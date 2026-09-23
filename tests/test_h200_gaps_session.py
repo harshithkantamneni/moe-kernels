@@ -4209,7 +4209,8 @@ def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
     got = run(["--dry-run"], session=tmp_path / "s")
     flat = " ".join(got.stdout.split())
     assert "A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW" in flat, flat[-3000:]
-    assert "The next session for those arms is --new" in flat
+    assert "A rerun of those arms on this driver is --new" in flat
+    assert "The next session for those arms" not in flat, "two next sessions in one paragraph"
 
 
 # --------------------------------------------------------------------------

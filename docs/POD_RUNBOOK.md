@@ -389,9 +389,11 @@ spread; a lone run's page says it was scored alone.
 
 **After a V7 FAIL at seed 0**, a seed 1 at 0.25 re-measures the same clock
 split, which is why the chain skips a G's later seeds on it; skip the
-hand-run seed 1 too. The follow-up is the line above at the lower duty the
-page names: first with no `--seed 1 --replicate-of` line, which is its seed
-0, then with `--seed 1 --replicate-of` that run's report. It is a new design
+hand-run seed 1 too. The follow-up is the line above at `--duty 0.1` (the
+page names a lower duty and no number; 0.1 is the one the chain's follow-up
+command registers): first as its seed 0, ending the command at
+`--session-tag <session directory name>` with no trailing backslash, then
+with `--seed 1 --replicate-of` that run's report. It is a new design
 key and its own pair, outside the driver's ledger, and it is read with
 `--read` on the laptop like any pair.
 

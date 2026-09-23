@@ -4142,8 +4142,8 @@ cat <<EOF
   working as designed, not a bug to route around: both are RESULTS, both are
   latched, and \`arm\` skips any arm already holding one. So after a session
   whose arms landed INVALID (the 2026-09-09 set landed six), --resume-latest
-  runs nothing for them however many defects have been fixed since. The next
-  session for those arms is --new, which opens a fresh ledger on purpose. A
+  runs nothing for them however many defects have been fixed since. A rerun
+  of those arms on this driver is --new, which opens a fresh ledger on purpose. A
   measuring run prints the exact command and the state each arm is expected to
   reach, a few lines above this one, under THE STANDALONE DRIVER'S RERUN, AND
   WHY IT IS --new; a --dry-run has no results to book a rerun against and

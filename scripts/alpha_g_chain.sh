@@ -968,7 +968,7 @@ chain_lock() {
       echo "  an arm a killed chain left running, still timing the card. A held flock is"
       echo "  never taken over. Find the holder, stop it, then --resume:"
       echo "      fuser -v $file     (or: lsof $file)"
-      echo "      ps -eo pid,etime,args | grep -E '[a]lpha_g_chain|[p]rivate_weight_reference|[c]lock_elasticity|[h]200_gaps_session'"
+      echo "      ps -eo pid,etime,args | grep -E '[a]lpha_g_chain[.]sh|[p]rivate_weight_reference|[c]lock_elasticity|[h]200_gaps_session'"
       echo "  fuser and lsof may be missing from the image; the ps line always runs. Only when"
       echo "  the ps line names nothing here is the holder on another pod sharing this volume."
       echo "  Do not open a --new session meanwhile: its arms would time this card beside"
@@ -1174,6 +1174,8 @@ case "$SESSION_HOW" in
     echo "      bash scripts/alpha_g_chain.sh --resume     # continue it"
     echo "      SESSION=$SESSION_WHAT bash scripts/alpha_g_chain.sh"
     echo "      bash scripts/alpha_g_chain.sh --new        # a fresh session, on purpose"
+    echo "  Before --new after a killed chain: an arm it left running still times the"
+    echo "  card. Look first: ps -eo pid,etime,args | grep -E '[p]rivate_weight_reference|[c]lock_elasticity'"
     exit 2 ;;
   *)
     echo "REFUSED: ${SESSION_WHAT:-session_choice printed nothing this chain can read}"
