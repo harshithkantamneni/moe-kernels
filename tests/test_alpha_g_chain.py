@@ -547,6 +547,72 @@ def test_the_resolution_sentence_is_session_4s_own_rescore():
     assert (three.hi - three.lo) / 2 > CE.RESOLUTION_TARGET, "the sentence's premise"
 
 
+#: Session 5's R1 pages, where pod-h200-session5 publishes them: the directory
+#: the header and the runbook cite for what R1 read at the chain's states.
+S5_R1 = ("results/published/2026-09-23-nvidia_h200-session5/results/gaps-nvidia_h200/"
+         "clock_elasticity/")
+#: Its pages per G, by the run id that ends each directory's name, in the order
+#: the texts give them: G=16's first page (INVALID on V5) was kept beside its re-run.
+S5_R1_PAGES = {"1": ["0d8858eb"], "4": ["e1c429b7"],
+               "16": ["a5a8fde2.first-v5-invalid", "a5a8fde2"], "64": ["a3d5cd3a"]}
+
+
+def _s5_reading(g: str, pages: list[str]) -> str:
+    """What the texts must say session 5's R1 read at G, off its own pages:
+    each half-width, the word through the chain's own eta, and the edge a
+    STRADDLES crossed or the validity gates that withheld the word."""
+    import clock_elasticity as CE
+    reps = []
+    for page in pages:
+        found = sorted((ROOT / S5_R1).glob(f"*-{page}"))
+        assert len(found) == 1, (page, found)
+        reps.append(found[0] / "report.json")
+    loaded = [json.loads(r.read_text()) for r in reps]
+    assert all(p["duty"] == [float(d) for d in _default("R1_DUTY").split()] for p in loaded), \
+        "session 5's pages ran at the chain's states"
+    halves = [f"{(p['elasticity']['hi'] - p['elasticity']['lo']) / 2:.4f}" for p in loaded]
+    words = [H.eta(r)[3] for r in reps]
+    if len(reps) == 1:
+        tail = words[0]
+        if tail == "STRADDLES":
+            lo, hi = loaded[0]["elasticity"]["lo"], loaded[0]["elasticity"]["hi"]
+            tail += " at " + " and ".join(f"{e:.2f}" for e in (CE.BAND_LOW, CE.BAND_HIGH)
+                                          if lo < e < hi)
+        return f"{halves[0]} at G={g} ({tail})"
+    assert len(set(words)) == 1, words
+    failed = [[f"V{gate['number']}" for gate in p["gates"]
+               if gate.get("kind") == "VALIDITY" and gate.get("verdict") != "PASS"]
+              for p in loaded]
+    assert all(len(f) == 1 for f in failed), failed
+    return (f"{' then '.join(halves)} at G={g} ({words[0]} both times, on"
+            f" {' and then on '.join(f[0] for f in failed)})")
+
+
+def test_the_resolution_paragraph_states_what_session_5_read_at_the_chains_states():
+    """The header and the runbook expected STRADDLES at the chain's states
+    ('not expected to resolve better', 'Expect STRADDLES'). Session 5 ran R1 at
+    exactly those states, and G=4 and G=64 read CLOCK-CARRIES. Both texts say
+    what it read and name its pages; where the tree carries them, every
+    half-width, word, edge and failed gate is the page's own."""
+    header = _header_prose().replace("/ ", "/")
+    runbook = " ".join(_runbook_chain_section().split())
+    ladder = re.search(r'^G_LADDER="\$\{G_LADDER:-([^}]*)\}"$', CODE, re.M).group(1).split()
+    assert list(S5_R1_PAGES) == ladder, "one reading per G of the chain's ladder"
+    names = [" then ".join(p) for p in S5_R1_PAGES.values()]
+    pages = f"its pages {', '.join(names[:-1])}, and {names[-1]} under"
+    for name, text in (("header", header), ("runbook", runbook)):
+        for stale in ("not expected to resolve better", "Expect STRADDLES", "hard to reach"):
+            assert stale not in text, (name, stale)
+        assert "Session 5 ran R1 at those three states, the chain's, at every G" in text, name
+        assert pages in text and S5_R1 in text, name
+        for g, run in S5_R1_PAGES.items():
+            if (ROOT / S5_R1).is_dir():
+                assert _s5_reading(g, run) in text, (name, g, _s5_reading(g, run))
+            else:
+                halves = r" then ".join([r"\d\.\d{4}"] * len(run))
+                assert re.search(rf"{halves} at G={g} \(", text), (name, g)
+
+
 def test_the_secant_caveat_is_first_order_and_says_where_it_fails():
     """T4. A per-tile cost A + B/f gives an elasticity in [0, 1]; session 4's
     G=16 claim read above 1, where the caveat has no model under it."""

@@ -179,9 +179,14 @@
 # R1'S RESOLUTION. Session 4's G=16 claim over treads 2 and deeper read a
 # half-width of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four;
 # the all-tread reading's was 0.076) against R1's 0.075 target, half the gap
-# band's width. The chain's three states are those three, not expected to
-# resolve better, so an interval within about its half-width of 0.25 or 0.40
-# reads STRADDLES, and UNREGISTERED-GAP is hard to reach at three states.
+# band's width. Session 5 ran R1 at those three states, the chain's, at every
+# G and read half-widths of 0.0096 at G=1 (STRADDLES at 0.40), 0.0660 at G=4
+# (CLOCK-CARRIES), 0.0837 then 0.0909 at G=16 (withheld:INVALID both times,
+# on V5 and then on V7) and 0.0875 at G=64 (CLOCK-CARRIES): its pages
+# 0d8858eb, e1c429b7, a5a8fde2.first-v5-invalid then a5a8fde2, and a3d5cd3a
+# under results/published/2026-09-23-nvidia_h200-session5/results/
+# gaps-nvidia_h200/clock_elasticity/. An interval within its half-width of
+# 0.25 or 0.40 reads STRADDLES.
 # THE WORD IS A SECANT, between the capped clock at duty 1.0 and the clocks at
 # 0.5 and 0.25; R3 runs at 0.25, at the ceiling, the top of that secant's
 # range. To first order, for a per-tile cost A + B/f with A and B not

@@ -592,21 +592,25 @@ consequence is licensed, so quote the interval and no word); CLOCK-CARRIES
 (wholly above 0.40: a time ratio, a blend of traffic and clock); STRADDLES
 (the interval crosses an edge: no word); `withheld:<EXIT>` (R1's page exited
 INVALID, REFUSED, ERROR or unscored: no word is read off a page its own gates
-did not stand behind); `unmeasured` (no R1 report for that G yet). Expect
-STRADDLES: session 4's G=16 claim over treads 2 and deeper read a half-width
-of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four; the
-all-tread reading's was 0.076) against R1's 0.075 target, half the gap band's
-width. Those are the chain's three states, so an interval within about its
-half-width of 0.25 or 0.40 straddles, and UNREGISTERED-GAP is hard to reach at
-three states. The word is a secant between the capped clock at duty 1.0 and
-the clocks at 0.5 and 0.25, and R3 runs at 0.25, at the ceiling, the top of
-that secant's range. To first order, for a per-tile cost A + B/f with A and
-B not negative, the local elasticity B/(Af + B) lies in [0, 1] and falls as f
-rises, so RAW-STANDS carries over to R3's operating point and CLOCK-CARRIES is
-only an upper bound there. That form cannot produce an elasticity above 1,
-which session 4's G=16 claim read at every subset of its states: where R1's
-point is above 1 the A + B/f reading does not apply, and the interval is quoted
-without it.
+did not stand behind); `unmeasured` (no R1 report for that G yet). Session
+4's G=16 claim over treads 2 and deeper read a half-width of 0.084 over its
+states 1.0, 0.5 and 0.25 (0.092 over all four; the all-tread reading's was
+0.076) against R1's 0.075 target, half the gap band's width. Session 5 ran R1
+at those three states, the chain's, at every G and read half-widths of 0.0096
+at G=1 (STRADDLES at 0.40), 0.0660 at G=4 (CLOCK-CARRIES), 0.0837 then 0.0909
+at G=16 (withheld:INVALID both times, on V5 and then on V7) and 0.0875 at
+G=64 (CLOCK-CARRIES): its pages 0d8858eb, e1c429b7, a5a8fde2.first-v5-invalid
+then a5a8fde2, and a3d5cd3a under
+`results/published/2026-09-23-nvidia_h200-session5/results/gaps-nvidia_h200/clock_elasticity/`.
+An interval within its half-width of 0.25 or 0.40 straddles. The word is a
+secant between the capped clock at duty 1.0 and the clocks at 0.5 and 0.25,
+and R3 runs at 0.25, at the ceiling, the top of that secant's range. To first
+order, for a per-tile cost A + B/f with A and B not negative, the local
+elasticity B/(Af + B) lies in [0, 1] and falls as f rises, so RAW-STANDS
+carries over to R3's operating point and CLOCK-CARRIES is only an upper bound
+there. That form cannot produce an elasticity above 1, which session 4's G=16
+claim read at every subset of its states: where R1's point is above 1 the
+A + B/f reading does not apply, and the interval is quoted without it.
 
 **What it leaves.** `$SESSION/CHAIN.tsv` is the ledger. The tables are rebuilt
 from the reports on disk at the end of every pass and before every STOP, so a
