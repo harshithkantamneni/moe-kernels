@@ -2367,7 +2367,7 @@ def _page_from(samples, probe, treads, census, copies_declared=9):
         high_water_bytes=None, draws=200, seed=0, header=["PLAN"],
         card="NVIDIA H200", synthetic=True, model_name=PW.DEFAULT_MODEL,
         pinned={}, prov=None, probe=probe, census=census,
-        copies_declared=copies_declared)
+        copies_declared=copies_declared, duty=1.0)
 
 
 def test_a_host_timed_native_step_does_not_choose_the_tread_v5_is_fitted_at():
@@ -4477,7 +4477,7 @@ def _payload_for(argv: list[str]) -> tuple[int, dict, str]:
 
 def _analyse(samples, treads: list[int], *, block_m: int = 32,
              draws: int = 10, copies: int = 9, replicates=(), run_id="",
-             pinned=None, seed: int = 0):
+             pinned=None, seed: int = 0, duty: float = 1.0):
     """`PW.analyse` over planted cells, with what a planted run hands it.
 
     The memory plan and the buffer proof `_main` builds for a synthetic world,
@@ -4498,7 +4498,7 @@ def _analyse(samples, treads: list[int], *, block_m: int = 32,
         high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=seed,
         header=[], card="no card", synthetic=True,
         model_name=PW.DEFAULT_MODEL, pinned=(pinned or {}), copies_declared=copies,
-        run_id=run_id, replicates=tuple(replicates))
+        run_id=run_id, replicates=tuple(replicates), duty=duty)
 
 
 def test_an_interval_that_was_not_formed_is_null_in_the_payload_and_not_nan():
@@ -4789,7 +4789,8 @@ def _page_after(skipped):
         seed=skipped.args.seed, header=["PLAN"], card="NVIDIA H200",
         synthetic=False, model_name=PW.DEFAULT_MODEL, pinned={},
         prov=PW._observed_iters(prov, skipped.samples), probe=skipped.probe,
-        census=skipped.census, copies_declared=skipped.copies_declared)
+        census=skipped.census, copies_declared=skipped.copies_declared,
+        duty=skipped.args.duty)
 
 
 def _one_skip_line(log: str) -> str:
@@ -5347,3 +5348,155 @@ def test_probe_check_says_what_it_is_for_and_the_on_card_test_calls_it():
     assert "PW.probe_check" in called, called
     assert "pytest.importorskip" in called
     assert "PW.time_probe_cell" not in called, "the logic lives in probe_check"
+
+
+# --------------------------------------------------------------------------
+# 25. report.json's duty is the one REQUESTED, whatever was timed
+# --------------------------------------------------------------------------
+
+def _measure_through_main(monkeypatch, tmp_path, sweep, duty="0.25"):
+    """Drive the real `_main` of a MEASURING run at `--duty duty` to the
+    report.json it writes, with `run_sweep` replaced by `sweep` and the two
+    host checks that refuse a laptop stood in. Everything between the argv
+    and the file (the run id, the plan, `analyse`, the writer) is shipped
+    code. Returns `(exit code, the payload on disk, the log)`."""
+    monkeypatch.setattr(PW.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(PW, "clock_sampler_refusal", lambda: "")
+    monkeypatch.setattr(PW, "run_sweep", sweep)
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW._main(["--duty", duty, "--ridge", "160", "--bandwidth-gbps",
+                       "4000", "--device-memory-gb", "140", "--capability",
+                       "9.0", "--out", str(tmp_path)])
+    written = list(tmp_path.rglob("report.json"))
+    assert len(written) == 1, log.getvalue()[-2000:]
+    return rc, json.loads(written[0].read_text()), log.getvalue()
+
+
+def test_a_v8_fail_page_records_the_requested_duty_and_null_for_the_timed_one(
+        no_cuda, monkeypatch, tmp_path):
+    """E2E-1. The REAL `run_sweep` returns no samples when the probe reads V8
+    FAIL, and `duty` was `duty_of(samples)`, whose default is 1.0: a run
+    requested at 0.25, keyed at 0.25 in its run id and naming the duty timer
+    as its instrument recorded full duty, the session-4 regime, and the
+    chain printed and tabulated it. `duty` is now the requested duty and
+    `duty_timed` is null, because nothing was timed."""
+    world = PW.WORLDS["ratio-path-split"]
+    real_sweep = PW.run_sweep
+
+    def planted(cfg, *, block_m, treads, declared_by_arm, **kw):
+        census = PW.path_census(cfg, treads, block_m, declared_by_arm)
+        return PW.planted_probe(world, cfg, block_m=block_m, treads=treads,
+                                declared_by_arm=declared_by_arm, census=census,
+                                noise=0.0, seed=0,
+                                weight_stream_ms=WEIGHTS.weight_stream_ms(
+                                    cfg, "bf16", 4000.0))
+
+    def never(*a, **k):
+        raise AssertionError("build_private_weights ran past the early return")
+
+    _stand_in_for_vllm(monkeypatch)
+    monkeypatch.setenv("TRITON_CACHE_DIR", str(tmp_path / "unused-cache"))
+    monkeypatch.setattr(PW, "probe_alignment", planted)
+    monkeypatch.setattr(PW, "build_private_weights", never)
+    rc, payload, log = _measure_through_main(monkeypatch, tmp_path, real_sweep)
+    assert "SWEEP SKIPPED" in log
+    assert rc == exit_codes.INVALID
+    assert payload["duty"] == 0.25
+    assert payload["duty_timed"] is None
+    assert "duty0.25" in payload["run_id"]
+    assert payload["instrument"].endswith("duty 0.25")
+    v8 = next(g for g in payload["gates"] if g["tag"] == "V8")
+    assert v8["verdict"] == exit_codes.FAIL
+
+
+def test_a_page_whose_every_cell_failed_records_the_requested_duty(
+        no_cuda, monkeypatch, tmp_path):
+    """The same default, the other empty path: every cell raised, so no row
+    is `ok` and `duty_of` had nothing to read. The failed rows carry the
+    requested duty (their `duty` column is the REQUESTED one), and the page
+    is INVALID on V0 with `duty` 0.25 and `duty_timed` null."""
+    treads = list(range(1, PW.DEFAULT_TREADS + 1))
+
+    def sweep(args, cfg, *, block_m, treads, census, stream_ms,
+              copies_declared, **kw):
+        declared = {a: PW.declared_experts(a, cfg.num_experts, copies_declared)
+                    for a in PW.ARMS}
+        failed = [PW.Sample(arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                            rows_per_expert=n * block_m,
+                            tokens=PW.SWEEP.tokens_for_rows(cfg, n * block_m),
+                            copies=PW.copies_read(arm, n),
+                            experts_declared=declared[arm], ms_p50=0.0,
+                            status="failed", detail="RuntimeError: planted",
+                            duty=args.duty)
+                  for rep in range(args.repeats) for n in treads
+                  for arm in PW.ARMS]
+        probe = PW.planted_probe(PW.WORLDS["refit"], cfg, block_m=block_m,
+                                 treads=treads, declared_by_arm=declared,
+                                 census=census, noise=0.0, seed=0,
+                                 weight_stream_ms=stream_ms)
+        return failed, PW.planted_proof(False), None, None, probe
+
+    rc, payload, _log = _measure_through_main(monkeypatch, tmp_path, sweep)
+    assert rc == exit_codes.INVALID
+    v0 = next(g for g in payload["gates"] if g["tag"] == "V0")
+    assert v0["verdict"] == exit_codes.FAIL
+    assert payload["duty"] == 0.25
+    assert payload["duty_timed"] is None
+    assert len(treads) == PW.DEFAULT_TREADS
+
+
+def test_duty_timed_is_what_the_timed_rows_carry_and_duty_what_was_asked():
+    """With cells timed, `duty_timed` is `duty_of` over them; the requested
+    `duty` is recorded beside it and never read off the rows."""
+    treads = [1, 2, 3, 4, 5, 6]
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0, copies_declared=9,
+              native_switch=4)
+    samples = [PW.replace(s, duty=0.25) for s in PW.planted_samples(
+        PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)]
+    payload = _analyse(samples, treads, duty=0.25).payload
+    assert payload["duty"] == 0.25 and payload["duty_timed"] == PW.duty_of(samples)
+    assert PW.duty_of([], default=None) is None and PW.duty_of([]) == 1.0
+
+
+def test_a_report_written_before_duty_timed_still_loads_and_reads(tmp_path):
+    """Old reports carry `duty` and no `duty_timed`: they load as replicates,
+    and `--read` prints the requested duty and says the timed one was not
+    recorded, rather than inventing one."""
+    treads = [1, 2, 3, 4, 5, 6]
+    pa, payload_a = _measured_shaped_report(tmp_path, "run-a", PW.ALPHA, treads)
+    pb, payload_b = _measured_shaped_report(tmp_path, "run-b", PW.ALPHA, treads,
+                                            seed=1)
+    assert "duty_timed" in payload_a
+    for p, payload in ((pa, payload_a), (pb, payload_b)):
+        old = dict(payload)
+        del old["duty_timed"]
+        p.write_text(json.dumps(old))
+    design = {k: payload_a.get(k, PW.DESIGN_KEY_DEFAULTS.get(k))
+              for k in PW.DESIGN_KEYS}
+    assert len(PW.load_replicates([pb], design=design, card_known=True)) == 1
+    got = run(["--read", str(pa), "--replicate-of", str(pb)])
+    assert "READ MODE: nothing measured, nothing written" in got.stdout, \
+        got.stdout[-800:]
+    assert f"duty        {payload_a['duty']}" in got.stdout
+    assert "duty timed  unrecorded (a report written before duty_timed)" \
+        in got.stdout
+    assert exit_codes.classify_text(got.stdout) == got.returncode
+
+
+def test_a_cell_that_failed_in_the_sweep_carries_the_duty_it_was_asked_at():
+    """The second call site of E2E-1. `run_sweep` builds a failed row with
+    `Sample(...)` directly, and `duty` defaulted to 1.0 there while every
+    timed row carried the requested duty through `time_cell`: a failed cell
+    at 0.25 was written to cells.csv as a full-duty row. Every `Sample(` the
+    sweep builds now names its duty."""
+    tree = ast.parse(SCRIPT.read_text())
+    sweep = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                 and n.name == "run_sweep")
+    built = [n for n in ast.walk(sweep) if isinstance(n, ast.Call)
+             and ast.unparse(n.func) == "Sample"]
+    assert built, "run_sweep builds no Sample directly any more; retarget"
+    for call in built:
+        kws = {k.arg: ast.unparse(k.value) for k in call.keywords}
+        assert kws.get("duty") == "args.duty", ast.unparse(call)

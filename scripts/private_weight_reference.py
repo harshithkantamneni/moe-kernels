@@ -2472,10 +2472,15 @@ def sample_from_timing(t: CellTiming, **cell) -> Sample:
     return Sample(**cell, **measured, detail=t.note)
 
 
-def duty_of(samples) -> float:
-    """The duty the ladder was timed at, off the rows (the smallest, so a
-    resumed ladder that mixed two is named by the one that mattered)."""
-    return min((s.duty for s in samples if s.status == "ok"), default=1.0)
+def duty_of(samples, default: float | None = 1.0) -> float | None:
+    """The duty the ladder was TIMED at, off the rows that were timed (the
+    smallest, so a resumed ladder that mixed two is named by the one that
+    mattered). `default` is what no timed row reads as: 1.0 for the page's
+    own lines, which print it only beside timed rows; None for report.json's
+    `duty_timed`, where nothing timed is null. NOT the duty a run was asked
+    for, which a page with no timed row (a V8 FAIL's skipped sweep, every
+    cell failed) still has: that is `--duty`, and `analyse` records it."""
+    return min((s.duty for s in samples if s.status == "ok"), default=default)
 
 
 def read_samples(path: Path) -> list[Sample]:
@@ -4897,7 +4902,14 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             copies_declared: int | None = None,
             clock_elasticity: ClockElasticity | None = None,
             run_id: str = "", session_tag: str = "",
-            replicates: tuple = ()) -> Report:
+            replicates: tuple = (), duty: float) -> Report:
+    """The page and report.json from the cells. `duty` is the REQUESTED duty
+    (`--duty`), recorded as the payload's `duty` whatever was timed: a page
+    whose sweep was skipped (V8 FAIL) or whose every cell failed has no
+    timed row, and reading the duty off the rows there wrote 1.0 for a run
+    asked, keyed and instrumented at 0.25. What the rows carry is
+    `duty_timed`, null when nothing was timed. No default: a caller that
+    forgot it would record full duty again."""
     planned = len(treads) * len(ARMS) * repeats
     if census is None:
         census = path_census(cfg, treads, block_m, {
@@ -5111,7 +5123,13 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "pinned": dict(pinned),
         "treads": list(treads),
         "repeats": repeats,
-        "duty": duty_of(samples),
+        # THE DESIGN KEY IS THE REQUESTED DUTY, and the run id and the
+        # instrument carry the same one. `duty_timed` is what the timed rows
+        # carry, null when none was timed; a report written before it has
+        # only `duty`, which was read off the rows and is 1.0 on any page
+        # that timed nothing.
+        "duty": duty,
+        "duty_timed": duty_of(samples, default=None),
         "alpha_refit": alpha,
         "alpha_band": list(ALPHA_BAND),
         "ridge": ridge,
@@ -6097,11 +6115,14 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                     # zeroed rows and exits DONE.
                     raise
                 except Exception as exc:                  # noqa: BLE001
+                    # THE REQUESTED DUTY, as a timed row carries it through
+                    # `time_cell`: the column's default is 1.0, and a failed
+                    # cell at 0.25 was written as a full-duty row.
                     sample = Sample(
                         arm=arm, repeat=rep, block_m=block_m, tiles=n,
                         rows_per_expert=n * block_m, tokens=tokens,
                         copies=copies, experts_declared=experts, ms_p50=0.0,
-                        status="failed",
+                        status="failed", duty=args.duty,
                         detail=f"{type(exc).__name__}: {exc}")
                     print(f"  {arm} n={n} rep={rep} FAILED  {sample.detail}")
                 samples.append(sample)
@@ -6867,7 +6888,7 @@ def _main(argv=None) -> int:
         prov=_observed_iters(prov, samples), probe=probe, census=census,
         copies_declared=copies_declared, clock_elasticity=clock_elasticity,
         run_id=run_id, session_tag=args.session_tag,
-        replicates=tuple(replicates))
+        replicates=tuple(replicates), duty=args.duty)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -6948,6 +6969,13 @@ def _read_mode(args) -> int:
     for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
                 "repeats", "copies_declared", "duty"):
         print(f"{key:<12}{payload.get(key, DESIGN_KEY_DEFAULTS.get(key))}")
+    # What the rows were timed at, beside the requested duty above. Absent
+    # from a report written before the key, whose `duty` was read off the
+    # rows; null when nothing was timed.
+    timed = payload.get("duty_timed", "unrecorded (a report written before "
+                                      "duty_timed)")
+    print(f"{'duty timed':<12}"
+          + ("none (nothing was timed)" if timed is None else str(timed)))
     print(f"session     {payload.get('session_tag') or '(unrecorded)'}")
     print(f"measured    {prov.get('utc') or 'utc unrecorded'} on "
           f"{prov.get('hostname') or 'an unrecorded host'}, tree "
