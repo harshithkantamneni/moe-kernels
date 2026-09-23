@@ -881,6 +881,12 @@ PYEOF
   # disagree, or no ceiling for the dtype the rows were swept in) is the guard
   # doing its job. Folding them into one number is how "5" looked like a
   # regression when four of the five were the first kind.
+  #
+  # AND THE ARMS ARE THE ONES GIT TRACKS (2026-09-23). It listed the directory,
+  # so the untracked session-3 directory on session 5's checkout read as a
+  # newly refusing arm missing from the census, and P7 printed FAIL on a pod
+  # whose guard had not changed. tests/test_calibration_provenance.py reads
+  # the same view, through tests/_committed.py.
   local refusals
   refusals="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
 import re
@@ -889,8 +895,18 @@ sys.path.insert(0, ".")
 from pathlib import Path
 from moe.bench.published import entitled_ridge
 
+import subprocess
+
 root = Path("results/published")
-arms = sorted(p for p in root.iterdir() if p.is_dir())
+# THE ARMS GIT TRACKS, not every directory on disk. A pod checkout can carry
+# an untracked published directory (session 5 carried the session 3 one, left
+# by its publish without its KIND file), and counting it made P7 report drift
+# no arm caused. The census this is compared with describes tracked arms.
+listed = subprocess.run(["git", "ls-files", "-z", "--", str(root)],
+                        capture_output=True, check=True).stdout.decode()
+names = {Path(p).parts[2] for p in listed.split(chr(0))
+         if p and len(Path(p).parts) > 3}
+arms = sorted(root / n for n in names)
 
 live_norows, live_prov = set(), set()
 for arm in arms:

@@ -152,6 +152,32 @@ def test_the_a100_note_exists_and_names_both_numbers():
 # states the wrong report count, and it quotes a ridge its own reports do not
 # carry.
 
+def test_a_report_git_does_not_track_is_not_one_this_tool_rescores(tmp_path):
+    """Session 5's pod checkout carried an UNTRACKED published directory whose
+    run directories hold `report.json` files of other arms' shapes. The walk
+    read them, `plan` died on `KeyError: 'alpha'` before a gate printed, and
+    the committed-report tests counted ten arms of three. Inside a work tree
+    the walk is what git tracks; outside one (every copy a writing test makes)
+    it is the whole directory, as before."""
+    root = tmp_path / "repo"
+    published = root / "results" / "published"
+    kept = published / "2026-01-01-nvidia_h200-kept" / "x.report.json"
+    stray = (published / "2026-01-02-nvidia_h200-stray" / "cells" / "run"
+             / "report.json")
+    for path in (kept, stray):
+        path.parent.mkdir(parents=True)
+        path.write_text("{}")
+    for args in (["init", "-q"], ["add", "--", str(kept)]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
+    assert RS.report_paths(published) == [kept]
+    # And the same tree outside git is walked whole.
+    copy = tmp_path / "copy"
+    shutil.copytree(published, copy)
+    assert RS.tracked_under(copy) is None
+    assert len(RS.report_paths(copy)) == 2
+
+
 def _rescored_arms() -> dict[Path, list[Path]]:
     arms: dict[Path, list[Path]] = {}
     for path in RS.report_paths(PUBLISHED):

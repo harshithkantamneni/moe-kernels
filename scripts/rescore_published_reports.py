@@ -77,6 +77,7 @@ import datetime as dt
 import importlib.util
 import json
 import statistics
+import subprocess
 import sys
 from pathlib import Path
 
@@ -349,16 +350,48 @@ def rescored_payload(before: dict, path: Path, sweep, now: str) -> dict | None:
     return after
 
 
-def report_paths(root: Path) -> list[Path]:
-    """Both committed layouts, deduplicated, minus anything inside a session.
+def tracked_under(root: Path) -> set[Path] | None:
+    """Every file git's index holds under `root`, resolved; None when `root` is
+    not inside a git work tree at all (a copy in a temporary directory, which
+    is where every test that WRITES runs this tool)."""
+    root = Path(root)
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True).stdout.strip()
+        listed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--full-name", "--", "."],
+            capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return {(Path(top) / name).resolve()
+            for name in listed.decode().split("\0") if name}
 
-    Same rule as `alpha_surface.py` for the two layouts. The exclusion is the
-    2026-09-09 lesson: a raw session committed under `results/published/`
-    carries the run directories its arms wrote, each with its own
-    `report.json`, and this walk read a dozen of them as published reports to
-    rescore. `published.is_session` asks the directory what it is.
+
+def report_paths(root: Path) -> list[Path]:
+    """Both committed layouts, deduplicated, minus anything inside a session,
+    and, inside a git work tree, minus anything git does not track.
+
+    Same rule as `alpha_surface.py` for the two layouts. The session exclusion
+    is the 2026-09-09 lesson: a raw session committed under
+    `results/published/` carries the run directories its arms wrote, each with
+    its own `report.json`, and this walk read a dozen of them as published
+    reports to rescore. `published.is_session` asks the directory what it is.
+
+    THE TRACKED EXCLUSION IS 2026-09-23'S. `results/published/` is not
+    git-ignored, so a pod's checkout can carry a directory nobody committed:
+    session 5's carried session 3's, left on the network volume by its publish
+    and missing the `KIND` file the committed copy has. Its run directories
+    were then walked as published reports, the plan died on `KeyError: 'alpha'`
+    before printing a gate, and the tests that census the committed reports
+    counted ten arms of three. This tool edits COMMITTED evidence, so a file
+    git does not track is not one of its inputs. A root outside any work tree
+    (`tracked_under` returns None) is walked whole, as before.
     """
     found = {*root.rglob("report.json"), *root.rglob("*.report.json")}
+    tracked = tracked_under(root)
+    if tracked is not None:
+        found = {p for p in found if p.resolve() in tracked}
     return sorted(p for p in found if not PUB.is_session(p.parent))
 
 
