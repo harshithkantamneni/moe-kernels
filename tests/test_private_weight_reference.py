@@ -3598,6 +3598,38 @@ def test_a_pre_change_directory_is_refused_while_new_runs_and_old_reports_read(
     assert exit_codes.classify_text(got.stdout) == got.returncode
 
 
+def test_a_full_duty_command_names_its_old_directory_and_the_store_refuses_it(
+        tmp_path):
+    """The review's R3-RUNID-RESUME-COMMENT. The duty is out of the run id at
+    1.0, so the command that wrote a session-4 directory names that same
+    directory today, and the comment beside the key said the directory
+    RESUMES. It does not: session 4's cells.csv carries neither the duty
+    columns nor the diagnostics, and the Store refuses its header. Its rows
+    still read back, with every missing field None. The comment now says what
+    happens."""
+    import dataclasses
+    import inspect
+    full = PW.default_run_id(_args(), "NVIDIA H200")
+    assert PW.default_run_id(_args(**{"--duty": 1.0}), "NVIDIA H200") == full
+    pre_duty = [c for c in PW.CSV_FIELDS
+                if c not in DIAGNOSTIC_COLUMNS + ("duty", "power_w")]
+    old = tmp_path / full / "cells.csv"
+    old.parent.mkdir()
+    with old.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=pre_duty + PW.PROVENANCE_COLUMNS,
+                                extrasaction="ignore", restval="")
+        writer.writeheader()
+        writer.writerow(dataclasses.asdict(_sample(PW.SHARED, 1, 0, 1.0)))
+    with pytest.raises(PW.SchemaCollision) as exc:
+        PW.Store(old, PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    assert "'duty', 'power_w'" in str(exc.value)
+    back = PW.read_samples(old)
+    assert len(back) == 1 and back[0].duty == 1.0 and back[0].power_w is None
+    src = " ".join(inspect.getsource(PW.default_run_id).replace("#", " ").split())
+    assert "a resumed session-4 directory resumes" not in src
+    assert "It does NOT resume there" in src and "SchemaCollision" in src
+
+
 def test_every_column_the_instrument_measured_reaches_the_row():
     """The second call site of findings 17 and 24. `run_sweep` copied the
     timing's fields into a `Sample` one by one, and `host_bound` was on

@@ -6141,7 +6141,11 @@ def default_run_id(args, card: str) -> str:
         # The duty moves board power and so the clock every cell is timed at;
         # in the key WHEN IT IS NOT 1.0, so every run id written before the
         # knob existed (all of them at full duty) is the id the same command
-        # still produces, and a resumed session-4 directory resumes.
+        # still produces: the same command names the same directory. It does
+        # NOT resume there. That directory's cells.csv predates the duty and
+        # diagnostic columns, `Store` refuses its header (SchemaCollision)
+        # rather than append wider rows under it, and --read still re-reads
+        # its report.json.
         **({"duty": args.duty} if args.duty != 1.0 else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
