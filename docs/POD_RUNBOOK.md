@@ -361,26 +361,135 @@ and that output, not a hand-computed difference, is the figure to quote.
 
 ## The alpha(G) chain (2026-09-22): the next session's command
 
-The next pod session is one sequenced ledger, not the arm by hand:
+The next pod session is one sequenced ledger, not the arm by hand.
+
+**Bring the pod's checkout to the pushed head first.** The volume's clone
+carries the last session's ruler yaml modified (calibrate `--publish` writes
+the tracked file), and git refuses to switch branches over it even when it is
+byte-identical to the committed copy:
 
 ```
-bash scripts/alpha_g_chain.sh --dry-run     # plan and price; nothing measured
-bash scripts/alpha_g_chain.sh               # a new chain session on this card
-bash scripts/alpha_g_chain.sh --resume      # continue the latest one
+git -C /workspace/moe-kernels checkout -- moe/bench/hardware/measured_nvidia_h200.yaml
+git -C /workspace/moe-kernels fetch origin
+git -C /workspace/moe-kernels checkout -B r3-align origin/r3-align
+git -C /workspace/moe-kernels log -1 --format=%h    # must print the head that was pushed
 ```
 
-It runs, in order: both arms' `--self-test`; the driver's thermal, calibrate
-and pin_probe-n64-g1 in the chain's own session directory; `clock_elasticity`
-at each G of {1, 4, 16, 64} with the three cap-binding duty states, so every
-G of the ladder has its own per-M-tile elasticity and a band (RAW-STANDS: the
-ratio beside it is a re-read fraction; CLOCK-CARRIES: a time ratio); then
-`private_weight_reference` at `--duty 0.5` for every G at seed 0, then 1,
-then 2, each later seed scored with the earlier ones through
-`--replicate-of`. `$SESSION/CHAIN.tsv` is the ledger, `$SESSION/PAIRS.tsv`
-the table (G, seed, ratio, interval, exit word, duty, run id, eta and band),
-logs under `$SESSION/chain-logs/`. The laptop dry run prices it at about
-140 min of arms plus overhead, about $11 at $4.59/h: book 4 h. The exfil
-line is printed at the end; copy it off before releasing the pod.
+Compare that hash with `git log -1 --format=%h origin/r3-align` on the laptop;
+do not type one from memory.
+
+**Launch it detached.** A dropped ssh session kills a foreground chain and the
+arm in flight. Watch the log and the ledger:
+
+```
+cd /workspace/moe-kernels
+bash scripts/alpha_g_chain.sh --dry-run       # plan and price; nothing measured
+nohup setsid bash scripts/alpha_g_chain.sh > /workspace/alpha_g_chain.out 2>&1 < /dev/null &
+tail -f /workspace/alpha_g_chain.out          # and $SESSION/CHAIN.tsv, one row per step
+```
+
+Continuing is `--resume` (the newest `alpha_g-<card>-*` directory that holds
+`CHAIN.tsv`, never a dry run's) or `SESSION=<dir>`, launched the same detached
+way. A bare run refuses when a chain session for the card already holds
+`CHAIN.tsv`, and prints both commands; `--new` opens a fresh one on purpose.
+`--dry-run` with `--resume` or `SESSION=` is refused: it would overwrite that
+session's step logs, and the driver's `logs/thermal.log`, with plan pages. A
+measuring run is refused on a box whose card torch cannot name, with the
+probe's reason and nvidia-smi's name, driver version and power limit printed.
+It holds a lock on the session for the whole run, and a second chain on it is
+refused. On the pod the lock is a `flock`, and a held one is never taken
+over, whatever pid it records: when the recorded chain is dead, the holder is
+the arm it left running (`pkill -f alpha_g_chain.sh` kills the shell, not its
+python), still timing the card. The refusal prints `fuser -v` and `lsof` for
+the lock file; stop that process, then `--resume`. Only the `mkdir` fallback,
+on a box without `flock`, lets `--resume` take over a lock whose pid is dead
+or whose host differs. It records the card's UUID in `$SESSION/DEVICE` and refuses a resume
+on another card, because R1 resumes by card name and would pool two cards'
+cells into one elasticity; after a pod is lost, the replacement pod is `--new`.
+
+It runs, in order:
+
+1. Both arms' `--self-test`. Each must be DONE: an INVALID self-test is a
+   scorer that failed its own planted world. One that is not DONE runs again
+   on every pass, in seconds, so after the scorer is fixed and checked out on
+   the pod a `--resume` re-proves it.
+2. The driver's thermal, calibrate and pin_probe-n64-g1 in the chain's own
+   session directory. The chain stops when the driver exits 2 (its thermal,
+   calibration or reference-grade gate refused), and unless thermal and
+   calibrate are DONE in its `ARMS.tsv`. The step latches only on the
+   driver's exit 0, so a row it still owes is re-attempted on `--resume`.
+   pin_probe-n64-g1 runs for the record and is not gated: it asks whether
+   `MOE_FORCE_TILE` reaches the kernel, and R1 and R3 both pin through vLLM's
+   `override_config` and never read `MOE_FORCE_TILE`.
+3. `tests/test_gpu.py` on the card, from PY_BASE: the timing, clock and graph
+   primitives both arms stand on. Not green stops the chain, and an exit 0 in
+   which no test passed is not green (off a card every one of them skips).
+   `--resume --past-gpu-tests` goes on after you have read the failures, and
+   the ledger records that decision as its own row.
+4. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
+   {1, 4, 16, 64}. On session 4's clock arm duty 0.25 sat flat at 1965 MHz
+   with no drift, and duty 0.5 still tracked board power (-1.09 MHz/W over
+   1882-1965 MHz). The chain stops after `r3-g1-s0` unless its V8 is PASS,
+   and a missing report.json stops it too: V8 is the alignment probe under
+   the graph, it describes the instrument and not G, and every later page
+   would repeat it. `--resume --past-v8` goes on, recorded.
+5. `clock_elasticity` at each G with the three cap-binding duty states (1.0,
+   0.7, 0.5), the per-M-tile elasticity gated.
+6. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
+   through `--replicate-of`; with R1 between seed 0 and seed 1, a G's seeds
+   are an hour or more apart. A G whose seed-0 page read V7 not PASS gets a
+   SKIPPED row for seeds 1 and 2 (not latched), which are not run.
+7. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
+   every arm: a record of the box that gates nothing. `END_SUITE=skip` writes
+   a SKIPPED row instead, for a resume that owes one arm. A suite that already
+   ran to its tally, green or red (pytest exit 1), is not bought again, and
+   `END_SUITE=skip` writes no row over it; a timeout, an interrupted run or a
+   log with no tally runs again. Both pytest steps
+   run without the chain's own knobs in their environment (`SESSION`,
+   `END_SUITE`, `G_LADDER` and the rest of `CHAIN_KNOBS`): the suite's tests
+   spawn the chain, and a `SESSION=<dir>` launch would otherwise steer them
+   into the real session.
+
+**The regime word per G**, read off R1's interval through the arm's own
+`band_of`: RAW-STANDS (wholly below 0.25: the ratio beside it is a re-read
+fraction); UNREGISTERED-GAP (wholly inside [0.25, 0.40]: neither registered
+consequence is licensed, so quote the interval and no word); CLOCK-CARRIES
+(wholly above 0.40: a time ratio, a blend of traffic and clock); STRADDLES
+(the interval crosses an edge: no word); `withheld:<EXIT>` (R1's page exited
+INVALID, REFUSED, ERROR or unscored: no word is read off a page its own gates
+did not stand behind); `unmeasured` (no R1 report for that G yet). The word is
+a secant between the capped clock at duty 1.0 and the clock at 0.7 and 0.5,
+and R3 runs at 0.25, at the ceiling. For a per-tile cost A + B/f the local
+elasticity falls as f rises, so RAW-STANDS carries over to R3's operating
+point and CLOCK-CARRIES is only an upper bound there.
+
+**What it leaves.** `$SESSION/CHAIN.tsv` is the ledger. `$SESSION/PAIRS.tsv` is
+the table, one row per ratio run, rebuilt from the reports on disk at the end
+of every pass and before every STOP, so a resume never duplicates a row and an
+R1 that lands on a later pass is joined: G, seed, ratio, within-run interval,
+exit word, duty, run id; the joint reading over the seeds so far (`rep_n`,
+spread, sd, envelope, joint verdict; `none` for a run scored alone, which is
+also how its own C1 was scored); each arm's median clock over the ladder and
+the count of LEVEL LOW (arm, tread) cells; and R1's eta, interval, word and
+exit. Quote the joint columns: the within-run interval is a bootstrap over
+repeats and understates the cross-run spread. `$SESSION/PAIRS-fixed.tsv` holds
+the coordinates every row shares (model, tile, pinned config, treads, repeats,
+duty) and where each was read. Logs are under `$SESSION/chain-logs/`.
+
+**The price.** The laptop dry run prices about 175 min of arms (four R1 runs
+at 876 s, twelve R3 runs at 581 s each at duty 0.25), under a minute of
+`tests/test_gpu.py`, about 54 min of end suite (the tree's count at session
+4's pod rate of 0.66 s a test, 2.5x the laptop's) and 21 min of overhead:
+about 250 min, about $19 at $4.59/h, and it says book 6 h. A V7 failure at
+seed 0 skips that G's two later seeds (about 21 min), and `END_SUITE=skip`
+drops the 54 min of suite.
+
+**Before releasing the pod.** The chain's calibrate re-dirties
+`moe/bench/hardware/measured_nvidia_h200.yaml`, and every row measured after it
+carries `git_dirty`: commit that yaml with the results. The exfil line printed
+at the end carries the session directory, the results directory, that yaml and
+calibrate's own run directory under `results/calibration/`; copy it off before
+releasing the pod.
 
 ## Before you rent anything
 
