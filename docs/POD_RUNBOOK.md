@@ -264,11 +264,13 @@ design defects in both. R1's, in the script behind `elasticity-m32-n64-g16`,
 were fixed on 2026-09-22: its gated claim is the per-M-tile elasticity over
 treads 2 and deeper, with tread 1 printed beside it off the law; a resume on
 another card of the same name is refused on the card's UUID; and its plan page
-prints the claim's own resolution. blockk-w4 has had one fix since, its kernel
-probe reading Triton's device caches (2026-09-21), and the rest of its review
-stands. Rent about an hour and run only the preconditions and this arm; the
-driver prices the four at ~18 minutes (~32 bounded), and the hand-run second
-seed below is about 10 more:
+prints the claim's own resolution. blockk-w4's review is not recorded in this
+repo and was not redone; since it, the script's kernel probe (2e2f1d8,
+2026-09-21) and its `--card` check (6f3a6ce, 2026-09-22) were fixed, and
+`git log -- scripts/blockk_diagonal.py` is the full list of its changes, not
+this sentence. Rent about an hour and run only the preconditions and this
+arm; the driver prices the four at ~18 minutes (~32 bounded), and the
+hand-run second seed below is about 10 more:
 
 ```
 bash scripts/h200_gaps_session.sh --new --only thermal,calibrate,pin_probe-n64-g1,private-mixtral-bm32

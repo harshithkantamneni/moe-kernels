@@ -5719,7 +5719,8 @@ def test_the_runbook_books_one_next_session_and_the_driver_calls_its_own_standal
     section = " ".join(_runbook_section("## The private-weight reference alone").split())
     assert "NOT yet fixed" not in section
     assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in section, section[:1500]
-    assert "UUID" in section.split("R1's", 1)[1].split("blockk-w4 has", 1)[0], section[:1500]
+    r1 = section.split("R1's", 1)[1].split("blockk-w4's review", 1)
+    assert len(r1) == 2 and "UUID" in r1[0], section[:1500]
     driver = " ".join(re.sub(r"(?m)^\s*#+", " ", TEXT).split())
     assert "The CARD file does not stop that" not in driver
     assert "DEVICE guard" in driver
@@ -5743,3 +5744,38 @@ def test_the_elasticity_arm_says_its_bands_read_the_per_m_tile_claim():
     assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in claim, claim
     assert "per-call" in claim and "gate nothing" in claim, claim
     assert "C1 asks whether its interval" in closes
+
+
+def test_the_runbook_counts_no_blockk_fixes_and_every_hash_it_cites_touched_it():
+    """A COUNT NOTHING SOURCES (recheck DRV-R1). R3's standalone section said
+    "blockk-w4 has had one fix since, its kernel probe reading Triton's device
+    caches (2026-09-21), and the rest of its review stands". `git log` lists
+    two functional changes to scripts/blockk_diagonal.py after that review,
+    the kernel probe and a `--card` check that compared a NAME to a SLUG and
+    refused 'NVIDIA H200' on session 4's pod, and no file in the repo records
+    the review, so "the rest of its review stands" cannot be checked. The
+    sentence now counts nothing, names each fix by its commit and sends the
+    reader to the log for the list. Every hash it cites is asked of git."""
+    section = " ".join(_runbook_section("## The private-weight reference alone").split())
+    said = [s for s in _sentences(section, ".") if s.startswith("blockk-w4")]
+    assert len(said) == 1, section[:2500]
+    sentence = said[0]
+    assert not re.search(r"\b(?:one|two|three|a single|only)\s+(?:fix|change)",
+                         sentence), sentence
+    assert "review stands" not in section
+    assert "kernel probe" in sentence and "`--card` check" in sentence, sentence
+    assert "`git log -- scripts/blockk_diagonal.py`" in sentence, sentence
+    cited = re.findall(r"\b[0-9a-f]{7,40}\b", sentence)
+    assert len(cited) >= 2, sentence
+
+    shallow = _spawn(["git", "-C", str(ROOT), "rev-parse", "--is-shallow-repository"],
+                     capture_output=True, text=True, timeout=60)
+    if shallow.returncode != 0 or shallow.stdout.strip() != "false":
+        pytest.skip("no full git history here to ask which commits touched the script")
+    for sha in cited:
+        touched = _spawn(["git", "-C", str(ROOT), "diff-tree", "--no-commit-id",
+                          "--name-only", "-r", sha, "--", "scripts/blockk_diagonal.py"],
+                         capture_output=True, text=True, timeout=60)
+        assert touched.returncode == 0, (sha, touched.stderr)
+        assert touched.stdout.split() == ["scripts/blockk_diagonal.py"], sha
+
