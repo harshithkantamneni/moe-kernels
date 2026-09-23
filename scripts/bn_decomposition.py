@@ -5679,10 +5679,36 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _hypothesis_ceiling(dtype: str) -> tuple[float, str]:
-    """A ceiling for planning only, labelled so it can never pass for measured."""
+    """A ceiling for planning only, labelled so it can never pass for measured.
+
+    A TRANSCRIPTION, AND THE LABEL NOW SAYS SO. 712.259 is the calibration
+    committed on 2026-09-02 (4efdacc); the committed ruler has since read
+    668.5, 682.1 and 663.0, and the pods of sessions 3 and 5 calibrated 668.9
+    and 669.6. The label used to call it "the 2026-09-01 H200 bf16 calibration
+    in this repo", which had the wrong date and stopped being true three
+    recalibrations ago.
+
+    IT DECIDES A VERDICT, which is why the staleness matters. Every self-test
+    and design-power line plants its worlds at this ceiling (the planted
+    bandwidth is `PLANT_COMPUTE_FRACTION x ceiling / rho` against a fixed
+    `--overhead-ms`), and at the four-height G=16 pinning S4 is a STEP in it
+    between 690 and 700 TFLOP/s: below it a bootstrap draw can qualify the
+    BLOCK_N=32 arm's memory-bound BLOCK_M=256 ladder as its own reference.
+    This value sits above the step and every real H200 ruler below it, so a
+    laptop printed sd(alpha_a) 0.0076 where sessions 4 and 5 printed 0.0440
+    (`tests/test_bn_decomposition.py` pins the step with planted ceilings).
+
+    NOT YET READ FROM THE COMMITTED FILE, as bm128_roofline's roof is, on
+    purpose: `test_h200_gaps_session.py` checks the S4 figure this command
+    prints against the driver's prose, and on a pod `calibrate` rewrites that
+    file before the suite runs, so a file-read here would make that check
+    fail on every pod whose card calibrated differently. Moving it is the
+    owner's call and has to move that check to a relation in the same commit.
+    """
     return (712.259 if dtype == "bf16" else 712.259,
-            "HYPOTHESIS: the 2026-09-01 H200 bf16 calibration in this repo, "
-            "which belongs to no attached device")
+            "HYPOTHESIS: the 2026-09-02 H200 bf16 calibration, TRANSCRIBED "
+            "(the committed ruler has moved since), which belongs to no "
+            "attached device")
 
 
 def _exit_over(gates: list[Gate], args) -> int:
