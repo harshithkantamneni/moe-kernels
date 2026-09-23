@@ -221,8 +221,13 @@ is expected to hold if both arms' average power stays where session 4's clock
 was flat (the clock arm's kernel, the study's own call, drew 277-317 W at
 0.25; the private arm reads more bytes and draws more), and V7 checks it: a
 FAIL below full duty is a duty not yet low enough, and its remedy names a
-lower one. When it holds the raw ratio is quotable and no elasticity model
-enters the number. The cost is wall clock, about 1/duty x the kernel time.
+lower one. At 0.25 that means this duty is not yet flat for this arm on this
+card; a lower one is a new design key and runs of its own, read with --read;
+scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a G's seed 0
+it skips the G's later seeds and prints the follow-up command
+(`V7_FAIL_AT_FLAT_DUTY`). When it
+holds the raw ratio is quotable and no elasticity model enters the number.
+The cost is wall clock, about 1/duty x the kernel time.
 THE DEFAULT STAYS 1.0: `duty` is one of `DESIGN_KEYS`, read as 1.0 from a
 report that predates it, so a different default would make every bare
 command a different design from session 4's full-duty runs, which
@@ -3489,12 +3494,32 @@ FLAT_DUTY_EVIDENCE = (
     "every tread's median read 1965 MHz and no cell drifted; at duty 0.1, "
     "1965-1980 MHz")
 
+#: WHAT A V7 FAIL AT OR BELOW THE POD SETTING MEANS, AND WHAT FOLLOWS IT: the
+#: owner's reading of 2026-09-22 (finding XS-1), written once for the remedy
+#: the page prints and the plan that promises it. This page named a lower
+#: duty while the session driver's text read the same FAIL the opposite way,
+#: and each was half right: the physical remedy IS a lower duty, and the
+#: chain does NOT act on it.
+V7_FAIL_AT_FLAT_DUTY = (
+    "this duty is not yet flat for this arm on this card. A lower one is a "
+    "new design key (`duty` is one of DESIGN_KEYS, so --replicate-of will not "
+    "pair it with runs at this one): runs of its own, outside the chain's "
+    "PAIRS.tsv, read together with --read on the laptop. "
+    f"scripts/alpha_g_chain.sh, which runs this arm at --duty {FLAT_DUTY} at "
+    "each G (--group-m), does not re-run at it: on a V7 FAIL at a G's seed 0 "
+    "there it skips the G's later seeds and prints the follow-up command")
+
 
 def v7_remedy(duty: float) -> str:
     """What a V7 FAIL tells the operator to do, at the duty the ladder ran.
     BELOW FULL DUTY TOO: a split there is a duty not yet low enough, and a
     FAIL page with no remedy on it leaves the operator to re-run at the same
-    duty rather than lower it."""
+    duty rather than lower it. AT OR BELOW THE POD SETTING the remedy still
+    names a lower duty and says what a run there is and who runs it
+    (`V7_FAIL_AT_FLAT_DUTY`): this duty is not yet flat for this arm on this
+    card; a lower one is a new design key, run by hand and read with --read;
+    scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a G's seed 0
+    it skips the G's later seeds and prints the follow-up command."""
     if duty >= 1.0:
         return (f"the remedy is --duty {FLAT_DUTY}: bursts of kernel time with "
                 "idle gaps lower the arms' average board power until the clock "
@@ -3503,7 +3528,7 @@ def v7_remedy(duty: float) -> str:
             "still split at this duty (each arm's board power, where it was "
             "read, is printed above)"
             + (f"; --duty {FLAT_DUTY} is the pod setting" if duty > FLAT_DUTY
-               else "")
+               else f", so {V7_FAIL_AT_FLAT_DUTY}")
             + f" ({FLAT_DUTY_EVIDENCE})")
 
 
@@ -3524,7 +3549,12 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
     construction whenever the arms draw different power. Below it (DESIGN
     DECISION 15) it holds when the duty is low enough that the clock no
     longer follows power, and a FAIL there says this duty was not; the
-    remedy printed on a FAIL names a lower duty in both cases.
+    remedy printed on a FAIL names a lower duty in both cases. At the pod
+    setting that reads: this duty is not yet flat for this arm on this card,
+    the page names a lower duty, which is a new design key and runs of its
+    own, and scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a
+    G's seed 0 it skips the G's later seeds and prints the follow-up command
+    (`v7_remedy`).
 
     UNKNOWN, NOT PASS, when a tread has no clock in either arm: an unread
     clock is not a matching one.
@@ -4720,7 +4750,10 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
            "split the cap forces at full duty (session 4 at full duty: the "
            "arm reading less boosted 2-18%). Whether this duty is low enough "
            f"is measured, not assumed ({FLAT_DUTY_EVIDENCE}); V7 checks it "
-           "here and a FAIL names a lower duty; "
+           "here and a FAIL names a lower duty"
+           + (f" (at this duty a FAIL means {V7_FAIL_AT_FLAT_DUTY})"
+              if args.duty <= FLAT_DUTY else "")
+           + "; "
            f"wall clock over the ladder ~{1 / args.duty:.1f}x the kernel time"
            if args.duty < 1.0 else
            ": the queue kept full, the driver's instrument; on a power-capped "

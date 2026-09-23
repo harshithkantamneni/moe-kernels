@@ -3272,6 +3272,10 @@ def test_the_plan_page_prices_the_duty_and_says_what_it_buys():
     assert "Whether this duty is low enough is measured, not assumed" in half.stdout
     assert PW.FLAT_DUTY_EVIDENCE in half.stdout and PW.FLAT_DUTY_EVIDENCE in quarter.stdout
     assert "V7 checks it here and a FAIL names a lower duty" in quarter.stdout
+    # At the pod setting the plan carries the owner's reading of that FAIL
+    # (XS-1), and above it, where the chain never runs, it does not.
+    assert f"(at this duty a FAIL means {PW.V7_FAIL_AT_FLAT_DUTY})" in quarter.stdout
+    assert "at this duty a FAIL means" not in half.stdout
     # V7's registration says where "by construction" applies: full duty.
     assert "at FULL duty a card that cannot lock its clock fails this by " \
         "construction" in quarter.stdout
@@ -5500,3 +5504,45 @@ def test_a_cell_that_failed_in_the_sweep_carries_the_duty_it_was_asked_at():
     for call in built:
         kws = {k.arg: ast.unparse(k.value) for k in call.keywords}
         assert kws.get("duty") == "args.duty", ast.unparse(call)
+
+
+# --------------------------------------------------------------------------
+# 26. a V7 FAIL at the pod duty: one reading, in every place that says it
+# --------------------------------------------------------------------------
+
+#: The owner's resolved reading of a V7 FAIL at `--duty 0.25` (finding XS-1),
+#: in the words every description carries.
+V7_AT_POD_DUTY = ("not yet flat for this arm on this card",
+                  "does not re-run at it",
+                  "at a G's seed 0",
+                  "skips the G's later seeds and prints the follow-up command")
+
+
+def test_a_v7_fail_at_the_pod_duty_reads_the_same_everywhere_this_file_says_it():
+    """XS-1. The page said "a lower duty"; the driver and the runbook said "a
+    finding about the card, not a setting to change". The owner's reading:
+    that duty is not yet flat for this arm on this card, the page names a
+    lower duty, and the chain does not act on it: it skips the G's later
+    seeds and prints the hand command for a lower-duty follow-up, a new
+    design key with runs of its own. Every place this file says what follows
+    a FAIL at the pod duty now says that, and none says the chain re-runs."""
+    remedy = PW.v7_remedy(PW.FLAT_DUTY)
+    doc = " ".join(PW.__doc__.split())
+    v7_doc = " ".join(PW.gate_v7_clock_parity.__doc__.split())
+    remedy_doc = " ".join(PW.v7_remedy.__doc__.split())
+    for where, text in (("v7_remedy(FLAT_DUTY)", remedy), ("module docstring", doc),
+                        ("V7's docstring", v7_doc),
+                        ("v7_remedy's docstring", remedy_doc),
+                        ("the plan's clause", PW.V7_FAIL_AT_FLAT_DUTY)):
+        for phrase in V7_AT_POD_DUTY:
+            assert phrase in text, (where, phrase, text[:400])
+    # The remedy still NAMES a lower duty, and says what a run there is.
+    assert remedy.startswith(f"the remedy is a lower --duty than {PW.FLAT_DUTY:.2f}:")
+    assert "new design key" in remedy and "--read" in remedy
+    assert "PAIRS.tsv" in remedy
+    # Above the pod setting the chain has nothing to say: it never runs there.
+    assert "alpha_g_chain" not in PW.v7_remedy(0.5)
+    assert "alpha_g_chain" not in PW.v7_remedy(1.0)
+    src = " ".join(SCRIPT.read_text().split())
+    assert "not a setting to change" not in src
+    assert "finding about the card" not in src
