@@ -142,10 +142,10 @@ from moe.bench import exit_codes  # noqa: E402
 #: short has to see them before spending 46 minutes on bn_g16's alpha.
 #: `private-mixtral-bm32` is first of the two and that ordering is a budget
 #: decision, not a dependency: neither reads the other, the private reference is
-#: booked at 3 minutes against the elasticity's 40, and the elasticity is the one
+#: the cheaper booking of the two in `arm_minutes`, and the elasticity is the one
 #: of the pair that can spend its whole booking and still exit INVALID (V1, the
-#: duty states failing to separate in clock). Three minutes buys a direct alpha
-#: before forty are risked on what the fitted one means.
+#: duty states failing to separate in clock). The cheaper arm buys a direct
+#: alpha before forty minutes are risked on what the fitted one means.
 ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "private-mixtral-bm32", "elasticity-m32-n64-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
@@ -305,10 +305,15 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     # ratio of two slopes with no assumed rate in it at all. An operator who
     # runs out of pod hours inside bn_g16 needs either reading rather than
     # another alpha. THE ORDER BETWEEN THE TWO IS A BUDGET DECISION AND NOT A
-    # DEPENDENCY: neither arm reads the other, so the 3-minute one runs first
+    # DEPENDENCY: neither arm reads the other, so the cheaper one runs first
     # and the 40-minute one that can exit INVALID on V1 runs second.
     assert (order[4], order[5]) == ("private-mixtral-bm32",
                                     "elasticity-m32-n64-g16")
+    # And "the cheaper one" is read off the table, not remembered: the private
+    # reference went from 3 to 10 booked minutes when it moved to a duty cycle.
+    cost = {name: int(lift(f"arm_minutes {name}", REPO=str(ROOT)).stdout)
+            for name in (order[4], order[5])}
+    assert cost[order[4]] < cost[order[5]], cost
     for early in ("private-mixtral-bm32", "elasticity-m32-n64-g16"):
         assert order.index(early) < order.index("bn_g16")
         assert order.index(early) < order.index("roofline-n64-g1")
@@ -579,20 +584,25 @@ INVOKED = {
     # operator's own assertion about V1, which the arm line has no business
     # making. The comment above used to call every string here a plan-shaping
     # flag on the arm line, and two of them are neither.
+    # --group-m AND --session-tag JOINED THE ARM LINE ON 2026-09-22: the G the
+    # arm's name promises is asked for rather than defaulted, and the tag is
+    # what stops the arm reproducing session 4's run id on the shared volume.
     "scripts/clock_elasticity.py": ("--dry-run", "--self-test", "--model",
-                                    "--dtype", "--treads", "--duty",
+                                    "--dtype", "--group-m", "--treads", "--duty",
                                     "--repeats", "--burst-ms", "--target-ms",
                                     "--trials", "--warm-ms", "--settle-seconds",
-                                    "--card", "--min-clock-ratio"),
+                                    "--session-tag", "--card",
+                                    "--min-clock-ratio"),
     "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
                                   "--dry-run"),
     # The no-reuse reference, added 2026-09-14. Every flag that shapes the
     # ladder is on both branches; --device-memory-gb is the dry branch's alone
-    # and names a HYPOTHETICAL card, the way dtype's --card does.
+    # and names a HYPOTHETICAL card, the way dtype's --card does. --duty since
+    # 2026-09-22, DESIGN DECISION 15 as the owner decided it.
     "scripts/private_weight_reference.py": ("--dry-run", "--capability",
                                             "--model", "--block-m", "--treads",
-                                            "--repeats", "--self-test",
+                                            "--repeats", "--duty", "--self-test",
                                             "--device-memory-gb",
                                             "--session-tag"),
     "scripts/tile_cap_test.py": ("--dry-run", "--capability", "--fail-on-gate"),
@@ -975,6 +985,9 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
     ("private-mixtral-bm32", "--block-m"),
     ("private-mixtral-bm32", "--treads"),
     ("private-mixtral-bm32", "--session-tag"),
+    ("private-mixtral-bm32", "--duty"),
+    ("elasticity-m32-n64-g16", "--session-tag"),
+    ("elasticity-m32-n64-g16", "--group-m"),
 ])
 def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
     """FOUR ARMS PREVIEWED SOMETHING ELSE. calibrate was skipped entirely with
@@ -3881,6 +3894,15 @@ def test_the_reference_grade_gate_is_wired_after_the_calibration_gate_and_refuse
 PLAN_SECONDS = (r"estimate\s+(\d+) s of GPU", r"estimated GPU time (\d+) s",
                 r"(\d+) s of timed kernel", r"Estimated KERNEL time (\d+) s")
 
+#: The line a plan run at a duty below 1 prints BESIDE its kernel figure, added
+#: 2026-09-22 when the private-weight reference moved to --duty 0.25. Not a
+#: fifth shape of the kernel figure: a second figure, the wall clock of the
+#: ladder's kernel time once the idle gaps are in it. Where a plan prints it the
+#: booking is the kernel figure with the ladder's kernel time swapped for that
+#: wall time, because the gaps are the experiment and the pod pays for them.
+PLAN_DUTY_WALL = (r"WALL CLOCK at duty [\d.]+: the ladder's (\d+) s of kernel "
+                  r"time takes about (\d+) s")
+
 
 def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_path):
     """F6. dtype was booked 6 KERNEL minutes "from ... 315 s of timed kernel"
@@ -3892,15 +3914,29 @@ def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_
     session = tmp_path / "s"
     got = run(["--dry-run"], session=session)
     assert got.returncode == 0, got.stdout[-3000:]
+    at_duty = []
     for name in KERNEL_ARMS:
         plan = (session / "logs" / f"{name}.log").read_text()
         hits = [m for pat in PLAN_SECONDS for m in re.finditer(pat, plan)]
         assert len(hits) == 1, (name, [h.group(0) for h in hits])
         seconds = int(hits[0].group(1))
+        basis = lift(f"arm_basis {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert str(seconds) in basis, (name, seconds)
+        # A DUTY-CYCLED PLAN IS BOOKED ON ITS WALL LINE. At most one such line
+        # per plan, and the ladder's kernel time it names must be inside the
+        # kernel figure, or the swap below would be arithmetic over two plans.
+        walls = list(re.finditer(PLAN_DUTY_WALL, plan))
+        assert len(walls) <= 1, (name, [w.group(0) for w in walls])
+        if walls:
+            ladder, wall = int(walls[0].group(1)), int(walls[0].group(2))
+            assert ladder <= seconds < seconds - ladder + wall, (name, ladder, wall)
+            seconds = seconds - ladder + wall
+            assert str(wall) in basis, (name, wall)
+            at_duty.append(name)
         booked = int(lift(f"arm_minutes {shlex.quote(name)}", REPO=str(ROOT)).stdout.strip())
         assert booked == math.ceil(seconds / 60), (name, seconds, booked)
-        assert str(seconds) in lift(f"arm_basis {shlex.quote(name)}",
-                                    REPO=str(ROOT)).stdout, (name, seconds)
+    # The one arm the driver runs at a duty below 1 is the one priced that way.
+    assert at_duty == ["private-mixtral-bm32"], at_duty
     assert lift("arm_minutes dtype", REPO=str(ROOT)).stdout.strip() == "8"
     assert "454 s of timed kernel" in (session / "logs" / "dtype.log").read_text()
     # The retired figure survives only on lines that retract it.
@@ -4898,15 +4934,18 @@ def _private_closes_line() -> str:
 
 
 def _private_plan() -> str:
-    """`private_weight_reference.py --dry-run --device-memory-gb 140`'s output.
+    """`private_weight_reference.py --dry-run --duty D --device-memory-gb 140`.
 
-    The same two flags the driver's own gate line advertises, so the numbers
-    this file checks the prose against are the numbers an operator reads off
-    the advertised command and not a second parameterisation of it.
+    The same flags the driver's own gate line advertises, the duty read from
+    the one function both arm lines read, so the numbers this file checks the
+    prose against are the numbers an operator reads off the advertised command
+    and not a second parameterisation of it.
     """
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    assert duty, "private_duty printed nothing"
     done = _spawn(
         [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
-         "--dry-run", "--device-memory-gb", "140"],
+         "--dry-run", "--duty", duty, "--device-memory-gb", "140"],
         capture_output=True, text=True, timeout=300, cwd=str(ROOT),
         env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()),
              "PYTHONPATH": str(ROOT)})
@@ -5254,3 +5293,279 @@ def test_the_runbook_counts_the_arms_the_private_reference_precedes():
     assert len(interpretation) == 2, interpretation
     assert "private-mixtral-bm32" in interpretation, interpretation
     assert "interpretation arms" not in _RUNBOOK
+
+
+# --------------------------------------------------------------------------
+# 23. the two interpretation arms once the alpha(G) chain exists: one duty for
+#     R3 at both of its call sites, and a session tag on R1's
+# --------------------------------------------------------------------------
+
+#: Session 4's published R1 directory, on origin/pod-h200-session4 under
+#: results/published/2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/
+#: clock_elasticity/. A directory NAME and not a measured quantity: it is the id
+#: this driver's elasticity line produced on an H200 before it carried a tag,
+#: and so the id a later session on the same shared volume must not reproduce.
+SESSION4_ELASTICITY_ID = ("nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25_0.1"
+                          "-l2flushtrue-modelmixtral_8x7b-repeats13-s-9f91fa91")
+
+#: Session 4's published R3 pages, one row each, with the V7 gate as its
+#: report.json on origin/pod-h200-session4 records it (results/published/
+#: 2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/
+#: private_weight_reference/<run id>/report.json, the gate tagged V7, its
+#: "verdict" and the percentage in its "measured" line). Measured values
+#: transcribed as a fixture: (run id suffix, --model, G, V7 verdict, the worst
+#: tread's clock difference between the shared and private arms in percent).
+#: Every one ran at full duty, before R3 had --duty.
+SESSION4_R3_V7 = (
+    ("d2e4dae0", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("efd9a3d6", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("17d3b789", "qwen2-57b-a14b", 1, "FAIL", 12.21),
+    ("6e27da91", "mixtral-8x7b", 16, "FAIL", 18.10),
+)
+
+
+def _arm_words(name: str) -> tuple[list[list[str]], list[list[str]]]:
+    """`(planning, measuring)`: each `arm <name>` line, continuations joined and
+    split into shell words, sorted by whether it carries `--dry-run`."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [shlex.split(ln) for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(name)}\s", ln)]
+    return ([w for w in lines if "--dry-run" in w],
+            [w for w in lines if "--dry-run" not in w])
+
+
+def _flag(words: list[str], flag: str) -> str:
+    assert flag in words, (flag, words)
+    return words[words.index(flag) + 1]
+
+
+@pytest.fixture(scope="module")
+def interpretation_dry(tmp_path_factory):
+    """ONE laptop dry session for the tests below, `(session dir, stdout)`.
+    Named the way the driver names its own, so the tag its arms carry is the
+    shape a pod's is."""
+    session = tmp_path_factory.mktemp("interp") / "gaps-nocard-20260922T000000Z"
+    got = run(["--dry-run"], session=session)
+    assert got.returncode == 0, got.stdout[-3000:]
+    return session, got.stdout
+
+
+def test_the_private_reference_runs_at_the_owners_duty_on_both_branches(interpretation_dry):
+    """DESIGN DECISION 15 REACHED ONE OF ITS TWO CALL SITES. 5b7b719 gave R3
+    `--duty` and the alpha(G) chain passed it; this driver's own private arm
+    still ran at the script's default of 1.0, where session 4's four ratio
+    pages were INVALID on V7 (the power cap boosting whichever arm read fewer
+    bytes). The runbook meanwhile said both "run it at --duty 0.5" and "the
+    driver runs seed 0", and a seed 1 following the first sentence would have
+    been REFUSED by --replicate-of against a seed 0 following the second,
+    because duty is a design key.
+
+    The owner decided 0.25 on 2026-09-22 (at 0.5 session 4's clock still
+    tracked board power; at 0.25 it sat flat). So: both branches read ONE
+    function, the plan the dry branch prints is at that duty with the duty in
+    its run id, every description of the arm quotes the same duty, and the
+    SCRIPT'S OWN default is still 1.0, since moving a design key's default
+    would re-label every full-duty report on disk."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    assert float(duty) == 0.25, duty          # the owner's decision, 2026-09-22
+    planning, measuring = _arm_words("private-mixtral-bm32")
+    assert len(planning) == 1 and len(measuring) == 1, (planning, measuring)
+    for words in planning + measuring:
+        assert _flag(words, "--duty") == "$(private_duty)", words
+    assert CODE.count("private_duty() {") == 1
+
+    session, stdout = interpretation_dry
+    plan = (session / "logs" / "private-mixtral-bm32.log").read_text()
+    assert re.search(rf"^duty\s+{re.escape(duty)}:", plan, re.M), plan[:3000]
+    experiment = re.search(r"^experiment\s+private_weight_reference / (\S+)$",
+                           plan, re.M)
+    assert experiment, plan[:500]
+    assert f"-duty{duty}-" in experiment.group(1), experiment.group(1)
+
+    private = _load_script_module("private_weight_reference")
+    assert private.build_parser().parse_args([]).duty == 1.0
+
+    # EVERY DESCRIPTION QUOTES THE DUTY THE LINES RUN, and no other one.
+    for reader in ("arm_basis", "arm_offgpu_gates", "arm_closes"):
+        text = lift(f"{reader} private-mixtral-bm32", REPO=str(ROOT)).stdout
+        quoted = set(re.findall(r"--duty ([\d.]+)", text))
+        assert quoted == {duty}, (reader, quoted)
+    first = re.sub(r"\s+", " ", stdout.split("READ THESE FIRST", 1)[1]
+                   .split("elasticity-m32-n64-g16", 1)[0])
+    assert f"--duty {duty}" in first, first
+    # And the retired premise is not restated anywhere in the driver: V7 does
+    # not hold "by construction" at a duty below 1, it is expected to.
+    assert "holds by construction" not in TEXT
+
+
+def test_the_elasticity_arm_measures_under_this_sessions_tag(interpretation_dry):
+    """THE DRIVER'S R1 LINE REPRODUCED SESSION 4'S RUN ID. 8d4eb78 gave
+    clock_elasticity `--session-tag` and the chain passed it; this driver's
+    elasticity arm passed nothing, so on an H200 its id was byte-identical to
+    session 4's published directory, and `$RESULTS` is keyed on the card and
+    not the session. On the shared volume the arm would find all 416 of
+    session 4's cells, time nothing, and re-score them as this session's; the
+    CARD file compares only the card NAME, which every H200 shares.
+
+    Both branches now carry the private arm's own tag expression, the run id
+    the measuring line produces differs from one session to the next and is
+    never session 4's, and the dry page names the dry session. --group-m is on
+    the line at the G the arm's name carries."""
+    planning, measuring = _arm_words("elasticity-m32-n64-g16")
+    assert len(planning) == 1 and len(measuring) == 1, (planning, measuring)
+    tag = _flag(_arm_words("private-mixtral-bm32")[1][0], "--session-tag")
+    named_g = re.search(r"-g(\d+)$", "elasticity-m32-n64-g16").group(1)
+    for words in planning + measuring:
+        assert _flag(words, "--session-tag") == tag, words
+        assert _flag(words, "--group-m") == named_g, words
+
+    elasticity = _load_script_module("clock_elasticity")
+    words = measuring[0]
+    script = next(i for i, w in enumerate(words) if w.endswith("clock_elasticity.py"))
+    flags = words[script + 1:]
+
+    def run_id(session_name: str) -> str:
+        argv = [session_name if w == tag else w for w in flags]
+        args = elasticity.build_parser().parse_args(argv + ["--card", "NVIDIA H200"])
+        return elasticity.default_run_id(args)
+
+    one = run_id("gaps-nvidia_h200-20260922T000000Z")
+    two = run_id("gaps-nvidia_h200-20260923T000000Z")
+    assert one != two, one
+    assert SESSION4_ELASTICITY_ID not in (one, two), (one, two)
+
+    session, _ = interpretation_dry
+    plan = (session / "logs" / "elasticity-m32-n64-g16.log").read_text()
+    assert re.search(rf"^session\s+{re.escape(session.name)}$", plan, re.M), plan[:1500]
+
+    # THE STANDALONE DECISION IS WRITTEN WHERE AN OPERATOR READS THE ARM: this
+    # arm keeps session 4's design and is not the chain's per-G elasticity.
+    closes = lift("arm_closes elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+    assert "STANDALONE ARM AND NOT THE CHAIN'S" in closes, closes[:500]
+    assert "scripts/alpha_g_chain.sh" in closes
+    for reader in ("arm_basis", "arm_offgpu_gates"):
+        text = lift(f"{reader} elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+        assert f"--group-m {named_g} " in text, reader
+    # The basis no longer promises a dry command reproduces the pod's run id.
+    basis = lift("arm_basis elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
+    assert "gets the same run id:" not in basis, basis
+
+
+def test_the_runbooks_private_reference_section_says_one_thing_about_v7():
+    """The section contradicted itself twice. V7 "FAILS by construction" in
+    one paragraph and "holds by construction" three paragraphs down; "Run it
+    at --duty 0.5" and then "the driver runs seed 0" with a driver that passed
+    no --duty. It is rewritten to the owner's decision: the driver runs R3 at
+    `private_duty`, "fails by construction" is the FULL-duty statement, the
+    booking is the driver's, and the hand-run second seed carries the duty
+    its seed 0 was run at."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    section = _RUNBOOK.split("## The private-weight reference alone", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    flat = re.sub(r"\s+", " ", section)
+    assert f"**The driver runs it at `--duty {duty}`**" in flat, flat[:3000]
+    # Only this duty, and the script's own full-duty default named as such.
+    assert set(re.findall(r"--duty ([\d.]+)", flat)) == {duty, "1.0"}, flat
+    assert "holds by construction" not in flat
+    for sentence in re.split(r"(?<=[.;])\s", flat):
+        if "by construction" in sentence.lower() and "fail" in sentence.lower():
+            assert "full duty" in sentence, sentence
+    booked = lift("arm_minutes private-mixtral-bm32", REPO=str(ROOT)).stdout.strip()
+    assert f"(`private-mixtral-bm32`, {booked} min)" in flat, flat[:600]
+    # The hour it books is priced by the driver over the section's own --only.
+    only = re.search(r"--only ([\w,-]+)", section).group(1).split(",")
+    assert "private-mixtral-bm32" in only, only
+    priced, bound = lift(f"session_bound {' '.join(only)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"the driver prices the {_count_word(len(only))} at ~{priced} minutes " \
+           f"(~{bound} bounded)" in flat, (priced, bound, flat[:900])
+    # The hand-run seed 1 is the driver's measuring line plus the replicate
+    # flags, and it keeps the duty: --replicate-of refuses one at another.
+    block = re.search(r"```\n(MOE_RESULTS_DIR=[^`]*)```", section)
+    assert block, section
+    command = block.group(1).replace("\\\n", " ")
+    words = shlex.split(command)
+    assert words[words.index("--duty") + 1] == duty, command
+    assert "--seed" in words and "--replicate-of" in words, command
+    measuring = _arm_words("private-mixtral-bm32")[1][0]
+    for flag in ("--model", "--block-m", "--treads", "--repeats"):
+        assert words[words.index(flag) + 1] == _flag(measuring, flag), flag
+    # There is no arms.sh; the section used to send the operator to one.
+    assert "arms.sh" not in section
+
+
+def test_session_4s_ratio_pages_are_counted_and_quoted_as_published():
+    """THE PROSE COUNTED THREE PAGES WHERE SESSION 4 PUBLISHED FOUR. The duty
+    rewrite cited session 4's R3 pages as the reason R3 is duty-cycled, and
+    said "three ratio pages" in the 0c comment and twice in the runbook, and
+    quoted their V7 reading as "2% at G=1, 18% at G=16" there and in the arm's
+    own description. Session 4 published four, all V7 FAIL at full duty: two
+    mixtral pages at G=1 (2%), one mixtral page at G=16 (18%), and a qwen2
+    page at G=1 that read 12%, so "2% at G=1" was wrong for one of the two
+    models it covered. Every count of those pages is checked against the
+    published set, every one carries the range, and every percentage quoted
+    against a G names its model and is that model's page at that G."""
+    assert {verdict for _, _, _, verdict, _ in SESSION4_R3_V7} == {"FAIL"}
+    worst: dict[tuple[str, int], int] = {}
+    for _, model, g, _, pct in SESSION4_R3_V7:
+        worst[(model, g)] = max(worst.get((model, g), 0), round(pct))
+    lo, hi = min(worst.values()), max(worst.values())
+    word = _count_word(len(SESSION4_R3_V7))
+    counts = "|".join([r"\d+", *_COUNT_WORDS.values()])
+    mention = re.compile(
+        rf"session 4(?:'s|:) ({counts}) (?:ratio |R3 )?pages", re.I)
+    quote = re.compile(r"(\d+)% (?:on (\S+) )?at G=(\d+)")
+
+    driver = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*#+", " ", TEXT))
+    runbook = re.sub(r"\s+", " ", _RUNBOOK)
+    for name, flat, least in (("driver", driver, 2), ("runbook", runbook, 2)):
+        found = list(mention.finditer(flat))
+        assert len(found) >= least, (name, [m.group(0) for m in found])
+        for m in found:
+            assert m.group(1).lower() == word, (name, m.group(0))
+            window = flat[m.start():m.start() + 400]
+            assert f"{lo}-{hi}%" in window, (name, window)
+        quoted = set()
+        for q in quote.finditer(flat):
+            pct, model, g = int(q.group(1)), q.group(2), int(q.group(3))
+            assert model is not None, (name, "no model named", q.group(0))
+            assert worst.get((model, g)) == pct, (name, q.group(0), worst)
+            quoted.add((model, g))
+        assert quoted == set(worst), (name, quoted, set(worst))
+
+
+def test_the_runbooks_rental_figures_are_the_drivers_own(interpretation_dry):
+    """"this page is a copy", and the copy was two sessions stale: it read
+    515 / 119 / 676 while the driver printed 576 / 137 / 761, and its two-hour
+    `--only` line had neither `thermal` nor the private-weight reference that
+    the driver's own two-hour set carries. The private arm's move to a duty
+    cycle moved all three figures again. The copy is checked here against the
+    dry page it is a copy of."""
+    _, stdout = interpretation_dry
+    priced = re.search(r"TOTAL ~(\d+) minutes", stdout).group(1)
+    kernel = re.search(r"of which ~(\d+) are KERNEL minutes", stdout).group(1)
+    bound = re.search(r"~(\d+) minutes \(~\d+h \d+m\), the same table", stdout).group(1)
+    reaches = _RUNBOOK.split("**What a rental reaches.**", 1)[1]
+    para = re.sub(r"\s+", " ", reaches.split("\n\n", 1)[0])
+    assert f"~{priced} priced minutes (~{kernel} of them KERNEL" in para, para
+    assert f"become ~{bound} once" in para, para
+    two = lift("rental_2h_arms", REPO=str(ROOT)).stdout.split()
+    listed = re.search(r"`--only ([\w,-]+)`", reaches)
+    assert listed and listed.group(1).split(",") == two, (listed, two)
+
+
+def test_the_runbooks_arm_table_books_what_the_driver_books():
+    """The runbook's arm ledger quotes each row's minutes and clock from the
+    driver's own table and says so, and until 2026-09-22 it had no row for
+    either interpretation arm, so the one whose booking moved (3 to 10 minutes
+    at --duty 0.25) and the one whose run id moved had nothing on the page an
+    operator books from. Both have rows now, and every row's two numbers are
+    the ones `--list` prints."""
+    listing = run(["--list"]).stdout
+    listed = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^  ([a-z0-9_-]+)\s+~\s*(\d+) min (\w+)$", listing, re.M)}
+    rows = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^\| `([a-z0-9_-]+)` \| *(\d+) \| (\w+) \|", _RUNBOOK, re.M)}
+    assert {"private-mixtral-bm32", "elasticity-m32-n64-g16"} <= set(rows), rows
+    for name, booked in rows.items():
+        assert listed.get(name) == booked, (name, booked, listed.get(name))
