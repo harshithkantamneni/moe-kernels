@@ -2664,7 +2664,8 @@ def test_c1_prints_the_clock_corrected_ratio_and_scores_the_raw_one():
     assert ("clock-corrected ratio 0.9743 at eta = 0.7436 [0.7277, 0.7559] "
             "(R1 report.json @81f80b7)") in joined
     assert "PRINTED ONLY" in joined and "moved +0.0192" in joined
-    assert "at eta = 1, the bound DD11 argues from, it would read 0.9809" in joined
+    assert ("at eta = 1, the first-order figure DD11 argues from, it would "
+            "read 0.9809; not a bound") in joined
     assert "ONE estimator's bootstrap carried across eta" in joined
 
 
@@ -3816,29 +3817,105 @@ def test_no_description_promises_v7_by_construction_below_full_duty():
     assert "the full-duty timer does not" not in SCRIPT.read_text()
 
 
-def test_the_elasticity_the_correction_takes_is_the_per_call_reading_everywhere():
-    """Finding 19. 8d4eb78 moved clock_elasticity's gated `value` from the
-    per-call elasticity to the per-M-tile one, and this file still called
-    `eta` the per-call quantity and quoted 0.74 as what that arm measures
-    without saying which field held it. `clock_corrected` scales each cell's
-    WHOLE per-call time, so it takes the per-call reading; every description
-    of the flag says so and where that reading sits in either vintage of
-    report. The numbers quoted beside it carry their run and date."""
+def _two_elasticity_world(clock, *, intercept_eta, tile_eta, a=0.3,
+                          b_shared=0.10, b_private=0.20, f0=1965.0):
+    """Ratio-arm cells under `ms = a (f0/f) ** intercept_eta + b n (f0/f) **
+    tile_eta`, the additive law with a different elasticity on each term, at
+    the clock `clock(arm, n)` gives. The planted ratio is b_shared / b_private
+    at any one clock. Every number here is PLANTED; none is a card's."""
+    out = []
+    for arm, b in ((PW.SHARED, b_shared), (PW.PRIVATE, b_private)):
+        for n in range(1, 7):
+            f = clock(arm, n)
+            ms = a * (f0 / f) ** intercept_eta + b * n * (f0 / f) ** tile_eta
+            out.extend(_sample(arm, n, rep, ms, load=f) for rep in range(3))
+    return out
+
+
+def _corrected_ratio(samples, eta):
+    cells = PW.clock_corrected(samples, eta, 1500.0)
+    return (PW.ladder_for(cells, PW.SHARED).slope_ms
+            / PW.ladder_for(cells, PW.PRIVATE).slope_ms)
+
+
+def test_one_clock_per_arm_is_carried_exactly_by_the_per_m_tile_elasticity():
+    """WHICH eta `clock_corrected` needs, as arithmetic on planted cells. The
+    ratio reads only slopes, so with each arm at one clock the per-call
+    factor reaches it through the slope alone: the per-M-tile elasticity
+    recovers the planted ratio exactly, and a per-call blend of the
+    intercept's elasticity with the tiles' does not, whatever its weights.
+    With a clock that moves across treads inside an arm, no single eta is
+    exact, which is what the descriptions say."""
+    intercept_eta, tile_eta = 0.2, 1.1
+    planted = 0.10 / 0.20
+    one = _two_elasticity_world(
+        lambda arm, n: 1740.0 if arm == PW.SHARED else 1425.0,
+        intercept_eta=intercept_eta, tile_eta=tile_eta)
+    assert _corrected_ratio(one, tile_eta) == pytest.approx(planted, abs=1e-12)
+    for blend in (0.25, 0.5, 0.75):
+        per_call = intercept_eta + blend * (tile_eta - intercept_eta)
+        assert abs(_corrected_ratio(one, per_call) - planted) > 1e-3, per_call
+    moving = _two_elasticity_world(
+        lambda arm, n: 1740.0 - 50.0 * (n - 1) if arm == PW.SHARED else 1425.0,
+        intercept_eta=intercept_eta, tile_eta=tile_eta)
+    assert abs(_corrected_ratio(moving, tile_eta) - planted) > 1e-3
+    # One elasticity on both terms is the case any consistent eta carries,
+    # which is the clock-split-elastic world's law.
+    shared_law = _two_elasticity_world(
+        lambda arm, n: 1740.0 - 50.0 * (n - 1) if arm == PW.SHARED else 1425.0,
+        intercept_eta=0.75, tile_eta=0.75)
+    assert _corrected_ratio(shared_law, 0.75) == pytest.approx(planted, abs=1e-12)
+
+
+def test_the_eta_1_line_is_a_reference_point_the_correction_can_pass():
+    """DD11's figure is first-order: the per-M-tile elasticity the correction
+    takes read above 1 on session 4's cells, and at such an eta the corrected
+    ratio lies past the eta = 1 one. The page used to call that line a bound
+    the correction cannot exceed."""
+    one = _two_elasticity_world(
+        lambda arm, n: 1740.0 if arm == PW.SHARED else 1425.0,
+        intercept_eta=0.2, tile_eta=1.1)
+    cc = PW.clock_corrected_ratio(one, PW.ClockElasticity(1.1, 1.1, 1.1, "x"),
+                                  f_ref=1500.0, f_ref_source="planted",
+                                  draws=50, seed=0)
+    assert (cc.ratio - cc.raw) * (cc.ratio - cc.at_unit) > 0
+    assert abs(cc.ratio - cc.raw) > abs(cc.at_unit - cc.raw)
+    joined = "\n".join(cc.lines())
+    assert "cannot exceed" not in joined
+    assert "not a bound: an eta above 1 carries the correction past it" in joined
+    doc = " ".join(PW.ClockCorrection.__doc__.split())
+    assert "cannot exceed" not in doc and "NOT a bound" in doc
+
+
+def test_the_elasticity_the_correction_takes_is_the_per_m_tile_claim_everywhere():
+    """Finding 19 and the review's R3-ETA-PER-CALL. `clock_corrected` scales
+    each cell's whole per-call time, and a first reading of that took it to
+    want the per-call elasticity; the ratio reads only slopes, so it wants
+    the per-M-tile one (the test above plants both and shows it), which is
+    also what clock_elasticity.py says its claim is for. Every description of
+    the flag names that quantity, where it sits in either vintage of report,
+    and that session 4's `value` is the per-call reading instead. The
+    numbers quoted beside it carry their run and date."""
     for doc in (PW.ClockElasticity.__doc__, PW.clock_corrected.__doc__):
-        assert "PER-CALL" in " ".join(doc.split()), doc
+        joined = " ".join(doc.split())
+        assert "PER-M-TILE" in joined and "PER-CALL ELASTICITY" not in joined, doc
     cls = " ".join(PW.ClockElasticity.__doc__.split())
-    assert "elasticity.fixed_tread" in cls and "elasticity.value" in cls
-    assert "8d4eb78" in cls
+    assert "elasticity.value" in cls and "elasticity.fixed_tread" in cls
+    assert "8d4eb78" in cls and "session 4's included" in cls
     helps = _helps()
-    assert "per-CALL" in helps["--clock-elasticity"]
-    assert "elasticity.fixed_tread" in helps["--clock-elasticity"]
-    assert "NOT its gated per-M-tile value" in helps["--clock-elasticity"]
-    assert "the key read" in helps["--clock-elasticity-source"]
+    assert "per-M-TILE" in helps["--clock-elasticity"]
+    assert "gated claim (elasticity.value" in helps["--clock-elasticity"]
+    assert "NOT its pooled per-call" in helps["--clock-elasticity"]
+    assert "e.g. elasticity.value" in helps["--clock-elasticity-source"]
     parity = _comment_above("CLOCK_PARITY")
-    assert "WHICH ELASTICITY `--clock-elasticity` TAKES" in parity
-    assert "elasticity.fixed_tread" in parity and "NOT the per-M-tile claim" in parity
+    assert "WHICH ELASTICITY `--clock-elasticity` TAKES: THE PER-M-TILE ONE" in parity
+    assert "NOT its pooled per-call reading" in parity
+    assert "no single eta is exact" in parity
+    assert "bounded above by 1" not in parity
     assert "9f91fa91" in parity and "2026-09-21" in parity and "12ec932" in parity
-    assert "measured PER-CALL elasticity" in " ".join(PW.__doc__.split())
+    doc = " ".join(PW.__doc__.split())
+    assert "measured PER-M-TILE elasticity" in doc
+    assert "PER-CALL elasticity" not in doc
 
 
 # --------------------------------------------------------------------------

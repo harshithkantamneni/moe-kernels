@@ -245,9 +245,11 @@ carry the same activation and compute terms, and dividing them subtracts
 nothing -- because being model-free is the entire reason this ladder was worth
 renting a card for. Two corrected ratios are PRINTED beside it, each under the
 model it assumes, and both are scored by nothing: the activation-corrected
-ratio, and (when `--clock-elasticity` names a measured PER-CALL elasticity
-and its source) the CLOCK-corrected ratio, every ratio-arm cell carried to
-one reference clock by `(f_cell / f_ref) ** eta` before the fit. V7 still
+ratio, and (when `--clock-elasticity` names a measured PER-M-TILE
+elasticity and its source) the CLOCK-corrected ratio, every ratio-arm cell
+carried to one reference clock by `(f_cell / f_ref) ** eta` before the fit
+(exact when each arm holds one clock at every fitted tread, first-order when
+a clock moves across treads; CLOCK_PARITY's comment has why). V7 still
 refuses a clock split of more than CLOCK_PARITY. At FULL duty on a pod that
 cannot lock its clock (RunPod refuses `nvidia-smi -lgc`) the arm reading less
 draws less power and clocks higher, so V7 fails by construction there and the
@@ -470,32 +472,43 @@ IDENTITY_SPREAD = 0.02
 #: DESIGN DECISION 11. V7's bound on the clock. At every fitted tread the
 #: median under-load SM clock of PRIVATE must sit within this fraction of
 #: SHARED's. CHOSEN, a tolerance and not a quantity derived from any card, and
-#: the reason is arithmetic: the elasticity of the per-call time to the clock
-#: is bounded above by 1 (time that is SM cycles over the clock), so a 1%
-#: clock gap moves a cell's time by at most 1%, and a slope that moved in
-#: proportion would move the ratio by at most ~0.01, a sixth of ALPHA_BAND's
-#: width. THE SLOPE NEED NOT MOVE IN PROPORTION, and session 4 says it did
-#: not: its clock arm's cells (run 9f91fa91, 2026-09-21, G=16), re-scored by
-#: `clock_elasticity.fit` at 12ec932, read the per-M-tile elasticity at 1.21
-#: over treads 1-8 and 1.11 over treads 2-8 against a per-call 0.74, because
-#: the intercept follows the clock less than the tiles do. So ~0.01 is a
-#: first-order figure, and 1% stays the tolerance.
+#: the reason is first-order arithmetic: time that is SM cycles over the clock
+#: has an elasticity of 1 to it, so a 1% clock gap moves such a cell's time by
+#: about 1%, and a slope that moved in proportion would move the ratio by
+#: about 0.01, a sixth of ALPHA_BAND's width. THE SLOPE NEED NOT MOVE IN
+#: PROPORTION, and session 4 says it did not: its clock arm's cells (run
+#: 9f91fa91, 2026-09-21, G=16), re-scored by `clock_elasticity.fit` at
+#: 12ec932, read the per-M-tile elasticity at 1.21 over treads 1-8 and 1.11
+#: over treads 2-8 against a pooled per-call 0.74, because the intercept
+#: follows the clock less than the tiles do. Both per-M-tile readings are
+#: above 1, so ~0.01 is a first-order figure and not a bound, and 1% stays
+#: the tolerance.
 #:
-#: WHICH ELASTICITY `--clock-elasticity` TAKES. `clock_corrected` scales each
-#: cell's WHOLE per-call ms by `(f / f_ref) ** eta`, so it takes the PER-CALL
-#: elasticity: `clock_elasticity`'s "eta, fixed tread, pooled" line, which is
-#: `elasticity.fixed_tread` in a report written since 8d4eb78 (2026-09-22)
-#: and `elasticity.value` in one written before it, such as session 4's,
-#: where it read 0.7436 [0.7277, 0.7559] at G=16. NOT the per-M-tile claim
-#: that arm gates (since 8d4eb78; over treads 2 and deeper by the owner's
-#: decision D2 of 2026-09-22): that is the elasticity of a slope, and applied to
-#: whole per-call times it would carry the intercept at the tiles' rate. The
-#: page PRINTS the corrected ratio beside the raw one. It never scores it, and
-#: it never moves this bound: at FULL duty on a card that cannot lock its
-#: clock the two arms draw different power and V7 refuses by construction,
-#: which is a fact about the platform the page should state, not soften;
-#: below full duty DESIGN DECISION 15 picks a duty at which session 4's clock
-#: no longer followed power.
+#: WHICH ELASTICITY `--clock-elasticity` TAKES: THE PER-M-TILE ONE.
+#: `clock_corrected` scales each cell's whole per-call ms by
+#: `(f / f_ref) ** eta`, and the ratio reads nothing but the two SLOPES. When
+#: each arm holds one clock at every fitted tread, the factor is one number
+#: per arm: the intercept's share of it stays in the intercept, the slope is
+#: carried by exactly that factor, and the corrected ratio is exact when eta
+#: is the elasticity of the per-M-tile cost. That is `clock_elasticity`'s
+#: gated claim, `elasticity.value` in a report written since 8d4eb78
+#: (2026-09-22), over treads 2 and deeper by the owner's decision D2 of
+#: 2026-09-22 (that file's `Elasticity` docstring says which treads `value`
+#: spans). NOT its pooled per-call reading, `elasticity.fixed_tread`, which
+#: is also what `elasticity.value` holds in a report written before 8d4eb78,
+#: session 4's included (0.7436 [0.7277, 0.7559] at G=16): that blends the
+#: one-tile call's 0.17 with the deeper treads' 1.04-1.11 on the same cells,
+#: and it is the elasticity of no slope.
+#: When a clock moves ACROSS treads inside one arm, as at full duty where
+#: power follows the tread, the intercept's clock term leaks into the slope
+#: and no single eta is exact (two elasticities would be; this correction
+#: takes one), so there the corrected ratio is first-order only. The page
+#: PRINTS it beside the raw one. It never scores it, and it never moves this
+#: bound: at FULL duty on a card that cannot lock its clock the two arms draw
+#: different power and V7 refuses by construction, which is a fact about the
+#: platform the page should state, not soften; below full duty DESIGN
+#: DECISION 15 picks a duty at which session 4's clock no longer followed
+#: power.
 CLOCK_PARITY = 0.01
 
 #: DESIGN DECISION 8. V3's two tolerances. The weight allocation is an exact
@@ -2449,16 +2462,20 @@ def ladder_for(samples, arm: str, repeats: list[int] | None = None) -> Ladder:
 
 @dataclass(frozen=True)
 class ClockElasticity:
-    """A PER-CALL clock elasticity, `eta = -d log ms / d log f` of a cell's
-    whole per-call time, with the interval it was measured with and where it
-    came from. PER CALL because `clock_corrected` applies it to each cell's
-    whole per-call ms. `scripts/clock_elasticity.py` is the arm that measures
-    it and nothing here does: its "eta, fixed tread, pooled" reading, which is
-    `elasticity.fixed_tread` in a report written since 8d4eb78 (2026-09-22)
-    and `elasticity.value` in one written before, session 4's included. The
-    per-M-tile elasticity that arm gates is a different quantity and [0, 1.5]
-    admits both, so the SOURCE is what says which one was given (DESIGN
-    DECISION 11)."""
+    """A PER-M-TILE clock elasticity, `eta = -d log b / d log f` of the
+    per-M-tile cost `b = d ms / d n`, with the interval it was measured with
+    and where it came from. PER-M-TILE because the ratio reads nothing but
+    slopes: `clock_corrected` scales each cell's whole per-call ms by one
+    factor, and when each arm holds one clock at every fitted tread that
+    factor reaches the ratio through the slope alone, which only the
+    per-M-tile elasticity carries exactly (CLOCK_PARITY's comment has the
+    arithmetic, and the case where no single eta is exact).
+    `scripts/clock_elasticity.py` is the arm that measures it and nothing here
+    does: its gated claim, `elasticity.value` in a report written since
+    8d4eb78 (2026-09-22). Its pooled per-CALL reading, `elasticity.fixed_tread`
+    and the `elasticity.value` of a report written before 8d4eb78, session 4's
+    included, is a different quantity and [0, 1.5] admits both, so the SOURCE
+    is what says which one was given (DESIGN DECISION 11)."""
     eta: float
     lo: float
     hi: float
@@ -2480,9 +2497,13 @@ def clock_corrected(samples, eta: float, f_ref: float) -> list:
     is untouched (nothing reads it), and a usable ratio-arm cell WITHOUT a
     clock refuses the whole correction rather than leaving that cell raw.
 
-    `eta` IS THE PER-CALL ELASTICITY (`ClockElasticity`): one factor on the
-    whole per-call time, intercept and tiles alike, which is what the per-call
-    reading measures and the per-M-tile one does not.
+    `eta` IS THE PER-M-TILE ELASTICITY (`ClockElasticity`), applied as one
+    factor to the whole per-call time, intercept and tiles alike. Where an arm
+    holds one clock at every fitted tread that factor is one number per arm,
+    the intercept's share of it stays in the intercept, and the slope, which
+    is all the ratio reads, is carried exactly. Where a clock moves across
+    treads inside an arm the intercept's share leaks into the slope and the
+    correction is first-order only.
 
     THE RATIO DOES NOT DEPEND ON f_ref: both arms carry the same factor
     `f_ref ** -eta`, which cancels. It is here so the corrected CELLS are at a
@@ -2517,8 +2538,11 @@ class ClockCorrection:
     nothing. `interval` is the same paired bootstrap over the corrected cells
     at `eta`; `envelope` is the union of the corrected intervals at `lo` and
     `hi`, i.e. ONE estimator's bootstrap carried across eta's own interval,
-    not a between-estimator spread; `at_unit` is the ratio at eta = 1, DD11's
-    bound, printed as the bracket the correction cannot exceed."""
+    not a between-estimator spread; `at_unit` is the ratio at eta = 1, the
+    first-order figure DD11 argues from, printed as a reference point and NOT
+    a bound: a per-M-tile eta above 1, which is what session 4's clock-arm
+    cells read when re-scored (CLOCK_PARITY's comment), carries the
+    correction past it."""
     elasticity: ClockElasticity
     f_ref: float
     f_ref_source: str
@@ -2555,8 +2579,9 @@ class ClockCorrection:
                f"{self.envelope[1]:.4f}] -- ONE estimator's bootstrap carried "
                "across eta, not a between-estimator spread"
                if self.envelope else ""),
-            f"  at eta = 1, the bound DD11 argues from, it would read "
-            f"{self.at_unit:.4f}: the correction cannot exceed that",
+            f"  at eta = 1, the first-order figure DD11 argues from, it would "
+            f"read {self.at_unit:.4f}; not a bound: an eta above 1 carries the "
+            "correction past it",
         ]
 
 
@@ -2564,8 +2589,8 @@ def clock_corrected_ratio(samples, elasticity: ClockElasticity, *,
                           f_ref: float, f_ref_source: str, draws: int,
                           seed: int) -> ClockCorrection:
     """Form the corrected ratio at `eta`, its interval, the envelope over
-    [lo, hi], and the eta = 1 bracket, from the same samples and the same
-    paired bootstrap the raw ratio uses."""
+    [lo, hi], and the eta = 1 reference point, from the same samples and the
+    same paired bootstrap the raw ratio uses."""
     def ratio_at(eta: float) -> float:
         cells = clock_corrected(samples, eta, f_ref)
         return ladder_for(cells, SHARED).slope_ms / ladder_for(cells, PRIVATE).slope_ms
@@ -6209,20 +6234,22 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ridge-band", default="")
     ap.add_argument("--clock-elasticity", type=float, nargs="+", default=None,
                     metavar="ETA",
-                    help="a MEASURED per-CALL clock elasticity, eta or eta "
-                         "lo hi, from scripts/clock_elasticity.py: its 'eta, "
-                         "fixed tread, pooled' reading (elasticity.fixed_tread "
-                         "in a report written since 2026-09-22), NOT its gated "
-                         "per-M-tile value, because the correction scales each "
-                         "cell's whole per-call time. The page then PRINTS a "
-                         "clock-corrected ratio beside the raw one. Scores "
-                         "nothing and moves no gate; needs "
-                         "--clock-elasticity-source")
+                    help="a MEASURED per-M-TILE clock elasticity, eta or "
+                         "eta lo hi, from scripts/clock_elasticity.py: its "
+                         "gated claim (elasticity.value in a report written "
+                         "since 8d4eb78, 2026-09-22), NOT its pooled per-call "
+                         "'eta, fixed tread, pooled' reading, which is "
+                         "elasticity.fixed_tread and also the elasticity.value "
+                         "of an older report, session 4's included. The ratio "
+                         "reads only slopes, and when each arm holds one clock "
+                         "the per-M-tile elasticity is the one that carries a "
+                         "slope exactly. The page then PRINTS a clock-corrected "
+                         "ratio beside the raw one. Scores nothing and moves "
+                         "no gate; needs --clock-elasticity-source")
     ap.add_argument("--clock-elasticity-source", default="",
                     help="where --clock-elasticity was read from (a report "
-                         "path, the key read, e.g. elasticity.fixed_tread, and "
-                         "the commit), recorded on the page and in "
-                         "report.json")
+                         "path, the key read, e.g. elasticity.value, and the "
+                         "commit), recorded on the page and in report.json")
     ap.add_argument("--bandwidth-gbps", type=float, default=0.0)
     ap.add_argument("--device-memory-gb", type=float, default=0.0,
                     help="a HYPOTHETICAL card's memory, for checking the plan "
