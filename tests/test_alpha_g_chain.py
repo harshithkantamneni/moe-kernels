@@ -3,9 +3,10 @@
 The chain sequences the alpha(G) matrix session: preflight, the driver's
 preconditions, tests/test_gpu.py on the card, the alignment probe's on-card
 check from the vLLM venv, the ratio at seed 0 at every G (the first run's V8
-read before anything else is bought), the clock elasticity at every G, the
-later seeds scored with the earlier ones at --duty 0.25, and the whole suite at
-the end as a record. What this file pins: the three shell habits this project
+read before anything else is bought), the clock elasticity at every G at
+duty states 1.0 0.5 0.25, the later seeds scored with the earlier ones at
+--duty 0.25, and, only when END_SUITE=run asks for it, the whole suite at the
+end as a record. What this file pins: the three shell habits this project
 has been burned by, the ledger's second opinion (the driver's rule, lifted),
 every gate asking for DONE and not for "latched", overrides that hold for
 every later pass, every arm under a hang cap off its own price, the session a
@@ -59,9 +60,9 @@ KNOBS = _KNOBS_LINE.group(1).split() if _KNOBS_LINE else []
 
 def chain_env(**extra) -> dict:
     """laptop_env without the chain's knobs, then `extra`. On the pod this file
-    runs inside the chain's end suite, and an operator's SESSION=<dir> or
-    END_SUITE=skip in the caller's environment must not steer a chain spawned
-    here into the real session."""
+    runs inside the chain's end suite when END_SUITE=run buys it, and an
+    operator's SESSION=<dir> or END_SUITE in the caller's environment must not
+    steer a chain spawned here into the real session."""
     env = {k: v for k, v in laptop_env().items() if k not in KNOBS}
     env.update(extra)
     return env
@@ -340,6 +341,29 @@ def test_a_collected_count_is_priced_half_up(tmp_path):
     assert _priced(4925, 0.66) != round(4925 * 0.66), "the count the old assertion flaked on"
 
 
+def test_the_pod_rate_is_the_quotient_of_the_run_it_cites():
+    """SUITE_S_PER_TEST is a measured rate: it is checked against the run its
+    comment cites (session 5's end suite, tests and seconds), not typed twice.
+    The comment's first "N tests in S s" is that run, and where the tree
+    carries the log it names, that log's own tally is the figure quoted."""
+    block = re.search(r'#: The price per collected test ON A POD.*?\n'
+                      r'SUITE_S_PER_TEST="\$\{SUITE_S_PER_TEST:-([0-9.]+)\}"', CODE, re.S)
+    assert block, "the rate's comment and line"
+    # the comment as one line: a wrapped path joins without a space
+    text = re.sub(r"\n#: ", " ", re.sub(r"/\n#: ", "/", block.group(0)))
+    n, secs = map(int, re.search(r"(\d+) tests in (\d+) s", text).groups())
+    assert "session 5" in text.split(f"{n} tests in")[0]
+    assert float(block.group(1)) == round(secs / n, 2), (block.group(1), secs, n)
+    cited = re.search(r"(results/published/\S+/suite\.log)", text)
+    assert cited, "the rate names the log it was read off"
+    log = ROOT / cited.group(1)
+    if log.exists():
+        tally = log.read_text().strip().splitlines()[-1]
+        ran = sum(int(k) for k in re.findall(r"(\d+) (?:failed|passed|skipped|errors?)\b", tally))
+        took = float(re.search(r" in ([\d.]+)s", tally).group(1))
+        assert (ran, round(took)) == (n, secs), tally
+
+
 def test_a_red_gpu_tests_page_stops_the_chain_before_any_arm(tmp_path):
     ledger = _ledger(tmp_path / "CHAIN.tsv",
                      _row("gpu-tests", "ERROR", "1", "pytest exit 1: 3 failed"))
@@ -441,8 +465,8 @@ def test_a_pytest_step_runs_without_the_chains_knobs(tmp_path, monkeypatch):
 def test_the_order_is_the_owners_and_only_the_pre_arm_checks_are_gated():
     """D3: preflight, preconditions, tests/test_gpu.py (gated), the probe
     check from the vLLM venv (gated), R3 seed 0 at every G with the pilot's
-    V8 read, R1 at every G, R3's later seeds, then the whole suite uncapped,
-    from PY_BASE, gating nothing."""
+    V8 read, R1 at every G, R3's later seeds, then, on END_SUITE=run, the
+    whole suite uncapped, from PY_BASE, gating nothing."""
     marks = ['echo "== preflight', 'echo "== preconditions', 'echo "== tests/test_gpu.py',
              'echo "== the alignment probe under the graph',
              'echo "== the re-read fraction, off the cap, seed', 'echo "== clock elasticity',
@@ -471,8 +495,9 @@ def test_help_prints_the_whole_header_and_no_code():
     got = subprocess.run(["bash", str(CHAIN), "--help"], capture_output=True, text=True,
                          timeout=60, env=chain_env(REPO=str(ROOT)))
     assert got.returncode == 0
-    for flag in ("--past-gpu-tests", "--past-v8", "--new", "--resume", "END_SUITE=skip"):
+    for flag in ("--past-gpu-tests", "--past-v8", "--new", "--resume", "END_SUITE=run"):
         assert flag in got.stdout, flag
+    assert "OFF BY DEFAULT. END_SUITE=run buys the whole suite" in got.stdout
     assert "WHAT IT RUNS" in got.stdout and "THE REGIME WORD" in got.stdout
     for word in ("RAW-STANDS", "UNREGISTERED-GAP", "CLOCK-CARRIES", "STRADDLES", "withheld:<EXIT>"):
         assert word in got.stdout, word
@@ -571,6 +596,14 @@ def test_the_runbook_chain_section_says_what_the_chain_does():
     assert "resumes by card name" not in flat and "an hour or more apart" not in flat
     assert "makes every later ratio page INVALID" in flat and "SEEDS=0" in sec
     assert "To first order" in flat
+    # session 5's three defaults, each where the runbook states it
+    assert "The whole suite, only on `END_SUITE=run`: it is off by default" in flat
+    assert "`END_SUITE=skip` drops" not in flat
+    assert "three duty states (1.0, 0.5, 0.25" in flat and "(1.0, 0.7, 0.5)" not in flat
+    assert "the clocks at 0.5 and 0.25" in flat and "clock at 0.7 and 0.5" not in flat
+    rate = re.search(r'^SUITE_S_PER_TEST="\$\{SUITE_S_PER_TEST:-([0-9.]+)\}"$', CODE, re.M)
+    assert f"session 5's pod rate of {rate.group(1)} s a test" in flat
+    assert "0.66 s a test" not in flat
 
 
 # --------------------------------------------------------------------------
@@ -874,7 +907,7 @@ def _r1(tmp_path, name, lo, hi, *verdicts):
     gates = [{"kind": k, "number": n, "verdict": v} for k, n, v in verdicts]
     p.write_text(json.dumps({"elasticity": {"value": (lo + hi) / 2 if lo is not None else None,
                                             "lo": lo, "hi": hi},
-                             "duty": [1.0, 0.7, 0.5], "gates": gates}))
+                             "duty": [1.0, 0.5, 0.25], "gates": gates}))
     return p
 
 
@@ -1001,7 +1034,7 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
              for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
     assert fixed["r3_duty"] == ["0.25", "report.json of 3 run(s)"]
     assert fixed["r3_pinned"][0] == "BLOCK_SIZE_N=64", "the swizzle is the G column, not fixed"
-    assert fixed["r1_duty"] == ["1.0 0.7 0.5", "report.json of 1 run(s)"]
+    assert fixed["r1_duty"] == ["1.0 0.5 0.25", "report.json of 1 run(s)"]
     assert fixed["r1_treads"] == ["--treads 8", "the chain's command line"]
     assert fixed["group_m"][0] == "varies: 1 4 16"
     assert not any(ln.startswith("#") for ln in (session / "PAIRS.tsv").read_text().splitlines())
@@ -1304,6 +1337,8 @@ class Pod:
                           END_SUITE="skip", G_LADDER="1 16", SEEDS="0 1 2",
                           STUB_PLAN=str(self.plan), STUB_TRACE=str(self.trace))
         full.update(env)
+        # a knob given as None is unset: the pass takes the chain's own default
+        full = {k: v for k, v in full.items() if v is not None}
         return subprocess.run(["bash", str(CHAIN), *args], capture_output=True, text=True,
                               timeout=900, env=full)
 
@@ -1347,7 +1382,7 @@ def test_a_measuring_pass_runs_the_owners_order_at_duty_0_25(two_passes):
     tag = s.name
     for step in ("r3-g1-s0", "r3-g16-s0", "r3-g1-s1", "r3-g4-s2"):
         assert "--duty 0.25" in args[step] and f"--session-tag {tag}" in args[step], args[step]
-    assert "--duty 1.0 0.7 0.5" in args["r1-g1"]
+    assert "--duty 1.0 0.5 0.25" in args["r1-g1"], "session 5's states, the owner's"
     def rep(st):
         return str(pod.results / "private_weight_reference" / f"stub-{st}-{tag}" / "report.json")
     assert "--replicate-of" not in args["r3-g1-s0"]
@@ -1370,6 +1405,7 @@ def test_a_seed_0_v7_failure_skips_that_gs_later_seeds_unlatched(two_passes):
     assert by["r3-g16-s0"][-1][1] == "INVALID"
     assert by["r1-g1"][-1][1] == "ERROR"
     assert by["suite"][-1][1] == "SKIPPED" and "END_SUITE=skip" in by["suite"][-1][6]
+    assert "not requested" in by["suite"][-1][6]
     # SKIPPED is not latched: the next pass asks again and skips again
     assert re.search(r"^r3-g16-s1\s+SKIPPED", second.stdout, re.M), second.stdout
 
@@ -1695,9 +1731,10 @@ def test_a_pilot_with_no_report_stops_the_chain(tmp_path):
 
 
 def test_a_callers_session_does_not_steer_a_chain_this_file_spawns(tmp_path, monkeypatch):
-    """On the pod this file runs inside the chain's end suite. A SESSION= in
-    the caller's environment turned every --resume here into a refusal, and
-    every plain pass here into a pass in the caller's directory."""
+    """On the pod this file runs inside the chain's end suite when END_SUITE=run
+    buys it. A SESSION= in the caller's environment turned every --resume here
+    into a refusal, and every plain pass here into a pass in the caller's
+    directory."""
     real = tmp_path / "the-operators-session"
     monkeypatch.setenv("SESSION", str(real))
     monkeypatch.setenv("END_SUITE", "run")
@@ -1773,6 +1810,44 @@ def test_an_end_suite_that_ran_to_its_tally_is_not_bought_again(tmp_path, rc, ta
             assert f"suite recorded, not bought again: {state}: pytest exit {rc}" in got.stdout
     else:
         assert (suite, ran) == ([state, "SKIPPED", state], 2)
+
+
+def test_the_end_suite_is_bought_only_on_end_suite_run(tmp_path):
+    """The owner's decision in session 5: on its pod the base-venv suite
+    exercised nothing the arms depend on beyond tests/test_gpu.py and ran 2499
+    tests in 3472 s before it was interrupted at 49%. A pass that does not ask
+    buys no suite and writes a SKIPPED row saying it was not requested;
+    END_SUITE=run buys it. tests/test_gpu.py before the arms is unchanged."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    seen = tmp_path / "pytest-seen.txt"
+    stub = {"G_LADDER": "1", "SEEDS": "0", "STUB_PYTEST": str(seen)}
+    got = pod.run("--resume", END_SUITE=None, **stub)
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-1000:]
+    assert not seen.exists(), "a pass that did not ask for the end suite bought it"
+    row = _rows(s / "CHAIN.tsv")[-1]
+    assert row[:2] == ["suite", "SKIPPED"], row
+    assert "not requested" in row[6] and "END_SUITE=run" in row[6], row[6]
+    got = pod.run("--resume", END_SUITE="run", **stub)
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-1000:]
+    assert len(seen.read_text().splitlines()) == 1, "END_SUITE=run buys the suite once"
+    assert _rows(s / "CHAIN.tsv")[-1][:2] == ["suite", "DONE"]
+
+
+@pytest.mark.parametrize("value", ["yes", "RUN"])
+def test_an_end_suite_value_other_than_run_or_skip_is_refused(tmp_path, value):
+    """With skip the default, a mistyped opt-in would skip the suite it asked
+    for without a word. Any value but run or skip is refused, exit 2, before a
+    step runs or a row is written."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    before = (s / "CHAIN.tsv").read_text()
+    seen = tmp_path / "pytest-seen.txt"
+    got = pod.run("--resume", END_SUITE=value, G_LADDER="1", SEEDS="0", STUB_PYTEST=str(seen))
+    assert got.returncode == 2, got.stdout[-2000:]
+    assert f"REFUSED: END_SUITE={value}: it takes run" in got.stdout
+    assert pod.traced() == [] and not seen.exists()
+    assert (s / "CHAIN.tsv").read_text() == before
 
 
 def test_a_driver_refusal_stops_the_chain_before_any_arm(tmp_path):
@@ -1895,13 +1970,16 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
     assert out.count("off its own plan") == 4 + 12, "one priced line per arm, none for preflights"
     assert "PRICE, off the arms' own plans: 4 elasticity runs + 12 ratio runs" in out
     assert re.search(r"= \d+ min; at \$4\.59/h about \$\d+\.\d\d\. Book \d h\.", out), out
-    # both pytest steps are COLLECTED and priced at the pod's rate, never run by a dry run
-    m = re.search(r"tests/test_gpu\.py ~(\d+) s \((\d+) tests\) before them and the end suite"
-                  r" ~(\d+) s\s+\((\d+) tests\) after them, at ([\d.]+) s a test", out)
+    assert "an elasticity run is its plan's wall figure at duty 1.0 0.5 0.25" in out
+    # tests/test_gpu.py is COLLECTED and priced at the pod's rate, never run by a
+    # dry run; the end suite, not requested by default, is neither
+    m = re.search(r"tests/test_gpu\.py ~(\d+) s \((\d+) tests\) before them at ([\d.]+) s a"
+                  r" test,\s+session 5's pod rate, and no end suite \(END_SUITE=skip, the default",
+                  out)
     assert m, out
-    rate = float(m.group(5))
+    rate = float(m.group(3))
     assert int(m.group(1)) == _priced(int(m.group(2)), rate) and int(m.group(2)) > 10
-    assert int(m.group(3)) == _priced(int(m.group(4)), rate) and int(m.group(4)) > 1000
+    assert "the end suite ~" not in out
     session = next((root / "session").glob("alpha_g-nocard-*"))
     ledger = (session / "CHAIN-dryrun.tsv").read_text().splitlines()
     names = [ln.split("\t")[0] for ln in ledger[1:]]
@@ -1916,8 +1994,9 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
         "probe-check"][6], "the probe check times the card: a dry run prices it, never runs it"
     assert rows["preflight-r1"][1] == "DONE" and "log agrees" in rows["preflight-r1"][6]
     assert rows["preconditions"][1] == "DONE" and "ARMS.tsv" in rows["preconditions"][6]
-    for step in ("gpu-tests", "suite"):
-        assert rows[step][1] == "DONE" and "tests collected" in rows[step][6], rows[step]
+    assert rows["gpu-tests"][1] == "DONE" and "tests collected" in rows["gpu-tests"][6]
+    assert rows["suite"][1] == "SKIPPED" and "not requested" in rows["suite"][6], rows["suite"]
+    assert not (session / "chain-logs" / "suite.log").exists(), "the suite was collected"
     assert rows["r3-g1-s0"][1] == "REFUSED", "a dry-run plan scores no gate: REFUSED"
     assert not (session / "CHAIN.tsv").exists() and not (session / "DEVICE").exists()
 
@@ -1945,11 +2024,15 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     arms = int(re.search(r"= (\d+) s of arms", out).group(1))
     assert sum(priced) == arms
     gpu = int(re.search(r"tests/test_gpu\.py ~(\d+) s", out).group(1))
-    suite = int(re.search(r"the end suite ~(\d+) s", out).group(1))
     total = int(re.search(r"\(an allowance\) = (\d+) s", out).group(1))
     overhead = _const("R3_RUN_OVERHEAD_S")
-    assert total == (arms + gpu + suite + pre + _const("PROBE_CHECK_S") + 12 * overhead
-                     + _const("EXFIL_S"))
+    assert total == (arms + gpu + pre + _const("PROBE_CHECK_S") + 12 * overhead
+                     + _const("EXFIL_S")), "no end suite in the default price"
+    # the unpriced cap is four times the longest arm's price, R1's at its states
+    r1 = [int(x) for x in re.findall(r"^r1-g\d+\s.*\n\s+priced (\d+) s off its own plan",
+                                     out, re.M)]
+    assert len(r1) == 4 and max(r1) == max(priced)
+    assert _const("ARM_CAP_UNPRICED_S") >= 4 * max(r1)
     steps = re.findall(r"^(r[13]-g\d+(?:-s\d)?)\s", out, re.M)
     assert len(steps) == len(priced) == 16
     clock, start = pre + gpu + _const("PROBE_CHECK_S"), {}
@@ -1967,6 +2050,46 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     assert f"~{-(-3 * per // 60)} min a G, 3 seeds at --duty 0.1 at {per} s each" in out
 
 
+@pytest.fixture(scope="module")
+def dry_with_suite(tmp_path_factory):
+    """A dry run that asks for the end suite, over one G and one seed: the
+    suite is collected and priced, never run."""
+    root = tmp_path_factory.mktemp("chain-suite")
+    env = chain_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
+                    SESSION_ROOT=str(root / "session"), RESULTS_ROOT=str(root / "results"),
+                    MOE_RESULTS_DIR=str(root / "results" / "gaps-nocard"), WORKSPACE=str(root),
+                    END_SUITE="run", G_LADDER="1", SEEDS="0")
+    got = subprocess.run(["bash", str(CHAIN), "--dry-run"], capture_output=True,
+                         text=True, timeout=1500, env=env)
+    return got, root
+
+
+def test_a_dry_run_on_end_suite_run_collects_and_prices_the_suite(dry_with_suite):
+    got, root = dry_with_suite
+    assert got.returncode == 0, got.stdout[-2500:] + got.stderr[-800:]
+    out = got.stdout
+    m = re.search(r"tests/test_gpu\.py ~(\d+) s \((\d+) tests\) before them and the end suite"
+                  r" ~(\d+) s\s+\((\d+) tests\) after them \(END_SUITE=run\), at ([\d.]+) s a"
+                  r" test, session 5's pod rate", out)
+    assert m, out
+    rate = float(m.group(5))
+    gpu, suite = int(m.group(1)), int(m.group(3))
+    assert gpu == _priced(int(m.group(2)), rate) and int(m.group(2)) > 10
+    assert suite == _priced(int(m.group(4)), rate) and int(m.group(4)) > 1000
+    arms = int(re.search(r"= (\d+) s of arms", out).group(1))
+    pre = int(re.search(r"plus the preconditions ~(\d+) s", out).group(1))
+    total = int(re.search(r"\(an allowance\) = (\d+) s", out).group(1))
+    assert total == (arms + gpu + suite + pre + _const("PROBE_CHECK_S")
+                     + _const("R3_RUN_OVERHEAD_S") + _const("EXFIL_S"))
+    session = next((root / "session").glob("alpha_g-nocard-*"))
+    rows = {ln.split("\t")[0]: ln.split("\t")
+            for ln in (session / "CHAIN-dryrun.tsv").read_text().splitlines()[1:]}
+    assert rows["suite"][1] == "DONE" and "tests collected" in rows["suite"][6], rows["suite"]
+    # the hang cap sits above the priced run: under it, an honest suite is interrupted
+    timeout = re.search(r'^SUITE_TIMEOUT_S="\$\{SUITE_TIMEOUT_S:-(\d+)\}"$', CODE, re.M)
+    assert timeout and int(timeout.group(1)) > suite, (timeout, suite)
+
+
 def test_the_dry_run_lines_carry_the_duty_the_swizzle_and_the_seed(dry):
     got, root, _b, _a = dry
     session = next((root / "session").glob("alpha_g-nocard-*"))
@@ -1977,7 +2100,7 @@ def test_the_dry_run_lines_carry_the_duty_the_swizzle_and_the_seed(dry):
     assert "'GROUP_SIZE_M': 16" in r3        # the ratio arm prints its pinned dict
     r1 = (logs / "r1-g1.log").read_text()
     assert re.search(r"GROUP_SIZE_M=1\b", r1) and "GROUP_SIZE_M=16" not in r1   # R1 prints k=v
-    assert "duty 1, 0.7, 0.5" in r1
+    assert "duty 1, 0.5, 0.25" in r1, "R1 plans at the chain's default states"
     # both preflights ran the scorer and said so
     assert "SELF-TEST OK" in (logs / "preflight-r3.log").read_text()
     assert re.search(r"^preflight-r1\s+DONE", got.stdout, re.M), got.stdout

@@ -534,16 +534,21 @@ It runs, in order:
    pilot's `align_probe` note and `graph_calls`, and says what going on buys,
    priced off the arms' own plans: V8 UNKNOWN or FAIL makes every later ratio
    page INVALID (the probe re-runs on every page); `--resume --past-v8` buys
-   R1's four regime words (about 59 min) and eleven ratio pages that cannot
+   R1's four regime words (about 75 min) and eleven ratio pages that cannot
    be quoted (about 120 min); `SEEDS=0 bash scripts/alpha_g_chain.sh --resume
    --past-v8` limits the ratio pages to seed 0 (three, about 33 min). The
    ledger records `--past-v8`, and later passes hold to it.
-6. `clock_elasticity` at each G with the three cap-binding duty states (1.0,
-   0.7, 0.5), the per-M-tile elasticity gated.
+6. `clock_elasticity` at each G with three duty states (1.0, 0.5, 0.25: the
+   card on its power cap at 1.0, off it at 0.5 and 0.25), the per-M-tile
+   elasticity gated. These are the owner's states since session 5: its G=1
+   run at 1.0, 0.7, 0.5 excluded 22.4% of its rows for in-burst clock drift
+   (0.7: 30.8%, 0.5: 36.5%, 1.0: 0%) and failed V4, which holds the excluded
+   rows to 20%; at 1.0, 0.5, 0.25 every G passed V4 (G=1 16.3%, G=4 6.7%,
+   G=16 5.4% and 5.8% on its re-run, G=64 5.8%). `R1_DUTY=` sets others.
 7. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
    through `--replicate-of`. With R1 between seed 0 and seed 1, a G's seed 0
-   and seed 1 start about 102 min apart and its seed 1 and seed 2 about 43
-   min apart at the dry run's prices of 2026-09-22; the dry run prints the
+   and seed 1 start about 118 min apart and its seed 1 and seed 2 about 43
+   min apart at the dry run's prices of 2026-09-23; the dry run prints the
    spacing off its own prices. A G whose seed-0 page did not read V7 PASS gets
    a SKIPPED row for seeds 1 and 2 (not latched), which are not run, and the
    note is worded by that verdict:
@@ -563,12 +568,18 @@ It runs, in order:
      (nothing timed, e.g. the sweep was skipped on V8, or a clock was
      unread), so a later seed would read the same; the note names the seed-0
      log.
-8. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
-   every arm: a record of the box that gates nothing. `END_SUITE=skip` writes
-   a SKIPPED row instead, for a resume that owes one arm. A suite that already
-   ran to its tally, green or red (pytest exit 1), is not bought again, and
-   `END_SUITE=skip` writes no row over it; a timeout, an interrupted run or a
-   log with no tally runs again. Both pytest steps
+8. The whole suite, only on `END_SUITE=run`: it is off by default, the
+   owner's decision in session 5. On that pod the base-venv suite exercised
+   nothing the arms depend on beyond `tests/test_gpu.py`, which step 3 runs
+   either way, and it ran about 1.4 s a test off the network volume (2499
+   tests in 3472 s before it was interrupted at 49%). Without it
+   (`END_SUITE=skip`, the default) the step writes a SKIPPED row saying the
+   suite was not requested; any other value is refused before a session is
+   opened. With it, the suite runs uncapped, from PY_BASE (`-rfE
+   --durations=25`), after every arm: a record of the box that gates nothing.
+   A suite that already ran to its tally, green or red (pytest exit 1), is
+   not bought again, and `END_SUITE=skip` writes no row over it; a timeout,
+   an interrupted run or a log with no tally runs again. Both pytest steps
    run without the chain's own knobs in their environment (`SESSION`,
    `END_SUITE`, `G_LADDER` and the rest of `CHAIN_KNOBS`): the suite's tests
    spawn the chain, and a `SESSION=<dir>` launch would otherwise steer them
@@ -585,10 +596,11 @@ did not stand behind); `unmeasured` (no R1 report for that G yet). Expect
 STRADDLES: session 4's G=16 claim over treads 2 and deeper read a half-width
 of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four; the
 all-tread reading's was 0.076) against R1's 0.075 target, half the gap band's
-width, so an interval within about its half-width of 0.25 or 0.40 straddles,
-and UNREGISTERED-GAP is hard to reach at three states. The word is a secant
-between the capped clock at duty 1.0 and the clock at 0.7 and 0.5, and R3 runs
-at 0.25, at the ceiling. To first order, for a per-tile cost A + B/f with A and
+width. Those are the chain's three states, so an interval within about its
+half-width of 0.25 or 0.40 straddles, and UNREGISTERED-GAP is hard to reach at
+three states. The word is a secant between the capped clock at duty 1.0 and
+the clocks at 0.5 and 0.25, and R3 runs at 0.25, at the ceiling, the top of
+that secant's range. To first order, for a per-tile cost A + B/f with A and
 B not negative, the local elasticity B/(Af + B) lies in [0, 1] and falls as f
 rises, so RAW-STANDS carries over to R3's operating point and CLOCK-CARRIES is
 only an upper bound there. That form cannot produce an elasticity above 1,
@@ -619,17 +631,19 @@ coordinates every row shares (model, tile, pinned config, treads, repeats,
 duty) and where each was read. Logs are under `$SESSION/chain-logs/`, and a
 V7 FAIL's follow-up under `$SESSION/followup-g<G>.txt`.
 
-**The price.** The laptop dry run prices about 176 min of arms (four R1 runs
-at 876 s; twelve R3 runs at 590 s each at duty 0.25, the plan's 581 s wall
-line plus the alignment probe's 9 s it leaves out), under a minute of
-`tests/test_gpu.py`, about 55 min of end suite (the tree's count at session
-4's pod rate of 0.66 s a test, 2.5x the laptop's), 8 min of preconditions (the
-driver's own `arm_minutes`: thermal 3, calibrate 3, pin_probe-n64-g1 2), 2 min
-for the probe check and 17 min of allowances (60 s of compiles and weight
-build a ratio run, 5 min of exfil): about 260 min, about $20 at $4.59/h, and it
-says book 6 h. A V7 FAIL at seed 0 skips that G's two later seeds (about 22
-min) and prints a follow-up that costs about 77 min a G after the chain;
-`END_SUITE=skip` drops the 55 min of suite.
+**The price.** The laptop dry run of 2026-09-23 prices about 193 min of arms
+(four R1 runs at 1124 s each at duty 1.0, 0.5, 0.25, which session 5's pod ran
+in 1139-1160 s; twelve R3 runs at 590 s each at duty 0.25, the plan's 581 s
+wall line plus the alignment probe's 9 s it leaves out), about a minute of
+`tests/test_gpu.py` (38 tests at session 5's pod rate of 1.39 s a test), 8 min
+of preconditions (the driver's own `arm_minutes`: thermal 3, calibrate 3,
+pin_probe-n64-g1 2), 2 min for the probe check and 17 min of allowances (60 s
+of compiles and weight build a ratio run, 5 min of exfil): about 221 min,
+about $17 at $4.59/h, and it says book 5 h. No end suite is in that figure:
+`END_SUITE=run` adds about 116 min (the tree's count, about 5000 tests, at
+1.39 s a test) and the dry run then says about 337 min, about $26, book 7 h.
+A V7 FAIL at seed 0 skips that G's two later seeds (about 22 min) and prints a
+follow-up that costs about 77 min a G after the chain.
 
 **Before releasing the pod.** The chain's calibrate re-dirties
 `moe/bench/hardware/measured_nvidia_h200.yaml`, and every row measured after it
