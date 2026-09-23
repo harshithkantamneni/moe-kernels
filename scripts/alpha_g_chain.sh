@@ -90,11 +90,15 @@
 #                  per-call time under the eager p50), about a minute, before
 #                  the pilot spends a ten-minute ladder finding the same
 #                  thing. Not DONE STOPS the chain and names the page. It runs
-#                  again on every pass until it is DONE, since its remedy is a
-#                  code change (PROBE_CALLS_PER_REPLAY) and a --resume after it
-#                  must re-prove the probe; --past-v8, the same instrument as
-#                  the pilot's V8, goes on and writes that decision to the
-#                  ledger.
+#                  again on every pass until it is DONE. After INVALID,
+#                  UNKNOWN or ERROR the remedy is a code change
+#                  (PROBE_CALLS_PER_REPLAY, or the capture) and a --resume
+#                  after it must re-prove the probe; --past-v8, the same
+#                  instrument as the pilot's V8, goes on and writes that
+#                  decision to the ledger. REFUSED timed nothing (no card, no
+#                  vLLM, or vLLM's op did not import): the interpreter or the
+#                  card is wrong, the arms run from the same one, and the STOP
+#                  names PY_VLLM and a --resume after that fix, not --past-v8.
 #   r3-g<G>-s0     scripts/private_weight_reference.py at --duty 0.25, every G
 #                  at seed 0 first, so the ratio arm's never-run paths (the
 #                  duty timer, the probe inside a page) meet the card minutes
@@ -650,9 +654,10 @@ gpu_tests_gate() {
 }
 
 #: What going on past V8 buys, priced off the arms' own plans, for the probe
-#: check's STOP and the pilot's. $1 how many ratio pages are already on disk
-#: (0 before the pilot, 1 after it). Each price is the arm's --dry-run, run
-#: again here into chain-logs.
+#: check's STOP and the pilot's; never for a REFUSED probe check, whose arms
+#: would refuse from the same interpreter. $1 how many ratio pages are already
+#: on disk (0 before the pilot, 1 after it). Each price is the arm's
+#: --dry-run, run again here into chain-logs.
 v8_consequences() {
   local done_pages="$1" n_g=0 n_s=0 r1_s=0 est per g later seed0
   for g in $G_LADDER; do
@@ -678,6 +683,13 @@ v8_consequences() {
 
 #: The probe-check gate: its newest row DONE, or --past-v8 on this pass or an
 #: earlier one. $1 1 when the flag was given. Returns 0 to go on, 3 to stop.
+#: THE STOP IS WORDED BY THE STATE. REFUSED (exit 2) timed nothing: R3
+#: refuses the check with no card, no vLLM, or a vLLM op that did not import,
+#: so the interpreter or the card is wrong, not the probe, and the arms run
+#: from that same interpreter. Until 2026-09-22 a REFUSED check got a FAIL's
+#: advice: a code change to the probe, and --past-v8 priced as if ratio pages
+#: would run, which, once taken, holds for every later pass even after the
+#: interpreter is fixed. INVALID, UNKNOWN and ERROR keep that advice.
 probe_check_gate() {
   local past="$1" newest said
   newest="$(newest_state probe-check "$LEDGER")"
@@ -691,6 +703,19 @@ probe_check_gate() {
     return 0
   fi
   said="$(grep -m1 -E '^(RESULT|REFUSED)' "$LOGS/probe-check.log" 2>/dev/null)"
+  if [[ "$newest" == REFUSED ]]; then
+    echo "STOP: the probe check is REFUSED, not DONE, on this card: it timed nothing."
+    echo "  Read $LOGS/probe-check.log:"
+    echo "      ${said:-no REFUSED line in it}"
+    echo "  A refusal names what the check could not reach (a card, vLLM, or vLLM's op):"
+    echo "  the interpreter or the card is wrong, not the probe. PY_VLLM here is $PY_VLLM"
+    echo "  (it falls back to PY_BASE when the vLLM venv's python is missing). Check that"
+    echo "  it imports vllm, and its torch wheel against the driver (torch.cuda.is_available()"
+    echo "  and nvidia-smi's driver version). Fix that, then --resume, which runs this check"
+    echo "  again until it is DONE. --past-v8 buys nothing here: R1 and R3 run from the same"
+    echo "  interpreter, and the ledger would hold that override for every later pass."
+    return 3
+  fi
   echo "STOP: the probe check is ${newest:-never run}, not DONE, on this card: the"
   echo "  alignment probe under the graph did not earn PASS. Read $LOGS/probe-check.log:"
   echo "      ${said:-no RESULT or REFUSED line in it}"

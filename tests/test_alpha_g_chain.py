@@ -1552,18 +1552,51 @@ def test_the_probe_check_stops_the_chain_before_the_pilot_and_runs_until_done(tm
     assert done.returncode == 0
 
 
-def test_past_v8_goes_past_the_probe_check_recorded_and_the_decision_holds(tmp_path):
+def test_a_refused_probe_check_stops_on_the_interpreter_and_offers_no_override(tmp_path):
+    """CH-1. A REFUSED check timed nothing: R3 refuses it with no card, no
+    vLLM, or a vLLM op that did not import, so the interpreter or the card is
+    wrong, not the probe. The STOP gave a FAIL's advice: a code change to the
+    probe, and --past-v8 priced as if ratio pages would run, from the same
+    interpreter that just refused, and held for every later pass once taken."""
     pod = Pod(tmp_path)
     s = pod.session()
     pod.set_plan({"probe-check": {"refuse": True}})
+    got = pod.run("--resume", G_LADDER="1 4 16 64")
+    assert got.returncode == 3, got.stdout[-3000:] + got.stderr[-800:]
+    stop = " ".join(got.stdout[got.stdout.index("STOP:"):].split())
+    assert "STOP: the probe check is REFUSED, not DONE, on this card" in stop
+    assert "REFUSED: no CUDA device (a planted refusal)" in stop, "the page's own line"
+    assert "timed nothing" in stop and "the interpreter or the card" in stop
+    assert f"PY_VLLM here is {pod.arm}" in stop, "the interpreter the arms run from"
+    assert "torch wheel against the driver" in stop
+    assert "then --resume, which runs this check again" in stop
+    # none of a FAIL's advice: no probe code change, no priced override
+    for fail_word in ("did not earn PASS", "PROBE_CALLS_PER_REPLAY", "ratio pages that cannot be",
+                      "regime words", "SEEDS=0 bash scripts/alpha_g_chain.sh --resume --past-v8"):
+        assert fail_word not in stop, fail_word
+    assert "--past-v8 buys nothing here" in stop
+    assert sorted(p.name for p in (s / "chain-logs").iterdir()) == ["probe-check.log"], \
+        "the arms' plans were run to price an override that buys nothing"
+    assert not [r for r in _rows(s / "CHAIN.tsv") if r[0].endswith("-override")]
+    # the interpreter fixed: a plain --resume proves the probe and goes on
+    pod.set_plan({})
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert [st for st, _ in pod.traced()][:3] == ["probe-check", "probe-check", "r3-g1-s0"]
+
+
+def test_past_v8_goes_past_the_probe_check_recorded_and_the_decision_holds(tmp_path):
+    pod = Pod(tmp_path)
+    s = pod.session()
+    pod.set_plan({"probe-check": {"P1": "FAIL"}})
     got = pod.run("--resume", G_LADDER="1", SEEDS="0")
     assert got.returncode == 3, got.stdout[-3000:]
-    assert "REFUSED: no CUDA device (a planted refusal)" in got.stdout
+    assert "RESULT: VALIDITY P1 FAIL [VALIDITY] planted probe" in got.stdout
     past = pod.run("--resume", "--past-v8", G_LADDER="1", SEEDS="0")
     assert past.returncode == 0, past.stdout[-3000:]
     over = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "probe-check-override"]
     assert len(over) == 1 and over[0][1] == "OVERRIDDEN" and "--past-v8" in over[0][6]
-    assert "the probe check's newest row: REFUSED" in over[0][6]
+    assert "the probe check's newest row: INVALID" in over[0][6]
     later = pod.run("--resume", G_LADDER="1", SEEDS="0")
     assert later.returncode == 0, later.stdout[-3000:]
     assert ("--past-v8 holds from an earlier pass (the ledger's probe-check-override row"

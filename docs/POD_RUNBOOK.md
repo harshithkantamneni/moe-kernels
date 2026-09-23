@@ -467,11 +467,18 @@ It runs, in order:
    `PROBE_CALLS_PER_REPLAY` calls per replay, not host-bound, the graph's
    per-call time under the eager p50), about a minute and one RESULT line,
    before the pilot spends a ten-minute ladder finding the same thing. Not
-   DONE stops the chain and quotes the page's RESULT or REFUSED line. It runs
-   again on every pass until it is DONE, because its remedy is a code change
-   (`PROBE_CALLS_PER_REPLAY`, or the capture) brought to the pod's checkout,
-   then `--resume`. `--resume --past-v8`, the same instrument as the pilot's
-   V8, goes on, recorded.
+   DONE stops the chain and quotes the page's RESULT or REFUSED line, and it
+   runs again on every pass until it is DONE. After INVALID, UNKNOWN or ERROR
+   the remedy is a code change (`PROBE_CALLS_PER_REPLAY`, or the capture)
+   brought to the pod's checkout, then `--resume`; `--resume --past-v8`, the
+   same instrument as the pilot's V8, goes on, recorded. REFUSED timed
+   nothing: the check found no card, no vLLM, or a vLLM op that did not
+   import, so the interpreter or the card is wrong, not the probe. The STOP
+   names the `PY_VLLM` in use (it falls back to PY_BASE when the vLLM venv's
+   python is missing); check that it imports vllm and that its torch wheel
+   matches the driver, then `--resume`. It does not offer `--past-v8` there:
+   R1 and R3 run from the same interpreter, and the ledger would hold that
+   override for every later pass.
 5. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
    {1, 4, 16, 64}. On session 4's clock arm duty 0.25 sat flat at 1965 MHz
    with no drift, and duty 0.5 still tracked board power (-1.09 MHz/W over
