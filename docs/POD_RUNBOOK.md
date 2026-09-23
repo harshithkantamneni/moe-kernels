@@ -652,6 +652,10 @@ bash scripts/pod_session.sh --dry-run          # every step, printed not run
 # the venv WITHOUT vLLM: `no_gpu` tests skip there (the -ra tail counts them),
 # the gaps-session tests hide the card from every child they spawn, and a
 # `--run`/bare invocation in a test is planted, never inherited from the box.
+# Tests about committed artefacts read git's view (tests/_committed.py): the
+# arms git TRACKS and the rulers git HOLDS, so calibrate's rewrite of the
+# tracked ruler and a stray directory an earlier publish left under
+# results/published fail nothing (session 5's suite hit both).
 # Never run the suite from the vllm venv: an unplanted --run would MEASURE.
 bash scripts/run_all.sh --dry-run --profile crossing-uniform
 .venv/bin/python scripts/alias_ablation.py --synthetic refit   # step 2b, no GPU
