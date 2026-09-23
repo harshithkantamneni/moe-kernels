@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import ast
 import csv
+import dataclasses
 import importlib.util
 import inspect
+import json
+import math
 import re
 import statistics
 import subprocess
@@ -885,34 +888,89 @@ def test_a_measuring_run_without_a_card_is_refused():
 # --------------------------------------------------------------------------
 
 def test_the_gated_reading_is_the_per_tile_costs_and_the_per_call_one_is_beside_it():
-    """One elasticity for the whole planted call: both readings agree, and the
-    new fields carry the per-call one with its own interval."""
+    """One elasticity for the whole planted call: every reading agrees, and the
+    fields beside the claim carry the all-tread and per-call readings with
+    intervals of their own."""
     est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.0), draws=50)
     assert est.value == pytest.approx(0.60, abs=1e-6)
     assert est.fixed_tread == pytest.approx(0.60, abs=1e-6)
-    assert est.per_tile_from2 == pytest.approx(0.60, abs=1e-6)
-    assert est.per_tile_treads == CE.DEFAULT_TREADS
+    assert est.per_tile_all_treads == pytest.approx(0.60, abs=1e-6)
+    assert est.claim_min_tread == CE.CLAIM_MIN_TREAD == 2
+    assert est.per_tile_treads == CE.DEFAULT_TREADS - CE.CLAIM_MIN_TREAD + 1
     assert est.lo is not None and est.fixed_tread_lo is not None
+    assert est.per_tile_all_treads_lo is not None
     assert est.lo <= est.value <= est.hi
     assert est.fixed_tread_lo <= est.fixed_tread <= est.fixed_tread_hi
+    assert (est.per_tile_all_treads_lo <= est.per_tile_all_treads
+            <= est.per_tile_all_treads_hi)
+
+
+def test_every_caller_of_the_per_tile_estimator_names_its_treads():
+    """THE RECURRING DEFECT, at the estimator: the claim and the reading beside
+    it are one function at two tread sets, and a default is how a second call
+    site silently reads the other one. `min_tread` has none."""
+    param = inspect.signature(CE.per_tile_slope).parameters["min_tread"]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY
+    assert param.default is inspect.Parameter.empty
+    for fn in (CE.tread_levels, CE.tread_one_departure):
+        param = inspect.signature(fn).parameters["min_tread"]
+        assert param.default is inspect.Parameter.empty, fn.__name__
 
 
 def test_an_intercept_with_its_own_elasticity_does_not_enter_the_claim():
-    """THE 2026-09-21 CARD, PLANTED: the one-tile call at 0.17 and the per-tile
-    cost at 1.00. The per-call pooled reading blends them (session 4 read
-    0.74); the claim is the per-tile cost's and comes back 1.00."""
+    """An intercept with its own elasticity, ON the additive law: eps_a=0.17
+    plants the INTERCEPT's elasticity, and the one-tile call then reads 0.78,
+    not 0.17, because at tread 1 the per-tile cost is still most of the call.
+    Every tread lies on a' + b' n, tread 1 included, so the claim and the
+    all-tread reading both return the per-tile cost's 1.00 and tread 1 sits
+    on the claim's lines. The off-law world, which is the 2026-09-21 card, is
+    the next test."""
     rows = CE.plant_rows(eps=1.00, eps_a=0.17, jitter=0.0)
     est = CE.fit(rows, draws=0)
     assert est.value == pytest.approx(1.00, abs=0.02), est.value
-    assert est.per_tile_from2 == pytest.approx(1.00, abs=0.02)
+    assert est.per_tile_all_treads == pytest.approx(1.00, abs=0.02)
     assert est.fixed_tread is not None and 0.5 < est.fixed_tread < 0.95
-    # And the per-tread readings show the blend rising with depth, as the
-    # additive law says they must: shallow treads carry more intercept.
+    # The per-tread readings rise with depth, as the additive law says they
+    # must: shallow treads carry more intercept.
     per = est.per_tread
     assert per[1] < per[CE.DEFAULT_TREADS]
+    assert per[1] > 0.5, "an on-law intercept cannot pull tread 1 to 0.17"
+    assert est.tread1_sensitivity_ms == pytest.approx(
+        est.tread1_sensitivity_on_line_ms, rel=1e-3)
+    assert est.tread1_level_ms == pytest.approx(est.tread1_level_on_line_ms,
+                                                rel=1e-3)
     # The old world with one elasticity still plants one number everywhere.
     one = CE.fit(CE.plant_rows(eps=0.30, jitter=0.0), draws=0)
     assert one.value == pytest.approx(one.fixed_tread, abs=1e-6)
+
+
+def test_a_tread_one_off_the_additive_law_moves_the_all_tread_reading_and_never_the_claim():
+    """THE 2026-09-21 CARD, PLANTED: the one-tile call reading 0.17 per call
+    beside a per-tile cost of 1.00, which no intercept elasticity inside
+    a(f) + b(f) n produces. The claim over treads 2 and deeper recovers the
+    planted 1.00 and its interval, drawn over the same treads, covers it; the
+    all-tread reading is displaced above it by more than the design's own
+    half-width, which is the defect the registered tread set removes."""
+    # No physical intercept elasticity puts tread 1 anywhere near 0.17 while
+    # the per-tile cost is 1.00: that is what "off the law" means here.
+    for eps_a in (0.0, 0.17, 0.5, 1.0):
+        on = CE.fit(CE.plant_rows(eps=1.00, eps_a=eps_a, jitter=0.0), draws=0)
+        assert on.per_tread[1] > 0.5, (eps_a, on.per_tread[1])
+
+    exact = CE.fit(CE.plant_rows(eps=1.00, off_law={1: 0.17}, jitter=0.0),
+                   draws=0)
+    assert exact.per_tread[1] == pytest.approx(0.17, abs=1e-9)
+    assert exact.value == pytest.approx(1.00, abs=1e-6)
+    assert exact.per_tile_all_treads > exact.value + CE.RESOLUTION_TARGET
+    assert exact.tread1_sensitivity_ms < exact.tread1_sensitivity_on_line_ms / 2
+
+    noisy = CE.fit(CE.plant_rows(eps=1.00, off_law={1: 0.17}, jitter=0.004,
+                                 seed=3), draws=400, seed=1)
+    assert noisy.lo < 1.00 < noisy.hi, (noisy.lo, noisy.hi)
+    assert noisy.lo <= noisy.value <= noisy.hi, (
+        "the interval was drawn over a different tread set from the point")
+    assert noisy.per_tile_all_treads_lo > noisy.hi, (
+        "the all-tread interval lies wholly above the claim's")
 
 
 def test_the_page_names_the_claim_and_prints_the_per_call_reading_beside_it():
@@ -921,12 +979,193 @@ def test_the_page_names_the_claim_and_prints_the_per_call_reading_beside_it():
     text = "\n".join(CE.report_lines(rows, est, parsed(["--self-test"])))
     assert "THE FIT: eta of the per-M-tile cost, -d log b / d log f" in text
     assert "over treads 2 and deeper" in text
+    assert "eta, THE CLAIM                      0.3000 over 7 treads" in text
+    assert "PRINTED BESIDE IT, never gated: the same estimator over EVERY tread" in text
+    assert "eta, per-M-tile, every tread        0.3000" in text
+    assert "tread 1 against the claim's lines" in text
     assert "PRINTED BESIDE IT, not the claim: eta of the per-CALL time" in text
     assert "eta, fixed tread, pooled            0.3000" in text
     assert "COMPANION: the elasticity of the ladder SLOPE" in text
     gate = CE.gate_c2_registered_reading(est)
     assert "per-M-tile cost" in gate.claim
+    assert "over treads 2 and deeper" in gate.claim
     assert gate.verdict == exit_codes.FAIL          # 0.30 is in the gap
+
+
+def test_no_description_calls_tread_one_the_swizzle_engaging():
+    """The launch arithmetic refutes it: num_pid_m = cdiv(numel + E(BM-1), BM)
+    = 8n+8 on the 2026-09-21 ladder, so at G=16 the real M-tiles sit in ONE
+    group at n=1 and at n=2 alike, and n=2 already reads like every deeper
+    tread. The page says what the data shows instead, and says the cause is
+    not established."""
+    for stale in ("swizzle engaging", "N-outer stream", "one group, an N-outer"):
+        assert stale not in SOURCE, stale
+    rows = CE.plant_rows(eps=0.30, jitter=0.0)
+    text = "\n".join(CE.report_lines(rows, CE.fit(rows, draws=0),
+                                     parsed(["--self-test"])))
+    assert "off the additive law a(f) + b(f) n" in text
+    assert "NOT ESTABLISHED, and it is not the swizzle" in text
+    assert "cdiv(numel + E(BM-1), BM)" in text
+
+
+def test_the_module_says_what_is_gated_and_what_is_printed_beside_it():
+    """Finding 19's two sites in this file: the docstring's first lines and the
+    sign convention both defined eta as -d log ms / d log f after the gate
+    had moved to the per-M-tile cost."""
+    head = CE.__doc__.split("\n\n")[0]
+    assert "-d log b / d log f" in head
+    assert "-d log ms / d log f" not in head
+    assert "treads 2 and deeper" in CE.__doc__
+    sign = SOURCE.split("#: THE SIGN CONVENTION")[1].split("ETA_SIGN = ")[0]
+    assert "eta_b = - d log b / d log f" in sign
+    assert "Every gate reads `eta`;" not in sign
+
+
+def test_a_passing_page_reads_the_per_tile_cost_and_not_the_whole_millisecond():
+    """Two more of finding 19's sites: with every gate passed the page's reading
+    said 'the measured millisecond is traffic', and C2's docstring said a FAIL
+    means the clock carries 'a measured millisecond'. The claim is the per-M-tile
+    cost over treads 2 and deeper, and tread 1 is left out of it because it sits
+    off the law, so a PASS says nothing about the whole per-call millisecond."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.004)
+    args = CE._self_test_args(CE.build_parser().parse_args(["--dry-run"]))
+    threshold, source = CE.registered_clock_ratio(args)
+    gates = CE.gates_for(rows, args, threshold, source,
+                         CE.fit(rows, draws=400, seed=0))
+    assert all(g.verdict == CE.PASS for g in gates), {
+        g.token: g.verdict for g in gates}
+    reading = "\n".join(CE.report_tail([], gates)).split("READING IT.")[1]
+    assert ("at this cell the per-M-tile cost, over treads 2 and deeper, is "
+            "traffic, not issue rate") in reading
+    assert "millisecond" not in reading
+    c2 = " ".join(CE.gate_c2_registered_reading.__doc__.split())
+    assert "millisecond" not in c2
+    assert "the per-M-tile cost over treads 2 and deeper" in c2
+
+
+# --------------------------------------------------------------------------
+# 11c. the claim's tread set, pinned on the cells that motivated it
+# --------------------------------------------------------------------------
+
+SESSION4_G16 = (ROOT / "tests" / "fixtures" /
+                "2026-09-21-nvidia_h200-session4-clock_elasticity-g16" /
+                "cells.csv")
+
+#: The chain's R1 flags (scripts/alpha_g_chain.sh r1_cmd) that shape the plan,
+#: less --duty, which is the subset under test.
+CHAIN_R1 = ["--model", "mixtral-8x7b", "--dtype", "bf16", "--group-m", "16",
+            "--treads", "8", "--repeats", "13", "--burst-ms", "40",
+            "--target-ms", "200", "--trials", "3", "--warm-ms", "200",
+            "--settle-seconds", "10"]
+
+
+def _session4(duties):
+    want = {CE._duty_key(d) for d in duties}
+    rows = [r for r in CE.read_rows(SESSION4_G16)
+            if CE._duty_key(r.duty_requested) in want]
+    args = parsed(CHAIN_R1 + ["--duty", *(str(d) for d in duties)])
+    threshold, source = CE.registered_clock_ratio(args)
+    est = CE.fit(rows, draws=1000, seed=0)
+    return rows, est, {g.token: g for g in CE.gates_for(rows, args, threshold,
+                                                        source, est)}
+
+
+def test_the_session4_fixture_is_the_published_run():
+    """Read by the arm's own reader, so the columns it carries are the ones
+    the fit and the gates read; its README names the source and the commit."""
+    rows = CE.read_rows(SESSION4_G16)
+    assert len(rows) == 13 * 4 * 8
+    assert {r.group_m for r in rows} == {16}
+    assert {CE._duty_key(r.duty_requested) for r in rows} == {
+        CE._duty_key(d) for d in (1.0, 0.5, 0.25, 0.1)}
+    readme = (SESSION4_G16.parent / "README.md").read_text()
+    assert "2c19a4ce7617a6aeaa025614cd97e45a24024723" in readme
+    assert "pod-h200-session4" in readme
+
+
+@pytest.mark.parametrize("duties", [(1.0, 0.5, 0.25, 0.1), (1.0, 0.5, 0.25),
+                                    (1.0, 0.5)])
+def test_session4_g16_rescored_is_admissible_and_clock_carries(duties):
+    """THE BLOCKER, pinned. Read over every tread, these cells put the claim's
+    interval wholly above V7's admissible edge and the page exits INVALID; read
+    over treads 2 and deeper, as registered, V7 passes and the interval sits
+    wholly in CLOCK-CARRIES. The all-tread reading lies above the claim, and V7
+    applied to ITS interval still fails, which is why it is printed and not
+    gated. {1.0, 0.5} is two states, below MIN_STATES, so V3 is not asked of
+    it; the others are whole pages and read CLAIM_FAIL, a result."""
+    _rows, est, gates = _session4(duties)
+    assert gates["V7"].verdict == CE.PASS, gates["V7"].measured
+    assert gates["C1"].verdict == CE.PASS
+    assert CE.band_of(est.lo, est.hi)[0] == "CLOCK-CARRIES"
+    assert "CLOCK-CARRIES" in gates["C1"].measured
+    assert est.per_tile_all_treads > est.value
+    assert est.per_tile_all_treads_lo > est.lo
+    every = dataclasses.replace(est, lo=est.per_tile_all_treads_lo,
+                                hi=est.per_tile_all_treads_hi)
+    assert CE.gate_v7_admissible(every).verdict == CE.FAIL
+    # Tread 1 is off the claim's line, below it in sensitivity and above it in
+    # level, which is the departure the page prints.
+    assert est.tread1_sensitivity_ms < est.tread1_sensitivity_on_line_ms
+    assert est.tread1_level_ms > est.tread1_level_on_line_ms
+    if len(duties) >= CE.MIN_STATES:
+        validity = [t for t, g in gates.items() if g.kind == CE.VALIDITY]
+        assert all(gates[t].verdict == CE.PASS for t in validity), {
+            t: gates[t].verdict for t in validity}
+        rc = exit_codes.classify(g.scored() for g in gates.values())
+        assert rc == exit_codes.CLAIM_FAIL
+
+
+def test_the_session4_page_prints_tread_one_beside_the_claim():
+    rows, est, gates = _session4((1.0, 0.5, 0.25, 0.1))
+    args = parsed(CHAIN_R1 + ["--duty", "1.0", "0.5", "0.25", "0.1"])
+    text = "\n".join(CE.report_tail(CE.report_lines(rows, est, args),
+                                    list(gates.values())))
+    assert f"{est.value:.4f} over 7 treads from tread 2" in text
+    assert (f"{est.per_tile_all_treads:.4f}  [{est.per_tile_all_treads_lo:.4f}, "
+            f"{est.per_tile_all_treads_hi:.4f}]") in text
+    assert (f"{est.tread1_sensitivity_ms:.4f} ms against "
+            f"{est.tread1_sensitivity_on_line_ms:.4f} ms on the line") in text
+    assert "RESULT: VALIDITY V7 PASS" in text
+
+
+def _helpers():
+    spec = importlib.util.spec_from_file_location(
+        "alpha_g_chain_helpers", ROOT / "scripts" / "alpha_g_chain_helpers.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_report_shape_on_disk_still_loads_through_the_chains_reader(tmp_path):
+    """Three shapes of `elasticity` are on disk and the chain's reader takes
+    `value`, `lo` and `hi` from any of them. The new keys ADD to the block and
+    rename nothing that reader reads; the Elasticity docstring says how to
+    tell the three apart."""
+    H = _helpers()
+    session4 = {"value": 0.7436, "slope": -0.7436, "lo": 0.7277, "hi": 0.7559,
+                "per_tread": {"1": 0.17}, "sxx": 0.16, "cells": 32,
+                "states": 4, "treads": 8, "repeats": 13, "draws": 2000,
+                "resampled": 2000, "ladder_slope": 0.70, "ladder_states": 4}
+    every_tread = dict(session4, value=1.2082, lo=1.1335, hi=1.2865,
+                       fixed_tread=0.7436, per_tile_from2=1.1075,
+                       per_tile_treads=8)
+    est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.002), draws=50)
+    now = dataclasses.asdict(est)
+    assert now["claim_min_tread"] == CE.CLAIM_MIN_TREAD
+    for key in ("per_tile_all_treads", "per_tile_all_treads_lo",
+                "per_tile_all_treads_hi", "tread1_sensitivity_ms",
+                "tread1_sensitivity_on_line_ms", "tread1_level_ms",
+                "tread1_level_on_line_ms", "fixed_tread"):
+        assert now[key] is not None, key
+    assert "per_tile_from2" not in now, "the claim is that reading now"
+    for name, block in (("s4", session4), ("8d4eb78", every_tread),
+                        ("now", now)):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps({"elasticity": block, "gates": []},
+                                   default=str))
+        got = H.eta(str(path))
+        assert got[0] != "unreadable", name
+        assert got[:3] == [f"{float(block[k]):.4f}" for k in ("value", "lo", "hi")]
 
 
 def test_group_m_pins_the_swizzle_and_enters_the_run_id():
@@ -1030,6 +1269,214 @@ def test_a_resumed_arm_scores_the_whole_file_and_not_only_what_it_measured():
     wide as one, and V3 would refuse an arm that is in fact complete."""
     assert "return read_rows(csv_path) if have else rows" in \
         inspect.getsource(CE.run_arm)
+
+
+# --------------------------------------------------------------------------
+# 13b. the resume guard is the card's UUID, not its name
+# --------------------------------------------------------------------------
+
+def test_the_device_guard_refuses_a_second_card_and_resumes_the_first(tmp_path):
+    """`private_weight_reference.device_guard`'s rule, one arm over: every H200
+    is 'NVIDIA H200', so the CARD stamp alone let a replacement pod's card fill
+    the holes in the first pod's ladder."""
+    out = tmp_path / "run"
+    assert CE.device_guard(out, "GPU-aaaa") == ""
+    assert (out / CE.DEVICE_FILE).read_text().strip() == "GPU-aaaa"
+    (out / "cells.csv").write_text("x\n")
+    assert CE.device_guard(out, "GPU-aaaa") == ""
+    refused = CE.device_guard(out, "GPU-bbbb")
+    assert "GPU-aaaa" in refused and "GPU-bbbb" in refused
+    assert "--session-tag" in refused and "--run-id" in refused, (
+        "the refusal names the fix")
+    assert CE.device_guard(out, "") != "", "an unreadable UUID proves nothing"
+
+
+def test_the_device_guard_accepts_a_no_uuid_identity_only_against_itself(tmp_path):
+    out = tmp_path / "run"
+    weak = CE.NO_UUID_PREFIX + "NVIDIA H200"
+    assert CE.device_guard(out, weak) == ""
+    (out / "cells.csv").write_text("x\n")
+    assert CE.device_guard(out, weak) == ""
+    assert CE.device_guard(out, "GPU-aaaa") != ""
+
+
+def test_an_old_card_stamp_is_refused_with_cells_and_upgraded_without(tmp_path):
+    """THE DECISION FOR A STAMP FROM BEFORE 2026-09-22, which names the card and
+    carries no UUID: with cells beside it, the card they came from cannot be
+    shown to be this one, so it is REFUSED (the ratio arm's rule for cells with
+    no DEVICE file); with no cells there is nothing to pool, so it is stamped
+    and measured."""
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "CARD").write_text("NVIDIA H200\n")
+    (old / "cells.csv").write_text("x\n")
+    refused = CE.device_guard(old, "GPU-aaaa")
+    assert "no DEVICE file" in refused and "--session-tag" in refused
+    assert not (old / CE.DEVICE_FILE).exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "CARD").write_text("NVIDIA H200\n")
+    assert CE.device_guard(empty, "GPU-aaaa") == ""
+    assert (empty / CE.DEVICE_FILE).read_text().strip() == "GPU-aaaa"
+
+
+class _FakeCuda:
+    def __init__(self, uuid=None):
+        self._uuid = uuid
+
+    def is_available(self):
+        return True
+
+    def current_device(self):
+        return 0
+
+    def get_device_name(self, index):
+        return "NVIDIA H200"
+
+    def get_device_properties(self, index):
+        if self._uuid is None:
+            raise RuntimeError("this torch exposes no uuid")
+        return type("Props", (), {"uuid": self._uuid})()
+
+
+def test_the_identity_is_the_uuid_and_names_itself_weaker_without_one(monkeypatch):
+    fake = type("Torch", (), {})()
+    fake.cuda = _FakeCuda("GPU-6b4b5fe6")
+    monkeypatch.setitem(sys.modules, "torch", fake)
+    assert CE.device_identity() == "GPU-6b4b5fe6"
+    fake.cuda = _FakeCuda(None)
+    assert CE.device_identity() == CE.NO_UUID_PREFIX + "NVIDIA H200"
+
+
+def _measuring_run(monkeypatch, out, *, identity, rows):
+    """`main` down to the measurement with every GPU door planted open and
+    `run_arm` replaced, so the guard is exercised on the path a pod takes."""
+    calls = []
+    monkeypatch.setattr(CE, "resolve_card", lambda args: "NVIDIA H200")
+    monkeypatch.setattr(CE.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(CE.T, "require_cuda", lambda: None)
+    monkeypatch.setattr(CE.T, "nvml_clock_reader", lambda *a, **k: None)
+    # raising=False so the parent commit, which has no UUID guard, runs this
+    # same path and shows what it did: it measured into the other card's ladder.
+    monkeypatch.setattr(CE, "device_identity", lambda: identity, raising=False)
+
+    def fake_run_arm(*args, **kwargs):
+        calls.append(args)
+        return rows
+    monkeypatch.setattr(CE, "run_arm", fake_run_arm)
+    rc = CE.main(["--out", str(out), "--run-id", "r", "--draws", "50"])
+    return rc, calls
+
+
+def test_a_resume_on_another_card_of_the_same_name_is_refused(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    (run_dir / "DEVICE").write_text("GPU-aaaa\n")
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-bbbb",
+                               rows=[])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert not calls, "the replacement card measured into the first card's ladder"
+    assert "GPU-aaaa" in out and "GPU-bbbb" in out and "--run-id" in out
+
+
+def test_a_resume_into_an_old_stamp_with_cells_is_refused(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=[])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert not calls
+    assert "no DEVICE file" in out
+
+
+def test_a_resume_on_the_same_card_measures_and_the_report_names_it(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    rows = CE.plant_rows(eps=0.05, jitter=0.004)
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=rows)
+    out = capsys.readouterr().out
+    assert calls, out[-800:]
+    assert rc == exit_codes.DONE, out[-1500:]
+    assert CE.DEVICE_FILE == "DEVICE", "the ratio arm's name for the same file"
+    assert (run_dir / "DEVICE").read_text().strip() == "GPU-aaaa"
+    payload = json.loads((run_dir / "report.json").read_text())
+    assert payload["device"] == "GPU-aaaa"
+    assert payload["elasticity"]["claim_min_tread"] == CE.CLAIM_MIN_TREAD
+    # And the second run on the same card resumes rather than refusing.
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=rows)
+    assert rc == exit_codes.DONE and len(calls) == 1
+
+
+# --------------------------------------------------------------------------
+# 13c. the plan page says what V1 is sized for
+# --------------------------------------------------------------------------
+
+def test_the_plan_prints_the_claims_own_resolution_at_the_design_requested():
+    """V1's threshold comes from the pooled per-call estimator's standard
+    error, and the gated claim fits one slope per tread over treads 2 and
+    deeper, so at V1's span its interval is several times wider. The page says
+    so for the design actually requested, the chain's three states included,
+    and V1 does not move."""
+    chain = CHAIN_R1 + ["--duty", "1.0", "0.7", "0.5"]
+    args = parsed(chain)
+    threshold, _source = CE.registered_clock_ratio(args)
+    factor = CE.per_tile_se_factor(8, min_tread=CE.CLAIM_MIN_TREAD)
+    assert factor > 1.0
+    assert CE.per_tile_se_factor(8, min_tread=1) < factor, (
+        "dropping the shallowest tread costs leverage")
+    need = CE.required_clock_ratio(repeats=13, treads=8, states=3,
+                                   se_factor=factor)
+    assert need > threshold, "the claim needs more span than V1 asks for"
+    assert CE.required_clock_ratio(repeats=13, treads=8, states=3) == \
+        CE.required_clock_ratio(repeats=13, treads=8, states=3, se_factor=1.0)
+    page = run(["--dry-run", *chain]).stdout
+    assert f"V1 THRESHOLD {threshold:.3f}x" in page
+    assert "V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE" in page
+    assert "(13 repeats x 8 treads x 3 states)" in page
+    assert f"a span of {need:.4f}x at every tread" in page
+    assert f"its interval is {factor:.2f}x wider" in page
+    # A ladder too shallow to hold two treads from tread 2 says so, rather
+    # than printing a span of inf.
+    assert CE.per_tile_se_factor(2, min_tread=CE.CLAIM_MIN_TREAD) == float("inf")
+    shallow = "\n".join(CE.mde_lines(parsed(["--treads", "2"])))
+    assert "cannot be formed at all" in shallow and "inf" not in shallow
+
+
+def test_the_claims_predicted_resolution_is_what_the_estimator_delivers():
+    """The printed factor is arithmetic, so it is checked against the
+    estimator: a planted 3-state design at V1's own span, with the corpus
+    spread as its jitter, bootstraps to a claim interval near the predicted
+    one and several times the pooled one."""
+    states, repeats = 3, 13
+    need = CE.required_clock_ratio(repeats=repeats, treads=8, states=states)
+    span = math.log(need)
+    mhz = tuple(1500.0 * math.exp(span * i / (states - 1)) for i in range(states))
+    xs = list(range(1, 9))
+    b = CE._line_slope(xs, list(CE.CORPUS_LADDER_MS))
+    a = statistics.fmean(CE.CORPUS_LADDER_MS) - b * statistics.fmean(xs)
+    claim, pooled = [], []
+    for seed in range(4):
+        est = CE.fit(CE.plant_rows(eps=0.5, duties=CE.DUTY_LEVELS[:states],
+                                   mhz=mhz, repeats=repeats, a_ms=a, b_ms=b,
+                                   jitter=CE.CORPUS_REPEAT_SPREAD, seed=seed),
+                     draws=400, seed=1)
+        claim.append(est.half_width)
+        pooled.append((est.fixed_tread_hi - est.fixed_tread_lo) / 2.0)
+    factor = CE.per_tile_se_factor(8, min_tread=CE.CLAIM_MIN_TREAD)
+    seen = statistics.median(claim) / statistics.median(pooled)
+    assert 0.75 * factor < seen < 1.33 * factor, (seen, factor)
+    predicted = CE.RESOLUTION_TARGET * factor
+    assert 0.75 * predicted < statistics.median(claim) < 1.5 * predicted
 
 
 # --------------------------------------------------------------------------
