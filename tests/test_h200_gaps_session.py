@@ -5465,8 +5465,13 @@ def test_the_runbooks_private_reference_section_says_one_thing_about_v7():
     section = section.split("\n## ", 1)[0]
     flat = re.sub(r"\s+", " ", section)
     assert f"**The driver runs it at `--duty {duty}`**" in flat, flat[:3000]
-    # Only this duty, and the script's own full-duty default named as such.
-    assert set(re.findall(r"--duty ([\d.]+)", flat)) == {duty, "1.0"}, flat
+    # Only this duty, the script's own full-duty default named as such, and
+    # the V7 follow-up's lower duty, read from the chain that registers it.
+    chain = (ROOT / "scripts" / "alpha_g_chain.sh").read_text()
+    followup = re.search(r"^R3_FOLLOWUP_DUTY=([\d.]+)$", chain, re.M).group(1)
+    assert set(re.findall(r"--duty ([\d.]+)", flat)) <= {duty, "1.0", followup}, flat
+    assert {duty, "1.0"} <= set(re.findall(r"--duty ([\d.]+)", flat)), flat
+    assert "0.5" not in set(re.findall(r"--duty ([\d.]+)", flat)), "the retired pod duty"
     assert "holds by construction" not in flat
     for sentence in re.split(r"(?<=[.;])\s", flat):
         if "by construction" in sentence.lower() and "fail" in sentence.lower():
