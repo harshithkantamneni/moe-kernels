@@ -142,7 +142,7 @@ against `--list` by `tests/test_docs.py`.
 | `calibrate` | 3 | ALLOW | this pod's own ridge and both dtype peaks, published; five arms refuse without it | KEEP: the only file worth committing |
 | `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
 | `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
-| `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Run at `--duty 0.25` on both branches, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's three pages were INVALID on V7. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
+| `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Run at `--duty 0.25` on both branches, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's four ratio pages were all INVALID on V7, the two arms' clocks 2-18% apart. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
 | `elasticity-m32-n64-g16` | 40 | WALL | the clock elasticity of the per-M-tile cost at one pinned cell (BLOCK_M=32, BLOCK_N=64, G=16), four duty states from the cap to the boost ceiling (1.0 0.5 0.25 0.1); the band it lands in decides what every alpha below MEANS | not in the verdict: ADDED 2026-09-16. THE STANDALONE ARM, session 4's design read on this session's card; the alpha(G) chain measures its own elasticity once per G of the ratio ladder, and that is the chain's step, not this row. `--session-tag` IS ON BOTH BRANCHES SINCE 2026-09-22: without it the run id on an H200 was session 4's own, and on the shared volume the arm would have re-scored session 4's 416 cells as this session's |
 | `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
 | `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships. No arm confirms the headline on sm_90: at BLOCK_N=256 no BLOCK_M=256 control fits at ANY warp or stage count (65536 of 65536 registers per block; `bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0` exits 2), and no BLOCK_SIZE_N does either | CUT: REFUSES at `--capability 9.0`; booked zero, the refusal is the finding. It is not one fix away: `--num-warps 16 --num-stages 3` refuses too, so the paper's headline has no confirming arm on this card |
@@ -309,24 +309,25 @@ base).
 **The driver runs it at `--duty 0.25`**, on both branches, and the alpha(G)
 chain runs R3 at the same duty: DESIGN DECISION 15 as the owner decided it on
 2026-09-22. The script's own default stays `--duty 1.0`: duty is a design key
-defaulting to 1.0, and moving the default would break `--replicate-of`
-against session 4's runs. WHY A DUTY AT ALL: at full duty the power cap
-boosts whichever arm reads fewer bytes, so on a card that cannot lock its
-clock V7 fails by construction, and session 4's three ratio pages were
-INVALID on V7 that way (the shared arm 2% above the private one at G=1, 18%
-at G=16). `--duty D` times each cell as bursts of about 40 ms of kernel time
-separated by idle gaps, which takes board power off the cap without changing
-a byte the kernel moves. WHY 0.25 AND NOT 0.5 is session 4's clock arm, the
-same native kernel under the same `time_duty` R3 imports: at duty 0.5 the
-clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz, 13 of the 78
-cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's median sat
-at 1965 MHz, at 277-317 W, and no cell drifted. So V7 is expected to hold at
-0.25, not guaranteed: the private arm draws more power than the kernel that
-was measured, and its V7 line is the measurement. The price is wall clock,
-about 1/0.25 = 4 times the kernel time: the plan prices the ladder's 145 s of
-kernel time at about 581 s, so a run is about 10 minutes before its compiles
-and the 25.4 GB weight build. The duty is in the run id, and board power is
-recorded per cell.
+defaulting to 1.0, and moving the default would break `--replicate-of` against
+session 4's runs. WHY A DUTY AT ALL: at full duty the power cap boosts
+whichever arm reads fewer bytes, so on a card that cannot lock its clock V7
+fails by construction, and session 4's four ratio pages were all INVALID on V7
+that way, the private arm's clock 2-18% below the shared arm's (2% on
+mixtral-8x7b at G=1 in both of its runs, 12% on qwen2-57b-a14b at G=1, 18% on
+mixtral-8x7b at G=16). `--duty D` times each cell as bursts of about 40 ms of
+kernel time separated by idle gaps, which takes board power off the cap
+without changing a byte the kernel moves. WHY 0.25 AND NOT 0.5 is session 4's
+clock arm, the same native kernel under the same `time_duty` R3 imports: at
+duty 0.5 the clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz,
+13 of the 78 cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's
+median sat at 1965 MHz, at 277-317 W, and no cell drifted. So V7 is expected
+to hold at 0.25, not guaranteed: the private arm draws more power than the
+kernel that was measured, and its V7 line is the measurement. The price is
+wall clock, about 1/0.25 = 4 times the kernel time: the plan prices the
+ladder's 145 s of kernel time at about 581 s, so a run is about 10 minutes
+before its compiles and the 25.4 GB weight build. The duty is in the run id,
+and board power is recorded per cell.
 
 **Book this arm as a PAIR.** The interval on C1 is a bootstrap over repeats
 within one run; on 2026-09-21 two G=1 runs at seeds 0 and 1, 77 minutes apart

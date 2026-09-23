@@ -5308,6 +5308,21 @@ def test_the_runbook_counts_the_arms_the_private_reference_precedes():
 SESSION4_ELASTICITY_ID = ("nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25_0.1"
                           "-l2flushtrue-modelmixtral_8x7b-repeats13-s-9f91fa91")
 
+#: Session 4's published R3 pages, one row each, with the V7 gate as its
+#: report.json on origin/pod-h200-session4 records it (results/published/
+#: 2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/
+#: private_weight_reference/<run id>/report.json, the gate tagged V7, its
+#: "verdict" and the percentage in its "measured" line). Measured values
+#: transcribed as a fixture: (run id suffix, --model, G, V7 verdict, the worst
+#: tread's clock difference between the shared and private arms in percent).
+#: Every one ran at full duty, before R3 had --duty.
+SESSION4_R3_V7 = (
+    ("d2e4dae0", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("efd9a3d6", "mixtral-8x7b", 1, "FAIL", 2.06),
+    ("17d3b789", "qwen2-57b-a14b", 1, "FAIL", 12.21),
+    ("6e27da91", "mixtral-8x7b", 16, "FAIL", 18.10),
+)
+
 
 def _arm_words(name: str) -> tuple[list[list[str]], list[list[str]]]:
     """`(planning, measuring)`: each `arm <name>` line, continuations joined and
@@ -5338,7 +5353,7 @@ def interpretation_dry(tmp_path_factory):
 def test_the_private_reference_runs_at_the_owners_duty_on_both_branches(interpretation_dry):
     """DESIGN DECISION 15 REACHED ONE OF ITS TWO CALL SITES. 5b7b719 gave R3
     `--duty` and the alpha(G) chain passed it; this driver's own private arm
-    still ran at the script's default of 1.0, where session 4's three ratio
+    still ran at the script's default of 1.0, where session 4's four ratio
     pages were INVALID on V7 (the power cap boosting whichever arm read fewer
     bytes). The runbook meanwhile said both "run it at --duty 0.5" and "the
     driver runs seed 0", and a seed 1 following the first sentence would have
@@ -5477,6 +5492,46 @@ def test_the_runbooks_private_reference_section_says_one_thing_about_v7():
         assert words[words.index(flag) + 1] == _flag(measuring, flag), flag
     # There is no arms.sh; the section used to send the operator to one.
     assert "arms.sh" not in section
+
+
+def test_session_4s_ratio_pages_are_counted_and_quoted_as_published():
+    """THE PROSE COUNTED THREE PAGES WHERE SESSION 4 PUBLISHED FOUR. The duty
+    rewrite cited session 4's R3 pages as the reason R3 is duty-cycled, and
+    said "three ratio pages" in the 0c comment and twice in the runbook, and
+    quoted their V7 reading as "2% at G=1, 18% at G=16" there and in the arm's
+    own description. Session 4 published four, all V7 FAIL at full duty: two
+    mixtral pages at G=1 (2%), one mixtral page at G=16 (18%), and a qwen2
+    page at G=1 that read 12%, so "2% at G=1" was wrong for one of the two
+    models it covered. Every count of those pages is checked against the
+    published set, every one carries the range, and every percentage quoted
+    against a G names its model and is that model's page at that G."""
+    assert {verdict for _, _, _, verdict, _ in SESSION4_R3_V7} == {"FAIL"}
+    worst: dict[tuple[str, int], int] = {}
+    for _, model, g, _, pct in SESSION4_R3_V7:
+        worst[(model, g)] = max(worst.get((model, g), 0), round(pct))
+    lo, hi = min(worst.values()), max(worst.values())
+    word = _count_word(len(SESSION4_R3_V7))
+    counts = "|".join([r"\d+", *_COUNT_WORDS.values()])
+    mention = re.compile(
+        rf"session 4(?:'s|:) ({counts}) (?:ratio |R3 )?pages", re.I)
+    quote = re.compile(r"(\d+)% (?:on (\S+) )?at G=(\d+)")
+
+    driver = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*#+", " ", TEXT))
+    runbook = re.sub(r"\s+", " ", _RUNBOOK)
+    for name, flat, least in (("driver", driver, 2), ("runbook", runbook, 2)):
+        found = list(mention.finditer(flat))
+        assert len(found) >= least, (name, [m.group(0) for m in found])
+        for m in found:
+            assert m.group(1).lower() == word, (name, m.group(0))
+            window = flat[m.start():m.start() + 400]
+            assert f"{lo}-{hi}%" in window, (name, window)
+        quoted = set()
+        for q in quote.finditer(flat):
+            pct, model, g = int(q.group(1)), q.group(2), int(q.group(3))
+            assert model is not None, (name, "no model named", q.group(0))
+            assert worst.get((model, g)) == pct, (name, q.group(0), worst)
+            quoted.add((model, g))
+        assert quoted == set(worst), (name, quoted, set(worst))
 
 
 def test_the_runbooks_rental_figures_are_the_drivers_own(interpretation_dry):
