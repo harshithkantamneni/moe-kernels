@@ -148,6 +148,21 @@ def an_h200(monkeypatch):
     return PLANTED_H200
 
 
+@pytest.fixture(scope="session")
+def committed_hardware(tmp_path_factory):
+    """The COMMITTED rulers (`moe/bench/hardware/`, as git's index holds them),
+    copied to a directory of their own, for tests whose subject is a committed
+    artefact and the calibration it was made against. A pod's `calibrate`
+    rewrites the tracked `measured_<card>.yaml` before the end suite, and five
+    tests in the half of session 5's suite that never ran compared committed
+    reports and transcripts with that working copy (reproduced on a laptop by
+    planting the pod's ruler). See tests/_committed.py."""
+    from _committed import committed_copy
+    return committed_copy(
+        pathlib.Path(__file__).resolve().parents[1] / "moe" / "bench" / "hardware",
+        tmp_path_factory.mktemp("committed_hardware"))
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _results_root_sandbox(tmp_path_factory):
     """The pod exports MOE_RESULTS_DIR=/workspace/results/gaps-<card> to every

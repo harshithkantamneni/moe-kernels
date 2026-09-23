@@ -1143,8 +1143,8 @@ def test_only_publish_routes_the_rescore_into_the_tree(monkeypatch):
 # changed, so the paragraph is now a count of them.
 # --------------------------------------------------------------------------
 
-def _cals() -> dict:
-    return {slug: mba.load_calibration(slug)
+def _cals(directory=None) -> dict:
+    return {slug: mba.load_calibration(slug, directory)
             for slug in ("nvidia_a100_sxm4_80gb", "nvidia_h200")}
 
 
@@ -1158,7 +1158,8 @@ def _plant_report(root, arm: str, ridge, rescored_from=None) -> None:
     (d / "planted.report.json").write_text(json.dumps(doc))
 
 
-def test_the_ridge_census_reads_the_committed_reports_rather_than_asserting_them():
+def test_the_ridge_census_reads_the_committed_reports_rather_than_asserting_them(
+        committed_hardware):
     """THE PARAGRAPH THIS REPLACES WAS A LITERAL AND THE LITERAL WENT FALSE.
 
     `ANCHOR_RESCORE.txt` said, in `say(...)` text, "Every one of these reports
@@ -1167,8 +1168,13 @@ def test_the_ridge_census_reads_the_committed_reports_rather_than_asserting_them
     all 26 on the same branch. So the transcript regenerated false on every run
     and disagreed with the data sitting beside it. This asserts the census
     agrees with the files, which is a thing that cannot go stale.
+
+    AGAINST THE COMMITTED RULERS (`committed_hardware`), because the reports
+    were rescored against those: on a pod `calibrate` rewrites the tracked H200
+    file first, and session 5's working copy (ridge 152.9) made 19 of the 26
+    committed reports look like strangers to their own card.
     """
-    cals = _cals()
+    cals = _cals(committed_hardware)
     census = mba.ridge_census(mba.PUBLISHED, cals)
     assert census["total"] == census["own_card"] > 0
     assert census["still_swept"] == []
@@ -1211,9 +1217,15 @@ def test_the_ridge_census_names_a_report_that_still_carries_the_swept_ridge(tmp_
     assert "No report carries the swept ridge" not in text
 
 
-def test_the_committed_transcript_is_what_the_script_writes_today(tmp_path):
+def test_the_committed_transcript_is_what_the_script_writes_today(
+        tmp_path, monkeypatch, committed_hardware):
     """The committed `ANCHOR_RESCORE.txt` regenerates byte for byte, or it is
     stale.
+
+    REGENERATED FROM COMMITTED INPUTS, the rulers included: the transcript
+    prints every card's calibration line, and on a pod `calibrate` rewrites the
+    tracked H200 file before the end suite, so a regeneration over the working
+    copy printed session 5's ruler and called the committed file stale.
 
     Nothing compared the two until 2026-09-02, and the house rule to
     `git checkout --` the file after every suite run then FROZE whichever
@@ -1228,6 +1240,7 @@ def test_the_committed_transcript_is_what_the_script_writes_today(tmp_path):
     """
     committed = mba.PUBLISHED / "ANCHOR_RESCORE.txt"
     assert committed.exists()
+    monkeypatch.setattr(mba, "HARDWARE_DIR", committed_hardware)
     mba.main(["--rescore", "--out-dir", str(tmp_path)])
     fresh = (tmp_path / "ANCHOR_RESCORE.txt").read_text()
     assert fresh == committed.read_text()
@@ -1260,7 +1273,8 @@ def _strip_stamp(payload: dict) -> dict:
     return out
 
 
-def test_the_committed_rescore_json_names_a_clean_tree(tmp_path):
+def test_the_committed_rescore_json_names_a_clean_tree(
+        tmp_path, monkeypatch, committed_hardware, no_cuda):
     """A published artefact whose provenance says `git_dirty: true` names no
     committed state, and this one did.
 
@@ -1277,7 +1291,11 @@ def test_the_committed_rescore_json_names_a_clean_tree(tmp_path):
     taken out. That second half is what makes the lag harmless -- the payload
     is a function of the committed reports, not of the HEAD it ran at -- and it
     would fail if a later edit changed the analysis without the pair being
-    regenerated.
+    regenerated. The calibrations are committed inputs too, so the fresh run
+    reads the committed rulers (`committed_hardware`), not a pod's working copy;
+    and the committed pair was written with no card attached, so the no-card
+    world is planted (`no_cuda`) or a pod's run stamps its H200 into
+    `gpu_name` and the comparison fails on a machine fact, as `hostname` did.
     """
     committed = json.loads((mba.PUBLISHED / "ANCHOR_RESCORE.json").read_text())
     prov = committed["provenance"]
@@ -1285,6 +1303,7 @@ def test_the_committed_rescore_json_names_a_clean_tree(tmp_path):
     assert prov["git_dirty_files"] == 0
     assert prov["git_sha"] == committed["git_sha"]
 
+    monkeypatch.setattr(mba, "HARDWARE_DIR", committed_hardware)
     mba.main(["--rescore", "--out-dir", str(tmp_path)])
     fresh = json.loads((tmp_path / "ANCHOR_RESCORE.json").read_text())
     assert _strip_stamp(fresh) == _strip_stamp(committed)

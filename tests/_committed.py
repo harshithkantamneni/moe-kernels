@@ -15,6 +15,14 @@ pinned to the tree". A published arm is one git tracks. So they read git's
 index, where a newly published arm counts from the moment it is `git add`ed,
 and an untracked directory is not an arm until it is.
 
+The same holds for the RULERS. A pod's `calibrate` rewrites the TRACKED
+`moe/bench/hardware/measured_<card>.yaml` before the end suite runs (session
+5's read ridge 152.9 against the committed 151.4), and a test that regenerates
+a committed artefact, or checks that committed reports cite "their card's
+committed calibration", has to read the committed ruler rather than the
+working copy. `committed_copy` materialises the index's version of a tracked
+directory for exactly that.
+
 Nothing here falls back to reading the directory when git cannot answer: a
 fallback would restore the defect exactly on the box that has it. A checkout
 without git fails these tests loudly, which is what the provenance tests in
@@ -50,3 +58,23 @@ def tracked_children(directory: Path) -> list[Path]:
              for path in tracked_files(directory)
              if len(path.relative_to(REPO).relative_to(rel).parts) > 1}
     return sorted(directory / name for name in names)
+
+
+def committed_copy(directory: Path, dest: Path) -> Path:
+    """Write the INDEX's version of every tracked file under `directory` into
+    `dest`, same relative paths, and return `dest`.
+
+    The index and not HEAD, so a ruler staged for commit is the one compared
+    against, exactly as `tracked_files` counts a staged arm. A working copy
+    that differs (a pod's fresh calibration) is never read.
+    """
+    directory = Path(directory)
+    rel = directory.resolve().relative_to(REPO.resolve())
+    for path in tracked_files(directory):
+        name = path.relative_to(REPO).as_posix()
+        blob = subprocess.run(["git", "-C", str(REPO), "show", f":{name}"],
+                              capture_output=True, check=True).stdout
+        target = Path(dest) / path.relative_to(REPO).relative_to(rel)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+    return Path(dest)

@@ -102,17 +102,21 @@ def test_the_a100_report_carries_its_own_ridge_and_says_where_it_came_from():
     assert doc["ridge_source"] == "measured_nvidia_a100_sxm4_80gb.yaml"
 
 
-def test_every_published_report_now_cites_its_own_card():
+def test_every_published_report_now_cites_its_own_card(committed_hardware):
     # Each card's ridge as its COMMITTED calibration reads today. The H200's
     # was 162.8 until its 2026-09-09 session sampled the dense GEMM's clock
     # under load and put it at 152.8, and every H200 report was rescored
     # against that: a report citing a ruler the tree no longer ships is the
     # whole-layer defect, which is what this whole module exists to prevent.
+    # COMMITTED means git's (`committed_hardware`): a pod's calibrate rewrites
+    # the tracked H200 file before the end suite, and session 5's working copy
+    # (152.9) would have called every committed H200 report a stranger.
     from moe.bench import roofline as RL
 
     expected = {
         slug[len("measured_"):]: round(
-            RL.load_hardware(slug).ridge_point("bf16"), 1)
+            RL.load_hardware(slug, directory=committed_hardware)
+            .ridge_point("bf16"), 1)
         for slug in ("measured_nvidia_a100_sxm4_80gb", "measured_nvidia_h200")
     }
     seen = set()
@@ -224,12 +228,22 @@ def test_asking_to_write_and_to_dry_run_at_once_refuses(arm_copy, tmp_path):
     assert {p: p.read_bytes() for p in RS.report_paths(arm_copy)} == snapshot
 
 
-def test_running_the_tool_on_the_committed_tree_now_changes_nothing():
-    """Idempotence, on the real tree, as a plan that proposes no rewrite."""
-    got = _run([])
-    assert got.returncode == 0, got.stderr
-    assert "0 to rewrite" in got.stdout
-    assert "12 to rewrite" not in got.stdout
+def test_running_the_tool_on_the_committed_tree_now_changes_nothing(
+        capsys, monkeypatch, committed_hardware):
+    """Idempotence, on the real tree, as a plan that proposes no rewrite.
+
+    AGAINST THE COMMITTED RULERS, and in process so they can be planted. The
+    tool rescores against whatever `moe/bench/hardware/` holds, which on a pod
+    is the file `calibrate` just rewrote: against session 5's (152.9) the plan
+    proposed rewriting all 19 H200 reports, which is the tool doing its job on
+    an uncommitted ruler, not a failure of idempotence on the committed one.
+    """
+    from moe.bench import roofline as RL
+    monkeypatch.setattr(RL, "HARDWARE_DIR", committed_hardware)
+    assert RS.main([]) == 0
+    out = capsys.readouterr().out
+    assert "0 to rewrite" in out
+    assert "12 to rewrite" not in out
 
 
 # --------------------------------------------------------------------------
