@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -541,26 +542,70 @@ def test_the_lock_is_released_only_while_it_names_this_shell(tmp_path):
     assert (s / "chain.lock.d" / "owner").read_text() == "999999 elsewhere\n"
 
 
-@pytest.mark.skipif(subprocess.run(["bash", "-c", "command -v flock"],
-                                   capture_output=True).returncode != 0,
-                    reason="this box has no flock; the mkdir lock is the one it takes")
-def test_the_flock_lock_refuses_while_held(tmp_path):
+FLOCK_SHIM = """#!@PYTHON@
+# util-linux's `flock [-n] FD`, for a box that has none: flock(2) on the
+# descriptor this process inherited, which is the shell's open file
+# description, so the lock outlives this process exactly as the real one's does
+import fcntl
+import sys
+
+args = sys.argv[1:]
+fd = int([a for a in args if a != "-n"][0])
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | (fcntl.LOCK_NB if "-n" in args else 0))
+except BlockingIOError:
+    sys.exit(1)
+"""
+
+
+def _flock_path(tmp_path: Path) -> str:
+    """A PATH with a flock on it: the box's own (the pod's), else the shim."""
+    if shutil.which("flock"):
+        return os.environ["PATH"]
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "flock").write_text(FLOCK_SHIM.replace("@PYTHON@", sys.executable))
+    (shim / "flock").chmod(0o755)
+    return f"{shim}{os.pathsep}{os.environ['PATH']}"
+
+
+@pytest.mark.parametrize("recorded", ["a live chain", "a dead chain", "another host"])
+def test_a_held_flock_is_refused_and_never_taken_over(tmp_path, recorded):
+    """The kernel's answer is authoritative. When the chain the lock file
+    records is dead, the process still holding the lock is the arm that chain
+    left running (it inherited fd 9); until 2026-09-22 a --resume took the lock
+    over and ran the same step, same run id, on the card beside it."""
     s = tmp_path / "s"
     s.mkdir()
-    holder = subprocess.Popen(["bash", "-c", f'exec 9>>"{s}/chain.lock"; flock 9; '
-                               f'echo "$$ {_hostname()}" > "{s}/chain.lock"; sleep 30'])
+    path = _flock_path(tmp_path)
+    owner = {"a live chain": f"{os.getpid()} {_hostname()}",
+             "a dead chain": f"{_dead_pid()} {_hostname()}",
+             "another host": f"{os.getpid()} some-other-pod"}[recorded]
+    # the holder EXECs its sleep, so killing it releases the lock: a forked
+    # sleep would keep fd 9 and the lock with it
+    holder = subprocess.Popen(["bash", "-c", f'exec 9>>"{s}/chain.lock"; flock 9 &&'
+                               f' echo "{owner}" > "{s}/chain.lock" && exec sleep 30'],
+                              env={**os.environ, "PATH": path})
     try:
         for _ in range(100):
             if (s / "chain.lock").exists() and (s / "chain.lock").read_text().strip():
                 break
             subprocess.run(["sleep", "0.1"])
-        got = lift(f"chain_lock {s!s} 1; echo rc=$?", LOCK_TOOL="flock")
-        assert got.stdout.strip().endswith("rc=2") and "another chain holds" in got.stdout
+        fresh, resume = (lift(f"chain_lock {s!s} {resuming}; echo rc=$?", LOCK_TOOL="flock",
+                              PATH=path) for resuming in (0, 1))
+        for got in (resume, fresh):
+            assert "took over" not in got.stdout, got.stdout
+            assert got.stdout.strip().endswith("rc=2"), got.stdout + got.stderr
+            assert f"another chain holds {s / 'chain.lock'} (it recorded {owner})" in got.stdout
+            assert "never taken over" in got.stdout and f"fuser -v {s / 'chain.lock'}" in got.stdout
+        assert (s / "chain.lock").read_text() == owner + "\n", "a refusal rewrote the holder"
     finally:
         holder.kill()
         holder.wait()
-    got = lift(f"chain_lock {s!s} 1; echo rc=$?", LOCK_TOOL="flock")
-    assert got.stdout.strip().endswith("rc=0"), got.stdout
+    got = lift(f"chain_lock {s!s} 1; echo rc=$?", LOCK_TOOL="flock", PATH=path)
+    assert got.stdout.strip().endswith("rc=0"), got.stdout + got.stderr
+    assert "took over" not in got.stdout, "a released lock is taken, not taken over"
+    assert (s / "chain.lock").read_text().split()[1] == _hostname()
 
 
 # --------------------------------------------------------------------------

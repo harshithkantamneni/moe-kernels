@@ -351,9 +351,14 @@ way. A bare run refuses when a chain session for the card already holds
 session's step logs, and the driver's `logs/thermal.log`, with plan pages. A
 measuring run is refused on a box whose card torch cannot name, with the
 probe's reason and nvidia-smi's name, driver version and power limit printed.
-It holds a lock on the session for the whole run: a second chain on it is
-refused, and `--resume` takes over a lock whose pid is dead or whose host
-differs. It records the card's UUID in `$SESSION/DEVICE` and refuses a resume
+It holds a lock on the session for the whole run, and a second chain on it is
+refused. On the pod the lock is a `flock`, and a held one is never taken
+over, whatever pid it records: when the recorded chain is dead, the holder is
+the arm it left running (`pkill -f alpha_g_chain.sh` kills the shell, not its
+python), still timing the card. The refusal prints `fuser -v` and `lsof` for
+the lock file; stop that process, then `--resume`. Only the `mkdir` fallback,
+on a box without `flock`, lets `--resume` take over a lock whose pid is dead
+or whose host differs. It records the card's UUID in `$SESSION/DEVICE` and refuses a resume
 on another card, because R1 resumes by card name and would pool two cards'
 cells into one elasticity; after a pod is lost, the replacement pod is `--new`.
 

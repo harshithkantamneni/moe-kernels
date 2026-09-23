@@ -39,8 +39,10 @@
 # would overwrite that session's step logs, and the driver's thermal.log, with
 # plan pages. A measuring run is REFUSED on a box whose card cannot be named
 # (the probe's reason is printed); it holds a lock on the session for the
-# whole run (a second chain on it is refused, and a --resume takes over a lock
-# whose pid is dead or whose host differs); and it records the card's UUID in
+# whole run (a second chain on it is refused; a held flock, the pod's, is never
+# taken over, since its holder may be an arm a killed chain left running, and
+# only the mkdir fallback's --resume takes over a lock whose pid is dead or
+# whose host differs); and it records the card's UUID in
 # $SESSION/DEVICE, refusing a resume on another card: R1's run id carries no
 # UUID, so its resume would pool two cards' cells into one elasticity.
 #
@@ -572,9 +574,10 @@ device_check() {
   printf '%s\n' "$ident" > "$file"
 }
 
-#: Is a recorded lock owner ("pid host") gone: its host differs from this one
-#: (the pod it ran on is not this pod), or its pid is dead here. $1 the owner,
-#: $2 this host. Returns 0 when stale.
+#: Is a recorded mkdir-lock owner ("pid host") gone: its host differs from
+#: this one (the pod it ran on is not this pod), or its pid is dead here. $1
+#: the owner, $2 this host. Returns 0 when stale. The flock branch never asks:
+#: a dead recorded pid says nothing about the arm that pid left running.
 lock_is_stale() {
   local pid="${1%% *}" host="${1#* }"
   [[ -n "$1" && "$1" == *" "* ]] || return 0
@@ -585,10 +588,20 @@ lock_is_stale() {
 
 #: THE LOCK, held for the whole measuring run. flock where the box has it,
 #: else an atomic mkdir; either way the holder is recorded as "pid host". $1
-#: the session, $2 1 when this pass continues an existing session (only such
-#: a pass may take over a stale lock). Returns 2, saying why, when refused;
-#: sets LOCK_DIR to what release_lock removes (nothing for flock, which the
-#: kernel releases when this shell and every child holding fd 9 are gone).
+#: the session, $2 1 when this pass continues an existing session. Returns 2,
+#: saying why, when refused; sets LOCK_DIR to what release_lock removes
+#: (nothing for flock, which the kernel releases when this shell and every
+#: child holding fd 9 are gone).
+#:   flock  A held lock is NEVER taken over, whatever pid it records: the
+#:          kernel's answer is that a live process holds the file, and when
+#:          the recorded chain is dead that process is the arm it left running
+#:          (`pkill -f alpha_g_chain.sh` kills the shell, not its python),
+#:          which inherited fd 9 and is still timing the card. A resume that
+#:          took it over would run the same step, same run id, on the same
+#:          card beside it.
+#:   mkdir  The fallback where there is no flock (a laptop). It cannot see an
+#:          orphaned arm, so a resuming pass ($2 1) takes over a lock whose
+#:          pid is dead or whose host differs.
 LOCK_TOOL="${LOCK_TOOL:-}"
 [[ -n "$LOCK_TOOL" ]] || { command -v flock >/dev/null 2>&1 && LOCK_TOOL=flock || LOCK_TOOL=mkdir; }
 LOCK_DIR=""
@@ -602,16 +615,15 @@ chain_lock() {
     exec 9>>"$file" || { echo "REFUSED: cannot open $file"; return 2; }
     if ! flock -n 9; then
       owner="$(cat "$file" 2>/dev/null)"
-      if (( resuming )) && lock_is_stale "$owner" "$host"; then
-        exec 9>&-
-        rm -f "$file"
-        exec 9>>"$file" && flock -n 9 || { echo "REFUSED: lost the race for $file"; return 2; }
-        echo "  took over a stale lock (held by ${owner:-nobody recorded})"
-      else
-        echo "REFUSED: another chain holds $file (${owner:-no holder recorded}); two chains"
-        echo "  on one session would time the card at once and resume the same run ids."
-        return 2
-      fi
+      exec 9>&-
+      echo "REFUSED: another chain holds $file (it recorded ${owner:-no holder}); two chains"
+      echo "  on one session would time the card at once and resume the same run ids."
+      echo "  The kernel says a live process holds it, whatever pid it records: a chain, or"
+      echo "  an arm a killed chain left running, still timing the card. A held flock is"
+      echo "  never taken over. Find the holder, stop it, then --resume:"
+      echo "      fuser -v $file     (or: lsof $file)"
+      echo "  If neither names a process here, it is on another pod sharing this volume."
+      return 2
     fi
     printf '%s\n' "$LOCK_OWNER" > "$file"
     return 0
@@ -626,7 +638,8 @@ chain_lock() {
     else
       echo "REFUSED: another chain holds $ldir (${owner:-no holder recorded}); two chains"
       echo "  on one session would time the card at once and resume the same run ids."
-      echo "  If no chain is running, a --resume takes a lock whose pid is dead over."
+      echo "  If no chain is running, a --resume takes a lock whose pid is dead over"
+      echo "  (this box has no flock, so an arm a killed chain left running is not seen)."
       return 2
     fi
   fi
