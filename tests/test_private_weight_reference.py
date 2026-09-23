@@ -3249,19 +3249,38 @@ def test_a_duty_outside_the_unit_interval_is_refused_before_anything():
 
 
 def test_the_plan_page_prices_the_duty_and_says_what_it_buys():
+    """The printed formats the chain's helpers parse are held byte-compatible
+    (the duty line's head, the kernel estimate, the wall figure); what the
+    page PROMISES changed. It said "V7 holds by construction" at duty 0.5,
+    and session 4's clock arm says the clock still tracked power there
+    (findings 0, 2 and 29): the page now says the duty's adequacy is
+    measured, names the evidence, and that V7 checks it."""
     full = run(["--dry-run", "--device-memory-gb", "140"])
     half = run(["--dry-run", "--device-memory-gb", "140", "--duty", "0.5"])
+    quarter = run(["--dry-run", "--device-memory-gb", "140", "--duty",
+                   str(PW.FLAT_DUTY)])
     assert "duty        1.00: the queue kept full" in full.stdout
+    assert f"(--duty {PW.FLAT_DUTY} is the setting" in full.stdout
     assert "WALL CLOCK" not in full.stdout
     assert "duty        0.50: every cell timed as bursts of ~40 ms" in half.stdout
     assert "idle gaps of 40 ms" in half.stdout
-    assert "V7 holds by construction" in half.stdout
-    m = re.search(r"the ladder's (\d+) s of kernel time takes about (\d+) s", half.stdout)
-    assert m, half.stdout[-1500:]
-    assert int(m.group(2)) == pytest.approx(2 * int(m.group(1)), abs=2)
-    # The kernel estimate itself does not move: the same calls, the same bytes.
+    assert f"duty        {PW.FLAT_DUTY:.2f}: every cell timed as bursts" in quarter.stdout
+    for page in (full.stdout, half.stdout, quarter.stdout):
+        assert "holds by construction" not in page
+        assert "boost ceiling" not in page
+    assert "Whether this duty is low enough is measured, not assumed" in half.stdout
+    assert PW.FLAT_DUTY_EVIDENCE in half.stdout and PW.FLAT_DUTY_EVIDENCE in quarter.stdout
+    assert "V7 checks it here and a FAIL names a lower duty" in quarter.stdout
+    # V7's registration says where "by construction" applies: full duty.
+    assert "at FULL duty a card that cannot lock its clock fails this by " \
+        "construction" in quarter.stdout
     est = lambda s: int(re.search(r"estimated GPU time (\d+) s", s).group(1))  # noqa: E731
-    assert est(full.stdout) == est(half.stdout)
+    for page, duty in ((half.stdout, 0.5), (quarter.stdout, PW.FLAT_DUTY)):
+        m = re.search(r"the ladder's (\d+) s of kernel time takes about (\d+) s", page)
+        assert m, page[-1500:]
+        assert int(m.group(2)) == pytest.approx(int(m.group(1)) / duty, abs=2)
+        # The kernel estimate itself does not move: the same calls, the same bytes.
+        assert est(full.stdout) == est(page)
 
 
 def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_power():
@@ -3340,16 +3359,30 @@ def test_the_duty_and_the_power_travel_through_the_csv(tmp_path):
     assert [s.duty for s in old] == [1.0, 1.0] and all(s.power_w is None for s in old)
 
 
-def test_v7_names_the_duty_remedy_only_on_a_split_at_full_duty():
+def test_v7_names_a_lower_duty_on_a_split_at_any_duty():
+    """At full duty the remedy is the pod setting. BELOW full duty a split is
+    a duty not yet low enough, and the page used to print no remedy there, so
+    a FAIL at duty 0.5 read as a card fault under a plan that had promised V7
+    would hold (findings 0, 2 and 29)."""
     treads = [1, 2, 3]
     split = _pair_world(private_clock=1425.0, shared_clock=1740.0)
-    gate = PW.gate_v7_clock_parity(split, treads=treads)
-    assert gate.verdict == exit_codes.FAIL
-    assert any("the remedy is --duty 0.5" in ln for ln in gate.lines), gate.lines
-    at_half = [PW.replace(s, duty=0.5) for s in split]
-    gate = PW.gate_v7_clock_parity(at_half, treads=treads)
-    assert gate.verdict == exit_codes.FAIL
-    assert not any("the remedy is --duty 0.5" in ln for ln in gate.lines)
+
+    def remedy(samples):
+        gate = PW.gate_v7_clock_parity(samples, treads=treads)
+        assert gate.verdict == exit_codes.FAIL
+        lines = [ln for ln in gate.lines if ln.startswith("the remedy is")]
+        assert len(lines) == 1, gate.lines
+        return lines[0]
+    full = remedy(split)
+    assert full.startswith(f"the remedy is --duty {PW.FLAT_DUTY}:")
+    assert PW.FLAT_DUTY_EVIDENCE in full
+    half = remedy([PW.replace(s, duty=0.5) for s in split])
+    assert half.startswith("the remedy is a lower --duty than 0.50:")
+    assert f"--duty {PW.FLAT_DUTY} is the pod setting" in half
+    assert PW.FLAT_DUTY_EVIDENCE in half
+    at_flat = remedy([PW.replace(s, duty=PW.FLAT_DUTY) for s in split])
+    assert at_flat.startswith(f"the remedy is a lower --duty than {PW.FLAT_DUTY:.2f}:")
+    assert "is the pod setting" not in at_flat
     ok = PW.gate_v7_clock_parity(_pair_world(private_clock=1965.0, shared_clock=1965.0),
                                  treads=treads)
     assert ok.verdict == exit_codes.PASS
@@ -3694,6 +3727,86 @@ def test_v7_prints_each_arms_power_and_sag_beside_its_clocks_and_scores_neither(
     # A page with neither prints what it always printed.
     bare = PW.gate_v7_clock_parity(_pair_world(), treads=treads)
     assert not any("power" in ln or "sag" in ln for ln in bare.lines)
+
+
+# --------------------------------------------------------------------------
+# 23. the duty premise and the elasticity, described as the evidence has them
+# --------------------------------------------------------------------------
+
+def _comment_above(name: str) -> str:
+    """The `#:` block directly above `name = ...` in the script, joined."""
+    lines = SCRIPT.read_text().splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"{name} = "))
+    block = []
+    for ln in reversed(lines[:at]):
+        if not ln.startswith("#:"):
+            break
+        block.append(ln[2:].strip())
+    return " ".join(reversed(block))
+
+
+def _helps() -> dict[str, str]:
+    return {flag: " ".join((a.help or "").split())
+            for a in PW.build_parser()._actions for flag in a.option_strings}
+
+
+def test_no_description_promises_v7_by_construction_below_full_duty():
+    """THE RECURRING DEFECT, one premise described in eight places (findings
+    0, 2 and 29). Design decision 15 said every state at or below duty 0.5
+    sat at the boost ceiling and V7 held there by construction; session 4's
+    own clock arm says the clock still tracked board power at 0.5 and sat
+    flat at 0.25. Every description of the premise now states that evidence,
+    and "by construction" stays only where it holds: at full duty."""
+    doc = " ".join(PW.__doc__.split())
+    assert "V7 then holds by construction" not in doc
+    assert "boost ceiling" not in doc
+    assert f"SO THE POD SETTING IS `--duty {PW.FLAT_DUTY}`" in doc
+    assert f"--duty {PW.FLAT_DUTY}    # both arms off the power cap" in PW.__doc__
+    assert "9f91fa91" in doc and "2026-09-21" in doc
+    assert "V7 fails by construction there" in doc and "At FULL duty" in doc
+    # The default stays 1.0 (the owner's decision D1), and says why.
+    assert "THE DEFAULT STAYS 1.0" in doc
+    assert PW.DESIGN_KEY_DEFAULTS["duty"] == 1.0
+    assert PW.build_parser().parse_args([]).duty == 1.0
+    duty_help = _helps()["--duty"]
+    assert "by construction" not in duty_help and "boost ceiling" not in duty_help
+    assert f"The pod setting is {PW.FLAT_DUTY}" in duty_help
+    assert "stays the default" in duty_help
+    parity = _comment_above("CLOCK_PARITY")
+    assert "at FULL duty on a card that cannot lock its clock" in parity
+    v7 = " ".join(PW.gate_v7_clock_parity.__doc__.split())
+    assert "`clock_elasticity.time_duty`'s one NVML read per burst" in v7
+    assert "AT FULL DUTY" in v7
+    v4 = " ".join(PW.gate_v4_memory_bound.__doc__.split())
+    assert "every cell here run under one board power cap" not in v4
+    assert "Below full duty" in v4 and "conservative for this gate" in v4
+    # Finding 18: the power description matches what both instruments do.
+    assert "the full-duty timer does not" not in SCRIPT.read_text()
+
+
+def test_the_elasticity_the_correction_takes_is_the_per_call_reading_everywhere():
+    """Finding 19. 8d4eb78 moved clock_elasticity's gated `value` from the
+    per-call elasticity to the per-M-tile one, and this file still called
+    `eta` the per-call quantity and quoted 0.74 as what that arm measures
+    without saying which field held it. `clock_corrected` scales each cell's
+    WHOLE per-call time, so it takes the per-call reading; every description
+    of the flag says so and where that reading sits in either vintage of
+    report. The numbers quoted beside it carry their run and date."""
+    for doc in (PW.ClockElasticity.__doc__, PW.clock_corrected.__doc__):
+        assert "PER-CALL" in " ".join(doc.split()), doc
+    cls = " ".join(PW.ClockElasticity.__doc__.split())
+    assert "elasticity.fixed_tread" in cls and "elasticity.value" in cls
+    assert "8d4eb78" in cls
+    helps = _helps()
+    assert "per-CALL" in helps["--clock-elasticity"]
+    assert "elasticity.fixed_tread" in helps["--clock-elasticity"]
+    assert "NOT its gated per-M-tile value" in helps["--clock-elasticity"]
+    assert "the key read" in helps["--clock-elasticity-source"]
+    parity = _comment_above("CLOCK_PARITY")
+    assert "WHICH ELASTICITY `--clock-elasticity` TAKES" in parity
+    assert "elasticity.fixed_tread" in parity and "NOT the per-M-tile claim" in parity
+    assert "9f91fa91" in parity and "2026-09-21" in parity and "12ec932" in parity
+    assert "measured PER-CALL elasticity" in " ".join(PW.__doc__.split())
 
 
 # --------------------------------------------------------------------------
