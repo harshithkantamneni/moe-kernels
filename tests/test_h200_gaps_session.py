@@ -5779,3 +5779,33 @@ def test_the_runbook_counts_no_blockk_fixes_and_every_hash_it_cites_touched_it()
         assert touched.returncode == 0, (sha, touched.stderr)
         assert touched.stdout.split() == ["scripts/blockk_diagonal.py"], sha
 
+
+def test_the_pages_beside_the_runbook_book_the_chain_as_the_next_session():
+    """THE SAME TWO NEXT SESSIONS, ONE PAGE OVER (recheck DRV-R2). The runbook
+    names the alpha(G) chain as the next session and the driver as the
+    standalone path, but docs/RUNPOD.md introduced the driver as running
+    "every arm of the next session", and docs/STUDY.md's 2026-09-10 section
+    wrote "The next session is `--new`" above the driver's counter set. Every
+    sentence on either page that names the next session now names the chain,
+    RUNPOD.md calls the driver on its own the standalone path, and STUDY.md
+    introduces the block as the driver's own rerun (tests/test_docs.py pins
+    the set inside it against the driver's `rerun_arms`)."""
+    script = "scripts/alpha_g_chain.sh"
+    assert (ROOT / script).exists(), script
+    runpod = " ".join((ROOT / "docs" / "RUNPOD.md").read_text().split())
+    study = (ROOT / "docs" / "STUDY.md").read_text()
+    study = study.split("## What the 2026-09-10 H200 session settled", 1)[1]
+    study = study.split("\n## ", 1)[0]
+    for where, text in (("RUNPOD.md", runpod), ("STUDY.md", study)):
+        mentions = [s for s in _sentences(text) if "next session" in s.lower()]
+        assert mentions, f"{where} names no next session"
+        for sentence in mentions:
+            assert "alpha(G) chain" in sentence, (where, sentence)
+        assert script in " ".join(text.split()), where
+    assert "every arm of the next session" not in runpod
+    assert "standalone path" in runpod
+    before = study.split("```bash\nbash scripts/h200_gaps_session.sh --new", 1)
+    assert len(before) == 2, study[:3000]
+    intro = " ".join(before[0].rstrip().split("\n\n")[-1].split())
+    assert "The driver's own rerun is `--new`" in intro, intro
+    assert "standalone path" in intro, intro

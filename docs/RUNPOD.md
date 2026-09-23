@@ -129,7 +129,7 @@ Two drivers exist and they answer different questions. The sweep:
 cd /workspace/repo && bash scripts/run_all.sh --profile standard --max-minutes 45
 ```
 
-and the open experiments, every arm of the next session in the order their
+and the open experiments, every arm the driver registers in the order their
 results are read, with its own ledger and resume:
 
 ```bash
@@ -137,10 +137,17 @@ cd /workspace/repo && bash scripts/h200_gaps_session.sh --dry-run   # first, on 
 cd /workspace/repo && bash scripts/h200_gaps_session.sh             # on the pod
 ```
 
-`docs/POD_RUNBOOK.md` is the operator page for the second. The first does:
-pull, idempotent setup, **test suite**, smoke, sweep, plots, summary.
-The test suite runs before the sweep on purpose. A failure there costs seconds;
-discovering the same failure after an hour of benchmarking costs an hour.
+That driver on its own is the standalone path. The next session is the
+alpha(G) chain, `scripts/alpha_g_chain.sh`, which runs the driver's
+preconditions inside its own ledger and R3 (the ratio arm) and R1 (the
+elasticity arm) at every G; its section of `docs/POD_RUNBOOK.md`, "The
+alpha(G) chain", is the command to book.
+
+`docs/POD_RUNBOOK.md` is the operator page for the driver and the chain. The
+sweep does: pull, idempotent setup, **test suite**, smoke, sweep, plots,
+summary. The test suite runs before the sweep on purpose. A failure there
+costs seconds; discovering the same failure after an hour of benchmarking
+costs an hour.
 
 Stop the pod when the summary prints. The volume keeps the environments, the
 caches, the traces, and the results.

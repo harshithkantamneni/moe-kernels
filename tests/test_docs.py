@@ -462,7 +462,7 @@ def test_study_records_what_the_2026_09_10_session_settled_and_what_it_left():
                    "1.293", "0.784", "one M-tile per expert",
                    "Never quote the 207% TEMPO", "--new"):
         assert needle in section, needle
-    # The next session is a command a reader can run, with the arms named,
+    # The rerun is a command a reader can run, with the arms named,
     # and it is the driver's OWN set rather than a prefix of it: the counter
     # is two arms, and "...,counter_plan,counter" was a passing substring of
     # the wrong booking until 2026-09-10.

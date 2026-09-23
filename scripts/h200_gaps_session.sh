@@ -467,7 +467,7 @@
 #     probe.
 #   * A SESSION OF INVALID ROWS CANNOT BE RESUMED, and this file said "resume"
 #     anyway. --resume-latest re-runs no CLAIM_FAIL and no INVALID row: that is
-#     the latch working. The next session after an INVALID set is `--new`, and
+#     the latch working. The driver's rerun after an INVALID set is `--new`, and
 #     the closing summary now prints that command with the arms and the state
 #     each is expected to reach.
 #
