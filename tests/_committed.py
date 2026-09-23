@@ -1,0 +1,52 @@
+"""What git tracks under a directory, for the tests that mean the committed tree.
+
+`results/published/` is the one place under `results/` that .gitignore does NOT
+exclude, so a directory there that nobody committed is simply untracked: `ls`
+sees it, `git status` lists it with `??`, and a test that counts
+`PUBLISHED.iterdir()` counts it. Session 4's pod suite and session 5's both
+ran on a checkout carrying one (`2026-09-15-nvidia_h200-session3`, left on the
+network volume by session 3's publish and missing the `KIND` file the
+committed copy carries), and the census and README-count tests failed on it:
+15 arms against a README's 14, and an `unknown` verdict nobody declared.
+
+Those tests say what they mean in their own words: "the committed report",
+"every published arm has a declared verdict", "the numbers on the page are
+pinned to the tree". A published arm is one git tracks. So they read git's
+index, where a newly published arm counts from the moment it is `git add`ed,
+and an untracked directory is not an arm until it is.
+
+Nothing here falls back to reading the directory when git cannot answer: a
+fallback would restore the defect exactly on the box that has it. A checkout
+without git fails these tests loudly, which is what the provenance tests in
+this suite already require of it.
+"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def tracked_files(directory: Path) -> list[Path]:
+    """Every file under `directory` that git's index holds, staged or committed."""
+    rel = Path(directory).resolve().relative_to(REPO.resolve())
+    out = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "-z", "--", rel.as_posix()],
+        capture_output=True, check=True)
+    return sorted(REPO / p for p in out.stdout.decode().split("\0") if p)
+
+
+def tracked_children(directory: Path) -> list[Path]:
+    """The directories directly under `directory` that hold a tracked file.
+
+    Sorted, and as paths under `directory` exactly as the caller spelled it, so
+    a test that used to iterate `directory.iterdir()` gets the same objects for
+    every directory git knows about and none for one it does not.
+    """
+    directory = Path(directory)
+    rel = directory.resolve().relative_to(REPO.resolve())
+    names = {path.relative_to(REPO).relative_to(rel).parts[0]
+             for path in tracked_files(directory)
+             if len(path.relative_to(REPO).relative_to(rel).parts) > 1}
+    return sorted(directory / name for name in names)

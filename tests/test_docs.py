@@ -26,6 +26,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
+from _committed import tracked_children  # noqa: E402
+
 from moe.bench import published as P  # noqa: E402
 
 README = (ROOT / "README.md").read_text()
@@ -46,9 +49,16 @@ def _arms() -> list[Path]:
     how this test came to demand "16 published arms" of a README that
     correctly says 14. `published.is_session` is the same question the
     provenance census and the rescorer ask, so ask it here too.
+
+    AND ONLY THE DIRECTORIES GIT TRACKS, because "the tree" is git's. Session
+    5's pod checkout carried an untracked `2026-09-15-nvidia_h200-session3`
+    without its `KIND` file, and this test demanded 15 of a README that
+    correctly says 14 (session 4's pod failed the same way on the same
+    directory). `_committed.tracked_children` reads the index, so an arm
+    counts from its `git add` and a stray directory never does.
     """
-    return sorted(p for p in PUBLISHED.glob("2026-*")
-                  if p.is_dir() and not P.is_session(p))
+    return [p for p in tracked_children(PUBLISHED)
+            if p.name.startswith("2026-") and not P.is_session(p)]
 
 
 def test_readme_test_count_is_the_trees():

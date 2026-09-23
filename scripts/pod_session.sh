@@ -1131,9 +1131,16 @@ PYEOF
     ! "$PY_BASE" -c "import vllm" 2>/dev/null; verdict P11c "suite interpreter carries no vLLM" $? \
       "$PY_BASE" "vllm not importable" soft \
       "Run the suite from a venv without vLLM (the tests plant every refusal door; the arms themselves exercise the vLLM paths)."
+    # The census, README-count, superseded-marker and thermal-floor tests read
+    # the arms git TRACKS (tests/_committed.py), so an untracked directory here
+    # no longer fails them; every other test that globs results/published still
+    # reads what is on disk, and a MODIFIED tracked file fails the census. The
+    # warning is written after the log is emptied and pytest APPENDS, because
+    # `pytest > log` used to truncate the very file the warning was teed into.
+    : > "$tlog"
     [[ -z "$(git -C "$REPO" status --porcelain results/published)" ]] \
-      || echo "P12: results/published is not clean; the arm-count and provenance tests read the directory, not git" | tee -a "$tlog"
-    "$PY_BASE" -m pytest tests/ -q > "$tlog" 2>&1
+      || echo "P12: results/published is not clean; the census and arm-count tests read git's index and skip untracked arms, every other test that globs it reads the disk" | tee -a "$tlog"
+    "$PY_BASE" -m pytest tests/ -q >> "$tlog" 2>&1
     local trc=$? tline
     tline="$(tail -3 "$tlog" | grep -E '[0-9]+ (passed|failed)' | tail -1)"
     [[ "$trc" == "0" ]]; verdict P12 "test suite" $? \
