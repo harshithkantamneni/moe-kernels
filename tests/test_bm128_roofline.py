@@ -2127,6 +2127,36 @@ def test_the_self_test_still_plants_the_controlled_worlds_without_a_control(rf):
     assert any(g.name == "S discrimination" for g in gates)
 
 
+def test_no_planted_world_reaches_a_verdict_on_an_attached_roof(rf, roof):
+    """SESSION 5's POD, at the function. `main` hands `self_test` whatever
+    `resolve_roof` returned, and on a card with a calibration that is the
+    card's own roof with `attached=True`. The worlds stood on it as given, V0
+    PASSED on generated timings, all five reached a real verdict, and
+    `S hypothesis roof refused` FAILED. A planted world is never a measurement,
+    so its roof is unattached whatever it was handed."""
+    attached = replace(roof, attached=True)
+    _, gates = rf.self_test(MODEL_CONFIGS["mixtral-8x7b"], attached, 2,
+                            r_min=32, r_max=4096, control_block_m=None,
+                            doublings=2)
+    refused = next(g for g in gates if g.name == "S hypothesis roof refused")
+    assert refused.passed is True, refused.observed
+    assert all(g.passed for g in gates), [g.name for g in gates if not g.passed]
+
+
+def test_a_self_test_on_a_calibrated_card_exits_done(rf, capsys, an_h200):
+    """The same through `main`, on the detection path a pod walks: the planted
+    card resolves the committed H200 calibration as its OWN roof, the plan page
+    says so, and the self test still exits DONE because no world inherits the
+    attachment."""
+    from moe.bench import exit_codes
+    assert rf.resolve_roof("bf16", synthetic=True).attached is True
+    code = rf.main(["--self-test"])
+    out = capsys.readouterr().out
+    assert code == exit_codes.DONE, out[-3000:]
+    assert "MEASURED on the attached card" in out
+    assert "RESULT: VALIDITY S_hypothesis_roof_refused PASS" in out
+
+
 def test_an_uncontrolled_arm_cannot_resume_into_a_controlled_ones_directory(rf):
     """The absence has a spelling, because a knob missing from a run id is a
     knob two runs can silently share a directory across."""

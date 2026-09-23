@@ -133,7 +133,11 @@ figure and never another machine's file. A measured run with no calibration for
 its own device REFUSES: seven published A100 reports were scored against 160.3
 Op/B, a stale H200 ridge, and nothing in their output said so. `--dry-run` and
 `--self-test` may assume the committed H200 calibration because nothing there is
-measured, and gate V0 marks any report built that way as unquotable.
+measured, and gate V0 marks any report built that way as unquotable. A
+`--self-test` on a card that HAS a calibration plants its worlds at that
+card's scale and still marks every world's roof unattached: planted timings
+are not a measurement of the card, so V0 refuses them on a pod exactly as it
+does on a laptop (session 5's pod suite is where they used to pass it).
 
 WHAT THE FRACTION IS AND IS NOT. The numerator counts GEMM flops only; the
 denominator is a pure GEMM. The timed call is vLLM's whole fused layer, which
@@ -964,6 +968,10 @@ def resolve_roof(dtype: str, *, synthetic: bool) -> Roof:
       2. For `--dry-run` and `--self-test` ONLY, the committed H200 calibration
          as a stated HYPOTHESIS, which gate V0 then refuses to let stand.
       3. Otherwise REFUSE.
+
+    A `--self-test` on a card that has a calibration gets step 1's roof, and
+    `self_test` uses it as the SCALE of its planted worlds only: every world
+    stands on a copy marked unattached, because nothing in it was measured.
     """
     from moe.bench import roofline
     gpu_name = roofline.current_gpu_name()
@@ -4131,7 +4139,22 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
     uncontrolled invocation still plants them against the default control. The
     uncontrolled gate set gets its own two worlds at the end, and they run in
     every invocation for the same reason.
+
+    EVERY WORLD STANDS ON AN UNATTACHED ROOF, whatever `roof` is. `main` hands
+    in `resolve_roof`'s answer, which on a card with a calibration is that
+    card's own measured roof with `attached=True`; until 2026-09-23 the worlds
+    were planted on it as given, V0 PASSED on generated timings, and all five
+    reached a REAL verdict. Session 5's pod suite failed `S hypothesis roof
+    refused` on exactly that, three tests at once. The roof's NUMBERS are kept,
+    because they are only the scale the worlds are planted at and a card's own
+    is as good a scale as the committed file; what no longer travels is the
+    claim that a device measured them for these timings.
     """
+    roof = replace(
+        roof, attached=False,
+        source=("PLANTED: timings generated from the model, which no device "
+                "measured, so this roof is the worlds' scale and not a "
+                f"ceiling they reached. Scale from: {roof.source}"))
     control_block_m = (DEFAULT_CONTROL_BLOCK_M if control_block_m is None
                        else control_block_m)
     subject_rows = doubling_rows(cfg, r_min, r_max, SUBJECT_BLOCK_M)
@@ -4143,10 +4166,12 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
     executed = {SUBJECT_BLOCK_M: planned, control_block_m: len(control_rows)}
 
     out = ["", "## Self test: planted worlds, real gates", "",
-           "  Every world below runs on the HYPOTHESIS roof, so V0 fails in all "
-           "of them and the real",
-           "  verdict is NOT SETTLED in all of them -- which is the point of V0 "
-           "and is asserted below.",
+           "  Every world below is PLANTED, so its roof is marked unattached "
+           "even on a calibrated card (the",
+           "  card's numbers are only the scale): V0 fails in all of them and "
+           "the real verdict is NOT SETTLED",
+           "  in all of them -- which is the point of V0 and is asserted "
+           "below.",
            "  The `would-be` column is `verdict()` applied to the CLAIM gates "
            "alone, i.e. what this",
            "  run would have concluded had it been measured on a calibrated "
@@ -4225,17 +4250,19 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         f"{sorted(VERDICT_NAMES[v] for v in verdicts)}",
         "the self test itself"))
 
-    # AND THE REFUSAL. A synthetic run stands on a roof no device produced, so
-    # every world's REAL verdict must be NOT SETTLED however clean its claim
-    # gates look. This is what stops a laptop report being quotable.
+    # AND THE REFUSAL. A planted world stands on a roof no device measured FOR
+    # IT, so every world's REAL verdict must be NOT SETTLED however clean its
+    # claim gates look, on a laptop and on a calibrated card alike. This is
+    # what stops a self-test report being quotable anywhere.
     gates.append(Gate(
         VALIDITY, "S hypothesis roof refused",
         "a run on a roof no attached device measured reaches no verdict",
         f"every world's real verdict is {UNSETTLED!r}",
         real_verdicts == {UNSETTLED},
         f"real verdicts: {sorted(real_verdicts)}",
-        "the self test itself: if a hypothesis roof could produce a verdict, "
-        "every --dry-run and --self-test on a laptop would be quotable"))
+        "the self test itself: if a planted world could produce a verdict, "
+        "every --self-test would be quotable, on a laptop from the committed "
+        "ruler and on a pod from the card's own"))
 
     # And the clock machinery, which no world above exercises: ONE exclusion
     # and TWO kept states, planted separately because a run can have any of
@@ -4638,8 +4665,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, then stop")
     ap.add_argument("--self-test", action="store_true",
-                    help="plant three worlds from the study's own model and "
-                         "check the gates tell them apart, off GPU")
+                    help="plant worlds from the study's own model and check "
+                         "the gates tell them apart. Measures nothing on any "
+                         "box: on a calibrated card the card's roof is only "
+                         "the worlds' scale and every world's roof is marked "
+                         "unattached, so V0 refuses each of them")
     ap.add_argument("--fail-on-gate", action="store_true",
                     help="ACCEPTED AND REDUNDANT since 2026-09-02, kept because "
                          "scripts/h200_gaps_session.sh documents it. Exit codes "
