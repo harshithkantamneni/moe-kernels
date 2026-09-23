@@ -316,7 +316,9 @@ between two cells, so it is two arms. Second is a THIRD BLOCK_M in the
 `bn_g16` grid: the current grid has
 two heights that yield a memory branch, which is why every candidate extra
 term correlates +0.72 to +0.98 with the activation column and nothing is
-identifiable. The next session is `--new`, ~303 priced minutes:
+identifiable. The driver's own rerun is `--new`, ~303 priced minutes, and it
+is the standalone path: the next session is the alpha(G) chain,
+`scripts/alpha_g_chain.sh` (its section of `docs/POD_RUNBOOK.md`). The rerun:
 
 ```bash
 bash scripts/h200_gaps_session.sh --new \
@@ -338,8 +340,8 @@ THE COUNTER IS TWO ARMS AND BOTH ARE BOOKED, which is what took that figure
 from ~180 to ~300. A DRAM read at ONE BLOCK_N buys `alpha_b` as a traffic
 slope and nothing else; the traffic-versus-time contrast is BETWEEN
 BLOCK_N=32 and BLOCK_N=128 at the same BLOCK_M=64, so one cell cannot ask it.
-`GROUP_SIZE_M` stays pinned at 16 on both, and a G=1 cell is a third arm this
-session does not book, which is worth saying because the session measured the
+`GROUP_SIZE_M` stays pinned at 16 on both, and a G=1 cell is a third arm the
+rerun does not book, which is worth saying because the session measured the
 per-M-tile cost moving 24% between G=1 and G=16.
 
 `bn_g16` is expected to reach CLAIM_FAIL again and that is its result; each

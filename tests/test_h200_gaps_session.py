@@ -5569,3 +5569,243 @@ def test_the_runbooks_arm_table_books_what_the_driver_books():
     assert {"private-mixtral-bm32", "elasticity-m32-n64-g16"} <= set(rows), rows
     for name, booked in rows.items():
         assert listed.get(name) == booked, (name, booked, listed.get(name))
+
+
+# --------------------------------------------------------------------------
+# the post-merge recheck of 2026-09-22: one reading of a V7 FAIL at the
+# registered duty, the elasticity the clock correction takes, and one next
+# session
+# --------------------------------------------------------------------------
+
+#: The owner's reading of a V7 FAIL at the registered duty, in the words every
+#: page that states it uses. R3's own page names a lower duty on that FAIL
+#: (`v7_remedy`), and the chain skips the G's later seeds and prints the hand
+#: command for the follow-up; the driver and the runbook said the opposite of
+#: the page, "a finding about the card, not a setting to change".
+_V7_READING = ("the page names a lower duty",
+               "skips the G's later seeds and prints the follow-up command")
+_V7_RETIRED = ("finding about the card", "finding about this card",
+               "not a setting to change")
+
+
+def _runbook_section(heading: str) -> str:
+    """One `## ` section of the runbook, heading line excluded."""
+    return _RUNBOOK.split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+def _sentences(text: str, ends: str = ".;:") -> list[str]:
+    """`text` with its whitespace collapsed, cut after each of `ends`."""
+    return re.split(rf"(?<=[{re.escape(ends)}])\s", " ".join(text.split()))
+
+
+def test_a_v7_fail_at_the_registered_duty_is_read_the_way_r3s_page_reads_it(
+        interpretation_dry):
+    """TWO OPPOSITE INSTRUCTIONS FOR ONE FAIL (finding XS-1). At the duty the
+    driver runs R3 at, R3's page answers a V7 FAIL with "the remedy is a lower
+    --duty", while the driver's READ THESE FIRST said "a finding about this
+    card, not a setting to change", its arm_closes said the page "reports [it]
+    as one", and the runbook agreed with the driver. The page is right about
+    the physics; the chain does not act on it by itself (it skips the G's
+    later seeds, D3), and the follow-up at a lower duty is a new design key and
+    its own runs. The page's behaviour is asked, not assumed, and each of the
+    three places that states the reading is checked for the same words."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    private = _load_script_module("private_weight_reference")
+    assert "lower --duty" in private.v7_remedy(float(duty)), \
+        private.v7_remedy(float(duty))
+
+    _, stdout = interpretation_dry
+    first = stdout.split("READ THESE FIRST", 1)[1].split("elasticity-m32-n64-g16", 1)[0]
+    places = {"READ THESE FIRST": first,
+              "arm_closes": _private_closes_line(),
+              "runbook": _runbook_section("## The private-weight reference alone")}
+    for where, text in places.items():
+        flat = " ".join(text.split())
+        assert (f"V7 FAIL at {duty} means that duty is not yet flat for that arm "
+                "on this card") in flat, (where, flat[:4000])
+        for words in _V7_READING:
+            assert words in flat, (where, words)
+        # A follow-up is its own design key and is read on the laptop.
+        assert "new design key" in flat and "--read" in flat, where
+    for where, text in (("driver", TEXT), ("runbook", _RUNBOOK)):
+        flat = " ".join(re.sub(r"(?m)^\s*#+", " ", text).split())
+        for words in _V7_RETIRED:
+            assert words not in flat, (where, words)
+
+
+def test_the_clock_correction_is_fed_the_per_m_tile_claim_and_names_its_key():
+    """THE RECIPE DID NOT SAY WHICH ELASTICITY (finding XS-5). R3's
+    `--clock-elasticity` takes R1's per-M-tile claim, and R1's report says
+    which shape it is by its keys: `claim_min_tread` marks the current claim,
+    fitted over treads CLAIM_MIN_TREAD and deeper, and session 4's reports,
+    the only committed ones, carry the pooled per-call reading under the same
+    `elasticity.value`. The runbook said only "a committed clock_elasticity
+    report" with a source of '<report>@<sha>', which is session 4's per-call
+    eta by the shortest route, and the driver's arm_closes said the same. Both
+    now name the claim, the treads, the key and the marker, and the source
+    format carries the key R3's --help asks for. Every name is read off the
+    two scripts rather than typed here."""
+    elasticity = _load_script_module("clock_elasticity")
+    private = _load_script_module("private_weight_reference")
+    fields = {f.name for f in elasticity.Elasticity.__dataclass_fields__.values()}
+    assert {"value", "lo", "hi", "claim_min_tread", "fixed_tread"} <= fields, fields
+    treads = f"treads {elasticity.CLAIM_MIN_TREAD} and deeper"
+    helps = {a.option_strings[0]: " ".join((a.help or "").split())
+             for a in private.build_parser()._actions if a.option_strings}
+    key = "elasticity.value"
+    assert f"e.g. {key}" in helps["--clock-elasticity-source"], helps
+    assert "per-M-TILE" in helps["--clock-elasticity"], helps
+
+    section = _runbook_section("## The private-weight reference alone")
+    recipe = [p for p in section.split("\n\n") if "--clock-elasticity ETA" in p]
+    assert len(recipe) == 1, recipe
+    flat = " ".join(recipe[0].split())
+    for words in ("per-M-tile", treads, f"`{key}`", "`claim_min_tread`",
+                  "per-call", f"--clock-elasticity-source '<report>:{key}@<sha>'"):
+        assert words in flat, (words, flat)
+    assert "'<report>@<sha>'" not in section
+
+    closes = " ".join(_private_closes_line().split())
+    said = [s for s in _sentences(closes, ".") if "--clock-elasticity" in s]
+    assert said, closes[:2000]
+    for sentence in said:
+        for words in ("per-M-tile", treads, key, "claim_min_tread", "per-call"):
+            assert words in sentence, (words, sentence)
+    assert "from a committed clock_elasticity report" not in closes
+
+
+def test_the_runbook_books_one_next_session_and_the_driver_calls_its_own_standalone():
+    """TWO NEXT SESSIONS, AND AN ARM DESCRIBED AS STILL DEFECTIVE (finding
+    XS-6). Part A opened on "the driver that owns every arm of the next
+    session" and its resume bullet booked the driver's counter set as "the
+    next session", while the alpha(G) chain's section is "the next session's
+    command"; and the driver prints that booking under THE NEXT SESSION into
+    the chain's own preconditions log, because the chain runs it for its
+    preconditions. Every mention of the next session outside the chain's
+    section now names the chain, the driver's block calls itself the
+    standalone path and names the chain first, and the runbook's heading for
+    that block is the one the driver prints.
+
+    And R3's standalone section said R1 has design defects "NOT yet fixed".
+    R1's claim reads treads CLAIM_MIN_TREAD and deeper and its resume is
+    guarded on the card's UUID since 2026-09-22, both read here off the
+    script, so the section says what was fixed; the driver's own R1 comment
+    still said only the card NAME stood between a new session and session
+    4's cells."""
+    chain = "## The alpha(G) chain"
+    assert chain in _RUNBOOK and (ROOT / "scripts" / "alpha_g_chain.sh").exists()
+    outside = _RUNBOOK.split(chain, 1)[0] + _RUNBOOK.split(chain, 1)[1].split("\n## ", 1)[1]
+    mentions = [s for s in _sentences(outside) if "next session" in s.lower()]
+    assert mentions, "the runbook names no next session outside the chain's section"
+    for sentence in mentions:
+        assert "chain" in sentence.lower(), sentence
+    intro = " ".join(_RUNBOOK.split("\n---\n", 1)[0].split())
+    assert "scripts/alpha_g_chain.sh" in intro, intro
+    assert "the driver that owns every arm of the next session" not in intro
+
+    printed = lift("next_session_booking", REPO=str(ROOT)).stdout
+    heading = re.search(r"^==== (.+) ====$", printed, re.M).group(1)
+    assert "STANDALONE" in heading and "NEXT SESSION" not in heading, heading
+    lead = " ".join(printed.split(heading, 1)[1].split("--resume-latest", 1)[0].split())
+    assert "scripts/alpha_g_chain.sh" in lead and "standalone" in lead.lower(), lead
+    bullet = [b for b in re.split(r"\n- ", _runbook_section("## Where things land"))
+              if "A RESUME RE-RUNS NO INVALID ROW" in b]
+    assert len(bullet) == 1, bullet
+    flat = " ".join(bullet[0].replace("`", "").split())
+    assert heading in flat and "STANDALONE PATH" in flat, (heading, flat[:1500])
+
+    elasticity = _load_script_module("clock_elasticity")
+    assert callable(elasticity.device_guard) and callable(elasticity.device_identity)
+    section = " ".join(_runbook_section("## The private-weight reference alone").split())
+    assert "NOT yet fixed" not in section
+    assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in section, section[:1500]
+    r1 = section.split("R1's", 1)[1].split("blockk-w4's review", 1)
+    assert len(r1) == 2 and "UUID" in r1[0], section[:1500]
+    driver = " ".join(re.sub(r"(?m)^\s*#+", " ", TEXT).split())
+    assert "The CARD file does not stop that" not in driver
+    assert "DEVICE guard" in driver
+
+
+def test_the_elasticity_arm_says_its_bands_read_the_per_m_tile_claim():
+    """D2 IN THE DRIVER'S OWN WORDS FOR THE ARM. `arm_closes` for the R1 arm
+    registered three bands and said "C1 asks whether the interval sits wholly
+    inside ONE band" without saying whose interval, after a problem statement
+    written in d log ms / d log f, the per-call reading session 4's page gated.
+    R1 now gates the elasticity of the per-M-tile cost over treads
+    CLAIM_MIN_TREAD and deeper and prints tread 1 and the per-call reading
+    beside it; the closes text says so, with the tread read off the script."""
+    elasticity = _load_script_module("clock_elasticity")
+    closes = " ".join(lift("arm_closes elasticity-m32-n64-g16",
+                           REPO=str(ROOT)).stdout.split())
+    said = closes.split("THE NUMBER THE BANDS ARE READ AGAINST", 1)
+    assert len(said) == 2, closes[:3000]
+    claim = said[1].split("C1 asks", 1)[0]
+    assert "PER-M-TILE" in claim, claim
+    assert f"treads {elasticity.CLAIM_MIN_TREAD} and deeper" in claim, claim
+    assert "per-call" in claim and "gate nothing" in claim, claim
+    assert "C1 asks whether its interval" in closes
+
+
+def test_the_runbook_counts_no_blockk_fixes_and_every_hash_it_cites_touched_it():
+    """A COUNT NOTHING SOURCES (recheck DRV-R1). R3's standalone section said
+    "blockk-w4 has had one fix since, its kernel probe reading Triton's device
+    caches (2026-09-21), and the rest of its review stands". `git log` lists
+    two functional changes to scripts/blockk_diagonal.py after that review,
+    the kernel probe and a `--card` check that compared a NAME to a SLUG and
+    refused 'NVIDIA H200' on session 4's pod, and no file in the repo records
+    the review, so "the rest of its review stands" cannot be checked. The
+    sentence now counts nothing, names each fix by its commit and sends the
+    reader to the log for the list. Every hash it cites is asked of git."""
+    section = " ".join(_runbook_section("## The private-weight reference alone").split())
+    said = [s for s in _sentences(section, ".") if s.startswith("blockk-w4")]
+    assert len(said) == 1, section[:2500]
+    sentence = said[0]
+    assert not re.search(r"\b(?:one|two|three|a single|only)\s+(?:fix|change)",
+                         sentence), sentence
+    assert "review stands" not in section
+    assert "kernel probe" in sentence and "`--card` check" in sentence, sentence
+    assert "`git log -- scripts/blockk_diagonal.py`" in sentence, sentence
+    cited = re.findall(r"\b[0-9a-f]{7,40}\b", sentence)
+    assert len(cited) >= 2, sentence
+
+    shallow = _spawn(["git", "-C", str(ROOT), "rev-parse", "--is-shallow-repository"],
+                     capture_output=True, text=True, timeout=60)
+    if shallow.returncode != 0 or shallow.stdout.strip() != "false":
+        pytest.skip("no full git history here to ask which commits touched the script")
+    for sha in cited:
+        touched = _spawn(["git", "-C", str(ROOT), "diff-tree", "--no-commit-id",
+                          "--name-only", "-r", sha, "--", "scripts/blockk_diagonal.py"],
+                         capture_output=True, text=True, timeout=60)
+        assert touched.returncode == 0, (sha, touched.stderr)
+        assert touched.stdout.split() == ["scripts/blockk_diagonal.py"], sha
+
+
+def test_the_pages_beside_the_runbook_book_the_chain_as_the_next_session():
+    """THE SAME TWO NEXT SESSIONS, ONE PAGE OVER (recheck DRV-R2). The runbook
+    names the alpha(G) chain as the next session and the driver as the
+    standalone path, but docs/RUNPOD.md introduced the driver as running
+    "every arm of the next session", and docs/STUDY.md's 2026-09-10 section
+    wrote "The next session is `--new`" above the driver's counter set. Every
+    sentence on either page that names the next session now names the chain,
+    RUNPOD.md calls the driver on its own the standalone path, and STUDY.md
+    introduces the block as the driver's own rerun (tests/test_docs.py pins
+    the set inside it against the driver's `rerun_arms`)."""
+    script = "scripts/alpha_g_chain.sh"
+    assert (ROOT / script).exists(), script
+    runpod = " ".join((ROOT / "docs" / "RUNPOD.md").read_text().split())
+    study = (ROOT / "docs" / "STUDY.md").read_text()
+    study = study.split("## What the 2026-09-10 H200 session settled", 1)[1]
+    study = study.split("\n## ", 1)[0]
+    for where, text in (("RUNPOD.md", runpod), ("STUDY.md", study)):
+        mentions = [s for s in _sentences(text) if "next session" in s.lower()]
+        assert mentions, f"{where} names no next session"
+        for sentence in mentions:
+            assert "alpha(G) chain" in sentence, (where, sentence)
+        assert script in " ".join(text.split()), where
+    assert "every arm of the next session" not in runpod
+    assert "standalone path" in runpod
+    before = study.split("```bash\nbash scripts/h200_gaps_session.sh --new", 1)
+    assert len(before) == 2, study[:3000]
+    intro = " ".join(before[0].rstrip().split("\n\n")[-1].split())
+    assert "The driver's own rerun is `--new`" in intro, intro
+    assert "standalone path" in intro, intro

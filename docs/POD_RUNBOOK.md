@@ -1,9 +1,15 @@
 # Pod runbook
 
-Two session scripts exist and this file covers both, in the order they
-matter. **Part A** is `scripts/h200_gaps_session.sh`, the driver that owns
-every arm of the next session: every open experiment as one unattended,
-resumable pod run with a ledger. **Part B** is the human-readable companion to
+**The next session is the alpha(G) chain**, `scripts/alpha_g_chain.sh`, one
+sequenced ledger that runs the driver's preconditions inside its own session
+directory; its section, "The alpha(G) chain" below, is the command to book.
+Outside that section the driver's commands and the hand-run arms are the
+standalone path, for a rental that books the driver or one arm on its own.
+
+Besides the chain, two session scripts exist and this file covers both, in
+the order they matter. **Part A** is `scripts/h200_gaps_session.sh`, the
+driver: every open experiment as one unattended, resumable pod run with a
+ledger. **Part B** is the human-readable companion to
 `scripts/pod_session.sh`, the 2026-09-01 sweep session; its pre-flight, its
 step gates and its failure playbook still apply to the sweep, and it is kept
 here as the operator's page for that script. `docs/RUNPOD.md` is how to get a
@@ -63,11 +69,15 @@ bash scripts/h200_gaps_session.sh --only thermal,calibrate,bn_g16   # a subset; 
 - **A RESUME RE-RUNS NO INVALID ROW.** That is the latch, and it means a
   session whose arms landed INVALID resumes into nothing however many defects
   have been fixed since. The 2026-09-09 session landed six INVALID rows and the
-  2026-09-10 one landed four. So the next session is `--new`, which opens a
-  fresh ledger deliberately, and it re-runs an INVALID arm only where the
-  defect behind it has actually been fixed. The driver prints the exact
-  command and the state each arm is expected to reach under the heading THE
-  NEXT SESSION, AND WHY IT IS `--new`:
+  2026-09-10 one landed four. So the driver's own rerun is `--new`, which
+  opens a fresh ledger deliberately, and it re-runs an INVALID arm only where
+  the defect behind it has actually been fixed. THIS IS THE STANDALONE PATH,
+  not the next booking: the next session is the alpha(G) chain (its section
+  below). The driver prints the exact command and the state each arm is
+  expected to reach under the heading THE STANDALONE DRIVER'S RERUN, AND WHY
+  IT IS `--new`, and says first that the chain is the next session; the chain
+  runs the driver for its preconditions, so the same block lands in the
+  chain's `preconditions.log` as the driver's record, not as the chain's plan:
 
   ```bash
   bash scripts/h200_gaps_session.sh --new \
@@ -143,7 +153,7 @@ against `--list` by `tests/test_docs.py`.
 | `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
 | `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
 | `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Run at `--duty 0.25` on both branches, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's four ratio pages were all INVALID on V7, the two arms' clocks 2-18% apart. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
-| `elasticity-m32-n64-g16` | 40 | WALL | the clock elasticity of the per-M-tile cost at one pinned cell (BLOCK_M=32, BLOCK_N=64, G=16), four duty states from the cap to the boost ceiling (1.0 0.5 0.25 0.1); the band it lands in decides what every alpha below MEANS | not in the verdict: ADDED 2026-09-16. THE STANDALONE ARM, session 4's design read on this session's card; the alpha(G) chain measures its own elasticity once per G of the ratio ladder, and that is the chain's step, not this row. `--session-tag` IS ON BOTH BRANCHES SINCE 2026-09-22: without it the run id on an H200 was session 4's own, and on the shared volume the arm would have re-scored session 4's 416 cells as this session's |
+| `elasticity-m32-n64-g16` | 40 | WALL | the clock elasticity of the per-M-tile cost at one pinned cell (BLOCK_M=32, BLOCK_N=64, G=16), four duty states from the cap to the boost ceiling (1.0 0.5 0.25 0.1); the band it lands in decides what every alpha below MEANS | not in the verdict: ADDED 2026-09-16. THE STANDALONE ARM, session 4's design read on this session's card; the alpha(G) chain measures its own elasticity once per G of the ratio ladder, and that is the chain's step, not this row. `--session-tag` IS ON BOTH BRANCHES SINCE 2026-09-22: without it the run id on an H200 was session 4's own, and on the shared volume the arm would have re-scored session 4's 416 cells as this session's. Its DEVICE guard, also 2026-09-22, now refuses that directory instead, so the tag is what lets the arm measure |
 | `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
 | `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships. No arm confirms the headline on sm_90: at BLOCK_N=256 no BLOCK_M=256 control fits at ANY warp or stage count (65536 of 65536 registers per block; `bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0` exits 2), and no BLOCK_SIZE_N does either | CUT: REFUSES at `--capability 9.0`; booked zero, the refusal is the finding. It is not one fix away: `--num-warps 16 --num-stages 3` refuses too, so the paper's headline has no confirming arm on this card |
 | `roofline-n256-g32` | 0 | FREE | the same at the swizzle vLLM ships at 2048 tokens | CUT: refuses for the same missing control |
@@ -243,12 +253,24 @@ verified that everything worth keeping exists somewhere that outlives the pod.
 ## The private-weight reference alone (2026-09-17)
 
 The one arm whose number needs no assumed bandwidth and no fitted intercept
-(`private-mixtral-bm32`, 10 min) was rebuilt on 2026-09-17 after two reviews,
-and it is the arm to run BEFORE the other two arms it shares
-`three-arms` with (`elasticity-m32-n64-g16`, `blockk-w4`), whose reviews found
-design defects that are NOT yet fixed. Rent about an hour and run only the
-preconditions and this arm; the driver prices the four at ~18 minutes (~32
-bounded), and the hand-run second seed below is about 10 more:
+(`private-mixtral-bm32`, 10 min) was rebuilt on 2026-09-17 after two reviews.
+THIS SECTION IS THE STANDALONE PATH, R3 (this arm,
+`scripts/private_weight_reference.py`) alone through the driver on a short
+rental; the next session is the alpha(G) chain below, which runs R3 at every G
+with R1 (`scripts/clock_elasticity.py`) beside it. The section was written to
+have R3 run BEFORE the other two arms it shares `three-arms` with
+(`elasticity-m32-n64-g16`, `blockk-w4`), because the 2026-09-17 reviews found
+design defects in both. R1's, in the script behind `elasticity-m32-n64-g16`,
+were fixed on 2026-09-22: its gated claim is the per-M-tile elasticity over
+treads 2 and deeper, with tread 1 printed beside it off the law; a resume on
+another card of the same name is refused on the card's UUID; and its plan page
+prints the claim's own resolution. blockk-w4's review is not recorded in this
+repo and was not redone; since it, the script's kernel probe (2e2f1d8,
+2026-09-21) and its `--card` check (6f3a6ce, 2026-09-22) were fixed, and
+`git log -- scripts/blockk_diagonal.py` is the full list of its changes, not
+this sentence. Rent about an hour and run only the preconditions and this
+arm; the driver prices the four at ~18 minutes (~32 bounded), and the
+hand-run second seed below is about 10 more:
 
 ```
 bash scripts/h200_gaps_session.sh --new --only thermal,calibrate,pin_probe-n64-g1,private-mixtral-bm32
@@ -282,24 +304,37 @@ eager fallback (capture refused, named on the page) needs the control to earn
 PASS. NATIVE keeps the switch, and V5 fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
-V7 (the two arms' clocks agree at every tread -- expected to hold at the duty
-the driver runs this arm at, and a FAIL there is a finding about the card; at
-full duty, on a pod that cannot lock its clock, it FAILS by construction
-whenever the arms draw different power and the page is INVALID, which is why
-the arm is duty-cycled, below; pass `--clock-elasticity ETA LO HI
---clock-elasticity-source '<report>@<sha>'` from a committed clock_elasticity
-report and C1 PRINTS a clock-corrected ratio beside the raw one, scored by
-nothing), V2 (each copy read by exactly
-its own tiles, one copy zeroed at a time), V5 (the declaration's per-tile
-cost with native's step out; the step itself is printed with an interval),
-V6 (shared and private agree at n=1, where they are the same call), then C1,
-which names the world the ratio landed in: ISSUE-AND-LATENCY, below/at/above
-the refit band, or NO-REUSE. C1 UNKNOWN means the point and the interval
-disagree on a world and the claim is unresolved at this precision, not that
-the arm broke. The arm REFUSES at plan time if the under-load clock sampler
-cannot read the card (V7 would be UNKNOWN throughout), and it writes a
+V7 (the two arms' clocks agree at every tread; below), V2 (each copy read by
+exactly its own tiles, one copy zeroed at a time), V5 (the declaration's
+per-tile cost with native's step out; the step itself is printed with an
+interval), V6 (shared and private agree at n=1, where they are the same
+call), then C1, which names the world the ratio landed in: ISSUE-AND-LATENCY,
+below/at/above the refit band, or NO-REUSE. C1 UNKNOWN means the point and the
+interval disagree on a world and the claim is unresolved at this precision,
+not that the arm broke. The arm REFUSES at plan time if the under-load clock
+sampler cannot read the card (V7 would be UNKNOWN throughout), and it writes a
 `DEVICE` file with the GPU UUID under its results directory so that a resume
 on another pod of the same card type is refused rather than merged.
+
+**V7 at the duty the driver runs.** V7 is expected to hold at 0.25, the duty
+the driver runs this arm at (why, below). A V7 FAIL at 0.25 means that duty is
+not yet flat for that arm on this card; the page names a lower duty; the chain
+skips the G's later seeds and prints the follow-up command. On this section's
+standalone path the follow-up is by hand, as the pair below says: a new design
+key and its own runs at the lower duty, read with `--read` on the laptop. At
+full duty, on a pod that cannot lock its clock, V7 FAILS by construction
+whenever the arms draw different power and the page is INVALID, which is why
+the arm is duty-cycled, below.
+
+**The clock-corrected ratio.** `--clock-elasticity ETA LO HI` takes R1's
+per-M-tile claim: `elasticity.value`, `elasticity.lo` and `elasticity.hi` of a
+clock_elasticity report whose `elasticity` block carries `claim_min_tread`,
+the claim fitted over treads 2 and deeper. Session 4's committed reports carry
+no `claim_min_tread`, and their `elasticity.value` is the pooled per-call
+reading, which is not that quantity: do not pass it. Name the source the way
+R3's `--help` asks, with the report, the key read and the commit:
+`--clock-elasticity-source '<report>:elasticity.value@<sha>'`. C1 then PRINTS
+a clock-corrected ratio beside the raw one, scored by nothing.
 
 One thing to eyeball on the pod before the run, because V2 would only catch
 it after the sweep: the installed vLLM's `fused_moe.py` must cast
@@ -350,8 +385,17 @@ MOE_RESULTS_DIR=/workspace/results/gaps-<card> /workspace/venvs/vllm/bin/python 
 Keep `--duty 0.25` and `--session-tag`: duty is a design key, so
 `--replicate-of` refuses a replicate at another duty. C1 is then scored on
 the envelope of both runs' intervals and the page prints the cross-run
-spread; a lone run's page says it was scored alone. A pair already on disk is
-re-read on the laptop with
+spread; a lone run's page says it was scored alone.
+
+**After a V7 FAIL at seed 0**, a seed 1 at 0.25 re-measures the same clock
+split, which is why the chain skips a G's later seeds on it; skip the
+hand-run seed 1 too. The follow-up is the line above at the lower duty the
+page names: first with no `--seed 1 --replicate-of` line, which is its seed
+0, then with `--seed 1 --replicate-of` that run's report. It is a new design
+key and its own pair, outside the driver's ledger, and it is read with
+`--read` on the laptop like any pair.
+
+A pair already on disk is re-read on the laptop with
 
 ```
 .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json
