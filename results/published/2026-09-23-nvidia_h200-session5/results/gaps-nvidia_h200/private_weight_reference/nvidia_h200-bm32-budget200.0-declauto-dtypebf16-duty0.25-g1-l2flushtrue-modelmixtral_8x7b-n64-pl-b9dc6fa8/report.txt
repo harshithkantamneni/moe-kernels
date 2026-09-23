@@ -1,0 +1,294 @@
+experiment  private_weight_reference / nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-b9dc6fa8
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+arms        native: E experts declared over w1[::n_decl], copy 0 of each expert: the call this study fits, reading SHARED's bytes at SHARED's addresses; shared: E x n_decl experts declared, every M-tile of expert e routed to copy 0: PRIVATE's call with one copy read (the numerator); private: E x n_decl experts declared, M-tile j of expert e routed to copy j: reuse across M-tiles impossible by construction (the denominator)
+ladder      6 treads n=1..6, exactly-full tile stacks only (r = n x 32)
+            r per tread: n=1:r=32:T=128, n=2:r=64:T=256, n=3:r=96:T=384, n=4:r=128:T=512, n=5:r=160:T=640, n=6:r=192:T=768
+            4 token step, rows quantum 1
+repeats     9 of the whole ladder, repeats OUTER, arms rotated within a tread so no arm is first in every triple, and the tread order REVERSED on odd repeats so no tread is always first
+cells       6 treads x 3 arms x 9 repeats = 162
+duty        0.25: every cell timed as bursts of ~40 ms of kernel time with idle gaps of 120 ms, so the arms' AVERAGE board power drops, and with it the clock split the cap forces at full duty (session 4 at full duty: the arm reading less boosted 2-18%). Whether this duty is low enough is measured, not assumed (session 4's clock arm, 2026-09-21, G=16 mixtral: at duty 0.5 the clock still tracked board power, -1.09 MHz/W over 1882-1965 MHz; at duty 0.25 every tread's median read 1965 MHz and no cell drifted; at duty 0.1, 1965-1980 MHz); V7 checks it here and a FAIL names a lower duty (at this duty a FAIL means this duty is not yet flat for this arm on this card. A lower one is a new design key (`duty` is one of DESIGN_KEYS, so --replicate-of will not pair it with runs at this one): runs of its own, outside the chain's PAIRS.tsv, read together with --read on the laptop. scripts/alpha_g_chain.sh, which runs this arm at --duty 0.25 at each G (--group-m), does not re-run at it: on a V7 FAIL at a G's seed 0 there it skips the G's later seeds and prints the follow-up command); wall clock over the ladder ~4.0x the kernel time
+experts     native declares E=8; shared and private declare E x n_decl = 72 at EVERY tread, copy c of expert e at slot e x n_decl + c
+            n_decl = 9 against n_max = 6 read: the ladder's id count runs 256..1536, across the small-batch id bound 1024, and E x n_max = 48 is under the expert bound 64; declaring 9 copies (E x 9 = 72) keeps both ratio arms on the scan kernel at every tread
+alignment   which moe_align_block_size kernel each call takes under the cited HYPOTHESIS (ids < 1024 and experts <= 64 -> small-batch, else block-scan); the probe MEASURES it:
+            native   n=1  T=128    ids=256    declared=8    small-batch
+            native   n=2  T=256    ids=512    declared=8    small-batch
+            native   n=3  T=384    ids=768    declared=8    small-batch
+            native   n=4  T=512    ids=1024   declared=8    block-scan
+            native   n=5  T=640    ids=1280   declared=8    block-scan
+            native   n=6  T=768    ids=1536   declared=8    block-scan
+            shared   n=1  T=128    ids=256    declared=72   block-scan
+            shared   n=2  T=256    ids=512    declared=72   block-scan
+            shared   n=3  T=384    ids=768    declared=72   block-scan
+            shared   n=4  T=512    ids=1024   declared=72   block-scan
+            shared   n=5  T=640    ids=1280   declared=72   block-scan
+            shared   n=6  T=768    ids=1536   declared=72   block-scan
+            private  n=1  T=128    ids=256    declared=72   block-scan
+            private  n=2  T=256    ids=512    declared=72   block-scan
+            private  n=3  T=384    ids=768    declared=72   block-scan
+            private  n=4  T=512    ids=1024   declared=72   block-scan
+            private  n=5  T=640    ids=1280   declared=72   block-scan
+            private  n=6  T=768    ids=1536   declared=72   block-scan
+            native   SWITCHES at tread 4
+            shared   one kernel throughout
+            private  one kernel throughout
+session     alpha_g-nvidia_h200-20260923T163248Z
+replicates  2 earlier run(s) of this design; C1 will be scored on the envelope of every interval
+            /workspace/results/gaps-nvidia_h200/private_weight_reference/nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-4efa4954/report.json: nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-4efa4954, seed 0, 2026-09-23T16:38:28+00:00, ratio 0.9148 [0.9144, 0.9154], own exit CLAIM_FAIL
+            /workspace/results/gaps-nvidia_h200/private_weight_reference/nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-79e04e7b/report.json: nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-79e04e7b, seed 1, 2026-09-23T19:01:04+00:00, ratio 0.9148 [0.9147, 0.9151], own exit CLAIM_FAIL
+bandwidth   4378.2 GB/s, measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern)
+card        nvidia_h200
+WRITES TO   /workspace/results/gaps-nvidia_h200/private_weight_reference/nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-b9dc6fa8
+            cells.csv (appended per cell), report.txt, report.json, triton-cache/
+git         git check-ignore exited 128; path UNVERIFIED (fatal: /workspace/results/gaps-nvidia_h200/private_weight_reference/nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-b9dc6fa8: '/workspace/results/gaps-nvidia_h200/private_weight_reference/nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-b9dc6fa8' is outside repository at '/workspace/moe-kernels'). Common cause: the path is outside this work tree, e.g. /workspace/results on a pod, which git has no opinion about at all.
+resources   one CTA's bill under the pinned constants, so a setting that cannot physically run is refused here and not diagnosed from its timing afterwards:
+  BLOCK_M=  32  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+memory      the arithmetic this arm commits to, before a byte is allocated:
+            per copy of the routed expert weight set      2.8186 GB
+            x 9 copies declared and filled (6 read at the deepest tread, 3 never read)    25.3672 GB
+            + modelled activation working set x 3.0 allowance     0.4719 GB
+            + the instrument's L2 flush buffer             0.2517 GB  (timing.flush_mb_for_device(), this device's own L2 x 4)
+            = predicted peak                              26.0907 GB
+            against 149.6 GB (free on the attached device, asked of the driver), of which this arm may take 66% = 98.7 GB: FITS
+depth       the deepest tread whose SHARED ladder is still under 95% of the fixed roof, per world, at this run's own ridge:
+            alpha=1.000 no-reuse   tread  >69   against the 6 planned
+            alpha=0.558 refit      tread  >69   against the 6 planned
+            alpha=0.100 retracted  tread    8   against the 6 planned
+            DISCRIMINATION FLOOR: alpha=0.0531. Below it this design's own shared ladder is compute bound before the deepest tread, V4 voids the page, and no ISSUE-AND-LATENCY result can be reported. The arm can therefore separate the registered worlds down to alpha=0.0531 and no further, and that is a property of the design and not of the card.
+
+PREDICTIONS, registered before the run and printed before any measurement
+  the quantity: ratio = slope(shared) / slope(private), one measured slope over another
+  the study's refit alpha 0.558, band 0.529-0.588 (90%), against the retracted 0.1
+  ridge       152.94 Op/B, measured on this device: NVIDIA H200 (measured), 669.6 TFLOP/s bf16 over 4378.2 GB/s (triad pattern); calibrated 2026-09-23 at 33d28339
+  bandwidth   4378.2 GB/s, measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern)
+  one complete stream of the routed expert weight set: 2.8186 GB in 0.6438 ms at that rate
+
+  THE REGISTERED PARTITION OF THE RATIO, covering [0, inf) with no gap and no overlap:
+    [0.000, 0.350)  ISSUE-AND-LATENCY
+                     most of the per-M-tile cost is NOT weight traffic: giving every M-tile its own copy barely moved the time. The traffic model is the wrong KIND of model, and the study's negative result about alpha becomes a positive result about the mechanism.
+    [0.350, 0.529)  BELOW-THE-REFIT-BAND
+                     the re-read is real but smaller than the refit says: between the two registered worlds, and the page says so rather than rounding to one.
+    [0.529, 0.588)  REFIT-CONFIRMED
+                     the refit 0.558 is a traffic fraction after all, measured here without an assumed rate and without a fitted intercept.
+    [0.588, 0.850)  ABOVE-THE-REFIT-BAND
+                     the re-read is larger than the refit says: between the two registered worlds, and the page says so rather than rounding to one.
+    [0.850,   inf)  NO-REUSE
+                     essentially the whole weight set is re-read per extra M-tile. The re-read is real and the traffic model's SHAPE was right even though its coefficient was not identifiable from timing.
+  the partition is total and disjoint: checked
+
+  WHAT EACH ARM PREDICTS, under the study's own traffic model, so the two worlds are on the page before the run:
+    native   the study's call over the same bytes: the SAME slope as shared, a different intercept, and the slope difference is V5
+    shared   slope ~ alpha x one stream + activations = 0.558 + 0.0093 streams per M-tile
+    private  slope ~ one stream + activations = 1.0000 + 0.0093 streams per M-tile, BY CONSTRUCTION
+    so the ratio is predicted at 0.5621 in the refit world and 1.0000 in the no-reuse world
+    and at 0.1083 in the retracted alpha=0.1 world, which the partition names ISSUE-AND-LATENCY
+
+  THE GATES, and the thresholds they are scored at:
+    V0 all cells, >= 3 usable treads and >= 3 repeats per arm
+    V1 one tread set, one BLOCK_M, one token count per tread
+    V2 all 5 parts of the buffer proof: addresses, sentinels, kernel_read, shared_blind, same_layer
+    V3 weight allocation within 1% of prediction; high-water mark under the plan's ceiling
+    V4 every fitted tread of shared and private under 95% of the fixed roof
+    V5 the far edge of b's 90% band, b the step-aware native - shared per-tile cost, < 3% of slope(private): the wider declaration's own per-M-tile cost, which ties the matched ratio to the study's call
+    V6 shared and private within 2.0% at n=1, where they are the same call
+    V7 shared and private under-load clocks within 1% at every tread; at FULL duty a card that cannot lock its clock fails this by construction whenever the arms draw different power, and below it this holds only at a duty low enough that the clock stops following power (session 4's clock arm: flat at 0.25, still tracking power at 0.5); --clock-elasticity PRINTS a corrected ratio beside the raw one, scored by nothing
+    V8 the probed alignment steps in SHARED's and PRIVATE's id sets are worth <= 0.01 of the ratio together; FAIL needs it over budget AND resolved, and a FAIL alone skips the sweep; the probe is timed under a CUDA graph (16 calls per replay) so its cells are GPU time and NATIVE's switch beside them confirms or bounds, never withholds; an EAGER fallback that comes back host-bound is scored only if it resolves NATIVE's switch at the census tread
+    C1 PASS: point and whole interval inside ALPHA_BAND; FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN
+    C2 the delivered weight-read rate is at or under the card's own, +10%
+
+  THE LAYOUT, REGISTERED: copy c of expert e is slot e x 9 + c, and shared and private declare all E x 9 = 72 slots at every tread, so the two share the sorted-id buffer, the launch grid, the dead launches and the tile order, and differ ONLY in the addresses their tiles read. Of those 9 copies the deepest tread READS 6; the rest are padding, filled and never read, and the buffer proof zeroes each of them and requires neither arm's output to move.
+  THE CAVEAT, REGISTERED: those addresses are also the TLB footprint and the DRAM page locality, so slope(private) is a BOUNDED PROXY for the no-reuse case and not the no-reuse case itself. V5 measures the declaration at depth, V6 this arm's own floor at n=1, V7 the clock. None is an argument; all are numbers on this page after the run.
+  AND WHAT NONE BOUNDS: a cost paid by READING the copies that vanishes at one copy, which is the shape of a TLB or DRAM-page locality cost. NATIVE does not read them and n=1 has one. The only trace such a cost leaves here is the private ladder's own mean relative residual, printed in the ladder table and SCORED BY NOTHING.
+  THE ALIGNMENT KERNEL, SEPARATED THREE WAYS: vLLM switches moe_align_block_size kernel at the cited id and expert bounds, and for this ladder the id bound falls inside it (native switches at tread 4). The ratio arms are declared past the expert bound so both take one kernel throughout (the census above, refused otherwise); the probe times the alignment op alone along the ladder once per ARM -- NATIVE's declaration, and SHARED's and PRIVATE's id sets at the ratio arms' -- and V8 scores both ratio series; and NATIVE, which keeps the study's declaration and its switch, has its difference from SHARED fitted with a step term so V5 reads the declaration's per-tile cost with the step out and the step is printed with an interval.
+  AND TWO SMALL ASYMMETRIES, REGISTERED AND NOT REMOVED: on the scan kernel, `count_and_sort_expert_tokens` does one atomic add per id into a per-expert counter, so SHARED's 8 counters take 32 n increments each while PRIVATE's 8 x n take 32 each; a per-tread term in the numerator alone. The probe times the alignment op on PRIVATE's id set as well as SHARED's, and V8 prints slope(private ids) - slope(shared ids) in us per tread and in the ratio's units: MEASURED, printed, not scored. And the wider declaration puts the top expert slot 71 at 7.77 Gi ELEMENTS from the weight base in w1, past the 2^31 an int32 offset holds, which the kernel addresses through an int64 cast of `off_experts`; NATIVE's strided view multiplies its own index by the same stride and depends on the cast too. A build without it reads the wrong bytes, and V2's same_layer and kernel_read parts are what catch that.
+  AND THE ASSUMPTION THE RATIO KEEPS: no rate enters the number, but the ratio is alpha as a traffic fraction only if both arms deliver the same bytes per second. The shared arm's non-re-read bytes come from L2, which is not free.
+  NOT A READOUT: the LEVEL of any ladder. Only the slopes are compared; native's intercept differs from shared's by the declaration's dead launches, which are a constant per tread.
+  NOT MEASURED HERE: alpha_a, the activation-side miss fraction. Both ladders carry the same activation term and the ratio subtracts nothing.
+
+========================================================================
+LADDERS
+========================================================================
+arm        n      r       T copies     E* reps         ms   TFLOP/s   %roof    %own    MHz
+native     1     32     128      1      8    9     0.7455     121.0  18.1%  13.5%   1965
+native     2     64     256      1      8    9     1.3382     134.8  20.1%  15.2%   1950
+native     3     96     384      1      8    8     1.9953     135.6  20.3%  15.3%   1950
+native     4    128     512      1      8    8     2.6101     138.2  20.6%  15.6%   1950
+native     5    160     640      1      8    7     3.2522     138.7  20.7%  15.6%   1950
+native     6    192     768      1      8    8     3.9000     138.8  20.7%  15.6%   1950
+shared     1     32     128      1     72    9     0.7444     121.2  18.1%  13.5%   1965
+shared     2     64     256      1     72    9     1.3336     135.3  20.2%  15.2%   1950
+shared     3     96     384      1     72    9     1.9892     136.0  20.3%  15.3%   1950
+shared     4    128     512      1     72    6     2.6154     137.9  20.6%  15.5%   1950
+shared     5    160     640      1     72    7     3.2579     138.4  20.7%  15.6%   1950
+shared     6    192     768      1     72    8     3.9076     138.5  20.7%  15.6%   1950
+private    1     32     128      1     72    9     0.7445     121.1  18.1%  13.5%   1965
+private    2     64     256      2     72    9     1.4335     125.8  18.8%  14.2%   1950
+private    3     96     384      3     72    9     2.1269     127.2  19.0%  14.3%   1950
+private    4    128     512      4     72    9     2.8232     127.8  19.1%  14.4%   1950
+private    5    160     640      5     72    9     3.5140     128.3  19.2%  14.4%   1950
+private    6    192     768      6     72    5     4.2108     128.5  19.2%  14.5%   1950
+
+FITS, ms = A + B n over the treads above
+  native   A=   0.0940 ms  B= 0.632265 ms/M-tile  treads=6  mean rel err 0.874%  across-repeat spread 0.055%  drifting cells excluded 5
+           w = 0.9821 weight-streams/M-tile at 4378.2 GB/s (measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+  shared   A=   0.0865 ms  B= 0.634716 ms/M-tile  treads=6  mean rel err 0.940%  across-repeat spread 0.041%  drifting cells excluded 6
+           w = 0.9859 weight-streams/M-tile at 4378.2 GB/s (measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+  private  A=   0.0485 ms  B= 0.693411 ms/M-tile  treads=6  mean rel err 0.114%  across-repeat spread 0.028%  drifting cells excluded 4
+           w = 1.0771 weight-streams/M-tile at 4378.2 GB/s (measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern); 2.8186 GB in 0.6438 ms, mixtral-8x7b bf16)
+
+DECLARATION, native - shared per tread (no traffic in it): n=1:+0.0011, n=2:+0.0046, n=3:+0.0061, n=4:-0.0053, n=5:-0.0057, n=6:-0.0076
+
+========================================================================
+GATES
+========================================================================
+RESULT: VALIDITY V0 PASS [VALIDITY] the run measured the grid it planned | measured 147/162 cells, treads 6/6/6, drift 9.3% | gate >= 3 usable treads and >= 3 repeats per arm, no unrecovered failure, and DRIFT under 20% of the timed cells
+V0  VALIDITY PASS     the run measured the grid it planned
+             measured 147/162 cells, treads 6/6/6, drift 9.3%   gate >= 3 usable treads and >= 3 repeats per arm, no unrecovered failure, and DRIFT under 20% of the timed cells
+             if this FAILS: every ladder below was fitted on a grid with holes in it, and no slope, ratio or interval on this page may be quoted
+             147 of 162 planned cells measured and usable
+             usable treads per arm: native:6, shared:6, private:6 (of 6 planned)
+             fewest repeats behind any tread, per arm: native:7, shared:6, private:5 (of 9 planned, floor 3)
+             cells excluded because the clock DRIFTED across their own trials, and so absent from every ladder above: native:5, shared:6, private:4; 9.3% of the 162 timed cells against a ceiling of 20%
+             0 cell(s) failed and were not recovered
+
+RESULT: VALIDITY V1 PASS [VALIDITY] the three arms ran one geometry over one tread set | measured 6 common treads at BLOCK_M=[32] | gate all three arms over the same treads at BLOCK_M=32, one token count per tread
+V1  VALIDITY PASS     the three arms ran one geometry over one tread set
+             measured 6 common treads at BLOCK_M=[32]   gate all three arms over the same treads at BLOCK_M=32, one token count per tread
+             if this FAILS: the ratio compares two ladders measured over different grids, and its value is a fact about the difference between the grids
+             treads per arm: native:[1, 2, 3, 4, 5, 6]; shared:[1, 2, 3, 4, 5, 6]; private:[1, 2, 3, 4, 5, 6]
+             tread set common to all three arms: [1, 2, 3, 4, 5, 6]
+             BLOCK_M seen in the rows: [32]
+             token count per tread is single-valued: yes
+             every usable row has rows_per_expert == tiles x BLOCK_M: yes
+
+RESULT: VALIDITY V2 PASS [VALIDITY] the private arm allocated and READ distinct weight copies | measured 5 of 5 parts | gate all 5 parts of the proof
+V2  VALIDITY PASS     the private arm allocated and READ distinct weight copies
+             measured 5 of 5 parts   gate all 5 parts of the proof
+             if this FAILS: the private ladder is not a no-reuse reference at all, and the ratio is a number about the apparatus
+             PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2
+                      9 copies x 8 experts span 25367150592 bytes against 25367150592 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True
+             PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them
+                      wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True
+             PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's
+                      every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=6 (never read): zeroing it left both outputs unchanged=True; c=7 (never read): zeroing it left both outputs unchanged=True; c=8 (never read): zeroing it left both outputs unchanged=True; c=1: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=2: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=3: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=4: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True; c=5: 128 rows changed, 128 routed, exact=True, shared unchanged=True, restored=True
+             PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption
+                      the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output
+             PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer
+                      private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)
+
+RESULT: VALIDITY V3 PASS [VALIDITY] the device memory taken is the memory the plan predicted | measured 2 of 2 parts | gate weight allocation within 1% of prediction, high-water mark at or under the plan's ceiling
+V3  VALIDITY PASS     the device memory taken is the memory the plan predicted
+             measured 2 of 2 parts   gate weight allocation within 1% of prediction, high-water mark at or under the plan's ceiling
+             if this FAILS: the copies are not the copies the plan priced, so neither the no-reuse reference nor the cost of reaching it is what this page says
+             weight allocation: 25.3672 GB measured against 25.3672 GB predicted, 0.00% apart (gate 1%)
+             high-water mark: 25.7636 GB against the plan's ceiling 26.0907 GB (weights 25.3672 + 3.0x the modelled activation set 0.4719 + the instrument's L2 flush buffer 0.2517, all in GB)
+
+RESULT: VALIDITY V4 PASS [VALIDITY] every fitted tread of both ladders is memory bound | measured worst 20.7% of the fixed roof | gate < 95% of the fixed roof on every fitted tread of shared and private
+V4  VALIDITY PASS     every fitted tread of both ladders is memory bound
+             measured worst 20.7% of the fixed roof   gate < 95% of the fixed roof on every fitted tread of shared and private
+             if this FAILS: at least one ladder's slope is set by arithmetic and not by reads, which pulls the ratio toward 1.0 for a reason that is not reuse
+             roof 669.6 TFLOP/s, ridge 152.94 Op/B x bandwidth 4378.2 GB/s; ridge: measured on this device: NVIDIA H200 (measured), 669.6 TFLOP/s bf16 over 4378.2 GB/s (triad pattern); calibrated 2026-09-23 at 33d28339; bandwidth: measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern)
+             worst fitted tread of shared/private reaches 20.7% of it
+             own-clock issue efficiency is printed per tread in the ladder table and is scored by nothing here; scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate input, since every cell and the calibration GEMM ran under one power cap; pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, printed beside it; it is not the compute-bound gate input, and memory-shaped and cross-card work read it labelled as issue efficiency
+
+RESULT: VALIDITY V5 PASS [VALIDITY] the declaration's own per-M-tile cost is bounded | measured 0.18% of the private slope at b's far edge, 0.03% at its near edge (point 0.10%) | gate PASS: the FAR edge of b's 90% band < 3% of the private slope. FAIL: its NEAR edge is over that bound, i.e. the whole band is. Otherwise UNKNOWN
+V5  VALIDITY PASS     the declaration's own per-M-tile cost is bounded
+             measured 0.18% of the private slope at b's far edge, 0.03% at its near edge (point 0.10%)   gate PASS: the FAR edge of b's 90% band < 3% of the private slope. FAIL: its NEAR edge is over that bound, i.e. the whole band is. Otherwise UNKNOWN
+             if this FAILS: the wider declaration changes the per-M-tile cost itself, so the matched ratio is about a call the study does not make, and nothing on this page may be quoted as the study's alpha
+             slope(native)  0.632265 ms per M-tile  (the study's call: E declared)
+             slope(shared)  0.634716 ms per M-tile  (same bytes, addresses and order; E x n_decl declared)
+             slope(private) 0.693411 ms per M-tile
+             native - shared per tread, fitted as a + s 1{n >= 4} + b n over 6 treads (3 dof): b = +0.000688 ms per M-tile [+0.000180, +0.001232], s = -12.21 us [-14.32, -10.04] -- NATIVE's alignment step, taken OUT of b, a = +0.0026 ms
+             the switch tread came from the cited hypothesis (tread 4); the probe resolved no step for native IN GPU TIME (threshold 34.03 us at 3 dof), so the hypothesis stands as the fit's tread and the step it names is under that per call
+             the raw slope gap native - shared is -0.002451 ms per M-tile (0.35% of the private slope); it carries the step at the design's leverage and is printed, not scored
+             declaration = b = +0.000688 ms per M-tile, which is 0.10% of the private slope
+             intercepts: native 0.0940 ms, shared 0.0865 ms -- the dead launches of the wider declaration belong HERE, as a constant, and are not scored
+             read b as the additive error bar on reading the ratio as the native call's: about +/-0.002 at the band's far edge, over and above the ratio's own bootstrap interval
+
+RESULT: VALIDITY V6 PASS [VALIDITY] shared and private agree at n=1, where they are the same call | measured 0.011% gap | gate <= 2.0%
+V6  VALIDITY PASS     shared and private agree at n=1, where they are the same call
+             measured 0.011% gap   gate <= 2.0%
+             if this FAILS: one call timed twice does not agree with itself, so the difference between the two arms at depth is not attributable to traffic and the ratio is unreadable at any value
+             medians at n=1: native:0.7455 ms, shared:0.7444 ms, private:0.7445 ms
+             shared/private gap 0.011% of the faster
+             this is the floor the ratio's own difference has to stand above, measured on this card in this session
+             native sits +0.148% from shared here: the declaration's constant, RECORDED and not scored
+
+RESULT: VALIDITY V7 PASS [VALIDITY] shared and private ran at the same clock at every tread | measured worst 0.00% | gate <= 1% at every tread, clock read in both arms
+V7  VALIDITY PASS     shared and private ran at the same clock at every tread
+             measured worst 0.00%   gate <= 1% at every tread, clock read in both arms
+             if this FAILS: the two slopes were taken at different clocks on a card whose time moves with its clock, so the raw ratio carries a clock difference and may not be quoted; the clock-corrected ratio this page may print beside it is a model's number, scored by nothing
+             n=1: shared 1965 MHz, private 1965 MHz, 0.00% apart; native 1965 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 310 W, private 311 W, native 307 W
+                   in-burst sag (tail - head) / head: shared +0.15%, private +0.10%, native +0.05%
+             n=2: shared 1950 MHz, private 1950 MHz, 0.00% apart; native 1950 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 314 W, private 317 W, native 313 W
+                   in-burst sag (tail - head) / head: shared +0.09%, private +0.06%, native +0.16%
+             n=3: shared 1950 MHz, private 1950 MHz, 0.00% apart; native 1950 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 313 W, private 320 W, native 314 W
+                   in-burst sag (tail - head) / head: shared +0.18%, private +0.05%, native +0.20%
+             n=4: shared 1950 MHz, private 1950 MHz, 0.00% apart; native 1950 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 314 W, private 317 W, native 317 W
+                   in-burst sag (tail - head) / head: shared +0.14%, private +0.08%, native +0.13%
+             n=5: shared 1950 MHz, private 1950 MHz, 0.00% apart; native 1950 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 317 W, private 317 W, native 317 W
+                   in-burst sag (tail - head) / head: shared +0.34%, private +0.06%, native +0.55%
+             n=6: shared 1950 MHz, private 1950 MHz, 0.00% apart; native 1950 MHz
+                   power (NVML's ~1 s average, duty-averaged over bursts and idle gaps): shared 316 W, private 334 W, native 316 W
+                   in-burst sag (tail - head) / head: shared +0.43%, private +0.07%, native +0.31%
+             power and in-burst sag are each arm's median over its cells at the tread, RECORDS: V7 scores the clocks alone
+
+RESULT: VALIDITY V8 PASS [VALIDITY] the ratio arms take one alignment kernel along the ladder | measured bias <= 0.0002, 0.0000 over the resolved steps, no step resolved | gate step bias on the ratio <= 0.01, from the probed series at the ratio arms' own declaration
+V8  VALIDITY PASS     the ratio arms take one alignment kernel along the ladder
+             measured bias <= 0.0002, 0.0000 over the resolved steps, no step resolved   gate step bias on the ratio <= 0.01, from the probed series at the ratio arms' own declaration
+             if this FAILS: vLLM changes alignment kernel inside the ratio arms' ladder on this build, and the step it leaves -- in one of the two slopes or in both, which the page names -- is worth more than the budget; the ratio is not quotable at this declaration
+             the probe timed the op under a CUDA graph, 16 calls per replay: each cell is GPU time (the replay's p50 over that count) and no host enqueue sits in it
+             native   best split at tread 4: step -6.20 us +/- 2.06 us (1 se), affine part 5.16 us + 4.7500 ns/id; RSS with the step 4.354e-06, without 1.752e-05; across-repeat spread 0.03 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 34.03 us [GPU time: 16 calls per graph replay]
+                      the hypothesis puts this declaration's switch at tread 4: no step resolved, so the hypothesis is not confirmed on this build
+             shared   best split at tread 5: step +0.28 us +/- 0.03 us (1 se), affine part 4.63 us + 0.5721 ns/id; RSS with the step 9.074e-10, without 3.474e-08; across-repeat spread 0.01 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 0.44 us [GPU time: 16 calls per graph replay]
+                      the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent
+             private  best split at tread 3: step -0.28 us +/- 0.08 us (1 se), affine part 4.50 us + 0.8942 ns/id; RSS with the step 8.741e-09, without 4.248e-08; across-repeat spread 0.02 us; the step is NOT resolved against 3 se widened by 1.79 for the 5 split(s) the minimum was taken over, i.e. 1.38 us [GPU time: 16 calls per graph replay]
+                      the hypothesis puts this declaration on one kernel throughout: no step resolved, consistent
+             slope(private ids) - slope(shared ids) = +0.082 us per tread (256 ids a tread), +0.00013 of the weight stream per tread: the alignment's counter asymmetry the plan page registers, MEASURED; printed, not scored
+             the ratio arms' steps: NEITHER arm resolved one; shared +0.28 us at 5, private -0.28 us at 3
+             the bias bound is pair_step_bias, ASSUMED ratio <= 1: the shared arm re-reads no more than the whole set per M-tile
+             shared's step: +0.28 us at tread 5, at leverage 0.229; private's step: -0.28 us at tread 3, at leverage 0.229; against a weight stream of 0.6438 ms (the denominator's own scale) they could move the ratio by at most 0.0002, and by 0.0000 over the RESOLVED steps alone, which is the number a FAIL is taken on
+             the instrument called 0 of 18 of shared's, 0 of 18 of private's probed cells HOST-BOUND at the ratio arms' declaration
+             NATIVE's switch NOT RESOLVED IN GPU TIME: best split at tread 4, step -6.20 us +/- 2.06 us, threshold 34.03 us at 3 dof over 5 split(s), so whatever switch NATIVE makes at tread 4 costs under 34.03 us per call -- a bound on the KERNEL, not a blind spot: no host cost sits in a graph replay. A step that size in a ratio arm at that tread would be worth 0.01359 of the ratio; a denser probe ladder is what tightens it, not more --probe-repeats
+
+RESULT: CLAIM C1 FAIL [CLAIM] the re-read fraction, measured against a no-reuse reference, is the study's refit alpha | measured 0.9154 [0.9149, 0.9156], NO-REUSE; over 3 runs: spread 0.0006, envelope [0.9144, 0.9156] | gate PASS: point and whole interval inside ALPHA_BAND [0.529, 0.588); FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN; with replicates: every run's point in the band and the ENVELOPE of their intervals inside it
+C1  CLAIM    FAIL     the re-read fraction, measured against a no-reuse reference, is the study's refit alpha
+             measured 0.9154 [0.9149, 0.9156], NO-REUSE; over 3 runs: spread 0.0006, envelope [0.9144, 0.9156]   gate PASS: point and whole interval inside ALPHA_BAND [0.529, 0.588); FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN; with replicates: every run's point in the band and the ENVELOPE of their intervals inside it
+             if this FAILS: the refit alpha is not the traffic fraction it is quoted as, and the page names which of the registered worlds it is instead
+             ratio = slope(shared) / slope(private) = 0.9154
+             90% percentile bootstrap interval [0.9149, 0.9156] over 2000 draws that produced a ratio
+             THE WORLD THIS LANDS IN: NO-REUSE
+               essentially the whole weight set is re-read per extra M-tile. The re-read is real and the traffic model's SHAPE was right even though its coefficient was not identifiable from timing.
+             the registered partition, in full: ISSUE-AND-LATENCY [0.000, 0.350); BELOW-THE-REFIT-BAND [0.350, 0.529); REFIT-CONFIRMED [0.529, 0.588); ABOVE-THE-REFIT-BAND [0.588, 0.850); NO-REUSE [0.850, inf)
+             activation-corrected ratio 0.9146, printed only: it subtracts a MODELLED activation slope from both terms, and the raw number above is the one this arm was built to produce
+             NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured slope over another, taken minutes apart on one card at one tile in one kernel.
+             this run alone would read FAIL; the verdict above is the JOINT one over the runs below
+             REPLICATES: 3 run(s) of this design read together; C1 is scored on the ENVELOPE of their intervals
+               run 0: nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-b9dc6fa8; seed 2; utc unrecorded; ratio 0.9154 [0.9149, 0.9156], the point at 0.62 of its own interval; own exit unscored
+                      slopes ms per M-tile: native 0.6323, shared 0.6347, private 0.6934; drift-excluded cells: native 5, shared 6, private 4
+               run 1: nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-4efa4954; seed 0; 2026-09-23T16:38:28+00:00; ratio 0.9148 [0.9144, 0.9154], the point at 0.41 of its own interval; own exit CLAIM_FAIL
+                      slopes ms per M-tile: native 0.6321, shared 0.6346, private 0.6936; drift-excluded cells: native 4, shared 3, private 6; git_dirty True
+               run 2: nvidia_h200-bm32-budget200.0-declauto-dtypebf16-duty0.25-g1-l2flushtrue-modelmixtral_8x7b-n64-pl-79e04e7b; seed 1; 2026-09-23T19:01:04+00:00; ratio 0.9148 [0.9147, 0.9151], the point at 0.14 of its own interval; own exit CLAIM_FAIL
+                      slopes ms per M-tile: native 0.6325, shared 0.6347, private 0.6939; drift-excluded cells: native 5, shared 5, private 3; git_dirty True
+               spread of the points 0.0006 (0.06% of the median), envelope [0.9144, 0.9156], sd 0.0003 over 3 points
+               the spread is 0.8x the median within-run interval width (0.0007)
+               within-run intervals that do not overlap: none
+               the within-run interval is a bootstrap over repeats and does not cover the run-to-run spread; a point at an edge of its own interval is that bootstrap flagging itself as skewed
+               joint C1 over the envelope: FAIL (PASS needs every point in ALPHA_BAND and the whole envelope inside it; FAIL needs the envelope to miss the band)
+
+RESULT: CLAIM C2 PASS [CLAIM] the private arm's delivered weight-read rate is at or under the card's own ceiling | measured 4064.8 GB/s, w=1.0771 | gate <= 4816.0 GB/s
+C2  CLAIM    PASS     the private arm's delivered weight-read rate is at or under the card's own ceiling
+             measured 4064.8 GB/s, w=1.0771   gate <= 4816.0 GB/s
+             if this FAILS: either the private arm did not read every copy (V2 answers that) or the calibrated bandwidth this study divides every slope by is not a ceiling
+             slope(private) 0.693411 ms per M-tile moves 2.8186 GB, so it delivered 4064.8 GB/s
+             the card's calibrated rate is 4378.2 GB/s (measured on this device: NVIDIA H200 (measured), 4378.2 GB/s (triad pattern)); the gate allows 10% over it, i.e. 4816.0 GB/s
+             w(private) = 1.0771 weight-streams per M-tile at that rate; 1.0000 is what a full fresh read per tile at the calibrated rate would give, and the excess over 1 is the shortfall of the achieved rate against the calibrated one
+             THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w divides a slope by a stream time computed at an ASSUMED rate; this row says what that assumption was worth on this card in this kernel.
+
+the gates imply 1 CLAIM_FAIL: measured; VALIDITY passed; a CLAIM gate did not (a result, not a retry)
