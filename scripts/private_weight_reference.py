@@ -1950,10 +1950,12 @@ class Sample:
     """One (arm, tread, repeat) timing and everything derivable from it.
 
     THE STATE THE CELL WAS TIMED IN IS A COLUMN. `instrument`, `warmup_ms`,
-    `iters`, `trials`, the three clock fields and `l2_flush` are what
-    `moe.bench.timing.time_kernel` reported about the measurement it just made,
-    written per row because they are what makes a row comparable with the roof
-    or not.
+    `iters`, `trials`, the three clock fields and `l2_flush` are what the
+    instrument reported about the measurement it just made
+    (`moe.bench.timing.time_kernel` at full duty, `clock_elasticity.time_duty`
+    below it: `time_cell`), written per row because they are what makes a
+    row comparable with the roof or not. The duty timer's own diagnostics
+    follow `power_w` and are records.
 
     AND A FAILED LEVEL CARRIES ITS SIDE. `clock_level_side` is LOW, HIGH or ""
     and is a RECORD, never an exclusion: since 2026-09-09 `clock_drift_ok` alone
@@ -1995,13 +1997,49 @@ class Sample:
     detail: str = ""
     #: The duty cycle this cell was timed at (DESIGN DECISION 15): 1.0 is the
     #: driver's instrument with the queue kept full; below 1.0 the cell was
-    #: bursts of kernel time with idle gaps, board power under the cap. A row
-    #: written before the column reads back as 1.0, which is what it was.
+    #: bursts of kernel time with idle gaps, at a lower average board power.
+    #: A row written before the column reads back as 1.0, which is what it
+    #: was. The REQUESTED duty; `duty_achieved` is the measured one.
     duty: float = 1.0
-    #: Median board power over the cell's clock samples, W, when the
-    #: instrument read it (the duty timer does; the full-duty timer does not).
-    #: A RECORD: the traffic signal that does not go through the clock.
+    #: Median board power over the cell's clock samples, W, None when no read
+    #: carried one. BOTH instruments read it, at the same NVML call as the
+    #: clock: `time_kernel` through `KernelTiming.power_w` at full duty,
+    #: `time_duty` once per burst below it. It is NVML's ~1 s average board
+    #: power, so below full duty it averages the bursts WITH the idle gaps
+    #: and is not the in-burst draw. A RECORD, the traffic signal that does
+    #: not go through the clock: V7 prints each arm's median per tread beside
+    #: its clocks and no gate scores it.
     power_w: float | None = None
+    # THE DUTY TIMER'S OWN DIAGNOSTICS (review findings 17 and 24), so a V7 or
+    # V0 failure at a duty below 1 can be read off cells.csv rather than
+    # bought again: `clock_elasticity.time_duty` measures every one of them
+    # and this arm used to keep none. RECORDS: no gate reads any of them. None
+    # on every row written before the columns existed, and at full duty for
+    # the burst quantities `time_kernel` does not have.
+    #: The GPU-busy fraction the duty timer measured over the trials' wall
+    #: clock, a LOWER BOUND (`clock_elasticity.DutyTiming.duty_achieved`).
+    duty_achieved: float | None = None
+    #: Calls per burst, the first of which is discarded, and the idle gap
+    #: after each burst, ms, sized from `DUTY_SIZING_MS` of full-duty reading.
+    calls_per_burst: int | None = None
+    gap_ms: float | None = None
+    #: Medians of the first and last quarter of a burst's kept per-call
+    #: times, and whether they agree within `timing.DRIFT_FRACTION`: R1 gates
+    #: this pair as its V5; here V7 prints each arm's median `burst_sag` per
+    #: tread beside its clocks and scores nothing on it.
+    head_ms: float | None = None
+    tail_ms: float | None = None
+    within_burst_ok: bool | None = None
+    #: Every usable under-load clock read, MHz, space-joined as
+    #: `clock_elasticity` writes them: one per burst below full duty, the
+    #: poller's reads at full duty. The samples and not only their median,
+    #: for `timing.KernelTiming.clock_samples_mhz`'s reason: a median and a
+    #: DRIFT flag cannot tell a settling ramp from a card hunting.
+    clock_samples_mhz: str | None = None
+    #: `timing.host_bound_verdict` on the cell: True when the queue drained
+    #: while the host was still enqueueing, so `ms_*` bound the kernel from
+    #: above. Both instruments compute it.
+    host_bound: bool | None = None
 
     def __post_init__(self) -> None:
         # The sweep owns the rule that a failed LEVEL without a side is not a
@@ -2021,6 +2059,15 @@ class Sample:
     @property
     def usable(self) -> bool:
         return self.status == "ok" and self.ms_p50 > 0 and not self.excluded
+
+    @property
+    def burst_sag(self) -> float | None:
+        """`(tail - head) / head` of the per-call time inside a burst: how
+        much slower the end of a burst ran than its start. None when either
+        quarter is unread, which is every full-duty cell."""
+        if self.head_ms is None or self.tail_ms is None or self.head_ms <= 0:
+            return None
+        return (self.tail_ms - self.head_ms) / self.head_ms
 
 
 CSV_FIELDS = list(Sample.__dataclass_fields__)
@@ -2083,6 +2130,10 @@ def _opt_bool(text: str):
     return text == "True"
 
 
+def _opt_int(text: str):
+    return int(text) if text not in ("", None) else None
+
+
 #: Bursts of about this much KERNEL time at a duty cycle below 1, the size the
 #: clock arm settled on: long enough that one NVML read per burst is a clock
 #: under load, short enough that the governor cannot ramp inside one.
@@ -2117,6 +2168,22 @@ class CellTiming:
     power_w: float | None
     host_bound: bool | None
     note: str
+    #: The duty timer's own diagnostics, `Sample`'s columns of the same
+    #: names; None where the instrument has no such quantity.
+    clock_samples_mhz: str | None = None
+    duty_achieved: float | None = None
+    calls_per_burst: int | None = None
+    gap_ms: float | None = None
+    head_ms: float | None = None
+    tail_ms: float | None = None
+    within_burst_ok: bool | None = None
+
+
+def _joined_clocks(reads) -> str | None:
+    """Clock reads, MHz, space-joined as `clock_elasticity` writes its
+    `clock_samples_mhz` column; None when there were none."""
+    reads = tuple(reads or ())
+    return " ".join(f"{c:.0f}" for c in reads) if reads else None
 
 
 def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
@@ -2141,12 +2208,20 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
         t = timer(call, warmup_ms=warmup_ms, target_ms=cell_budget_ms,
                   trials=trials, l2_flush=l2_flush,
                   reference_clock_mhz=reference_clock_mhz)
-        return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.iters, t.trials,
-                          t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
-                          t.clock_level_ok, t.clock_level_side,
-                          t.clock_drift_ok, t.l2_flush, 1.0,
-                          getattr(t, "power_w", None),
-                          getattr(t, "host_bound", None), "")
+        # `power_w`, `host_bound` and the clock list are `KernelTiming`'s
+        # own fields; read with a default because a timer written before any
+        # of them existed does not carry it. The burst diagnostics stay None:
+        # a queue-deep loop has no bursts.
+        return CellTiming(
+            ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+            iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
+            instrument=t.instrument, sm_clock_load_mhz=t.sm_clock_load_mhz,
+            clock_level_ok=t.clock_level_ok,
+            clock_level_side=t.clock_level_side,
+            clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush, duty=1.0,
+            power_w=getattr(t, "power_w", None),
+            host_bound=getattr(t, "host_bound", None), note="",
+            clock_samples_mhz=_joined_clocks(getattr(t, "clock_samples_mhz", ())))
     if duty_timer is None:
         import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
         duty_timer = CE.time_duty
@@ -2160,14 +2235,37 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
                    bursts=bursts, trials=trials, warm_ms=warmup_ms,
                    l2_flush=l2_flush, per_call_ms=per_call,
                    reference_clock_mhz=reference_clock_mhz)
-    # PER TRIAL, as `time_kernel`'s `iters` is: `samples` is the kept calls
-    # summed over every burst of every trial.
-    return CellTiming(t.ms_p50, t.ms_min, t.ms_std,
-                      t.samples // max(1, t.trials), t.trials,
-                      t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
-                      t.clock_level_ok, t.clock_level_side, t.clock_drift_ok,
-                      t.l2_flush, duty, t.power_w, t.host_bound,
-                      t.clock_note or "")
+    return CellTiming(
+        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+        # PER TRIAL, as `time_kernel`'s `iters` is: `samples` is the kept
+        # calls summed over every burst of every trial.
+        iters=t.samples // max(1, t.trials), trials=t.trials,
+        warmup_ms=t.warmup_ms, instrument=t.instrument,
+        sm_clock_load_mhz=t.sm_clock_load_mhz,
+        clock_level_ok=t.clock_level_ok, clock_level_side=t.clock_level_side,
+        clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush, duty=duty,
+        power_w=t.power_w, host_bound=t.host_bound, note=t.clock_note or "",
+        # EVERYTHING THE DUTY TIMER MEASURED, kept: what V7 and V0 need to
+        # tell a split between arms from a card jittering at this duty.
+        clock_samples_mhz=_joined_clocks(t.clock_samples_mhz),
+        duty_achieved=t.duty_achieved, calls_per_burst=t.calls_per_burst,
+        gap_ms=t.gap_ms, head_ms=t.head_ms, tail_ms=t.tail_ms,
+        within_burst_ok=t.within_burst_ok)
+
+
+def sample_from_timing(t: CellTiming, **cell) -> Sample:
+    """The `Sample` one timed cell becomes: `cell` names it (arm, repeat,
+    tread and the rest of its identity), `t` fills EVERY column the
+    instrument measured, by name, and its note becomes the row's `detail`.
+
+    ONE MAPPING, NOT A LIST AT THE CALL SITE. `run_sweep` used to copy the
+    fields one by one, and `host_bound` was on `CellTiming` and on no row: a
+    column the instrument measured, dropped at the second call site without
+    a sound. A `CellTiming` field with no `Sample` column is now a test
+    failure, not a silent loss."""
+    measured = {name: getattr(t, name) for name in CellTiming.__dataclass_fields__
+                if name in Sample.__dataclass_fields__}
+    return Sample(**cell, **measured, detail=t.note)
 
 
 def duty_of(samples) -> float:
@@ -2204,7 +2302,15 @@ def read_samples(path: Path) -> list[Sample]:
                 l2_flush=(row.get("l2_flush", "") == "True"),
                 status=row.get("status", "ok"), detail=row.get("detail", ""),
                 duty=float(row.get("duty") or 1.0),
-                power_w=_opt_float(row.get("power_w", ""))))
+                power_w=_opt_float(row.get("power_w", "")),
+                duty_achieved=_opt_float(row.get("duty_achieved", "")),
+                calls_per_burst=_opt_int(row.get("calls_per_burst", "")),
+                gap_ms=_opt_float(row.get("gap_ms", "")),
+                head_ms=_opt_float(row.get("head_ms", "")),
+                tail_ms=_opt_float(row.get("tail_ms", "")),
+                within_burst_ok=_opt_bool(row.get("within_burst_ok", "")),
+                clock_samples_mhz=row.get("clock_samples_mhz") or None,
+                host_bound=_opt_bool(row.get("host_bound", ""))))
     return out
 
 
@@ -3066,6 +3172,20 @@ def _median_by_arm(samples, tread: int, field_name: str) -> dict[str, float]:
     return out
 
 
+def _arm_medians(samples, tread: int, value) -> dict[str, float]:
+    """Each arm's median of `value(sample)` over its usable cells at `tread`,
+    an arm with no value left out. Not `_median_by_arm`, which drops a FALSY
+    value: right for a time or a clock, wrong for a sag of exactly zero."""
+    out = {}
+    for arm in ARMS:
+        vals = [v for s in samples
+                if s.usable and s.arm == arm and s.tiles == tread
+                for v in (value(s),) if v is not None]
+        if vals:
+            out[arm] = statistics.median(vals)
+    return out
+
+
 def gate_v6_identity(samples, *, identity_tread: int = 1) -> Gate:
     """At one M-tile per expert SHARED and PRIVATE are the SAME CALL.
 
@@ -3135,11 +3255,22 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
 
     UNKNOWN, NOT PASS, when a tread has no clock in either arm: an unread
     clock is not a matching one.
+
+    PRINTED BESIDE THE CLOCKS AND SCORED BY NOTHING: each arm's median board
+    power per tread (`power_w`, NVML's ~1 s average, so duty-averaged below
+    full duty) and each arm's median in-burst sag (`burst_sag`, the duty
+    timer's first and last quarter of a burst). A FAIL is then readable off
+    the page: a systematic power difference between the arms is a split, the
+    same power in both is a card jittering.
     """
     detail = []
     worst = 0.0
     unread = []
     over = []
+    records: list[str] = []
+    averaged = (", duty-averaged over bursts and idle gaps"
+                if duty_of(samples) < 1.0 else "")
+    order = (*RATIO_ARMS, NATIVE)
     for n in treads:
         # A tread one ratio arm never reached is V0's and V1's to score; a
         # tread both reached with no clock in one of them is unread HERE.
@@ -3158,6 +3289,18 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                       f"{med[PRIVATE]:.0f} MHz, {rel:.2%} apart"
                       + (f"; native {med[NATIVE]:.0f} MHz" if NATIVE in med
                          else ""))
+        power = _arm_medians(samples, n, lambda s: s.power_w)
+        if power:
+            detail.append(f"      power (NVML's ~1 s average{averaged}): "
+                          + ", ".join(f"{a} {power[a]:.0f} W"
+                                      for a in order if a in power))
+            records.append("power")
+        sag = _arm_medians(samples, n, lambda s: s.burst_sag)
+        if sag:
+            detail.append("      in-burst sag (tail - head) / head: "
+                          + ", ".join(f"{a} {sag[a]:+.2%}"
+                                      for a in order if a in sag))
+            records.append("in-burst sag")
     if unread:
         detail.append(f"no clock in one or both ratio arms at treads {unread}")
     if not detail:
@@ -3171,6 +3314,12 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
         verdict = UNKNOWN
     else:
         verdict = PASS if not over else FAIL
+    if records:
+        named = list(dict.fromkeys(records))
+        detail.append(" and ".join(named)
+                      + (" are" if len(named) > 1 else " is")
+                      + " each arm's median over its cells at the tread, "
+                      "RECORDS: V7 scores the clocks alone")
     if over and duty_of(samples) >= 1.0:
         detail.append(
             "the remedy is --duty 0.5: bursts of kernel time with idle gaps "
@@ -5658,23 +5807,16 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                                       trials=args.trials,
                                       l2_flush=not args.no_l2_flush,
                                       reference_clock_mhz=reference_clock)
-                    sample = Sample(
-                        arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                    # THE SIDE TRAVELS WITH THE VERDICT, with every other
+                    # column the instrument measured: `sample_from_timing`
+                    # copies them all. A failed LEVEL without its side is
+                    # refused at construction, because read as LOW it would
+                    # drop every boosted tread; NEITHER side excludes here,
+                    # DRIFT alone does.
+                    sample = sample_from_timing(
+                        t, arm=arm, repeat=rep, block_m=block_m, tiles=n,
                         rows_per_expert=n * block_m, tokens=tokens,
-                        copies=copies, experts_declared=experts,
-                        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_stdev,
-                        iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
-                        instrument=t.instrument,
-                        sm_clock_load_mhz=t.sm_clock_load_mhz,
-                        clock_level_ok=t.clock_level_ok,
-                        # THE SIDE TRAVELS WITH THE VERDICT. A failed LEVEL
-                        # without it is refused at construction, because read
-                        # as LOW it would drop every boosted tread; NEITHER
-                        # side excludes here, DRIFT alone does.
-                        clock_level_side=t.clock_level_side,
-                        clock_drift_ok=t.clock_drift_ok,
-                        l2_flush=t.l2_flush, duty=t.duty, power_w=t.power_w,
-                        detail=t.note)
+                        copies=copies, experts_declared=experts)
                     if t.clock_level_side:
                         print(f"  ^ LEVEL {t.clock_level_side.upper()}: kept in "
                               "every fit, side recorded; its fraction of the "
