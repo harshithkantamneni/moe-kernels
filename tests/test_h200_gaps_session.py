@@ -5434,3 +5434,83 @@ def test_the_elasticity_arm_measures_under_this_sessions_tag(interpretation_dry)
     # The basis no longer promises a dry command reproduces the pod's run id.
     basis = lift("arm_basis elasticity-m32-n64-g16", REPO=str(ROOT)).stdout
     assert "gets the same run id:" not in basis, basis
+
+
+def test_the_runbooks_private_reference_section_says_one_thing_about_v7():
+    """The section contradicted itself twice. V7 "FAILS by construction" in
+    one paragraph and "holds by construction" three paragraphs down; "Run it
+    at --duty 0.5" and then "the driver runs seed 0" with a driver that passed
+    no --duty. It is rewritten to the owner's decision: the driver runs R3 at
+    `private_duty`, "fails by construction" is the FULL-duty statement, the
+    booking is the driver's, and the hand-run second seed carries the duty
+    its seed 0 was run at."""
+    duty = lift("private_duty", REPO=str(ROOT)).stdout.strip()
+    section = _RUNBOOK.split("## The private-weight reference alone", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    flat = re.sub(r"\s+", " ", section)
+    assert f"**The driver runs it at `--duty {duty}`**" in flat, flat[:3000]
+    # Only this duty, and the script's own full-duty default named as such.
+    assert set(re.findall(r"--duty ([\d.]+)", flat)) == {duty, "1.0"}, flat
+    assert "holds by construction" not in flat
+    for sentence in re.split(r"(?<=[.;])\s", flat):
+        if "by construction" in sentence.lower() and "fail" in sentence.lower():
+            assert "full duty" in sentence, sentence
+    booked = lift("arm_minutes private-mixtral-bm32", REPO=str(ROOT)).stdout.strip()
+    assert f"(`private-mixtral-bm32`, {booked} min)" in flat, flat[:600]
+    # The hour it books is priced by the driver over the section's own --only.
+    only = re.search(r"--only ([\w,-]+)", section).group(1).split(",")
+    assert "private-mixtral-bm32" in only, only
+    priced, bound = lift(f"session_bound {' '.join(only)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"the driver prices the {_count_word(len(only))} at ~{priced} minutes " \
+           f"(~{bound} bounded)" in flat, (priced, bound, flat[:900])
+    # The hand-run seed 1 is the driver's measuring line plus the replicate
+    # flags, and it keeps the duty: --replicate-of refuses one at another.
+    block = re.search(r"```\n(MOE_RESULTS_DIR=[^`]*)```", section)
+    assert block, section
+    command = block.group(1).replace("\\\n", " ")
+    words = shlex.split(command)
+    assert words[words.index("--duty") + 1] == duty, command
+    assert "--seed" in words and "--replicate-of" in words, command
+    measuring = _arm_words("private-mixtral-bm32")[1][0]
+    for flag in ("--model", "--block-m", "--treads", "--repeats"):
+        assert words[words.index(flag) + 1] == _flag(measuring, flag), flag
+    # There is no arms.sh; the section used to send the operator to one.
+    assert "arms.sh" not in section
+
+
+def test_the_runbooks_rental_figures_are_the_drivers_own(interpretation_dry):
+    """"this page is a copy", and the copy was two sessions stale: it read
+    515 / 119 / 676 while the driver printed 576 / 137 / 761, and its two-hour
+    `--only` line had neither `thermal` nor the private-weight reference that
+    the driver's own two-hour set carries. The private arm's move to a duty
+    cycle moved all three figures again. The copy is checked here against the
+    dry page it is a copy of."""
+    _, stdout = interpretation_dry
+    priced = re.search(r"TOTAL ~(\d+) minutes", stdout).group(1)
+    kernel = re.search(r"of which ~(\d+) are KERNEL minutes", stdout).group(1)
+    bound = re.search(r"~(\d+) minutes \(~\d+h \d+m\), the same table", stdout).group(1)
+    reaches = _RUNBOOK.split("**What a rental reaches.**", 1)[1]
+    para = re.sub(r"\s+", " ", reaches.split("\n\n", 1)[0])
+    assert f"~{priced} priced minutes (~{kernel} of them KERNEL" in para, para
+    assert f"become ~{bound} once" in para, para
+    two = lift("rental_2h_arms", REPO=str(ROOT)).stdout.split()
+    listed = re.search(r"`--only ([\w,-]+)`", reaches)
+    assert listed and listed.group(1).split(",") == two, (listed, two)
+
+
+def test_the_runbooks_arm_table_books_what_the_driver_books():
+    """The runbook's arm ledger quotes each row's minutes and clock from the
+    driver's own table and says so, and until 2026-09-22 it had no row for
+    either interpretation arm, so the one whose booking moved (3 to 10 minutes
+    at --duty 0.25) and the one whose run id moved had nothing on the page an
+    operator books from. Both have rows now, and every row's two numbers are
+    the ones `--list` prints."""
+    listing = run(["--list"]).stdout
+    listed = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^  ([a-z0-9_-]+)\s+~\s*(\d+) min (\w+)$", listing, re.M)}
+    rows = {m.group(1): (int(m.group(2)), m.group(3)) for m in re.finditer(
+        r"^\| `([a-z0-9_-]+)` \| *(\d+) \| (\w+) \|", _RUNBOOK, re.M)}
+    assert {"private-mixtral-bm32", "elasticity-m32-n64-g16"} <= set(rows), rows
+    for name, booked in rows.items():
+        assert listed.get(name) == booked, (name, booked, listed.get(name))

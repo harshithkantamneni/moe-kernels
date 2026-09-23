@@ -142,6 +142,8 @@ against `--list` by `tests/test_docs.py`.
 | `calibrate` | 3 | ALLOW | this pod's own ridge and both dtype peaks, published; five arms refuse without it | KEEP: the only file worth committing |
 | `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
 | `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
+| `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Run at `--duty 0.25` on both branches, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's three pages were INVALID on V7. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
+| `elasticity-m32-n64-g16` | 40 | WALL | the clock elasticity of the per-M-tile cost at one pinned cell (BLOCK_M=32, BLOCK_N=64, G=16), four duty states from the cap to the boost ceiling (1.0 0.5 0.25 0.1); the band it lands in decides what every alpha below MEANS | not in the verdict: ADDED 2026-09-16. THE STANDALONE ARM, session 4's design read on this session's card; the alpha(G) chain measures its own elasticity once per G of the ratio ladder, and that is the chain's step, not this row. `--session-tag` IS ON BOTH BRANCHES SINCE 2026-09-22: without it the run id on an H200 was session 4's own, and on the shared volume the arm would have re-scored session 4's 416 cells as this session's |
 | `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
 | `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships. No arm confirms the headline on sm_90: at BLOCK_N=256 no BLOCK_M=256 control fits at ANY warp or stage count (65536 of 65536 registers per block; `bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0` exits 2), and no BLOCK_SIZE_N does either | CUT: REFUSES at `--capability 9.0`; booked zero, the refusal is the finding. It is not one fix away: `--num-warps 16 --num-stages 3` refuses too, so the paper's headline has no confirming arm on this card |
 | `roofline-n256-g32` | 0 | FREE | the same at the swizzle vLLM ships at 2048 tokens | CUT: refuses for the same missing control |
@@ -170,27 +172,39 @@ the same self-test fails at every pinning checked except 16, so there is
 nowhere to re-pin it to.
 
 **What a rental reaches.** The driver prints, from its own table, that
-~515 priced minutes (~119 of them KERNEL, which exclude compiles) become
-~676 once the KERNEL part is multiplied by the one wall-over-model ratio this
+~583 priced minutes (~144 of them KERNEL, which exclude compiles) become
+~778 once the KERNEL part is multiplied by the one wall-over-model ratio this
 repository has measured (2.35x, mixtral_g1 on the s4 arm); that second number
 is an illustration of the gap, not an estimate of any arm. THOSE THREE
 FIGURES READ 262 / 107 / 407 UNTIL 2026-09-10 and none of the three had been
 true for two sessions: the whole-session total moved when `bn_g16` went from
 36 to 46 priced minutes and again when the counter pair added 240, and this
-paragraph was retyped from a `--dry-run` that predates both. Re-read it off
-`bash scripts/h200_gaps_session.sh --dry-run` rather than from here; the
-driver computes it from `arm_minutes` and `arm_clock` and this page is a copy.
+paragraph was retyped from a `--dry-run` that predates both. THEY THEN READ
+515 / 119 / 676 UNTIL 2026-09-22, which predated four arms (`thermal`,
+`private-mixtral-bm32`, `elasticity-m32-n64-g16`, `blockk-w4`) and the
+private reference's move to `--duty 0.25`, which took it from 3 booked minutes
+to 10. Re-read it off `bash scripts/h200_gaps_session.sh --dry-run` rather
+than from here; the driver computes it from `arm_minutes` and `arm_clock` and
+this page is a copy, which `tests/test_h200_gaps_session.py` now checks.
 
-A two-hour rental reaches both payload arms and their preconditions
-(`--only calibrate,pin_probe-n64-g1,pin_probe-n256-g16,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16`);
+A two-hour rental reaches both payload arms, their preconditions and the
+private-weight reference
+(`--only thermal,calibrate,pin_probe-n64-g1,pin_probe-n256-g16,private-mixtral-bm32,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16`);
 a three-hour one adds `bm128_depth`, the anchor pair and the cheap tail.
 NEITHER contains the noise floor: it is 120 WALL minutes on its own and a
 rental that enters it without finishing it fails that script's own V2 and buys
 nothing. Book it on its own.
 
-**Read these four first** when it ends: the `alias_ablation` P1 line, the
+**Read these first** when it ends: the `private-mixtral-bm32` ratio and the
+`elasticity-m32-n64-g16` band (neither measures an alpha below; both decide
+what every one of them means), then the `alias_ablation` P1 line, the
 `roofline-n256-g16` verdict line (or its refusal), the `noise_floor` sd, and
 the `bn_g16` residual line. The driver prints them under that heading.
+`elasticity-m32-n64-g16` is the driver's STANDALONE elasticity: session 4's
+design (G=16, duty 1.0 0.5 0.25 0.1) under this session's `--session-tag`, a
+second card's reading of it cell for cell. It is not the alpha(G) chain's
+elasticity, which is measured once per G of the ratio ladder and is the
+chain's own step.
 
 **What to commit.** `moe/bench/hardware/measured_<card>.yaml` and
 `results/published/NOISE_FLOOR.json`, both written under `--publish`, both
@@ -229,11 +243,12 @@ verified that everything worth keeping exists somewhere that outlives the pod.
 ## The private-weight reference alone (2026-09-17)
 
 The one arm whose number needs no assumed bandwidth and no fitted intercept
-(`private-mixtral-bm32`, 3 min) was rebuilt on 2026-09-17 after two reviews,
+(`private-mixtral-bm32`, 10 min) was rebuilt on 2026-09-17 after two reviews,
 and it is the arm to run BEFORE the other two arms it shares
 `three-arms` with (`elasticity-m32-n64-g16`, `blockk-w4`), whose reviews found
 design defects that are NOT yet fixed. Rent about an hour and run only the
-preconditions and this arm:
+preconditions and this arm; the driver prices the four at ~18 minutes (~32
+bounded), and the hand-run second seed below is about 10 more:
 
 ```
 bash scripts/h200_gaps_session.sh --new --only thermal,calibrate,pin_probe-n64-g1,private-mixtral-bm32
@@ -267,9 +282,11 @@ eager fallback (capture refused, named on the page) needs the control to earn
 PASS. NATIVE keeps the switch, and V5 fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
-V7 (the two arms' clocks agree at every tread -- on a pod that cannot lock its
-clock this FAILS by construction whenever the arms draw different power, and
-the page is INVALID; pass `--clock-elasticity ETA LO HI
+V7 (the two arms' clocks agree at every tread -- expected to hold at the duty
+the driver runs this arm at, and a FAIL there is a finding about the card; at
+full duty, on a pod that cannot lock its clock, it FAILS by construction
+whenever the arms draw different power and the page is INVALID, which is why
+the arm is duty-cycled, below; pass `--clock-elasticity ETA LO HI
 --clock-elasticity-source '<report>@<sha>'` from a committed clock_elasticity
 report and C1 PRINTS a clock-corrected ratio beside the raw one, scored by
 nothing), V2 (each copy read by exactly
@@ -289,19 +306,46 @@ it after the sweep: the installed vLLM's `fused_moe.py` must cast
 `off_experts` to int64 (slot 71 x 117 MB is past 2^31 bytes from the weight
 base).
 
-**Run it at `--duty 0.5`.** Session 4's pages were INVALID on V7 because the
-power cap boosts whichever arm reads less; its clock arm showed the cap binds
-only at full duty (every state at or below 50% duty sat at 1905-1980 MHz at
-every tread). `--duty 0.5` times each cell as bursts with idle gaps, so both
-arms run at the boost ceiling and V7 holds by construction; wall clock about
-doubles (~7 min a run) and board power is recorded per cell.
+**The driver runs it at `--duty 0.25`**, on both branches, and the alpha(G)
+chain runs R3 at the same duty: DESIGN DECISION 15 as the owner decided it on
+2026-09-22. The script's own default stays `--duty 1.0`: duty is a design key
+defaulting to 1.0, and moving the default would break `--replicate-of`
+against session 4's runs. WHY A DUTY AT ALL: at full duty the power cap
+boosts whichever arm reads fewer bytes, so on a card that cannot lock its
+clock V7 fails by construction, and session 4's three ratio pages were
+INVALID on V7 that way (the shared arm 2% above the private one at G=1, 18%
+at G=16). `--duty D` times each cell as bursts of about 40 ms of kernel time
+separated by idle gaps, which takes board power off the cap without changing
+a byte the kernel moves. WHY 0.25 AND NOT 0.5 is session 4's clock arm, the
+same native kernel under the same `time_duty` R3 imports: at duty 0.5 the
+clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz, 13 of the 78
+cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's median sat
+at 1965 MHz, at 277-317 W, and no cell drifted. So V7 is expected to hold at
+0.25, not guaranteed: the private arm draws more power than the kernel that
+was measured, and its V7 line is the measurement. The price is wall clock,
+about 1/0.25 = 4 times the kernel time: the plan prices the ladder's 145 s of
+kernel time at about 581 s, so a run is about 10 minutes before its compiles
+and the 25.4 GB weight build. The duty is in the run id, and board power is
+recorded per cell.
 
 **Book this arm as a PAIR.** The interval on C1 is a bootstrap over repeats
 within one run; on 2026-09-21 two G=1 runs at seeds 0 and 1, 77 minutes apart
 on one pod, read ratios whose intervals did not overlap. The driver runs seed
-0; the second run is by hand after it, the same measuring line with
-`--seed 1 --replicate-of <seed-0 run dir>/report.json` added (the arm's line is
-in the session's own `arms.sh`; keep `--session-tag`). C1 is then scored on
+0; the second run is by hand after it: the driver's own measuring line
+(section 0c of `scripts/h200_gaps_session.sh`) with
+`--seed 1 --replicate-of <seed-0 run dir>/report.json` added. The seed-0 run
+directory is the `WRITES TO` line of `$SESSION/logs/private-mixtral-bm32.log`,
+and the session tag is the session directory's name:
+
+```
+MOE_RESULTS_DIR=/workspace/results/gaps-<card> /workspace/venvs/vllm/bin/python \
+  scripts/private_weight_reference.py --model mixtral-8x7b --block-m 32 \
+  --treads 6 --repeats 9 --duty 0.25 --session-tag <session directory name> \
+  --seed 1 --replicate-of <seed-0 run dir>/report.json
+```
+
+Keep `--duty 0.25` and `--session-tag`: duty is a design key, so
+`--replicate-of` refuses a replicate at another duty. C1 is then scored on
 the envelope of both runs' intervals and the page prints the cross-run
 spread; a lone run's page says it was scored alone. A pair already on disk is
 re-read on the laptop with
