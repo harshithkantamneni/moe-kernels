@@ -42,6 +42,19 @@ from moe.bench import exit_codes  # noqa: E402
 CODE = CHAIN.read_text()
 HEADER = "step\tstate\trc\tseconds\tdirty\tlog\tnote\n"
 ARMS_HEADER = "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+#: Every variable the chain reads from its environment, off its own line.
+_KNOBS_LINE = re.search(r'^CHAIN_KNOBS="([^"]+)"$', CODE, re.M)
+KNOBS = _KNOBS_LINE.group(1).split() if _KNOBS_LINE else []
+
+
+def chain_env(**extra) -> dict:
+    """laptop_env without the chain's knobs, then `extra`. On the pod this file
+    runs inside the chain's end suite, and an operator's SESSION=<dir> or
+    END_SUITE=skip in the caller's environment must not steer a chain spawned
+    here into the real session."""
+    env = {k: v for k, v in laptop_env().items() if k not in KNOBS}
+    env.update(extra)
+    return env
 
 
 def lift(script: str, **variables) -> subprocess.CompletedProcess:
@@ -51,7 +64,7 @@ def lift(script: str, **variables) -> subprocess.CompletedProcess:
             f'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' "{CHAIN}")"\n'
             f"{setup}\n{script}\n")
     return subprocess.run(["bash", "-c", body], capture_output=True, text=True,
-                          timeout=300, env=laptop_env(REPO=str(ROOT)))
+                          timeout=300, env=chain_env(REPO=str(ROOT)))
 
 
 def _ledger(path: Path, *rows, header: str = HEADER) -> Path:
@@ -74,7 +87,7 @@ def test_the_chain_parses_and_avoids_the_three_habits():
     assert not re.search(r"^set -[a-z]*e", CODE, re.M), "set -e would abort a rented session"
     assert "errexit" not in CODE
     assert "$!" not in CODE, "a PID variable in a shell that starts no background job"
-    body = CODE.split("\nrun_step() {", 1)[1].split("\n}", 1)[0]
+    body = CODE.split("\nrun_step_as() {", 1)[1].split("\n}", 1)[0]
     assert '"$@" > "$log" 2>&1 || rc=$?' in body, "the measured command's rc is captured directly"
     assert "| tee" not in body
 
@@ -151,7 +164,7 @@ def test_the_preconditions_step_latches_only_on_the_drivers_exit_0(tmp_path, rc,
     2026-09-22 exit 3 was filed INVALID, which latched, so an owed pin_probe
     was never re-attempted although the driver said --resume would."""
     ledger = _ledger(tmp_path / "CHAIN.tsv")
-    got = lift(f'OPINION=driver run_step preconditions {tmp_path / "p.log"!s} bash -c "exit {rc}";'
+    got = lift(f'run_step_as driver preconditions {tmp_path / "p.log"!s} bash -c "exit {rc}";'
                f" echo rc=$?", LEDGER=str(ledger))
     assert f"rc={rc}" in got.stdout, got.stdout + got.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
@@ -238,7 +251,7 @@ def test_a_pytest_row_is_its_exit_code_and_tally(tmp_path, rc, tally, state, nee
     word, so --resume re-runs it), and the note carries pytest's own tally."""
     ledger = _ledger(tmp_path / "CHAIN.tsv")
     page = _fake_pytest(tmp_path, "suite.py", tally, rc)
-    got = lift(f"OPINION=suite run_step gpu-tests {tmp_path / 's.log'!s} {sys.executable} {page!s};"
+    got = lift(f"run_step_as suite gpu-tests {tmp_path / 's.log'!s} {sys.executable} {page!s};"
                f" echo rc=$?", LEDGER=str(ledger))
     assert f"rc={rc}" in got.stdout, got.stdout + got.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
@@ -293,6 +306,60 @@ def test_the_tests_interpreter_must_not_import_vllm(tmp_path):
     assert lift(f"suite_interpreter_ok {without!s} && echo ok").stdout.strip() == "ok"
 
 
+def test_chain_knobs_names_every_variable_the_chain_takes_from_its_environment():
+    """A knob missing from CHAIN_KNOBS would reach the end suite's tests. The
+    chain's knobs are its self-defaulting assignments (`X="${X:-...}"`), SESSION
+    (read as `${SESSION:-}` where the session is chosen) and CAPABILITY (read
+    inline by a dry run); PY_BASE and PY_VLLM are replaced by the tests'
+    laptop_env, and CARD is emptied before the probe fills it."""
+    defaulted = set(re.findall(r'^\s*([A-Z0-9_]+)="\$\{\1:-', CODE, re.M))
+    assert '"${SESSION:-}"' in CODE and "${CAPABILITY:-" in CODE
+    assert set(KNOBS) == (defaulted - {"PY_BASE", "PY_VLLM", "CARD"}) | {"SESSION", "CAPABILITY"}
+
+
+def test_the_opinion_is_an_argument_and_reaches_no_child(tmp_path, monkeypatch):
+    """`OPINION=suite run_step ...` exported OPINION to every child of the
+    step, so on the pod the end suite's own run of this file scored six of its
+    rows with the suite's opinion and recorded them FAILED. The opinion is an
+    argument now: no child sees one, and one in the chain's environment
+    decides nothing."""
+    monkeypatch.delenv("OPINION", raising=False)
+    ledger = _ledger(tmp_path / "CHAIN.tsv")
+    log = tmp_path / "probe.log"
+    lift(f"run_step_as suite gpu-tests {log!s} bash -c"
+         " 'echo opinion=${OPINION:-unset}; echo \"1 passed in 0.01s\"'", LEDGER=str(ledger))
+    assert "opinion=unset" in log.read_text(), log.read_text()
+    assert _rows(ledger)[-1][:2] == ["gpu-tests", "DONE"]
+    page = tmp_path / "page.py"
+    page.write_text("import sys\n"
+                    "print('RESULT: CLAIM C1 FAIL [CLAIM] x | measured 0.9 | gate y')\n"
+                    "sys.exit(1)\n")
+    got = lift(f"export OPINION=suite; run_step r3-g1-s0 {tmp_path / 'a.log'!s}"
+               f" {sys.executable} {page!s}", LEDGER=str(ledger))
+    assert _rows(ledger)[-1][:3] == ["r3-g1-s0", "CLAIM_FAIL", "1"], got.stdout + got.stderr
+
+
+def test_a_pytest_step_runs_without_the_chains_knobs(tmp_path, monkeypatch):
+    """The suite's tests spawn this chain and the driver with os.environ merged
+    in. An operator's `SESSION=<dir> bash scripts/alpha_g_chain.sh` left
+    SESSION exported to the end suite, whose chain tests then wrote their
+    ledgers into that directory and recorded 14 spurious failures."""
+    monkeypatch.delenv("OPINION", raising=False)
+    probe = tmp_path / "py"
+    probe.write_text('#!/bin/bash\n[[ "$1" == -c ]] && exit 1\n'        # `import vllm` fails
+                     'env | sed "s/=.*//" | sort > "$(dirname "$0")/seen.txt"\n'
+                     'echo "5 passed in 1.00s"\n')
+    probe.chmod(0o755)
+    ledger = _ledger(tmp_path / "CHAIN.tsv")
+    exports = " ".join(f'export {k}="${{{k}:-planted}}";' for k in KNOBS)
+    got = lift(f"{exports} pytest_step suite 60 tests/",
+               PY_BASE=str(probe), LEDGER=str(ledger), LOGS=str(tmp_path))
+    seen = set((tmp_path / "seen.txt").read_text().split())
+    assert "PATH" in seen and "MOE_RESULTS_DIR" in seen, "the environment, not an empty one"
+    assert seen.isdisjoint([*KNOBS, "OPINION"]), sorted(seen & {*KNOBS, "OPINION"})
+    assert _rows(ledger)[-1][:2] == ["suite", "DONE"], got.stdout + got.stderr
+
+
 def test_the_order_is_the_owners_and_only_test_gpu_is_gated():
     """D3: preflight, preconditions, tests/test_gpu.py (gated), R3 seed 0 at
     every G with the pilot's V8 read, R1 at every G, R3's later seeds, then
@@ -317,7 +384,7 @@ def test_the_order_is_the_owners_and_only_test_gpu_is_gated():
 
 def test_help_prints_the_whole_header_and_no_code():
     got = subprocess.run(["bash", str(CHAIN), "--help"], capture_output=True, text=True,
-                         timeout=60, env=laptop_env(REPO=str(ROOT)))
+                         timeout=60, env=chain_env(REPO=str(ROOT)))
     assert got.returncode == 0
     for flag in ("--past-gpu-tests", "--past-v8", "--new", "--resume", "END_SUITE=skip"):
         assert flag in got.stdout, flag
@@ -715,6 +782,13 @@ if [[ "${1:-}" == */alpha_g_chain_helpers.py ]]; then
     device) printf '%s\n' "${STUB_DEVICE:-0a0a0a0a-1111-2222-3333-444444444444}"; exit 0 ;;
   esac
 fi
+# a planted pytest, when the test asks for one: the names of the environment
+# it was run with, and a tally
+if [[ "${1:-}" == -m && "${2:-}" == pytest && -n "${STUB_PYTEST:-}" ]]; then
+  printf 'pytest\t%s\n' "$(env | sed 's/=.*//' | sort | tr '\n' ' ')" >> "$STUB_PYTEST"
+  echo "${STUB_PYTEST_TALLY:-5 passed in 1.00s}"
+  exit "${STUB_PYTEST_RC:-0}"
+fi
 exec @PYTHON@ "$@"
 """
 
@@ -839,7 +913,7 @@ class Pod:
         return s
 
     def run(self, *args, **env) -> subprocess.CompletedProcess:
-        full = laptop_env(REPO=str(ROOT), PY_BASE=str(self.base), PY_VLLM=str(self.arm),
+        full = chain_env(REPO=str(ROOT), PY_BASE=str(self.base), PY_VLLM=str(self.arm),
                           SESSION_ROOT=str(self.sessions), RESULTS_ROOT=str(self.root / "results"),
                           MOE_RESULTS_DIR=str(self.results), WORKSPACE=str(self.root),
                           END_SUITE="skip", G_LADDER="1 16", SEEDS="0 1 2",
@@ -983,6 +1057,39 @@ def test_a_pilot_with_no_report_stops_the_chain(tmp_path):
     assert "STOP: r3-g1-s0's V8 is unread: no report.json, not PASS" in got.stdout
 
 
+def test_a_callers_session_does_not_steer_a_chain_this_file_spawns(tmp_path, monkeypatch):
+    """On the pod this file runs inside the chain's end suite. A SESSION= in
+    the caller's environment turned every --resume here into a refusal, and
+    every plain pass here into a pass in the caller's directory."""
+    real = tmp_path / "the-operators-session"
+    monkeypatch.setenv("SESSION", str(real))
+    monkeypatch.setenv("END_SUITE", "run")
+    pod = Pod(tmp_path)
+    s = pod.session()
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert got.returncode == 0, got.stdout[-2500:] + got.stderr[-800:]
+    assert f"alpha(G) chain  {s.name}   (RESUMED)" in got.stdout
+    assert not real.exists()
+
+
+def test_the_end_suite_sees_neither_the_opinion_nor_the_operators_knobs(tmp_path, monkeypatch):
+    """The operator's documented `SESSION=<dir> bash scripts/alpha_g_chain.sh`,
+    end to end: pytest is started without SESSION and every other knob the
+    chain reads, and without an OPINION."""
+    monkeypatch.delenv("OPINION", raising=False)
+    pod = Pod(tmp_path)
+    s = pod.session()
+    seen = tmp_path / "pytest-seen.txt"
+    got = pod.run(SESSION=str(s), G_LADDER="1", SEEDS="0", END_SUITE="run",
+                  STUB_PYTEST=str(seen))
+    assert got.returncode == 0, got.stdout[-2500:] + got.stderr[-800:]
+    (line,) = seen.read_text().splitlines()
+    names = set(line.split("\t", 1)[1].split())
+    assert "STUB_PLAN" in names, "the planted world reaches pytest"
+    assert names.isdisjoint([*KNOBS, "OPINION"]), sorted(names & {*KNOBS, "OPINION"})
+    assert _rows(s / "CHAIN.tsv")[-1][:2] == ["suite", "DONE"]
+
+
 def test_a_driver_refusal_stops_the_chain_before_any_arm(tmp_path):
     """The real driver, pointed at this session: it cannot name the planted
     card, refuses with exit 2, and the chain stops, although the ARMS.tsv a
@@ -1038,8 +1145,8 @@ def test_a_concurrent_chain_on_the_session_is_refused(tmp_path):
 
 
 def test_a_measuring_run_off_a_card_is_refused_with_the_probes_reason(tmp_path):
-    env = laptop_env(REPO=str(ROOT), SESSION_ROOT=str(tmp_path / "session"),
-                     RESULTS_ROOT=str(tmp_path / "results"), WORKSPACE=str(tmp_path))
+    env = chain_env(REPO=str(ROOT), SESSION_ROOT=str(tmp_path / "session"),
+                    RESULTS_ROOT=str(tmp_path / "results"), WORKSPACE=str(tmp_path))
     env.pop("MOE_RESULTS_DIR", None)
     got = subprocess.run(["bash", str(CHAIN)], capture_output=True, text=True, timeout=300, env=env)
     assert got.returncode == 2, got.stdout[-2000:]
@@ -1059,9 +1166,9 @@ def test_a_dry_run_into_an_existing_session_is_refused(tmp_path, args, env):
     (s / "chain-logs" / "r3-g1-s0.log").write_text("experiment  private_weight_reference / REAL\n")
     if env.get("SESSION") == "named":
         env = {"SESSION": str(s)}
-    full = laptop_env(REPO=str(ROOT), SESSION_ROOT=str(tmp_path / "session"),
-                      RESULTS_ROOT=str(tmp_path / "results"), WORKSPACE=str(tmp_path),
-                      MOE_RESULTS_DIR=str(tmp_path / "results" / "gaps-nocard"), **env)
+    full = chain_env(REPO=str(ROOT), SESSION_ROOT=str(tmp_path / "session"),
+                     RESULTS_ROOT=str(tmp_path / "results"), WORKSPACE=str(tmp_path),
+                     MOE_RESULTS_DIR=str(tmp_path / "results" / "gaps-nocard"), **env)
     got = subprocess.run(["bash", str(CHAIN), *args], capture_output=True, text=True,
                          timeout=300, env=full)
     assert got.returncode == 2, got.stdout[-2000:]
@@ -1078,10 +1185,9 @@ def test_a_dry_run_into_an_existing_session_is_refused(tmp_path, args, env):
 @pytest.fixture(scope="module")
 def dry(tmp_path_factory):
     root = tmp_path_factory.mktemp("chain")
-    env = laptop_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
-                     SESSION_ROOT=str(root / "session"), RESULTS_ROOT=str(root / "results"),
-                     MOE_RESULTS_DIR=str(root / "results" / "gaps-nocard"), WORKSPACE=str(root))
-    env.pop("END_SUITE", None)
+    env = chain_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
+                    SESSION_ROOT=str(root / "session"), RESULTS_ROOT=str(root / "results"),
+                    MOE_RESULTS_DIR=str(root / "results" / "gaps-nocard"), WORKSPACE=str(root))
     before = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"],
                             capture_output=True, text=True).stdout
     got = subprocess.run(["bash", str(CHAIN), "--dry-run"], capture_output=True,
@@ -1163,9 +1269,9 @@ def test_a_results_dir_without_the_card_is_refused_before_anything_is_made(tmp_p
     does not carry the card is refused, exit 2, and no session directory is
     opened. The suite's results sandbox is exactly such a directory, so without
     this the chain would open a session and then watch the driver refuse."""
-    env = laptop_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
-                     SESSION_ROOT=str(tmp_path / "session"), RESULTS_ROOT=str(tmp_path / "results"),
-                     MOE_RESULTS_DIR=str(tmp_path / "plain"), WORKSPACE=str(tmp_path))
+    env = chain_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
+                    SESSION_ROOT=str(tmp_path / "session"), RESULTS_ROOT=str(tmp_path / "results"),
+                    MOE_RESULTS_DIR=str(tmp_path / "plain"), WORKSPACE=str(tmp_path))
     got = subprocess.run(["bash", str(CHAIN), "--dry-run"], capture_output=True, text=True,
                          timeout=600, env=env)
     assert got.returncode == 2, got.stdout[-1500:]

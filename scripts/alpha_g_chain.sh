@@ -91,6 +91,9 @@
 #   suite          the whole suite, uncapped, from PY_BASE, AFTER every arm:
 #                  a record of this box that gates nothing, its row in the
 #                  ledger. END_SUITE=skip writes a SKIPPED row instead.
+#                  Both pytest steps run with this chain's own knobs (SESSION,
+#                  END_SUITE, G_LADDER and the rest of CHAIN_KNOBS) removed
+#                  from their environment: the suite's tests spawn this chain.
 #
 # THE REGIME WORD, per G, off R1's interval through the arm's own band_of:
 #   RAW-STANDS        wholly below 0.25: the per-tile cost is a traffic
@@ -264,10 +267,13 @@ skip_row() {
   printf '%-16s %-10s %s\n' "$1" SKIPPED "$2"
 }
 
-#: Run one step and write its row. $1 name, $2 log, $3.. the command. The
-#: command's exit code is captured directly: never `cmd | tee`, which reports
-#: tee's. Returns the command's rc. The state is decided by OPINION:
-#:   page    (default) the arm's RESULT lines must support its exit code.
+#: Run one step and write its row. $1 the opinion, $2 name, $3 log, $4.. the
+#: command. The command's exit code is captured directly: never `cmd | tee`,
+#: which reports tee's. Returns the command's rc. The opinion is an ARGUMENT,
+#: never an environment variable: `OPINION=suite f` on a function exports it
+#: to every child of f, and the end suite's own tests then scored their rows
+#: with it. The state is decided by the opinion:
+#:   page    (run_step) the arm's RESULT lines must support its exit code.
 #:   driver  the preconditions step, the driver sequencing arms, which prints
 #:           no RESULT line of its own: exit 0 is DONE, exit 2 is REFUSED (one
 #:           of its gates refused the card or the ruler), and ANY OTHER CODE
@@ -281,13 +287,13 @@ skip_row() {
 #:           code is ERROR. Never a latched word unless DONE, so a red run
 #:           re-runs on --resume. The note is pytest's tally.
 #:   collect a dry run's `pytest --collect-only`: DONE when it collected.
-run_step() {
-  local name="$1" log="$2"; shift 2
+run_step_as() {
+  local opinion="$1" name="$2" log="$3"; shift 3
   local rc=0 t0 secs implied state note tally
   t0="$(date +%s)"
   "$@" > "$log" 2>&1 || rc=$?
   secs="$(( $(date +%s) - t0 ))"
-  case "${OPINION:-page}" in
+  case "$opinion" in
     driver)
       case "$rc" in
         0) state=DONE; note="the driver's own ARMS.tsv carries each arm's second opinion" ;;
@@ -324,10 +330,44 @@ run_step() {
   return "$rc"
 }
 
+#: An arm's step, its page's RESULT lines the second opinion. $1 name, $2 log,
+#: $3.. the command.
+run_step() { run_step_as page "$@"; }
+
+#: Every variable this chain reads from its environment. A pytest step runs
+#: WITHOUT them: the suite's tests spawn this chain and the driver with
+#: os.environ merged in, so an operator's SESSION=<dir> or END_SUITE=skip
+#: reached those children and steered them into the real session.
+#: MOE_RESULTS_DIR stays (tests/conftest.py sandboxes it), and so do PY_BASE
+#: and PY_VLLM (tests/_hermetic.py replaces them).
+CHAIN_KNOBS="REPO SESSION SESSION_ROOT RESULTS_ROOT WORKSPACE G_LADDER SEEDS R3_DUTY R1_DUTY RATE_USD_H SUITE_S_PER_TEST SUITE_TIMEOUT_S GPU_TESTS_TIMEOUT_S END_SUITE LOCK_TOOL CAPABILITY"
+without_knobs() {
+  local -a unset_args=()
+  local k
+  for k in $CHAIN_KNOBS; do unset_args+=(-u "$k"); done
+  env ${unset_args[@]+"${unset_args[@]}"} "$@"
+}
+
 #: The tests' interpreter must NOT import vLLM: the tests plant every refusal
 #: door, and from a venv with vLLM an unplanted bare --run would MEASURE
 #: (pod_session.sh P11c). Returns 0 when the interpreter is safe.
 suite_interpreter_ok() { ! "$1" -c "import vllm" >/dev/null 2>&1; }
+
+#: A pytest step: the interpreter refusal, the timeout wrapper, the run.
+#: $1 the step's name, $2 the timeout in seconds, $3.. pytest's arguments.
+pytest_step() {
+  local name="$1" secs="$2"; shift 2
+  local -a tmo=()
+  if ! suite_interpreter_ok "$PY_BASE"; then
+    printf '%s\tREFUSED\t2\t0\t%s\t-\t%s\n' "$name" "$(dirty_count)" \
+      "the interpreter $PY_BASE imports vllm; an unplanted --run would MEASURE" >> "$LEDGER"
+    printf '%-16s %-10s %s\n' "$name" REFUSED "$PY_BASE imports vllm; set PY_BASE to the venv without it"
+    return 0
+  fi
+  command -v timeout >/dev/null 2>&1 && tmo=(timeout --signal=INT --kill-after=60 "$secs")
+  run_step_as suite "$name" "$LOGS/$name.log" in_repo without_knobs ${tmo[@]+"${tmo[@]}"} \
+    "$PY_BASE" -m pytest "$@" || true
+}
 
 #: Go on past a gate on its flag, and write that decision to the ledger as its
 #: own OVERRIDDEN row, so it travels with the results. $1 the row's name, $2
@@ -806,22 +846,6 @@ r3_step() {   # $1 G, $2 seed
   fi
 }
 
-#: A pytest step: the interpreter refusal, the timeout wrapper, the run.
-#: $1 the step's name, $2 the timeout in seconds, $3.. pytest's arguments.
-pytest_step() {
-  local name="$1" secs="$2"; shift 2
-  local -a tmo=()
-  if ! suite_interpreter_ok "$PY_BASE"; then
-    printf '%s\tREFUSED\t2\t0\t%s\t-\t%s\n' "$name" "$(dirty_count)" \
-      "the interpreter $PY_BASE imports vllm; an unplanted --run would MEASURE" >> "$LEDGER"
-    printf '%-16s %-10s %s\n' "$name" REFUSED "$PY_BASE imports vllm; set PY_BASE to the venv without it"
-    return 0
-  fi
-  command -v timeout >/dev/null 2>&1 && tmo=(timeout --signal=INT --kill-after=60 "$secs")
-  OPINION=suite run_step "$name" "$LOGS/$name.log" in_repo ${tmo[@]+"${tmo[@]}"} \
-    "$PY_BASE" -m pytest "$@" || true
-}
-
 # --------------------------------------------------------------------------
 # 1. preflight: the scorers, proven on this interpreter
 # --------------------------------------------------------------------------
@@ -841,7 +865,8 @@ echo; echo "== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 
 if ! latched preconditions "$LEDGER" || (( DRY )); then
   pre_flags=(--only thermal,calibrate,pin_probe-n64-g1)
   (( DRY )) && pre_flags+=(--dry-run)
-  SESSION="$SESSION" OPINION=driver run_step preconditions "$LOGS/preconditions.log" bash "$REPO/scripts/h200_gaps_session.sh" "${pre_flags[@]}" || true
+  run_step_as driver preconditions "$LOGS/preconditions.log" \
+    env SESSION="$SESSION" bash "$REPO/scripts/h200_gaps_session.sh" "${pre_flags[@]}" || true
 fi
 (( DRY )) || preconditions_gate "$SESSION/ARMS.tsv" || stop_chain
 
@@ -851,8 +876,8 @@ fi
 echo; echo "== tests/test_gpu.py on this card, from the base venv (gated)"
 if (( DRY )); then
   # a dry run COLLECTS and prices; off a card every one of them would skip
-  OPINION=collect run_step gpu-tests "$LOGS/gpu-tests.log" in_repo "$PY_BASE" -m pytest tests/test_gpu.py \
-    --collect-only -q -p no:cacheprovider || true
+  run_step_as collect gpu-tests "$LOGS/gpu-tests.log" in_repo without_knobs "$PY_BASE" -m pytest \
+    tests/test_gpu.py --collect-only -q -p no:cacheprovider || true
   read -r GPU_TESTS_N GPU_TESTS_S < <(price_tests "$LOGS/gpu-tests.log")
   echo "    priced ${GPU_TESTS_S} s: $GPU_TESTS_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"
 elif ! latched gpu-tests "$LEDGER" && ! (( PAST_GPU_TESTS )); then
@@ -912,7 +937,7 @@ if [[ "$END_SUITE" == skip ]]; then
 elif (( DRY )); then
   # a dry run COLLECTS and prices; running it here would take the laptop 20
   # minutes and run this chain's own dry-run tests inside itself
-  OPINION=collect run_step suite "$LOGS/suite.log" in_repo "$PY_BASE" -m pytest tests/ \
+  run_step_as collect suite "$LOGS/suite.log" in_repo without_knobs "$PY_BASE" -m pytest tests/ \
     --collect-only -q -p no:cacheprovider || true
   read -r SUITE_N SUITE_S < <(price_tests "$LOGS/suite.log")
   echo "    priced ${SUITE_S} s: $SUITE_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"

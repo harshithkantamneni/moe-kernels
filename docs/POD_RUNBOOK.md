@@ -389,7 +389,11 @@ It runs, in order:
    SKIPPED row for seeds 1 and 2 (not latched), which are not run.
 7. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
    every arm: a record of the box that gates nothing. `END_SUITE=skip` writes
-   a SKIPPED row instead, for a resume that owes one arm.
+   a SKIPPED row instead, for a resume that owes one arm. Both pytest steps
+   run without the chain's own knobs in their environment (`SESSION`,
+   `END_SUITE`, `G_LADDER` and the rest of `CHAIN_KNOBS`): the suite's tests
+   spawn the chain, and a `SESSION=<dir>` launch would otherwise steer them
+   into the real session.
 
 **The regime word per G**, read off R1's interval through the arm's own
 `band_of`: RAW-STANDS (wholly below 0.25: the ratio beside it is a re-read
