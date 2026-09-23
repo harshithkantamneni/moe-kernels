@@ -11,6 +11,9 @@
     python scripts/private_weight_reference.py --read RUN1/report.json \
                                                --replicate-of RUN0/report.json
                                        # off GPU: a stored pair re-read, nothing measured
+    python scripts/private_weight_reference.py --probe-check
+                                       # on the card, from the vLLM venv: V8's
+                                       # probe instrument alone, nothing written
 
 WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
 routed expert weight set that is re-read per extra M-tile. Every estimate of it
@@ -218,8 +221,13 @@ is expected to hold if both arms' average power stays where session 4's clock
 was flat (the clock arm's kernel, the study's own call, drew 277-317 W at
 0.25; the private arm reads more bytes and draws more), and V7 checks it: a
 FAIL below full duty is a duty not yet low enough, and its remedy names a
-lower one. When it holds the raw ratio is quotable and no elasticity model
-enters the number. The cost is wall clock, about 1/duty x the kernel time.
+lower one. At 0.25 that means this duty is not yet flat for this arm on this
+card; a lower one is a new design key and runs of its own, read with --read;
+scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a G's seed 0
+it skips the G's later seeds and prints the follow-up command
+(`V7_FAIL_AT_FLAT_DUTY`). When it
+holds the raw ratio is quotable and no elasticity model enters the number.
+The cost is wall clock, about 1/duty x the kernel time.
 THE DEFAULT STAYS 1.0: `duty` is one of `DESIGN_KEYS`, read as 1.0 from a
 report that predates it, so a different default would make every bare
 command a different design from session 4's full-duty runs, which
@@ -267,6 +275,7 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
+import importlib.util
 import json
 import math
 import os
@@ -1922,6 +1931,157 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                        graph_timer=graph_timer, eager_timer=eager_timer)
 
 
+#: The one gate `--probe-check` scores. Not a V number: it is scored before a
+#: page exists, on the op alone, and nothing on the page reads it.
+PROBE_CHECK_TAG = "P1"
+
+
+def probe_check(cfg, *, block_m: int, op=None, sync=None, graph_timer=None,
+                eager_timer=None, device: str = "cuda") -> Gate:
+    """V8's probe instrument checked ON THE CARD, and nothing else. The ONE
+    place this is decided: `--probe-check` prints the gate it returns, and
+    `tests/test_gpu.py::test_the_alignment_probe_is_gpu_time_under_the_graph`
+    asserts it PASSes.
+
+    What it times is the probe's cheapest cell: vLLM's `moe_align_block_size`
+    at tread 1 (`r = BLOCK_M`) with NATIVE's declaration `E`, once EAGERLY
+    (`timing.time_kernel`, the fallback's instrument) and once as the probe
+    times it (`time_probe_cell`, `PROBE_CALLS_PER_REPLAY` calls captured per
+    graph replay by `driver.time_kernel_graph`). PASS needs the three things
+    the probe's design assumes and no laptop can show: the capture is
+    accepted and the cell is graph-timed at that count; the instrument does
+    not call the replay host-bound; and the per-call graph time is under the
+    eager p50 (session 4's eager cells were 25-29 us of interval against
+    32-36 us of host enqueue). Any of them read false is FAIL; no host-bound
+    verdict, or no eager time to compare against, is UNKNOWN.
+
+    `op`, `sync` and the two timers default to the pod's own (vLLM's op,
+    `torch.cuda.synchronize`, the probe's two instruments) and are there for
+    the off-GPU tests, which drive this with fakes on `device="cpu"`. A
+    capture refusal is a FAIL here, not an exception: it is the answer.
+    """
+    from moe.bench import timing
+    if op is None:
+        from vllm.model_executor.layers.fused_moe.moe_align_block_size import (
+            moe_align_block_size as op,
+        )
+    if sync is None:
+        import torch
+        sync = torch.cuda.synchronize
+    if graph_timer is None:
+        from moe.bench.driver import time_kernel_graph as graph_timer
+    if eager_timer is None:
+        eager_timer = timing.time_kernel
+    tokens = SWEEP.tokens_for_rows(cfg, block_m)
+    ids = SWEEP.balanced_ids(cfg, tokens, device)
+    declared = cfg.num_experts
+
+    def call():
+        op(ids, block_m, declared)
+    call()
+    sync()
+    eager = eager_timer(call, warmup_ms=PROBE_WARMUP_MS,
+                        target_ms=PROBE_TARGET_MS, trials=PROBE_TRIALS,
+                        l2_flush=False, reference_clock_mhz=None)
+    eager_ms = float(eager.ms_p50)
+    detail = [f"{cfg.name} BLOCK_M={block_m}, tread 1: {tokens} tokens, "
+              f"{ids.numel()} ids, {declared} experts declared (NATIVE's "
+              "declaration), the op alone"]
+    fails: list[str] = []
+    unknowns: list[str] = []
+    try:
+        cell = time_probe_cell(
+            call, arm=NATIVE, tread=1, numel=ids.numel(), declared=declared,
+            repeat=0, reference_clock=None,
+            calls_per_replay=PROBE_CALLS_PER_REPLAY, graph_timer=graph_timer,
+            eager_timer=eager_timer)
+    except timing.NotCapturable as exc:
+        cell = None
+        fails.append(f"the capture was REFUSED ({str(exc)[:160]}): the probe "
+                     "falls back to timing every cell eagerly, which session "
+                     "4's H200 read host-bound 36 of 36 cells and V8 UNKNOWN; "
+                     "on that fallback V8 is scored only if NATIVE's switch "
+                     "resolves at the census tread")
+        measured = f"capture refused; eager p50 {eager_ms * 1e3:.2f} us per call"
+    if cell is not None:
+        replay = cell.replay_ms if cell.replay_ms is not None else math.nan
+        measured = (f"graph {cell.ms * 1e3:.2f} us per call over "
+                    f"{cell.graph_calls} calls per replay (replay p50 "
+                    f"{replay * 1e3:.2f} us), host-bound {cell.host_bound}; "
+                    f"eager p50 {eager_ms * 1e3:.2f} us per call")
+        if cell.graph_calls != PROBE_CALLS_PER_REPLAY:
+            fails.append(f"the cell was timed at {cell.graph_calls} calls per "
+                         f"replay, not {PROBE_CALLS_PER_REPLAY}")
+        if cell.host_bound is True:
+            fails.append(
+                f"the instrument called a {cell.graph_calls}-call replay "
+                "HOST-BOUND"
+                + (f" ({cell.host_note})" if cell.host_note else "")
+                + ": the launch outran the GPU work, so V8 would read these "
+                "cells as the host's and not the op's. Raise "
+                "PROBE_CALLS_PER_REPLAY (its comment: doubled once) before "
+                "the pilot")
+        elif cell.host_bound is None:
+            unknowns.append("the instrument returned no host-bound verdict "
+                            "for the replay, and an unread verdict is not a "
+                            "clean one")
+        if not math.isfinite(eager_ms) or eager_ms <= 0:
+            unknowns.append("the eager timing returned no p50 to compare the "
+                            "graph's per-call time against")
+        elif not cell.ms < eager_ms:
+            fails.append(f"the graph's per-call time is not under the eager "
+                         f"p50 ({cell.ms * 1e3:.2f} us against "
+                         f"{eager_ms * 1e3:.2f} us), so the graph bought no "
+                         "GPU time over the host-timed eager cell")
+    verdict = FAIL if fails else UNKNOWN if unknowns else PASS
+    return Gate(PROBE_CHECK_TAG, VALIDITY,
+                "vLLM's moe_align_block_size captures under a CUDA graph and "
+                f"a {PROBE_CALLS_PER_REPLAY}-call replay is GPU time: not "
+                "host-bound, per call under the eager p50",
+                verdict, measured,
+                f"graph_calls == {PROBE_CALLS_PER_REPLAY}, host-bound False, "
+                "graph per-call ms < eager p50",
+                "R3's alignment probe cannot time this op as GPU time on this "
+                "build, so V8 can read UNKNOWN and latch the page INVALID after "
+                "the whole ladder is paid for; this check exists to find that "
+                "out before the pilot and not after it",
+                detail + fails + unknowns)
+
+
+def probe_check_refusal() -> str:
+    """"" when `--probe-check` can run in this interpreter, else why not.
+
+    Asked BEFORE anything heavy: torch is imported to ask for the card (every
+    detector in the repo asks `torch.cuda.is_available()`, which is what the
+    suite plants), and vLLM is only LOOKED FOR, so the base venv refuses
+    without importing it.
+    """
+    try:
+        import torch
+    except ImportError:
+        return ("no torch in this interpreter, so no card to time vLLM's "
+                "alignment op on")
+    try:
+        cuda = torch.cuda.is_available()
+    except Exception:                                     # noqa: BLE001
+        cuda = False
+    if not cuda:
+        return ("no CUDA device: --probe-check times vLLM's "
+                "moe_align_block_size on the card and there is no card here. "
+                "Off GPU, the tests drive `probe_check` with fake timers")
+    try:
+        found = importlib.util.find_spec("vllm") is not None
+    except (ImportError, ValueError):
+        found = False
+    if not found:
+        return ("vLLM is not importable in this interpreter, and the op "
+                "--probe-check times is vLLM's. Run it from the vLLM venv "
+                "(scripts/alpha_g_chain.sh does, as PY_VLLM); the base venv "
+                "has no vLLM, which is why the on-card test can only skip "
+                "there")
+    return ""
+
+
 #: What the probe times per tread and repeat: one series per ARM (NATIVE's
 #: declaration, and SHARED's and PRIVATE's id sets at the shared declaration).
 PROBE_LABELS = len(ARMS)
@@ -2317,10 +2477,15 @@ def sample_from_timing(t: CellTiming, **cell) -> Sample:
     return Sample(**cell, **measured, detail=t.note)
 
 
-def duty_of(samples) -> float:
-    """The duty the ladder was timed at, off the rows (the smallest, so a
-    resumed ladder that mixed two is named by the one that mattered)."""
-    return min((s.duty for s in samples if s.status == "ok"), default=1.0)
+def duty_of(samples, default: float | None = 1.0) -> float | None:
+    """The duty the ladder was TIMED at, off the rows that were timed (the
+    smallest, so a resumed ladder that mixed two is named by the one that
+    mattered). `default` is what no timed row reads as: 1.0 for the page's
+    own lines, which print it only beside timed rows; None for report.json's
+    `duty_timed`, where nothing timed is null. NOT the duty a run was asked
+    for, which a page with no timed row (a V8 FAIL's skipped sweep, every
+    cell failed) still has: that is `--duty`, and `analyse` records it."""
+    return min((s.duty for s in samples if s.status == "ok"), default=default)
 
 
 def read_samples(path: Path) -> list[Sample]:
@@ -3329,12 +3494,32 @@ FLAT_DUTY_EVIDENCE = (
     "every tread's median read 1965 MHz and no cell drifted; at duty 0.1, "
     "1965-1980 MHz")
 
+#: WHAT A V7 FAIL AT OR BELOW THE POD SETTING MEANS, AND WHAT FOLLOWS IT: the
+#: owner's reading of 2026-09-22 (finding XS-1), written once for the remedy
+#: the page prints and the plan that promises it. This page named a lower
+#: duty while the session driver's text read the same FAIL the opposite way,
+#: and each was half right: the physical remedy IS a lower duty, and the
+#: chain does NOT act on it.
+V7_FAIL_AT_FLAT_DUTY = (
+    "this duty is not yet flat for this arm on this card. A lower one is a "
+    "new design key (`duty` is one of DESIGN_KEYS, so --replicate-of will not "
+    "pair it with runs at this one): runs of its own, outside the chain's "
+    "PAIRS.tsv, read together with --read on the laptop. "
+    f"scripts/alpha_g_chain.sh, which runs this arm at --duty {FLAT_DUTY} at "
+    "each G (--group-m), does not re-run at it: on a V7 FAIL at a G's seed 0 "
+    "there it skips the G's later seeds and prints the follow-up command")
+
 
 def v7_remedy(duty: float) -> str:
     """What a V7 FAIL tells the operator to do, at the duty the ladder ran.
     BELOW FULL DUTY TOO: a split there is a duty not yet low enough, and a
     FAIL page with no remedy on it leaves the operator to re-run at the same
-    duty rather than lower it."""
+    duty rather than lower it. AT OR BELOW THE POD SETTING the remedy still
+    names a lower duty and says what a run there is and who runs it
+    (`V7_FAIL_AT_FLAT_DUTY`): this duty is not yet flat for this arm on this
+    card; a lower one is a new design key, run by hand and read with --read;
+    scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a G's seed 0
+    it skips the G's later seeds and prints the follow-up command."""
     if duty >= 1.0:
         return (f"the remedy is --duty {FLAT_DUTY}: bursts of kernel time with "
                 "idle gaps lower the arms' average board power until the clock "
@@ -3343,7 +3528,7 @@ def v7_remedy(duty: float) -> str:
             "still split at this duty (each arm's board power, where it was "
             "read, is printed above)"
             + (f"; --duty {FLAT_DUTY} is the pod setting" if duty > FLAT_DUTY
-               else "")
+               else f", so {V7_FAIL_AT_FLAT_DUTY}")
             + f" ({FLAT_DUTY_EVIDENCE})")
 
 
@@ -3364,7 +3549,12 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
     construction whenever the arms draw different power. Below it (DESIGN
     DECISION 15) it holds when the duty is low enough that the clock no
     longer follows power, and a FAIL there says this duty was not; the
-    remedy printed on a FAIL names a lower duty in both cases.
+    remedy printed on a FAIL names a lower duty in both cases. At the pod
+    setting that reads: this duty is not yet flat for this arm on this card,
+    the page names a lower duty, which is a new design key and runs of its
+    own, and scripts/alpha_g_chain.sh does not re-run at it: on a FAIL at a
+    G's seed 0 it skips the G's later seeds and prints the follow-up command
+    (`v7_remedy`).
 
     UNKNOWN, NOT PASS, when a tread has no clock in either arm: an unread
     clock is not a matching one.
@@ -4560,7 +4750,10 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
            "split the cap forces at full duty (session 4 at full duty: the "
            "arm reading less boosted 2-18%). Whether this duty is low enough "
            f"is measured, not assumed ({FLAT_DUTY_EVIDENCE}); V7 checks it "
-           "here and a FAIL names a lower duty; "
+           "here and a FAIL names a lower duty"
+           + (f" (at this duty a FAIL means {V7_FAIL_AT_FLAT_DUTY})"
+              if args.duty <= FLAT_DUTY else "")
+           + "; "
            f"wall clock over the ladder ~{1 / args.duty:.1f}x the kernel time"
            if args.duty < 1.0 else
            ": the queue kept full, the driver's instrument; on a power-capped "
@@ -4742,7 +4935,14 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             copies_declared: int | None = None,
             clock_elasticity: ClockElasticity | None = None,
             run_id: str = "", session_tag: str = "",
-            replicates: tuple = ()) -> Report:
+            replicates: tuple = (), duty: float) -> Report:
+    """The page and report.json from the cells. `duty` is the REQUESTED duty
+    (`--duty`), recorded as the payload's `duty` whatever was timed: a page
+    whose sweep was skipped (V8 FAIL) or whose every cell failed has no
+    timed row, and reading the duty off the rows there wrote 1.0 for a run
+    asked, keyed and instrumented at 0.25. What the rows carry is
+    `duty_timed`, null when nothing was timed. No default: a caller that
+    forgot it would record full duty again."""
     planned = len(treads) * len(ARMS) * repeats
     if census is None:
         census = path_census(cfg, treads, block_m, {
@@ -4956,7 +5156,13 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "pinned": dict(pinned),
         "treads": list(treads),
         "repeats": repeats,
-        "duty": duty_of(samples),
+        # THE DESIGN KEY IS THE REQUESTED DUTY, and the run id and the
+        # instrument carry the same one. `duty_timed` is what the timed rows
+        # carry, null when none was timed; a report written before it has
+        # only `duty`, which was read off the rows and is 1.0 on any page
+        # that timed nothing.
+        "duty": duty,
+        "duty_timed": duty_of(samples, default=None),
         "alpha_refit": alpha,
         "alpha_band": list(ALPHA_BAND),
         "ridge": ridge,
@@ -5942,11 +6148,14 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                     # zeroed rows and exits DONE.
                     raise
                 except Exception as exc:                  # noqa: BLE001
+                    # THE REQUESTED DUTY, as a timed row carries it through
+                    # `time_cell`: the column's default is 1.0, and a failed
+                    # cell at 0.25 was written as a full-duty row.
                     sample = Sample(
                         arm=arm, repeat=rep, block_m=block_m, tiles=n,
                         rows_per_expert=n * block_m, tokens=tokens,
                         copies=copies, experts_declared=experts, ms_p50=0.0,
-                        status="failed",
+                        status="failed", duty=args.duty,
                         detail=f"{type(exc).__name__}: {exc}")
                     print(f"  {arm} n={n} rep={rep} FAILED  {sample.detail}")
                 samples.append(sample)
@@ -6287,6 +6496,19 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, and "
                          "REFUSE: nothing is measured and no gate is scored")
+    ap.add_argument("--probe-check", action="store_true",
+                    help="run ONLY the V8 alignment probe's on-card check, "
+                         "the one tests/test_gpu.py::test_the_alignment_probe"
+                         "_is_gpu_time_under_the_graph performs: vLLM's "
+                         "moe_align_block_size at tread 1 of --model at "
+                         "--block-m, timed eagerly and under a CUDA graph of "
+                         f"{PROBE_CALLS_PER_REPLAY} calls per replay; one "
+                         "RESULT line, P1, exit 0 PASS or 3 FAIL/UNKNOWN. "
+                         "scripts/alpha_g_chain.sh runs it from the vLLM venv "
+                         "before the pilot, because that venv has no pytest "
+                         "and in the base venv the on-card test can only skip "
+                         "(no vLLM). Measures nothing else and writes nothing; "
+                         "REFUSED (2) with no CUDA device or no vLLM")
     ap.add_argument("--self-test", default=None, choices=sorted(WORLDS),
                     help="score the gates against a planted world, off GPU")
     ap.add_argument("--plant-noise", type=float, default=0.004,
@@ -6328,6 +6550,10 @@ def _main(argv=None) -> int:
     which the ledger already reads as a finished result.
     """
     args = build_parser().parse_args(argv)
+    if args.probe_check:
+        # FIRST, and on its own: the chain runs it from the vLLM venv before
+        # the pilot, and it needs neither a ridge nor a plan.
+        return _probe_check_mode(args)
     if args.read is not None:
         # BEFORE the partition check, the ridge and the card: a stored pair is
         # re-read on a laptop with none of them.
@@ -6695,7 +6921,7 @@ def _main(argv=None) -> int:
         prov=_observed_iters(prov, samples), probe=probe, census=census,
         copies_declared=copies_declared, clock_elasticity=clock_elasticity,
         run_id=run_id, session_tag=args.session_tag,
-        replicates=tuple(replicates))
+        replicates=tuple(replicates), duty=args.duty)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -6776,6 +7002,13 @@ def _read_mode(args) -> int:
     for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
                 "repeats", "copies_declared", "duty"):
         print(f"{key:<12}{payload.get(key, DESIGN_KEY_DEFAULTS.get(key))}")
+    # What the rows were timed at, beside the requested duty above. Absent
+    # from a report written before the key, whose `duty` was read off the
+    # rows; null when nothing was timed.
+    timed = payload.get("duty_timed", "unrecorded (a report written before "
+                                      "duty_timed)")
+    print(f"{'duty timed':<12}"
+          + ("none (nothing was timed)" if timed is None else str(timed)))
     print(f"session     {payload.get('session_tag') or '(unrecorded)'}")
     print(f"measured    {prov.get('utc') or 'utc unrecorded'} on "
           f"{prov.get('hostname') or 'an unrecorded host'}, tree "
@@ -6797,6 +7030,48 @@ def _read_mode(args) -> int:
         print("REFUSED: the stored report carries no gates")
         return exit_codes.REFUSED
     rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+def _probe_check_mode(args) -> int:
+    """PROBE-CHECK MODE: `probe_check` on the attached card, its one gate
+    printed, the exit `classify` over it (0 PASS, 3 FAIL or UNKNOWN). REFUSED
+    (2) before anything heavy is imported when there is no card or no vLLM,
+    when vLLM's op does not import (an import that drifted), and beside
+    another mode, which it would otherwise silently drop. Nothing is written:
+    no run id, no results directory, no report."""
+    other = [flag for flag, given in (
+        ("--read", args.read is not None),
+        ("--replicate-of", bool(args.replicate_of)),
+        ("--self-test", args.self_test is not None),
+        ("--dry-run", args.dry_run)) if given]
+    if other:
+        print(f"REFUSED: --probe-check is a mode of its own and measures one "
+              f"thing; drop {' and '.join(other)}")
+        return exit_codes.REFUSED
+    cfg = MODEL_CONFIGS[args.model]
+    why = identity_tread_refusal(cfg, args.block_m)
+    if why:
+        print(f"REFUSED: {why}")
+        return exit_codes.REFUSED
+    missing = probe_check_refusal()
+    if missing:
+        print(f"REFUSED: {missing}")
+        return exit_codes.REFUSED
+    print(f"PROBE CHECK: V8's alignment probe instrument on this card, alone "
+          f"({args.model}, BLOCK_M={args.block_m}); nothing else is measured "
+          "and nothing is written")
+    try:
+        gate = probe_check(cfg, block_m=args.block_m)
+    except ImportError as exc:
+        # vLLM was found and its op was not where this imports it from: an
+        # import that drifted, which the exit-code table calls REFUSED.
+        print(f"REFUSED: vLLM is installed and the op --probe-check times did "
+              f"not import ({exc}); nothing was timed")
+        return exit_codes.REFUSED
+    print("\n".join(gate.render()))
+    rc = exit_codes.classify([gate.scored()])
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 
