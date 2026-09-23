@@ -115,12 +115,17 @@ def no_cuda(monkeypatch):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
 
-#: What `an_h200` reports for device 0: the pod's own card as torch describes
-#: it, so a detector that reads the name, the capability or the SM count on a
-#: pod reads the same values here.
+#: What `an_h200` reports for device 0: the session-5 pod's own card as torch
+#: described it, so a detector that reads the name, the capability, the SM
+#: count, the L2 size or the memory size on a pod reads the same values here.
+#: Every field is copied from that pod's row, not from a spec sheet: the
+#: pin-probe CSV `alpha_g-nvidia_h200-20260923T163248Z/pin-probe-n64-g1/
+#: run_7d76ae4fe744_vllm.csv` records gpu_name NVIDIA H200, sm_capability 9.0,
+#: sm_count 132, l2_bytes 62914560 and total_memory 150109880320, and the
+#: pod's calibrate wrote the same l2_bytes into its ruler.
 PLANTED_H200 = types.SimpleNamespace(
     name="NVIDIA H200", major=9, minor=0, multi_processor_count=132,
-    total_memory=150_121_644_032, L2_cache_size=50_331_648)
+    total_memory=150_109_880_320, L2_cache_size=62_914_560)
 
 
 @pytest.fixture
@@ -128,7 +133,8 @@ def an_h200(monkeypatch):
     """Plant the attached-card world in THIS process: the mirror of `no_cuda`.
 
     torch.cuda answers every DETECTOR question the way the session-5 pod did
-    (available, one device, 'NVIDIA H200', sm_90, 132 SMs), so a test can walk
+    (available, one device, 'NVIDIA H200', sm_90, 132 SMs, a 60 MiB L2 and
+    the memory size `PLANTED_H200` cites), so a test can walk
     the pod's detection path on a laptop and fail there first. Session 5's pod
     suite failed ten tests on paths no laptop could reach: a self-test whose
     planted worlds stood on the ATTACHED card's roof, and tests asserting the
