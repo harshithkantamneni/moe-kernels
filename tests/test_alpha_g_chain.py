@@ -1130,6 +1130,52 @@ def test_the_tables_carry_a_legend_off_the_arms_own_constants(tmp_path):
     assert "95% percentile bootstrap" in legend
 
 
+def _default(knob: str) -> str:
+    """A knob's default, off its own `KNOB="${KNOB:-default}"` line."""
+    m = re.search(rf'^{knob}="\$\{{{knob}:-([^}}]*)\}}"$', CODE, re.M)
+    assert m, knob
+    return m.group(1)
+
+
+def test_the_legend_names_the_states_r1s_secant_spans(tmp_path):
+    """The legend called R1's word 'a SECANT between R1's capped duty
+    states', written when the states were 1.0 0.7 0.5. At 1.0 0.5 0.25 only
+    1.0 held session 5's H200 on its power cap, and R3's duty 0.25 is one of
+    R1's own states. The legend names the states this session's R1 ran and
+    R3's duty, as PAIRS-fixed.tsv reads them, and what the secant spans at the
+    chain's own defaults, R1_DUTY's and R3_DUTY's."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    _seeded(session, results, 1, {0: (0.95, 0.94, 0.96, "PASS")})
+    # an R1 run at states other than the defaults: the legend names what ran
+    (results / "clock_elasticity" / "rid-r1-g1").mkdir(parents=True)
+    (results / "clock_elasticity" / "rid-r1-g1" / "report.json").write_text(json.dumps(
+        {"elasticity": {"value": 0.5, "lo": 0.45, "hi": 0.55}, "duty": [1.0, 0.7, 0.5],
+         "gates": []}))
+    (session / "chain-logs" / "r1-g1.log").write_text(
+        "experiment  clock_elasticity / rid-r1-g1\n")
+    H.pairs_table(session, results, "1", "0", {"r1_duty": "--duty 1.0 0.6 0.3"})
+    fixed = {ln.split("\t")[0]: ln.split("\t")[1]
+             for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
+    assert (fixed["r1_duty"], fixed["r3_duty"]) == ("1.0 0.7 0.5", "0.25"), fixed
+    legend = " ".join((session / "PAIRS-README.txt").read_text().split())
+    assert "capped duty states" not in legend
+    assert "It is a SECANT across R1's duty states, not a local reading at R3's duty" in legend
+    assert (f"This session's R1 states: {fixed['r1_duty']}; R3's duty: {fixed['r3_duty']}"
+            " (PAIRS-fixed.tsv's r1_duty and r3_duty)") in legend
+    r1, r3 = _default("R1_DUTY").split(), _default("R3_DUTY")
+    assert r1[0] == "1.0" and r3 == r1[-1], "the sentence below is about these defaults"
+    assert (f"At the chain's defaults, R1_DUTY {' '.join(r1)} and R3_DUTY {r3}, the secant"
+            f" runs from the capped clock at {r1[0]} to the clocks at {' and '.join(r1[1:])}"
+            ) in legend
+    assert f"R3's {r3} is the top of that range" in legend
+    # a session with no R1 report yet names the chain's command line, not the flag
+    fresh = tmp_path / "fresh"
+    _seeded(fresh, results, 4, {0: (0.7, 0.69, 0.71, "PASS")})
+    H.pairs_table(fresh, results, "4", "0", {"r1_duty": f"--duty {' '.join(r1)}"})
+    legend = " ".join((fresh / "PAIRS-README.txt").read_text().split())
+    assert f"This session's R1 states: {' '.join(r1)}; R3's duty: {r3}" in legend
+
+
 def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
     session, results = tmp_path / "s", tmp_path / "res"
     (session / "chain-logs").mkdir(parents=True)

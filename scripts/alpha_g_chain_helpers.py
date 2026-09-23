@@ -366,9 +366,13 @@ def by_g(g: str, reports: list[str]) -> tuple[list[str], str]:
              ("seed " + ", seed ".join(invalid)) if invalid else "none"], note or "none")
 
 
-def pairs_readme() -> str:
+def pairs_readme(r1_duty: str = "none", r3_duty: str = "none") -> str:
     """PAIRS-README.txt: what every column of the three tables means, the
-    interval widths read off the arms (R3's INTERVAL_PCT and ALPHA_BAND)."""
+    interval widths read off the arms (R3's INTERVAL_PCT and ALPHA_BAND), and
+    the duty states R1's word is a secant across and R3's duty, as
+    PAIRS-fixed.tsv's r1_duty and r3_duty rows read them (pairs_table passes
+    those values). The sentence on the chain's defaults names R1_DUTY's and
+    R3_DUTY's defaults in scripts/alpha_g_chain.sh; a test holds it to them."""
     import private_weight_reference as PWR
     pct = f"{PWR.INTERVAL_PCT:.0f}%"
     band = f"[{PWR.ALPHA_BAND[0]}, {PWR.ALPHA_BAND[1]})"
@@ -406,8 +410,14 @@ PAIRS.tsv, one row per ratio run (private_weight_reference), G then seed:
                        (clock_elasticity.fit's 2.5th and 97.5th percentiles), the
                        regime word off that interval, and R1's own exit word. The
                        word is withheld (`withheld:<EXIT>`) from a page whose gates
-                       did not stand behind it. It is a SECANT between R1's capped
-                       duty states, not a reading at R3's duty.
+                       did not stand behind it. It is a SECANT across R1's duty
+                       states, not a local reading at R3's duty. This session's R1
+                       states: {r1_duty}; R3's duty: {r3_duty} (PAIRS-fixed.tsv's
+                       r1_duty and r3_duty). At the chain's defaults, R1_DUTY
+                       1.0 0.5 0.25 and R3_DUTY 0.25, the secant runs from the
+                       capped clock at 1.0 to the clocks at 0.5 and 0.25 (on
+                       session 5's H200 only 1.0 held the 700 W cap), and R3's
+                       0.25 is the top of that range.
 
 PAIRS-by-G.tsv, one row per G, THE PER-G VALUE: every seed of that G whose report
 formed a ratio, whatever order the seeds ran in, read together by R3's own
@@ -536,8 +546,9 @@ def pairs_table(session: str | Path, results: str | Path, ladder: str, seeds: st
     disk, in ladder order; the R1 columns are `eta` for the G. PAIRS-by-G.tsv:
     one row per G of the ladder, every seed read together (`by_g`). The
     coordinates every row shares (model, tile, pinned config, treads,
-    repeats, duty) go in the sidecar with where each came from. Returns the
-    number of PAIRS.tsv rows.
+    repeats, duty) go in the sidecar with where each came from, and the legend
+    names the sidecar's r1_duty and r3_duty. Returns the number of PAIRS.tsv
+    rows.
     """
     session, settings = Path(session), dict(settings or {})
     rows, by_g_rows, r3_payloads, r1_payloads = [], [], [], []
@@ -563,9 +574,6 @@ def pairs_table(session: str | Path, results: str | Path, ladder: str, seeds: st
     header = reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
     _write_tsv(session / "PAIRS.tsv", [header, *rows])
     _write_tsv(session / "PAIRS-by-G.tsv", [BY_G_HEADER, *by_g_rows])
-    tmp = session / "PAIRS-README.txt.tmp"
-    tmp.write_text(pairs_readme())
-    os.replace(tmp, session / "PAIRS-README.txt")
     fixed = [
         ["key", "value", "source"],
         _fixed("model", r3_payloads, "model", fallback=settings.get("model")),
@@ -582,6 +590,12 @@ def pairs_table(session: str | Path, results: str | Path, ladder: str, seeds: st
         ["r1_repeats", settings.get("r1_repeats", "none"), "the chain's command line"],
     ]
     _write_tsv(session / "PAIRS-fixed.tsv", fixed)
+    # the legend names the duties the fixed rows read, without the flag a
+    # value off the chain's command line carries
+    duty = {r[0]: r[1].removeprefix("--duty ") for r in fixed[1:]}
+    tmp = session / "PAIRS-README.txt.tmp"
+    tmp.write_text(pairs_readme(duty["r1_duty"], duty["r3_duty"]))
+    os.replace(tmp, session / "PAIRS-README.txt")
     return len(rows)
 
 
