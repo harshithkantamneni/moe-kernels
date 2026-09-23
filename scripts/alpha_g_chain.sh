@@ -10,8 +10,12 @@
 #   bash scripts/alpha_g_chain.sh --resume           # continue the newest one holding CHAIN.tsv
 #   SESSION=<dir> bash scripts/alpha_g_chain.sh      # continue a named one
 #   bash scripts/alpha_g_chain.sh --resume --past-gpu-tests   # go on past a red test_gpu.py, recorded
-#   bash scripts/alpha_g_chain.sh --resume --past-v8          # go on past the pilot's V8, recorded
+#   bash scripts/alpha_g_chain.sh --resume --past-v8          # go on past the probe check or the pilot's V8, recorded
 #   END_SUITE=skip bash scripts/alpha_g_chain.sh --resume     # the end suite as a SKIPPED row
+# AN OVERRIDE HOLDS. Its decision is written to the ledger as its own
+# OVERRIDDEN row, and every later pass of the session reads that row back: a
+# plain --resume after it goes on past the same gate without the flag, and
+# says so on the console.
 #
 # ON THE POD, FIRST. The volume's clone carries the last session's ruler yaml
 # modified, and git will not switch branches over it, even when it is
@@ -21,14 +25,16 @@
 #   git -C /workspace/moe-kernels checkout -B r3-align origin/r3-align
 #   git -C /workspace/moe-kernels log -1 --format=%h   # must print the head that was pushed
 # Then launch it DETACHED, so a dropped ssh session does not take a run of
-# four hours and more with it, and watch the log and the ledger:
+# four hours and more with it, and watch the log and the ledger. The console
+# APPENDS (>>): a --resume launched the same way keeps the earlier passes'
+# lines, and the exfil line printed at the end carries that file:
 #   cd /workspace/moe-kernels && nohup setsid bash scripts/alpha_g_chain.sh \
-#       > /workspace/alpha_g_chain.out 2>&1 < /dev/null &
+#       >> /workspace/alpha_g_chain.out 2>&1 < /dev/null &
 #   tail -f /workspace/alpha_g_chain.out       # and $SESSION/CHAIN.tsv, one row per step
 # The chain's calibrate re-dirties that yaml: --publish writes this card's
 # ruler into the tracked file, every row after it carries git_dirty, and the
-# yaml is committed WITH the results. The exfil line printed at the end
-# carries it and calibrate's own run directory.
+# yaml is committed WITH the results. The exfil line carries it and
+# calibrate's own run directory.
 #
 # WHICH SESSION. A bare run REFUSES when a chain session for this card already
 # holds CHAIN.tsv: every R1 and R3 run id carries the session's tag, so a
@@ -41,10 +47,14 @@
 # (the probe's reason is printed); it holds a lock on the session for the
 # whole run (a second chain on it is refused; a held flock, the pod's, is never
 # taken over, since its holder may be an arm a killed chain left running, and
-# only the mkdir fallback's --resume takes over a lock whose pid is dead or
-# whose host differs); and it records the card's UUID in
-# $SESSION/DEVICE, refusing a resume on another card: R1's run id carries no
-# UUID, so its resume would pool two cards' cells into one elasticity.
+# the refusal names fuser, lsof and a ps line that needs neither; only the
+# mkdir fallback's --resume takes over a lock whose pid is dead or whose host
+# differs); and on its first pass it records the card's UUID in
+# $SESSION/DEVICE and R3's duty in $SESSION/R3_DUTY, refusing a resume on
+# another card or at another R3_DUTY (--new opens a session at another duty).
+# The DEVICE check refuses before any step runs; R3's DEVICE file and R1's
+# device_guard each refuse a directory measured on another card as well, so a
+# replacement pod's card is refused by either layer alone.
 #
 # WHAT IT RUNS, IN ORDER, and why that order:
 #   preflight      the two arms' --self-test on the box's interpreter: the
@@ -65,33 +75,64 @@
 #                  arm below reads MOE_FORCE_TILE. Both pin through vLLM's
 #                  override_config.
 #   gpu-tests      tests/test_gpu.py on this card, from PY_BASE (the venv
-#                  WITHOUT vLLM): the timing, clock and graph primitives both
-#                  arms stand on, on the card that will time them, in minutes.
-#                  Not green STOPS the chain, and an exit 0 in which no test
-#                  passed is not green (off a card every one of them skips);
+#                  WITHOUT vLLM): the timing and clock primitives both arms
+#                  stand on, on the card that will time them, in minutes. It
+#                  does NOT cover the graph probe R3's V8 stands on: that one
+#                  test imports vLLM and SKIPS from PY_BASE. Not green STOPS
+#                  the chain, and an exit 0 in which no test passed is not
+#                  green (off a card every one of them skips);
 #                  --past-gpu-tests goes on and writes that decision to the
 #                  ledger.
+#   probe-check    scripts/private_weight_reference.py --probe-check from
+#                  PY_VLLM: that skipped test's on-card check alone
+#                  (moe_align_block_size captured under a CUDA graph, the
+#                  calls per replay as registered, not host-bound, the graph's
+#                  per-call time under the eager p50), about a minute, before
+#                  the pilot spends a ten-minute ladder finding the same
+#                  thing. Not DONE STOPS the chain and names the page. It runs
+#                  again on every pass until it is DONE, since its remedy is a
+#                  code change (PROBE_CALLS_PER_REPLAY) and a --resume after it
+#                  must re-prove the probe; --past-v8, the same instrument as
+#                  the pilot's V8, goes on and writes that decision to the
+#                  ledger.
 #   r3-g<G>-s0     scripts/private_weight_reference.py at --duty 0.25, every G
-#                  at seed 0 first, so the ratio arm's never-run paths (the V8
-#                  alignment probe under the graph, the duty timer) meet the
-#                  card minutes in, not an hour in. At 0.25 session 4's clock
-#                  arm sat flat at the ceiling; at 0.5 it still tracked board
-#                  power. The chain STOPS after r3-g1-s0 when its V8 is not
-#                  PASS, and when it wrote no report.json: V8 describes the
-#                  instrument, not G, so every later page would repeat it;
-#                  --past-v8 goes on and writes that decision to the ledger.
+#                  at seed 0 first, so the ratio arm's never-run paths (the
+#                  duty timer, the probe inside a page) meet the card minutes
+#                  in, not an hour in. At 0.25 session 4's clock arm sat flat
+#                  at the ceiling; at 0.5 it still tracked board power. The
+#                  chain STOPS after r3-g1-s0 when its V8 is not PASS, and when
+#                  it wrote no report.json: V8 describes the instrument, not G,
+#                  and the probe re-runs on every page, so a V8 UNKNOWN or FAIL
+#                  makes every later ratio page INVALID. --past-v8 goes on and
+#                  writes that decision to the ledger; it buys R1's regime
+#                  words and ratio pages that cannot be quoted (the STOP prices
+#                  both off the arms' own plans), and SEEDS=0 limits those
+#                  pages to seed 0.
 #   r1-g<G>        scripts/clock_elasticity.py at each G, three cap-binding
 #                  duty states (1.0 0.7 0.5), the per-M-tile elasticity gated:
 #                  the REGIME word for that G, below.
 #   r3-g<G>-s1,s2  seeds 1 then 2 at every G, each later seed scored WITH the
 #                  earlier ones of its G through --replicate-of (DESIGN
-#                  DECISION 14). The R1 block sits between seed 0 and seed 1,
-#                  so a G's seeds are an hour or more apart and the envelope
-#                  sees the drift it exists to capture. A G whose seed-0 page
-#                  read V7 not PASS gets a SKIPPED row (not latched) for seeds
-#                  1 and 2, which are not run: a clock split between the two
-#                  ratio arms is the power state, and two more seeds would
-#                  buy the same split.
+#                  DECISION 14). The R1 block sits between seed 0 and seed 1:
+#                  a G's seed 0 and seed 1 are the rest of the seed-0 block and
+#                  the whole R1 block apart, its seed 1 and seed 2 one seed
+#                  block apart, and the dry run prints both spacings off the
+#                  arms' own prices. A G whose seed-0 page did not read V7 PASS
+#                  gets a SKIPPED row (not latched) for seeds 1 and 2, which
+#                  are not run, and the note says which of two things
+#                  happened. V7 FAIL: the two ratio arms ran at different
+#                  clocks at this duty (the power state), and a later seed at
+#                  it would buy the same split. A V7 FAIL at 0.25 means that
+#                  duty is not yet flat for that arm on this card; the page
+#                  names a lower duty; the chain skips the G's later seeds and
+#                  prints the follow-up command: that G's three seeds at
+#                  --duty 0.1, by hand AFTER the chain and never beside it,
+#                  priced off R3's own plan at 0.1, a new design key that is
+#                  read with --read on the laptop, outside PAIRS.tsv. V7
+#                  UNKNOWN, absent or unreadable: seed 0's V7 could not be
+#                  scored (nothing timed, e.g. the sweep was skipped on V8, or
+#                  a clock was unread), so a later seed would read the same;
+#                  the seed-0 log says which.
 #   suite          the whole suite, uncapped, from PY_BASE, AFTER every arm:
 #                  a record of this box that gates nothing, its row in the
 #                  ledger. END_SUITE=skip writes a SKIPPED row instead. A
@@ -101,6 +142,16 @@
 #                  Both pytest steps run with this chain's own knobs (SESSION,
 #                  END_SUITE, G_LADDER and the rest of CHAIN_KNOBS) removed
 #                  from their environment: the suite's tests spawn this chain.
+#
+# EVERY ARM STEP (probe-check, r1, r3) runs under `timeout --signal=INT
+# --kill-after=60`, the pytest steps' wrapper, at a cap off its own price:
+# max(3 x the arm's own --dry-run figure, 30 min), the plan run again just
+# before the step, and for probe-check, which prints no plan, the same rule
+# over its documented constant. A timed-out arm is ERROR with TIMED OUT in its
+# note, not latched: both arms resume per cell, so --resume re-runs it. A box
+# without timeout runs them uncapped, as it runs the pytest steps. A cap
+# rescues a stall a signal can reach; a process parked inside the volume's
+# FUSE request cannot be signalled, by this or by anything.
 #
 # THE REGIME WORD, per G, off R1's interval through the arm's own band_of:
 #   RAW-STANDS        wholly below 0.25: the per-tile cost is a traffic
@@ -114,27 +165,44 @@
 #   withheld:<EXIT>   R1's page exited INVALID, REFUSED, ERROR or unscored: no
 #                     word is read off a page its own gates did not stand behind.
 #   unmeasured        no R1 report for that G on disk yet.
+# R1'S RESOLUTION. Session 4's G=16 claim over treads 2 and deeper read a
+# half-width of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four;
+# the all-tread reading's was 0.076) against R1's 0.075 target, half the gap
+# band's width. Three states here are not expected to resolve better, so an
+# interval within about its half-width of 0.25 or 0.40 reads STRADDLES, and
+# UNREGISTERED-GAP is hard to reach at three states.
 # THE WORD IS A SECANT, between the capped clock at duty 1.0 and the clock at
-# 0.7 and 0.5; R3 runs at 0.25, at the ceiling. For a per-tile cost A + B/f
-# the local elasticity falls as f rises, so RAW-STANDS carries over to R3's
-# operating point and CLOCK-CARRIES is only an upper bound there.
+# 0.7 and 0.5; R3 runs at 0.25, at the ceiling. To first order, for a per-tile
+# cost A + B/f with A and B not negative, the local elasticity B/(Af + B) lies
+# in [0, 1] and falls as f rises, so RAW-STANDS carries over to R3's operating
+# point and CLOCK-CARRIES is only an upper bound there. That form cannot
+# produce an elasticity above 1, which session 4's G=16 claim read at every
+# subset of its states: where R1's point is above 1 the A + B/f reading does
+# not apply, and the interval is quoted without it.
 #
 # WHAT IT LEAVES: $SESSION/CHAIN.tsv (one row per step: state, rc, seconds,
 # log, note, with the driver's second opinion taken off the RESULT lines);
-# $SESSION/PAIRS.tsv, one row per ratio run, REBUILT from the reports on disk
-# at the end of every pass and before every STOP, so a resume never
-# duplicates a row and an R1 finished on a later pass is joined: G, seed,
-# ratio, interval, exit word, duty, run id; the joint reading over the seeds
-# so far, off that run's replicates block (n, spread, sd, envelope, verdict;
-# `none` for a run scored alone); each arm's median clock over the ladder and
-# the count of LEVEL LOW (arm, tread) cells; R1's eta, interval, word and exit.
-# $SESSION/PAIRS-fixed.tsv holds the coordinates every row shares (model,
-# tile, pinned config, treads, repeats, duty) and where each was read.
-# $SESSION/DEVICE, logs under $SESSION/chain-logs/, and the driver's own
-# ARMS.tsv beside them. --resume skips every step whose newest row is latched
-# (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED, ERROR, UNKNOWN and SKIPPED
-# ones, with two exceptions: a preflight self-test runs again until it is
-# DONE, and the end suite is not bought again once it ran to its tally.
+# the tables, REBUILT from the reports on disk at the end of every pass and
+# before every STOP, so a resume never duplicates a row and an R1 finished on
+# a later pass is joined, with their legend in $SESSION/PAIRS-README.txt:
+# $SESSION/PAIRS.tsv, one row per ratio run: G, seed, ratio, interval, exit
+# word and its scope (`alone`, or `envelope` when C1 was scored with earlier
+# seeds), duty, run id; the joint reading on that run's page (n, spread, sd,
+# envelope, verdict), only where the run formed a ratio and is in it; each
+# arm's median clock over the ladder and the count of LEVEL LOW (arm, tread)
+# cells; R1's eta, interval, word and exit. $SESSION/PAIRS-by-G.tsv, one row
+# per G, every seed of it that formed a ratio read together by R3's own
+# cross-run machinery whatever order they ran in (n, mean, sd, envelope,
+# joint verdict, any INVALID run inside the envelope) beside R1's columns: the
+# per-G value. $SESSION/PAIRS-fixed.tsv holds the coordinates every row shares
+# (model, tile, pinned config, treads, repeats, duty) and where each was read.
+# $SESSION/DEVICE and $SESSION/R3_DUTY, logs under $SESSION/chain-logs/, the
+# driver's own ARMS.tsv beside them, and a follow-up's commands, when a V7
+# FAIL named one, in $SESSION/followup-g<G>.txt. --resume skips every step
+# whose newest row is latched (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED,
+# ERROR, UNKNOWN and SKIPPED ones, with three exceptions: a preflight
+# self-test and the probe check run again until they are DONE, and the end
+# suite is not bought again once it ran to its tally.
 #
 # THE THREE HABITS THIS REPOSITORY HAS BEEN BURNED BY, and how this file
 # avoids them: no `set -e` (a failed arm is a ledger row, not the end of a
@@ -166,6 +234,31 @@ SEEDS="${SEEDS:-0 1 2}"
 R3_DUTY="${R3_DUTY:-0.25}"
 R3_TREADS=6
 R3_REPEATS=9
+#: The duty a V7 FAIL's follow-up names: the lowest state session 4's clock
+#: arm measured (1965-1980 MHz at 0.1, R3's FLAT_DUTY_EVIDENCE). A follow-up
+#: is a new design key and its own runs, by hand after the chain, read with
+#: --read on the laptop and never joined into PAIRS.tsv.
+R3_FOLLOWUP_DUTY=0.1
+#: What a ratio run costs beyond its plan's figure, which leaves out the
+#: Triton compiles and the 25.4 GB private weight build ("NOT IN THAT
+#: FIGURE"): an ALLOWANCE, not a measurement, charged per run.
+R3_RUN_OVERHEAD_S=60
+#: The probe check prints no plan, so its price is a documented ALLOWANCE,
+#: not a measurement: a cold vLLM import and a CUDA context off the network
+#: volume, and one probe cell (a few hundred ms of warmup and trials, eager
+#: and under the graph), put at two minutes. The volume once stalled a cold
+#: import for 9 minutes and recovered; the cap covers that, not this price.
+PROBE_CHECK_S=120
+#: The exfil allowance: the tar of the session, the results and the ruler.
+EXFIL_S=300
+#: THE HANG CAP ON AN ARM STEP: max(ARM_CAP_FACTOR x its price, ARM_CAP_FLOOR_S),
+#: and ARM_CAP_UNPRICED_S when its plan priced nothing: four times R1's ~15
+#: minutes, the longest arm's price. 3x is past any honest overrun of a plan
+#: that already charges its idle gaps; the 30-minute floor is past the 9-minute
+#: cold-import stall the volume has shown and then recovered from.
+ARM_CAP_FACTOR=3
+ARM_CAP_FLOOR_S=1800
+ARM_CAP_UNPRICED_S=3600
 #: The elasticity arm's states: cap-binding ones. Session 4 showed duty 0.5,
 #: 0.25 and 0.10 were one clock cluster, so two of its four states bought
 #: nothing and cost 14/17 of the wall; three states is MIN_STATES.
@@ -309,6 +402,11 @@ skip_row() {
 #: to every child of f, and the end suite's own tests then scored their rows
 #: with it. The state is decided by the opinion:
 #:   page    (run_step) the arm's RESULT lines must support its exit code.
+#:   page:N  (arm_step) the same, for an arm run under a cap of N seconds: an
+#:           exit 124 (timeout's own code; no arm returns it), or 137 once
+#:           the cap has passed (the KILL 60 s after the INT), is ERROR with
+#:           TIMED OUT in the note, not latched, whatever the log printed
+#:           before the cap. N 0 is no cap.
 #:   driver  the preconditions step, the driver sequencing arms, which prints
 #:           no RESULT line of its own: exit 0 is DONE, exit 2 is REFUSED (one
 #:           of its gates refused the card or the ruler), and ANY OTHER CODE
@@ -325,8 +423,9 @@ skip_row() {
 #:           pytest's tally.
 #:   collect a dry run's `pytest --collect-only`: DONE when it collected.
 run_step_as() {
-  local opinion="$1" name="$2" log="$3"; shift 3
+  local opinion="$1" name="$2" log="$3" cap=0; shift 3
   local rc=0 t0 secs implied state note tally
+  case "$opinion" in page:*) cap="${opinion#page:}"; opinion=page ;; esac
   t0="$(date +%s)"
   "$@" > "$log" 2>&1 || rc=$?
   secs="$(( $(date +%s) - t0 ))"
@@ -358,8 +457,13 @@ run_step_as() {
       fi
       note="pytest exit $rc: $tally" ;;
     *)
-      implied="$("$PY_BASE" "$HELPERS" verdict "$log" 2>/dev/null)" || implied="UNREADABLE"
-      IFS=$'\t' read -r state note < <(state_for "$rc" "$implied") ;;
+      if (( cap > 0 )) && { (( rc == 124 )) || { (( rc == 137 )) && (( secs >= cap )); }; }; then
+        state=ERROR
+        note="TIMED OUT after $secs s against a cap of $cap s (exit $rc: INT at the cap, KILL 60 s later); not latched, --resume re-runs it and the arm resumes per cell"
+      else
+        implied="$("$PY_BASE" "$HELPERS" verdict "$log" 2>/dev/null)" || implied="UNREADABLE"
+        IFS=$'\t' read -r state note < <(state_for "$rc" "$implied")
+      fi ;;
   esac
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$state" "$rc" "$secs" \
     "$(dirty_count)" "$log" "$note" >> "$LEDGER"
@@ -370,6 +474,52 @@ run_step_as() {
 #: An arm's step, its page's RESULT lines the second opinion. $1 name, $2 log,
 #: $3.. the command.
 run_step() { run_step_as page "$@"; }
+
+#: An arm's step on the card, under its hang cap. $1 name, $2 log, $3 the cap
+#: in seconds (`cap_for`), $4.. the command. The pytest steps' wrapper,
+#: `timeout --signal=INT --kill-after=60`; a box without timeout runs the arm
+#: uncapped, as it runs those.
+arm_step() {
+  local name="$1" log="$2" cap="$3"; shift 3
+  local -a tmo=()
+  if command -v timeout >/dev/null 2>&1; then
+    tmo=(timeout --signal=INT --kill-after=60 "$cap")
+  else
+    cap=0
+  fi
+  run_step_as "page:$cap" "$name" "$log" ${tmo[@]+"${tmo[@]}"} "$@"
+}
+
+#: THE CAP ON ONE ARM STEP, off its price in seconds ($1, empty when its plan
+#: priced nothing): max(ARM_CAP_FACTOR x the price, ARM_CAP_FLOOR_S), or
+#: ARM_CAP_UNPRICED_S. Prints "<cap><TAB><how it was reached>".
+cap_for() {
+  local est="$1" cap
+  if [[ -z "$est" ]]; then
+    printf '%s\tno price on its plan: the unpriced cap\n' "$ARM_CAP_UNPRICED_S"; return 0
+  fi
+  cap=$(( ARM_CAP_FACTOR * est ))
+  if (( cap < ARM_CAP_FLOOR_S )); then
+    printf '%s\t%s x %s s is under the %s s floor\n' "$ARM_CAP_FLOOR_S" "$ARM_CAP_FACTOR" "$est" "$ARM_CAP_FLOOR_S"
+  else
+    printf '%s\t%s x its plan'"'"'s %s s\n' "$cap" "$ARM_CAP_FACTOR" "$est"
+  fi
+}
+
+#: An arm's own price: its --dry-run, run into $1, priced off the plan page
+#: it printed. $2.. the dry command. Prints the seconds, or nothing.
+plan_price() {
+  local log="$1"; shift
+  "$@" > "$log" 2>&1 || true
+  "$PY_BASE" "$HELPERS" estimate "$log" 2>/dev/null || true
+}
+
+#: The driver's own booking for one of its arms, in minutes, lifted from its
+#: `arm_minutes` the way its tests lift it; nothing when it books none.
+driver_minutes() {
+  ( eval "$(sed -n '/^arm_minutes()/,/^esac; }/p' "$REPO/scripts/h200_gaps_session.sh")"
+    arm_minutes "$1" ) 2>/dev/null
+}
 
 #: Every variable this chain reads from its environment. A pytest step runs
 #: WITHOUT them: the suite's tests spawn this chain and the driver with
@@ -408,11 +558,32 @@ pytest_step() {
 
 #: Go on past a gate on its flag, and write that decision to the ledger as its
 #: own OVERRIDDEN row, so it travels with the results. $1 the row's name, $2
-#: the flag, $3 what was gone past. A flag counts for the pass it is given on.
+#: the flag, $3 what was gone past. THE DECISION HOLDS: every later pass of
+#: the session reads the row back (`overridden`) and goes on past the same
+#: gate without the flag. Until 2026-09-22 a flag counted for the pass it was
+#: given on, so a plain --resume after a killed chain stopped at the same gate
+#: again, and re-bought tests/test_gpu.py first.
 override_row() {
   printf '%s\tOVERRIDDEN\t-\t0\t%s\t-\t%s\n' "$1" "$(dirty_count)" \
     "the operator went on with $2; $3" >> "$LEDGER"
-  echo "  $2: going on past $3; the ledger says so"
+  echo "  $2: going on past $3; the ledger says so, and later passes hold to it"
+}
+
+#: Does the ledger hold an OVERRIDDEN row named $1: an override an earlier
+#: pass (or this one) wrote. Returns 0 when it does.
+overridden() {
+  [[ -f "$LEDGER" ]] || return 1
+  awk -F'\t' -v n="$1" '$1 == n && $2 == "OVERRIDDEN" {f = 1} END {exit !f}' "$LEDGER"
+}
+
+#: Go on past a gate on an override an earlier pass wrote, and say so. $1 the
+#: row's name, $2 the flag, $3 what is gone past now. No new row: the decision
+#: is the operator's, and it is already in the ledger.
+held_override() {
+  local said
+  said="$(awk -F'\t' -v n="$1" '$1 == n && $2 == "OVERRIDDEN" {s = $7} END {print s}' "$LEDGER")"
+  echo "  $2 holds from an earlier pass (the ledger's $1 row: $said);"
+  echo "  going on past $3 without the flag"
 }
 
 #: The preflight gate: both self-tests DONE, which is not the same as latched.
@@ -456,8 +627,9 @@ preconditions_gate() {
   return 0
 }
 
-#: The gpu-tests gate: tests/test_gpu.py's newest row DONE, or --past-gpu-tests.
-#: $1 1 when the flag was given. Returns 0 to go on, 3 to stop.
+#: The gpu-tests gate: tests/test_gpu.py's newest row DONE, or --past-gpu-tests
+#: on this pass or an earlier one. $1 1 when the flag was given. Returns 0 to
+#: go on, 3 to stop.
 gpu_tests_gate() {
   local past="$1" newest
   newest="$(newest_state gpu-tests "$LEDGER")"
@@ -466,9 +638,66 @@ gpu_tests_gate() {
     override_row gpu-tests-override --past-gpu-tests "tests/test_gpu.py's newest row: ${newest:-never ran}"
     return 0
   fi
+  if overridden gpu-tests-override; then
+    held_override gpu-tests-override --past-gpu-tests "tests/test_gpu.py's newest row: ${newest:-never ran}"
+    return 0
+  fi
   echo "STOP: tests/test_gpu.py is ${newest:-never run}, not green, on this card. Read"
   echo "  $LOGS/gpu-tests.log (-rfE lists every failure and error). If none of it bears"
-  echo "  on the arms, go on with --resume --past-gpu-tests, which the ledger records."
+  echo "  on the arms, go on with --resume --past-gpu-tests, which the ledger records"
+  echo "  and every later pass holds to."
+  return 3
+}
+
+#: What going on past V8 buys, priced off the arms' own plans, for the probe
+#: check's STOP and the pilot's. $1 how many ratio pages are already on disk
+#: (0 before the pilot, 1 after it). Each price is the arm's --dry-run, run
+#: again here into chain-logs.
+v8_consequences() {
+  local done_pages="$1" n_g=0 n_s=0 r1_s=0 est per g later seed0
+  for g in $G_LADDER; do
+    n_g=$(( n_g + 1 ))
+    # shellcheck disable=SC2046
+    est="$(plan_price "$LOGS/price-r1-g$g.log" $(r1_cmd "$g" 1))"
+    r1_s=$(( r1_s + ${est:-0} ))
+  done
+  for g in $SEEDS; do n_s=$(( n_s + 1 )); done
+  # shellcheck disable=SC2046
+  est="$(plan_price "$LOGS/price-r3-g$FIRST_G.log" $(r3_cmd "$FIRST_G" "$FIRST_SEED" 1))"
+  per=$(( ${est:-0} + R3_RUN_OVERHEAD_S ))
+  later=$(( n_g * n_s - done_pages ))
+  seed0=$(( n_g - done_pages ))
+  echo "  V8 UNKNOWN or FAIL makes every later ratio page INVALID: the probe re-runs on"
+  echo "  every page. --past-v8 buys R1's $n_g regime words (~$(( (r1_s + 59) / 60 )) min off R1's own"
+  echo "  plans) and $later ratio pages that cannot be quoted (~$(( (later * per + 59) / 60 )) min at $per s a page,"
+  echo "  R3's own plan plus ${R3_RUN_OVERHEAD_S} s of compiles and weight build; a V8 FAIL page skips its"
+  echo "  sweep and costs less). SEEDS=$FIRST_SEED limits the ratio pages to seed $FIRST_SEED ($seed0, ~$(( (seed0 * per + 59) / 60 )) min):"
+  echo "      SEEDS=$FIRST_SEED bash scripts/alpha_g_chain.sh --resume --past-v8"
+  echo "  The ledger records --past-v8, and every later pass holds to it."
+}
+
+#: The probe-check gate: its newest row DONE, or --past-v8 on this pass or an
+#: earlier one. $1 1 when the flag was given. Returns 0 to go on, 3 to stop.
+probe_check_gate() {
+  local past="$1" newest said
+  newest="$(newest_state probe-check "$LEDGER")"
+  [[ "$newest" == DONE ]] && return 0
+  if (( past )); then
+    override_row probe-check-override --past-v8 "the probe check's newest row: ${newest:-never ran}"
+    return 0
+  fi
+  if overridden probe-check-override; then
+    held_override probe-check-override --past-v8 "the probe check's newest row: ${newest:-never ran}"
+    return 0
+  fi
+  said="$(grep -m1 -E '^(RESULT|REFUSED)' "$LOGS/probe-check.log" 2>/dev/null)"
+  echo "STOP: the probe check is ${newest:-never run}, not DONE, on this card: the"
+  echo "  alignment probe under the graph did not earn PASS. Read $LOGS/probe-check.log:"
+  echo "      ${said:-no RESULT or REFUSED line in it}"
+  echo "  The pilot's V8 runs this probe inside R3, on every page."
+  v8_consequences 0
+  echo "  A fix is a code change (PROBE_CALLS_PER_REPLAY, or the capture) brought to the"
+  echo "  pod's checkout, then --resume, which runs this check again until it is DONE."
   return 3
 }
 
@@ -482,24 +711,30 @@ report_of() {
 }
 
 #: The pilot gate: the first ratio run's V8, off its report.json. $1 1 when
-#: --past-v8 was given. Returns 0 to go on, 3 to stop.
+#: --past-v8 was given. An override on an earlier pass holds. Returns 0 to go
+#: on, 3 to stop.
 v8_gate() {
-  local past="$1" rep v8
+  local past="$1" rep v8 probe=""
   rep="$(report_of "$LOGS/$PILOT.log")"
   if [[ -z "$rep" ]]; then
     v8="unread: no report.json"
   else
     v8="$("$PY_BASE" "$HELPERS" gate "$rep" V8 2>/dev/null)" || v8="unreadable"
+    probe="$("$PY_BASE" "$HELPERS" probe-note "$rep" 2>/dev/null)" || probe=""
   fi
   [[ "$v8" == PASS ]] && return 0
   if (( past )); then
     override_row v8-override --past-v8 "$PILOT's V8 $v8"
     return 0
   fi
+  if overridden v8-override; then
+    held_override v8-override --past-v8 "$PILOT's V8 $v8"
+    return 0
+  fi
   echo "STOP: $PILOT's V8 is $v8, not PASS. V8 is the alignment probe under the"
-  echo "  graph: it describes the instrument, not G, so every later ratio page would"
-  echo "  repeat it. Read $LOGS/$PILOT.log. Going on anyway is --resume --past-v8,"
-  echo "  which the ledger records."
+  echo "  graph: it describes the instrument, not G. Read $LOGS/$PILOT.log."
+  [[ -n "$probe" ]] && echo "  the pilot's probe: $probe"
+  v8_consequences 1
   return 3
 }
 
@@ -511,7 +746,8 @@ seed0_v7() {
   "$PY_BASE" "$HELPERS" gate "$rep" V7 2>/dev/null || echo unreadable
 }
 
-#: REWRITE PAIRS.tsv and PAIRS-fixed.tsv from the reports on disk. Idempotent.
+#: REWRITE PAIRS.tsv, PAIRS-by-G.tsv, PAIRS-fixed.tsv and PAIRS-README.txt from
+#: the reports on disk. Idempotent.
 rebuild_pairs() {
   local out rc=0
   out="$("$PY_BASE" "$HELPERS" pairs-table "$SESSION" "$RESULTS" "$G_LADDER" "$SEEDS" \
@@ -520,7 +756,9 @@ rebuild_pairs() {
     "r1_treads=--treads $R1_TREADS" "r1_repeats=--repeats $R1_REPEATS" "r1_duty=--duty $R1_DUTY" \
     2>&1)" || rc=$?
   if (( rc == 0 )); then
-    echo "pairs     $SESSION/PAIRS.tsv ($out, rebuilt from the reports), fixed coordinates in PAIRS-fixed.tsv"
+    echo "pairs     $SESSION/PAIRS.tsv ($out, rebuilt from the reports); per G, every seed read"
+    echo "          together, in PAIRS-by-G.tsv; fixed coordinates in PAIRS-fixed.tsv; the legend"
+    echo "          in PAIRS-README.txt"
   else
     echo "pairs     NOT rebuilt (exit $rc): $out"
   fi
@@ -583,9 +821,10 @@ session_choice() {
 #: identity. Writes DEVICE on first use; returns 2, saying why, when the
 #: session was measured on another card, when its ledger has rows but no
 #: DEVICE (the card those rows came from is unknown), or when this card's
-#: UUID cannot be read. R3 guards its own directories on the UUID; R1 keys
-#: its resume on the card NAME, which every H200 shares, so without this a
-#: resume on a replacement pod would pool two governors into one elasticity.
+#: UUID cannot be read. Both arms guard their own directories on the UUID
+#: too (R3's DEVICE file, R1's device_guard since 858bf35), so this check
+#: duplicates them on purpose: it refuses before any step runs, on the
+#: session as a whole, where theirs refuse one run directory at a time.
 device_check() {
   local file="$1/DEVICE" ident="$2" recorded rows
   if [[ -z "$ident" ]]; then
@@ -597,8 +836,9 @@ device_check() {
     recorded="$(tr -d '[:space:]' < "$file")"
     [[ "$recorded" == "$ident" ]] && return 0
     echo "REFUSED: $1 was measured on the card $recorded, and this card is $ident."
-    echo "  Every R1 run id resumes by card NAME, so its ladder would take this card's cells"
-    echo "  into the other card's fit. A fresh session on this card, on purpose:"
+    echo "  One session is one card: R3's and R1's own UUID guards would refuse each run"
+    echo "  directory that card began, one step at a time. A fresh session on this card,"
+    echo "  on purpose:"
     echo "      bash scripts/alpha_g_chain.sh --new"
     return 2
   fi
@@ -609,6 +849,39 @@ device_check() {
     return 2
   fi
   printf '%s\n' "$ident" > "$file"
+}
+
+#: THE DUTY THIS SESSION'S RATIO RUNS ARE AT. $1 the session, $2 R3_DUTY.
+#: Writes R3_DUTY on the first measuring pass, beside DEVICE; returns 2,
+#: saying why, when the session recorded another duty, or holds ratio rows and
+#: no record. Duty is one of R3's design keys: a --resume at another one left
+#: every latched seed 0 at the old duty, read the old seed 0's V7 for the skip,
+#: and handed every owed later seed earlier seeds its load_replicates refuses,
+#: so it measured nothing new and read as if it had.
+duty_check() {
+  local file="$1/R3_DUTY" duty="$2" recorded rows
+  if [[ -f "$file" ]]; then
+    recorded="$(tr -d '[:space:]' < "$file")"
+    awk -v a="$recorded" -v b="$duty" 'BEGIN {exit !(a + 0 == b + 0 && a != "")}' && return 0
+    echo "REFUSED: $1's ratio runs are at --duty ${recorded:-(an empty record)} ($file), and"
+    echo "  this pass asks for R3_DUTY=$duty. Duty is a design key of R3: seed 0 stays latched"
+    echo "  at the recorded duty and every owed later seed would be refused against it."
+    echo "  Resume this session at its own duty (without R3_DUTY=), or open a session at"
+    echo "  the new one, on purpose:"
+    echo "      R3_DUTY=$duty bash scripts/alpha_g_chain.sh --new"
+    echo "  A lower duty for one G after a V7 FAIL is the follow-up the chain printed,"
+    echo "  run by hand after it, not a resume."
+    return 2
+  fi
+  rows="$(awk -F'\t' 'NR > 1 && $1 ~ /^r3-g/' "$1/CHAIN.tsv" 2>/dev/null | grep -c . || true)"
+  if (( ${rows:-0} > 0 )); then
+    echo "REFUSED: $1 holds $rows ratio row(s) and no R3_DUTY file, so the duty they ran at"
+    echo "  is unknown here. PAIRS-fixed.tsv's r3_duty row reads it off the reports; write"
+    echo "  that value into $file and --resume, or open a fresh session:"
+    echo "      bash scripts/alpha_g_chain.sh --new"
+    return 2
+  fi
+  printf '%s\n' "$duty" > "$file"
 }
 
 #: Is a recorded mkdir-lock owner ("pid host") gone: its host differs from
@@ -670,7 +943,11 @@ chain_lock() {
       echo "  an arm a killed chain left running, still timing the card. A held flock is"
       echo "  never taken over. Find the holder, stop it, then --resume:"
       echo "      fuser -v $file     (or: lsof $file)"
-      echo "  If neither names a process here, it is on another pod sharing this volume."
+      echo "      ps -eo pid,etime,args | grep -E '[a]lpha_g_chain|[p]rivate_weight_reference|[c]lock_elasticity|[h]200_gaps_session'"
+      echo "  fuser and lsof may be missing from the image; the ps line always runs. Only when"
+      echo "  the ps line names nothing here is the holder on another pod sharing this volume."
+      echo "  Do not open a --new session meanwhile: its arms would time this card beside"
+      echo "  whatever still holds the lock."
       return 2
     else
       printf '%s\n' "$LOCK_OWNER" > "$file"
@@ -704,6 +981,103 @@ release_lock() {
   [[ -n "$LOCK_DIR" ]] || return 0
   [[ "$(cat "$LOCK_DIR/owner" 2>/dev/null)" == "$LOCK_OWNER" ]] && rm -rf "$LOCK_DIR"
   return 0
+}
+# the command lines, in one place each (TAG is the session's name)
+r1_cmd() {   # $1 G, $2 dry
+  local g="$1" dry="$2"
+  if (( dry )); then
+    echo "$PY_BASE" "$REPO/scripts/clock_elasticity.py" --dry-run
+  else
+    echo "$PY_VLLM" "$REPO/scripts/clock_elasticity.py"
+  fi
+  # shellcheck disable=SC2086
+  echo --model mixtral-8x7b --dtype bf16 --group-m "$g" --treads "$R1_TREADS" --duty $R1_DUTY \
+       --repeats "$R1_REPEATS" --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 \
+       --settle-seconds 10 --session-tag "$TAG"
+}
+#: The ratio arm at a named duty: the chain's own R3 flags, so a follow-up at
+#: R3_FOLLOWUP_DUTY differs from the chain's runs in the duty and nothing else.
+r3_cmd_at() {   # $1 duty, $2 G, $3 seed, $4 dry, $5.. replicate reports
+  local duty="$1" g="$2" seed="$3" dry="$4"; shift 4
+  if (( dry )); then
+    echo "$PY_BASE" "$REPO/scripts/private_weight_reference.py" --dry-run \
+         --capability "${CAPABILITY:-9.0}" --device-memory-gb 140
+  else
+    echo "$PY_VLLM" "$REPO/scripts/private_weight_reference.py"
+  fi
+  echo --model mixtral-8x7b --block-m 32 --treads "$R3_TREADS" --repeats "$R3_REPEATS" \
+       --group-m "$g" --duty "$duty" --seed "$seed" --session-tag "$TAG"
+  if (( $# )); then echo --replicate-of "$@"; fi
+}
+r3_cmd() { r3_cmd_at "$R3_DUTY" "$@"; }   # $1 G, $2 seed, $3 dry, $4.. replicate reports
+probe_check_cmd() {
+  echo "$PY_VLLM" "$REPO/scripts/private_weight_reference.py" --probe-check \
+       --model mixtral-8x7b --block-m 32
+}
+
+#: The price of a follow-up for G $1: its seeds at R3_FOLLOWUP_DUTY, off R3's
+#: own plan at that duty, run into chain-logs. Prints "<seconds a run><TAB>
+#: <runs><TAB><the plan's seconds>", the run the plan plus R3_RUN_OVERHEAD_S.
+followup_price() {
+  local g="$1" est n=0 s
+  for s in $SEEDS; do n=$(( n + 1 )); done
+  # shellcheck disable=SC2046
+  est="$(plan_price "$LOGS/followup-g$g.price.log" $(r3_cmd_at "$R3_FOLLOWUP_DUTY" "$g" "$FIRST_SEED" 1))"
+  printf '%s\t%s\t%s\n' "$(( ${est:-0} + R3_RUN_OVERHEAD_S ))" "$n" "${est:-unpriced}"
+}
+
+#: THE FOLLOW-UP A V7 FAIL AT SEED 0 NAMES, for G $1, per the owner's reading
+#: of 2026-09-22: a V7 FAIL at the chain's duty means that duty is not yet flat
+#: for that arm on this card, and R3's page names a lower one. The chain does
+#: not act on it: it skips the G's later seeds and prints, here and in
+#: $SESSION/followup-g<G>.txt, that G's seeds at R3_FOLLOWUP_DUTY with the
+#: chain's own R3 flags and session tag, to run by hand AFTER the chain (never
+#: beside it: two runs would time the card at once). Later seeds are scored
+#: with the follow-up's first seed through --replicate-of. It is a new design
+#: key and its own runs, read with --read on the laptop, outside PAIRS.tsv.
+#: Sets FOLLOWUP_NOTE, the ledger's one-line form.
+FOLLOWUP_NOTE=""
+followup() {
+  local g="$1" file per n plan first s0log slog s
+  if ! awk -v f="$R3_FOLLOWUP_DUTY" -v d="$R3_DUTY" 'BEGIN {exit !(f + 0 < d + 0)}'; then
+    FOLLOWUP_NOTE="no follow-up duty below $R3_DUTY is registered in this chain (R3_FOLLOWUP_DUTY is $R3_FOLLOWUP_DUTY); the page's V7 lines are the record"
+    echo "    $FOLLOWUP_NOTE"
+    return 0
+  fi
+  # read from a string, not `< <(...)`: a process substitution on a command
+  # with IFS=<tab> in front of it runs with that IFS, and no word would split
+  local priced
+  priced="$(followup_price "$g")"
+  IFS=$'\t' read -r per n plan <<< "$priced"
+  file="$SESSION/followup-g$g.txt"
+  s0log="$SESSION/followup-logs/r3-g$g-s$FIRST_SEED-duty$R3_FOLLOWUP_DUTY.log"
+  # shellcheck disable=SC2046
+  first="$(echo $(r3_cmd_at "$R3_FOLLOWUP_DUTY" "$g" "$FIRST_SEED" 0)) > $s0log 2>&1"
+  {
+    echo "# G=$g: seed $FIRST_SEED's page (r3-g$g-s$FIRST_SEED) read V7 FAIL at --duty $R3_DUTY. A V7 FAIL at"
+    echo "# $R3_DUTY means that duty is not yet flat for that arm on this card; the page names a"
+    echo "# lower duty. These lines run G=$g's seeds at --duty $R3_FOLLOWUP_DUTY: a new design key and"
+    echo "# its own runs, outside the chain's ledger and PAIRS.tsv."
+    echo "# RUN THEM AFTER THE CHAIN HAS FINISHED, never beside it: two runs would time the"
+    echo "# card at once. ~$(( (n * per + 59) / 60 )) min: $n runs at $per s each, R3's own plan at --duty"
+    echo "# $R3_FOLLOWUP_DUTY ($plan s) plus $R3_RUN_OVERHEAD_S s of compiles and weight build."
+    echo "cd $REPO"
+    echo "export MOE_RESULTS_DIR=$RESULTS"
+    echo "mkdir -p $SESSION/followup-logs"
+    echo "$first"
+    echo "S0=\"\$MOE_RESULTS_DIR/private_weight_reference/\$($PY_BASE $HELPERS run-id $s0log private_weight_reference)/report.json\""
+    for s in $SEEDS; do
+      [[ "$s" == "$FIRST_SEED" ]] && continue
+      slog="$SESSION/followup-logs/r3-g$g-s$s-duty$R3_FOLLOWUP_DUTY.log"
+      # shellcheck disable=SC2046
+      echo "$(echo $(r3_cmd_at "$R3_FOLLOWUP_DUTY" "$g" "$s" 0 '"$S0"')) > $slog 2>&1"
+    done
+    echo "# The chain's exfil line carries them (under $SESSION and $RESULTS). Then, on the"
+    echo "# laptop, outside PAIRS.tsv, the seeds read together:"
+    echo "#   .venv/bin/python scripts/private_weight_reference.py --read <a later seed's run>/report.json --replicate-of <the other runs>/report.json"
+  } > "$file"
+  sed 's/^/    /' "$file"
+  FOLLOWUP_NOTE="the follow-up, by hand AFTER the chain and never beside it: G=$g's seeds at --duty $R3_FOLLOWUP_DUTY, ~$(( (n * per + 59) / 60 )) min off R3's own plan at $R3_FOLLOWUP_DUTY, a new design key read with --read on the laptop, outside PAIRS.tsv; every line is in $file, the first: $first"
 }
 # <<< LIFTABLE
 
@@ -810,8 +1184,11 @@ if ! (( DRY )); then
   trap release_lock EXIT
   DEVICE_ID="$("$PY_BASE" "$HELPERS" device)" || DEVICE_ID=""
   device_check "$SESSION" "$DEVICE_ID" || exit 2
+  duty_check "$SESSION" "$R3_DUTY" || exit 2
 fi
 [[ -f "$LEDGER" ]] || printf 'step\tstate\trc\tseconds\tdirty\tlog\tnote\n' > "$LEDGER"
+#: Where the documented detached launch appends this chain's console.
+CONSOLE_OUT="$WORKSPACE/alpha_g_chain.out"
 
 echo "alpha(G) chain  $TAG   ($SESSION_HOW)"
 echo "  card        $CARD${CARD_REASON:+  -- $CARD_REASON}"
@@ -821,6 +1198,7 @@ echo "  session     $SESSION"
 echo "  results     $RESULTS   (exported as MOE_RESULTS_DIR to every arm)"
 echo "  ledger      $LEDGER"
 echo "  ladder      G in {$G_LADDER}, seeds {$SEEDS}, ratio arms at duty $R3_DUTY, elasticity states $R1_DUTY"
+(( DRY )) || echo "  r3 duty     $R3_DUTY   (recorded in $SESSION/R3_DUTY; a resume at another is refused)"
 echo "  interpreters base $PY_BASE / vllm $PY_VLLM"
 (( DRY )) && echo "  DRY RUN: every arm's own --dry-run is run and priced; nothing is measured"
 if ! (( DRY )) && [[ -t 1 ]]; then
@@ -831,40 +1209,33 @@ fi
 #: Every STOP after the session exists leaves the table as the disk has it.
 stop_chain() { rebuild_pairs; exit 3; }
 
-# --------------------------------------------------------------------------
-# the command lines, in one place each
-# --------------------------------------------------------------------------
-r1_cmd() {   # $1 G, $2 dry
-  local g="$1" dry="$2"
-  if (( dry )); then
-    echo "$PY_BASE" "$REPO/scripts/clock_elasticity.py" --dry-run
-  else
-    echo "$PY_VLLM" "$REPO/scripts/clock_elasticity.py"
-  fi
-  # shellcheck disable=SC2086
-  echo --model mixtral-8x7b --dtype bf16 --group-m "$g" --treads "$R1_TREADS" --duty $R1_DUTY \
-       --repeats "$R1_REPEATS" --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 \
-       --settle-seconds 10 --session-tag "$TAG"
-}
-r3_cmd() {   # $1 G, $2 seed, $3 dry, $4.. replicate reports
-  local g="$1" seed="$2" dry="$3"; shift 3
-  if (( dry )); then
-    echo "$PY_BASE" "$REPO/scripts/private_weight_reference.py" --dry-run \
-         --capability "${CAPABILITY:-9.0}" --device-memory-gb 140
-  else
-    echo "$PY_VLLM" "$REPO/scripts/private_weight_reference.py"
-  fi
-  echo --model mixtral-8x7b --block-m 32 --treads "$R3_TREADS" --repeats "$R3_REPEATS" \
-       --group-m "$g" --duty "$R3_DUTY" --seed "$seed" --session-tag "$TAG"
-  if (( $# )); then echo --replicate-of "$@"; fi
-}
-
-TOTAL_S=0
+TOTAL_S=0; LAST_EST=""
 GPU_TESTS_S=0; GPU_TESTS_N=""; SUITE_S=0; SUITE_N=""
-price() {   # $1 log: add the arm's own dry-run estimate to the total
-  local est
-  est="$("$PY_BASE" "$HELPERS" estimate "$1" 2>/dev/null)" || est=""
-  if [[ -n "$est" ]]; then TOTAL_S=$(( TOTAL_S + est )); echo "    priced ${est} s off its own plan"; else echo "    (no estimate on its plan page)"; fi
+#: The dry run's TIMELINE: every step's start on the priced clock, so the seed
+#: spacing it prints is these prices' and not a sentence's.
+CLOCK_S=0
+mark() { printf -v "AT_${1//-/_}" '%s' "$CLOCK_S"; }
+price() {   # $1 log: add the arm's own dry-run estimate to the total; say what it is and its cap
+  local basis cap how
+  LAST_EST="$("$PY_BASE" "$HELPERS" estimate "$1" 2>/dev/null)" || LAST_EST=""
+  if [[ -n "$LAST_EST" ]]; then
+    TOTAL_S=$(( TOTAL_S + LAST_EST ))
+    basis="$("$PY_BASE" "$HELPERS" estimate-basis "$1" 2>/dev/null)" || basis=""
+    echo "    priced ${LAST_EST} s off its own plan${basis:+: $basis}"
+  else
+    echo "    (no estimate on its plan page)"
+  fi
+  IFS=$'\t' read -r cap how < <(cap_for "$LAST_EST")
+  echo "    capped on the pod at $cap s ($how)"
+}
+#: A measuring arm's cap, off its own plan run again just before it. $1 the
+#: step, $2.. the dry command. Sets STEP_CAP and says so.
+STEP_CAP=0
+step_cap() {
+  local step="$1" est how; shift
+  est="$(plan_price "$LOGS/$step.price.log" "$@")"
+  IFS=$'\t' read -r STEP_CAP how < <(cap_for "$est")
+  echo "  $step: capped at $STEP_CAP s ($how)"
 }
 
 #: One ratio run: pairing with the earlier seeds of its G that FORMED a ratio
@@ -885,19 +1256,25 @@ r3_step() {   # $1 G, $2 seed
     while IFS= read -r line; do [[ -n "$line" ]] && paired+=("$line"); done \
       < <("$PY_BASE" "$HELPERS" pairs ${earlier[@]+"${earlier[@]}"} 2>/dev/null)
   fi
-  # shellcheck disable=SC2046
-  run_step "$step" "$LOGS/$step.log" $(r3_cmd "$g" "$seed" "$DRY" ${paired[@]+"${paired[@]}"}) || true
   if (( DRY )); then
+    mark "$step"
+    # shellcheck disable=SC2046
+    run_step "$step" "$LOGS/$step.log" $(r3_cmd "$g" "$seed" 1 ${paired[@]+"${paired[@]}"}) || true
     price "$LOGS/$step.log"
+    CLOCK_S=$(( CLOCK_S + ${LAST_EST:-0} + R3_RUN_OVERHEAD_S ))
     (( ${#paired[@]} )) && echo "    scored WITH ${#paired[@]} earlier seed(s)"
     return 0
   fi
+  # shellcheck disable=SC2046
+  step_cap "$step" $(r3_cmd "$g" "$seed" 1)
+  # shellcheck disable=SC2046
+  arm_step "$step" "$LOGS/$step.log" "$STEP_CAP" $(r3_cmd "$g" "$seed" 0 ${paired[@]+"${paired[@]}"}) || true
   rep="$(report_of "$LOGS/$step.log")"
   if [[ -n "$rep" ]]; then
-    local rg rseed ratio lo hi word duty rid rest e elo ehi band eexit
-    IFS=$'\t' read -r rg rseed ratio lo hi word duty rid rest < <("$PY_BASE" "$HELPERS" reading "$rep")
+    local rg rseed ratio lo hi word scope duty rid rest e elo ehi band eexit
+    IFS=$'\t' read -r rg rseed ratio lo hi word scope duty rid rest < <("$PY_BASE" "$HELPERS" reading "$rep")
     IFS=$'\t' read -r e elo ehi band eexit < <("$PY_BASE" "$HELPERS" eta-for "$SESSION" "$RESULTS" "$g")
-    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)"
+    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word (C1 $scope)  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)"
   else
     echo "    no report.json for $step (see $LOGS/$step.log)"
   fi
@@ -929,6 +1306,18 @@ if ! latched preconditions "$LEDGER" || (( DRY )); then
     env SESSION="$SESSION" bash "$REPO/scripts/h200_gaps_session.sh" "${pre_flags[@]}" || true
 fi
 (( DRY )) || preconditions_gate "$SESSION/ARMS.tsv" || stop_chain
+if (( DRY )); then
+  # the price of the same three arms is the driver's own booking, not a guess
+  PRE_S=0; PRE_BASIS=""
+  for arm in thermal calibrate pin_probe-n64-g1; do
+    m="$(driver_minutes "$arm")"
+    PRE_S=$(( PRE_S + ${m:-0} * 60 ))
+    PRE_BASIS+="${PRE_BASIS:+, }$arm ${m:-unbooked}"
+  done
+  PRE_BASIS="the driver's own arm_minutes: $PRE_BASIS min"
+  echo "    priced ${PRE_S} s: $PRE_BASIS"
+  CLOCK_S=$(( CLOCK_S + PRE_S ))
+fi
 
 # --------------------------------------------------------------------------
 # 3. tests/test_gpu.py on this card, before any arm is booked on it
@@ -940,15 +1329,34 @@ if (( DRY )); then
     tests/test_gpu.py --collect-only -q -p no:cacheprovider || true
   read -r GPU_TESTS_N GPU_TESTS_S < <(price_tests "$LOGS/gpu-tests.log")
   echo "    priced ${GPU_TESTS_S} s: $GPU_TESTS_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"
-elif ! latched gpu-tests "$LEDGER" && ! (( PAST_GPU_TESTS )); then
+  CLOCK_S=$(( CLOCK_S + GPU_TESTS_S ))
+elif ! latched gpu-tests "$LEDGER" && ! (( PAST_GPU_TESTS )) && ! overridden gpu-tests-override; then
   # --past-gpu-tests is a decision taken AFTER reading a red page: it does not
-  # run the same file again
+  # run the same file again, on this pass or a later one
   pytest_step gpu-tests "$GPU_TESTS_TIMEOUT_S" tests/test_gpu.py -q -rfE -p no:cacheprovider
 fi
 (( DRY )) || gpu_tests_gate "$PAST_GPU_TESTS" || stop_chain
 
 # --------------------------------------------------------------------------
-# 4. the ratio at seed 0 at every G; the pilot's V8 read first
+# 4. the alignment probe under the graph, on this card, before the pilot
+# --------------------------------------------------------------------------
+echo; echo "== the alignment probe under the graph, on this card, from the vllm venv (gated)"
+IFS=$'\t' read -r PROBE_CAP PROBE_CAP_HOW < <(cap_for "$PROBE_CHECK_S")
+if (( DRY )); then
+  skip_row probe-check "a dry run does not run it: it times the card. Priced ~$PROBE_CHECK_S s, a documented allowance (it prints no plan); capped on the pod at $PROBE_CAP s ($PROBE_CAP_HOW)"
+  CLOCK_S=$(( CLOCK_S + PROBE_CHECK_S ))
+elif [[ "$(newest_state probe-check "$LEDGER")" != DONE ]] && ! (( PAST_V8 )) \
+     && ! overridden probe-check-override; then
+  # runs again until DONE, as a preflight does: its remedy is a code change,
+  # and a --resume after it must prove the probe again
+  echo "  probe-check: capped at $PROBE_CAP s ($PROBE_CAP_HOW, over its documented allowance)"
+  # shellcheck disable=SC2046
+  arm_step probe-check "$LOGS/probe-check.log" "$PROBE_CAP" $(probe_check_cmd) || true
+fi
+(( DRY )) || probe_check_gate "$PAST_V8" || stop_chain
+
+# --------------------------------------------------------------------------
+# 5. the ratio at seed 0 at every G; the pilot's V8 read first
 # --------------------------------------------------------------------------
 echo; echo "== the re-read fraction, off the cap, seed $FIRST_SEED at every G (the pilot: $PILOT)"
 for g in $G_LADDER; do
@@ -959,19 +1367,28 @@ for g in $G_LADDER; do
 done
 
 # --------------------------------------------------------------------------
-# 5. the elasticity at every G of the ladder
+# 6. the elasticity at every G of the ladder
 # --------------------------------------------------------------------------
 echo; echo "== clock elasticity per geometry (the regime word)"
 for g in $G_LADDER; do
   step="r1-g$g"
   if latched "$step" "$LEDGER" && ! (( DRY )); then echo "  $step latched, skipped"; continue; fi
-  # shellcheck disable=SC2046
-  run_step "$step" "$LOGS/$step.log" $(r1_cmd "$g" "$DRY") || true
-  (( DRY )) && price "$LOGS/$step.log"
+  if (( DRY )); then
+    mark "$step"
+    # shellcheck disable=SC2046
+    run_step "$step" "$LOGS/$step.log" $(r1_cmd "$g" 1) || true
+    price "$LOGS/$step.log"
+    CLOCK_S=$(( CLOCK_S + ${LAST_EST:-0} ))
+  else
+    # shellcheck disable=SC2046
+    step_cap "$step" $(r1_cmd "$g" 1)
+    # shellcheck disable=SC2046
+    arm_step "$step" "$LOGS/$step.log" "$STEP_CAP" $(r1_cmd "$g" 0) || true
+  fi
 done
 
 # --------------------------------------------------------------------------
-# 6. the later seeds, seed-major, each scored with the earlier ones of its G
+# 7. the later seeds, seed-major, each scored with the earlier ones of its G
 # --------------------------------------------------------------------------
 echo; echo "== the re-read fraction, the later seeds, scored with the earlier ones"
 for seed in $SEEDS; do
@@ -981,7 +1398,21 @@ for seed in $SEEDS; do
     if latched "$step" "$LEDGER" && ! (( DRY )); then echo "  $step latched, skipped"; continue; fi
     v7="$(seed0_v7 "$g")"
     if [[ -n "$v7" && "$v7" != PASS ]]; then
-      skip_row "$step" "seed $FIRST_SEED's page (r3-g$g-s$FIRST_SEED) read V7 $v7: the two ratio arms ran at different clocks, which is the power state and not the routing draw, so another seed would buy the same split"
+      # WORDED BY THE VERDICT: a FAIL is a clock split that was measured, and
+      # an UNKNOWN (or no V7 at all) is a page that compared no clocks, which
+      # is what every page whose sweep a V8 FAIL skipped reads
+      if [[ "$v7" == FAIL ]]; then
+        fu_var="FU_G$g"
+        if [[ -z "${!fu_var:-}" ]]; then
+          echo "  G=$g: seed $FIRST_SEED read V7 FAIL at --duty $R3_DUTY. Its follow-up, by hand AFTER the chain:"
+          followup "$g"
+          printf -v "$fu_var" '%s' "$FOLLOWUP_NOTE"
+        fi
+        note="seed $FIRST_SEED's page (r3-g$g-s$FIRST_SEED) read V7 FAIL: the two ratio arms ran at different clocks at duty $R3_DUTY, the power state, so a later seed at this duty would buy the same split. A V7 FAIL at $R3_DUTY means that duty is not yet flat for that arm on this card; the page names a lower duty; the chain skips the G's later seeds and prints the follow-up command. ${!fu_var}"
+      else
+        note="seed $FIRST_SEED's page (r3-g$g-s$FIRST_SEED) read V7 $v7: seed $FIRST_SEED's V7 could not be scored (nothing timed, e.g. the sweep was skipped on V8, or a clock was unread), so a later seed would read the same; see $LOGS/r3-g$g-s$FIRST_SEED.log"
+      fi
+      skip_row "$step" "$note"
       continue
     fi
     r3_step "$g" "$seed"
@@ -989,7 +1420,7 @@ for seed in $SEEDS; do
 done
 
 # --------------------------------------------------------------------------
-# 7. the whole suite, after every arm: a record of this box, gating nothing
+# 8. the whole suite, after every arm: a record of this box, gating nothing
 # --------------------------------------------------------------------------
 echo; echo "== the whole suite, uncapped, from the base venv (a record; gates nothing)"
 if (( DRY )) && [[ "$END_SUITE" == skip ]]; then
@@ -1012,32 +1443,62 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# 8. the table, the price, and what to copy off
+# 9. the table, the price, and what to copy off
 # --------------------------------------------------------------------------
 echo
 if (( DRY )); then
   n_r1=0; for g in $G_LADDER; do n_r1=$(( n_r1 + 1 )); done
+  n_s=0; for s in $SEEDS; do n_s=$(( n_s + 1 )); done
   n_r3=0; for s in $SEEDS; do for g in $G_LADDER; do n_r3=$(( n_r3 + 1 )); done; done
-  overhead=$(( 4 * 60 + n_r3 * 60 + 5 * 60 ))
-  wall=$(( TOTAL_S + GPU_TESTS_S + SUITE_S + overhead ))
-  echo "PRICE, off the arms' own plans: $n_r1 elasticity runs + $n_r3 ratio runs = $TOTAL_S s of arms,"
+  compile_s=$(( n_r3 * R3_RUN_OVERHEAD_S ))
+  wall=$(( TOTAL_S + GPU_TESTS_S + SUITE_S + PRE_S + PROBE_CHECK_S + compile_s + EXFIL_S ))
+  echo "PRICE, off the arms' own plans: $n_r1 elasticity runs + $n_r3 ratio runs = $TOTAL_S s of arms"
+  echo "  (a ratio run is its plan's wall line at duty $R3_DUTY plus the alignment probe's"
+  echo "  seconds at full duty; an elasticity run is its plan's wall figure),"
   echo "  tests/test_gpu.py ~$GPU_TESTS_S s (${GPU_TESTS_N:-?} tests) before them and the end suite ~$SUITE_S s"
   echo "  (${SUITE_N:-0} tests) after them, at $SUITE_S_PER_TEST s a test, session 4's pod rate,"
-  echo "  plus ~$overhead s (preconditions, per-run compiles and weight copies, exfil) = $wall s"
+  echo "  plus the preconditions ~$PRE_S s ($PRE_BASIS),"
+  echo "  the probe check ~$PROBE_CHECK_S s (an allowance: it prints no plan), per-run compiles and"
+  echo "  weight copies ~$compile_s s ($R3_RUN_OVERHEAD_S s a ratio run, an allowance) and exfil ~$EXFIL_S s"
+  echo "  (an allowance) = $wall s"
   echo "  = $(( (wall + 59) / 60 )) min; at \$$RATE_USD_H/h about \$$(awk -v w="$wall" -v r="$RATE_USD_H" 'BEGIN {printf "%.2f", w / 3600 * r}'). Book $(( (wall + 3599) / 3600 + 1 )) h."
+  # the seed spacing, start to start, off the timeline these prices drew
+  spacing=""; prev=""
+  for s in $SEEDS; do
+    if [[ -n "$prev" ]]; then
+      lo=""; hi=""
+      for g in $G_LADDER; do
+        a="AT_r3_g${g}_s$prev"; b="AT_r3_g${g}_s$s"
+        d=$(( ${!b:-0} - ${!a:-0} ))
+        if [[ -z "$lo" ]] || (( d < lo )); then lo=$d; fi
+        if [[ -z "$hi" ]] || (( d > hi )); then hi=$d; fi
+      done
+      rng="$(( (lo + 30) / 60 ))"
+      (( (hi + 30) / 60 != (lo + 30) / 60 )) && rng="$rng-$(( (hi + 30) / 60 ))"
+      spacing+="${spacing:+; }seed $prev to seed $s ~$rng min"
+    fi
+    prev="$s"
+  done
+  [[ -n "$spacing" ]] && echo "  SEED SPACING at these prices, start to start, for every G: $spacing."
+  fu_priced="$(followup_price "$FIRST_G")"
+  IFS=$'\t' read -r fu_per fu_n fu_plan <<< "$fu_priced"
   echo "  NOT in that figure: pod boot and checkout, any arm that REFUSES and is re-run,"
-  echo "  and the seeds a V7 failure at seed 0 skips (less, not more)."
+  echo "  the seeds a V7 FAIL at seed 0 skips (less), and the follow-up that FAIL prints, run"
+  echo "  by hand after the chain: ~$(( (fu_n * fu_per + 59) / 60 )) min a G, $fu_n seeds at --duty $R3_FOLLOWUP_DUTY at $fu_per s each (R3's own"
+  echo "  plan at $R3_FOLLOWUP_DUTY, $fu_plan s, plus $R3_RUN_OVERHEAD_S s) (more)."
   echo "on the pod, first:"
   echo "    git -C /workspace/moe-kernels checkout -- moe/bench/hardware/measured_nvidia_h200.yaml"
   echo "    git -C /workspace/moe-kernels fetch origin && git -C /workspace/moe-kernels checkout -B r3-align origin/r3-align"
   echo "    git -C /workspace/moe-kernels log -1 --format=%h    # must print the head that was pushed"
-  echo "then detached:  cd /workspace/moe-kernels && nohup setsid bash scripts/alpha_g_chain.sh > /workspace/alpha_g_chain.out 2>&1 < /dev/null &"
+  echo "then detached, APPENDING, so a --resume keeps the earlier passes' console:"
+  echo "    cd /workspace/moe-kernels && nohup setsid bash scripts/alpha_g_chain.sh >> /workspace/alpha_g_chain.out 2>&1 < /dev/null &"
   echo "and watch:      tail -f /workspace/alpha_g_chain.out   (and \$SESSION/CHAIN.tsv)"
 else
   rebuild_pairs
 fi
 echo "ledger    $LEDGER"
 echo "read a pair on the laptop:  .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json"
+echo "  (PAIRS-by-G.tsv already reads every seed of a G together that way; PAIRS-README.txt is the legend)"
 YAML_REL="moe/bench/hardware/measured_$CARD.yaml"
 CALIB_DIR="$("$PY_BASE" "$HELPERS" calibration-dir "$SESSION/logs/calibrate.log" 2>/dev/null)" || CALIB_DIR=""
 CALIB_REL="${CALIB_DIR#"$REPO"/}"
@@ -1052,7 +1513,16 @@ else
   echo "  (no '[calibrate] wrote' line in $SESSION/logs/calibrate.log: copy calibrate's run dir"
   echo "   under $REPO/results/calibration off by hand)"
 fi
+# the console the documented launch appends to, which holds lines no ledger
+# does (the lock's fallback notice, the STOP explanations, the per-run lines)
+if (( DRY )) || [[ -f "$CONSOLE_OUT" ]]; then
+  CONSOLE_ARG="-C \"$(dirname "$CONSOLE_OUT")\" \"$(basename "$CONSOLE_OUT")\""
+else
+  CONSOLE_ARG=""
+  echo "  (no $CONSOLE_OUT: this chain was not launched the documented way, so copy its"
+  echo "   console off from wherever it went)"
+fi
 echo "the ruler this session scored against is $REPO/$YAML_REL, TRACKED and dirty after"
 echo "  calibrate: commit it with the results. copy off before releasing the pod:"
-echo "    tar czf $WORKSPACE/exfil-alpha_g-$CARD.tar.gz -C \"$(dirname "$SESSION")\" \"$(basename "$SESSION")\" -C \"$(dirname "$RESULTS")\" \"$(basename "$RESULTS")\" -C \"$REPO\" \"$YAML_REL\"${CALIB_ARG:+ $CALIB_ARG}"
+echo "    tar czf $WORKSPACE/exfil-alpha_g-$CARD.tar.gz -C \"$(dirname "$SESSION")\" \"$(basename "$SESSION")\" -C \"$(dirname "$RESULTS")\" \"$(basename "$RESULTS")\" -C \"$REPO\" \"$YAML_REL\"${CALIB_ARG:+ $CALIB_ARG}${CONSOLE_ARG:+ $CONSOLE_ARG}"
 exit 0

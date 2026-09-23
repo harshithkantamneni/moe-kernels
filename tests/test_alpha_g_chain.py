@@ -1,22 +1,29 @@
 """scripts/alpha_g_chain.sh, checked without a pod.
 
 The chain sequences the alpha(G) matrix session: preflight, the driver's
-preconditions, tests/test_gpu.py on the card, the ratio at seed 0 at every G
-(the first run's V8 read before anything else is bought), the clock
-elasticity at every G, the later seeds scored with the earlier ones at
---duty 0.25, and the whole suite at the end as a record. What this file pins:
-the three shell habits this project has been burned by, the ledger's second
-opinion (the driver's rule, lifted), every gate asking for DONE and not for
-"latched", the session a pass lands in, the card it is measured on and the lock
-it holds, pairing only with reports that formed a ratio, a table rebuilt from
-the reports on disk, the elasticity band read through the arm's own `band_of`
-and withheld from a page its gates refused, and a laptop dry run that prices
-every step off the arms' own plans and writes nothing into the tree.
+preconditions, tests/test_gpu.py on the card, the alignment probe's on-card
+check from the vLLM venv, the ratio at seed 0 at every G (the first run's V8
+read before anything else is bought), the clock elasticity at every G, the
+later seeds scored with the earlier ones at --duty 0.25, and the whole suite at
+the end as a record. What this file pins: the three shell habits this project
+has been burned by, the ledger's second opinion (the driver's rule, lifted),
+every gate asking for DONE and not for "latched", overrides that hold for
+every later pass, every arm under a hang cap off its own price, the session a
+pass lands in, the card and the duty it is measured at and the lock it holds,
+pairing only with reports that formed a ratio, a skip worded by seed 0's V7
+verdict and the follow-up a V7 FAIL prints, tables rebuilt from the reports on
+disk (per run, and per G through R3's own cross-run machinery) with their
+legend, the elasticity band read through the arm's own `band_of` and withheld
+from a page its gates refused, and a laptop dry run that prices every step off
+its own source and writes nothing into the tree.
 
 The measuring path is driven end to end off GPU through two planted
-interpreters: a base one that names a planted card and UUID and is the real
-interpreter for everything else, and an arm one that prints the plan line and
-the RESULT lines and writes report.json, which is all the chain reads.
+interpreters: a base one that names a planted card and UUID, prints a planted
+plan page for an arm's --dry-run and is the real interpreter for everything
+else, and an arm one that prints the plan line and the RESULT lines and writes
+report.json, which is all the chain reads, and emulates
+`private_weight_reference.py --probe-check` (one RESULT line; exit 0, 3, or 2
+when it refuses).
 """
 from __future__ import annotations
 
@@ -25,6 +32,7 @@ import math
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -167,6 +175,45 @@ def test_run_step_writes_the_row_with_the_second_opinion_taken(tmp_path):
          LEDGER=str(ledger))
     last = ledger.read_text().splitlines()[-1].split("\t")
     assert last[1] == "UNKNOWN" and "UNEARNED DONE" in last[6]
+
+
+@pytest.mark.skipif(shutil.which("timeout") is None,
+                    reason="no timeout(1) here: the chain runs its arms uncapped on such a box")
+def test_an_arm_that_outlives_its_cap_is_an_unlatched_timed_out_error(tmp_path):
+    """GPU-2. A timed-out arm is ERROR with TIMED OUT in its note, not latched,
+    whatever RESULT lines it printed before the cap: both arms resume per
+    cell, so --resume re-runs it."""
+    ledger = _ledger(tmp_path / "CHAIN.tsv")
+    hang = tmp_path / "hang.py"
+    hang.write_text("import time\n"
+                    "print('RESULT: VALIDITY V7 PASS [VALIDITY] x | measured y | gate z',"
+                    " flush=True)\n"
+                    "time.sleep(120)\n")
+    got = lift(f"arm_step r3-g1-s0 {tmp_path / 'a.log'!s} 2 {sys.executable} {hang!s}; echo rc=$?",
+               LEDGER=str(ledger))
+    assert "rc=124" in got.stdout, got.stdout + got.stderr
+    row = _rows(ledger)[-1]
+    assert row[:3] == ["r3-g1-s0", "ERROR", "124"]
+    assert "TIMED OUT after" in row[6] and "against a cap of 2 s" in row[6]
+    assert lift(f"latched r3-g1-s0 {ledger!s} || echo no").stdout.strip() == "no"
+    # under its cap, an arm is scored by its page as before
+    page = tmp_path / "page.py"
+    page.write_text("import sys\n"
+                    "print('RESULT: CLAIM C1 FAIL [CLAIM] x | measured 0.9 | gate y')\n"
+                    "sys.exit(1)\n")
+    lift(f"arm_step r3-g4-s0 {tmp_path / 'b.log'!s} 60 {sys.executable} {page!s}",
+         LEDGER=str(ledger))
+    assert _rows(ledger)[-1][:3] == ["r3-g4-s0", "CLAIM_FAIL", "1"]
+
+
+def test_an_arms_cap_is_a_multiple_of_its_own_price_with_a_floor():
+    factor, floor = _const("ARM_CAP_FACTOR"), _const("ARM_CAP_FLOOR_S")
+    for est in (1, floor // factor + 1, 876, 5000):
+        cap, how = lift(f"cap_for {est}").stdout.rstrip("\n").split("\t")
+        assert int(cap) == max(factor * est, floor), (est, cap, how)
+        assert str(est) in how
+    cap, how = lift('cap_for ""').stdout.rstrip("\n").split("\t")
+    assert int(cap) == _const("ARM_CAP_UNPRICED_S") and "no price" in how
 
 
 @pytest.mark.parametrize("rc,state,latches", [
@@ -391,11 +438,13 @@ def test_a_pytest_step_runs_without_the_chains_knobs(tmp_path, monkeypatch):
     assert _rows(ledger)[-1][:2] == ["suite", "DONE"], got.stdout + got.stderr
 
 
-def test_the_order_is_the_owners_and_only_test_gpu_is_gated():
-    """D3: preflight, preconditions, tests/test_gpu.py (gated), R3 seed 0 at
-    every G with the pilot's V8 read, R1 at every G, R3's later seeds, then
-    the whole suite uncapped, from PY_BASE, gating nothing."""
+def test_the_order_is_the_owners_and_only_the_pre_arm_checks_are_gated():
+    """D3: preflight, preconditions, tests/test_gpu.py (gated), the probe
+    check from the vLLM venv (gated), R3 seed 0 at every G with the pilot's
+    V8 read, R1 at every G, R3's later seeds, then the whole suite uncapped,
+    from PY_BASE, gating nothing."""
     marks = ['echo "== preflight', 'echo "== preconditions', 'echo "== tests/test_gpu.py',
+             'echo "== the alignment probe under the graph',
              'echo "== the re-read fraction, off the cap, seed', 'echo "== clock elasticity',
              'echo "== the re-read fraction, the later seeds', 'echo "== the whole suite']
     at = [CODE.index(m) for m in marks]
@@ -403,9 +452,14 @@ def test_the_order_is_the_owners_and_only_test_gpu_is_gated():
     gpu = CODE[at[2]:at[3]]
     assert "tests/test_gpu.py -q -rfE -p no:cacheprovider" in gpu
     assert 'gpu_tests_gate "$PAST_GPU_TESTS" || stop_chain' in gpu
-    pilot = CODE[at[3]:at[4]]
+    probe = CODE[at[3]:at[4]]
+    assert "$(probe_check_cmd)" in probe and 'probe_check_gate "$PAST_V8" || stop_chain' in probe
+    assert re.search(r'^probe_check_cmd\(\) \{\n  echo "\$PY_VLLM" "\$REPO/scripts/private_weight_'
+                     r'reference\.py" --probe-check \\\n\s+--model mixtral-8x7b --block-m 32\n\}',
+                     CODE, re.M), "the NEW INTERFACE's command line, from the vLLM venv"
+    pilot = CODE[at[4]:at[5]]
     assert 'v8_gate "$PAST_V8" || stop_chain' in pilot
-    suite = CODE[at[6]:CODE.index("# 8. the table")]
+    suite = CODE[at[7]:CODE.index("# 9. the table")]
     assert ('pytest_step suite "$SUITE_TIMEOUT_S" tests/ -q -rfE --durations=25'
             ' -p no:cacheprovider') in suite
     assert "--maxfail" not in suite and "-x " not in suite, "the suite on the pod is uncapped"
@@ -425,9 +479,98 @@ def test_help_prints_the_whole_header_and_no_code():
     assert "CLOCK-CARRIES is only an upper bound" in got.stdout, "finding 28's caveat"
     assert "RUNS FOR THE RECORD AND IS NOT GATED" in got.stdout
     assert "nohup setsid bash scripts/alpha_g_chain.sh" in got.stdout
+    assert ">> /workspace/alpha_g_chain.out 2>&1" in got.stdout, "a --resume appends"
+    assert "> /workspace/alpha_g_chain.out" not in got.stdout.replace(">>", ""), \
+        "no launch line truncates the console"
+    assert "AN OVERRIDE HOLDS" in got.stdout and "probe-check" in got.stdout
+    flat = " ".join(_header_prose().split())
+    assert ("A V7 FAIL at 0.25 means that duty is not yet flat for that arm on this card; the"
+            " page names a lower duty; the chain skips the G's later seeds and prints the"
+            " follow-up command") in flat, "the owner's reading of a V7 FAIL (XS-1)"
+    assert "a finding about the card" not in CODE
+    assert "does NOT cover the graph probe R3's V8 stands on" in flat, "GPU-1: no false cover"
     assert "checkout -B r3-align origin/r3-align" in got.stdout
     assert "no PID variable" in got.stdout, "the header's last line"
     assert "set -uo pipefail" not in got.stdout
+
+
+def _header_prose() -> str:
+    """The header's comment, one line of prose: wrapped sentences are found
+    whole."""
+    head = CODE.split("\nset -uo pipefail\n", 1)[0]
+    return " ".join(ln[2:] if ln.startswith("# ") else ln.lstrip("#")
+                    for ln in head.splitlines()[1:])
+
+
+def test_the_resolution_sentence_is_session_4s_own_rescore():
+    """T3. The header's figures for R1's resolution are session 4's G=16 cells
+    re-scored by the arm's own fit at its default bootstrap, not typed."""
+    import clock_elasticity as CE
+    cells = ROOT / "tests" / "fixtures" / "2026-09-21-nvidia_h200-session4-clock_elasticity-g16"
+    rows = CE.read_rows(cells / "cells.csv")
+
+    def fitted(duties):
+        want = {CE._duty_key(d) for d in duties}
+        return CE.fit([r for r in rows if CE._duty_key(r.duty_requested) in want],
+                      draws=CE.DEFAULT_DRAWS, seed=0)
+    three, four = fitted((1.0, 0.5, 0.25)), fitted((1.0, 0.5, 0.25, 0.1))
+    text = _header_prose()
+    assert (f"half-width of {(three.hi - three.lo) / 2:.3f} over its states 1.0, 0.5 and 0.25"
+            f" ({(four.hi - four.lo) / 2:.3f} over all four; the all-tread reading's was"
+            f" {(four.per_tile_all_treads_hi - four.per_tile_all_treads_lo) / 2:.3f}) against"
+            f" R1's {CE.RESOLUTION_TARGET:.3f} target") in text
+    assert (three.hi - three.lo) / 2 > CE.RESOLUTION_TARGET, "the sentence's premise"
+
+
+def test_the_secant_caveat_is_first_order_and_says_where_it_fails():
+    """T4. A per-tile cost A + B/f gives an elasticity in [0, 1]; session 4's
+    G=16 claim read above 1, where the caveat has no model under it."""
+    text = _header_prose()
+    assert "To first order, for a per-tile cost A + B/f" in text
+    assert "cannot produce an elasticity above 1" in text
+    assert "an hour or more apart" not in CODE, "the dry run prints the spacing"
+    assert "SEED SPACING" in CODE
+
+
+def test_no_text_says_r1_would_pool_two_cards():
+    """XS-3. R1 carries its own UUID guard (device_guard, 858bf35); the chain
+    said R1 resumes by card NAME and would pool two cards' cells."""
+    import clock_elasticity as CE
+    assert callable(CE.device_guard)
+    for stale in ("resumes by card NAME", "keys its resume on the card NAME",
+                  "R1's run id carries no UUID, so its resume would pool"):
+        assert stale not in CODE, stale
+    assert "R1's device_guard" in _header_prose()
+
+
+def _runbook_chain_section() -> str:
+    text = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
+    start = text.index("## The alpha(G) chain")
+    return text[start:text.index("\n## ", start + 1)]
+
+
+def test_the_runbook_chain_section_says_what_the_chain_does():
+    """Every behaviour this file pins has its runbook sentence: the appending
+    launch, the probe check, overrides that hold, the V7 wording and its
+    follow-up, the per-G table, the flock fallback, the caps."""
+    sec = _runbook_chain_section()
+    flat = " ".join(sec.split())
+    assert "nohup setsid bash scripts/alpha_g_chain.sh >> /workspace/alpha_g_chain.out" in sec
+    assert "> /workspace/alpha_g_chain.out" not in sec.replace(">>", "")
+    assert "--probe-check" in sec and "skips from PY_BASE" in flat
+    assert "graph primitives" not in flat
+    assert "holds for every later pass" in flat
+    assert ("V7 FAIL at 0.25 means that duty is not yet flat for that arm on this card; the"
+            " page names a lower duty; the chain skips the G's later seeds and prints the"
+            " follow-up command") in flat
+    assert "a finding about the card" not in flat
+    assert "could not be scored" in flat and "--duty 0.1" in flat
+    assert "PAIRS-by-G.tsv" in sec and "exit_scope" in sec and "PAIRS-README.txt" in sec
+    assert "ps -eo pid,etime,args" in sec
+    assert "timeout --signal=INT --kill-after=60" in sec
+    assert "resumes by card name" not in flat and "an hour or more apart" not in flat
+    assert "makes every later ratio page INVALID" in flat and "SEEDS=0" in sec
+    assert "To first order" in flat
 
 
 # --------------------------------------------------------------------------
@@ -513,6 +656,7 @@ def test_the_device_file_is_written_once_and_a_resume_on_another_card_is_refused
     assert got.stdout.strip().endswith("rc=2")
     assert "was measured on the card 6b4b5fe6-e1ec, and this card is 99999999-aaaa" in got.stdout
     assert "bash scripts/alpha_g_chain.sh --new" in got.stdout
+    assert "R3's and R1's own UUID guards" in got.stdout
     assert (s / "DEVICE").read_text() == "6b4b5fe6-e1ec\n", "a refusal rewrites nothing"
 
 
@@ -628,6 +772,8 @@ def test_a_held_flock_is_refused_and_never_taken_over(tmp_path, recorded):
             assert got.stdout.strip().endswith("rc=2"), got.stdout + got.stderr
             assert f"another chain holds {s / 'chain.lock'} (it recorded {owner})" in got.stdout
             assert "never taken over" in got.stdout and f"fuser -v {s / 'chain.lock'}" in got.stdout
+            assert "ps -eo pid,etime,args | grep -E" in got.stdout, "a fallback the image has"
+            assert "Do not open a --new session meanwhile" in got.stdout
         assert (s / "chain.lock").read_text() == owner + "\n", "a refusal rewrote the holder"
     finally:
         holder.kill()
@@ -704,7 +850,8 @@ def test_reading_carries_the_joint_reading_each_arms_clock_and_the_low_cells(tmp
     header = H.reading_header()
     assert len(row) == len(header)
     got = dict(zip(header, row, strict=True))
-    assert row[:8] == ["16", "2", "0.9551", "0.9544", "0.9695", "CLAIM_FAIL", "0.25", "run-a"]
+    assert row[:9] == ["16", "2", "0.9551", "0.9544", "0.9695", "CLAIM_FAIL", "envelope",
+                       "0.25", "run-a"]
     assert (got["rep_n"], got["rep_spread"], got["rep_sd"], got["env_lo"], got["env_hi"],
             got["joint"]) == ("3", "0.0200", "0.0100", "0.9400", "0.9800", "PASS")
     assert got[f"clk_{PWR.NATIVE}"] == "1972"            # the median of 1965 and 1980
@@ -716,6 +863,7 @@ def test_reading_carries_the_joint_reading_each_arms_clock_and_the_low_cells(tmp
                                                              "sm_clock_load_mhz": 1965.0}])))
     got = dict(zip(header, alone, strict=True))
     assert [got[k] for k in ("rep_n", "rep_sd", "joint")] == ["none"] * 3
+    assert got["exit_scope"] == "alone"
     assert got["low_cells"] == "none"
     assert H.reading(str(tmp_path / "missing.json")) == ["unreadable"]
 
@@ -744,7 +892,9 @@ def test_eta_reads_the_band_through_the_arms_own_edges(tmp_path):
 
 
 @pytest.mark.parametrize("gates,word", [
-    # session 4's G=16 shape: above R1's admissible ceiling, V7 FAIL, the page INVALID
+    # an interval above V7's admissible edge (planted at the all-tread reading of
+    # session 4's G=16 cells, which is printed beside the claim and never gated),
+    # V7 FAIL, the page INVALID
     ((("VALIDITY", "V7", "FAIL"), ("CLAIM", "C1", "FAIL")), "INVALID"),
     ((("VALIDITY", "V1", "UNKNOWN"),), "INVALID"),
     ((), "unscored"),
@@ -768,12 +918,17 @@ def test_gate_reads_one_verdict_off_a_report(tmp_path):
 def test_run_id_and_estimate_come_off_the_plan_page(tmp_path):
     log = tmp_path / "r3.log"
     log.write_text("experiment  private_weight_reference / nvidia_h200-bm32-g4-abc123\n"
-                   "estimated GPU time 154 s at the model's own timings\n"
+                   "estimated GPU time 154 s at the model's own timings, excluding compiles and"
+                   " allocation; that includes the alignment probe's 9 s\n"
                    "WALL CLOCK at duty 0.25: the ladder's 145 s of kernel time takes about 581 s,"
                    " the idle gaps\n")
     assert H.run_id(str(log), "private_weight_reference") == "nvidia_h200-bm32-g4-abc123"
     assert H.run_id(str(log), "clock_elasticity") == ""
-    assert H.estimate(str(log)) == "581"          # the wall figure, not the kernel one
+    # the wall figure, not the kernel one, PLUS the probe that wall line leaves out
+    # (timed at full duty): the driver books the same arm at 581 + 9
+    assert H.estimate(str(log)) == str(581 + 9)
+    assert H.estimate_basis(str(log)) == ("581 s the ladder's wall at the plan's duty + 9 s the"
+                                          " alignment probe, timed at full duty on top of it")
     r1 = tmp_path / "r1.log"
     r1.write_text("experiment  clock_elasticity / x-1cb0bac3\n"
                   "estimated wall time 876 s (14.6 min), itemised:\n")
@@ -852,6 +1007,96 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
     assert not any(ln.startswith("#") for ln in (session / "PAIRS.tsv").read_text().splitlines())
 
 
+def test_a_run_that_formed_no_ratio_quotes_no_joint_reading(tmp_path):
+    """E2E-3. When a later seed forms no ratio of its own, R3 builds its
+    replicates block from the OTHER runs alone, and PAIRS.tsv printed that
+    block on the seed's row as if the seed were in it (n=2 PASS beside a
+    ratio of none). The joint columns are filled only when the block is a
+    reading this run is in."""
+    others = {"n": 2, "spread": 0.01, "sd": None, "envelope": [0.94, 0.97], "verdict": "PASS",
+              "runs": [{"run_id": "run-s0"}, {"run_id": "run-s1"}]}
+    rep = _report(tmp_path, "run-s2", seed=2, ratio=None, lo=None, hi=None, replicates=others)
+    got = dict(zip(H.reading_header(), H.reading(str(rep)), strict=True))
+    assert [got[k] for k in ("rep_n", "env_lo", "env_hi", "joint")] == ["none"] * 4
+    assert got["exit_scope"] == "alone", "C1 with no ratio of its own was not scored on an envelope"
+    # a block that names other runs only is not this run's either
+    rep = _report(tmp_path, "run-s2c", seed=2, replicates=others)
+    assert dict(zip(H.reading_header(), H.reading(str(rep)), strict=True))["joint"] == "none"
+    # the same shape on a run that formed its ratio and is in it: quoted, on the envelope
+    mine = dict(others, n=3, runs=[{"run_id": "run-s2b"}, *others["runs"]])
+    rep = _report(tmp_path, "run-s2b", seed=2, replicates=mine)
+    got = dict(zip(H.reading_header(), H.reading(str(rep)), strict=True))
+    assert (got["rep_n"], got["joint"], got["exit_scope"]) == ("3", "PASS", "envelope")
+
+
+def _seeded(session, results, g, runs, duty=0.25):
+    """Plant a G's ratio reports and the chain logs that name them."""
+    logs = session / "chain-logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    for seed, (ratio, lo, hi, v7) in runs.items():
+        rid = f"rid-g{g}-s{seed}"
+        _report(results / "private_weight_reference", rid, G=g, seed=seed, ratio=ratio, lo=lo,
+                hi=hi, v7=v7, duty=duty if not isinstance(duty, dict) else duty[seed])
+        (logs / f"r3-g{g}-s{seed}.log").write_text(
+            f"experiment  private_weight_reference / {rid}\n")
+
+
+def test_the_per_g_table_reads_every_seed_together_whatever_order_they_ran(tmp_path):
+    """E2E-4 and T5. The chain pairs a seed only with the seeds BEFORE it, so a
+    seed 0 re-run on --resume after seeds 1 and 2 latched was scored alone
+    and no PAIRS.tsv row ever held all three; and an INVALID run inside a
+    joint envelope was flagged nowhere. PAIRS-by-G.tsv reads every seed of a
+    G that formed a ratio together, through R3's own cross-run machinery,
+    whatever PAIRS.tsv's rows say, and names any INVALID run inside."""
+    import private_weight_reference as PWR
+    session, results = tmp_path / "s", tmp_path / "res"
+    runs = {0: (0.560, 0.550, 0.570, "PASS"), 1: (0.600, 0.580, 0.610, "FAIL"),
+            2: (0.555, 0.540, 0.565, "PASS")}
+    _seeded(session, results, 4, runs)
+    _seeded(session, results, 16, {0: (0.7, 0.69, 0.71, "PASS"), 1: (0.72, 0.71, 0.73, "PASS")},
+            duty={0: 0.25, 1: 0.1})
+    H.pairs_table(session, results, "1 4 16", "0 1 2", {})
+    rows = [dict(zip(H.BY_G_HEADER, r, strict=True)) for r in _rows(session / "PAIRS-by-G.tsv")]
+    assert [r["G"] for r in rows] == ["1", "4", "16"], "one row per G of the ladder"
+    g1, g4, g16 = rows
+    assert (g1["n"], g1["joint"]) == ("0", "none") and "formed a ratio" in g1["note"]
+    points = [r[0] for r in runs.values()]
+    assert (g4["n"], g4["seeds"]) == ("3", "0 1 2")
+    assert (float(g4["env_lo"]), float(g4["env_hi"])) == (min(r[1] for r in runs.values()),
+                                                          max(r[2] for r in runs.values()))
+    assert float(g4["mean"]) == pytest.approx(statistics.mean(points), abs=5e-5)
+    assert float(g4["sd"]) == pytest.approx(statistics.stdev(points), abs=5e-5)
+    # the envelope reaches past ALPHA_BAND's upper edge without missing the band
+    assert float(g4["env_lo"]) < PWR.ALPHA_BAND[1] <= float(g4["env_hi"])
+    assert g4["joint"] == "UNKNOWN"
+    assert g4["invalid_in_envelope"] == "seed 1", "seed 1's own page exited INVALID on V7"
+    assert g4["eta"] == "none" and g4["band"] == "unmeasured", "R1's columns ride beside"
+    # two duties are two designs: R3's load_replicates refuses them, and so does the table
+    assert g16["joint"] == "REFUSED" and "duty" in g16["note"], g16
+
+
+def test_the_tables_carry_a_legend_off_the_arms_own_constants(tmp_path):
+    """T6. `exit` changed scope between seed 0 and seed 1 of a G, `joint` is a
+    verdict against the refit band and not a quotability flag, and the two
+    intervals are 90% and 95%: none of it was written down beside the table."""
+    import clock_elasticity as CE
+    import private_weight_reference as PWR
+    session, results = tmp_path / "s", tmp_path / "res"
+    _seeded(session, results, 1, {0: (0.95, 0.94, 0.96, "PASS")})
+    H.pairs_table(session, results, "1", "0", {})
+    legend = (session / "PAIRS-README.txt").read_text()
+    for column in ("exit_scope", "rep_n", "joint", "eta_exit", "invalid_in_envelope",
+                   "PAIRS-by-G.tsv", "PAIRS-fixed.tsv"):
+        assert column in legend, column
+    assert f"{PWR.INTERVAL_PCT:.0f}% percentile bootstrap over repeats" in legend
+    assert f"ALPHA_BAND [{PWR.ALPHA_BAND[0]}, {PWR.ALPHA_BAND[1]})" in legend
+    assert "NOT a quotability flag" in legend
+    # R1's interval is the 2.5th to 97.5th percentile of its own bootstrap
+    source = Path(CE.__file__).read_text()
+    assert "_percentile(values, 0.025)" in source and "_percentile(values, 0.975)" in source
+    assert "95% percentile bootstrap" in legend
+
+
 def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
     session, results = tmp_path / "s", tmp_path / "res"
     (session / "chain-logs").mkdir(parents=True)
@@ -869,13 +1114,36 @@ def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
 # the measuring path, end to end, through planted interpreters
 # --------------------------------------------------------------------------
 
+#: The planted plan pages' prices: R3's ladder kernel seconds and its probe's,
+#: and R1's wall. The chain prices every cap, the V8 STOP and a follow-up off
+#: these; the tests recompute each figure from them.
+STUB_LADDER_S, STUB_PROBE_S, STUB_R1_S = 150, 10, 900
+
 STUB_BASE = r"""#!/bin/bash
-# a planted base interpreter: the card and its UUID are the test's, and
-# everything else runs on the real one
+# a planted base interpreter: the card and its UUID are the test's, an arm's
+# --dry-run is a planted plan page carrying the price lines the chain reads,
+# and everything else runs on the real one
 if [[ "${1:-}" == */alpha_g_chain_helpers.py ]]; then
   case "${2:-}" in
     card)   printf '%s\t\n' "${STUB_CARD:-nvidia_testcard}"; exit 0 ;;
     device) printf '%s\n' "${STUB_DEVICE:-0a0a0a0a-1111-2222-3333-444444444444}"; exit 0 ;;
+  esac
+fi
+if [[ " $* " == *" --dry-run "* ]]; then
+  case "${1:-}" in
+    */clock_elasticity.py)
+      echo "experiment  clock_elasticity / planted-dry"
+      echo "estimated wall time @R1@ s, itemised:"
+      exit 2 ;;
+    */private_weight_reference.py)
+      duty=1.0; prev=""
+      for a in "$@"; do [[ "$prev" == --duty ]] && duty="$a"; prev="$a"; done
+      echo "experiment  private_weight_reference / planted-dry"
+      echo "estimated GPU time $(( @LADDER@ + @PROBE@ )) s; that includes the alignment" \
+           "probe's @PROBE@ s"
+      w="$(awk -v d="$duty" 'BEGIN {printf "%d", @LADDER@ / d + 0.5}')"
+      echo "WALL CLOCK at duty $duty: the ladder's @LADDER@ s of kernel time takes about $w s"
+      exit 2 ;;
   esac
 fi
 # a planted pytest, when the test asks for one: the names of the environment
@@ -917,8 +1185,21 @@ def many(name):
     return out
 
 
-g, tag = int(opt("--group-m")), opt("--session-tag")
 plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text()) if os.environ.get("STUB_PLAN") else {}
+if "--probe-check" in args:
+    # the NEW INTERFACE of private_weight_reference.py --probe-check: one RESULT
+    # line, exit 0 on PASS and 3 otherwise, REFUSED 2 with no card or no vLLM
+    with open(os.environ["STUB_TRACE"], "a") as f:
+        f.write("probe-check\t" + " ".join(args) + "\n")
+    cfg = plan.get("probe-check", {})
+    if cfg.get("refuse"):
+        print("REFUSED: no CUDA device (a planted refusal)")
+        sys.exit(2)
+    v = cfg.get("P1", "PASS")
+    print(exit_codes.result_line("VALIDITY", "P1", v, "[VALIDITY] planted probe | measured "
+                                 "graph_calls 16 | gate graph_calls == 16"))
+    sys.exit(0 if v == "PASS" else 3)
+g, tag = int(opt("--group-m")), opt("--session-tag")
 if script == "clock_elasticity.py":
     exp, step = "clock_elasticity", f"r1-g{g}"
 else:
@@ -949,8 +1230,13 @@ if exp == "private_weight_reference":
                "ratio_interval": [ratio - 0.01, ratio + 0.01],
                "replicates": ({"n": 1 + len(reps), "spread": 0.01 * len(reps),
                                "sd": 0.005 if len(reps) >= 2 else None,
-                               "envelope": [0.94, ratio + 0.01], "verdict": "PASS"}
+                               "envelope": [0.94, ratio + 0.01], "verdict": "PASS",
+                               "runs": [{"run_id": rid}]
+                               + [{"run_id": json.loads(Path(r).read_text())["run_id"]}
+                                  for r in reps]}
                               if reps else None),
+               "align_probe": {"synthetic": False, "note": cfg.get("probe_note", ""),
+                               "cells": [{"graph_calls": 16, "host_bound": False}] * 3},
                "treads_table": table,
                "gates": [{"tag": t, "kind": k, "verdict": v} for k, t, v in gates]}
 else:
@@ -983,7 +1269,10 @@ class Pod:
         self.trace = root / "trace.txt"
         self.plan = root / "plan.json"
         self.base = root / "py-base"
-        self.base.write_text(STUB_BASE.replace("@PYTHON@", sys.executable))
+        self.base.write_text(STUB_BASE.replace("@PYTHON@", sys.executable)
+                             .replace("@LADDER@", str(STUB_LADDER_S))
+                             .replace("@PROBE@", str(STUB_PROBE_S))
+                             .replace("@R1@", str(STUB_R1_S)))
         self.arm = root / "py-arm"
         self.arm.write_text(STUB_ARM.replace("@PYTHON@", sys.executable)
                             .replace("@ROOT@", str(ROOT)))
@@ -1030,9 +1319,10 @@ def _rows(path: Path) -> list[list[str]]:
 
 @pytest.fixture(scope="module")
 def two_passes(tmp_path_factory):
-    """Pass 1: r1-g1 crashes; G=4's R1 page is INVALID (session 4's G=16 shape,
-    above the admissible ceiling); G=16's seed 0 reads V7 FAIL. Pass 2,
-    --resume: r1-g1 lands, and nothing else is bought."""
+    """Pass 1: r1-g1 crashes; G=4's R1 page is INVALID (planted at the
+    all-tread reading of session 4's G=16 cells, above V7's admissible edge);
+    G=16's seed 0 reads V7 FAIL. Pass 2, --resume: r1-g1 lands, and nothing
+    else is bought."""
     pod = Pod(tmp_path_factory.mktemp("pod"))
     s = pod.session()
     plan = {"r3-g1-s0": {"low": 2}, "r3-g16-s0": {"V7": "FAIL"},
@@ -1050,8 +1340,9 @@ def test_a_measuring_pass_runs_the_owners_order_at_duty_0_25(two_passes):
     pod, s, first, after, _second = two_passes
     assert first.returncode == 0, first.stdout[-3000:] + first.stderr[-1500:]
     steps = [step for step, _ in after["trace"]]
-    assert steps == ["r3-g1-s0", "r3-g4-s0", "r3-g16-s0", "r1-g1", "r1-g4", "r1-g16",
-                     "r3-g1-s1", "r3-g4-s1", "r3-g1-s2", "r3-g4-s2"], steps
+    assert steps == ["probe-check", "r3-g1-s0", "r3-g4-s0", "r3-g16-s0", "r1-g1", "r1-g4",
+                     "r1-g16", "r3-g1-s1", "r3-g4-s1", "r3-g1-s2", "r3-g4-s2"], steps
+    assert dict(after["trace"])["probe-check"] == "--probe-check --model mixtral-8x7b --block-m 32"
     args = dict(after["trace"])
     tag = s.name
     for step in ("r3-g1-s0", "r3-g16-s0", "r3-g1-s1", "r3-g4-s2"):
@@ -1072,11 +1363,48 @@ def test_a_seed_0_v7_failure_skips_that_gs_later_seeds_unlatched(two_passes):
     for seed in (1, 2):
         (row,) = by[f"r3-g16-s{seed}"]
         assert row[1] == "SKIPPED" and "r3-g16-s0) read V7 FAIL" in row[6], row
+        assert "the two ratio arms ran at different clocks at duty 0.25" in row[6]
+        assert ("A V7 FAIL at 0.25 means that duty is not yet flat for that arm on this card;"
+                " the page names a lower duty; the chain skips the G's later seeds and prints"
+                " the follow-up command") in row[6]
     assert by["r3-g16-s0"][-1][1] == "INVALID"
     assert by["r1-g1"][-1][1] == "ERROR"
     assert by["suite"][-1][1] == "SKIPPED" and "END_SUITE=skip" in by["suite"][-1][6]
     # SKIPPED is not latched: the next pass asks again and skips again
     assert re.search(r"^r3-g16-s1\s+SKIPPED", second.stdout, re.M), second.stdout
+
+
+def test_a_seed_0_v7_fail_prints_the_follow_up_at_a_lower_duty(two_passes):
+    """XS-1, T2(i). R3's page names a lower duty on a V7 FAIL at 0.25; the chain
+    skipped the G's later seeds and said nothing more, and a hand re-run at
+    0.1 is a new design key outside the ledger. It now prints, once per G, the
+    exact follow-up with its own R3 flags and session tag, priced off R3's own
+    plan at 0.1, to run after the chain and read with --read on the laptop."""
+    pod, s, first, _after, _second = two_passes
+    tag = s.name
+    fu = (s / "followup-g16.txt").read_text()
+    runs = [ln for ln in fu.splitlines()
+            if not ln.startswith("#") and "private_weight_reference.py" in ln and " > " in ln]
+    assert len(runs) == 3
+    for seed, ln in zip((0, 1, 2), runs, strict=True):
+        assert ln.startswith(f"{pod.arm} {ROOT}/scripts/private_weight_reference.py --model"), ln
+        assert (f"--treads 6 --repeats 9 --group-m 16 --duty 0.1 --seed {seed}"
+                f" --session-tag {tag}") in ln
+        assert ln.endswith(f"r3-g16-s{seed}-duty0.1.log 2>&1") and "--dry-run" not in ln
+    assert "--replicate-of" not in runs[0]
+    assert all(ln.split(" > ")[0].endswith('--replicate-of "$S0"') for ln in runs[1:])
+    assert f"S0=\"$MOE_RESULTS_DIR/private_weight_reference/$({pod.base} " in fu
+    assert f"export MOE_RESULTS_DIR={pod.results}" in fu
+    per = _r3_price(0.1) + _const("R3_RUN_OVERHEAD_S")
+    assert f"~{-(-3 * per // 60)} min: 3 runs at {per} s each" in fu, "R3's own plan at 0.1"
+    assert "RUN THEM AFTER THE CHAIN HAS FINISHED, never beside it" in fu
+    assert "--read" in fu and "outside the chain's ledger and PAIRS.tsv" in fu
+    note = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "r3-g16-s1"][0][6]
+    assert runs[0] in note and "--read on the laptop, outside PAIRS.tsv" in note
+    assert str(s / "followup-g16.txt") in note
+    assert first.stdout.count("Its follow-up, by hand AFTER the chain") == 1, "once per G"
+    assert runs[2] in first.stdout, "the whole block on the console"
+    assert not (s / "followup-g1.txt").exists() and not (s / "followup-g4.txt").exists()
 
 
 def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_passes):
@@ -1095,6 +1423,7 @@ def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_pa
         ("withheld:INVALID", "INVALID")] * 3 + [("RAW-STANDS", "DONE")]
     assert [r["rep_n"] for r in now] == ["none", "2", "3"] * 2 + ["none"]
     assert [r["joint"] for r in now] == ["none", "PASS", "PASS"] * 2 + ["none"]
+    assert [r["exit_scope"] for r in now] == ["alone", "envelope", "envelope"] * 2 + ["alone"]
     assert [r["low_cells"] for r in now] == ["2"] + ["0"] * 6
     assert {r["clk_private"] for r in now} == {"1950"}
     assert [r["exit"] for r in now] == ["DONE"] * 6 + ["INVALID"]
@@ -1131,15 +1460,193 @@ def test_the_pilots_v8_stops_the_chain_and_past_v8_goes_on_recorded(tmp_path):
     assert got.returncode == 3, got.stdout[-3000:] + got.stderr[-1000:]
     assert "STOP: r3-g1-s0's V8 is FAIL, not PASS" in got.stdout
     assert "--resume --past-v8" in got.stdout
-    assert [st for st, _ in pod.traced()] == ["r3-g1-s0"], "nothing after the pilot was bought"
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0"], \
+        "nothing after the pilot was bought"
+    # T1: what going on buys, priced off the arms' own (planted) plans, and the
+    # probe's own record off the pilot's report
+    assert "makes every later ratio page INVALID: the probe re-runs on" in got.stdout
+    n_g, n_s, per = 2, 2, _r3_price(0.25) + _const("R3_RUN_OVERHEAD_S")
+    later = n_g * n_s - 1
+    assert f"R1's {n_g} regime words (~{-(-n_g * STUB_R1_S // 60)} min off R1's own" in got.stdout
+    assert (f"{later} ratio pages that cannot be quoted (~{-(-later * per // 60)} min at {per} s"
+            " a page") in got.stdout
+    assert f"limits the ratio pages to seed 0 ({n_g - 1}, ~{-(-(n_g - 1) * per // 60)} min)" \
+        in got.stdout
+    assert "SEEDS=0 bash scripts/alpha_g_chain.sh --resume --past-v8" in got.stdout
+    assert "the pilot's probe: note: none; graph_calls 16; host-bound 0 of 3" in got.stdout
     assert [(r[0], r[1]) for r in _rows(s / "PAIRS.tsv")] == [("1", "0")], "rebuilt before the STOP"
     again = pod.run("--resume", "--past-v8", SEEDS="0 1")
     assert again.returncode == 0, again.stdout[-3000:]
     over = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "v8-override"]
     assert len(over) == 1 and over[0][1] == "OVERRIDDEN"
     assert "--past-v8" in over[0][6] and "r3-g1-s0's V8 FAIL" in over[0][6]
-    assert [st for st, _ in pod.traced()] == ["r3-g1-s0", "r3-g16-s0", "r1-g1", "r1-g16",
-                                              "r3-g1-s1", "r3-g16-s1"]
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r3-g16-s0", "r1-g1",
+                                              "r1-g16", "r3-g1-s1", "r3-g16-s1"]
+    # XS-7, T8: THE DECISION HOLDS. A plain --resume after it (a killed chain
+    # relaunched the runbook's way) went back to the STOP it had gone past.
+    later = pod.run("--resume", SEEDS="0 1")
+    assert later.returncode == 0, later.stdout[-3000:]
+    assert "--past-v8 holds from an earlier pass (the ledger's v8-override row" in later.stdout
+    assert len([r for r in _rows(s / "CHAIN.tsv") if r[0] == "v8-override"]) == 1, \
+        "a held decision writes no second row"
+
+
+def _const(name: str) -> int:
+    """One of the chain's plain integer constants, off its own line."""
+    return int(re.search(rf"^{name}=(\d+)$", CODE, re.M).group(1))
+
+
+def _r3_price(duty: float) -> int:
+    """What the planted R3 plan page prices a run at: its wall line at the duty
+    (rounded as the stub's awk rounds) plus the probe that line leaves out."""
+    return math.floor(STUB_LADDER_S / duty + 0.5) + STUB_PROBE_S
+
+
+def test_past_gpu_tests_holds_on_every_later_pass(tmp_path):
+    """XS-7, T8. --past-gpu-tests counted for the pass it was given on: a plain
+    --resume after it re-ran tests/test_gpu.py (up to 15 min on a hung volume)
+    and stopped at the same gate again."""
+    pod = Pod(tmp_path)
+    s = pod.session(_row("preflight-r1", "DONE"), _row("preflight-r3", "DONE"),
+                    _row("preconditions", "DONE"), _row("gpu-tests", "ERROR", "1", "3 failed"))
+    seen = tmp_path / "pytest-seen.txt"
+    stub = {"G_LADDER": "1", "SEEDS": "0", "STUB_PYTEST": str(seen), "STUB_PYTEST_RC": "1",
+            "STUB_PYTEST_TALLY": "3 failed, 32 passed in 20.00s"}
+    first = pod.run("--resume", "--past-gpu-tests", **stub)
+    assert first.returncode == 0, first.stdout[-3000:] + first.stderr[-800:]
+    later = pod.run("--resume", **stub)
+    assert later.returncode == 0, later.stdout[-3000:] + later.stderr[-800:]
+    assert ("--past-gpu-tests holds from an earlier pass (the ledger's gpu-tests-override row"
+            in later.stdout)
+    assert not seen.exists(), "tests/test_gpu.py was bought again after the operator went past it"
+    over = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "gpu-tests-override"]
+    assert len(over) == 1 and over[0][1] == "OVERRIDDEN"
+
+
+def test_the_probe_check_stops_the_chain_before_the_pilot_and_runs_until_done(tmp_path):
+    """GPU-1. tests/test_gpu.py's one on-card test of the graph probe imports
+    vLLM and skips from PY_BASE, the only interpreter the chain ran it from, so
+    a probe the capture refused was found by the pilot's ten-minute ladder,
+    latched INVALID. The probe check runs that check alone from the vLLM venv
+    first, and runs again on every pass until it is DONE."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    pod.set_plan({"probe-check": {"P1": "UNKNOWN"}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0 1")
+    assert got.returncode == 3, got.stdout[-3000:] + got.stderr[-800:]
+    assert "STOP: the probe check is INVALID, not DONE, on this card" in got.stdout
+    assert "RESULT: VALIDITY P1 UNKNOWN [VALIDITY] planted probe" in got.stdout, "the page's line"
+    assert str(s / "chain-logs" / "probe-check.log") in got.stdout
+    assert "makes every later ratio page INVALID" in got.stdout
+    assert f"{2} ratio pages that cannot be quoted" in got.stdout, "none is on disk yet"
+    assert [st for st, _ in pod.traced()] == ["probe-check"], "the pilot's ladder was not bought"
+    row = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "probe-check"][-1]
+    assert row[1:3] == ["INVALID", "3"] and "log agrees" in row[6]
+    # the fix is a code change: a --resume proves the probe again, and a PASS goes on
+    pod.set_plan({})
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0 1")
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert [st for st, _ in pod.traced()][:3] == ["probe-check", "probe-check", "r3-g1-s0"]
+    done = pod.run("--resume", G_LADDER="1", SEEDS="0 1")
+    assert [st for st, _ in pod.traced()].count("probe-check") == 2, "a DONE check is not re-bought"
+    assert done.returncode == 0
+
+
+def test_past_v8_goes_past_the_probe_check_recorded_and_the_decision_holds(tmp_path):
+    pod = Pod(tmp_path)
+    s = pod.session()
+    pod.set_plan({"probe-check": {"refuse": True}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert got.returncode == 3, got.stdout[-3000:]
+    assert "REFUSED: no CUDA device (a planted refusal)" in got.stdout
+    past = pod.run("--resume", "--past-v8", G_LADDER="1", SEEDS="0")
+    assert past.returncode == 0, past.stdout[-3000:]
+    over = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "probe-check-override"]
+    assert len(over) == 1 and over[0][1] == "OVERRIDDEN" and "--past-v8" in over[0][6]
+    assert "the probe check's newest row: REFUSED" in over[0][6]
+    later = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert later.returncode == 0, later.stdout[-3000:]
+    assert ("--past-v8 holds from an earlier pass (the ledger's probe-check-override row"
+            in later.stdout)
+    assert [st for st, _ in pod.traced()].count("probe-check") == 1, \
+        "a check the operator went past is not run again"
+
+
+def test_a_seed_0_page_that_compared_no_clocks_skips_its_seeds_without_blaming_a_split(tmp_path):
+    """E2E-2, T9. After a V8 FAIL R3 skips its sweep, times nothing and reads V7
+    UNKNOWN; the skip note blamed a clock split between the ratio arms, the
+    power state, for a card whose clocks R3 never read."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    pod.set_plan({"r3-g1-s0": {"V8": "FAIL", "V7": "UNKNOWN"}})
+    got = pod.run("--resume", "--past-v8", G_LADDER="1", SEEDS="0 1")
+    assert got.returncode == 0, got.stdout[-3000:]
+    (row,) = [r for r in _rows(s / "CHAIN.tsv") if r[0] == "r3-g1-s1"]
+    assert row[1] == "SKIPPED"
+    assert ("read V7 UNKNOWN: seed 0's V7 could not be scored (nothing timed, e.g. the sweep"
+            " was skipped on V8, or a clock was unread)") in row[6]
+    assert str(s / "chain-logs" / "r3-g1-s0.log") in row[6]
+    assert "different clocks" not in row[6] and "follow-up" not in row[6]
+    assert not (s / "followup-g1.txt").exists()
+
+
+def test_the_session_records_r3s_duty_and_refuses_a_resume_at_another(tmp_path):
+    """T2(ii). R3_DUTY=0.1 on a --resume of a 0.25 session measured nothing:
+    seed 0 was latched at 0.25, the skip read the 0.25 page again, and every
+    owed later seed was refused against 0.25 reports."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    duty = re.search(r'^R3_DUTY="\$\{R3_DUTY:-([0-9.]+)\}"$', CODE, re.M).group(1)
+    first = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert first.returncode == 0, first.stdout[-3000:]
+    assert (s / "R3_DUTY").read_text() == duty + "\n"
+    ledger, traced = (s / "CHAIN.tsv").read_text(), pod.traced()
+    other = pod.run("--resume", G_LADDER="1", SEEDS="0", R3_DUTY="0.1")
+    assert other.returncode == 2, other.stdout[-2000:]
+    assert f"ratio runs are at --duty {duty}" in other.stdout
+    assert "R3_DUTY=0.1 bash scripts/alpha_g_chain.sh --new" in other.stdout
+    assert pod.traced() == traced and (s / "CHAIN.tsv").read_text() == ledger
+    assert (s / "R3_DUTY").read_text() == duty + "\n", "a refusal rewrites nothing"
+    same = pod.run("--resume", G_LADDER="1", SEEDS="0", R3_DUTY=f"{float(duty):.3f}")
+    assert same.returncode == 0, "one duty however it is spelled"
+
+
+def test_ratio_rows_with_no_duty_record_are_refused(tmp_path):
+    s = tmp_path / "s"
+    _ledger(s / "CHAIN.tsv", _row("preflight-r1", "DONE"))
+    assert lift(f"duty_check {s!s} 0.25; echo rc=$?").stdout.strip() == "rc=0"
+    assert (s / "R3_DUTY").read_text() == "0.25\n"
+    t = tmp_path / "t"
+    _ledger(t / "CHAIN.tsv", _row("r3-g1-s0", "DONE"))
+    got = lift(f"duty_check {t!s} 0.25; echo rc=$?")
+    assert got.stdout.strip().endswith("rc=2") and "no R3_DUTY file" in got.stdout
+    assert not (t / "R3_DUTY").exists()
+
+
+def test_every_arm_step_runs_under_a_cap_off_its_own_price(tmp_path):
+    """GPU-2. Every arm ran as a bare command with no deadline, while the
+    pytest steps were capped because the volume's MooseFS has hung. The probe
+    check, R3 and R1 now run under timeout at max(3 x the arm's own price,
+    30 min), the plan run again before the step."""
+    pod = Pod(tmp_path)
+    pod.session()
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "timeout").write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$STUB_TIMEOUTS"\n'
+                                  'shift 3\nexec "$@"\n')
+    (shim / "timeout").chmod(0o755)
+    seen = tmp_path / "timeouts.txt"
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", STUB_TIMEOUTS=str(seen),
+                  PATH=f"{shim}{os.pathsep}{os.environ['PATH']}")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    factor, floor = _const("ARM_CAP_FACTOR"), _const("ARM_CAP_FLOOR_S")
+    want = {"probe-check": max(factor * _const("PROBE_CHECK_S"), floor),
+            "r3-g1-s0": max(factor * _r3_price(0.25), floor),
+            "r1-g1": max(factor * STUB_R1_S, floor)}
+    for step, cap in want.items():
+        assert f"{step}: capped at {cap} s" in got.stdout, step
+    calls = [ln.split()[:3] for ln in seen.read_text().splitlines()]
+    assert calls == [["--signal=INT", "--kill-after=60", str(cap)] for cap in want.values()]
 
 
 def test_a_pilot_with_no_report_stops_the_chain(tmp_path):
@@ -1148,7 +1655,8 @@ def test_a_pilot_with_no_report_stops_the_chain(tmp_path):
     (logs / "r3-g1-s0.log").write_text("Traceback: died before its plan page\n")
     ledger = _ledger(tmp_path / "CHAIN.tsv")
     got = lift("v8_gate 0; echo rc=$?", LEDGER=str(ledger), LOGS=str(logs),
-               RESULTS=str(tmp_path / "res"), PILOT="r3-g1-s0")
+               RESULTS=str(tmp_path / "res"), PILOT="r3-g1-s0", TAG="t", G_LADDER="1",
+               SEEDS="0")
     assert got.stdout.strip().endswith("rc=3"), got.stdout + got.stderr
     assert "STOP: r3-g1-s0's V8 is unread: no report.json, not PASS" in got.stdout
 
@@ -1199,7 +1707,7 @@ def test_a_preflight_that_is_not_done_runs_again_on_every_pass(tmp_path):
     rows = _rows(s / "CHAIN.tsv")
     assert [r[1] for r in rows if r[0] == "preflight-r3"] == ["INVALID", "DONE"]
     assert [r[1] for r in rows if r[0] == "preflight-r1"] == ["DONE"]
-    assert [st for st, _ in pod.traced()] == ["r3-g1-s0", "r1-g1"]
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1"]
 
 
 @pytest.mark.parametrize("rc,tally,state,recorded", [
@@ -1364,18 +1872,66 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
     session = next((root / "session").glob("alpha_g-nocard-*"))
     ledger = (session / "CHAIN-dryrun.tsv").read_text().splitlines()
     names = [ln.split("\t")[0] for ln in ledger[1:]]
-    assert names[:4] == ["preflight-r1", "preflight-r3", "preconditions", "gpu-tests"]
-    assert names[4:8] == [f"r3-g{g}-s0" for g in (1, 4, 16, 64)]
-    assert names[8:12] == ["r1-g1", "r1-g4", "r1-g16", "r1-g64"]
-    assert names[12:20] == [f"r3-g{g}-s{s}" for s in (1, 2) for g in (1, 4, 16, 64)]
-    assert names[20:] == ["suite"]
+    assert names[:5] == ["preflight-r1", "preflight-r3", "preconditions", "gpu-tests",
+                         "probe-check"]
+    assert names[5:9] == [f"r3-g{g}-s0" for g in (1, 4, 16, 64)]
+    assert names[9:13] == ["r1-g1", "r1-g4", "r1-g16", "r1-g64"]
+    assert names[13:21] == [f"r3-g{g}-s{s}" for s in (1, 2) for g in (1, 4, 16, 64)]
+    assert names[21:] == ["suite"]
     rows = {ln.split("\t")[0]: ln.split("\t") for ln in ledger[1:]}
+    assert rows["probe-check"][1] == "SKIPPED" and "a dry run does not run it" in rows[
+        "probe-check"][6], "the probe check times the card: a dry run prices it, never runs it"
     assert rows["preflight-r1"][1] == "DONE" and "log agrees" in rows["preflight-r1"][6]
     assert rows["preconditions"][1] == "DONE" and "ARMS.tsv" in rows["preconditions"][6]
     for step in ("gpu-tests", "suite"):
         assert rows[step][1] == "DONE" and "tests collected" in rows[step][6], rows[step]
     assert rows["r3-g1-s0"][1] == "REFUSED", "a dry-run plan scores no gate: REFUSED"
     assert not (session / "CHAIN.tsv").exists() and not (session / "DEVICE").exists()
+
+
+def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
+    """XS-8, E2E-5, T7. The preconditions were 4 min against the driver's own 8,
+    each ratio run left out the probe its plan prices on top of the wall line,
+    and the prose said the seeds were 'an hour or more apart'. Every term is
+    now read off its source, and the spacing is these prices' own timeline."""
+    got, root, _b, _a = dry
+    out = got.stdout
+    logs = next((root / "session").glob("alpha_g-nocard-*")) / "chain-logs"
+    page = (logs / "r3-g16-s2.log").read_text()
+    wall = int(re.search(r"takes about (\d+) s", page).group(1))
+    probe = int(re.search(r"includes the alignment probe's (\d+) s", page).group(1))
+    assert int(H.estimate(logs / "r3-g16-s2.log")) == wall + probe
+    driver = ROOT / "scripts" / "h200_gaps_session.sh"
+    booked = subprocess.run(
+        ["bash", "-c", f'eval "$(sed -n \'/^arm_minutes()/,/^esac; }}/p\' "{driver}")"; '
+                       "for a in thermal calibrate pin_probe-n64-g1; do arm_minutes $a; done"],
+        capture_output=True, text=True, timeout=60).stdout.split()
+    pre = 60 * sum(int(m) for m in booked)
+    assert f"plus the preconditions ~{pre} s (the driver's own arm_minutes" in out
+    priced = [int(x) for x in re.findall(r"priced (\d+) s off its own plan", out)]
+    arms = int(re.search(r"= (\d+) s of arms", out).group(1))
+    assert sum(priced) == arms
+    gpu = int(re.search(r"tests/test_gpu\.py ~(\d+) s", out).group(1))
+    suite = int(re.search(r"the end suite ~(\d+) s", out).group(1))
+    total = int(re.search(r"\(an allowance\) = (\d+) s", out).group(1))
+    overhead = _const("R3_RUN_OVERHEAD_S")
+    assert total == (arms + gpu + suite + pre + _const("PROBE_CHECK_S") + 12 * overhead
+                     + _const("EXFIL_S"))
+    steps = re.findall(r"^(r[13]-g\d+(?:-s\d)?)\s", out, re.M)
+    assert len(steps) == len(priced) == 16
+    clock, start = pre + gpu + _const("PROBE_CHECK_S"), {}
+    for step, secs in zip(steps, priced, strict=True):
+        start[step] = clock
+        clock += secs + (overhead if step.startswith("r3") else 0)
+    for a, b in ((0, 1), (1, 2)):
+        gaps = {(start[f"r3-g{g}-s{b}"] - start[f"r3-g{g}-s{a}"] + 30) // 60
+                for g in (1, 4, 16, 64)}
+        assert len(gaps) == 1, gaps
+        assert f"seed {a} to seed {b} ~{gaps.pop()} min" in out
+    fu_log = logs / "followup-g1.price.log"
+    assert "duty0.1" in H.run_id(fu_log, "private_weight_reference")
+    per = int(H.estimate(fu_log)) + overhead
+    assert f"~{-(-3 * per // 60)} min a G, 3 seeds at --duty 0.1 at {per} s each" in out
 
 
 def test_the_dry_run_lines_carry_the_duty_the_swizzle_and_the_seed(dry):
@@ -1399,12 +1955,13 @@ def test_the_dry_run_prints_the_pod_checkout_the_detached_launch_and_the_exfil(d
     assert ("git -C /workspace/moe-kernels checkout --"
             " moe/bench/hardware/measured_nvidia_h200.yaml") in out
     assert "checkout -B r3-align origin/r3-align" in out and "log -1 --format=%h" in out
-    assert ("nohup setsid bash scripts/alpha_g_chain.sh > /workspace/alpha_g_chain.out 2>&1"
-            " < /dev/null &") in out
+    assert ("nohup setsid bash scripts/alpha_g_chain.sh >> /workspace/alpha_g_chain.out 2>&1"
+            " < /dev/null &") in out, "the launch APPENDS: a --resume keeps the first console"
     assert "tail -f /workspace/alpha_g_chain.out" in out
     tar = next(ln for ln in out.splitlines() if "exfil-alpha_g-nocard.tar.gz" in ln)
     assert '"moe/bench/hardware/measured_nocard.yaml"' in tar, "the ruler rides with the results"
     assert "results/calibration/" in tar, "and calibrate's own run directory"
+    assert f'-C "{dry[1]}" "alpha_g_chain.out"' in tar, "and the console the launch appends to"
     assert "commit it with the results" in out
 
 

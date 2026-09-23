@@ -7,14 +7,17 @@ stays a sequencer and the reading is testable off GPU.
     alpha_g_chain_helpers.py device                 -> this card's UUID, as R3's DEVICE file keys it
     alpha_g_chain_helpers.py run-id LOG EXPERIMENT  -> the run id the plan page printed
     alpha_g_chain_helpers.py estimate LOG           -> seconds the arm's own --dry-run priced
+    alpha_g_chain_helpers.py estimate-basis LOG     -> what that figure is made of, in words
     alpha_g_chain_helpers.py reading REPORT         -> one PAIRS row's ratio half (R3)
     alpha_g_chain_helpers.py pairs REPORT...        -> the reports that FORMED a ratio, one per line
     alpha_g_chain_helpers.py eta REPORT             -> eta, lo, hi, band, exit word (R1)
     alpha_g_chain_helpers.py eta-for SESSION RESULTS G  -> the same, for the G's R1 log
     alpha_g_chain_helpers.py gate REPORT TAG        -> that gate's verdict, `absent` or `unreadable`
+    alpha_g_chain_helpers.py probe-note REPORT      -> the alignment probe's note and graph_calls
     alpha_g_chain_helpers.py verdict LOG            -> what its RESULT lines imply (2nd opinion)
     alpha_g_chain_helpers.py pairs-table SESSION RESULTS LADDER SEEDS [key=value...]
-                                                    -> rewrites PAIRS.tsv and PAIRS-fixed.tsv
+                                                    -> rewrites PAIRS.tsv, PAIRS-by-G.tsv,
+                                                       PAIRS-fixed.tsv and PAIRS-README.txt
     alpha_g_chain_helpers.py calibration-dir LOG    -> the run directory calibrate wrote
 
 Every command prints tab-separated fields on ONE line (or one path per line for
@@ -44,6 +47,10 @@ ESTIMATE_LINES = (
     re.compile(r"estimated GPU time (\d+) s"),           # R3 at full duty
     re.compile(r"estimated wall time (\d+) s"),          # R1
 )
+#: R3's plan names the alignment probe's seconds INSIDE its GPU figure, and
+#: below full duty its wall line leaves them OUT ("the probe is timed at full
+#: duty"): the price of a run below full duty is the wall line plus these.
+PROBE_SECONDS = re.compile(r"includes the alignment probe's (\d+) s")
 #: The one line calibrate_hardware.py prints for the ruler it measured, under
 #: its untracked run directory (the published copy is a second line, PUBLISHED).
 CALIBRATE_WROTE = re.compile(r"^\[calibrate\] wrote (\S+\.yaml)\s*$", re.M)
@@ -146,37 +153,88 @@ def run_id(log: str | Path, experiment: str) -> str:
     return ""
 
 
-def estimate(log: str) -> str:
-    """Seconds the arm's own --dry-run priced, off its plan page; '' if none."""
+def _estimate_terms(log: str | Path) -> list[tuple[int, str]]:
+    """The seconds an arm's own --dry-run priced, term by term, off its plan
+    page, or [] when it priced nothing. R3 below full duty is TWO terms: the
+    ladder's wall line at the duty and the alignment probe's seconds, which
+    that line leaves out because the probe is timed at full duty (the driver
+    books the same arm as their sum)."""
     try:
         text = Path(log).read_text(errors="replace")
     except OSError:
-        return ""
-    for pattern in ESTIMATE_LINES:
+        return []
+    for k, pattern in enumerate(ESTIMATE_LINES):
         m = pattern.search(text)
-        if m:
-            return m.group(1)
-    return ""
+        if not m:
+            continue
+        secs = int(m.group(1))
+        if k == 0:
+            probe = PROBE_SECONDS.search(text)
+            terms = [(secs, "the ladder's wall at the plan's duty")]
+            if probe:
+                terms.append((int(probe.group(1)),
+                              "the alignment probe, timed at full duty on top of it"))
+            return terms
+        if k == 1:
+            return [(secs, "the plan's GPU figure at full duty, the alignment probe inside it")]
+        return [(secs, "the plan's wall figure")]
+    return []
+
+
+def estimate(log: str | Path) -> str:
+    """Seconds the arm's own --dry-run priced, off its plan page; '' if none.
+    The sum of `_estimate_terms`."""
+    terms = _estimate_terms(log)
+    return str(sum(s for s, _ in terms)) if terms else ""
+
+
+def estimate_basis(log: str | Path) -> str:
+    """What `estimate` is made of, in words: `581 s the ladder's wall ... +
+    9 s the alignment probe ...`; '' if the plan priced nothing."""
+    return " + ".join(f"{s} s {what}" for s, what in _estimate_terms(log))
 
 
 def reading_header() -> list[str]:
     """The ratio half of PAIRS.tsv's header, the arm names read from the arm."""
     import private_weight_reference as PWR
-    return ["G", "seed", "ratio", "lo", "hi", "exit", "duty", "run_id",
+    return ["G", "seed", "ratio", "lo", "hi", "exit", "exit_scope", "duty", "run_id",
             "rep_n", "rep_spread", "rep_sd", "env_lo", "env_hi", "joint",
             *[f"clk_{arm}" for arm in PWR.ARMS], "low_cells"]
+
+
+def _formed(p: dict) -> bool:
+    """The report formed its own ratio and interval: the rule `run_reading`
+    and `pairs` apply."""
+    iv = p.get("ratio_interval") or [None, None]
+    return p.get("ratio") is not None and iv[0] is not None and iv[1] is not None
+
+
+def _joint_is_its_own(p: dict) -> bool:
+    """Is the report's `replicates` block a reading THIS run is in: the run
+    formed its own ratio (R3 builds the block from the replicates alone when
+    it did not) and, where the block lists its runs by id, this run is one."""
+    rep = p.get("replicates")
+    if not isinstance(rep, dict) or not _formed(p):
+        return False
+    ids = [r.get("run_id") for r in rep.get("runs") or [] if isinstance(r, dict)]
+    return not any(ids) or p.get("run_id") in ids
 
 
 def reading(report: str | Path) -> list[str]:
     """One PAIRS row's ratio half for a private_weight_reference report:
 
-    `G seed ratio lo hi exit duty run_id`, the run's own within-run reading;
+    `G seed ratio lo hi exit exit_scope duty run_id`, the run's own within-run
+    reading and its exit word; `exit_scope` says how C1 inside that word was
+    scored: `alone` on this run's interval, `envelope` on the envelope of
+    this run's and the earlier seeds' it was given through --replicate-of;
     `rep_n rep_spread rep_sd env_lo env_hi joint`, the JOINT reading over this
-    seed and the earlier ones it was scored with (the report's `replicates`
-    block; `none` for a run scored alone, which is also how C1 in `exit` was
-    scored). The within-run interval is a bootstrap over repeats and
-    understates the cross-run spread (DESIGN DECISION 14): the joint columns
-    are the ones the table is scored on;
+    seed and those earlier ones (the report's `replicates` block), FILLED ONLY
+    when the block is a reading this run is in (`_joint_is_its_own`): a run
+    that formed no ratio of its own gets a block built from the other runs
+    alone, and its row says `none` rather than quote their envelope as its
+    own. The within-run interval is a bootstrap over repeats and understates
+    the cross-run spread (DESIGN DECISION 14); the per-G joint over every
+    seed, whatever order they ran in, is PAIRS-by-G.tsv's (`by_g`);
     `clk_<arm>...` each arm's median under-load clock over the ladder, off
     `treads_table`, and `low_cells`, the (arm, tread) cells whose
     `level_sides` carries LEVEL LOW. At a duty below 1 every cell is expected
@@ -190,13 +248,15 @@ def reading(report: str | Path) -> list[str]:
     from moe.bench.timing import LEVEL_LOW
 
     iv = p.get("ratio_interval") or [None, None]
+    own = _joint_is_its_own(p)
     row = [str((p.get("pinned") or {}).get("GROUP_SIZE_M", "?")),
            str(p.get("seed") if p.get("seed") is not None else "unrecorded"),
            _fmt(p.get("ratio")), _fmt(iv[0]), _fmt(iv[1]), _exit_word(p),
+           "envelope" if own else "alone",
            str(p.get("duty", 1.0)), str(p.get("run_id") or Path(report).parent.name)]
 
     rep = p.get("replicates")
-    if isinstance(rep, dict):
+    if own:
         env = rep.get("envelope") or [None, None]
         row += [str(rep.get("n", "none")), _fmt(rep.get("spread")), _fmt(rep.get("sd")),
                 _fmt(env[0]), _fmt(env[1]), str(rep.get("verdict") or "none")]
@@ -223,10 +283,7 @@ def pairs(reports: list[str]) -> list[str]:
         p = _load(r)
         if p is None or p.get("experiment") != "private_weight_reference":
             continue
-        if p.get("synthetic"):
-            continue
-        iv = p.get("ratio_interval") or [None, None]
-        if p.get("ratio") is None or iv[0] is None or iv[1] is None:
+        if p.get("synthetic") or not _formed(p):
             continue
         out.append(r)
     return out
@@ -239,9 +296,12 @@ def eta(report: str | Path) -> list[str]:
 
     THE BAND IS READ ONLY OFF A PAGE WHOSE GATES STAND BEHIND IT: exit DONE or
     CLAIM_FAIL. Any other exit prints `withheld:<EXIT>` in the band field.
-    `band_of` alone put CLOCK-CARRIES on session 4's G=16 cells, an interval
-    above R1's admissible ceiling on a page that exits INVALID, and that word
-    asserts the clock mechanism the page has just disclaimed.
+    `band_of` alone would put CLOCK-CARRIES on an interval above V7's
+    admissible edge, on a page that exits INVALID, and that word asserts the
+    clock mechanism the page has just disclaimed. The all-tread reading of
+    session 4's G=16 cells (printed beside the claim, never gated) is such an
+    interval. The claim itself, over treads 2 and deeper (D2), passes V7 on
+    those cells, exits CLAIM_FAIL, and its CLOCK-CARRIES is quoted here.
     """
     p = _load(report)
     if p is None or "elasticity" not in p:
@@ -258,6 +318,115 @@ def eta(report: str | Path) -> list[str]:
         got = CE.band_of(float(lo), float(hi))
         band = got[0] if got else "STRADDLES"
     return [_fmt(value), _fmt(lo), _fmt(hi), band, word]
+
+
+#: PAIRS-by-G.tsv's header: the R3 half off `by_g`, then R1's columns.
+BY_G_HEADER = ["G", "n", "seeds", "mean", "sd", "env_lo", "env_hi", "joint",
+               "invalid_in_envelope", "eta", "eta_lo", "eta_hi", "band", "eta_exit", "note"]
+
+
+def by_g(g: str, reports: list[str]) -> tuple[list[str], str]:
+    """One PAIRS-by-G row's R3 half, and its note: EVERY report of this G
+    that formed a ratio, whatever order its seeds ran in, read together by
+    R3's own cross-run machinery the way `--read RUN --replicate-of ...`
+    reads them (`run_reading` of the first, `load_replicates` of the rest
+    against its design, `cross_run` over all), so the envelope, the sd and
+    the joint verdict are R3's and are written nowhere else.
+
+    `n seeds mean sd env_lo env_hi joint invalid_in_envelope`: `sd` is the
+    points' (R3 forms one from three); `joint` is C1's rule on the envelope;
+    `invalid_in_envelope` names the seeds inside it whose own page exited
+    INVALID, which `load_replicates` admits by design (their spread is
+    information, their ratio is not quotable alone). A refusal by
+    `load_replicates` (two duties, say) is `REFUSED` with its reason.
+    """
+    import private_weight_reference as PWR
+    formed = pairs(reports)
+    if not formed:
+        return [g, "0"] + ["none"] * 7, "no report of this G formed a ratio yet"
+    payload = _load(formed[0]) or {}
+    seeds = " ".join(str(s) if (s := (_load(r) or {}).get("seed")) is not None
+                     else "unrecorded" for r in formed)
+    try:
+        this = PWR.run_reading(payload, Path(formed[0]))
+        reps = PWR.load_replicates(
+            formed[1:], card_known=True, this=this,
+            design={k: payload.get(k, PWR.DESIGN_KEY_DEFAULTS.get(k)) for k in PWR.DESIGN_KEYS})
+    except PWR.PrivateWeightRefusal as exc:
+        return ([g, str(len(formed)), seeds] + ["none"] * 4 + ["REFUSED", "none"],
+                _one_line(f"load_replicates refused: {exc}"))
+    cross = PWR.cross_run([this, *reps])
+    lo, hi = cross.envelope
+    invalid = [str(r.seed if r.seed is not None else r.name) for r in cross.readings
+               if r.exit_code == exit_codes.INVALID]
+    note = ("one run: the envelope is its own interval" if len(cross.readings) == 1
+            else "an sd needs three points" if cross.sd is None else "")
+    return ([g, str(len(cross.readings)), seeds, _fmt(statistics.mean(cross.points)),
+             _fmt(cross.sd), _fmt(lo), _fmt(hi), cross.verdict,
+             ("seed " + ", seed ".join(invalid)) if invalid else "none"], note or "none")
+
+
+def pairs_readme() -> str:
+    """PAIRS-README.txt: what every column of the three tables means, the
+    interval widths read off the arms (R3's INTERVAL_PCT and ALPHA_BAND)."""
+    import private_weight_reference as PWR
+    pct = f"{PWR.INTERVAL_PCT:.0f}%"
+    band = f"[{PWR.ALPHA_BAND[0]}, {PWR.ALPHA_BAND[1]})"
+    return f"""\
+THE alpha(G) TABLES, rebuilt from the reports on disk by
+scripts/alpha_g_chain_helpers.py pairs-table at the end of every chain pass and
+before every STOP, and again on the laptop after exfil by the same command.
+
+PAIRS.tsv, one row per ratio run (private_weight_reference), G then seed:
+  G seed duty run_id   the swizzle the run pinned (GROUP_SIZE_M), its seed, its
+                       duty and its run id.
+  ratio lo hi          the run's OWN reading, slope(shared) / slope(private), and
+                       its {pct} percentile bootstrap over repeats WITHIN the run
+                       (R3's INTERVAL_PCT). It understates the run-to-run spread.
+  exit                 the run's own exit word: classify over its page's gates.
+  exit_scope           how C1 inside that word was scored: `alone` on this run's
+                       interval; `envelope` on the envelope of this run's interval
+                       and those of the earlier seeds it was given through
+                       --replicate-of. Seed 0's exit and seed 1's can differ by
+                       scope, not by result.
+  rep_n rep_spread rep_sd env_lo env_hi joint
+                       the joint reading on that run's page, over itself and those
+                       earlier seeds: n, the spread and sd of the points (an sd
+                       needs three), the envelope, and `joint`, C1's verdict on the
+                       envelope against R3's refit band ALPHA_BAND {band}. `joint`
+                       is NOT a quotability flag: NO-REUSE, expected at G=1, reads
+                       FAIL. `none` on a run scored alone, and on a run whose page
+                       formed no ratio of its own (its page's replicates block is
+                       then the other runs' reading, not one this run is in).
+  clk_<arm> low_cells  each arm's median under-load clock (MHz) over the ladder, and
+                       the (arm, tread) cells whose level record reads LEVEL LOW.
+  eta eta_lo eta_hi band eta_exit
+                       R1 (clock_elasticity) at this G: the per-M-tile elasticity
+                       over treads 2 and deeper, its 95% percentile bootstrap
+                       (clock_elasticity.fit's 2.5th and 97.5th percentiles), the
+                       regime word off that interval, and R1's own exit word. The
+                       word is withheld (`withheld:<EXIT>`) from a page whose gates
+                       did not stand behind it. It is a SECANT between R1's capped
+                       duty states, not a reading at R3's duty.
+
+PAIRS-by-G.tsv, one row per G, THE PER-G VALUE: every seed of that G whose report
+formed a ratio, whatever order the seeds ran in, read together by R3's own
+cross-run machinery (what `--read RUN --replicate-of ...` prints):
+  n seeds              how many runs, and their seeds.
+  mean sd              the points' mean, and their sd (three points or more).
+  env_lo env_hi joint  the envelope of the runs' {pct} intervals and C1's verdict on
+                       it, the same rule and band as `joint` above.
+  invalid_in_envelope  the seeds inside the envelope whose own page exited INVALID:
+                       R3 admits them by design, their spread is information and
+                       their ratio is not quotable alone.
+  eta .. eta_exit      R1 at this G, as above.
+  note                 why a G has no joint (no report formed a ratio, or
+                       load_replicates refused the set, e.g. two duties).
+
+PAIRS-fixed.tsv: the coordinates every row shares (model, tile, pinned config,
+treads, repeats, duty), their value and where each was read; MIXED when the
+reports disagree.
+"""
 
 
 def _log(session: str | Path, step: str) -> Path:
@@ -289,6 +458,27 @@ def gate(report: str | Path, tag: str) -> str:
         if isinstance(g, dict) and (g.get("tag") or g.get("number")) == tag:
             return str(g.get("verdict"))
     return "absent"
+
+
+def probe_note(report: str | Path) -> str:
+    """The alignment probe's own record off an R3 report, for the V8 STOP:
+    its note (a refused capture is named there), the `graph_calls` its cells
+    were timed with (0 is eager) and how many cells the instrument called
+    host-bound. '' when the report carries no probe."""
+    p = _load(report)
+    probe = (p or {}).get("align_probe")
+    if not isinstance(probe, dict):
+        return ""
+    cells = [c for c in probe.get("cells") or [] if isinstance(c, dict)]
+    parts = [f"note: {probe.get('note') or 'none'}"]
+    if cells:
+        calls = sorted({int(c.get("graph_calls") or 0) for c in cells})
+        judged = [c for c in cells if c.get("host_bound") is not None]
+        parts.append("graph_calls " + ", ".join(map(str, calls))
+                     + (" (0 is eager)" if 0 in calls else ""))
+        parts.append(f"host-bound {sum(1 for c in judged if c['host_bound'])} "
+                     f"of {len(judged)} judged cells")
+    return _one_line("; ".join(parts))
 
 
 def verdict(log: str) -> str:
@@ -336,37 +526,46 @@ def _fixed(key: str, payloads: list[tuple[str, dict]], field: str, drop=(),
 
 def pairs_table(session: str | Path, results: str | Path, ladder: str, seeds: str,
                 settings: dict[str, str] | None = None) -> int:
-    """REWRITE PAIRS.tsv from the reports on disk, and PAIRS-fixed.tsv beside it.
+    """REWRITE PAIRS.tsv, PAIRS-by-G.tsv and PAIRS-fixed.tsv from the reports
+    on disk, and PAIRS-README.txt, the legend, beside them.
 
     Rebuilt, never appended: the chain calls this at the end of every pass and
     before every STOP, so a step re-run on --resume cannot leave a second row
     for one run id, and an R1 that finished on a later pass is joined to every
-    row of its G. One row per (G, seed) whose ratio report is on disk, in
-    ladder order; the R1 columns are `eta` for the G. The coordinates every
-    row shares (model, tile, pinned config, treads, repeats, duty) go in the
-    sidecar with where each came from. Returns the number of rows.
+    row of its G. PAIRS.tsv: one row per (G, seed) whose ratio report is on
+    disk, in ladder order; the R1 columns are `eta` for the G. PAIRS-by-G.tsv:
+    one row per G of the ladder, every seed read together (`by_g`). The
+    coordinates every row shares (model, tile, pinned config, treads,
+    repeats, duty) go in the sidecar with where each came from. Returns the
+    number of PAIRS.tsv rows.
     """
     session, settings = Path(session), dict(settings or {})
-    rows, r3_payloads, r1_payloads = [], [], []
+    rows, by_g_rows, r3_payloads, r1_payloads = [], [], [], []
     for g in ladder.split():
-        eta_cols = None
+        eta_cols = eta_for(session, results, g)
+        found = []
         for seed in seeds.split():
             step = f"r3-g{g}-s{seed}"
             rep = _report(results, _log(session, step), "private_weight_reference")
             if rep is None:
                 continue
+            found.append(str(rep))
             payload = _load(rep)
             if payload is not None:
                 r3_payloads.append((step, payload))
-            if eta_cols is None:
-                eta_cols = eta_for(session, results, g)
             rows.append(reading(rep) + eta_cols)
+        r3_half, note = by_g(g, found)
+        by_g_rows.append(r3_half + eta_cols + [note])
         r1 = _report(results, _log(session, f"r1-g{g}"), "clock_elasticity")
         if r1 is not None and (payload := _load(r1)) is not None:
             r1_payloads.append((f"r1-g{g}", payload))
 
     header = reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
     _write_tsv(session / "PAIRS.tsv", [header, *rows])
+    _write_tsv(session / "PAIRS-by-G.tsv", [BY_G_HEADER, *by_g_rows])
+    tmp = session / "PAIRS-README.txt.tmp"
+    tmp.write_text(pairs_readme())
+    os.replace(tmp, session / "PAIRS-README.txt")
     fixed = [
         ["key", "value", "source"],
         _fixed("model", r3_payloads, "model", fallback=settings.get("model")),
@@ -418,6 +617,8 @@ def main(argv: list[str] | None = None) -> int:
         print(run_id(rest[0], rest[1]))
     elif cmd == "estimate" and len(rest) == 1:
         print(estimate(rest[0]))
+    elif cmd == "estimate-basis" and len(rest) == 1:
+        print(estimate_basis(rest[0]))
     elif cmd == "reading" and len(rest) == 1:
         print("\t".join(reading(rest[0])))
     elif cmd == "pairs":
@@ -428,6 +629,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\t".join(eta_for(*rest)))
     elif cmd == "gate" and len(rest) == 2:
         print(gate(rest[0], rest[1]))
+    elif cmd == "probe-note" and len(rest) == 1:
+        print(probe_note(rest[0]))
     elif cmd == "verdict" and len(rest) == 1:
         print(verdict(rest[0]))
     elif cmd == "pairs-table" and len(rest) >= 4:
