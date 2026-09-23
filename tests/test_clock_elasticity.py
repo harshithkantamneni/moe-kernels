@@ -1249,6 +1249,152 @@ def test_a_resumed_arm_scores_the_whole_file_and_not_only_what_it_measured():
 
 
 # --------------------------------------------------------------------------
+# 13b. the resume guard is the card's UUID, not its name
+# --------------------------------------------------------------------------
+
+def test_the_device_guard_refuses_a_second_card_and_resumes_the_first(tmp_path):
+    """`private_weight_reference.device_guard`'s rule, one arm over: every H200
+    is 'NVIDIA H200', so the CARD stamp alone let a replacement pod's card fill
+    the holes in the first pod's ladder."""
+    out = tmp_path / "run"
+    assert CE.device_guard(out, "GPU-aaaa") == ""
+    assert (out / CE.DEVICE_FILE).read_text().strip() == "GPU-aaaa"
+    (out / "cells.csv").write_text("x\n")
+    assert CE.device_guard(out, "GPU-aaaa") == ""
+    refused = CE.device_guard(out, "GPU-bbbb")
+    assert "GPU-aaaa" in refused and "GPU-bbbb" in refused
+    assert "--session-tag" in refused and "--run-id" in refused, (
+        "the refusal names the fix")
+    assert CE.device_guard(out, "") != "", "an unreadable UUID proves nothing"
+
+
+def test_the_device_guard_accepts_a_no_uuid_identity_only_against_itself(tmp_path):
+    out = tmp_path / "run"
+    weak = CE.NO_UUID_PREFIX + "NVIDIA H200"
+    assert CE.device_guard(out, weak) == ""
+    (out / "cells.csv").write_text("x\n")
+    assert CE.device_guard(out, weak) == ""
+    assert CE.device_guard(out, "GPU-aaaa") != ""
+
+
+def test_an_old_card_stamp_is_refused_with_cells_and_upgraded_without(tmp_path):
+    """THE DECISION FOR A STAMP FROM BEFORE 2026-09-22, which names the card and
+    carries no UUID: with cells beside it, the card they came from cannot be
+    shown to be this one, so it is REFUSED (the ratio arm's rule for cells with
+    no DEVICE file); with no cells there is nothing to pool, so it is stamped
+    and measured."""
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "CARD").write_text("NVIDIA H200\n")
+    (old / "cells.csv").write_text("x\n")
+    refused = CE.device_guard(old, "GPU-aaaa")
+    assert "no DEVICE file" in refused and "--session-tag" in refused
+    assert not (old / CE.DEVICE_FILE).exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "CARD").write_text("NVIDIA H200\n")
+    assert CE.device_guard(empty, "GPU-aaaa") == ""
+    assert (empty / CE.DEVICE_FILE).read_text().strip() == "GPU-aaaa"
+
+
+class _FakeCuda:
+    def __init__(self, uuid=None):
+        self._uuid = uuid
+
+    def is_available(self):
+        return True
+
+    def current_device(self):
+        return 0
+
+    def get_device_name(self, index):
+        return "NVIDIA H200"
+
+    def get_device_properties(self, index):
+        if self._uuid is None:
+            raise RuntimeError("this torch exposes no uuid")
+        return type("Props", (), {"uuid": self._uuid})()
+
+
+def test_the_identity_is_the_uuid_and_names_itself_weaker_without_one(monkeypatch):
+    fake = type("Torch", (), {})()
+    fake.cuda = _FakeCuda("GPU-6b4b5fe6")
+    monkeypatch.setitem(sys.modules, "torch", fake)
+    assert CE.device_identity() == "GPU-6b4b5fe6"
+    fake.cuda = _FakeCuda(None)
+    assert CE.device_identity() == CE.NO_UUID_PREFIX + "NVIDIA H200"
+
+
+def _measuring_run(monkeypatch, out, *, identity, rows):
+    """`main` down to the measurement with every GPU door planted open and
+    `run_arm` replaced, so the guard is exercised on the path a pod takes."""
+    calls = []
+    monkeypatch.setattr(CE, "resolve_card", lambda args: "NVIDIA H200")
+    monkeypatch.setattr(CE.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(CE.T, "require_cuda", lambda: None)
+    monkeypatch.setattr(CE.T, "nvml_clock_reader", lambda *a, **k: None)
+    # raising=False so the parent commit, which has no UUID guard, runs this
+    # same path and shows what it did: it measured into the other card's ladder.
+    monkeypatch.setattr(CE, "device_identity", lambda: identity, raising=False)
+
+    def fake_run_arm(*args, **kwargs):
+        calls.append(args)
+        return rows
+    monkeypatch.setattr(CE, "run_arm", fake_run_arm)
+    rc = CE.main(["--out", str(out), "--run-id", "r", "--draws", "50"])
+    return rc, calls
+
+
+def test_a_resume_on_another_card_of_the_same_name_is_refused(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    (run_dir / "DEVICE").write_text("GPU-aaaa\n")
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-bbbb",
+                               rows=[])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert not calls, "the replacement card measured into the first card's ladder"
+    assert "GPU-aaaa" in out and "GPU-bbbb" in out and "--run-id" in out
+
+
+def test_a_resume_into_an_old_stamp_with_cells_is_refused(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=[])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert not calls
+    assert "no DEVICE file" in out
+
+
+def test_a_resume_on_the_same_card_measures_and_the_report_names_it(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    run_dir.mkdir(parents=True)
+    (run_dir / "CARD").write_text("NVIDIA H200\n")
+    rows = CE.plant_rows(eps=0.05, jitter=0.004)
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=rows)
+    out = capsys.readouterr().out
+    assert calls, out[-800:]
+    assert rc == exit_codes.DONE, out[-1500:]
+    assert CE.DEVICE_FILE == "DEVICE", "the ratio arm's name for the same file"
+    assert (run_dir / "DEVICE").read_text().strip() == "GPU-aaaa"
+    payload = json.loads((run_dir / "report.json").read_text())
+    assert payload["device"] == "GPU-aaaa"
+    assert payload["elasticity"]["claim_min_tread"] == CE.CLAIM_MIN_TREAD
+    # And the second run on the same card resumes rather than refusing.
+    (run_dir / "cells.csv").write_text("x\n")
+    rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
+                               rows=rows)
+    assert rc == exit_codes.DONE and len(calls) == 1
+
+
+# --------------------------------------------------------------------------
 # 14. the booking in the session driver is this plan's own figure
 # --------------------------------------------------------------------------
 

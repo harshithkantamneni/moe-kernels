@@ -64,6 +64,8 @@ WHAT IT WRITES, under `$MOE_RESULTS_DIR` or `/workspace/results` or `<repo>/resu
     <results>/clock_elasticity/<run-id>/cells.csv     one row per state x tread x repeat
     <results>/clock_elasticity/<run-id>/report.txt    exactly what was printed
     <results>/clock_elasticity/<run-id>/report.json   the fit, the gates, the provenance
+    <results>/clock_elasticity/<run-id>/CARD, DEVICE  the card's name and UUID, the
+                                                      resume guard (`device_guard`)
 
 NO RULER IS RESOLVED AND NONE IS NEEDED. An elasticity is a ratio of logs: it has
 no ridge in it, no bandwidth, no compute peak and no fitted level. The reference
@@ -2764,6 +2766,89 @@ def resolve_card(args) -> str:
     return NO_CARD
 
 
+#: The prefix of the weaker identity recorded when a device is attached and its
+#: UUID cannot be read. `private_weight_reference.NO_UUID_PREFIX`'s spelling,
+#: so the two arms' DEVICE files read alike.
+NO_UUID_PREFIX = "no-uuid:"
+
+#: The file beside CARD that holds the UUID of the card the cells came from.
+DEVICE_FILE = "DEVICE"
+
+
+def device_identity() -> str:
+    """The attached GPU's UUID; `no-uuid:<name>` when a device is attached and
+    its UUID cannot be read; "" with no device at all.
+
+    MIRRORED FROM `private_weight_reference.device_identity`, not imported:
+    that module imports this one for `time_duty`, and the ratio arm's whole
+    module is not something the clock arm should load to read one property.
+    Read off the CURRENT device, as `resolve_card` names it, where the ratio
+    arm reads device 0; on a one-card pod they are the same card.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return ""
+        index = torch.cuda.current_device()
+    except Exception:                                   # noqa: BLE001
+        return ""
+    try:
+        return str(torch.cuda.get_device_properties(index).uuid)
+    except Exception:                                   # noqa: BLE001
+        try:
+            name = torch.cuda.get_device_name(index)
+        except Exception:                               # noqa: BLE001
+            name = "unnamed"
+        return NO_UUID_PREFIX + str(name)
+
+
+def device_guard(out_dir: Path, identity: str) -> str:
+    """"" when the cells on disk were measured on THIS card (or none exist),
+    else why a resume here would pool two cards.
+
+    THE CARD STAMP NAMES A MODEL OF CARD, and every H200 reports "NVIDIA H200".
+    The run id is card slug + knobs + session tag, identical on any two H200
+    pods, and /workspace is shared between rentals, so a --resume on a
+    replacement pod lands in the first pod's directory, and the resume key
+    (repeat, duty, tread) lets the new card fill the holes in the old card's
+    ladder: one elasticity from two governors. The UUID names the card.
+
+    `private_weight_reference.device_guard`'s rule, kept identical so the two
+    arms of one chain refuse the same resumes. Writes DEVICE on first use. A
+    directory with cells.csv and no DEVICE file is REFUSED, and that is the
+    decision for a stamp written before 2026-09-22, which carries the card's
+    name and no UUID: the card those cells came from cannot be shown to be
+    this one. A directory with a CARD stamp and no cells has nothing to pool,
+    so it is stamped and measured. A `no-uuid:<name>` identity matches only
+    itself: on a torch with no UUID two pods of one card type CAN resume each
+    other, and the guard is then only as strong as the name.
+    """
+    marker = out_dir / DEVICE_FILE
+    has_cells = (out_dir / "cells.csv").exists()
+    recorded = marker.read_text().strip() if marker.exists() else None
+    fix = ("The chain passes --session-tag itself, so a new chain is a fresh "
+           "directory; by hand, use a fresh --session-tag, --run-id or --out.")
+    if recorded is None:
+        if has_cells:
+            return (f"{out_dir} holds cells.csv and no {DEVICE_FILE} file, so the "
+                    "card those cells came from is unknown (a CARD stamp names a "
+                    "model of card, which every H200 shares). Resuming would put "
+                    f"this card's cells into that ladder. {fix}")
+        if identity:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            marker.write_text(identity + "\n")
+        return ""
+    if not identity:
+        return (f"this card's UUID could not be read, and {out_dir} holds cells "
+                f"from {recorded}; a resume cannot be shown to be on the same "
+                f"card. {fix}")
+    if identity != recorded:
+        return (f"{out_dir} holds cells measured on {recorded} and this card is "
+                f"{identity}. An elasticity pooled over two cards' governors is "
+                f"not an elasticity. {fix}")
+    return ""
+
+
 def default_run_id(args) -> str:
     """Card first, then every knob that changes what is MEASURED.
 
@@ -3153,6 +3238,14 @@ def _main(argv=None) -> int:
               "elasticity pooled over two cards' governors is not an "
               "elasticity; use a fresh --out or --run-id.")
         return exit_codes.REFUSED
+    # AND THE NAME IS NOT THE CARD. Every H200 is 'NVIDIA H200', so the check
+    # above passes a replacement pod's card into the first pod's ladder; the
+    # UUID in DEVICE is what refuses it (`device_guard`).
+    identity = device_identity()
+    wrong_card = device_guard(out_dir, identity)
+    if wrong_card:
+        print(f"REFUSED. {wrong_card}")
+        return exit_codes.REFUSED
     stamp.write_text(card + "\n")
     rows = run_arm(args, cfg, paths["cells.csv"], out_dir / "triton-cache", prov)
 
@@ -3164,7 +3257,7 @@ def _main(argv=None) -> int:
 
     (out_dir / "report.txt").write_text("\n".join(header + tail) + "\n")
     payload = prov.stamp({
-        "run_id": run_id, "card": card,
+        "run_id": run_id, "card": card, "device": identity,
         "pinned": pinned_for(args.group_m), "duty": list(args.duty),
         "predictions": [asdict(p) for p in PREDICTIONS],
         "bands": [{"name": n, "lo": lo, "hi": hi, "consequence": c}
