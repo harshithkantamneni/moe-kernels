@@ -2664,7 +2664,8 @@ def test_c1_prints_the_clock_corrected_ratio_and_scores_the_raw_one():
     assert ("clock-corrected ratio 0.9743 at eta = 0.7436 [0.7277, 0.7559] "
             "(R1 report.json @81f80b7)") in joined
     assert "PRINTED ONLY" in joined and "moved +0.0192" in joined
-    assert "at eta = 1, the bound DD11 argues from, it would read 0.9809" in joined
+    assert ("at eta = 1, the first-order figure DD11 argues from, it would "
+            "read 0.9809; not a bound") in joined
     assert "ONE estimator's bootstrap carried across eta" in joined
 
 
@@ -3206,21 +3207,32 @@ def test_a_run_that_formed_no_interval_still_prints_the_replicates_it_was_given(
 # --------------------------------------------------------------------------
 
 class _CellTiming:
+    """`time_kernel`'s return, with the fields `KernelTiming` carries: the
+    power, the host verdict and the clock list included, because a fake
+    without them is how "the full-duty timer records no power" stayed green
+    while the real one recorded it."""
     def __init__(self, **kw):
         defaults = dict(ms_p50=0.5, ms_min=0.49, ms_std=0.01, iters=40, trials=3,
                         warmup_ms=300.0, instrument="fake/time_kernel",
                         sm_clock_load_mhz=1455.0, clock_level_ok=True,
-                        clock_level_side="", clock_drift_ok=True, l2_flush=True)
+                        clock_level_side="", clock_drift_ok=True, l2_flush=True,
+                        power_w=695.0, host_bound=True,
+                        clock_samples_mhz=(1455.0, 1440.0, 1455.0))
         defaults.update(kw)
         self.__dict__.update(defaults)
 
 
 class _CellDutyTiming(_CellTiming):
+    """`clock_elasticity.time_duty`'s return, every diagnostic it measures."""
     def __init__(self, **kw):
-        super().__init__(samples=400, power_w=480.0, host_bound=False,
-                         clock_note="LEVEL HIGH (recorded)",
-                         instrument="fake/time_duty", sm_clock_load_mhz=1965.0,
-                         **kw)
+        # 3 trials x 5 bursts x (80 calls - the discarded lead): `samples` is
+        # the kept calls summed over EVERY trial, as `time_duty` returns it.
+        super().__init__(**{**dict(
+            samples=3 * 5 * 79, power_w=480.0, host_bound=False,
+            clock_note="LEVEL HIGH (recorded)", instrument="fake/time_duty",
+            sm_clock_load_mhz=1965.0, duty_achieved=0.47, calls_per_burst=80,
+            gap_ms=40.0, head_ms=0.51, tail_ms=0.52, within_burst_ok=True,
+            clock_samples_mhz=(1965.0, 1950.0, 1965.0)), **kw})
 
 
 def test_the_duty_knob_keeps_every_full_duty_run_id_and_moves_the_others():
@@ -3238,19 +3250,38 @@ def test_a_duty_outside_the_unit_interval_is_refused_before_anything():
 
 
 def test_the_plan_page_prices_the_duty_and_says_what_it_buys():
+    """The printed formats the chain's helpers parse are held byte-compatible
+    (the duty line's head, the kernel estimate, the wall figure); what the
+    page PROMISES changed. It said "V7 holds by construction" at duty 0.5,
+    and session 4's clock arm says the clock still tracked power there
+    (findings 0, 2 and 29): the page now says the duty's adequacy is
+    measured, names the evidence, and that V7 checks it."""
     full = run(["--dry-run", "--device-memory-gb", "140"])
     half = run(["--dry-run", "--device-memory-gb", "140", "--duty", "0.5"])
+    quarter = run(["--dry-run", "--device-memory-gb", "140", "--duty",
+                   str(PW.FLAT_DUTY)])
     assert "duty        1.00: the queue kept full" in full.stdout
+    assert f"(--duty {PW.FLAT_DUTY} is the setting" in full.stdout
     assert "WALL CLOCK" not in full.stdout
     assert "duty        0.50: every cell timed as bursts of ~40 ms" in half.stdout
     assert "idle gaps of 40 ms" in half.stdout
-    assert "V7 holds by construction" in half.stdout
-    m = re.search(r"the ladder's (\d+) s of kernel time takes about (\d+) s", half.stdout)
-    assert m, half.stdout[-1500:]
-    assert int(m.group(2)) == pytest.approx(2 * int(m.group(1)), abs=2)
-    # The kernel estimate itself does not move: the same calls, the same bytes.
+    assert f"duty        {PW.FLAT_DUTY:.2f}: every cell timed as bursts" in quarter.stdout
+    for page in (full.stdout, half.stdout, quarter.stdout):
+        assert "holds by construction" not in page
+        assert "boost ceiling" not in page
+    assert "Whether this duty is low enough is measured, not assumed" in half.stdout
+    assert PW.FLAT_DUTY_EVIDENCE in half.stdout and PW.FLAT_DUTY_EVIDENCE in quarter.stdout
+    assert "V7 checks it here and a FAIL names a lower duty" in quarter.stdout
+    # V7's registration says where "by construction" applies: full duty.
+    assert "at FULL duty a card that cannot lock its clock fails this by " \
+        "construction" in quarter.stdout
     est = lambda s: int(re.search(r"estimated GPU time (\d+) s", s).group(1))  # noqa: E731
-    assert est(full.stdout) == est(half.stdout)
+    for page, duty in ((half.stdout, 0.5), (quarter.stdout, PW.FLAT_DUTY)):
+        m = re.search(r"the ladder's (\d+) s of kernel time takes about (\d+) s", page)
+        assert m, page[-1500:]
+        assert int(m.group(2)) == pytest.approx(int(m.group(1)) / duty, abs=2)
+        # The kernel estimate itself does not move: the same calls, the same bytes.
+        assert est(full.stdout) == est(page)
 
 
 def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_power():
@@ -3282,10 +3313,18 @@ def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_po
     assert kw["warm_ms"] == 300.0 and kw["l2_flush"] is True
     assert kw["reference_clock_mhz"] == 1455.0
     assert ct.duty == 0.5 and ct.power_w == 480.0 and ct.ms_p50 == 0.52
-    assert ct.iters == 400 and ct.instrument == "fake/time_duty"
+    # ITERATIONS PER TRIAL, as at full duty: the kept calls of one trial.
+    assert ct.iters == 5 * 79 and ct.trials == 3
+    assert ct.instrument == "fake/time_duty"
     assert ct.sm_clock_load_mhz == 1965.0 and ct.host_bound is False
     assert ct.note.startswith("LEVEL HIGH")
-    # Full duty never touches the duty timer and records no power.
+    # Everything the duty timer measured is kept (findings 17 and 24).
+    assert (ct.duty_achieved, ct.calls_per_burst, ct.gap_ms) == (0.47, 80, 40.0)
+    assert (ct.head_ms, ct.tail_ms, ct.within_burst_ok) == (0.51, 0.52, True)
+    assert ct.clock_samples_mhz == "1965 1950 1965"
+    # Full duty never touches the duty timer, and records the power, host
+    # verdict and clock list `time_kernel` read (finding 18: it does read
+    # power, and this assertion said None only because the fake had none).
     calls.clear()
     ct = PW.time_cell(lambda: None, duty=1.0, warmup_ms=300.0,
                       cell_budget_ms=200.0, trials=3, l2_flush=True,
@@ -3293,7 +3332,11 @@ def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_po
                       duty_timer=duty_timer)
     assert [c[0] for c in calls] == ["timer"]
     assert calls[0][1]["target_ms"] == 200.0 and calls[0][1]["warmup_ms"] == 300.0
-    assert ct.duty == 1.0 and ct.power_w is None and ct.instrument == "fake/time_kernel"
+    assert ct.duty == 1.0 and ct.instrument == "fake/time_kernel"
+    assert ct.power_w == _CellTiming().power_w and ct.host_bound is True
+    assert ct.clock_samples_mhz == "1455 1440 1455"
+    assert (ct.duty_achieved, ct.calls_per_burst, ct.gap_ms, ct.head_ms,
+            ct.tail_ms, ct.within_burst_ok) == (None,) * 6
     assert ct.iters == 40 and ct.note == ""
 
 
@@ -3317,16 +3360,30 @@ def test_the_duty_and_the_power_travel_through_the_csv(tmp_path):
     assert [s.duty for s in old] == [1.0, 1.0] and all(s.power_w is None for s in old)
 
 
-def test_v7_names_the_duty_remedy_only_on_a_split_at_full_duty():
+def test_v7_names_a_lower_duty_on_a_split_at_any_duty():
+    """At full duty the remedy is the pod setting. BELOW full duty a split is
+    a duty not yet low enough, and the page used to print no remedy there, so
+    a FAIL at duty 0.5 read as a card fault under a plan that had promised V7
+    would hold (findings 0, 2 and 29)."""
     treads = [1, 2, 3]
     split = _pair_world(private_clock=1425.0, shared_clock=1740.0)
-    gate = PW.gate_v7_clock_parity(split, treads=treads)
-    assert gate.verdict == exit_codes.FAIL
-    assert any("the remedy is --duty 0.5" in ln for ln in gate.lines), gate.lines
-    at_half = [PW.replace(s, duty=0.5) for s in split]
-    gate = PW.gate_v7_clock_parity(at_half, treads=treads)
-    assert gate.verdict == exit_codes.FAIL
-    assert not any("the remedy is --duty 0.5" in ln for ln in gate.lines)
+
+    def remedy(samples):
+        gate = PW.gate_v7_clock_parity(samples, treads=treads)
+        assert gate.verdict == exit_codes.FAIL
+        lines = [ln for ln in gate.lines if ln.startswith("the remedy is")]
+        assert len(lines) == 1, gate.lines
+        return lines[0]
+    full = remedy(split)
+    assert full.startswith(f"the remedy is --duty {PW.FLAT_DUTY}:")
+    assert PW.FLAT_DUTY_EVIDENCE in full
+    half = remedy([PW.replace(s, duty=0.5) for s in split])
+    assert half.startswith("the remedy is a lower --duty than 0.50:")
+    assert f"--duty {PW.FLAT_DUTY} is the pod setting" in half
+    assert PW.FLAT_DUTY_EVIDENCE in half
+    at_flat = remedy([PW.replace(s, duty=PW.FLAT_DUTY) for s in split])
+    assert at_flat.startswith(f"the remedy is a lower --duty than {PW.FLAT_DUTY:.2f}:")
+    assert "is the pod setting" not in at_flat
     ok = PW.gate_v7_clock_parity(_pair_world(private_clock=1965.0, shared_clock=1965.0),
                                  treads=treads)
     assert ok.verdict == exit_codes.PASS
@@ -3349,6 +3406,516 @@ def test_a_replicate_at_another_duty_is_refused_and_a_pre_duty_report_is_full_du
     po.write_text(json.dumps(old))
     assert len(PW.load_replicates([po], design=design, card_known=True)) == 1
     assert "duty" in PW.DESIGN_KEYS
+
+
+# --------------------------------------------------------------------------
+# 21. a duty page names the instrument that timed it, and counts per trial
+# --------------------------------------------------------------------------
+
+def _provenance_instrument(monkeypatch, tmp_path, duty: str) -> str | None:
+    """Drive the real `_main` of a MEASURING run (no --dry-run, no
+    --self-test) to the line that builds the provenance block, and hand back
+    the instrument it names. The two host checks that refuse a laptop are
+    stood in; the block itself raises once it is asked, so nothing past it
+    runs and nothing is written."""
+    seen: dict = {}
+
+    class _Built(Exception):
+        pass
+
+    def block(**kw):
+        seen.update(kw)
+        raise _Built
+
+    monkeypatch.setattr(PW.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(PW, "clock_sampler_refusal", lambda: "")
+    monkeypatch.setattr(PW.PV, "provenance_block", block)
+    with contextlib.redirect_stdout(io.StringIO()), pytest.raises(_Built):
+        PW._main(["--duty", duty, "--ridge", "160", "--bandwidth-gbps", "4000",
+                  "--device-memory-gb", "140", "--capability", "9.0",
+                  "--out", str(tmp_path)])
+    assert not any(tmp_path.iterdir()), "the run wrote before its provenance"
+    return seen["instrument"]
+
+
+def test_a_duty_run_stamps_the_duty_timer_as_its_instrument(monkeypatch, tmp_path):
+    """Finding 5. The provenance block is what every row's `prov_instrument`
+    column and report.json's top-level `instrument` are written from, and at a
+    duty below 1 it named the queue-deep `time_kernel` loop the cells were NOT
+    timed with, while each row's own `instrument` column named the duty
+    timer. It now names the duty timer's own string, the one those rows carry,
+    and the duty."""
+    import clock_elasticity as CE
+    row_instrument = CE.DutyTiming.__dataclass_fields__["instrument"].default
+    got = _provenance_instrument(monkeypatch, tmp_path, "0.25")
+    assert got != TIMING.TIMING_BASIS
+    assert got.startswith(row_instrument) and got.endswith("duty 0.25")
+    assert PW.ladder_instrument(0.25) == got
+    # Full duty keeps the queue-deep basis, which is what timed its cells.
+    assert _provenance_instrument(monkeypatch, tmp_path, "1.0") == TIMING.TIMING_BASIS
+    assert PW.ladder_instrument(0.5, synthetic=True) == PW.SYNTHETIC_INSTRUMENT
+    # report.json's top-level key is the block's, through `stamp`.
+    prov = PW.PV.Provenance(instrument=got, ridge_source="this test",
+                            bandwidth_source="this test")
+    treads = [1, 2, 3, 4, 5, 6]
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0, copies_declared=9,
+              native_switch=4)
+    samples = PW.planted_samples(PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)
+    report = _analyse(samples, treads)
+    assert prov.stamp(report.payload)["instrument"] == got
+
+
+def test_iterations_per_trial_mean_one_thing_at_either_duty():
+    """Finding 5's second call site. At a duty below 1 `time_cell` stored the
+    kept calls summed over EVERY trial, and the page printed that as
+    "iterations per trial" and wrote it into provenance's `iters`: three
+    times a per-trial count at the default three trials."""
+    def timer(fn, **kw):
+        return _CellTiming(ms_p50=0.5)
+
+    def duty_timer(fn, **kw):
+        return _CellDutyTiming(ms_p50=0.52)
+    ct = PW.time_cell(lambda: None, duty=0.25, warmup_ms=300.0,
+                      cell_budget_ms=200.0, trials=3, l2_flush=True,
+                      reference_clock_mhz=None, timer=timer,
+                      duty_timer=duty_timer)
+    per_trial = _CellDutyTiming().samples // 3
+    assert ct.iters == per_trial
+    rows = [PW.replace(_sample(PW.SHARED, n, 0, 1.0), iters=ct.iters,
+                       duty=0.25) for n in (1, 2, 3)]
+    line = PW._iters_line(rows)
+    assert line.startswith(f"iterations per trial: median {per_trial} ")
+    assert "At duty 0.25 an iteration is a KEPT call" in line
+    assert "first call of every burst discarded" in line
+    prov = PW._observed_iters(PW.PV.Provenance(), rows)
+    assert prov.iters == per_trial
+    # Full duty keeps its sentence.
+    full = [_sample(PW.SHARED, n, 0, 1.0) for n in (1, 2, 3)]
+    assert PW._iters_line(full).endswith(
+        "Sized per cell by the instrument from --cell-budget-ms.")
+
+
+# --------------------------------------------------------------------------
+# 22. the duty timer's own diagnostics, kept per cell and printed beside V7
+# --------------------------------------------------------------------------
+
+#: The columns this build adds for the duty timer's diagnostics (findings 17
+#: and 24). Named here so the pre-change header below is the one a cells.csv
+#: written at 12ec932 carries.
+DIAGNOSTIC_COLUMNS = ("duty_achieved", "calls_per_burst", "gap_ms", "head_ms",
+                      "tail_ms", "within_burst_ok", "clock_samples_mhz",
+                      "host_bound")
+
+#: The top-level keys of session 4's published report.json files (written at
+#: 81f80b7, 2026-09-21, on the pod-h200-session4 branch): what a report from
+#: before this build, and before the duty, run id and seed keys, carries.
+SESSION4_REPORT_KEYS = (
+    "experiment", "synthetic", "card", "model", "dtype", "block_m", "pinned",
+    "treads", "repeats", "alpha_refit", "alpha_band", "ridge", "ridge_source",
+    "bandwidth_gbps", "bandwidth_source", "roof_tflops", "roof_source",
+    "reference_clock_mhz", "reference_clock_grade", "reference_clock_source",
+    "weight_stream_ms", "memory_plan", "weight_delta_bytes", "high_water_bytes",
+    "buffer_proof", "ladders", "treads_table", "copies_declared", "path_census",
+    "align_probe", "declaration_fit", "ratio", "ratio_interval",
+    "ratio_interval_pct", "ratio_draws", "ratio_corrected", "outcome",
+    "outcomes_partition", "gates", "git_sha", "gpu_name", "instrument",
+    "provenance")
+
+
+def test_the_duty_timers_diagnostics_travel_through_the_csv_and_an_old_file_reads_none(
+        tmp_path):
+    """Findings 17 and 24: `time_duty` measures the achieved duty, the burst
+    shape, the in-burst head and tail, every per-burst clock and the host
+    verdict, and the arm kept none of them, so a V7 or V0 FAIL at a duty
+    could not be read off cells.csv. They are columns now, each read back BY
+    NAME, and a file written before them reads None, never 0 or False."""
+    assert set(DIAGNOSTIC_COLUMNS) <= set(PW.CSV_FIELDS)
+    path = tmp_path / "cells.csv"
+    store = PW.Store(path, PW.CSV_FIELDS)
+    full = PW.replace(_sample(PW.SHARED, 2, 0, 1.0, load=1455.0), power_w=695.0,
+                      clock_samples_mhz="1455 1440", host_bound=False)
+    duty = PW.replace(_sample(PW.PRIVATE, 2, 0, 1.1, load=1965.0), duty=0.25,
+                      power_w=300.0, duty_achieved=0.231, calls_per_burst=80,
+                      gap_ms=120.0, head_ms=0.5, tail_ms=0.495,
+                      within_burst_ok=True, clock_samples_mhz="1965 1965 1980",
+                      host_bound=True)
+    store.append(full)
+    store.append(duty)
+    back = PW.read_samples(path)
+    assert back == [full, duty]
+    assert back[1].burst_sag == pytest.approx(-0.01)
+    assert back[0].burst_sag is None
+    text = path.read_text().splitlines()
+    header = text[0].split(",")
+    keep = [i for i, h in enumerate(header) if h not in DIAGNOSTIC_COLUMNS]
+    (tmp_path / "old.csv").write_text("\n".join(
+        ",".join(ln.split(",")[i] for i in keep) for ln in text) + "\n")
+    old = PW.read_samples(tmp_path / "old.csv")
+    for s in old:
+        assert all(getattr(s, c) is None for c in DIAGNOSTIC_COLUMNS), s
+        assert s.burst_sag is None
+    assert [s.power_w for s in old] == [695.0, 300.0]
+
+
+def test_a_pre_change_directory_is_refused_while_new_runs_and_old_reports_read(
+        tmp_path):
+    """The Store refuses a header it did not write, so adding the columns
+    REFUSES a resume of a directory written before them. Nothing the chain
+    runs is such a directory: its R3 runs are at a duty below 1, whose run id
+    is not any full-duty run's, so they start a fresh file under this
+    header; and --read / --replicate-of read report.json, whose keys this
+    build does not touch, so a pre-change report pair still re-scores."""
+    old_dir = tmp_path / "old"
+    old_dir.mkdir()
+    pre_change = [c for c in PW.CSV_FIELDS if c not in DIAGNOSTIC_COLUMNS]
+    with (old_dir / "cells.csv").open("w", newline="") as fh:
+        csv.DictWriter(fh, fieldnames=pre_change + PW.PROVENANCE_COLUMNS).writeheader()
+    with pytest.raises(PW.SchemaCollision) as exc:
+        PW.Store(old_dir / "cells.csv", PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    assert "clock_samples_mhz" in str(exc.value) and "fresh directory" in str(exc.value)
+    # A duty run is a different id, so a different, empty directory.
+    full = PW.default_run_id(_args(), "NVIDIA H200")
+    quarter = PW.default_run_id(_args(**{"--duty": 0.25}), "NVIDIA H200")
+    assert quarter != full
+    fresh = tmp_path / quarter / "cells.csv"
+    fresh.parent.mkdir()
+    PW.Store(fresh, PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS).append(
+        PW.replace(_sample(PW.SHARED, 1, 0, 1.0), duty=0.25, calls_per_burst=80))
+    assert PW.read_samples(fresh)[0].calls_per_burst == 80
+    # A pre-change report pair, session 4's key set, re-read off GPU.
+    treads = [1, 2, 3, 4, 5, 6]
+    paths = []
+    for name, alpha, seed in (("s4-a", PW.ALPHA, 0), ("s4-b", 0.60, 1)):
+        p, payload = _measured_shaped_report(tmp_path, name, alpha, treads, seed=seed)
+        old = {k: v for k, v in payload.items() if k in SESSION4_REPORT_KEYS}
+        old["instrument"] = TIMING.TIMING_BASIS
+        p.write_text(json.dumps(old, indent=2))
+        paths.append(p)
+    got = run(["--read", str(paths[0]), "--replicate-of", str(paths[1])])
+    assert "READ MODE: nothing measured, nothing written" in got.stdout, (
+        got.stdout[-800:] + got.stderr[-800:])
+    assert "duty        1.0" in got.stdout
+    assert exit_codes.classify_text(got.stdout) == got.returncode
+
+
+def test_a_full_duty_command_names_its_old_directory_and_the_store_refuses_it(
+        tmp_path):
+    """The review's R3-RUNID-RESUME-COMMENT. The duty is out of the run id at
+    1.0, so the command that wrote a session-4 directory names that same
+    directory today, and the comment beside the key said the directory
+    RESUMES. It does not: session 4's cells.csv carries neither the duty
+    columns nor the diagnostics, and the Store refuses its header. Its rows
+    still read back, with every missing field None. The comment now says what
+    happens."""
+    import dataclasses
+    import inspect
+    full = PW.default_run_id(_args(), "NVIDIA H200")
+    assert PW.default_run_id(_args(**{"--duty": 1.0}), "NVIDIA H200") == full
+    pre_duty = [c for c in PW.CSV_FIELDS
+                if c not in DIAGNOSTIC_COLUMNS + ("duty", "power_w")]
+    old = tmp_path / full / "cells.csv"
+    old.parent.mkdir()
+    with old.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=pre_duty + PW.PROVENANCE_COLUMNS,
+                                extrasaction="ignore", restval="")
+        writer.writeheader()
+        writer.writerow(dataclasses.asdict(_sample(PW.SHARED, 1, 0, 1.0)))
+    with pytest.raises(PW.SchemaCollision) as exc:
+        PW.Store(old, PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    assert "'duty', 'power_w'" in str(exc.value)
+    back = PW.read_samples(old)
+    assert len(back) == 1 and back[0].duty == 1.0 and back[0].power_w is None
+    src = " ".join(inspect.getsource(PW.default_run_id).replace("#", " ").split())
+    assert "a resumed session-4 directory resumes" not in src
+    assert "It does NOT resume there" in src and "SchemaCollision" in src
+
+
+def test_every_column_the_instrument_measured_reaches_the_row():
+    """The second call site of findings 17 and 24. `run_sweep` copied the
+    timing's fields into a `Sample` one by one, and `host_bound` was on
+    `CellTiming` and on no row. `sample_from_timing` copies every field the
+    two share BY NAME, and a `CellTiming` field with no column fails here."""
+    timing_fields = set(PW.CellTiming.__dataclass_fields__) - {"note"}
+    assert timing_fields <= set(PW.Sample.__dataclass_fields__), (
+        timing_fields - set(PW.Sample.__dataclass_fields__))
+    ct = PW.CellTiming(
+        ms_p50=1.25, ms_min=1.2, ms_stdev=0.01, iters=95, trials=2,
+        warmup_ms=300.0, instrument="an instrument", sm_clock_load_mhz=1950.0,
+        clock_level_ok=False, clock_level_side="high", clock_drift_ok=True,
+        l2_flush=True, duty=0.25, power_w=301.0, host_bound=True,
+        note="a clock note", clock_samples_mhz="1950 1965",
+        duty_achieved=0.24, calls_per_burst=33, gap_ms=121.0, head_ms=1.2,
+        tail_ms=1.3, within_burst_ok=False)
+    s = PW.sample_from_timing(ct, arm=PW.PRIVATE, repeat=4, block_m=32,
+                              tiles=3, rows_per_expert=96, tokens=384,
+                              copies=3, experts_declared=72)
+    for name in timing_fields:
+        assert getattr(s, name) == getattr(ct, name), name
+    assert s.detail == "a clock note" and s.status == "ok"
+    assert (s.arm, s.repeat, s.tiles) == (PW.PRIVATE, 4, 3)
+
+
+class _BurstEvents:
+    """The event seam `clock_elasticity.time_duty` injects off GPU: the lead
+    call of a burst costs 8 ms, the kept ones ramp from 2 ms by 1 us per
+    call, so the burst's last quarter runs slower than its first and inside
+    `timing.DRIFT_FRACTION` of it."""
+    def __init__(self, n):
+        rec = types.SimpleNamespace(record=lambda: None)
+        self.starts, self.ends = [rec] * n, [rec] * n
+
+    def synchronize(self):
+        pass
+
+    def elapsed(self, n):
+        return [8.0] + [2.0 + 0.001 * i for i in range(n - 1)]
+
+
+def test_time_cell_over_the_real_duty_timer_fills_every_diagnostic(tmp_path):
+    """No laptop test drove `time_cell` through the REAL `time_duty`, so the
+    names it reads off `DutyTiming` were checked only against a fake written
+    beside them. Here the arm's own timer runs behind injected events, clock
+    reads and sleep, and every diagnostic lands on the row and comes back
+    from cells.csv; the row's instrument is the string the page's provenance
+    starts with."""
+    import functools
+
+    import clock_elasticity as CE
+    reads = iter([1965, 1950, 1965, 1980] * 10)
+
+    def clock_read():
+        return TIMING.ClockState(next(reads), 60, source=TIMING.CLOCK_SOURCE_NVML,
+                                 power_w=300.0)
+    duty_timer = functools.partial(CE.time_duty, events=_BurstEvents,
+                                   clock_read=clock_read, sleep=lambda s: None)
+    ct = PW.time_cell(lambda: None, duty=0.25, warmup_ms=0.0,
+                      cell_budget_ms=200.0, trials=2, l2_flush=False,
+                      reference_clock_mhz=None,
+                      timer=lambda fn, **kw: _CellTiming(ms_p50=2.0),
+                      duty_timer=duty_timer)
+    calls = round(PW.DUTY_BURST_MS / 2.0)
+    bursts = round(200.0 / PW.DUTY_BURST_MS)
+    assert ct.calls_per_burst == calls and ct.iters == bursts * (calls - 1)
+    assert ct.gap_ms == pytest.approx(calls * 2.0 * (1 / 0.25 - 1))
+    assert ct.head_ms < ct.tail_ms and ct.within_burst_ok is True
+    assert ct.duty_achieved is not None and ct.power_w == 300.0
+    assert ct.host_bound is not None
+    assert ct.clock_samples_mhz.split() == ["1965", "1950", "1965", "1980"] * 2 + ["1965", "1950"]
+    assert ct.instrument == CE.INSTRUMENT
+    assert PW.ladder_instrument(0.25).startswith(ct.instrument)
+    row = PW.sample_from_timing(ct, arm=PW.SHARED, repeat=0, block_m=32,
+                                tiles=1, rows_per_expert=32, tokens=128,
+                                copies=1, experts_declared=72)
+    path = tmp_path / "cells.csv"
+    PW.Store(path, PW.CSV_FIELDS).append(row)
+    back = PW.read_samples(path)[0]
+    assert back.burst_sag == pytest.approx(row.burst_sag) and back.burst_sag > 0
+    for name in DIAGNOSTIC_COLUMNS:
+        got, want = getattr(back, name), getattr(row, name)
+        assert got == (pytest.approx(want) if isinstance(want, float) else want), name
+
+
+def _powered_pair(*, duty=0.25, shared_w=290.0, private_w=320.0,
+                  shared_sag=0.0, private_sag=-0.01):
+    """`_pair_world` at matched clocks with each arm's power and in-burst
+    head and tail planted, so V7 PASSES on the clocks whatever is printed."""
+    out = []
+    for s in _pair_world(private_clock=1965.0, shared_clock=1965.0):
+        watts, sag = {PW.SHARED: (shared_w, shared_sag),
+                      PW.PRIVATE: (private_w, private_sag)}.get(s.arm, (None, None))
+        out.append(PW.replace(s, duty=duty, power_w=watts,
+                              head_ms=None if sag is None else 1.0,
+                              tail_ms=None if sag is None else 1.0 + sag))
+    return out
+
+
+def test_v7_prints_each_arms_power_and_sag_beside_its_clocks_and_scores_neither():
+    """Findings 2 and 24: power_w was written per cell and never shown, so a
+    V7 FAIL could not say whether the arms split (one draws more) or both
+    jittered; and the in-burst sag R1 gates as V5 had no view here at all.
+    Both are printed per tread now, labelled as what they are, and V7's
+    verdict does not move with either."""
+    treads = [1, 2, 3]
+    gate = PW.gate_v7_clock_parity(_powered_pair(), treads=treads)
+    assert gate.verdict == exit_codes.PASS
+    joined = "\n".join(gate.lines)
+    assert ("power (NVML's ~1 s average, duty-averaged over bursts and idle "
+            "gaps): shared 290 W, private 320 W") in joined, joined
+    # A sag of exactly zero is a reading, not a missing one.
+    assert "in-burst sag (tail - head) / head: shared +0.00%, private -1.00%" in joined
+    assert "RECORDS: V7 scores the clocks alone" in joined
+    assert joined.count("power (NVML") == len(treads)
+    # Wildly different power and sag, same clocks: the verdict is the clocks'.
+    loud = PW.gate_v7_clock_parity(
+        _powered_pair(private_w=600.0, private_sag=-0.2), treads=treads)
+    assert loud.verdict == exit_codes.PASS
+    # At full duty the power is NVML's average of a busy card, not averaged
+    # with gaps, and a queue-deep cell has no sag to print.
+    full = [PW.replace(s, head_ms=None, tail_ms=None)
+            for s in _powered_pair(duty=1.0)]
+    lines = "\n".join(PW.gate_v7_clock_parity(full, treads=treads).lines)
+    assert "power (NVML's ~1 s average): shared 290 W, private 320 W" in lines
+    assert "duty-averaged" not in lines and "in-burst sag" not in lines
+    # A page with neither prints what it always printed.
+    bare = PW.gate_v7_clock_parity(_pair_world(), treads=treads)
+    assert not any("power" in ln or "sag" in ln for ln in bare.lines)
+
+
+# --------------------------------------------------------------------------
+# 23. the duty premise and the elasticity, described as the evidence has them
+# --------------------------------------------------------------------------
+
+def _comment_above(name: str) -> str:
+    """The `#:` block directly above `name = ...` in the script, joined."""
+    lines = SCRIPT.read_text().splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"{name} = "))
+    block = []
+    for ln in reversed(lines[:at]):
+        if not ln.startswith("#:"):
+            break
+        block.append(ln[2:].strip())
+    return " ".join(reversed(block))
+
+
+def _helps() -> dict[str, str]:
+    return {flag: " ".join((a.help or "").split())
+            for a in PW.build_parser()._actions for flag in a.option_strings}
+
+
+def test_no_description_promises_v7_by_construction_below_full_duty():
+    """THE RECURRING DEFECT, one premise described in eight places (findings
+    0, 2 and 29). Design decision 15 said every state at or below duty 0.5
+    sat at the boost ceiling and V7 held there by construction; session 4's
+    own clock arm says the clock still tracked board power at 0.5 and sat
+    flat at 0.25. Every description of the premise now states that evidence,
+    and "by construction" stays only where it holds: at full duty."""
+    doc = " ".join(PW.__doc__.split())
+    assert "V7 then holds by construction" not in doc
+    assert "boost ceiling" not in doc
+    assert f"SO THE POD SETTING IS `--duty {PW.FLAT_DUTY}`" in doc
+    assert f"--duty {PW.FLAT_DUTY}    # both arms off the power cap" in PW.__doc__
+    assert "9f91fa91" in doc and "2026-09-21" in doc
+    assert "V7 fails by construction there" in doc and "At FULL duty" in doc
+    # The default stays 1.0 (the owner's decision D1), and says why.
+    assert "THE DEFAULT STAYS 1.0" in doc
+    assert PW.DESIGN_KEY_DEFAULTS["duty"] == 1.0
+    assert PW.build_parser().parse_args([]).duty == 1.0
+    duty_help = _helps()["--duty"]
+    assert "by construction" not in duty_help and "boost ceiling" not in duty_help
+    assert f"The pod setting is {PW.FLAT_DUTY}" in duty_help
+    assert "stays the default" in duty_help
+    parity = _comment_above("CLOCK_PARITY")
+    assert "at FULL duty on a card that cannot lock its clock" in parity
+    v7 = " ".join(PW.gate_v7_clock_parity.__doc__.split())
+    assert "`clock_elasticity.time_duty`'s one NVML read per burst" in v7
+    assert "AT FULL DUTY" in v7
+    v4 = " ".join(PW.gate_v4_memory_bound.__doc__.split())
+    assert "every cell here run under one board power cap" not in v4
+    assert "Below full duty" in v4 and "conservative for this gate" in v4
+    # Finding 18: the power description matches what both instruments do.
+    assert "the full-duty timer does not" not in SCRIPT.read_text()
+
+
+def _two_elasticity_world(clock, *, intercept_eta, tile_eta, a=0.3,
+                          b_shared=0.10, b_private=0.20, f0=1965.0):
+    """Ratio-arm cells under `ms = a (f0/f) ** intercept_eta + b n (f0/f) **
+    tile_eta`, the additive law with a different elasticity on each term, at
+    the clock `clock(arm, n)` gives. The planted ratio is b_shared / b_private
+    at any one clock. Every number here is PLANTED; none is a card's."""
+    out = []
+    for arm, b in ((PW.SHARED, b_shared), (PW.PRIVATE, b_private)):
+        for n in range(1, 7):
+            f = clock(arm, n)
+            ms = a * (f0 / f) ** intercept_eta + b * n * (f0 / f) ** tile_eta
+            out.extend(_sample(arm, n, rep, ms, load=f) for rep in range(3))
+    return out
+
+
+def _corrected_ratio(samples, eta):
+    cells = PW.clock_corrected(samples, eta, 1500.0)
+    return (PW.ladder_for(cells, PW.SHARED).slope_ms
+            / PW.ladder_for(cells, PW.PRIVATE).slope_ms)
+
+
+def test_one_clock_per_arm_is_carried_exactly_by_the_per_m_tile_elasticity():
+    """WHICH eta `clock_corrected` needs, as arithmetic on planted cells. The
+    ratio reads only slopes, so with each arm at one clock the per-call
+    factor reaches it through the slope alone: the per-M-tile elasticity
+    recovers the planted ratio exactly, and a per-call blend of the
+    intercept's elasticity with the tiles' does not, whatever its weights.
+    With a clock that moves across treads inside an arm, no single eta is
+    exact, which is what the descriptions say."""
+    intercept_eta, tile_eta = 0.2, 1.1
+    planted = 0.10 / 0.20
+    one = _two_elasticity_world(
+        lambda arm, n: 1740.0 if arm == PW.SHARED else 1425.0,
+        intercept_eta=intercept_eta, tile_eta=tile_eta)
+    assert _corrected_ratio(one, tile_eta) == pytest.approx(planted, abs=1e-12)
+    for blend in (0.25, 0.5, 0.75):
+        per_call = intercept_eta + blend * (tile_eta - intercept_eta)
+        assert abs(_corrected_ratio(one, per_call) - planted) > 1e-3, per_call
+    moving = _two_elasticity_world(
+        lambda arm, n: 1740.0 - 50.0 * (n - 1) if arm == PW.SHARED else 1425.0,
+        intercept_eta=intercept_eta, tile_eta=tile_eta)
+    assert abs(_corrected_ratio(moving, tile_eta) - planted) > 1e-3
+    # One elasticity on both terms is the case any consistent eta carries,
+    # which is the clock-split-elastic world's law.
+    shared_law = _two_elasticity_world(
+        lambda arm, n: 1740.0 - 50.0 * (n - 1) if arm == PW.SHARED else 1425.0,
+        intercept_eta=0.75, tile_eta=0.75)
+    assert _corrected_ratio(shared_law, 0.75) == pytest.approx(planted, abs=1e-12)
+
+
+def test_the_eta_1_line_is_a_reference_point_the_correction_can_pass():
+    """DD11's figure is first-order: the per-M-tile elasticity the correction
+    takes read above 1 on session 4's cells, and at such an eta the corrected
+    ratio lies past the eta = 1 one. The page used to call that line a bound
+    the correction cannot exceed."""
+    one = _two_elasticity_world(
+        lambda arm, n: 1740.0 if arm == PW.SHARED else 1425.0,
+        intercept_eta=0.2, tile_eta=1.1)
+    cc = PW.clock_corrected_ratio(one, PW.ClockElasticity(1.1, 1.1, 1.1, "x"),
+                                  f_ref=1500.0, f_ref_source="planted",
+                                  draws=50, seed=0)
+    assert (cc.ratio - cc.raw) * (cc.ratio - cc.at_unit) > 0
+    assert abs(cc.ratio - cc.raw) > abs(cc.at_unit - cc.raw)
+    joined = "\n".join(cc.lines())
+    assert "cannot exceed" not in joined
+    assert "not a bound: an eta above 1 carries the correction past it" in joined
+    doc = " ".join(PW.ClockCorrection.__doc__.split())
+    assert "cannot exceed" not in doc and "NOT a bound" in doc
+
+
+def test_the_elasticity_the_correction_takes_is_the_per_m_tile_claim_everywhere():
+    """Finding 19 and the review's R3-ETA-PER-CALL. `clock_corrected` scales
+    each cell's whole per-call time, and a first reading of that took it to
+    want the per-call elasticity; the ratio reads only slopes, so it wants
+    the per-M-tile one (the test above plants both and shows it), which is
+    also what clock_elasticity.py says its claim is for. Every description of
+    the flag names that quantity, where it sits in either vintage of report,
+    and that session 4's `value` is the per-call reading instead. The
+    numbers quoted beside it carry their run and date."""
+    for doc in (PW.ClockElasticity.__doc__, PW.clock_corrected.__doc__):
+        joined = " ".join(doc.split())
+        assert "PER-M-TILE" in joined and "PER-CALL ELASTICITY" not in joined, doc
+    cls = " ".join(PW.ClockElasticity.__doc__.split())
+    assert "elasticity.value" in cls and "elasticity.fixed_tread" in cls
+    assert "8d4eb78" in cls and "session 4's included" in cls
+    helps = _helps()
+    assert "per-M-TILE" in helps["--clock-elasticity"]
+    assert "gated claim (elasticity.value" in helps["--clock-elasticity"]
+    assert "NOT its pooled per-call" in helps["--clock-elasticity"]
+    assert "e.g. elasticity.value" in helps["--clock-elasticity-source"]
+    parity = _comment_above("CLOCK_PARITY")
+    assert "WHICH ELASTICITY `--clock-elasticity` TAKES: THE PER-M-TILE ONE" in parity
+    assert "NOT its pooled per-call reading" in parity
+    assert "no single eta is exact" in parity
+    assert "bounded above by 1" not in parity
+    assert "9f91fa91" in parity and "2026-09-21" in parity and "12ec932" in parity
+    doc = " ".join(PW.__doc__.split())
+    assert "measured PER-M-TILE elasticity" in doc
+    assert "PER-CALL elasticity" not in doc
 
 
 # --------------------------------------------------------------------------

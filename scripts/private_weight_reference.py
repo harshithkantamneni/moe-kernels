@@ -5,7 +5,7 @@
     python scripts/private_weight_reference.py --self-test refit
     python scripts/private_weight_reference.py --self-test issue-bound
     python scripts/private_weight_reference.py                # the pod run
-    python scripts/private_weight_reference.py --duty 0.5     # both arms off the power cap
+    python scripts/private_weight_reference.py --duty 0.25    # both arms off the power cap
     python scripts/private_weight_reference.py --seed 1 --replicate-of RUN0/report.json
                                        # a second run; C1 scored WITH the first
     python scripts/private_weight_reference.py --read RUN1/report.json \
@@ -202,16 +202,34 @@ V2 says they were) or the calibration is not a ceiling.
 WHY THE CLOCK SPLIT EXISTS AND HOW IT IS REMOVED (DESIGN DECISION 15). Session
 4's pages were INVALID on V7 because a power-capped card boosts whichever arm
 reads fewer bytes: both arms ran flat out against the 700 W cap and the shared
-arm sat 2% (G=1) to 18% (G=16) above the private one. Session 4's clock arm
-showed the cap binds ONLY at full duty: every state at or below 50% duty sat at
-the boost ceiling (1905-1980 MHz) at every tread, at 180-500 W. `--duty 0.5`
-times every cell as bursts of kernel time separated by idle gaps of equal
-length, the mechanism `clock_elasticity.time_duty` already has, so the same
-kernel moves the same bytes with board power under the cap and both arms at
-one clock. V7 then holds by construction, the raw ratio is quotable, and no
-elasticity model enters the number. The cost is wall clock, about 1/duty x
-the kernel time. Board power is recorded per cell (`power_w`): the one traffic
-signal on the page that does not go through the clock.
+arm sat 2% (G=1) to 18% (G=16) above the private one. `--duty D` times every
+cell as bursts of about 40 ms of kernel time, each followed by an idle gap of
+`burst x (1/D - 1)`, the mechanism `clock_elasticity.time_duty` already has
+(imported, not copied), so the same kernel moves the same bytes at a lower
+AVERAGE board power. Whether a duty is low enough that the clock stops
+following power is a measured fact about the card, and session 4's clock arm
+measured it (2026-09-21, the G=16 mixtral arm, run 9f91fa91 under
+results/published/2026-09-21-nvidia_h200-session4/ on the pod-h200-session4
+branch): at duty 0.5 the clock still tracked board power, -1.09 MHz/W over
+1882-1965 MHz, and 13 of its 104 cells failed DRIFT (16.7% of those at treads
+1-6); at duty 0.25 every tread's median clock read 1965 MHz, the slope was
+-0.07 MHz/W and no cell drifted. SO THE POD SETTING IS `--duty 0.25`. There V7
+is expected to hold if both arms' average power stays where session 4's clock
+was flat (the clock arm's kernel, the study's own call, drew 277-317 W at
+0.25; the private arm reads more bytes and draws more), and V7 checks it: a
+FAIL below full duty is a duty not yet low enough, and its remedy names a
+lower one. When it holds the raw ratio is quotable and no elasticity model
+enters the number. The cost is wall clock, about 1/duty x the kernel time.
+THE DEFAULT STAYS 1.0: `duty` is one of `DESIGN_KEYS`, read as 1.0 from a
+report that predates it, so a different default would make every bare
+command a different design from session 4's full-duty runs, which
+`--replicate-of` then refuses, and would move their run ids. Board power is
+recorded per cell (`power_w`, NVML's ~1 s average, so below full duty an
+average over the bursts and the gaps together) and V7 prints each arm's
+median per tread beside its clocks: the traffic signal that does not go
+through the clock. Beside it goes each arm's median in-burst sag, the change
+inside a burst that one clock read per burst cannot see. Both are scored by
+nothing.
 
 WHAT ONE RUN'S INTERVAL IS NOT. The bootstrap is over repeats WITHIN a run. Two
 runs of this arm on one card at two seeds, 77 minutes apart (session 4), sat
@@ -227,13 +245,17 @@ carry the same activation and compute terms, and dividing them subtracts
 nothing -- because being model-free is the entire reason this ladder was worth
 renting a card for. Two corrected ratios are PRINTED beside it, each under the
 model it assumes, and both are scored by nothing: the activation-corrected
-ratio, and -- when `--clock-elasticity` names a measured elasticity and its
-source -- the CLOCK-corrected ratio, every ratio-arm cell carried to one
-reference clock by `(f_cell / f_ref) ** eta` before the fit. V7 still refuses a
-clock split of more than CLOCK_PARITY: on a pod that cannot lock its clock
-(RunPod refuses `nvidia-smi -lgc`) the arm reading less draws less power and
-clocks higher, so V7 fails by construction and the page says so while it
-prints what the correction would read.
+ratio, and (when `--clock-elasticity` names a measured PER-M-TILE
+elasticity and its source) the CLOCK-corrected ratio, every ratio-arm cell
+carried to one reference clock by `(f_cell / f_ref) ** eta` before the fit
+(exact when each arm holds one clock at every fitted tread, first-order when
+a clock moves across treads; CLOCK_PARITY's comment has why). V7 still
+refuses a clock split of more than CLOCK_PARITY. At FULL duty on a pod that
+cannot lock its clock (RunPod refuses `nvidia-smi -lgc`) the arm reading less
+draws less power and clocks higher, so V7 fails by construction there and the
+page says so while it prints what the correction would read; below the duty
+at which the clock stops following power (DESIGN DECISION 15) it is expected
+to hold, and it is scored either way.
 
 EXIT CODES are `moe/bench/exit_codes.py`'s table and nothing is folded into
 DONE. There is deliberately no gate-softening flag: a CLAIM that did not pass
@@ -449,17 +471,44 @@ IDENTITY_SPREAD = 0.02
 
 #: DESIGN DECISION 11. V7's bound on the clock. At every fitted tread the
 #: median under-load SM clock of PRIVATE must sit within this fraction of
-#: SHARED's. CHOSEN, and the reason is arithmetic rather than a calibration:
-#: the elasticity of the per-call time to the clock is bounded above by 1, so
-#: a 1% clock gap moves one slope by at most 1% and the ratio by at most
-#: ~0.01 -- a sixth of ALPHA_BAND's width. A tolerance, not a quantity derived
-#: from any card. `clock_elasticity` MEASURES the elasticity (session 4 read
-#: 0.74 at one cell; the per-tread record runs above it, so the pooled figure
-#: is the one with an interval, not the largest), and `--clock-elasticity`
-#: lets this page PRINT a clock-corrected ratio beside the raw one. It never
-#: scores it, and it never moves this bound: on a card that cannot lock its
-#: clock the two arms draw different power and V7 refuses by construction,
-#: which is a fact about the platform the page should state, not soften.
+#: SHARED's. CHOSEN, a tolerance and not a quantity derived from any card, and
+#: the reason is first-order arithmetic: time that is SM cycles over the clock
+#: has an elasticity of 1 to it, so a 1% clock gap moves such a cell's time by
+#: about 1%, and a slope that moved in proportion would move the ratio by
+#: about 0.01, a sixth of ALPHA_BAND's width. THE SLOPE NEED NOT MOVE IN
+#: PROPORTION, and session 4 says it did not: its clock arm's cells (run
+#: 9f91fa91, 2026-09-21, G=16), re-scored by `clock_elasticity.fit` at
+#: 12ec932, read the per-M-tile elasticity at 1.21 over treads 1-8 and 1.11
+#: over treads 2-8 against a pooled per-call 0.74, because the intercept
+#: follows the clock less than the tiles do. Both per-M-tile readings are
+#: above 1, so ~0.01 is a first-order figure and not a bound, and 1% stays
+#: the tolerance.
+#:
+#: WHICH ELASTICITY `--clock-elasticity` TAKES: THE PER-M-TILE ONE.
+#: `clock_corrected` scales each cell's whole per-call ms by
+#: `(f / f_ref) ** eta`, and the ratio reads nothing but the two SLOPES. When
+#: each arm holds one clock at every fitted tread, the factor is one number
+#: per arm: the intercept's share of it stays in the intercept, the slope is
+#: carried by exactly that factor, and the corrected ratio is exact when eta
+#: is the elasticity of the per-M-tile cost. That is `clock_elasticity`'s
+#: gated claim, `elasticity.value` in a report written since 8d4eb78
+#: (2026-09-22), over treads 2 and deeper by the owner's decision D2 of
+#: 2026-09-22 (that file's `Elasticity` docstring says which treads `value`
+#: spans). NOT its pooled per-call reading, `elasticity.fixed_tread`, which
+#: is also what `elasticity.value` holds in a report written before 8d4eb78,
+#: session 4's included (0.7436 [0.7277, 0.7559] at G=16): that blends the
+#: one-tile call's 0.17 with the deeper treads' 1.04-1.11 on the same cells,
+#: and it is the elasticity of no slope.
+#: When a clock moves ACROSS treads inside one arm, as at full duty where
+#: power follows the tread, the intercept's clock term leaks into the slope
+#: and no single eta is exact (two elasticities would be; this correction
+#: takes one), so there the corrected ratio is first-order only. The page
+#: PRINTS it beside the raw one. It never scores it, and it never moves this
+#: bound: at FULL duty on a card that cannot lock its clock the two arms draw
+#: different power and V7 refuses by construction, which is a fact about the
+#: platform the page should state, not soften; below full duty DESIGN
+#: DECISION 15 picks a duty at which session 4's clock no longer followed
+#: power.
 CLOCK_PARITY = 0.01
 
 #: DESIGN DECISION 8. V3's two tolerances. The weight allocation is an exact
@@ -525,10 +574,37 @@ NO_CARD_SLUG = SWEEP.NO_CARD_SLUG
 #: never touched.
 SYNTHETIC_INSTRUMENT = SWEEP.SYNTHETIC_INSTRUMENT
 
-#: The instrument this arm times with. Imported from the sweep so a rename
-#: lands here as a refusal rather than as a row with an empty column.
+#: The instrument this arm times with at full duty. Imported from the sweep so
+#: a rename lands here as a refusal rather than as a row with an empty column.
 def timing_basis() -> str | None:
     return SWEEP.timing_basis()
+
+
+def ladder_instrument(duty: float, *, synthetic: bool = False) -> str | None:
+    """The instrument the LADDER CELLS are timed with at `duty`, as the
+    provenance block and report.json's top-level `instrument` name it.
+
+    TWO INSTRUMENTS, ONE KNOB (DESIGN DECISION 15). At full duty it is
+    `timing_basis()`, the queue-deep `time_kernel` loop. Below it the cells
+    are timed by `clock_elasticity.time_duty`, whose own `INSTRUMENT` string
+    says it is NOT `timing.TIMING_BASIS`, and naming the queue-deep loop there
+    would put a duty-cycled page beside a full-duty one as one instrument.
+    Below full duty this is that string, the one every row's `instrument`
+    column carries, followed by the duty every row's `duty` column carries.
+    None off-torch, as `timing_basis` is: `clock_elasticity` imports the
+    timing module, which imports torch.
+    """
+    if synthetic:
+        return SYNTHETIC_INSTRUMENT
+    if duty >= 1.0:
+        return timing_basis()
+    try:
+        import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
+    except Exception:                                     # noqa: BLE001
+        # Broad for `timing_basis`'s reason: an installed, broken torch raises
+        # OSError, and naming the instrument is never worth the report.
+        return None
+    return f"{CE.INSTRUMENT} | duty {duty:.2f}"
 
 
 # --------------------------------------------------------------------------
@@ -1923,10 +1999,12 @@ class Sample:
     """One (arm, tread, repeat) timing and everything derivable from it.
 
     THE STATE THE CELL WAS TIMED IN IS A COLUMN. `instrument`, `warmup_ms`,
-    `iters`, `trials`, the three clock fields and `l2_flush` are what
-    `moe.bench.timing.time_kernel` reported about the measurement it just made,
-    written per row because they are what makes a row comparable with the roof
-    or not.
+    `iters`, `trials`, the three clock fields and `l2_flush` are what the
+    instrument reported about the measurement it just made
+    (`moe.bench.timing.time_kernel` at full duty, `clock_elasticity.time_duty`
+    below it: `time_cell`), written per row because they are what makes a
+    row comparable with the roof or not. The duty timer's own diagnostics
+    follow `power_w` and are records.
 
     AND A FAILED LEVEL CARRIES ITS SIDE. `clock_level_side` is LOW, HIGH or ""
     and is a RECORD, never an exclusion: since 2026-09-09 `clock_drift_ok` alone
@@ -1968,13 +2046,49 @@ class Sample:
     detail: str = ""
     #: The duty cycle this cell was timed at (DESIGN DECISION 15): 1.0 is the
     #: driver's instrument with the queue kept full; below 1.0 the cell was
-    #: bursts of kernel time with idle gaps, board power under the cap. A row
-    #: written before the column reads back as 1.0, which is what it was.
+    #: bursts of kernel time with idle gaps, at a lower average board power.
+    #: A row written before the column reads back as 1.0, which is what it
+    #: was. The REQUESTED duty; `duty_achieved` is the measured one.
     duty: float = 1.0
-    #: Median board power over the cell's clock samples, W, when the
-    #: instrument read it (the duty timer does; the full-duty timer does not).
-    #: A RECORD: the traffic signal that does not go through the clock.
+    #: Median board power over the cell's clock samples, W, None when no read
+    #: carried one. BOTH instruments read it, at the same NVML call as the
+    #: clock: `time_kernel` through `KernelTiming.power_w` at full duty,
+    #: `time_duty` once per burst below it. It is NVML's ~1 s average board
+    #: power, so below full duty it averages the bursts WITH the idle gaps
+    #: and is not the in-burst draw. A RECORD, the traffic signal that does
+    #: not go through the clock: V7 prints each arm's median per tread beside
+    #: its clocks and no gate scores it.
     power_w: float | None = None
+    # THE DUTY TIMER'S OWN DIAGNOSTICS (review findings 17 and 24), so a V7 or
+    # V0 failure at a duty below 1 can be read off cells.csv rather than
+    # bought again: `clock_elasticity.time_duty` measures every one of them
+    # and this arm used to keep none. RECORDS: no gate reads any of them. None
+    # on every row written before the columns existed, and at full duty for
+    # the burst quantities `time_kernel` does not have.
+    #: The GPU-busy fraction the duty timer measured over the trials' wall
+    #: clock, a LOWER BOUND (`clock_elasticity.DutyTiming.duty_achieved`).
+    duty_achieved: float | None = None
+    #: Calls per burst, the first of which is discarded, and the idle gap
+    #: after each burst, ms, sized from `DUTY_SIZING_MS` of full-duty reading.
+    calls_per_burst: int | None = None
+    gap_ms: float | None = None
+    #: Medians of the first and last quarter of a burst's kept per-call
+    #: times, and whether they agree within `timing.DRIFT_FRACTION`: R1 gates
+    #: this pair as its V5; here V7 prints each arm's median `burst_sag` per
+    #: tread beside its clocks and scores nothing on it.
+    head_ms: float | None = None
+    tail_ms: float | None = None
+    within_burst_ok: bool | None = None
+    #: Every usable under-load clock read, MHz, space-joined as
+    #: `clock_elasticity` writes them: one per burst below full duty, the
+    #: poller's reads at full duty. The samples and not only their median,
+    #: for `timing.KernelTiming.clock_samples_mhz`'s reason: a median and a
+    #: DRIFT flag cannot tell a settling ramp from a card hunting.
+    clock_samples_mhz: str | None = None
+    #: `timing.host_bound_verdict` on the cell: True when the queue drained
+    #: while the host was still enqueueing, so `ms_*` bound the kernel from
+    #: above. Both instruments compute it.
+    host_bound: bool | None = None
 
     def __post_init__(self) -> None:
         # The sweep owns the rule that a failed LEVEL without a side is not a
@@ -1994,6 +2108,15 @@ class Sample:
     @property
     def usable(self) -> bool:
         return self.status == "ok" and self.ms_p50 > 0 and not self.excluded
+
+    @property
+    def burst_sag(self) -> float | None:
+        """`(tail - head) / head` of the per-call time inside a burst: how
+        much slower the end of a burst ran than its start. None when either
+        quarter is unread, which is every full-duty cell."""
+        if self.head_ms is None or self.tail_ms is None or self.head_ms <= 0:
+            return None
+        return (self.tail_ms - self.head_ms) / self.head_ms
 
 
 CSV_FIELDS = list(Sample.__dataclass_fields__)
@@ -2056,6 +2179,10 @@ def _opt_bool(text: str):
     return text == "True"
 
 
+def _opt_int(text: str):
+    return int(text) if text not in ("", None) else None
+
+
 #: Bursts of about this much KERNEL time at a duty cycle below 1, the size the
 #: clock arm settled on: long enough that one NVML read per burst is a clock
 #: under load, short enough that the governor cannot ramp inside one.
@@ -2068,9 +2195,12 @@ DUTY_SIZING_MS = 20.0
 @dataclass(frozen=True)
 class CellTiming:
     """What one ladder cell's timing contributes to its `Sample`, whichever
-    instrument produced it. `iters` is `time_kernel`'s iterations per trial
-    at full duty and the duty timer's KEPT calls in total below it; `note`
-    is the duty timer's clock note (empty at full duty)."""
+    instrument produced it. `iters` is ITERATIONS PER TRIAL on both: at full
+    duty `time_kernel`'s, below it the duty timer's KEPT calls per trial,
+    `bursts x (calls_per_burst - 1)` (its `samples` summed over every trial,
+    divided by the trials), so the page's "iterations per trial" line and
+    provenance's `iters` mean one thing at either duty; `note` is the duty
+    timer's clock note (empty at full duty)."""
     ms_p50: float
     ms_min: float
     ms_stdev: float
@@ -2087,6 +2217,22 @@ class CellTiming:
     power_w: float | None
     host_bound: bool | None
     note: str
+    #: The duty timer's own diagnostics, `Sample`'s columns of the same
+    #: names; None where the instrument has no such quantity.
+    clock_samples_mhz: str | None = None
+    duty_achieved: float | None = None
+    calls_per_burst: int | None = None
+    gap_ms: float | None = None
+    head_ms: float | None = None
+    tail_ms: float | None = None
+    within_burst_ok: bool | None = None
+
+
+def _joined_clocks(reads) -> str | None:
+    """Clock reads, MHz, space-joined as `clock_elasticity` writes its
+    `clock_samples_mhz` column; None when there were none."""
+    reads = tuple(reads or ())
+    return " ".join(f"{c:.0f}" for c in reads) if reads else None
 
 
 def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
@@ -2111,12 +2257,20 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
         t = timer(call, warmup_ms=warmup_ms, target_ms=cell_budget_ms,
                   trials=trials, l2_flush=l2_flush,
                   reference_clock_mhz=reference_clock_mhz)
-        return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.iters, t.trials,
-                          t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
-                          t.clock_level_ok, t.clock_level_side,
-                          t.clock_drift_ok, t.l2_flush, 1.0,
-                          getattr(t, "power_w", None),
-                          getattr(t, "host_bound", None), "")
+        # `power_w`, `host_bound` and the clock list are `KernelTiming`'s
+        # own fields; read with a default because a timer written before any
+        # of them existed does not carry it. The burst diagnostics stay None:
+        # a queue-deep loop has no bursts.
+        return CellTiming(
+            ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+            iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
+            instrument=t.instrument, sm_clock_load_mhz=t.sm_clock_load_mhz,
+            clock_level_ok=t.clock_level_ok,
+            clock_level_side=t.clock_level_side,
+            clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush, duty=1.0,
+            power_w=getattr(t, "power_w", None),
+            host_bound=getattr(t, "host_bound", None), note="",
+            clock_samples_mhz=_joined_clocks(getattr(t, "clock_samples_mhz", ())))
     if duty_timer is None:
         import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
         duty_timer = CE.time_duty
@@ -2130,11 +2284,37 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
                    bursts=bursts, trials=trials, warm_ms=warmup_ms,
                    l2_flush=l2_flush, per_call_ms=per_call,
                    reference_clock_mhz=reference_clock_mhz)
-    return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.samples, t.trials,
-                      t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
-                      t.clock_level_ok, t.clock_level_side, t.clock_drift_ok,
-                      t.l2_flush, duty, t.power_w, t.host_bound,
-                      t.clock_note or "")
+    return CellTiming(
+        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+        # PER TRIAL, as `time_kernel`'s `iters` is: `samples` is the kept
+        # calls summed over every burst of every trial.
+        iters=t.samples // max(1, t.trials), trials=t.trials,
+        warmup_ms=t.warmup_ms, instrument=t.instrument,
+        sm_clock_load_mhz=t.sm_clock_load_mhz,
+        clock_level_ok=t.clock_level_ok, clock_level_side=t.clock_level_side,
+        clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush, duty=duty,
+        power_w=t.power_w, host_bound=t.host_bound, note=t.clock_note or "",
+        # EVERYTHING THE DUTY TIMER MEASURED, kept: what V7 and V0 need to
+        # tell a split between arms from a card jittering at this duty.
+        clock_samples_mhz=_joined_clocks(t.clock_samples_mhz),
+        duty_achieved=t.duty_achieved, calls_per_burst=t.calls_per_burst,
+        gap_ms=t.gap_ms, head_ms=t.head_ms, tail_ms=t.tail_ms,
+        within_burst_ok=t.within_burst_ok)
+
+
+def sample_from_timing(t: CellTiming, **cell) -> Sample:
+    """The `Sample` one timed cell becomes: `cell` names it (arm, repeat,
+    tread and the rest of its identity), `t` fills EVERY column the
+    instrument measured, by name, and its note becomes the row's `detail`.
+
+    ONE MAPPING, NOT A LIST AT THE CALL SITE. `run_sweep` used to copy the
+    fields one by one, and `host_bound` was on `CellTiming` and on no row: a
+    column the instrument measured, dropped at the second call site without
+    a sound. A `CellTiming` field with no `Sample` column is now a test
+    failure, not a silent loss."""
+    measured = {name: getattr(t, name) for name in CellTiming.__dataclass_fields__
+                if name in Sample.__dataclass_fields__}
+    return Sample(**cell, **measured, detail=t.note)
 
 
 def duty_of(samples) -> float:
@@ -2171,7 +2351,15 @@ def read_samples(path: Path) -> list[Sample]:
                 l2_flush=(row.get("l2_flush", "") == "True"),
                 status=row.get("status", "ok"), detail=row.get("detail", ""),
                 duty=float(row.get("duty") or 1.0),
-                power_w=_opt_float(row.get("power_w", ""))))
+                power_w=_opt_float(row.get("power_w", "")),
+                duty_achieved=_opt_float(row.get("duty_achieved", "")),
+                calls_per_burst=_opt_int(row.get("calls_per_burst", "")),
+                gap_ms=_opt_float(row.get("gap_ms", "")),
+                head_ms=_opt_float(row.get("head_ms", "")),
+                tail_ms=_opt_float(row.get("tail_ms", "")),
+                within_burst_ok=_opt_bool(row.get("within_burst_ok", "")),
+                clock_samples_mhz=row.get("clock_samples_mhz") or None,
+                host_bound=_opt_bool(row.get("host_bound", ""))))
     return out
 
 
@@ -2274,9 +2462,20 @@ def ladder_for(samples, arm: str, repeats: list[int] | None = None) -> Ladder:
 
 @dataclass(frozen=True)
 class ClockElasticity:
-    """`eta = -d log ms / d log f`, with the interval it was measured with and
-    where it came from. `scripts/clock_elasticity.py` is the arm that measures
-    it; nothing here does."""
+    """A PER-M-TILE clock elasticity, `eta = -d log b / d log f` of the
+    per-M-tile cost `b = d ms / d n`, with the interval it was measured with
+    and where it came from. PER-M-TILE because the ratio reads nothing but
+    slopes: `clock_corrected` scales each cell's whole per-call ms by one
+    factor, and when each arm holds one clock at every fitted tread that
+    factor reaches the ratio through the slope alone, which only the
+    per-M-tile elasticity carries exactly (CLOCK_PARITY's comment has the
+    arithmetic, and the case where no single eta is exact).
+    `scripts/clock_elasticity.py` is the arm that measures it and nothing here
+    does: its gated claim, `elasticity.value` in a report written since
+    8d4eb78 (2026-09-22). Its pooled per-CALL reading, `elasticity.fixed_tread`
+    and the `elasticity.value` of a report written before 8d4eb78, session 4's
+    included, is a different quantity and [0, 1.5] admits both, so the SOURCE
+    is what says which one was given (DESIGN DECISION 11)."""
     eta: float
     lo: float
     hi: float
@@ -2297,6 +2496,14 @@ def clock_corrected(samples, eta: float, f_ref: float) -> list:
     ** eta`. NATIVE is untouched (the ratio never reads it), an excluded cell
     is untouched (nothing reads it), and a usable ratio-arm cell WITHOUT a
     clock refuses the whole correction rather than leaving that cell raw.
+
+    `eta` IS THE PER-M-TILE ELASTICITY (`ClockElasticity`), applied as one
+    factor to the whole per-call time, intercept and tiles alike. Where an arm
+    holds one clock at every fitted tread that factor is one number per arm,
+    the intercept's share of it stays in the intercept, and the slope, which
+    is all the ratio reads, is carried exactly. Where a clock moves across
+    treads inside an arm the intercept's share leaks into the slope and the
+    correction is first-order only.
 
     THE RATIO DOES NOT DEPEND ON f_ref: both arms carry the same factor
     `f_ref ** -eta`, which cancels. It is here so the corrected CELLS are at a
@@ -2331,8 +2538,11 @@ class ClockCorrection:
     nothing. `interval` is the same paired bootstrap over the corrected cells
     at `eta`; `envelope` is the union of the corrected intervals at `lo` and
     `hi`, i.e. ONE estimator's bootstrap carried across eta's own interval,
-    not a between-estimator spread; `at_unit` is the ratio at eta = 1, DD11's
-    bound, printed as the bracket the correction cannot exceed."""
+    not a between-estimator spread; `at_unit` is the ratio at eta = 1, the
+    first-order figure DD11 argues from, printed as a reference point and NOT
+    a bound: a per-M-tile eta above 1, which is what session 4's clock-arm
+    cells read when re-scored (CLOCK_PARITY's comment), carries the
+    correction past it."""
     elasticity: ClockElasticity
     f_ref: float
     f_ref_source: str
@@ -2369,8 +2579,9 @@ class ClockCorrection:
                f"{self.envelope[1]:.4f}] -- ONE estimator's bootstrap carried "
                "across eta, not a between-estimator spread"
                if self.envelope else ""),
-            f"  at eta = 1, the bound DD11 argues from, it would read "
-            f"{self.at_unit:.4f}: the correction cannot exceed that",
+            f"  at eta = 1, the first-order figure DD11 argues from, it would "
+            f"read {self.at_unit:.4f}; not a bound: an eta above 1 carries the "
+            "correction past it",
         ]
 
 
@@ -2378,8 +2589,8 @@ def clock_corrected_ratio(samples, elasticity: ClockElasticity, *,
                           f_ref: float, f_ref_source: str, draws: int,
                           seed: int) -> ClockCorrection:
     """Form the corrected ratio at `eta`, its interval, the envelope over
-    [lo, hi], and the eta = 1 bracket, from the same samples and the same
-    paired bootstrap the raw ratio uses."""
+    [lo, hi], and the eta = 1 reference point, from the same samples and the
+    same paired bootstrap the raw ratio uses."""
     def ratio_at(eta: float) -> float:
         cells = clock_corrected(samples, eta, f_ref)
         return ladder_for(cells, SHARED).slope_ms / ladder_for(cells, PRIVATE).slope_ms
@@ -2776,10 +2987,14 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
     nothing to do with reuse.
 
     SCORED AGAINST THE FIXED ROOF, which is what `roofline.ROOF_NOTE_SCORED`
-    says a compute-bound gate reads: the calibration's GEMM and every cell here
-    run under one board power cap, so the fixed roof compares delivered
-    throughput under one budget. The own-clock fraction is printed beside each
-    tread as issue efficiency and is scored by nothing.
+    says a compute-bound gate reads: the calibration's GEMM ran against the
+    board power cap, and at full duty so does every cell here, so the fixed
+    roof compares delivered throughput under one budget. Below full duty
+    (DESIGN DECISION 15) the cells run under the cap at a higher clock than
+    the GEMM had, so their fraction of the fixed roof reads HIGH, which errs
+    toward calling a tread compute bound: conservative for this gate. The
+    own-clock fraction is printed beside each tread as issue efficiency and is
+    scored by nothing.
     """
     fitted = [r for r in rows if r["arm"] in RATIO_ARMS]
     hot = [r for r in fitted if r["pct_of_roof"] >= COMPUTE_BOUND_FRACTION]
@@ -3033,6 +3248,20 @@ def _median_by_arm(samples, tread: int, field_name: str) -> dict[str, float]:
     return out
 
 
+def _arm_medians(samples, tread: int, value) -> dict[str, float]:
+    """Each arm's median of `value(sample)` over its usable cells at `tread`,
+    an arm with no value left out. Not `_median_by_arm`, which drops a FALSY
+    value: right for a time or a clock, wrong for a sag of exactly zero."""
+    out = {}
+    for arm in ARMS:
+        vals = [v for s in samples
+                if s.usable and s.arm == arm and s.tiles == tread
+                for v in (value(s),) if v is not None]
+        if vals:
+            out[arm] = statistics.median(vals)
+    return out
+
+
 def gate_v6_identity(samples, *, identity_tread: int = 1) -> Gate:
     """At one M-tile per expert SHARED and PRIVATE are the SAME CALL.
 
@@ -3089,6 +3318,35 @@ def gate_v6_identity(samples, *, identity_tread: int = 1) -> Gate:
                 detail)
 
 
+#: The duty the pod runs this arm at (DESIGN DECISION 15), and the evidence
+#: for it, QUOTED from session 4's clock arm (the 2026-09-21 G=16 mixtral
+#: arm, run 9f91fa91, results/published/2026-09-21-nvidia_h200-session4/ on
+#: the pod-h200-session4 branch) for the remedy V7 prints; nothing scores it.
+FLAT_DUTY = 0.25
+FLAT_DUTY_EVIDENCE = (
+    "session 4's clock arm, 2026-09-21, G=16 mixtral: at duty 0.5 the clock "
+    "still tracked board power, -1.09 MHz/W over 1882-1965 MHz; at duty 0.25 "
+    "every tread's median read 1965 MHz and no cell drifted; at duty 0.1, "
+    "1965-1980 MHz")
+
+
+def v7_remedy(duty: float) -> str:
+    """What a V7 FAIL tells the operator to do, at the duty the ladder ran.
+    BELOW FULL DUTY TOO: a split there is a duty not yet low enough, and a
+    FAIL page with no remedy on it leaves the operator to re-run at the same
+    duty rather than lower it."""
+    if duty >= 1.0:
+        return (f"the remedy is --duty {FLAT_DUTY}: bursts of kernel time with "
+                "idle gaps lower the arms' average board power until the clock "
+                f"stops following it ({FLAT_DUTY_EVIDENCE})")
+    return (f"the remedy is a lower --duty than {duty:.2f}: the arms' clocks "
+            "still split at this duty (each arm's board power, where it was "
+            "read, is printed above)"
+            + (f"; --duty {FLAT_DUTY} is the pod setting" if duty > FLAT_DUTY
+               else "")
+            + f" ({FLAT_DUTY_EVIDENCE})")
+
+
 def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
     """Did PRIVATE and SHARED run at the same clock, tread by tread.
 
@@ -3098,15 +3356,34 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
     settle at a different clock, and a slope measured at a different clock is
     a slope with the clock problem in it -- the one this arm exists to avoid.
     Scored at every tread both arms reached, on the per-tread MEDIAN of the
-    under-load clock `time_kernel` records.
+    under-load clock the cell's instrument records: `time_kernel`'s poller at
+    full duty, and below it `clock_elasticity.time_duty`'s one NVML read per
+    burst, taken with the burst still in flight.
+
+    AT FULL DUTY on a card that cannot lock its clock this fails by
+    construction whenever the arms draw different power. Below it (DESIGN
+    DECISION 15) it holds when the duty is low enough that the clock no
+    longer follows power, and a FAIL there says this duty was not; the
+    remedy printed on a FAIL names a lower duty in both cases.
 
     UNKNOWN, NOT PASS, when a tread has no clock in either arm: an unread
     clock is not a matching one.
+
+    PRINTED BESIDE THE CLOCKS AND SCORED BY NOTHING: each arm's median board
+    power per tread (`power_w`, NVML's ~1 s average, so duty-averaged below
+    full duty) and each arm's median in-burst sag (`burst_sag`, the duty
+    timer's first and last quarter of a burst). A FAIL is then readable off
+    the page: a systematic power difference between the arms is a split, the
+    same power in both is a card jittering.
     """
     detail = []
     worst = 0.0
     unread = []
     over = []
+    records: list[str] = []
+    averaged = (", duty-averaged over bursts and idle gaps"
+                if duty_of(samples) < 1.0 else "")
+    order = (*RATIO_ARMS, NATIVE)
     for n in treads:
         # A tread one ratio arm never reached is V0's and V1's to score; a
         # tread both reached with no clock in one of them is unread HERE.
@@ -3125,6 +3402,18 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                       f"{med[PRIVATE]:.0f} MHz, {rel:.2%} apart"
                       + (f"; native {med[NATIVE]:.0f} MHz" if NATIVE in med
                          else ""))
+        power = _arm_medians(samples, n, lambda s: s.power_w)
+        if power:
+            detail.append(f"      power (NVML's ~1 s average{averaged}): "
+                          + ", ".join(f"{a} {power[a]:.0f} W"
+                                      for a in order if a in power))
+            records.append("power")
+        sag = _arm_medians(samples, n, lambda s: s.burst_sag)
+        if sag:
+            detail.append("      in-burst sag (tail - head) / head: "
+                          + ", ".join(f"{a} {sag[a]:+.2%}"
+                                      for a in order if a in sag))
+            records.append("in-burst sag")
     if unread:
         detail.append(f"no clock in one or both ratio arms at treads {unread}")
     if not detail:
@@ -3138,12 +3427,14 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
         verdict = UNKNOWN
     else:
         verdict = PASS if not over else FAIL
-    if over and duty_of(samples) >= 1.0:
-        detail.append(
-            "the remedy is --duty 0.5: bursts of kernel time with idle gaps "
-            "hold board power under the cap so both arms sit at the boost "
-            "ceiling (session 4's clock arm: 1905-1980 MHz at every tread at "
-            "or below duty 0.5, against 1425-1792 MHz at full duty)")
+    if records:
+        named = list(dict.fromkeys(records))
+        detail.append(" and ".join(named)
+                      + (" are" if len(named) > 1 else " is")
+                      + " each arm's median over its cells at the tread, "
+                      "RECORDS: V7 scores the clocks alone")
+    if over:
+        detail.append(v7_remedy(duty_of(samples)))
     return Gate("V7", VALIDITY,
                 "shared and private ran at the same clock at every tread",
                 verdict,
@@ -4116,10 +4407,13 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
     out.append(f"    V6 shared and private within {IDENTITY_SPREAD:.1%} at n=1, "
                "where they are the same call")
     out.append(f"    V7 shared and private under-load clocks within "
-               f"{CLOCK_PARITY:.0%} at every tread; a card that cannot lock "
-               "its clock fails this by construction whenever the arms draw "
-               "different power, and --clock-elasticity then PRINTS a "
-               "corrected ratio beside the raw one, scored by nothing")
+               f"{CLOCK_PARITY:.0%} at every tread; at FULL duty a card that "
+               "cannot lock its clock fails this by construction whenever the "
+               "arms draw different power, and below it this holds only at a "
+               "duty low enough that the clock stops following power (session "
+               f"4's clock arm: flat at {FLAT_DUTY}, still tracking power at "
+               "0.5); --clock-elasticity PRINTS a corrected ratio beside the "
+               "raw one, scored by nothing")
     out.append(f"    V8 the probed alignment steps in SHARED's and PRIVATE's id "
                f"sets are worth <= {ALIGN_STEP_RATIO_BUDGET} of the ratio "
                "together; FAIL needs it over budget AND resolved, and a FAIL "
@@ -4262,14 +4556,17 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         f"duty        {args.duty:.2f}"
         + (f": every cell timed as bursts of ~{DUTY_BURST_MS:.0f} ms of kernel "
            f"time with idle gaps of {DUTY_BURST_MS * (1 / args.duty - 1):.0f} ms, "
-           "so board power sits under the cap and both ratio arms run at the "
-           "boost ceiling; V7 holds by construction rather than by luck "
-           "(session 4 at full duty: the arm reading less boosted 2-18%); "
+           "so the arms' AVERAGE board power drops, and with it the clock "
+           "split the cap forces at full duty (session 4 at full duty: the "
+           "arm reading less boosted 2-18%). Whether this duty is low enough "
+           f"is measured, not assumed ({FLAT_DUTY_EVIDENCE}); V7 checks it "
+           "here and a FAIL names a lower duty; "
            f"wall clock over the ladder ~{1 / args.duty:.1f}x the kernel time"
            if args.duty < 1.0 else
            ": the queue kept full, the driver's instrument; on a power-capped "
            "card the two ratio arms then draw different power and V7 decides "
-           "whether their clocks agreed (--duty 0.5 is what holds them equal)"),
+           f"whether their clocks agreed (--duty {FLAT_DUTY} is the setting "
+           "session 4's clock arm read flat: DESIGN DECISION 15)"),
         f"experts     native declares E={cfg.num_experts}; shared and private "
         f"declare E x n_decl = {expert_space(cfg.num_experts, copies_declared)} "
         "at EVERY tread, copy c of expert e at slot e x n_decl + c",
@@ -5625,23 +5922,16 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                                       trials=args.trials,
                                       l2_flush=not args.no_l2_flush,
                                       reference_clock_mhz=reference_clock)
-                    sample = Sample(
-                        arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                    # THE SIDE TRAVELS WITH THE VERDICT, with every other
+                    # column the instrument measured: `sample_from_timing`
+                    # copies them all. A failed LEVEL without its side is
+                    # refused at construction, because read as LOW it would
+                    # drop every boosted tread; NEITHER side excludes here,
+                    # DRIFT alone does.
+                    sample = sample_from_timing(
+                        t, arm=arm, repeat=rep, block_m=block_m, tiles=n,
                         rows_per_expert=n * block_m, tokens=tokens,
-                        copies=copies, experts_declared=experts,
-                        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_stdev,
-                        iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
-                        instrument=t.instrument,
-                        sm_clock_load_mhz=t.sm_clock_load_mhz,
-                        clock_level_ok=t.clock_level_ok,
-                        # THE SIDE TRAVELS WITH THE VERDICT. A failed LEVEL
-                        # without it is refused at construction, because read
-                        # as LOW it would drop every boosted tread; NEITHER
-                        # side excludes here, DRIFT alone does.
-                        clock_level_side=t.clock_level_side,
-                        clock_drift_ok=t.clock_drift_ok,
-                        l2_flush=t.l2_flush, duty=t.duty, power_w=t.power_w,
-                        detail=t.note)
+                        copies=copies, experts_declared=experts)
                     if t.clock_level_side:
                         print(f"  ^ LEVEL {t.clock_level_side.upper()}: kept in "
                               "every fit, side recorded; its fraction of the "
@@ -5876,7 +6166,11 @@ def default_run_id(args, card: str) -> str:
         # The duty moves board power and so the clock every cell is timed at;
         # in the key WHEN IT IS NOT 1.0, so every run id written before the
         # knob existed (all of them at full duty) is the id the same command
-        # still produces, and a resumed session-4 directory resumes.
+        # still produces: the same command names the same directory. It does
+        # NOT resume there. That directory's cells.csv predates the duty and
+        # diagnostic columns, `Store` refuses its header (SchemaCollision)
+        # rather than append wider rows under it, and --read still re-reads
+        # its report.json.
         **({"duty": args.duty} if args.duty != 1.0 else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
@@ -5917,12 +6211,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--cell-budget-ms", type=float, default=200.0)
     ap.add_argument("--duty", type=float, default=1.0,
                     help="duty cycle every ladder cell is timed at (DESIGN "
-                         "DECISION 15). 1.0 keeps the queue full, the "
-                         "driver's instrument; 0.5 times bursts of ~40 ms of "
-                         "kernel time with equal idle gaps, so board power "
-                         "sits under the cap and both ratio arms run at the "
-                         "boost ceiling: V7 by construction. Wall clock "
-                         "~1/duty x. In the run id")
+                         "DECISION 15). 1.0, the default, keeps the queue "
+                         "full, the driver's instrument, and stays the "
+                         "default so --replicate-of still reads session 4's "
+                         "full-duty runs as this design. Below 1 each cell is "
+                         "bursts of ~40 ms of kernel time with idle gaps of "
+                         "burst x (1/duty - 1), lowering average board power. "
+                         "The pod setting is 0.25: session 4's clock arm "
+                         "(2026-09-21) read the clock flat at 1965 MHz there, "
+                         "and still tracking board power at 0.5 (-1.09 "
+                         "MHz/W). V7 "
+                         "checks it either way. Wall clock ~1/duty x. In the "
+                         "run id")
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--no-l2-flush", action="store_true")
     ap.add_argument("--capability", default="",
@@ -5934,15 +6234,22 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ridge-band", default="")
     ap.add_argument("--clock-elasticity", type=float, nargs="+", default=None,
                     metavar="ETA",
-                    help="a MEASURED clock elasticity, eta or eta lo hi, from "
-                         "scripts/clock_elasticity.py: the page then PRINTS a "
-                         "clock-corrected ratio beside the raw one. Scores "
-                         "nothing and moves no gate; needs "
-                         "--clock-elasticity-source")
+                    help="a MEASURED per-M-TILE clock elasticity, eta or "
+                         "eta lo hi, from scripts/clock_elasticity.py: its "
+                         "gated claim (elasticity.value in a report written "
+                         "since 8d4eb78, 2026-09-22), NOT its pooled per-call "
+                         "'eta, fixed tread, pooled' reading, which is "
+                         "elasticity.fixed_tread and also the elasticity.value "
+                         "of an older report, session 4's included. The ratio "
+                         "reads only slopes, and when each arm holds one clock "
+                         "the per-M-tile elasticity is the one that carries a "
+                         "slope exactly. The page then PRINTS a clock-corrected "
+                         "ratio beside the raw one. Scores nothing and moves "
+                         "no gate; needs --clock-elasticity-source")
     ap.add_argument("--clock-elasticity-source", default="",
                     help="where --clock-elasticity was read from (a report "
-                         "path and commit), recorded on the page and in "
-                         "report.json")
+                         "path, the key read, e.g. elasticity.value, and the "
+                         "commit), recorded on the page and in report.json")
     ap.add_argument("--bandwidth-gbps", type=float, default=0.0)
     ap.add_argument("--device-memory-gb", type=float, default=0.0,
                     help="a HYPOTHETICAL card's memory, for checking the plan "
@@ -6305,7 +6612,7 @@ def _main(argv=None) -> int:
             return exit_codes.REFUSED
 
     prov = PV.provenance_block(
-        instrument=(SYNTHETIC_INSTRUMENT if synthetic else timing_basis()),
+        instrument=ladder_instrument(args.duty, synthetic=synthetic),
         ridge=ridge, ridge_source=ridge_source,
         bandwidth=bandwidth, bandwidth_source=bw_source,
         warmup_ms=args.warmup, iters=None, target_ms=args.cell_budget_ms)
@@ -6515,9 +6822,10 @@ def clock_sampler_refusal() -> str:
 
 def _observed_iters(prov, samples):
     """The provenance block with the iteration count the cells were actually
-    timed at. Nothing timed means nothing recorded: a planted world carries
-    iters=0 on every row, so there is no median to take and the block keeps its
-    None and its reason."""
+    timed at: the median ITERATIONS PER TRIAL, which below full duty is the
+    duty timer's kept calls per trial (`time_cell`). Nothing timed means
+    nothing recorded: a planted world carries iters=0 on every row, so there
+    is no median to take and the block keeps its None and its reason."""
     counts = sorted(s.iters for s in samples if s.usable and s.iters > 0)
     if not counts:
         return prov
@@ -6530,9 +6838,17 @@ def _iters_line(samples) -> str:
     if not counts:
         return ("iterations per trial: none recorded (nothing was timed; a "
                 "planted world's cells carry iters=0)")
-    return (f"iterations per trial: median {int(statistics.median(counts))} "
-            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. "
-            "Sized per cell by the instrument from --cell-budget-ms.")
+    head = (f"iterations per trial: median {int(statistics.median(counts))} "
+            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. ")
+    duty = duty_of(samples)
+    if duty >= 1.0:
+        return head + "Sized per cell by the instrument from --cell-budget-ms."
+    return head + (
+        f"At duty {duty:.2f} an iteration is a KEPT call of the duty timer: "
+        "bursts x (calls per burst - 1) per trial, the first call of every "
+        f"burst discarded, the burst count from --cell-budget-ms / "
+        f"{DUTY_BURST_MS:.0f} ms and the calls per burst from a "
+        f"{DUTY_SIZING_MS:.0f} ms full-duty reading of the same call.")
 
 
 def main(argv=None) -> int:
