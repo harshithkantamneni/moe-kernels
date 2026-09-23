@@ -387,11 +387,13 @@ def report_paths(root: Path) -> list[Path]:
 
     THE TRACKED EXCLUSION IS 2026-09-23'S. `results/published/` is not
     git-ignored, so a pod's checkout can carry a directory nobody committed:
-    session 5's carried session 3's, left on the network volume by its publish
-    and missing the `KIND` file the committed copy has. Its run directories
-    were then walked as published reports, the plan died on `KeyError: 'alpha'`
-    before printing a gate, and the tests that census the committed reports
-    counted ten arms of three. This tool edits COMMITTED evidence, so a file
+    session 5's carried session 3's (`2026-09-15-nvidia_h200-session3`), left
+    on the network volume by its publish and missing the `KIND` file the
+    committed copy has. This tool's tests sit in the half of that suite that
+    never ran; with the directory planted on a laptop, its run directories are
+    walked as published reports, the plan dies on `KeyError: 'alpha'` before
+    printing a gate, and the tests that census the committed reports count ten
+    arms of three. This tool edits COMMITTED evidence, so a file
     git does not track is not one of its inputs. A root outside any work tree
     (`tracked_under` returns None) is walked whole, as before.
 

@@ -479,10 +479,13 @@ def test_p7_fails_when_an_arm_is_not_in_the_census(tmp_path):
 
 def test_p7_does_not_count_a_directory_git_does_not_track(tmp_path):
     """Session 5's pod checkout carried an UNTRACKED published directory
-    (session 3's, left on the volume by its publish and missing its KIND file).
-    P7 listed the directory, read it as a newly refusing arm absent from the
-    census, and FAILED on a guard that had not changed. An arm is a directory
-    git tracks, so a stray beside the listed arm leaves P7 passing."""
+    (session 3's, left on the volume by its publish and missing its KIND file),
+    and that suite's census tests counted it as an arm. P7 did not run there,
+    but it listed the directory too: with the directory planted on a laptop it
+    reads as a newly refusing arm absent from the census, and P7 FAILs on a
+    guard that has not changed (test_p7_passes_against_the_repositorys_own_
+    census fails on 33d2833). An arm is a directory git tracks, so a stray
+    beside the listed arm leaves P7 passing."""
     root = _repo_farm(tmp_path)
     published = root / "results" / "published"
     _fixture_arm(published, "2026-01-01-fixture-listed")

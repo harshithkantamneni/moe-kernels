@@ -154,11 +154,12 @@ def test_the_a100_note_exists_and_names_both_numbers():
 
 def test_a_report_git_does_not_track_is_not_one_this_tool_rescores(tmp_path):
     """Session 5's pod checkout carried an UNTRACKED published directory whose
-    run directories hold `report.json` files of other arms' shapes. The walk
-    read them, `plan` died on `KeyError: 'alpha'` before a gate printed, and
-    the committed-report tests counted ten arms of three. Inside a work tree
-    the walk is what git tracks; outside one (every copy a writing test makes)
-    it is the whole directory, as before."""
+    run directories hold `report.json` files of other arms' shapes. These tests
+    sit in the half of that suite that never ran; with the directory planted
+    on a laptop the walk reads them, `plan` dies on `KeyError: 'alpha'` before
+    a gate prints, and the committed-report tests count ten arms of three.
+    Inside a work tree the walk is what git tracks; outside one (every copy a
+    writing test makes) it is the whole directory, as before."""
     root = tmp_path / "repo"
     published = root / "results" / "published"
     kept = published / "2026-01-01-nvidia_h200-kept" / "x.report.json"

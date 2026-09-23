@@ -882,11 +882,16 @@ PYEOF
   # doing its job. Folding them into one number is how "5" looked like a
   # regression when four of the five were the first kind.
   #
-  # AND THE ARMS ARE THE ONES GIT TRACKS (2026-09-23). It listed the directory,
-  # so the untracked session-3 directory on session 5's checkout read as a
-  # newly refusing arm missing from the census, and P7 printed FAIL on a pod
-  # whose guard had not changed. tests/test_calibration_provenance.py reads
-  # the same view, through tests/_committed.py.
+  # AND THE ARMS ARE THE ONES GIT TRACKS (2026-09-23). It listed the directory.
+  # Session 5's checkout carried an untracked session-3 directory
+  # (2026-09-15-nvidia_h200-session3), which that suite's census tests counted
+  # as an arm; listed, it reads as a newly refusing arm missing from the census
+  # and P7 prints FAIL on a guard that has not changed. P7 did not run on
+  # session 5 (the alpha_g chain never calls this script): the FAIL is a laptop
+  # reproduction with that directory planted, where
+  # test_p7_passes_against_the_repositorys_own_census fails on 33d2833.
+  # tests/test_calibration_provenance.py reads the same view, through
+  # tests/_committed.py.
   local refusals
   refusals="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
 import re
@@ -900,8 +905,9 @@ import subprocess
 root = Path("results/published")
 # THE ARMS GIT TRACKS, not every directory on disk. A pod checkout can carry
 # an untracked published directory (session 5 carried the session 3 one, left
-# by its publish without its KIND file), and counting it made P7 report drift
-# no arm caused. The census this is compared with describes tracked arms.
+# by its publish without its KIND file), and counting it makes P7 report drift
+# no arm caused (reproduced on a laptop with it planted; P7 did not run on
+# session 5). The census this is compared with describes tracked arms.
 listed = subprocess.run(["git", "ls-files", "-z", "--", str(root)],
                         capture_output=True, check=True).stdout.decode()
 names = {Path(p).parts[2] for p in listed.split(chr(0))
