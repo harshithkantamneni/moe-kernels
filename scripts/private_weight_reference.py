@@ -525,10 +525,37 @@ NO_CARD_SLUG = SWEEP.NO_CARD_SLUG
 #: never touched.
 SYNTHETIC_INSTRUMENT = SWEEP.SYNTHETIC_INSTRUMENT
 
-#: The instrument this arm times with. Imported from the sweep so a rename
-#: lands here as a refusal rather than as a row with an empty column.
+#: The instrument this arm times with at full duty. Imported from the sweep so
+#: a rename lands here as a refusal rather than as a row with an empty column.
 def timing_basis() -> str | None:
     return SWEEP.timing_basis()
+
+
+def ladder_instrument(duty: float, *, synthetic: bool = False) -> str | None:
+    """The instrument the LADDER CELLS are timed with at `duty`, as the
+    provenance block and report.json's top-level `instrument` name it.
+
+    TWO INSTRUMENTS, ONE KNOB (DESIGN DECISION 15). At full duty it is
+    `timing_basis()`, the queue-deep `time_kernel` loop. Below it the cells
+    are timed by `clock_elasticity.time_duty`, whose own `INSTRUMENT` string
+    says it is NOT `timing.TIMING_BASIS`, and naming the queue-deep loop there
+    would put a duty-cycled page beside a full-duty one as one instrument.
+    Below full duty this is that string, the one every row's `instrument`
+    column carries, followed by the duty every row's `duty` column carries.
+    None off-torch, as `timing_basis` is: `clock_elasticity` imports the
+    timing module, which imports torch.
+    """
+    if synthetic:
+        return SYNTHETIC_INSTRUMENT
+    if duty >= 1.0:
+        return timing_basis()
+    try:
+        import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
+    except Exception:                                     # noqa: BLE001
+        # Broad for `timing_basis`'s reason: an installed, broken torch raises
+        # OSError, and naming the instrument is never worth the report.
+        return None
+    return f"{CE.INSTRUMENT} | duty {duty:.2f}"
 
 
 # --------------------------------------------------------------------------
@@ -2068,9 +2095,12 @@ DUTY_SIZING_MS = 20.0
 @dataclass(frozen=True)
 class CellTiming:
     """What one ladder cell's timing contributes to its `Sample`, whichever
-    instrument produced it. `iters` is `time_kernel`'s iterations per trial
-    at full duty and the duty timer's KEPT calls in total below it; `note`
-    is the duty timer's clock note (empty at full duty)."""
+    instrument produced it. `iters` is ITERATIONS PER TRIAL on both: at full
+    duty `time_kernel`'s, below it the duty timer's KEPT calls per trial,
+    `bursts x (calls_per_burst - 1)` (its `samples` summed over every trial,
+    divided by the trials), so the page's "iterations per trial" line and
+    provenance's `iters` mean one thing at either duty; `note` is the duty
+    timer's clock note (empty at full duty)."""
     ms_p50: float
     ms_min: float
     ms_stdev: float
@@ -2130,7 +2160,10 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
                    bursts=bursts, trials=trials, warm_ms=warmup_ms,
                    l2_flush=l2_flush, per_call_ms=per_call,
                    reference_clock_mhz=reference_clock_mhz)
-    return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.samples, t.trials,
+    # PER TRIAL, as `time_kernel`'s `iters` is: `samples` is the kept calls
+    # summed over every burst of every trial.
+    return CellTiming(t.ms_p50, t.ms_min, t.ms_std,
+                      t.samples // max(1, t.trials), t.trials,
                       t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
                       t.clock_level_ok, t.clock_level_side, t.clock_drift_ok,
                       t.l2_flush, duty, t.power_w, t.host_bound,
@@ -6305,7 +6338,7 @@ def _main(argv=None) -> int:
             return exit_codes.REFUSED
 
     prov = PV.provenance_block(
-        instrument=(SYNTHETIC_INSTRUMENT if synthetic else timing_basis()),
+        instrument=ladder_instrument(args.duty, synthetic=synthetic),
         ridge=ridge, ridge_source=ridge_source,
         bandwidth=bandwidth, bandwidth_source=bw_source,
         warmup_ms=args.warmup, iters=None, target_ms=args.cell_budget_ms)
@@ -6515,9 +6548,10 @@ def clock_sampler_refusal() -> str:
 
 def _observed_iters(prov, samples):
     """The provenance block with the iteration count the cells were actually
-    timed at. Nothing timed means nothing recorded: a planted world carries
-    iters=0 on every row, so there is no median to take and the block keeps its
-    None and its reason."""
+    timed at: the median ITERATIONS PER TRIAL, which below full duty is the
+    duty timer's kept calls per trial (`time_cell`). Nothing timed means
+    nothing recorded: a planted world carries iters=0 on every row, so there
+    is no median to take and the block keeps its None and its reason."""
     counts = sorted(s.iters for s in samples if s.usable and s.iters > 0)
     if not counts:
         return prov
@@ -6530,9 +6564,17 @@ def _iters_line(samples) -> str:
     if not counts:
         return ("iterations per trial: none recorded (nothing was timed; a "
                 "planted world's cells carry iters=0)")
-    return (f"iterations per trial: median {int(statistics.median(counts))} "
-            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. "
-            "Sized per cell by the instrument from --cell-budget-ms.")
+    head = (f"iterations per trial: median {int(statistics.median(counts))} "
+            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. ")
+    duty = duty_of(samples)
+    if duty >= 1.0:
+        return head + "Sized per cell by the instrument from --cell-budget-ms."
+    return head + (
+        f"At duty {duty:.2f} an iteration is a KEPT call of the duty timer: "
+        "bursts x (calls per burst - 1) per trial, the first call of every "
+        f"burst discarded, the burst count from --cell-budget-ms / "
+        f"{DUTY_BURST_MS:.0f} ms and the calls per burst from a "
+        f"{DUTY_SIZING_MS:.0f} ms full-duty reading of the same call.")
 
 
 def main(argv=None) -> int:

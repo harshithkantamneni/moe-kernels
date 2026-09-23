@@ -3217,7 +3217,9 @@ class _CellTiming:
 
 class _CellDutyTiming(_CellTiming):
     def __init__(self, **kw):
-        super().__init__(samples=400, power_w=480.0, host_bound=False,
+        # 3 trials x 5 bursts x (80 calls - the discarded lead): `samples` is
+        # the kept calls summed over EVERY trial, as `time_duty` returns it.
+        super().__init__(samples=3 * 5 * 79, power_w=480.0, host_bound=False,
                          clock_note="LEVEL HIGH (recorded)",
                          instrument="fake/time_duty", sm_clock_load_mhz=1965.0,
                          **kw)
@@ -3282,7 +3284,9 @@ def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_po
     assert kw["warm_ms"] == 300.0 and kw["l2_flush"] is True
     assert kw["reference_clock_mhz"] == 1455.0
     assert ct.duty == 0.5 and ct.power_w == 480.0 and ct.ms_p50 == 0.52
-    assert ct.iters == 400 and ct.instrument == "fake/time_duty"
+    # ITERATIONS PER TRIAL, as at full duty: the kept calls of one trial.
+    assert ct.iters == 5 * 79 and ct.trials == 3
+    assert ct.instrument == "fake/time_duty"
     assert ct.sm_clock_load_mhz == 1965.0 and ct.host_bound is False
     assert ct.note.startswith("LEVEL HIGH")
     # Full duty never touches the duty timer and records no power.
@@ -3349,6 +3353,94 @@ def test_a_replicate_at_another_duty_is_refused_and_a_pre_duty_report_is_full_du
     po.write_text(json.dumps(old))
     assert len(PW.load_replicates([po], design=design, card_known=True)) == 1
     assert "duty" in PW.DESIGN_KEYS
+
+
+# --------------------------------------------------------------------------
+# 21. a duty page names the instrument that timed it, and counts per trial
+# --------------------------------------------------------------------------
+
+def _provenance_instrument(monkeypatch, tmp_path, duty: str) -> str | None:
+    """Drive the real `_main` of a MEASURING run (no --dry-run, no
+    --self-test) to the line that builds the provenance block, and hand back
+    the instrument it names. The two host checks that refuse a laptop are
+    stood in; the block itself raises once it is asked, so nothing past it
+    runs and nothing is written."""
+    seen: dict = {}
+
+    class _Built(Exception):
+        pass
+
+    def block(**kw):
+        seen.update(kw)
+        raise _Built
+
+    monkeypatch.setattr(PW.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(PW, "clock_sampler_refusal", lambda: "")
+    monkeypatch.setattr(PW.PV, "provenance_block", block)
+    with contextlib.redirect_stdout(io.StringIO()), pytest.raises(_Built):
+        PW._main(["--duty", duty, "--ridge", "160", "--bandwidth-gbps", "4000",
+                  "--device-memory-gb", "140", "--capability", "9.0",
+                  "--out", str(tmp_path)])
+    assert not any(tmp_path.iterdir()), "the run wrote before its provenance"
+    return seen["instrument"]
+
+
+def test_a_duty_run_stamps_the_duty_timer_as_its_instrument(monkeypatch, tmp_path):
+    """Finding 5. The provenance block is what every row's `prov_instrument`
+    column and report.json's top-level `instrument` are written from, and at a
+    duty below 1 it named the queue-deep `time_kernel` loop the cells were NOT
+    timed with, while each row's own `instrument` column named the duty
+    timer. It now names the duty timer's own string, the one those rows carry,
+    and the duty."""
+    import clock_elasticity as CE
+    row_instrument = CE.DutyTiming.__dataclass_fields__["instrument"].default
+    got = _provenance_instrument(monkeypatch, tmp_path, "0.25")
+    assert got != TIMING.TIMING_BASIS
+    assert got.startswith(row_instrument) and got.endswith("duty 0.25")
+    assert PW.ladder_instrument(0.25) == got
+    # Full duty keeps the queue-deep basis, which is what timed its cells.
+    assert _provenance_instrument(monkeypatch, tmp_path, "1.0") == TIMING.TIMING_BASIS
+    assert PW.ladder_instrument(0.5, synthetic=True) == PW.SYNTHETIC_INSTRUMENT
+    # report.json's top-level key is the block's, through `stamp`.
+    prov = PW.PV.Provenance(instrument=got, ridge_source="this test",
+                            bandwidth_source="this test")
+    treads = [1, 2, 3, 4, 5, 6]
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0, copies_declared=9,
+              native_switch=4)
+    samples = PW.planted_samples(PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)
+    report = _analyse(samples, treads)
+    assert prov.stamp(report.payload)["instrument"] == got
+
+
+def test_iterations_per_trial_mean_one_thing_at_either_duty():
+    """Finding 5's second call site. At a duty below 1 `time_cell` stored the
+    kept calls summed over EVERY trial, and the page printed that as
+    "iterations per trial" and wrote it into provenance's `iters`: three
+    times a per-trial count at the default three trials."""
+    def timer(fn, **kw):
+        return _CellTiming(ms_p50=0.5)
+
+    def duty_timer(fn, **kw):
+        return _CellDutyTiming(ms_p50=0.52)
+    ct = PW.time_cell(lambda: None, duty=0.25, warmup_ms=300.0,
+                      cell_budget_ms=200.0, trials=3, l2_flush=True,
+                      reference_clock_mhz=None, timer=timer,
+                      duty_timer=duty_timer)
+    per_trial = _CellDutyTiming().samples // 3
+    assert ct.iters == per_trial
+    rows = [PW.replace(_sample(PW.SHARED, n, 0, 1.0), iters=ct.iters,
+                       duty=0.25) for n in (1, 2, 3)]
+    line = PW._iters_line(rows)
+    assert line.startswith(f"iterations per trial: median {per_trial} ")
+    assert "At duty 0.25 an iteration is a KEPT call" in line
+    assert "first call of every burst discarded" in line
+    prov = PW._observed_iters(PW.PV.Provenance(), rows)
+    assert prov.iters == per_trial
+    # Full duty keeps its sentence.
+    full = [_sample(PW.SHARED, n, 0, 1.0) for n in (1, 2, 3)]
+    assert PW._iters_line(full).endswith(
+        "Sized per cell by the instrument from --cell-budget-ms.")
 
 
 # --------------------------------------------------------------------------
