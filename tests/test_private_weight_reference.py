@@ -5160,3 +5160,190 @@ def test_the_skipped_pages_iteration_line_blames_a_world_the_pod_never_ran(
         native_switch=skipped.census.switch_tread(PW.NATIVE))
     assert len(planted) == 162 and {s.iters for s in planted} == {0}
     assert PW._iters_line(planted) == empty
+
+
+# --------------------------------------------------------------------------
+# 24. --probe-check: V8's on-card probe check alone, for the vLLM venv
+# --------------------------------------------------------------------------
+
+def _stand_in_probe_check(monkeypatch, *, eager_ms=0.030, replay_ms=None,
+                          graph_host_bound=False, graph_note="",
+                          refuse_capture=False):
+    """Run the REAL `probe_check` under `--probe-check` with its four seams
+    filled by fakes: the op, the sync, and the two timers `time_probe_cell`
+    already takes. The host check that refuses a laptop is stood in, so the
+    mode's own wiring (argparse, the gate it prints, the exit it returns) is
+    what runs. Hands back the op's calls."""
+    replay = (PW.PROBE_CALLS_PER_REPLAY * eager_ms / 8 if replay_ms is None
+              else replay_ms)
+    ops: list = []
+
+    def op(ids, block_m, declared):
+        ops.append((int(ids.numel()), block_m, declared))
+
+    def graph_timer(fn, **kw):
+        if refuse_capture:
+            raise TIMING.NotCapturable("operation not permitted when stream is "
+                                       "capturing")
+        fn()
+        return _Timing(replay, host_bound=graph_host_bound, host_note=graph_note)
+
+    def eager_timer(fn, **kw):
+        fn()
+        return _Timing(eager_ms, host_bound=True, host_note="eager, host-timed")
+
+    real = PW.probe_check
+
+    def check(cfg, **kw):
+        return real(cfg, op=op, sync=lambda: None, graph_timer=graph_timer,
+                    eager_timer=eager_timer, device="cpu", **kw)
+    monkeypatch.setattr(PW, "probe_check_refusal", lambda: "")
+    monkeypatch.setattr(PW, "probe_check", check)
+    return ops
+
+
+def _probe_check_log(argv=("--probe-check",)) -> tuple[int, str]:
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW.main(list(argv))
+    return rc, log.getvalue()
+
+
+#: (world, the fakes' settings, the verdict the one RESULT line must carry).
+PROBE_CHECK_WORLDS: tuple[tuple[str, dict, str], ...] = (
+    ("gpu-time", {}, exit_codes.PASS),
+    ("host-bound-replay", {"graph_host_bound": True,
+                           "graph_note": "the queue drained while the host "
+                                         "was still enqueueing"},
+     exit_codes.FAIL),
+    ("not-under-eager", {"replay_ms": PW.PROBE_CALLS_PER_REPLAY * 0.031},
+     exit_codes.FAIL),
+    ("capture-refused", {"refuse_capture": True}, exit_codes.FAIL),
+    ("no-host-bound-verdict", {"graph_host_bound": None}, exit_codes.UNKNOWN),
+)
+
+
+@pytest.mark.parametrize("world,fakes,verdict", PROBE_CHECK_WORLDS,
+                         ids=[w for w, _f, _v in PROBE_CHECK_WORLDS])
+def test_probe_check_prints_one_result_line_its_exit_code_is_recomputed_from(
+        world, fakes, verdict, monkeypatch, tmp_path):
+    """THE NEW INTERFACE THE CHAIN CALLS. One RESULT line, `P1`, VALIDITY, in
+    the format `Gate.result_line` renders every gate on the page in, and an
+    exit through `exit_codes`: 0 on PASS, 3 on FAIL or UNKNOWN, which is what
+    `classify_text` recomputes from the log. The fakes plant each way the
+    on-card test could fail: a replay the instrument calls host-bound, a
+    per-call graph time not under the eager p50, a refused capture, and no
+    host-bound verdict at all (UNKNOWN, not PASS)."""
+    ops = _stand_in_probe_check(monkeypatch, **fakes)
+    root = tmp_path / "results-root"
+    root.mkdir()
+    monkeypatch.setenv("MOE_RESULTS_DIR", str(root))
+    rc, out = _probe_check_log()
+    lines = exit_codes.parse_result_lines(out)
+    assert len(lines) == 1, out
+    assert [ln for ln in out.splitlines() if ln.startswith("RESULT: ")] == \
+        [lines[0].render()]
+    (line,) = lines
+    assert (line.kind, line.name, line.verdict) == (exit_codes.VALIDITY, "P1", verdict)
+    assert line.detail.startswith("[VALIDITY] ")
+    assert " | measured " in line.detail and " | gate " in line.detail
+    assert rc == exit_codes.classify_text(out)
+    assert rc == (exit_codes.DONE if verdict == exit_codes.PASS
+                  else exit_codes.INVALID)
+    # What it times: tread 1 (r = BLOCK_M) of the default model at NATIVE's
+    # declaration, the cell the on-card test times.
+    tokens = PW.SWEEP.tokens_for_rows(CFG, PW.DEFAULT_BLOCK_M)
+    assert set(ops) == {(tokens * CFG.top_k, PW.DEFAULT_BLOCK_M, CFG.num_experts)}
+    if not fakes.get("refuse_capture"):
+        assert f"{PW.PROBE_CALLS_PER_REPLAY} calls per replay" in line.detail
+    # It measures nothing else and writes no results directory.
+    assert list(root.rglob("*")) == []
+    assert "private_weight_reference/" not in out
+
+
+def test_probe_check_refuses_with_no_cuda_before_it_measures_anything(
+        no_cuda, monkeypatch, tmp_path):
+    """No card: REFUSED (2) with a line that says why, before `probe_check`
+    (and with it vLLM's op and the timers) is reached. The return code alone
+    is argparse's too, so the sentence is asserted."""
+    def never(*a, **k):
+        raise AssertionError("probe_check ran on a host with no card")
+    monkeypatch.setattr(PW, "probe_check", never)
+    root = tmp_path / "results-root"
+    root.mkdir()
+    monkeypatch.setenv("MOE_RESULTS_DIR", str(root))
+    rc, out = _probe_check_log()
+    assert rc == exit_codes.REFUSED
+    refused = [ln for ln in out.splitlines() if ln.startswith("REFUSED: ")]
+    assert len(refused) == 1 and "no CUDA device" in refused[0], out
+    assert exit_codes.parse_result_lines(out) == []
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(out)
+    assert list(root.rglob("*")) == []
+    # And as the chain runs it: a child process, the laptop world laid over it.
+    got = run(["--probe-check", "--model", PW.DEFAULT_MODEL, "--block-m",
+               str(PW.DEFAULT_BLOCK_M)])
+    assert got.returncode == exit_codes.REFUSED, got.stderr[-800:]
+    assert "REFUSED: " in got.stdout and "no CUDA device" in got.stdout
+    assert "unrecognized arguments" not in got.stderr
+
+
+def test_probe_check_refuses_without_vllm_even_on_a_card(monkeypatch):
+    """The base venv on the pod: a card and no vLLM. Refused naming vLLM and
+    the venv to run it from, and vLLM is LOOKED FOR, not imported."""
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setitem(sys.modules, "vllm", None)
+
+    def never(*a, **k):
+        raise AssertionError("probe_check ran with no vLLM")
+    monkeypatch.setattr(PW, "probe_check", never)
+    rc, out = _probe_check_log()
+    assert rc == exit_codes.REFUSED
+    refused = [ln for ln in out.splitlines() if ln.startswith("REFUSED: ")]
+    assert len(refused) == 1 and "vLLM" in refused[0] and "venv" in refused[0], out
+    assert exit_codes.parse_result_lines(out) == []
+
+
+def test_probe_check_refuses_a_vllm_whose_op_does_not_import(monkeypatch):
+    """vLLM found, its op not where `probe_check` imports it from: an import
+    that drifted, REFUSED (2) with the import error named, not a crash (4)."""
+    monkeypatch.setattr(PW, "probe_check_refusal", lambda: "")
+    monkeypatch.setitem(
+        sys.modules, "vllm.model_executor.layers.fused_moe.moe_align_block_size",
+        None)
+    rc, out = _probe_check_log()
+    assert rc == exit_codes.REFUSED, out
+    refused = [ln for ln in out.splitlines() if ln.startswith("REFUSED: ")]
+    assert len(refused) == 1 and "did not import" in refused[0], out
+    assert exit_codes.parse_result_lines(out) == []
+
+
+def test_probe_check_is_a_mode_of_its_own():
+    """Beside another mode it would print one of the two and drop the other
+    without a word, so the pair is refused."""
+    for extra in (["--dry-run"], ["--self-test", "refit"],
+                  ["--read", "x.json", "--replicate-of", "y.json"]):
+        rc, out = _probe_check_log(["--probe-check", *extra])
+        assert rc == exit_codes.REFUSED, extra
+        assert "REFUSED: --probe-check is a mode of its own" in out, out
+        assert exit_codes.parse_result_lines(out) == []
+
+
+def test_probe_check_says_what_it_is_for_and_the_on_card_test_calls_it():
+    """The --help says why the chain runs it (the vLLM venv has no pytest, and
+    the base venv can only skip the on-card test), and the on-card test calls
+    the ONE function the mode calls rather than a copy of its logic."""
+    got = _helps()["--probe-check"]
+    for phrase in ("scripts/alpha_g_chain.sh", "vLLM venv", "no pytest",
+                   "test_the_alignment_probe_is_gpu_time_under_the_graph",
+                   "can only skip", "writes nothing"):
+        assert phrase in got, (phrase, got)
+    assert "--probe-check" in PW.__doc__.split("WHY THIS ARM EXISTS")[0]
+    tree = ast.parse((ROOT / "tests" / "test_gpu.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "test_the_alignment_probe_is_gpu_time_under_the_graph")
+    called = {ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)}
+    assert "PW.probe_check" in called, called
+    assert "pytest.importorskip" in called
+    assert "PW.time_probe_cell" not in called, "the logic lives in probe_check"

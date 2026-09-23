@@ -601,29 +601,17 @@ def test_the_alignment_probe_is_gpu_time_under_the_graph():
     `moe_align_block_size` CAPTURES under `torch.cuda.graph`, that the
     instrument does not call a 16-call replay host-bound, and that the
     per-call GPU time is under the eager p50 (session 4's eager cells were
-    25-29 us of interval against 32-36 us of host enqueue)."""
+    25-29 us of interval against 32-36 us of host enqueue).
+
+    The check itself is `private_weight_reference.probe_check`, the ONE
+    function `--probe-check` also calls: the chain runs that mode from the
+    vLLM venv, which has no pytest, because from the base venv this test
+    can only skip."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     pytest.importorskip("vllm")
     import private_weight_reference as PW
-    from vllm.model_executor.layers.fused_moe.moe_align_block_size import moe_align_block_size
 
-    cfg = MODEL_CONFIGS["mixtral-8x7b"]
-    ids = PW.SWEEP.balanced_ids(cfg, PW.SWEEP.tokens_for_rows(cfg, 32), "cuda")
-
-    def call():
-        moe_align_block_size(ids, 32, cfg.num_experts)
-    call()
-    torch.cuda.synchronize()
-    eager = T.time_kernel(call, warmup_ms=PW.PROBE_WARMUP_MS,
-                          target_ms=PW.PROBE_TARGET_MS, trials=PW.PROBE_TRIALS,
-                          l2_flush=False)
-    cell = PW.time_probe_cell(
-        call, arm=PW.NATIVE, tread=1, numel=ids.numel(), declared=cfg.num_experts,
-        repeat=0, reference_clock=None,
-        calls_per_replay=PW.PROBE_CALLS_PER_REPLAY,
-        graph_timer=D.time_kernel_graph, eager_timer=T.time_kernel)
-    assert cell.graph_calls == PW.PROBE_CALLS_PER_REPLAY
-    assert cell.host_bound is False, cell.host_note
-    assert cell.ms < eager.ms_p50, (cell.ms, eager.ms_p50)
+    gate = PW.probe_check(MODEL_CONFIGS["mixtral-8x7b"], block_m=32)
+    assert gate.verdict == PW.PASS, "\n".join(gate.render())

@@ -11,6 +11,9 @@
     python scripts/private_weight_reference.py --read RUN1/report.json \
                                                --replicate-of RUN0/report.json
                                        # off GPU: a stored pair re-read, nothing measured
+    python scripts/private_weight_reference.py --probe-check
+                                       # on the card, from the vLLM venv: V8's
+                                       # probe instrument alone, nothing written
 
 WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
 routed expert weight set that is re-read per extra M-tile. Every estimate of it
@@ -267,6 +270,7 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
+import importlib.util
 import json
 import math
 import os
@@ -1920,6 +1924,157 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                        calls_per_replay=calls_per_replay,
                        op=moe_align_block_size, sync=torch.cuda.synchronize,
                        graph_timer=graph_timer, eager_timer=eager_timer)
+
+
+#: The one gate `--probe-check` scores. Not a V number: it is scored before a
+#: page exists, on the op alone, and nothing on the page reads it.
+PROBE_CHECK_TAG = "P1"
+
+
+def probe_check(cfg, *, block_m: int, op=None, sync=None, graph_timer=None,
+                eager_timer=None, device: str = "cuda") -> Gate:
+    """V8's probe instrument checked ON THE CARD, and nothing else. The ONE
+    place this is decided: `--probe-check` prints the gate it returns, and
+    `tests/test_gpu.py::test_the_alignment_probe_is_gpu_time_under_the_graph`
+    asserts it PASSes.
+
+    What it times is the probe's cheapest cell: vLLM's `moe_align_block_size`
+    at tread 1 (`r = BLOCK_M`) with NATIVE's declaration `E`, once EAGERLY
+    (`timing.time_kernel`, the fallback's instrument) and once as the probe
+    times it (`time_probe_cell`, `PROBE_CALLS_PER_REPLAY` calls captured per
+    graph replay by `driver.time_kernel_graph`). PASS needs the three things
+    the probe's design assumes and no laptop can show: the capture is
+    accepted and the cell is graph-timed at that count; the instrument does
+    not call the replay host-bound; and the per-call graph time is under the
+    eager p50 (session 4's eager cells were 25-29 us of interval against
+    32-36 us of host enqueue). Any of them read false is FAIL; no host-bound
+    verdict, or no eager time to compare against, is UNKNOWN.
+
+    `op`, `sync` and the two timers default to the pod's own (vLLM's op,
+    `torch.cuda.synchronize`, the probe's two instruments) and are there for
+    the off-GPU tests, which drive this with fakes on `device="cpu"`. A
+    capture refusal is a FAIL here, not an exception: it is the answer.
+    """
+    from moe.bench import timing
+    if op is None:
+        from vllm.model_executor.layers.fused_moe.moe_align_block_size import (
+            moe_align_block_size as op,
+        )
+    if sync is None:
+        import torch
+        sync = torch.cuda.synchronize
+    if graph_timer is None:
+        from moe.bench.driver import time_kernel_graph as graph_timer
+    if eager_timer is None:
+        eager_timer = timing.time_kernel
+    tokens = SWEEP.tokens_for_rows(cfg, block_m)
+    ids = SWEEP.balanced_ids(cfg, tokens, device)
+    declared = cfg.num_experts
+
+    def call():
+        op(ids, block_m, declared)
+    call()
+    sync()
+    eager = eager_timer(call, warmup_ms=PROBE_WARMUP_MS,
+                        target_ms=PROBE_TARGET_MS, trials=PROBE_TRIALS,
+                        l2_flush=False, reference_clock_mhz=None)
+    eager_ms = float(eager.ms_p50)
+    detail = [f"{cfg.name} BLOCK_M={block_m}, tread 1: {tokens} tokens, "
+              f"{ids.numel()} ids, {declared} experts declared (NATIVE's "
+              "declaration), the op alone"]
+    fails: list[str] = []
+    unknowns: list[str] = []
+    try:
+        cell = time_probe_cell(
+            call, arm=NATIVE, tread=1, numel=ids.numel(), declared=declared,
+            repeat=0, reference_clock=None,
+            calls_per_replay=PROBE_CALLS_PER_REPLAY, graph_timer=graph_timer,
+            eager_timer=eager_timer)
+    except timing.NotCapturable as exc:
+        cell = None
+        fails.append(f"the capture was REFUSED ({str(exc)[:160]}): the probe "
+                     "falls back to timing every cell eagerly, which session "
+                     "4's H200 read host-bound 36 of 36 cells and V8 UNKNOWN; "
+                     "on that fallback V8 is scored only if NATIVE's switch "
+                     "resolves at the census tread")
+        measured = f"capture refused; eager p50 {eager_ms * 1e3:.2f} us per call"
+    if cell is not None:
+        replay = cell.replay_ms if cell.replay_ms is not None else math.nan
+        measured = (f"graph {cell.ms * 1e3:.2f} us per call over "
+                    f"{cell.graph_calls} calls per replay (replay p50 "
+                    f"{replay * 1e3:.2f} us), host-bound {cell.host_bound}; "
+                    f"eager p50 {eager_ms * 1e3:.2f} us per call")
+        if cell.graph_calls != PROBE_CALLS_PER_REPLAY:
+            fails.append(f"the cell was timed at {cell.graph_calls} calls per "
+                         f"replay, not {PROBE_CALLS_PER_REPLAY}")
+        if cell.host_bound is True:
+            fails.append(
+                f"the instrument called a {cell.graph_calls}-call replay "
+                "HOST-BOUND"
+                + (f" ({cell.host_note})" if cell.host_note else "")
+                + ": the launch outran the GPU work, so V8 would read these "
+                "cells as the host's and not the op's. Raise "
+                "PROBE_CALLS_PER_REPLAY (its comment: doubled once) before "
+                "the pilot")
+        elif cell.host_bound is None:
+            unknowns.append("the instrument returned no host-bound verdict "
+                            "for the replay, and an unread verdict is not a "
+                            "clean one")
+        if not math.isfinite(eager_ms) or eager_ms <= 0:
+            unknowns.append("the eager timing returned no p50 to compare the "
+                            "graph's per-call time against")
+        elif not cell.ms < eager_ms:
+            fails.append(f"the graph's per-call time is not under the eager "
+                         f"p50 ({cell.ms * 1e3:.2f} us against "
+                         f"{eager_ms * 1e3:.2f} us), so the graph bought no "
+                         "GPU time over the host-timed eager cell")
+    verdict = FAIL if fails else UNKNOWN if unknowns else PASS
+    return Gate(PROBE_CHECK_TAG, VALIDITY,
+                "vLLM's moe_align_block_size captures under a CUDA graph and "
+                f"a {PROBE_CALLS_PER_REPLAY}-call replay is GPU time: not "
+                "host-bound, per call under the eager p50",
+                verdict, measured,
+                f"graph_calls == {PROBE_CALLS_PER_REPLAY}, host-bound False, "
+                "graph per-call ms < eager p50",
+                "R3's alignment probe cannot time this op as GPU time on this "
+                "build, so V8 can read UNKNOWN and latch the page INVALID after "
+                "the whole ladder is paid for; this check exists to find that "
+                "out before the pilot and not after it",
+                detail + fails + unknowns)
+
+
+def probe_check_refusal() -> str:
+    """"" when `--probe-check` can run in this interpreter, else why not.
+
+    Asked BEFORE anything heavy: torch is imported to ask for the card (every
+    detector in the repo asks `torch.cuda.is_available()`, which is what the
+    suite plants), and vLLM is only LOOKED FOR, so the base venv refuses
+    without importing it.
+    """
+    try:
+        import torch
+    except ImportError:
+        return ("no torch in this interpreter, so no card to time vLLM's "
+                "alignment op on")
+    try:
+        cuda = torch.cuda.is_available()
+    except Exception:                                     # noqa: BLE001
+        cuda = False
+    if not cuda:
+        return ("no CUDA device: --probe-check times vLLM's "
+                "moe_align_block_size on the card and there is no card here. "
+                "Off GPU, the tests drive `probe_check` with fake timers")
+    try:
+        found = importlib.util.find_spec("vllm") is not None
+    except (ImportError, ValueError):
+        found = False
+    if not found:
+        return ("vLLM is not importable in this interpreter, and the op "
+                "--probe-check times is vLLM's. Run it from the vLLM venv "
+                "(scripts/alpha_g_chain.sh does, as PY_VLLM); the base venv "
+                "has no vLLM, which is why the on-card test can only skip "
+                "there")
+    return ""
 
 
 #: What the probe times per tread and repeat: one series per ARM (NATIVE's
@@ -6287,6 +6442,19 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, and "
                          "REFUSE: nothing is measured and no gate is scored")
+    ap.add_argument("--probe-check", action="store_true",
+                    help="run ONLY the V8 alignment probe's on-card check, "
+                         "the one tests/test_gpu.py::test_the_alignment_probe"
+                         "_is_gpu_time_under_the_graph performs: vLLM's "
+                         "moe_align_block_size at tread 1 of --model at "
+                         "--block-m, timed eagerly and under a CUDA graph of "
+                         f"{PROBE_CALLS_PER_REPLAY} calls per replay; one "
+                         "RESULT line, P1, exit 0 PASS or 3 FAIL/UNKNOWN. "
+                         "scripts/alpha_g_chain.sh runs it from the vLLM venv "
+                         "before the pilot, because that venv has no pytest "
+                         "and in the base venv the on-card test can only skip "
+                         "(no vLLM). Measures nothing else and writes nothing; "
+                         "REFUSED (2) with no CUDA device or no vLLM")
     ap.add_argument("--self-test", default=None, choices=sorted(WORLDS),
                     help="score the gates against a planted world, off GPU")
     ap.add_argument("--plant-noise", type=float, default=0.004,
@@ -6328,6 +6496,10 @@ def _main(argv=None) -> int:
     which the ledger already reads as a finished result.
     """
     args = build_parser().parse_args(argv)
+    if args.probe_check:
+        # FIRST, and on its own: the chain runs it from the vLLM venv before
+        # the pilot, and it needs neither a ridge nor a plan.
+        return _probe_check_mode(args)
     if args.read is not None:
         # BEFORE the partition check, the ridge and the card: a stored pair is
         # re-read on a laptop with none of them.
@@ -6797,6 +6969,48 @@ def _read_mode(args) -> int:
         print("REFUSED: the stored report carries no gates")
         return exit_codes.REFUSED
     rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+def _probe_check_mode(args) -> int:
+    """PROBE-CHECK MODE: `probe_check` on the attached card, its one gate
+    printed, the exit `classify` over it (0 PASS, 3 FAIL or UNKNOWN). REFUSED
+    (2) before anything heavy is imported when there is no card or no vLLM,
+    when vLLM's op does not import (an import that drifted), and beside
+    another mode, which it would otherwise silently drop. Nothing is written:
+    no run id, no results directory, no report."""
+    other = [flag for flag, given in (
+        ("--read", args.read is not None),
+        ("--replicate-of", bool(args.replicate_of)),
+        ("--self-test", args.self_test is not None),
+        ("--dry-run", args.dry_run)) if given]
+    if other:
+        print(f"REFUSED: --probe-check is a mode of its own and measures one "
+              f"thing; drop {' and '.join(other)}")
+        return exit_codes.REFUSED
+    cfg = MODEL_CONFIGS[args.model]
+    why = identity_tread_refusal(cfg, args.block_m)
+    if why:
+        print(f"REFUSED: {why}")
+        return exit_codes.REFUSED
+    missing = probe_check_refusal()
+    if missing:
+        print(f"REFUSED: {missing}")
+        return exit_codes.REFUSED
+    print(f"PROBE CHECK: V8's alignment probe instrument on this card, alone "
+          f"({args.model}, BLOCK_M={args.block_m}); nothing else is measured "
+          "and nothing is written")
+    try:
+        gate = probe_check(cfg, block_m=args.block_m)
+    except ImportError as exc:
+        # vLLM was found and its op was not where this imports it from: an
+        # import that drifted, which the exit-code table calls REFUSED.
+        print(f"REFUSED: vLLM is installed and the op --probe-check times did "
+              f"not import ({exc}); nothing was timed")
+        return exit_codes.REFUSED
+    print("\n".join(gate.render()))
+    rc = exit_codes.classify([gate.scored()])
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 
