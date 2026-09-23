@@ -1,9 +1,17 @@
 #!/usr/bin/env python
-"""How much of a measured millisecond is the CLOCK? d log ms / d log f, one kernel.
+"""How much of the per-M-tile cost is the CLOCK? -d log b / d log f, one kernel.
 
     python scripts/clock_elasticity.py --dry-run     # the priced plan and the registered bands
     python scripts/clock_elasticity.py --self-test   # the scorer and the estimator, off GPU
     python scripts/clock_elasticity.py --card 'NVIDIA H200'    # the pod run
+
+WHAT IS GATED. eta_b = -d log b / d log f, where b is the per-M-tile cost in
+ms = a(f) + b(f) n, read off the fixed-tread slopes of treads 2 and deeper
+(`per_tile_slope`, `CLAIM_MIN_TREAD`). Printed beside it and never gated: the
+same estimator over every tread, tread 1's departure from the line the claim
+fits, and the pooled per-call eta = -d log ms / d log f at fixed tread, which is
+what this arm gated before 2026-09-22 (session 4 read 0.74 on it). Every one of
+them is in report.json under its own key.
 
 WHY THIS ARM EXISTS. A 13-agent reading of the 2026-09-10 session concluded that
 alpha, as this study defines it, is NOT IDENTIFIED by this apparatus, and one of
@@ -227,6 +235,20 @@ MIN_STATES = 3
 #: what is left is a subsample chosen by the card's own behaviour.
 EXCLUSION_CEILING = 0.20
 
+#: THE SHALLOWEST TREAD THE CLAIM'S LINE READS, registered by the owner on
+#: 2026-09-22 before the run and not chosen by the fit. The claim assumes every
+#: tread it reads lies on ms = a(f) + b(f) n, and session 4's one-tile call did
+#: not: its fixed-tread sensitivity was 0.13 ms against the 0.62 ms the line
+#: through treads 2-8 extrapolates to at n = 1, its level 0.75 ms against the
+#: line's 0.63, and a per-call reading of 0.17 beside 1.04-1.11 at every deeper
+#: tread is a point that law reaches only with an intercept elasticity far below
+#: zero, which is not physics. Read over every tread, that one point moved the
+#: claim from 1.11 to 1.21 and failed V7 on the cells that motivated the claim
+#: (tests/fixtures/2026-09-21-nvidia_h200-session4-clock_elasticity-g16). The
+#: all-tread reading and tread 1's departure are printed beside the claim and
+#: stored in report.json; neither is gated.
+CLAIM_MIN_TREAD = 2
+
 # --------------------------------------------------------------------------
 # THE REGISTERED BANDS. Written here, printed by --dry-run before the run, and
 # NOT chosen after the fact. They come from the session-3 analysis: below 0.25
@@ -265,11 +287,11 @@ BANDS = (
 RESOLUTION_TARGET = (BAND_HIGH - BAND_LOW) / 2.0
 
 #: THE PHYSICALLY ADMISSIBLE RANGE, and why it needs a gate rather than a
-#: sentence. `eta` is the share of a measured millisecond that moves with the
-#: SM clock: 0 is a call whose time is pure traffic, 1 is a call whose time is
-#: pure issue rate. BELOW 0 the call got SLOWER as the clock rose at a
-#: byte-identical kernel, and ABOVE 1 it got faster than the clock did; both are
-#: apparatus faults and neither is a reading. `band_of`'s outer bands are
+#: sentence. The gated eta is the share of the per-M-tile cost that moves with
+#: the SM clock: 0 is a tile whose cost is pure traffic, 1 is a tile whose cost
+#: is pure issue rate. BELOW 0 that cost ROSE as the clock rose at a
+#: byte-identical kernel, and ABOVE 1 it fell faster than the clock rose; both
+#: are apparatus faults and neither is a reading. `band_of`'s outer bands are
 #: deliberately OPEN at their far edges -- RAW-STANDS has no lower edge -- so
 #: without this gate a negative interval lands inside the pre-registered PASS
 #: and the page prints "the clock is not what is wrong with alpha" over a run
@@ -357,8 +379,9 @@ PREDICTIONS = (
     Prediction(
         2, "the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of "
            "what one more tile adds at this cell is traffic, not issue rate",
-        f"the 95% interval on -d log b / d log f, b the ladder slope, lies "
-        f"wholly below {BAND_LOW}, "
+        f"the 95% interval on -d log b / d log f, b the ladder slope, read "
+        f"over treads {CLAIM_MIN_TREAD} and deeper, lies wholly below "
+        f"{BAND_LOW}, "
         "which is the band in which the study's raw readings stand and pooled "
         "EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone",
         f"a FAIL is a RESULT and not a retry. Above {BAND_HIGH} the BLOCK_M "
@@ -598,13 +621,19 @@ def collapse(rows, repeats=None) -> dict[tuple[int, str], tuple[float, float, in
 #: kernel whose time is entirely issue-rate-limited has slope -1. The study's
 #: registered bands are POSITIVE numbers (0.25, 0.40) and the session-3 analysis
 #: sweeps "the admissible clock elasticity" from 0 upward, so the quantity those
-#: bands are about is the MAGNITUDE:
+#: bands are about is the MAGNITUDE, and it is taken of every elasticity this
+#: arm reports:
 #:
-#:     eta = - d log ms / d log f,   0 = pure traffic,  1 = pure issue rate
+#:     eta_b = - d log b / d log f    the per-M-tile cost, treads >= CLAIM_MIN_TREAD
+#:     eta   = - d log ms / d log f   the per-call time at fixed tread, pooled
 #:
-#: Both are on the page and in report.json, because a conclusion that flips with
-#: a sign is exactly the kind this study has already had to retract once. Every
-#: gate reads `eta`; `Elasticity.slope` carries the signed regression slope.
+#: 0 = pure traffic, 1 = pure issue rate, for both. Every gate that reads the
+#: fit reads the claim, `Elasticity.value` and its interval, which is eta_b
+#: over treads 2 and deeper; `Elasticity.slope` carries its signed
+#: counterpart, and the per-call eta is `Elasticity.fixed_tread`, printed and
+#: never gated. Signed and unsigned are both on the page and in report.json,
+#: because a conclusion that flips with a sign is exactly the kind this study
+#: has already had to retract once.
 ETA_SIGN = -1.0
 
 
@@ -660,9 +689,39 @@ def _line_slope(xs, ys) -> float | None:
     return sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys, strict=True)) / sxx
 
 
-def per_tile_slope(cells, min_tread: int = 1) -> tuple[float | None, int]:
-    """SIGNED d log b / d log f of the per-M-tile cost b = d ms / d n: THE CLAIM,
-    built from the fixed-tread slopes and nothing else.
+def _line_at(xs, ys, x: float) -> float | None:
+    """The least-squares line of ys on xs, evaluated at x; None without spread."""
+    slope = _line_slope(xs, ys)
+    if slope is None:
+        return None
+    return statistics.fmean(ys) + slope * (x - statistics.fmean(xs))
+
+
+def tread_levels(cells, *, min_tread: int) -> dict[int, tuple[float, float]]:
+    """{tread: (level ms, SIGNED sensitivity d ms / d log f)} for every tread at
+    or above `min_tread` that carries a fixed-tread slope.
+
+    The level is the geometric mean of the tread's per-state medians, and the
+    sensitivity is that level times the tread's own fixed-tread slope s_n =
+    d log ms_n / d log f. THE ONE PLACE the two are formed, so the claim, the
+    all-tread reading and tread 1's departure are read off the same points.
+    """
+    _pooled, per_tread, _sxx, _used = within_tread_slope(cells)
+    logs: dict[int, list[float]] = {}
+    for (tread, _duty), (ms, mhz, _n) in cells.items():
+        if ms > 0 and mhz > 0 and tread in per_tread and tread >= min_tread:
+            logs.setdefault(tread, []).append(math.log(ms))
+    out = {}
+    for tread in sorted(logs):
+        level = math.exp(statistics.fmean(logs[tread]))
+        out[tread] = (level, per_tread[tread] * level)
+    return out
+
+
+def per_tile_slope(cells, *, min_tread: int) -> tuple[float | None, int]:
+    """SIGNED d log b / d log f of the per-M-tile cost b = d ms / d n, built from
+    the fixed-tread slopes and nothing else. THE CLAIM at `min_tread` =
+    `CLAIM_MIN_TREAD`; the all-tread reading beside it at 1.
 
     At tread n the fixed-tread slope s_n = d log ms_n / d log f times the tread's
     own level ms_n is d ms_n / d log f. Under ms = a(f) + b(f) n that
@@ -673,34 +732,55 @@ def per_tile_slope(cells, min_tread: int = 1) -> tuple[float | None, int]:
     elasticity, whatever it is, cancels: it is the same number at every tread
     and a line through the sensitivities has no use for it.
 
+    THAT CANCELLATION HOLDS ONLY FOR TREADS ON THE LAW, and it is why
+    `min_tread` is keyword-only: every caller says which treads it reads. A
+    tread off ms = a(f) + b(f) n enters the line as a point the law cannot
+    place, and the one-tile call is the end of the line with the most leverage
+    on its slope. On the 2026-09-21 cells it was off the law and moved the
+    reading from 1.11 to 1.21 (`CLAIM_MIN_TREAD` has the numbers).
+
     Why this and not the pooled fixed-tread reading. The pooled reading is an
     Sxx-weighted blend of every tread's per-call elasticity, intercept
     included; on the 2026-09-21 cells the one-tile call read 0.17, every
     deeper tread 1.04-1.11, and the blend 0.74. The ratio arm's correction
     and the model's traffic term are about the per-tile cost, not the call.
 
-    `min_tread` drops shallow treads from the line (2 excludes the one-tile
-    call, which on a swizzled ladder is a different regime: one group, an
-    N-outer stream); both readings are printed, neither is hidden.
-
     Returns (signed elasticity, treads used); None when fewer than two treads
     carry a fixed-tread slope or the ladder has no positive slope.
     """
-    _pooled, per_tread, _sxx, _used = within_tread_slope(cells)
-    logs: dict[int, list[float]] = {}
-    for (tread, _duty), (ms, mhz, _n) in cells.items():
-        if ms > 0 and mhz > 0 and tread in per_tread and tread >= min_tread:
-            logs.setdefault(tread, []).append(math.log(ms))
-    treads = sorted(logs)
+    points = tread_levels(cells, min_tread=min_tread)
+    treads = sorted(points)
     if len(treads) < 2:
         return None, len(treads)
-    level = {t: math.exp(statistics.fmean(logs[t])) for t in treads}
-    sens = {t: per_tread[t] * level[t] for t in treads}
-    b = _line_slope(treads, [level[t] for t in treads])
-    db = _line_slope(treads, [sens[t] for t in treads])
+    b = _line_slope(treads, [points[t][0] for t in treads])
+    db = _line_slope(treads, [points[t][1] for t in treads])
     if b is None or b <= 0 or db is None:
         return None, len(treads)
     return db / b, len(treads)
+
+
+def tread_one_departure(cells, *, min_tread: int
+                        ) -> tuple[float, float, float, float] | None:
+    """Tread 1 against the line the claim fits, extrapolated to n = 1.
+
+    Returns (tread 1's SIGNED sensitivity, the sensitivity line's value at
+    n = 1, tread 1's level, the level line's value at n = 1), both lines fitted
+    over treads >= `min_tread`, all in ms. A RECORD and never a gate: tread 1
+    far from both lines is tread 1 off ms = a(f) + b(f) n, which is what the
+    claim's tread set is registered against, and the page prints it so the
+    reader sees how far off it was. None when tread 1 carries no fixed-tread
+    slope or fewer than two treads from `min_tread` do.
+    """
+    one = tread_levels(cells, min_tread=1).get(1)
+    points = tread_levels(cells, min_tread=max(2, min_tread))
+    treads = sorted(points)
+    if one is None or len(treads) < 2:
+        return None
+    level_line = _line_at(treads, [points[t][0] for t in treads], 1.0)
+    sens_line = _line_at(treads, [points[t][1] for t in treads], 1.0)
+    if level_line is None or sens_line is None:
+        return None
+    return one[1], sens_line, one[0], level_line
 
 
 def ladder_slope_elasticity(cells) -> tuple[float | None, int]:
@@ -757,13 +837,26 @@ def _percentile(values: list[float], q: float) -> float:
 class Elasticity:
     """The fit, its interval, and everything a reader needs to check it.
 
-    `value` is ETA of the PER-M-TILE cost: the positive magnitude the registered
-    bands are about, `-d log b / d log f` (`per_tile_slope`). `slope` is the
-    signed regression slope the estimator actually computed. `fixed_tread` is
-    eta of the per-CALL time at fixed tread, the reading this arm gated until
-    2026-09-22, carried and printed beside the claim; `per_tile_from2` is the
-    claim over treads 2 and deeper. All are carried so a reader never has to
-    infer which convention, or which quantity, a number is in.
+    THE CLAIM: `value` is ETA of the PER-M-TILE cost over treads
+    `claim_min_tread` and deeper, the positive magnitude the registered bands
+    are about, `-d log b / d log f` (`per_tile_slope`); `slope` is its signed
+    counterpart; `lo` and `hi` are its bootstrap interval, over the same treads;
+    `per_tile_treads` counts the treads its line read.
+
+    PRINTED BESIDE IT, NEVER GATED: `per_tile_all_treads` (with `_lo`, `_hi`
+    from the same draws) is the same estimator over every tread, tread 1
+    included; `tread1_*` is tread 1 against the claim's two lines extrapolated
+    to n = 1, as -d ms / d log f and as a level, in ms; `fixed_tread` (with
+    `_lo`, `_hi`) is eta of the per-CALL time at fixed tread, pooled, and
+    `per_tread` is that reading tread by tread.
+
+    THREE SHAPES ARE ON DISK, and a report.json says which it is by its keys.
+    Carrying `claim_min_tread`: this one. Carrying `per_tile_from2` and no
+    `claim_min_tread` (8d4eb78 to 12ec932, 2026-09-22): `value` is the per-tile
+    reading over EVERY tread and `per_tile_from2` the one over treads 2 and
+    deeper. Carrying neither (session 4 and earlier): `value` is the pooled
+    per-call eta, what this file now calls `fixed_tread`. `value`, `lo` and
+    `hi` are present in all three, which is all the chain's helper reads.
     """
 
     value: float | None
@@ -783,8 +876,15 @@ class Elasticity:
     fixed_tread: float | None = None
     fixed_tread_lo: float | None = None
     fixed_tread_hi: float | None = None
-    per_tile_from2: float | None = None
     per_tile_treads: int = 0
+    claim_min_tread: int = CLAIM_MIN_TREAD
+    per_tile_all_treads: float | None = None
+    per_tile_all_treads_lo: float | None = None
+    per_tile_all_treads_hi: float | None = None
+    tread1_sensitivity_ms: float | None = None
+    tread1_sensitivity_on_line_ms: float | None = None
+    tread1_level_ms: float | None = None
+    tread1_level_on_line_ms: float | None = None
 
     @property
     def half_width(self) -> float | None:
@@ -802,14 +902,20 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
     treat 13 correlated passes as hundreds of independent draws and report an
     interval a factor of several too narrow, which is precisely the
     understatement the session-3 reading found in the published sd of 0.0037.
+
+    THE INTERVAL IS THE CLAIM'S OWN: every draw re-fits the claim over the same
+    treads, `CLAIM_MIN_TREAD` and deeper, that the point estimate reads. The
+    all-tread and per-call readings get their intervals from the same draws and
+    are printed beside it.
     """
     keep = kept_rows(rows)
     repeats = sorted({r.repeat for r in keep})
     cells = collapse(keep)
     slope, per_tread, sxx, used = within_tread_slope(cells)
     ladder, ladder_states = ladder_slope_elasticity(cells)
-    tile, tile_treads = per_tile_slope(cells)
-    tile2, _from2 = per_tile_slope(cells, min_tread=2)
+    tile, tile_treads = per_tile_slope(cells, min_tread=CLAIM_MIN_TREAD)
+    every, _every_treads = per_tile_slope(cells, min_tread=1)
+    off = tread_one_departure(cells, min_tread=CLAIM_MIN_TREAD)
     # COUNTED OFF THE CELLS THAT ENTERED THE SLOPE, not off the labels present
     # somewhere in the file. A tread that lost every state but one contributes
     # nothing to Sxx, and the report line that read "24 (8 treads x 4 states)"
@@ -817,21 +923,25 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
     fitted = set(per_tread)
     states = len({d for t, d in cells if t in fitted})
     treads = len(fitted)
-    lo = hi = fixed_lo = fixed_hi = None
+    lo = hi = fixed_lo = fixed_hi = every_lo = every_hi = None
     drawn = 0
     if (slope is not None or tile is not None) and draws > 0 and len(repeats) >= 2:
         rng = random.Random(seed)
         values: list[float] = []
         totals: list[float] = []
+        everywhere: list[float] = []
         for _ in range(draws):
             sample = [rng.choice(repeats) for _ in repeats]
             drawn_cells = collapse(keep, sample)
             got, _pt, _xx, _n = within_tread_slope(drawn_cells)
             if got is not None:
                 totals.append(ETA_SIGN * got)
-            got_tile, _t = per_tile_slope(drawn_cells)
+            got_tile, _t = per_tile_slope(drawn_cells, min_tread=CLAIM_MIN_TREAD)
             if got_tile is not None:
                 values.append(ETA_SIGN * got_tile)
+            got_every, _t = per_tile_slope(drawn_cells, min_tread=1)
+            if got_every is not None:
+                everywhere.append(ETA_SIGN * got_every)
         if values:
             lo = _percentile(values, 0.025)
             hi = _percentile(values, 0.975)
@@ -839,6 +949,9 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
         if totals:
             fixed_lo = _percentile(totals, 0.025)
             fixed_hi = _percentile(totals, 0.975)
+        if everywhere:
+            every_lo = _percentile(everywhere, 0.025)
+            every_hi = _percentile(everywhere, 0.975)
     return Elasticity(value=None if tile is None else ETA_SIGN * tile,
                       slope=tile, lo=lo, hi=hi,
                       per_tread={t: ETA_SIGN * v for t, v in per_tread.items()},
@@ -848,8 +961,18 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
                       ladder_states=ladder_states,
                       fixed_tread=None if slope is None else ETA_SIGN * slope,
                       fixed_tread_lo=fixed_lo, fixed_tread_hi=fixed_hi,
-                      per_tile_from2=None if tile2 is None else ETA_SIGN * tile2,
-                      per_tile_treads=tile_treads)
+                      per_tile_treads=tile_treads,
+                      claim_min_tread=CLAIM_MIN_TREAD,
+                      per_tile_all_treads=(None if every is None
+                                           else ETA_SIGN * every),
+                      per_tile_all_treads_lo=every_lo,
+                      per_tile_all_treads_hi=every_hi,
+                      tread1_sensitivity_ms=(None if off is None
+                                             else ETA_SIGN * off[0]),
+                      tread1_sensitivity_on_line_ms=(None if off is None
+                                                     else ETA_SIGN * off[1]),
+                      tread1_level_ms=None if off is None else off[2],
+                      tread1_level_on_line_ms=None if off is None else off[3])
 
 
 def band_of(lo: float | None, hi: float | None) -> tuple[str, str] | None:
@@ -1166,12 +1289,14 @@ def gate_v5_within_burst(keep) -> Gate:
 def gate_v6_memory_clock(keep) -> Gate:
     """Did the MEMORY clock stay put while the SM clock moved.
 
-    THE CONFOUND THIS ARM WOULD OTHERWISE CARRY. `d log ms / d log f_sm` is only
-    the SM clock's elasticity if nothing else moved with it. HBM on this part is
-    not DVFS'd the way the SM domain is, so the expectation is a flat line, and
-    that expectation is worth one gate rather than one sentence: if the memory
-    clock moved with the duty cycle, the measured slope is a blend of issue rate
-    and bandwidth and the whole arm is answering a different question.
+    THE CONFOUND THIS ARM WOULD OTHERWISE CARRY. Every slope this arm fits,
+    `d log ms_n / d log f_sm` at each tread and the per-M-tile claim built from
+    them, is the SM clock's elasticity only if nothing else moved with it. HBM
+    on this part is not DVFS'd the way the SM domain is, so the expectation is
+    a flat line, and that expectation is worth one gate rather than one
+    sentence: if the memory clock moved with the duty cycle, the measured slope
+    is a blend of issue rate and bandwidth and the whole arm is answering a
+    different question.
 
     UNKNOWN when nothing carried a reading. On the live path that cannot happen
     where the SM clock read -- both come from the same NVML handle in the same
@@ -1214,11 +1339,11 @@ def gate_v7_admissible(est: Elasticity) -> Gate:
     want = (f"the interval intersects [{lo_edge:.3f}, {hi_edge:.3f}], "
             f"which is [0, 1] widened by the design's own half-width "
             f"{ADMISSIBLE_MARGIN:.3f}")
-    costs = ("both claims and the whole page: eta below 0 is a call that got "
-             "SLOWER as the clock rose at a byte-identical kernel, and eta "
-             "above 1 is one that got faster than the clock. Neither is a "
-             "reading, and RAW-STANDS is open below 0 so the first of them "
-             "would otherwise score as the pre-registered PASS")
+    costs = ("both claims and the whole page: eta below 0 is a per-M-tile "
+             "cost that ROSE as the clock rose at a byte-identical kernel, and "
+             "eta above 1 is one that fell faster than the clock rose. Neither "
+             "is a reading, and RAW-STANDS is open below 0 so the first of "
+             "them would otherwise score as the pre-registered PASS")
     if est.lo is None or est.hi is None:
         return Gate(VALIDITY, "7", "the elasticity is physically admissible",
                     UNKNOWN, "no interval: the fit produced no slope",
@@ -1227,15 +1352,15 @@ def gate_v7_admissible(est: Elasticity) -> Gate:
     lines = []
     if not ok:
         lines.append(
-            "BELOW 0: the measured call got slower as the clock rose. Suspect "
-            "the clock READ before the clock: this instrument takes one NVML "
-            "sample per burst, and a sample that lands in the ramp after the "
-            "idle gap is low in the low-duty states and right at the anchor, "
-            "which is this sign exactly."
+            "BELOW 0: the measured per-M-tile cost rose as the clock rose. "
+            "Suspect the clock READ before the clock: this instrument takes "
+            "one NVML sample per burst, and a sample that lands in the ramp "
+            "after the idle gap is low in the low-duty states and right at the "
+            "anchor, which is this sign exactly."
             if est.hi < lo_edge else
-            "ABOVE 1: the measured call sped up by more than the clock did. "
-            "Something other than the SM clock moved between the states; V6 "
-            "is the memory clock and this is everything else.")
+            "ABOVE 1: the measured per-M-tile cost fell by more than the clock "
+            "rose. Something other than the SM clock moved between the states; "
+            "V6 is the memory clock and this is everything else.")
     return Gate(
         VALIDITY, "7", "the elasticity is physically admissible",
         PASS if ok else FAIL,
@@ -1288,8 +1413,8 @@ def gate_c2_registered_reading(est: Elasticity) -> Gate:
         lines.append("the interval straddles a boundary (C1), so this FAIL is "
                      "'not shown' and not 'shown false'.")
     return Gate(
-        CLAIM, "2", f"eta of the per-M-tile cost, -d log b / d log f, is below "
-        f"{BAND_LOW} at this cell",
+        CLAIM, "2", f"eta of the per-M-tile cost, -d log b / d log f over treads "
+        f"{CLAIM_MIN_TREAD} and deeper, is below {BAND_LOW} at this cell",
         PASS if ok else FAIL,
         (f"{est.value:.4f} [{est.lo:.4f}, {est.hi:.4f}]"
          if est.value is not None and est.lo is not None
@@ -1425,7 +1550,7 @@ def mde_lines(args) -> list[str]:
         f"  at exactly that span the interval  half-width ~{2 * se:.4f}",
         "  the per-M-tile fit's own resolution is scored by S4 over the planted "
         "design, not derived here; its interval is wider than the pooled "
-        "per-call one (2.5-3x on the 2026-09-21 cells)",
+        "per-call one",
         "  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. "
         "The same arithmetic gates an A100 without being told which part is "
         "attached, and a shallower run is held to a WIDER separation rather "
@@ -2250,16 +2375,22 @@ PLANTED_MEM_MHZ = 2619.0
 def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
                treads: int = DEFAULT_TREADS, repeats: int = DEFAULT_REPEATS,
                a_ms: float = 0.1936, b_ms: float = 0.5559,
-               eps_a: float | None = None,
+               eps_a: float | None = None, off_law=None,
                jitter: float = 0.0, seed: int = 7,
                block_m_at=None, drift_at=(), host_at=(),
                level_at=None, mem_at=None, burst_moves_at=(),
                calls_per_burst: int = 24) -> list[Row]:
     """Rows from a stated law: `ms(n, f) = a (f_ref / f) ** eps_a + b n (f_ref / f) ** eps`,
-    `eps_a` defaulting to `eps` (one elasticity for the whole call). Two
-    elasticities is the 2026-09-21 card: the one-tile call at 0.17, every
-    deeper tread at ~1.05, and the estimator has to return `eps`, the
-    per-tile cost's, whatever the intercept does.
+    `eps_a` defaulting to `eps` (one elasticity for the whole call). An
+    intercept with its own `eps_a` is still ON the law: every tread's
+    sensitivity lies on a' + b' n and the claim's line returns `eps`.
+
+    `off_law` plants treads OFF it, {tread: e}: that tread's whole call is the
+    law's time at `f_ref` scaled by `(f_ref / f) ** e`, so it reads a per-call
+    elasticity of exactly `e` whatever the other treads do. That is the
+    2026-09-21 card's tread 1, 0.17 beside 1.04-1.11 deeper, which no `eps_a`
+    reproduces: at the planted a and b an intercept that pulled tread 1 down to
+    0.17 would pull tread 2 far below 1.
 
     THE LAW IS THE ONLY SOURCE OF TIME IN THESE ROWS, which is what makes the
     self-test a recovery test rather than a smoke test: the estimator either
@@ -2273,6 +2404,7 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
     rng = random.Random(seed)
     level_at = level_at or {}
     block_m_at = block_m_at or {}
+    off_law = off_law or {}
     out = []
     for repeat in range(repeats):
         for index, duty in enumerate(duties):
@@ -2281,6 +2413,9 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
                 scale_b = (PLANTED_REFERENCE_MHZ / f) ** eps
                 scale_a = (PLANTED_REFERENCE_MHZ / f) ** (eps if eps_a is None else eps_a)
                 base = a_ms * scale_a + b_ms * tread * scale_b
+                if tread in off_law:
+                    base = ((a_ms + b_ms * tread)
+                            * (PLANTED_REFERENCE_MHZ / f) ** off_law[tread])
                 ms = base * (1.0 + rng.gauss(0.0, jitter) if jitter else 1.0)
                 key = (index, tread, repeat)
                 drift = (key in drift_at)
@@ -2693,22 +2828,48 @@ def report_lines(rows, est: Elasticity, args) -> list[str]:
         f"{sides['undetermined']} undetermined. NEITHER SIDE EXCLUDES ANYTHING "
         "HERE.",
         "",
-        "THE FIT: eta of the per-M-tile cost, -d log b / d log f, from the "
-        "fixed-tread slopes",
-        "  eta                                 "
-        + (f"{est.value:.4f} over treads 1..{est.per_tile_treads}"
-           if est.value is not None else "no slope"),
-        "  over treads 2 and deeper            "
-        + (f"{est.per_tile_from2:.4f}" if est.per_tile_from2 is not None
-           else "not determined")
-        + "  (the one-tile call is its own regime on a swizzled ladder: "
-        "one group, an N-outer stream; both readings are printed)",
+        f"THE FIT: eta of the per-M-tile cost, -d log b / d log f, over treads "
+        f"{est.claim_min_tread} and deeper, from the fixed-tread slopes",
+        "  eta, THE CLAIM                      "
+        + (f"{est.value:.4f} over {est.per_tile_treads} treads from tread "
+           f"{est.claim_min_tread}" if est.value is not None else "no slope"),
         f"  95% interval over {est.repeats} repeats     "
         + (f"[{est.lo:.4f}, {est.hi:.4f}]  half-width {est.half_width:.4f}"
            if est.lo is not None else "none"),
         f"  bootstrap draws                     {est.resampled} of {est.draws}",
-        f"  cells in the fit                    {est.cells} "
+        f"  cells under the per-tread slopes    {est.cells} "
         f"({est.treads} treads x {est.states} states)",
+        "",
+        "  PRINTED BESIDE IT, never gated: the same estimator over EVERY tread, "
+        "tread 1 included",
+        "  eta, per-M-tile, every tread        "
+        + (f"{est.per_tile_all_treads:.4f}" if est.per_tile_all_treads is not None
+           else "no slope")
+        + (f"  [{est.per_tile_all_treads_lo:.4f}, {est.per_tile_all_treads_hi:.4f}]"
+           if est.per_tile_all_treads_lo is not None else ""),
+        f"  tread 1 against the claim's lines through treads "
+        f"{est.claim_min_tread} and deeper, at n = 1:",
+        "    -d ms / d log f                   "
+        + (f"{est.tread1_sensitivity_ms:.4f} ms against "
+           f"{est.tread1_sensitivity_on_line_ms:.4f} ms on the line"
+           if est.tread1_sensitivity_ms is not None else "not determined"),
+        "    level                             "
+        + (f"{est.tread1_level_ms:.4f} ms against "
+           f"{est.tread1_level_on_line_ms:.4f} ms on the line"
+           if est.tread1_level_ms is not None else "not determined"),
+        "  Tread 1 off those lines is tread 1 off the additive law a(f) + b(f) n "
+        "that the claim's",
+        "  line assumes. The claim leaves it out by registration and not by fit, "
+        "so it moves the",
+        "  every-tread reading above and never the claim. WHAT MAKES THE ONE-TILE "
+        "CALL DIFFERENT IS",
+        "  NOT ESTABLISHED, and it is not the swizzle: on the 2026-09-21 cells at "
+        "G=16 tread 1 read",
+        "  0.17 per call and every deeper tread 1.04-1.11, while the launch "
+        "arithmetic of that ladder",
+        "  (mixtral, E=8, BLOCK_M=32), num_pid_m = cdiv(numel + E(BM-1), BM) = "
+        "8n+8, puts the real",
+        "  M-tiles in ONE group of 16 at both n=1 and n=2.",
         "",
         "  PRINTED BESIDE IT, not the claim: eta of the per-CALL time at fixed "
         "tread, intercept included (what this arm gated until 2026-09-22)",
@@ -2718,10 +2879,9 @@ def report_lines(rows, est: Elasticity, args) -> list[str]:
            if est.fixed_tread_lo is not None else ""),
         "  per tread                           "
         + ", ".join(f"n{t}={v:+.4f}" for t, v in sorted(est.per_tread.items())),
-        "  A per-tread reading that jumps between tread 1 and tread 2 and is "
-        "flat after it is the",
-        "  swizzle engaging, not the card; the pooled figure blends the two "
-        "regimes by their clock spread.",
+        "  The pooled figure blends every tread's per-call reading, tread 1's "
+        "included, by its clock",
+        "  spread.",
         "",
         "  COMPANION: the elasticity of the ladder SLOPE with a clock assigned "
         "to each state",

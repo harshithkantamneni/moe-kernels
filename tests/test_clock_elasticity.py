@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import ast
 import csv
+import dataclasses
 import importlib.util
 import inspect
+import json
 import re
 import statistics
 import subprocess
@@ -885,34 +887,89 @@ def test_a_measuring_run_without_a_card_is_refused():
 # --------------------------------------------------------------------------
 
 def test_the_gated_reading_is_the_per_tile_costs_and_the_per_call_one_is_beside_it():
-    """One elasticity for the whole planted call: both readings agree, and the
-    new fields carry the per-call one with its own interval."""
+    """One elasticity for the whole planted call: every reading agrees, and the
+    fields beside the claim carry the all-tread and per-call readings with
+    intervals of their own."""
     est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.0), draws=50)
     assert est.value == pytest.approx(0.60, abs=1e-6)
     assert est.fixed_tread == pytest.approx(0.60, abs=1e-6)
-    assert est.per_tile_from2 == pytest.approx(0.60, abs=1e-6)
-    assert est.per_tile_treads == CE.DEFAULT_TREADS
+    assert est.per_tile_all_treads == pytest.approx(0.60, abs=1e-6)
+    assert est.claim_min_tread == CE.CLAIM_MIN_TREAD == 2
+    assert est.per_tile_treads == CE.DEFAULT_TREADS - CE.CLAIM_MIN_TREAD + 1
     assert est.lo is not None and est.fixed_tread_lo is not None
+    assert est.per_tile_all_treads_lo is not None
     assert est.lo <= est.value <= est.hi
     assert est.fixed_tread_lo <= est.fixed_tread <= est.fixed_tread_hi
+    assert (est.per_tile_all_treads_lo <= est.per_tile_all_treads
+            <= est.per_tile_all_treads_hi)
+
+
+def test_every_caller_of_the_per_tile_estimator_names_its_treads():
+    """THE RECURRING DEFECT, at the estimator: the claim and the reading beside
+    it are one function at two tread sets, and a default is how a second call
+    site silently reads the other one. `min_tread` has none."""
+    param = inspect.signature(CE.per_tile_slope).parameters["min_tread"]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY
+    assert param.default is inspect.Parameter.empty
+    for fn in (CE.tread_levels, CE.tread_one_departure):
+        param = inspect.signature(fn).parameters["min_tread"]
+        assert param.default is inspect.Parameter.empty, fn.__name__
 
 
 def test_an_intercept_with_its_own_elasticity_does_not_enter_the_claim():
-    """THE 2026-09-21 CARD, PLANTED: the one-tile call at 0.17 and the per-tile
-    cost at 1.00. The per-call pooled reading blends them (session 4 read
-    0.74); the claim is the per-tile cost's and comes back 1.00."""
+    """An intercept with its own elasticity, ON the additive law: eps_a=0.17
+    plants the INTERCEPT's elasticity, and the one-tile call then reads 0.78,
+    not 0.17, because at tread 1 the per-tile cost is still most of the call.
+    Every tread lies on a' + b' n, tread 1 included, so the claim and the
+    all-tread reading both return the per-tile cost's 1.00 and tread 1 sits
+    on the claim's lines. The off-law world, which is the 2026-09-21 card, is
+    the next test."""
     rows = CE.plant_rows(eps=1.00, eps_a=0.17, jitter=0.0)
     est = CE.fit(rows, draws=0)
     assert est.value == pytest.approx(1.00, abs=0.02), est.value
-    assert est.per_tile_from2 == pytest.approx(1.00, abs=0.02)
+    assert est.per_tile_all_treads == pytest.approx(1.00, abs=0.02)
     assert est.fixed_tread is not None and 0.5 < est.fixed_tread < 0.95
-    # And the per-tread readings show the blend rising with depth, as the
-    # additive law says they must: shallow treads carry more intercept.
+    # The per-tread readings rise with depth, as the additive law says they
+    # must: shallow treads carry more intercept.
     per = est.per_tread
     assert per[1] < per[CE.DEFAULT_TREADS]
+    assert per[1] > 0.5, "an on-law intercept cannot pull tread 1 to 0.17"
+    assert est.tread1_sensitivity_ms == pytest.approx(
+        est.tread1_sensitivity_on_line_ms, rel=1e-3)
+    assert est.tread1_level_ms == pytest.approx(est.tread1_level_on_line_ms,
+                                                rel=1e-3)
     # The old world with one elasticity still plants one number everywhere.
     one = CE.fit(CE.plant_rows(eps=0.30, jitter=0.0), draws=0)
     assert one.value == pytest.approx(one.fixed_tread, abs=1e-6)
+
+
+def test_a_tread_one_off_the_additive_law_moves_the_all_tread_reading_and_never_the_claim():
+    """THE 2026-09-21 CARD, PLANTED: the one-tile call reading 0.17 per call
+    beside a per-tile cost of 1.00, which no intercept elasticity inside
+    a(f) + b(f) n produces. The claim over treads 2 and deeper recovers the
+    planted 1.00 and its interval, drawn over the same treads, covers it; the
+    all-tread reading is displaced above it by more than the design's own
+    half-width, which is the defect the registered tread set removes."""
+    # No physical intercept elasticity puts tread 1 anywhere near 0.17 while
+    # the per-tile cost is 1.00: that is what "off the law" means here.
+    for eps_a in (0.0, 0.17, 0.5, 1.0):
+        on = CE.fit(CE.plant_rows(eps=1.00, eps_a=eps_a, jitter=0.0), draws=0)
+        assert on.per_tread[1] > 0.5, (eps_a, on.per_tread[1])
+
+    exact = CE.fit(CE.plant_rows(eps=1.00, off_law={1: 0.17}, jitter=0.0),
+                   draws=0)
+    assert exact.per_tread[1] == pytest.approx(0.17, abs=1e-9)
+    assert exact.value == pytest.approx(1.00, abs=1e-6)
+    assert exact.per_tile_all_treads > exact.value + CE.RESOLUTION_TARGET
+    assert exact.tread1_sensitivity_ms < exact.tread1_sensitivity_on_line_ms / 2
+
+    noisy = CE.fit(CE.plant_rows(eps=1.00, off_law={1: 0.17}, jitter=0.004,
+                                 seed=3), draws=400, seed=1)
+    assert noisy.lo < 1.00 < noisy.hi, (noisy.lo, noisy.hi)
+    assert noisy.lo <= noisy.value <= noisy.hi, (
+        "the interval was drawn over a different tread set from the point")
+    assert noisy.per_tile_all_treads_lo > noisy.hi, (
+        "the all-tread interval lies wholly above the claim's")
 
 
 def test_the_page_names_the_claim_and_prints_the_per_call_reading_beside_it():
@@ -921,12 +978,171 @@ def test_the_page_names_the_claim_and_prints_the_per_call_reading_beside_it():
     text = "\n".join(CE.report_lines(rows, est, parsed(["--self-test"])))
     assert "THE FIT: eta of the per-M-tile cost, -d log b / d log f" in text
     assert "over treads 2 and deeper" in text
+    assert "eta, THE CLAIM                      0.3000 over 7 treads" in text
+    assert "PRINTED BESIDE IT, never gated: the same estimator over EVERY tread" in text
+    assert "eta, per-M-tile, every tread        0.3000" in text
+    assert "tread 1 against the claim's lines" in text
     assert "PRINTED BESIDE IT, not the claim: eta of the per-CALL time" in text
     assert "eta, fixed tread, pooled            0.3000" in text
     assert "COMPANION: the elasticity of the ladder SLOPE" in text
     gate = CE.gate_c2_registered_reading(est)
     assert "per-M-tile cost" in gate.claim
+    assert "over treads 2 and deeper" in gate.claim
     assert gate.verdict == exit_codes.FAIL          # 0.30 is in the gap
+
+
+def test_no_description_calls_tread_one_the_swizzle_engaging():
+    """The launch arithmetic refutes it: num_pid_m = cdiv(numel + E(BM-1), BM)
+    = 8n+8 on the 2026-09-21 ladder, so at G=16 the real M-tiles sit in ONE
+    group at n=1 and at n=2 alike, and n=2 already reads like every deeper
+    tread. The page says what the data shows instead, and says the cause is
+    not established."""
+    for stale in ("swizzle engaging", "N-outer stream", "one group, an N-outer"):
+        assert stale not in SOURCE, stale
+    rows = CE.plant_rows(eps=0.30, jitter=0.0)
+    text = "\n".join(CE.report_lines(rows, CE.fit(rows, draws=0),
+                                     parsed(["--self-test"])))
+    assert "off the additive law a(f) + b(f) n" in text
+    assert "NOT ESTABLISHED, and it is not the swizzle" in text
+    assert "cdiv(numel + E(BM-1), BM)" in text
+
+
+def test_the_module_says_what_is_gated_and_what_is_printed_beside_it():
+    """Finding 19's two sites in this file: the docstring's first lines and the
+    sign convention both defined eta as -d log ms / d log f after the gate
+    had moved to the per-M-tile cost."""
+    head = CE.__doc__.split("\n\n")[0]
+    assert "-d log b / d log f" in head
+    assert "-d log ms / d log f" not in head
+    assert "treads 2 and deeper" in CE.__doc__
+    sign = SOURCE.split("#: THE SIGN CONVENTION")[1].split("ETA_SIGN = ")[0]
+    assert "eta_b = - d log b / d log f" in sign
+    assert "Every gate reads `eta`;" not in sign
+
+
+# --------------------------------------------------------------------------
+# 11c. the claim's tread set, pinned on the cells that motivated it
+# --------------------------------------------------------------------------
+
+SESSION4_G16 = (ROOT / "tests" / "fixtures" /
+                "2026-09-21-nvidia_h200-session4-clock_elasticity-g16" /
+                "cells.csv")
+
+#: The chain's R1 flags (scripts/alpha_g_chain.sh r1_cmd) that shape the plan,
+#: less --duty, which is the subset under test.
+CHAIN_R1 = ["--model", "mixtral-8x7b", "--dtype", "bf16", "--group-m", "16",
+            "--treads", "8", "--repeats", "13", "--burst-ms", "40",
+            "--target-ms", "200", "--trials", "3", "--warm-ms", "200",
+            "--settle-seconds", "10"]
+
+
+def _session4(duties):
+    want = {CE._duty_key(d) for d in duties}
+    rows = [r for r in CE.read_rows(SESSION4_G16)
+            if CE._duty_key(r.duty_requested) in want]
+    args = parsed(CHAIN_R1 + ["--duty", *(str(d) for d in duties)])
+    threshold, source = CE.registered_clock_ratio(args)
+    est = CE.fit(rows, draws=1000, seed=0)
+    return rows, est, {g.token: g for g in CE.gates_for(rows, args, threshold,
+                                                        source, est)}
+
+
+def test_the_session4_fixture_is_the_published_run():
+    """Read by the arm's own reader, so the columns it carries are the ones
+    the fit and the gates read; its README names the source and the commit."""
+    rows = CE.read_rows(SESSION4_G16)
+    assert len(rows) == 13 * 4 * 8
+    assert {r.group_m for r in rows} == {16}
+    assert {CE._duty_key(r.duty_requested) for r in rows} == {
+        CE._duty_key(d) for d in (1.0, 0.5, 0.25, 0.1)}
+    readme = (SESSION4_G16.parent / "README.md").read_text()
+    assert "2c19a4ce7617a6aeaa025614cd97e45a24024723" in readme
+    assert "pod-h200-session4" in readme
+
+
+@pytest.mark.parametrize("duties", [(1.0, 0.5, 0.25, 0.1), (1.0, 0.5, 0.25),
+                                    (1.0, 0.5)])
+def test_session4_g16_rescored_is_admissible_and_clock_carries(duties):
+    """THE BLOCKER, pinned. Read over every tread, these cells put the claim's
+    interval wholly above V7's admissible edge and the page exits INVALID; read
+    over treads 2 and deeper, as registered, V7 passes and the interval sits
+    wholly in CLOCK-CARRIES. The all-tread reading lies above the claim, and V7
+    applied to ITS interval still fails, which is why it is printed and not
+    gated. {1.0, 0.5} is two states, below MIN_STATES, so V3 is not asked of
+    it; the others are whole pages and read CLAIM_FAIL, a result."""
+    _rows, est, gates = _session4(duties)
+    assert gates["V7"].verdict == CE.PASS, gates["V7"].measured
+    assert gates["C1"].verdict == CE.PASS
+    assert CE.band_of(est.lo, est.hi)[0] == "CLOCK-CARRIES"
+    assert "CLOCK-CARRIES" in gates["C1"].measured
+    assert est.per_tile_all_treads > est.value
+    assert est.per_tile_all_treads_lo > est.lo
+    every = dataclasses.replace(est, lo=est.per_tile_all_treads_lo,
+                                hi=est.per_tile_all_treads_hi)
+    assert CE.gate_v7_admissible(every).verdict == CE.FAIL
+    # Tread 1 is off the claim's line, below it in sensitivity and above it in
+    # level, which is the departure the page prints.
+    assert est.tread1_sensitivity_ms < est.tread1_sensitivity_on_line_ms
+    assert est.tread1_level_ms > est.tread1_level_on_line_ms
+    if len(duties) >= CE.MIN_STATES:
+        validity = [t for t, g in gates.items() if g.kind == CE.VALIDITY]
+        assert all(gates[t].verdict == CE.PASS for t in validity), {
+            t: gates[t].verdict for t in validity}
+        rc = exit_codes.classify(g.scored() for g in gates.values())
+        assert rc == exit_codes.CLAIM_FAIL
+
+
+def test_the_session4_page_prints_tread_one_beside_the_claim():
+    rows, est, gates = _session4((1.0, 0.5, 0.25, 0.1))
+    args = parsed(CHAIN_R1 + ["--duty", "1.0", "0.5", "0.25", "0.1"])
+    text = "\n".join(CE.report_tail(CE.report_lines(rows, est, args),
+                                    list(gates.values())))
+    assert f"{est.value:.4f} over 7 treads from tread 2" in text
+    assert (f"{est.per_tile_all_treads:.4f}  [{est.per_tile_all_treads_lo:.4f}, "
+            f"{est.per_tile_all_treads_hi:.4f}]") in text
+    assert (f"{est.tread1_sensitivity_ms:.4f} ms against "
+            f"{est.tread1_sensitivity_on_line_ms:.4f} ms on the line") in text
+    assert "RESULT: VALIDITY V7 PASS" in text
+
+
+def _helpers():
+    spec = importlib.util.spec_from_file_location(
+        "alpha_g_chain_helpers", ROOT / "scripts" / "alpha_g_chain_helpers.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_report_shape_on_disk_still_loads_through_the_chains_reader(tmp_path):
+    """Three shapes of `elasticity` are on disk and the chain's reader takes
+    `value`, `lo` and `hi` from any of them. The new keys ADD to the block and
+    rename nothing that reader reads; the Elasticity docstring says how to
+    tell the three apart."""
+    H = _helpers()
+    session4 = {"value": 0.7436, "slope": -0.7436, "lo": 0.7277, "hi": 0.7559,
+                "per_tread": {"1": 0.17}, "sxx": 0.16, "cells": 32,
+                "states": 4, "treads": 8, "repeats": 13, "draws": 2000,
+                "resampled": 2000, "ladder_slope": 0.70, "ladder_states": 4}
+    every_tread = dict(session4, value=1.2082, lo=1.1335, hi=1.2865,
+                       fixed_tread=0.7436, per_tile_from2=1.1075,
+                       per_tile_treads=8)
+    est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.002), draws=50)
+    now = dataclasses.asdict(est)
+    assert now["claim_min_tread"] == CE.CLAIM_MIN_TREAD
+    for key in ("per_tile_all_treads", "per_tile_all_treads_lo",
+                "per_tile_all_treads_hi", "tread1_sensitivity_ms",
+                "tread1_sensitivity_on_line_ms", "tread1_level_ms",
+                "tread1_level_on_line_ms", "fixed_tread"):
+        assert now[key] is not None, key
+    assert "per_tile_from2" not in now, "the claim is that reading now"
+    for name, block in (("s4", session4), ("8d4eb78", every_tread),
+                        ("now", now)):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps({"elasticity": block, "gates": []},
+                                   default=str))
+        got = H.eta(str(path))
+        assert got[0] != "unreadable", name
+        assert got[:3] == [f"{float(block[k]):.4f}" for k in ("value", "lo", "hi")]
 
 
 def test_group_m_pins_the_swizzle_and_enters_the_run_id():
