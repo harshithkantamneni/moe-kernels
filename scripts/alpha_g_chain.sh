@@ -50,7 +50,9 @@
 #   preflight      the two arms' --self-test on the box's interpreter: the
 #                  scorers are proven before a cent is spent. Each must be
 #                  DONE; an INVALID self-test is a scorer that failed its own
-#                  planted world, and it STOPS the chain.
+#                  planted world, and it STOPS the chain. One that is not DONE
+#                  runs again on every pass (seconds on the CPU), so a
+#                  --resume after the scorer is fixed re-proves it.
 #   preconditions  scripts/h200_gaps_session.sh --only thermal,calibrate,pin_probe-n64-g1
 #                  in THIS session directory: card healthy, ruler measured on
 #                  this card. The chain STOPS when the driver exits 2 (its
@@ -92,7 +94,10 @@
 #                  buy the same split.
 #   suite          the whole suite, uncapped, from PY_BASE, AFTER every arm:
 #                  a record of this box that gates nothing, its row in the
-#                  ledger. END_SUITE=skip writes a SKIPPED row instead.
+#                  ledger. END_SUITE=skip writes a SKIPPED row instead. A
+#                  suite that already ran to its tally, green or red (pytest
+#                  exit 1), is not bought again and gets no row over it; a
+#                  timeout, an interrupted run or a log with no tally re-runs.
 #                  Both pytest steps run with this chain's own knobs (SESSION,
 #                  END_SUITE, G_LADDER and the rest of CHAIN_KNOBS) removed
 #                  from their environment: the suite's tests spawn this chain.
@@ -128,7 +133,8 @@
 # $SESSION/DEVICE, logs under $SESSION/chain-logs/, and the driver's own
 # ARMS.tsv beside them. --resume skips every step whose newest row is latched
 # (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED, ERROR, UNKNOWN and SKIPPED
-# ones.
+# ones, with two exceptions: a preflight self-test runs again until it is
+# DONE, and the end suite is not bought again once it ran to its tally.
 #
 # THE THREE HABITS THIS REPOSITORY HAS BEEN BURNED BY, and how this file
 # avoids them: no `set -e` (a failed arm is a ledger row, not the end of a
@@ -178,7 +184,8 @@ SUITE_S_PER_TEST="${SUITE_S_PER_TEST:-0.66}"
 SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-5400}"
 GPU_TESTS_TIMEOUT_S="${GPU_TESTS_TIMEOUT_S:-900}"
 #: `skip` records the end suite as a SKIPPED row and does not run it: a
-#: resume that owes one arm need not buy the whole suite again.
+#: resume that owes one arm need not buy the whole suite again. A suite that
+#: already ran to its tally gets no row at all (end_suite_recorded).
 END_SUITE="${END_SUITE:-run}"
 #: The seed a G starts at, and the step after which V8 is read.
 FIRST_SEED="${SEEDS%% *}"
@@ -262,6 +269,32 @@ tally_count() {
   printf '%s\n' "${n:-0}"
 }
 
+#: A --collect-only log priced at the pod's rate: prints "<count> <seconds>",
+#: the seconds rounded half up (awk's n * r + 0.5, not Python's half to even).
+price_tests() {
+  local n
+  n="$(tally_count "$(suite_tally "$1")" "tests? collected")"
+  printf '%s %s\n' "$n" "$(awk -v n="$n" -v r="$SUITE_S_PER_TEST" 'BEGIN {printf "%d", n * r + 0.5}')"
+}
+
+#: Has the END SUITE left its record: its newest row that is not SKIPPED is
+#: DONE, or is ERROR at pytest exit 1 with a tally (it ran to its end and some
+#: tests failed; the tally and -rfE say which). It gates nothing, so a record
+#: is not bought again, green or red, and END_SUITE=skip writes no row over
+#: it. A timeout, an interrupted run, a crash, a REFUSED interpreter or a log
+#: with no tally is no record: the next pass that runs the suite runs it.
+#: Prints the record's state and note; returns 1 when there is none.
+end_suite_recorded() {
+  [[ -f "$LEDGER" ]] || return 1
+  awk -F'\t' '$1 == "suite" && $2 != "SKIPPED" {s = $2; rc = $3; note = $7}
+    END {
+      if (s == "DONE" || (s == "ERROR" && rc == "1" && note !~ /no tally in the log/)) {
+        print s ": " note; exit 0
+      }
+      exit 1
+    }' "$LEDGER"
+}
+
 #: A row for a step this pass decided not to run, and why. SKIPPED is not a
 #: latched word: the next pass asks again.
 skip_row() {
@@ -286,8 +319,10 @@ skip_row() {
 #:   suite   pytest, which prints no RESULT line either: exit 0 with at least
 #:           one test passed is DONE; exit 0 with none passed is UNKNOWN (off
 #:           a card every GPU test skips, and that is not green); any other
-#:           code is ERROR. Never a latched word unless DONE, so a red run
-#:           re-runs on --resume. The note is pytest's tally.
+#:           code is ERROR. Never a latched word unless DONE, so a red
+#:           tests/test_gpu.py re-runs on --resume; the end suite, which gates
+#:           nothing, has its own rule (end_suite_recorded). The note is
+#:           pytest's tally.
 #:   collect a dry run's `pytest --collect-only`: DONE when it collected.
 run_step_as() {
   local opinion="$1" name="$2" log="$3"; shift 3
@@ -390,6 +425,8 @@ preflight_gate() {
       echo "STOP: $step is ${st:-absent}, not DONE; the scorer is not proven on this interpreter."
       echo "  Read $LOGS/$step.log: an INVALID or CLAIM_FAIL self-test is a scorer that"
       echo "  failed its own planted world, and every page it scores would carry that."
+      echo "  Fix the scorer, bring the pod's checkout to the fix, and --resume: a"
+      echo "  self-test that is not DONE runs again on every pass."
       return 3
     fi
   done
@@ -817,11 +854,6 @@ price() {   # $1 log: add the arm's own dry-run estimate to the total
   est="$("$PY_BASE" "$HELPERS" estimate "$1" 2>/dev/null)" || est=""
   if [[ -n "$est" ]]; then TOTAL_S=$(( TOTAL_S + est )); echo "    priced ${est} s off its own plan"; else echo "    (no estimate on its plan page)"; fi
 }
-price_tests() {   # $1 log of a --collect-only; prints "<count> <seconds>"
-  local n
-  n="$(tally_count "$(suite_tally "$1")" "tests? collected")"
-  printf '%s %s\n' "$n" "$(awk -v n="$n" -v r="$SUITE_S_PER_TEST" 'BEGIN {printf "%d", n * r + 0.5}')"
-}
 
 #: One ratio run: pairing with the earlier seeds of its G that FORMED a ratio
 #: (the rule load_replicates applies), the step, and its console line.
@@ -863,10 +895,13 @@ r3_step() {   # $1 G, $2 seed
 # 1. preflight: the scorers, proven on this interpreter
 # --------------------------------------------------------------------------
 echo; echo "== preflight"
-if ! latched preflight-r1 "$LEDGER" || (( DRY )); then
+# A self-test that is not DONE runs again on every pass, in seconds on the
+# CPU: a latched INVALID used to STOP every --resume the same way, even after
+# the scorer was fixed and checked out on the pod.
+if [[ "$(newest_state preflight-r1 "$LEDGER")" != DONE ]] || (( DRY )); then
   run_step preflight-r1 "$LOGS/preflight-r1.log" "$PY_BASE" "$REPO/scripts/clock_elasticity.py" --self-test --draws 50 || true
 fi
-if ! latched preflight-r3 "$LEDGER" || (( DRY )); then
+if [[ "$(newest_state preflight-r3 "$LEDGER")" != DONE ]] || (( DRY )); then
   run_step preflight-r3 "$LOGS/preflight-r3.log" "$PY_BASE" "$REPO/scripts/private_weight_reference.py" --self-test refit || true
 fi
 (( DRY )) || preflight_gate || stop_chain
@@ -945,8 +980,8 @@ done
 # 7. the whole suite, after every arm: a record of this box, gating nothing
 # --------------------------------------------------------------------------
 echo; echo "== the whole suite, uncapped, from the base venv (a record; gates nothing)"
-if [[ "$END_SUITE" == skip ]]; then
-  if (( DRY )); then echo "    END_SUITE=skip: not collected, not priced"; else skip_row suite "END_SUITE=skip: the operator did not run the end suite this pass"; fi
+if (( DRY )) && [[ "$END_SUITE" == skip ]]; then
+  echo "    END_SUITE=skip: not collected, not priced"
 elif (( DRY )); then
   # a dry run COLLECTS and prices; running it here would take the laptop 20
   # minutes and run this chain's own dry-run tests inside itself
@@ -954,8 +989,12 @@ elif (( DRY )); then
     --collect-only -q -p no:cacheprovider || true
   read -r SUITE_N SUITE_S < <(price_tests "$LOGS/suite.log")
   echo "    priced ${SUITE_S} s: $SUITE_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"
-elif latched suite "$LEDGER"; then
-  echo "  suite latched, skipped"
+elif SUITE_RECORD="$(end_suite_recorded)"; then
+  # asked BEFORE END_SUITE=skip: a SKIPPED row over a DONE one made the next
+  # plain --resume buy the whole suite again
+  echo "  suite recorded, not bought again: $SUITE_RECORD"
+elif [[ "$END_SUITE" == skip ]]; then
+  skip_row suite "END_SUITE=skip: the operator did not run the end suite this pass"
 else
   pytest_step suite "$SUITE_TIMEOUT_S" tests/ -q -rfE --durations=25 -p no:cacheprovider
 fi

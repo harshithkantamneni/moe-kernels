@@ -365,7 +365,9 @@ cells into one elasticity; after a pod is lost, the replacement pod is `--new`.
 It runs, in order:
 
 1. Both arms' `--self-test`. Each must be DONE: an INVALID self-test is a
-   scorer that failed its own planted world.
+   scorer that failed its own planted world. One that is not DONE runs again
+   on every pass, in seconds, so after the scorer is fixed and checked out on
+   the pod a `--resume` re-proves it.
 2. The driver's thermal, calibrate and pin_probe-n64-g1 in the chain's own
    session directory. The chain stops when the driver exits 2 (its thermal,
    calibration or reference-grade gate refused), and unless thermal and
@@ -394,7 +396,10 @@ It runs, in order:
    SKIPPED row for seeds 1 and 2 (not latched), which are not run.
 7. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
    every arm: a record of the box that gates nothing. `END_SUITE=skip` writes
-   a SKIPPED row instead, for a resume that owes one arm. Both pytest steps
+   a SKIPPED row instead, for a resume that owes one arm. A suite that already
+   ran to its tally, green or red (pytest exit 1), is not bought again, and
+   `END_SUITE=skip` writes no row over it; a timeout, an interrupted run or a
+   log with no tally runs again. Both pytest steps
    run without the chain's own knobs in their environment (`SESSION`,
    `END_SUITE`, `G_LADDER` and the rest of `CHAIN_KNOBS`): the suite's tests
    spawn the chain, and a `SESSION=<dir>` launch would otherwise steer them

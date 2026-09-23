@@ -21,6 +21,7 @@ the RESULT lines and writes report.json, which is all the chain reads.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -196,6 +197,8 @@ def test_the_preflight_gate_asks_for_done_not_latched(tmp_path, r1, r3, goes):
     if not goes:
         bad = "preflight-r1" if r1 != "DONE" else "preflight-r3"
         assert f"STOP: {bad} is {r1 if r1 != 'DONE' else (r3 or 'absent')}, not DONE" in got.stdout
+        assert "Fix the scorer" in got.stdout and "runs again on every pass" in got.stdout, \
+            "the STOP names the way out"
 
 
 @pytest.mark.parametrize("pre,thermal,calibrate,pin,goes,needle", [
@@ -261,6 +264,21 @@ def test_a_pytest_row_is_its_exit_code_and_tally(tmp_path, rc, tally, state, nee
     assert "\t" not in row[6]
     latched = lift(f"latched gpu-tests {ledger!s} && echo yes || echo no")
     assert latched.stdout.strip() == ("yes" if state == "DONE" else "no")
+
+
+def _priced(n: int, rate: float) -> int:
+    """The chain's rounding, awk's `n * r + 0.5` truncated: half UP. Python's
+    round() is half to even and disagrees at every count that is 25 mod 100
+    at 0.66 s a test (4925 x 0.66 = 3250.5)."""
+    return math.floor(n * rate + 0.5)
+
+
+def test_a_collected_count_is_priced_half_up(tmp_path):
+    log = tmp_path / "collect.log"
+    log.write_text("tests/test_a.py::test_x\n\n4925 tests collected in 3.00s\n")
+    got = lift(f"price_tests {log!s}", SUITE_S_PER_TEST="0.66")
+    assert got.stdout.split() == ["4925", str(_priced(4925, 0.66))], got.stdout + got.stderr
+    assert _priced(4925, 0.66) != round(4925 * 0.66), "the count the old assertion flaked on"
 
 
 def test_a_red_gpu_tests_page_stops_the_chain_before_any_arm(tmp_path):
@@ -1135,6 +1153,54 @@ def test_the_end_suite_sees_neither_the_opinion_nor_the_operators_knobs(tmp_path
     assert _rows(s / "CHAIN.tsv")[-1][:2] == ["suite", "DONE"]
 
 
+def test_a_preflight_that_is_not_done_runs_again_on_every_pass(tmp_path):
+    """An INVALID self-test latched, so every --resume STOPPED on it the same
+    way, even after the scorer was fixed and checked out: --new or an edited
+    ledger was the only way on. It runs again until it is DONE; a DONE one is
+    not bought again."""
+    pod = Pod(tmp_path)
+    s = pod.session(_row("preflight-r1", "DONE"), _row("preflight-r3", "INVALID", "3"),
+                    _row("preconditions", "DONE"), _row("gpu-tests", "DONE"))
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-1000:]
+    rows = _rows(s / "CHAIN.tsv")
+    assert [r[1] for r in rows if r[0] == "preflight-r3"] == ["INVALID", "DONE"]
+    assert [r[1] for r in rows if r[0] == "preflight-r1"] == ["DONE"]
+    assert [st for st, _ in pod.traced()] == ["r3-g1-s0", "r1-g1"]
+
+
+@pytest.mark.parametrize("rc,tally,state,recorded", [
+    (0, "5 passed in 1.00s", "DONE", True),
+    # ran to its end, some tests red: a record of the box, not a gate
+    (1, "2 failed, 3 passed in 1.00s", "ERROR", True),
+    # timed out, or interrupted before its end: no record, bought again
+    (124, "2 failed, 3000 passed in 5400.00s", "ERROR", False),
+    (2, "Interrupted: 1 error during collection", "ERROR", False),
+])
+def test_an_end_suite_that_ran_to_its_tally_is_not_bought_again(tmp_path, rc, tally, state,
+                                                                recorded):
+    """END_SUITE=skip wrote a SKIPPED row over a DONE one, and only the newest
+    row counts, so the next plain --resume bought the suite again (54 min at
+    the pod's rate); a red suite re-ran on every --resume. Passes: the suite
+    run, then END_SUITE=skip, then a plain --resume."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    seen = tmp_path / "pytest-seen.txt"
+    stub = {"G_LADDER": "1", "SEEDS": "0", "STUB_PYTEST": str(seen),
+            "STUB_PYTEST_RC": str(rc), "STUB_PYTEST_TALLY": tally}
+    passes = [pod.run("--resume", END_SUITE=end, **stub) for end in ("run", "skip", "run")]
+    for got in passes:
+        assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-1000:]
+    suite = [r[1] for r in _rows(s / "CHAIN.tsv") if r[0] == "suite"]
+    ran = len(seen.read_text().splitlines())
+    if recorded:
+        assert (suite, ran) == ([state], 1)
+        for got in passes[1:]:
+            assert f"suite recorded, not bought again: {state}: pytest exit {rc}" in got.stdout
+    else:
+        assert (suite, ran) == ([state, "SKIPPED", state], 2)
+
+
 def test_a_driver_refusal_stops_the_chain_before_any_arm(tmp_path):
     """The real driver, pointed at this session: it cannot name the planted
     card, refuses with exit 2, and the chain stops, although the ARMS.tsv a
@@ -1260,8 +1326,8 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
                   r" ~(\d+) s\s+\((\d+) tests\) after them, at ([\d.]+) s a test", out)
     assert m, out
     rate = float(m.group(5))
-    assert int(m.group(1)) == round(int(m.group(2)) * rate) and int(m.group(2)) > 10
-    assert int(m.group(3)) == round(int(m.group(4)) * rate) and int(m.group(4)) > 1000
+    assert int(m.group(1)) == _priced(int(m.group(2)), rate) and int(m.group(2)) > 10
+    assert int(m.group(3)) == _priced(int(m.group(4)), rate) and int(m.group(4)) > 1000
     session = next((root / "session").glob("alpha_g-nocard-*"))
     ledger = (session / "CHAIN-dryrun.tsv").read_text().splitlines()
     names = [ln.split("\t")[0] for ln in ledger[1:]]
