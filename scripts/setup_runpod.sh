@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Idempotent environment bootstrap for a RunPod H200 pod backed by a network
-# volume. First run installs; every later run detects an unchanged requirements
-# file by content hash and skips in about a second.
+# volume. First run installs; every later run detects an unchanged environment
+# by its stamp (the requirements file's content hash, the venv flags and base's
+# torch pin) and skips in about a second.
 #
 #   bash scripts/setup_runpod.sh                      # all environments
 #   bash scripts/setup_runpod.sh base                 # just one
@@ -10,9 +11,22 @@
 #   bash scripts/setup_runpod.sh --base-python 3.12   # pin base's interpreter
 #   bash scripts/setup_runpod.sh --isolated base      # base without the image's torch
 #   MOE_FORCE=1 bash scripts/setup_runpod.sh          # rebuild regardless of hashes
+#   MOE_FRAMEWORK_PYTHON=3.12 bash scripts/setup_runpod.sh vllm   # pin vllm/sglang's interpreter
+#   MOE_HOST_KIND=vm bash scripts/setup_runpod.sh     # a VM's local disk, not a volume
 #
 # Everything expensive lives on the volume, so a terminated pod costs nothing
-# but the pod.
+# but the pod. On a VM launched without a volume (the Lambda runbook's
+# choice), scripts/setup_vm.sh calls this script with WORKSPACE on the local
+# disk and MOE_HOST_KIND=vm, and the closing report says that disk dies with
+# the instance.
+#
+# THE STAMP WAS READ AND NEVER WRITTEN, from 75bd12a to 2026-09-24. The skip
+# below compares `$VENVS/.stamp-<env>` with the environment's inputs, and the
+# line that wrote the stamp went missing when the resolved-set logic arrived, so
+# every run rebuilt every environment. It is written again, only after every
+# install step succeeded, and it keys on everything that decides what the venv
+# holds: the requirements file's hash, the venv flags (the interpreter), and for
+# base the torch pin and its index.
 #
 # THE PIN USED TO BE A SOURCE EDIT, AND THE EDIT TAINTED EVERY ROW.
 # `docs/RUNPOD.md` told the operator to change this file's `setup_env base
@@ -70,6 +84,16 @@ BASE_PYTHON="${MOE_BASE_PYTHON:-}"
 #: the RunPod image's CUDA-matched torch rather than guessing a wheel tag.
 BASE_ISOLATION="${MOE_BASE_ISOLATION:-system}"
 ISOLATION_SET=0
+#: The interpreter the FRAMEWORK venvs (vllm, sglang) are built on, e.g. 3.12.
+#: Empty keeps the historical behaviour, whatever interpreter uv finds first,
+#: which on the pod image is /usr/bin/python3.12 (the one the resolved sets were
+#: frozen under, profiles/q2_kernel_names.txt) and on an Ubuntu 22.04 VM is
+#: python3.10.
+FRAMEWORK_PYTHON="${MOE_FRAMEWORK_PYTHON:-}"
+#: pod | vm. What the workspace is: a RunPod network volume that outlives the
+#: pod, or a VM's local disk that survives a reboot and dies at termination.
+#: Only the words this script prints depend on it.
+HOST_KIND="${MOE_HOST_KIND:-pod}"
 targets=()
 
 while [[ $# -gt 0 ]]; do
@@ -104,6 +128,11 @@ if [[ -n "$BASE_PYTHON" && "$BASE_ISOLATION" == "system" ]]; then
   BASE_ISOLATION="isolated"
   echo "[setup] --base-python $BASE_PYTHON implies an isolated base venv"
 fi
+
+case "$HOST_KIND" in
+  pod|vm) ;;
+  *) echo "[setup] REFUSING: MOE_HOST_KIND=$HOST_KIND is neither pod nor vm." >&2; exit 2 ;;
+esac
 
 if [[ ${#targets[@]} -eq 0 ]]; then targets=(base vllm sglang); fi
 
@@ -263,7 +292,12 @@ require_space() {
   log "$label: ${avail}G free on $path (want ~${need}G)"
   if (( avail < need )); then
     echo "[setup] ABORT: only ${avail}G free on $path, need about ${need}G." >&2
-    echo "[setup]   Network volumes can be grown in the RunPod console." >&2
+    if [[ "$HOST_KIND" == "vm" ]]; then
+      echo "[setup]   A VM's local disk does not grow: free space on it, or rent an" >&2
+      echo "[setup]   instance type with more disk." >&2
+    else
+      echo "[setup]   Network volumes can be grown in the RunPod console." >&2
+    fi
     echo "[setup]   Or install fewer environments: bash $0 base" >&2
     return 1
   fi
@@ -287,7 +321,11 @@ venv_args() {
   local env="$1"
   if [[ "$env" != "base" ]]; then
     # The framework envs are isolated because they each pin a torch of their own.
-    printf ''
+    if [[ -n "$FRAMEWORK_PYTHON" ]]; then
+      printf -- '--python %s' "$FRAMEWORK_PYTHON"
+    else
+      printf ''
+    fi
     return 0
   fi
   if [[ -n "$BASE_PYTHON" ]]; then
@@ -329,6 +367,23 @@ requirements_for() {
   return 1
 }
 
+#: What an environment's stamp records: every input that decides what the venv
+#: holds. The requirements file's hash alone called a base venv built against
+#: the cu128 index "unchanged" when the next run asked for cu130, and a venv on
+#: one interpreter "unchanged" when the next asked for another. One line:
+#: `<sha256> venv[<flags>] torch[<pin>@<index>]`, the torch part for base only.
+stamp_for() {
+  local env="$1" install_from="$2" key
+  key="$(hash_of "$install_from") venv[$(venv_args "$env")]"
+  if [[ "$env" == "base" ]]; then
+    key+=" torch[${MOE_BASE_TORCH:-}@${MOE_TORCH_INDEX:-}]"
+  fi
+  printf '%s\n' "$key"
+}
+
+#: The `venv[...]` field of a stamp, or '' for a stamp that has none.
+venv_field() { grep -o 'venv\[[^]]*\]' <<< "$1" || true; }
+
 setup_env() {
   local env="$1"
   local req="$REQ_DIR/${env}.txt"
@@ -347,10 +402,10 @@ setup_env() {
   fi
 
   local stamp="$VENVS/.stamp-${env}"
-  local want; want="$(hash_of "$install_from")"
+  local want; want="$(stamp_for "$env" "$install_from")"
+  local had=""; [[ -f "$stamp" ]] && had="$(cat "$stamp")"
 
-  if [[ -z "${MOE_FORCE:-}" && -f "$stamp" && "$(cat "$stamp")" == "$want" \
-        && -x "$VENVS/$env/bin/python" ]]; then
+  if [[ -z "${MOE_FORCE:-}" && "$had" == "$want" && -x "$VENVS/$env/bin/python" ]]; then
     log "$env: unchanged, skipping"
     return 0
   fi
@@ -358,10 +413,24 @@ setup_env() {
   require_space "$VENVS" "$(space_for "$env")" "$env" || return 1
 
   log "$env: building from $(basename "$install_from") ($reason)"
+  # The old stamp goes first, so a build that dies halfway leaves no stamp
+  # claiming the venv is what an earlier run built.
+  rm -f "$stamp"
   local vargs; vargs="$(venv_args "$env")"
+  # A VENV ON THE WRONG INTERPRETER IS RECREATED, NOT PATCHED. `uv venv` below
+  # runs only when no interpreter exists, so a venv whose recorded flags differ
+  # from this run's would otherwise keep its old interpreter under a new stamp.
+  # A stamp from before 2026-09-24 records no flags, so it says nothing either
+  # way and that venv is rebuilt in place, as it always was.
+  local built_with; built_with="$(venv_field "$had")"
+  if [[ -x "$VENVS/$env/bin/python" && -n "$built_with" \
+        && "$built_with" != "venv[$vargs]" ]]; then
+    log "$env: built with $built_with, this run asks venv[$vargs]: recreating it"
+    rm -rf "${VENVS:?}/$env"
+  fi
   if [[ ! -x "$VENVS/$env/bin/python" ]]; then
     # shellcheck disable=SC2086  # vargs is a deliberate word list, possibly empty
-    uv venv $vargs "$VENVS/$env"
+    uv venv $vargs "$VENVS/$env" || return 1
   fi
 
   # THE OLDER PIN, kept because docs/RUNPOD.md names it and a pod may still be
@@ -371,11 +440,13 @@ setup_env() {
   # fires when the variable is set.
   if [[ "$env" == "base" && -n "${MOE_BASE_TORCH:-}" ]]; then
     log "base: pinning ${MOE_BASE_TORCH} (overrides the image's torch)"
+    # Every install step returns on failure: setup_env runs under `||`, where
+    # bash suspends errexit, so a failed step used to fall through to the next.
     if [[ -n "${MOE_TORCH_INDEX:-}" ]]; then
       uv pip install --python "$VENVS/$env/bin/python" \
-        --index-url "$MOE_TORCH_INDEX" "$MOE_BASE_TORCH"
+        --index-url "$MOE_TORCH_INDEX" "$MOE_BASE_TORCH" || return 1
     else
-      uv pip install --python "$VENVS/$env/bin/python" "$MOE_BASE_TORCH"
+      uv pip install --python "$VENVS/$env/bin/python" "$MOE_BASE_TORCH" || return 1
     fi
   fi
 
@@ -399,11 +470,14 @@ setup_env() {
     log "$env: installing the exact resolved closure (editable path lines dropped)"
   fi
 
+  # `${a[@]+"${a[@]}"}`: bash 3.2 (a laptop's /bin/bash) calls an EMPTY array
+  # unbound under `set -u`, and every environment without an overrides file
+  # has one.
   uv pip install --python "$VENVS/$env/bin/python" \
-    --prerelease=allow "${override_args[@]}" -r "$from"
+    --prerelease=allow ${override_args[@]+"${override_args[@]}"} -r "$from" || return 1
   # Editable install so `moe` is importable in every environment and edits to
   # your kernels take effect without reinstalling.
-  uv pip install --python "$VENVS/$env/bin/python" -e "$REPO_ROOT" --no-deps
+  uv pip install --python "$VENVS/$env/bin/python" -e "$REPO_ROOT" --no-deps || return 1
 
   # ONLY WHEN THE INPUT WAS THE PLAIN FILE. Freezing after installing FROM the
   # resolved set would rewrite it with whatever this machine happened to have,
@@ -411,11 +485,12 @@ setup_env() {
   # than of a decision.
   if [[ "$install_from" == "$req" ]]; then
     uv pip freeze --python "$VENVS/$env/bin/python" \
-      > "$REQ_DIR/resolved-${env}.txt"
+      > "$REQ_DIR/resolved-${env}.txt" || return 1
     log "$env: done, resolved set written to requirements/resolved-${env}.txt"
   else
     log "$env: done, installed from the committed resolved set (not re-frozen)"
   fi
+  printf '%s\n' "$want" > "$stamp"
 }
 
 # --------------------------------------------------------------------------
@@ -445,6 +520,8 @@ if (( DRY_RUN )); then
   log "venvs               $VENVS"
   log "base interpreter    ${BASE_PYTHON:-the image interpreter}"
   log "base isolation      $BASE_ISOLATION"
+  log "framework interp.   ${FRAMEWORK_PYTHON:-whatever uv finds first}"
+  log "host kind           $HOST_KIND"
   for env in "${targets[@]}"; do
     [[ -f "$REQ_DIR/${env}.txt" ]] || { log "$env: no requirements/${env}.txt"; continue; }
     vargs="$(venv_args "$env")"
@@ -479,17 +556,25 @@ for env in "${targets[@]}"; do
 done
 
 log "--- environment ---"
-if mountpoint -q "$WORKSPACE" 2>/dev/null; then
+if [[ "$HOST_KIND" == "vm" ]]; then
+  log "workspace           $WORKSPACE"
+  log "                    local disk: survives reboot, lost at termination; exfiltrate results"
+elif mountpoint -q "$WORKSPACE" 2>/dev/null; then
   log "workspace           $WORKSPACE (mounted volume, survives pod termination)"
 else
   log "workspace           $WORKSPACE  *** NOT A MOUNTED VOLUME ***"
   log "                    Everything here is lost when the pod is terminated,"
   log "                    including the venvs you just paid to build."
 fi
-log "free on volume      $(free_gb "$WORKSPACE")G"
+if [[ "$HOST_KIND" == "vm" ]]; then
+  log "free on disk        $(free_gb "$WORKSPACE")G"
+else
+  log "free on volume      $(free_gb "$WORKSPACE")G"
+fi
 log "venvs               $VENVS"
 log "base interpreter    ${BASE_PYTHON:-the image interpreter}"
 log "base isolation      $BASE_ISOLATION"
+log "framework interp.   ${FRAMEWORK_PYTHON:-whatever uv finds first}"
 log "HF_HOME             $HF_HOME"
 log "TRITON_CACHE_DIR    $TRITON_CACHE_DIR"
 if [[ -x "$VENVS/base/bin/python" ]]; then
