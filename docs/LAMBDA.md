@@ -81,14 +81,13 @@ bash setup_vm.sh --bundle moe.bundle --commit <SHA> 2>&1 | tee setup_vm.log
 What it does, stage by stage, is in the script's header. In short: it detects
 the box (S0), refuses a box whose nvidia-smi cannot reach the driver (a
 `Driver/library version mismatch` after an unattended userspace upgrade; a
-reboot loads the matching module) and a driver below r570, installs
-git/curl/gcc if missing (S3), clones the bundle at exactly `<SHA>` into
-`~/moe/repo` (S1), then `exec`s that checkout's own `setup_vm.sh`, which picks
-the torch wheel index from the driver (S2: r580+ cu130, 570-579 cu128),
-builds the base and vLLM venvs through `scripts/setup_runpod.sh` on Python
-3.12 (S4), finds or installs ncu (S5), picks the counter door (S6), writes
-`~/moe/env.sh` (S7), and runs the preflight (S8). Nothing is placed under
-`/workspace`.
+reboot loads the matching module) and a driver below r580 (see below),
+installs git/curl/gcc if missing (S3), clones the bundle at exactly `<SHA>`
+into `~/moe/repo` (S1), then `exec`s that checkout's own `setup_vm.sh`, which
+picks the torch wheel index from the driver (S2: r580+ cu130), builds the base
+and vLLM venvs through `scripts/setup_runpod.sh` on Python 3.12 (S4), finds or
+installs ncu (S5), picks the counter door (S6), writes `~/moe/env.sh` (S7),
+and runs the preflight (S8). Nothing is placed under `/workspace`.
 
 Exit codes are the repo's table: **0** READY (a counter was read), **1** the
 preflight did not pass (`~/moe/session/PREFLIGHT.txt` names each check), **2**
@@ -103,8 +102,10 @@ Three things it will refuse rather than do:
   `apt-get -s` shows the transaction touches no `nvidia-driver`,
   `cuda-drivers`, `libnvidia-compute` or kernel-module package. A driver below
   r580 cannot run the vLLM venv's cu13 torch, and the fix is a driver upgrade
-  this script never performs; on such a box PF2 fails, and a cu128 vLLM path is
-  untested.
+  this script never performs, so such a box is refused at S2 before anything
+  is built: rent another instance. `--torch-index cu128` on r570-r579 builds
+  anyway, by request, and there PF2 fails for the vLLM venv, because a cu128
+  vLLM path is untested.
 - **Measure from a moved or dirty checkout.** `~/moe/repo` at another sha, or
   with local changes, is refused. `--fresh` re-resolves the requirement sets
   and so dirties the checkout on purpose; copy the new `resolved-*.txt` back

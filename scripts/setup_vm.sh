@@ -46,7 +46,11 @@
 #   S2 DECIDE     the torch wheel index and the ncu package, from the driver:
 #                 r580+ cu130 (a cu130 wheel needs r580+, pod_session.sh P2c),
 #                 570-579 cu128, below 570 REFUSED (this script never moves a
-#                 driver). Python 3.12, the pod rows' interpreter.
+#                 driver). 570-579 is REFUSED under --torch-index auto too: the
+#                 vllm venv's torch is resolved-vllm.txt's cu13 build, which
+#                 needs r580+, so PF2 would fail it after the whole build; an
+#                 explicit --torch-index cu128 builds that untested path by
+#                 request. Python 3.12, the pod rows' interpreter.
 #   S3 SYSTEM     git, curl, and build-essential only if gcc is missing (Triton
 #                 builds its launcher with it). Runs in stage 1, because S1
 #                 needs git.
@@ -72,9 +76,10 @@
 # EXIT CODES, the repo's table (moe/bench/exit_codes.py; a test holds these to
 # it): 0 ready, 1 the preflight did not pass (the box cannot take the
 # measurement yet; PREFLIGHT.txt says which check), 2 REFUSED before anything
-# was spent (no GPU, a driver nvidia-smi cannot reach, driver below 570, a
-# dirty or other checkout, an apt transaction that would move the driver, root
-# needed and absent, not enough disk), 4 a step crashed.
+# was spent (no GPU, a driver nvidia-smi cannot reach, driver below 570, or
+# below 580 under --torch-index auto, a dirty or other checkout, an apt
+# transaction that would move the driver, root needed and absent, not enough
+# disk), 4 a step crashed.
 #
 # TEST SEAMS, read-only paths a test points at fixtures: MOE_NVIDIA_PARAMS
 # (/proc/driver/nvidia/params), MOE_PROC_STATUS (/proc/self/status),
@@ -363,8 +368,16 @@ decide() {
     refuse "driver $DRIVER is below r$CU128_MIN_DRIVER: no torch wheel index this repo has measured on (cu130 needs r$CU130_MIN_DRIVER+, cu128 r$CU128_MIN_DRIVER+) runs on it. Remedy: upgrade the driver yourself (this script never moves a driver), or rent another instance"
     return 0
   fi
+  # A driver the base venv's index can serve is not yet a box the run can use:
+  # the vllm venv's torch comes from requirements/resolved-vllm.txt, a cu13
+  # build, whatever index the base venv takes.
+  local vllm_dead=0
+  (( DRIVER_MAJOR < CU130_MIN_DRIVER )) && vllm_dead=1
   case "$TORCH_INDEX_ARG" in
-    auto)  TORCH_INDEX="$rule" ;;
+    auto)  if (( vllm_dead )); then
+             refuse "driver $DRIVER is r$CU128_MIN_DRIVER-r$((CU130_MIN_DRIVER - 1)): the base venv could take the $rule index, but the vllm venv's torch comes from requirements/resolved-vllm.txt, a cu13 build that needs r$CU130_MIN_DRIVER+, so the preflight's PF2 would fail for it after the whole venv build. Remedy: rent an instance whose driver is r$CU130_MIN_DRIVER+ (this script never moves a driver), or pass --torch-index cu128 to build on the untested cu128 path anyway"
+           fi
+           TORCH_INDEX="$rule" ;;
     cu130) (( DRIVER_MAJOR >= CU130_MIN_DRIVER )) || refuse "--torch-index cu130 on driver $DRIVER: a cu130 wheel needs r$CU130_MIN_DRIVER+"
            TORCH_INDEX=cu130 ;;
     cu128) TORCH_INDEX=cu128 ;;
@@ -373,10 +386,11 @@ decide() {
   say "torch index         $TORCH_INDEX_ROOT/$TORCH_INDEX  (driver $DRIVER, rule: $rule)"
   say "ncu package         $NCU_PACKAGE (if no ncu is found)"
   say "python              $PYVER"
-  if [[ "$TORCH_INDEX" == cu128 ]]; then
-    say "WARNING: the vllm venv's torch comes from requirements/resolved-vllm.txt, a cu13"
-    say "         build that needs r$CU130_MIN_DRIVER+, so on this driver the preflight's PF2"
-    say "         fails for the vllm venv. A cu128 vLLM path is untested in this repo."
+  if (( vllm_dead )) && [[ "$TORCH_INDEX_ARG" == cu128 ]]; then
+    say "OPT-IN: --torch-index cu128 on driver $DRIVER builds the untested cu128 path. The"
+    say "        vllm venv's torch comes from requirements/resolved-vllm.txt, a cu13 build that"
+    say "        needs r$CU130_MIN_DRIVER+, so the preflight's PF2 fails for the vllm venv. A cu128"
+    say "        vLLM path is untested in this repo."
   fi
 }
 

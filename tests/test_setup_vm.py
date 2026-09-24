@@ -254,23 +254,50 @@ def test_the_laptop_dry_run_prints_its_plan_and_refuses_cleanly(tmp_path):
     assert tree_state() == before
 
 
-@pytest.mark.parametrize("driver,cuda,index,package", [
-    ("580.95.05", "13.0", "cu130", "cuda-nsight-compute-13-0"),
-    ("575.57.08", "12.9", "cu128", "cuda-nsight-compute-12-8"),
+@pytest.mark.parametrize("driver,cuda,extra,index,package", [
+    ("580.95.05", "13.0", [], "cu130", "cuda-nsight-compute-13-0"),
+    ("575.57.08", "12.9", ["--torch-index", "cu128"], "cu128", "cuda-nsight-compute-12-8"),
 ])
-def test_the_driver_picks_the_wheel_index_and_the_ncu_package(tmp_path, driver, cuda, index,
-                                                              package):
+def test_the_driver_picks_the_wheel_index_and_the_ncu_package(tmp_path, driver, cuda, extra,
+                                                              index, package):
     """pod_session.sh P2c's rule, applied as a decision: r580+ takes cu130,
-    570-579 cu128. The cu128 plan also says the vLLM venv's cu13 torch will
-    fail PF2 there, because it will."""
+    570-579 cu128. On 570-579 only an explicit --torch-index cu128 gets this
+    far, and the plan says it is the untested path whose vLLM venv (a cu13
+    torch) fails PF2, because it will."""
     env = _vm_world(tmp_path, driver=driver, cuda=cuda)
-    r = vm(env, "--commit", HEAD, "--repo", "https://example.invalid/moe.git", "--dry-run")
+    r = vm(env, "--commit", HEAD, "--repo", "https://example.invalid/moe.git", "--dry-run",
+           *extra)
     assert r.returncode == 0, r.stdout + r.stderr
     assert f"torch index         https://download.pytorch.org/whl/{index}" in r.stdout
     assert f"MOE_TORCH_INDEX=https://download.pytorch.org/whl/{index}" in r.stdout
     assert f"ncu package         {package}" in r.stdout
+    assert ("OPT-IN: --torch-index cu128" in r.stdout) == (index == "cu128")
     assert ("untested in this repo" in r.stdout) == (index == "cu128")
     assert not Path(env["LOUD_MARK"]).exists()
+
+
+def test_a_570_to_579_driver_is_refused_under_auto_before_the_venv_build(tmp_path, tiny):
+    """S2 knew on a 575 driver that the vLLM venv's torch (resolved-vllm.txt's
+    cu13 build) needs r580+, printed a WARNING, and spent the whole venv build
+    before PF2 failed it with exit 1. Under --torch-index auto that box is a
+    refusal: exit 2, the remedy named, nothing cloned and uv never run."""
+    env = _vm_world(tmp_path, driver="575.57.08", cuda="12.9")
+    plan = vm(env, "--commit", HEAD, "--repo", "https://example.invalid/moe.git", "--dry-run")
+    assert plan.returncode == 2, plan.stdout + plan.stderr
+    assert "driver 575.57.08 is r570-r579" in plan.stderr, plan.stderr
+    assert "rent an instance whose driver is r580+" in plan.stderr
+    assert "pass --torch-index cu128" in plan.stderr
+    assert not Path(env["LOUD_MARK"]).exists()
+
+    bundle, tip, _ = tiny
+    (tmp_path / "real").mkdir()
+    real = _real_world(tmp_path / "real", APT_NCU_ONLY)
+    _stub(tmp_path / "real" / "bin", "nvidia-smi", smi_stub("575.57.08", "12.9"))
+    r = vm(real, "--commit", tip, "--bundle", str(bundle))
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "driver 575.57.08 is r570-r579" in r.stderr
+    assert not Path(real["UV_LOG"]).exists(), Path(real["UV_LOG"]).read_text()
+    assert not (tmp_path / "real" / "home" / "moe" / "repo").exists()
 
 
 def test_a_driver_below_570_is_refused_with_the_remedy(tmp_path):
