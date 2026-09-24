@@ -2,8 +2,9 @@
 
 A Lambda Cloud instance is a plain Ubuntu VM with root, Lambda Stack and a
 driver nobody knows until it boots. It has **no network volume**: the local
-disk survives a reboot and is **lost at termination**, and Lambda instances
-can only be launched, restarted or terminated (there is no stop). The one
+disk survives a reboot and is **lost at termination** (Lambda's docs:
+terminating permanently removes the instance), and Lambda instances can only
+be launched, restarted or terminated (there is no stop). The one
 command that turns a fresh instance into a box that can take the measurement
 is `scripts/setup_vm.sh`; this page is everything around it.
 
