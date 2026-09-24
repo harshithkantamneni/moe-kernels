@@ -5655,6 +5655,33 @@ def do_dry_run_r3(args) -> int:
 # --run --family r3-arms: the census and one G's page.
 # --------------------------------------------------------------------------
 
+def r3_commit() -> tuple[str | None, str]:
+    """`(sha, "")` for the tree this file runs from, or `(None, why)`.
+
+    A CENSUS LICENSES A PAGE BY COMMIT, and `None == None` is not a match.
+    `provenance._git` returns no sha on any git failure, and the expected one
+    on a counter box is git refusing to run as root in a repository another
+    user owns ("detected dubious ownership"), which is exactly what the sudo
+    counter door (`sudo -E env PATH=... HOME=...`) does. Until 2026-09-24 the
+    census stored `commit: None`, the page compared `None != None` as a match,
+    and `--analyse` joined pages over the commit set `{'None'}`: a page could be
+    written and joined with no commit at all. Every r3-arms write site now
+    asks here and refuses without a sha, printing provenance's own reason and
+    the remedy for the root-in-a-user-repository case.
+    """
+    prov = PV.provenance_block(instrument=R3_RUN_INSTRUMENT)
+    if prov.git_sha:
+        return prov.git_sha, ""
+    reason = prov.missing.get("git_sha") or "provenance named no git sha and no reason"
+    remedy = ("run from a git checkout of this repository" if "dubious" not in reason else
+              "git refuses to run as this user in a repository another user owns, which "
+              "is what the sudo counter door does: add the checkout to safe.directory in "
+              "the gitconfig the launcher's HOME points at (as the login user, `git "
+              f"config --global --add safe.directory {REPO}`), then run again")
+    return None, (f"this tree has no commit git could name ({reason}), and every "
+                  f"r3-arms census and page is matched by commit: {remedy}")
+
+
 def _r3_capture(argv: list[str], log_path: Path, timeout: float) -> tuple[int, str]:
     rc, out, err = _run(argv, timeout=timeout)
     log_path.write_text((out or "") + (err or ""))
@@ -5673,9 +5700,10 @@ def _r3_reduce(binary: str, report: Path, csv_path: Path) -> str:
 
 def do_run_r3(args) -> int:
     """The census or one G's page. REFUSED before the child runs when the route
-    is not open for this family, when there is no card, when a page is asked
-    for without its G or its census, and when the census is another card's,
-    another commit's or another vLLM's."""
+    is not open for this family, when there is no card, when git cannot name
+    this tree's commit (`r3_commit`), when a page is asked for without its G
+    or its census, and when the census is another card's, another commit's or
+    another vLLM's, or names no commit."""
     if not args.out:
         print("REFUSE: --run needs --out <path>; a measurement nobody wrote down is "
               "not a measurement.")
@@ -5704,7 +5732,10 @@ def do_run_r3(args) -> int:
               "names its card and a census is matched to it by UUID")
         return exit_codes.REFUSED
     stack = r3_stack_versions()
-    commit = PV.provenance_block(instrument=R3_RUN_INSTRUMENT).git_sha
+    commit, no_commit = r3_commit()
+    if commit is None:
+        print(f"REFUSE: {no_commit}")
+        return exit_codes.REFUSED
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     profiles = Path(args.profile_dir) if args.profile_dir else \
@@ -5727,7 +5758,9 @@ def do_run_r3(args) -> int:
     if (census.get("card") or {}).get("uuid") != card["uuid"]:
         why.append(f"card {(census.get('card') or {}).get('uuid')} is not this card "
                    f"{card['uuid']}")
-    if census.get("commit") != commit:
+    if not census.get("commit"):
+        why.append("it names no commit, and a census licenses a page by commit")
+    elif census.get("commit") != commit:
         why.append(f"commit {census.get('commit')} is not this tree's {commit}")
     if (census.get("stack") or {}).get("vllm") != stack.get("vllm"):
         why.append(f"vLLM {(census.get('stack') or {}).get('vllm')} is not "
@@ -5854,6 +5887,14 @@ def do_reduce_r3(args) -> int:
         return exit_codes.REFUSED
     plan = json.loads(need["plan.json"].read_text())
     capture = json.loads(need["capture.json"].read_text())
+    if not capture.get("commit"):
+        print(f"REFUSE: the capture {need['capture.json']} names no commit, so the page "
+              "it would rebuild could be joined with nothing")
+        return exit_codes.REFUSED
+    here, no_commit = r3_commit()
+    if here is None:
+        print(f"REFUSE: {no_commit}")
+        return exit_codes.REFUSED
     census_path = Path(args.census)
     census = json.loads(census_path.read_text())
     if (census.get("card") or {}).get("uuid") != (capture.get("card") or {}).get("uuid"):
@@ -5883,7 +5924,11 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
     at n in {1, 6}, one warmup, one call) under the same kernel filter with no
     skip and no cap: the report must hold exactly GEMMS_PER_CALL x 4 launches
     and their grids must equal the child's vLLM-derived ones. The child
-    builds R3's whole declaration, so its memory plan is checked too."""
+    builds R3's whole declaration, so its memory plan is checked too. A census
+    with no commit licenses nothing, so none is written (`r3_commit`)."""
+    if not commit:
+        print(f"REFUSE: {r3_commit()[1]}")
+        return exit_codes.REFUSED
     r3 = _r3()
     g_m = args.group_m if getattr(args, "group_m_given", False) else R3_GROUPS[0]
     try:
@@ -5973,6 +6018,11 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
               "summary joins r3-arms pages only")
         return exit_codes.REFUSED
     if len(loaded) > 1:
+        bare = [str(p) for p, d in loaded if not _page_commit(d)]
+        if bare:
+            print(f"REFUSED: {bare} name no commit; an alpha(G) table joins pages of one "
+                  "commit, and pages that name none cannot show they share one")
+            return exit_codes.REFUSED
         apparatus = {
             "card UUID": lambda d: (d.get("card") or {}).get("uuid"),
             "commit": _page_commit,

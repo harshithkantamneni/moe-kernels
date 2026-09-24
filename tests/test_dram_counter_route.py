@@ -2402,10 +2402,17 @@ def test_the_r3_dry_run_refuses_a_tread_outside_r3s_ladder(capsys):
     assert "not a subset of R3's ladder" in capsys.readouterr().out
 
 
+#: The commit a written planted page names, as `stamped` would put one on a
+#: page `--run` writes: `--analyse` joins pages of one commit, and refuses a
+#: join over pages that name none.
+PLANTED_COMMIT = "0000000planted"
+
+
 def _write_pages(tmp_path, specs) -> list[Path]:
     paths = []
     for world, g, over in specs:
         page = DCR.planted_r3_page(world, g)
+        page["git_sha"] = PLANTED_COMMIT
         for key, value in over.items():
             page["card"][key] = value
         path = tmp_path / f"r3c-g{g}-{world}-{len(paths)}.json"
@@ -2829,6 +2836,82 @@ def test_a_page_needs_its_g_and_a_census_from_this_card(tmp_path, monkeypatch, c
                  str(census), "--out", out]) == exit_codes.REFUSED
     assert "is not this card" in capsys.readouterr().out
     assert not Path(out).exists()
+
+
+#: What `provenance._git` returns when root runs git in a checkout its login
+#: user owns, which is what the sudo counter door does.
+_DUBIOUS = (None, None, None, "git rev-parse: fatal: detected dubious ownership in "
+                              "repository at '/home/ubuntu/moe/repo'")
+
+
+def test_no_census_or_page_is_written_or_joined_without_a_commit(
+        tmp_path, monkeypatch, capsys):
+    """A census licenses a page by commit, and `None == None` is not a match.
+    Until 2026-09-24 a tree git could not name (root in a user-owned checkout,
+    under the sudo counter door) wrote a census with `commit: None`, the page
+    compared None with None and was accepted, and `--analyse` joined pages
+    over the commit set {'None'}. Now the census and the page refuse, naming
+    provenance's reason and the safe.directory remedy; a census that names no
+    commit licenses no page; and a join over pages that name none refuses."""
+    _plant_the_box(monkeypatch)
+    census, page = tmp_path / "census.json", tmp_path / "r3c-g4.json"
+    real_git = PV._git
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "dubious ownership" in out and "safe.directory" in out
+    assert not census.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    doc = json.loads(census.read_text())
+    assert doc["commit"]
+    capsys.readouterr()
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.REFUSED
+    assert "safe.directory" in capsys.readouterr().out and not page.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    doc["commit"] = None
+    census.write_text(json.dumps(doc))
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.REFUSED
+    assert "names no commit" in capsys.readouterr().out and not page.exists()
+    paths = _write_pages(tmp_path, [("group", 4, {}), ("group", 1, {})])
+    for p in paths:
+        bare = json.loads(p.read_text())
+        del bare["git_sha"]
+        p.write_text(json.dumps(bare))
+    assert main(["--analyse", *map(str, paths)]) == exit_codes.REFUSED
+    assert "name no commit" in capsys.readouterr().out
+
+
+def test_a_page_is_not_rebuilt_from_a_capture_or_a_tree_with_no_commit(
+        tmp_path, monkeypatch, capsys):
+    """`--reduce-only` writes a page too: it refuses a capture record that
+    names no commit and a reducing tree git cannot name."""
+    _plant_the_box(monkeypatch)
+    census, page = tmp_path / "census.json", tmp_path / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page)]) == exit_codes.DONE
+    page.unlink()
+    reduce = ["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+              "--census", str(census), "--out", str(page)]
+    real_git = PV._git
+    monkeypatch.setattr(PV, "_git", lambda root: _DUBIOUS)
+    capsys.readouterr()
+    assert main(reduce) == exit_codes.REFUSED
+    assert "safe.directory" in capsys.readouterr().out and not page.exists()
+    monkeypatch.setattr(PV, "_git", real_git)
+    record = tmp_path / "r3c-g4.profiles" / "g4.capture.json"
+    capture = json.loads(record.read_text())
+    capture["commit"] = None
+    record.write_text(json.dumps(capture))
+    assert main(reduce) == exit_codes.REFUSED
+    assert "names no commit" in capsys.readouterr().out and not page.exists()
 
 
 def test_the_family_flags_are_refused_where_they_mean_nothing(capsys):

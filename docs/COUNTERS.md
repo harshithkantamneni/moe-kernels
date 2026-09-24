@@ -784,7 +784,11 @@ measured by the census (`--run --family r3-arms --census-only`): NATIVE at
 n in {1, 6}, one warmup and one call, no skip and no cap, must profile
 exactly 2 x 4 launches at the grids the child derived from vLLM's own
 `moe_align_block_size`. Every page needs a census from the same card UUID,
-commit and vLLM version.
+commit and vLLM version. A tree git cannot name writes neither: root running
+git in a checkout its login user owns (the sudo counter door) gets "detected
+dubious ownership" and no sha, so the census, the page and `--reduce-only`
+refuse and name the `safe.directory` remedy, and a census that names no
+commit licenses no page.
 
 Attribution (`attribute_launches`) is exact: the CSV must hold exactly the
 planned launch count, launch i is the i-th (cell, call, GEMM) of the
@@ -874,8 +878,8 @@ number read from R3's report.json files and none typed.
 Every page's first line reads `CARD <name> (<slug>, UUID <uuid>, sm_<cc>, <SMs>
 SMs, <L2> MiB L2): every number here is THIS card's; the study's timing pages
 are nvidia_h200.` The run id carries the live slug, `--analyse` refuses to join
-pages from two UUIDs, two commits, two vLLM versions or two designs, and a page
-without a card block fails V0. The target is 1x H100 SXM5 (132 SMs, 50 MB L2);
+pages from two UUIDs, two commits, two vLLM versions or two designs, or pages
+that name no commit, and a page without a card block fails V0. The target is 1x H100 SXM5 (132 SMs, 50 MB L2);
 an A100 40 GB shake-out is possible first. Neither is the study's H200 and no
 alpha either prints is the H200's.
 
