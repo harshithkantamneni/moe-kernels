@@ -506,6 +506,36 @@ def test_a_real_run_installs_ncu_and_its_preflight_refuses_success_without_a_cou
     assert Path(env["APT_LOG"]).read_text().count("install -y") == 1
 
 
+#: What nvidia-smi prints on an Ubuntu VM after an unattended upgrade moved the
+#: NVIDIA userspace under the loaded kernel module.
+NVML_MISMATCH = ("#!/bin/sh\necho 'Failed to initialize NVML: Driver/library version mismatch'\n"
+                 "echo 'NVML library version: 580.95'\nexit 18\n")
+
+
+@pytest.mark.parametrize("extra", [[], ["--torch-index", "cu130"]], ids=["auto", "cu130"])
+def test_a_driver_nvidia_smi_cannot_reach_is_refused_before_anything_is_spent(tmp_path, tiny,
+                                                                             extra):
+    """S0 read the NVML error's two lines as two cards named "Failed to
+    initialize NVML: ...", read no driver, and went on: it cloned, handed
+    runpod_env's placeholder to uv as an --index-url and built the venvs
+    before anything refused. A box whose driver nvidia-smi cannot reach is the
+    header's "no GPU" refusal, exit 2, with nothing cloned and uv never run,
+    whatever --torch-index says."""
+    bundle, tip, _ = tiny
+    env = _real_world(tmp_path, APT_NCU_ONLY)
+    _stub(tmp_path / "bin", "nvidia-smi", NVML_MISMATCH)
+    r = vm(env, "--commit", tip, "--bundle", str(bundle), *extra)
+    out = r.stdout + r.stderr
+    assert r.returncode == 2, out
+    assert "REFUSED: no GPU reachable: nvidia-smi exited 18" in r.stderr, out
+    assert "Driver/library version mismatch" in r.stderr and "a reboot" in r.stderr
+    assert "2 GPUs" not in out and "gpu                 0x none" in r.stdout, out
+    assert not Path(env["UV_LOG"]).exists(), Path(env["UV_LOG"]).read_text()
+    assert not (tmp_path / "home" / "moe" / "repo").exists()
+    plan = vm(env, "--commit", tip, "--bundle", str(bundle), "--dry-run", *extra)
+    assert plan.returncode == 2 and "no GPU reachable" in plan.stderr, plan.stdout + plan.stderr
+
+
 def test_a_checkout_at_another_sha_is_refused_not_moved(tmp_path, tiny):
     bundle, tip, parent = tiny
     env = _real_world(tmp_path, APT_NCU_ONLY)

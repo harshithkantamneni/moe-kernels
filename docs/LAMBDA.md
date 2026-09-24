@@ -79,13 +79,16 @@ bash setup_vm.sh --bundle moe.bundle --commit <SHA> 2>&1 | tee setup_vm.log
 ```
 
 What it does, stage by stage, is in the script's header. In short: it detects
-the box (S0), refuses a driver below r570, installs git/curl/gcc if missing
-(S3), clones the bundle at exactly `<SHA>` into `~/moe/repo` (S1), then
-`exec`s that checkout's own `setup_vm.sh`, which picks the torch wheel index
-from the driver (S2: r580+ cu130, 570-579 cu128), builds the base and vLLM
-venvs through `scripts/setup_runpod.sh` on Python 3.12 (S4), finds or installs
-ncu (S5), picks the counter door (S6), writes `~/moe/env.sh` (S7), and runs
-the preflight (S8). Nothing is placed under `/workspace`.
+the box (S0), refuses a box whose nvidia-smi cannot reach the driver (a
+`Driver/library version mismatch` after an unattended userspace upgrade; a
+reboot loads the matching module) and a driver below r570, installs
+git/curl/gcc if missing (S3), clones the bundle at exactly `<SHA>` into
+`~/moe/repo` (S1), then `exec`s that checkout's own `setup_vm.sh`, which picks
+the torch wheel index from the driver (S2: r580+ cu130, 570-579 cu128),
+builds the base and vLLM venvs through `scripts/setup_runpod.sh` on Python
+3.12 (S4), finds or installs ncu (S5), picks the counter door (S6), writes
+`~/moe/env.sh` (S7), and runs the preflight (S8). Nothing is placed under
+`/workspace`.
 
 Exit codes are the repo's table: **0** READY (a counter was read), **1** the
 preflight did not pass (`~/moe/session/PREFLIGHT.txt` names each check), **2**

@@ -37,6 +37,9 @@
 #                 count, memory, driver, the header's CUDA version), Lambda
 #                 Stack (recorded, never used), RAM, disk, gcc, the module's
 #                 RestrictProfilingToAdminUsers and this process's CapEff.
+#                 REFUSED unless nvidia-smi exits 0 and lists a card with a
+#                 driver version: "Failed to initialize NVML: Driver/library
+#                 version mismatch" is an unreachable driver, not a card.
 #   S1 REPO       clone (--bundle or --repo) and check out --detach <sha>;
 #                 skipped when HEAD == sha and clean; REFUSED when dirty, at
 #                 another sha, or the sha is not a full, known commit.
@@ -69,9 +72,9 @@
 # EXIT CODES, the repo's table (moe/bench/exit_codes.py; a test holds these to
 # it): 0 ready, 1 the preflight did not pass (the box cannot take the
 # measurement yet; PREFLIGHT.txt says which check), 2 REFUSED before anything
-# was spent (no GPU, driver below 570, a dirty or other checkout, an apt
-# transaction that would move the driver, root needed and absent, not enough
-# disk), 4 a step crashed.
+# was spent (no GPU, a driver nvidia-smi cannot reach, driver below 570, a
+# dirty or other checkout, an apt transaction that would move the driver, root
+# needed and absent, not enough disk), 4 a step crashed.
 #
 # TEST SEAMS, read-only paths a test points at fixtures: MOE_NVIDIA_PARAMS
 # (/proc/driver/nvidia/params), MOE_PROC_STATUS (/proc/self/status),
@@ -229,6 +232,7 @@ if [[ -n "$SRC_BUNDLE" && "$SRC_BUNDLE" != /* ]]; then SRC_BUNDLE="$PWD/$SRC_BUN
 # --------------------------------------------------------------------------
 OS_ID=""; OS_VERSION=""; ARCH=""; UID_NOW=""; SUDO_STATE=""
 GPU_COUNT=0; GPU_NAME=""; GPU_MEM_MIB=""; GPU_UUID=""; DRIVER=""; DRIVER_MAJOR=""
+SMI_RC=""; SMI_FIRST=""
 CUDA_DRIVER=""; LAMBDA_STACK=""; SYS_TORCH=""; RAM_GB=""; DISK_GB=""; HAVE_GCC=0
 RESTRICT=""; CAP_EFF=""; CAP_PERFMON=""; CAP_SYS_ADMIN=""
 
@@ -261,17 +265,26 @@ detect() {
   say "user                uid $UID_NOW, sudo: $SUDO_STATE"
 
   if command -v nvidia-smi >/dev/null 2>&1; then
-    local q line
+    local q row name mem drv uuid extra
+    SMI_RC=0
     q="$(nvidia-smi --query-gpu=name,memory.total,driver_version,uuid \
-           --format=csv,noheader,nounits 2>/dev/null || true)"
-    GPU_COUNT="$(grep -c . <<< "$q" || true)"
-    line="$(head -1 <<< "$q")"
-    if [[ -n "$line" ]]; then
-      IFS=',' read -r GPU_NAME GPU_MEM_MIB DRIVER GPU_UUID <<< "$line"
-      GPU_NAME="$(trim "$GPU_NAME")"; GPU_MEM_MIB="$(trim "$GPU_MEM_MIB")"
-      DRIVER="$(trim "$DRIVER")"; GPU_UUID="$(trim "$GPU_UUID")"
-      DRIVER_MAJOR="${DRIVER%%.*}"
-    fi
+           --format=csv,noheader,nounits 2>&1)" || SMI_RC=$?
+    SMI_FIRST="$(grep -m1 . <<< "$q" || true)"
+    # A card is a row of exactly four fields whose driver is a version number.
+    # Anything else nvidia-smi prints ("Failed to initialize NVML: ...", a
+    # warning) is not a card, and counting it as one named an NVML error as
+    # the GPU and read no driver.
+    while IFS= read -r row; do
+      IFS=',' read -r name mem drv uuid extra <<< "$row"
+      drv="$(trim "${drv:-}")"
+      [[ -z "${extra:-}" && -n "$(trim "${uuid:-}")" && "$drv" =~ ^[0-9]+\. ]] || continue
+      GPU_COUNT=$((GPU_COUNT + 1))
+      if (( GPU_COUNT == 1 )); then
+        GPU_NAME="$(trim "$name")"; GPU_MEM_MIB="$(trim "$mem")"
+        DRIVER="$drv"; GPU_UUID="$(trim "$uuid")"
+        DRIVER_MAJOR="${DRIVER%%.*}"
+      fi
+    done <<< "$q"
     CUDA_DRIVER="$(nvidia-smi 2>/dev/null | grep -o 'CUDA Version: *[0-9.]*' | awk '{print $NF}' | head -1 || true)"
   fi
   say "gpu                 ${GPU_COUNT}x ${GPU_NAME:-none} ${GPU_MEM_MIB:+(${GPU_MEM_MIB} MiB)} ${GPU_UUID}"
@@ -302,8 +315,14 @@ detect() {
   fi
   say "counter gate        RestrictProfilingToAdminUsers=${RESTRICT:-unread} ($NVIDIA_PARAMS); CapEff ${CAP_EFF:-unread} (CAP_SYS_ADMIN ${CAP_SYS_ADMIN:-?}, CAP_PERFMON ${CAP_PERFMON:-?})"
 
-  if [[ "$GPU_COUNT" == 0 || -z "$GPU_NAME" ]]; then
-    refuse "no GPU: nvidia-smi is $(command -v nvidia-smi >/dev/null 2>&1 && echo 'present and lists no card' || echo 'not on PATH'); there is nothing to measure on this box"
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    refuse "no GPU: nvidia-smi is not on PATH; there is nothing to measure on this box"
+  elif (( SMI_RC != 0 )) || [[ ! "$DRIVER" =~ ^[0-9]+\. ]]; then
+    local remedy=""
+    if grep -q 'version mismatch' <<< "$q"; then
+      remedy=". A Driver/library version mismatch is NVIDIA userspace upgraded under the loaded kernel module (an unattended upgrade does this): a reboot loads the matching module, or rent another instance"
+    fi
+    refuse "no GPU reachable: nvidia-smi exited $SMI_RC and listed no card with a driver version (${SMI_FIRST:-it printed nothing}), so no wheel index, ncu package or card can be chosen$remedy"
   elif (( GPU_COUNT > 1 )); then
     say "note                $GPU_COUNT GPUs; the counter run uses GPU 0 only"
   fi
@@ -502,6 +521,12 @@ runpod_env() {
 venv_stage() {
   local repo="$1" pin
   stage "S4 VENVS (${ENVS[*]}, via setup_runpod.sh)"
+  # runpod_env's placeholder is the plan's wording for the index; a real build
+  # handed it would pass it to uv as an --index-url. S0 refuses a box with no
+  # driver read, so this is the second lock on the same door.
+  if [[ -z "$TORCH_INDEX" ]] && (( ! DRY_RUN )); then
+    refuse "S2 chose no torch wheel index (no driver was read), so no venv is built: uv would be handed the plan's placeholder as an index"
+  fi
   if ! pin="$(torch_pin "$repo")" || [[ -z "$pin" ]]; then
     if (( DRY_RUN )); then
       pin="<the torch== line of $REPO/requirements/resolved-base.txt>"
