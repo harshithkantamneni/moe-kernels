@@ -6483,7 +6483,8 @@ def test_a_run_prints_and_stores_the_discrimination_floor_off_its_own_shared_lad
 
 
 # --------------------------------------------------------------------------
-# PRIVATE-K (--private-copies K): tile j of an expert reads copy j mod K. The
+# PRIVATE-K (--private-copies K): an expert's M-tiles read K copies, one run
+# of consecutive tiles per copy in the order the kernel runs them. The
 # owner's next experiment after session 5, the G=1 split between reuse in the
 # shared arm and a per-copy cost in the private one
 # --------------------------------------------------------------------------
@@ -6505,20 +6506,53 @@ def _rank_within_expert(ids):
     return torch.tensor(ranks)
 
 
+def _run_copies(tiles: int, k: int) -> list[int]:
+    """The copy each of `tiles` rank tiles is routed to, built here from the
+    slot histogram and not from the module: copy c holds as many tiles as
+    there are j < tiles with j mod K == c (the count the first build routed),
+    and they are consecutive ranks, copy 0's first."""
+    sizes = [sum(1 for j in range(tiles) if j % k == c) for c in range(k)]
+    return [c for c, size in enumerate(sizes) for _ in range(size)]
+
+
+def _kernel_copy_order(ids, n_decl: int, bm: int) -> dict[int, list[int]]:
+    """{expert: the copy each of its M-tiles reads, IN THE ORDER THE KERNEL
+    RUNS THEM}. `moe_align_block_size` sorts the ids by slot (argsort, as
+    `_slot_order_by_expert` does), pads each slot to whole BLOCK_M blocks and
+    writes `expert_ids` block by block in that order, and the fused_moe
+    kernel walks the blocks in that order (GROUP_M 1: pid_m = pid //
+    num_pid_n). Every slot here holds whole tiles, which is asserted, so the
+    sorted ids chunk into blocks of one slot each."""
+    import torch
+    flat = ids.reshape(-1).long()
+    ordered = flat[torch.argsort(flat, stable=True)].tolist()
+    assert len(ordered) % bm == 0
+    out: dict[int, list[int]] = {}
+    for start in range(0, len(ordered), bm):
+        block = set(ordered[start:start + bm])
+        assert len(block) == 1, "a block straddles two slots"
+        slot = block.pop()
+        out.setdefault(slot // n_decl, []).append(slot % n_decl)
+    return out
+
+
 @pytest.mark.parametrize("k", PRIVATE_K)
 @pytest.mark.parametrize("tiles", PK_TREADS)
-def test_private_k_routes_tile_j_of_every_expert_to_copy_j_mod_k(k, tiles):
-    """THE ROUTING. The j-th M-tile of expert e (ranks [j BM, (j+1) BM)) reads
-    copy j mod K, slot e x n_decl + (j mod K): every slot holds BLOCK_M rows
-    per tile routed to it, and no slot at copy K or past it is touched."""
+def test_private_k_routes_each_rank_tile_to_the_copy_of_its_run(k, tiles):
+    """THE ROUTING. Expert e's ranks [j BM, (j+1) BM) are rank tile j, and
+    the tiles split into min(n, K) runs of consecutive ranks, copy 0's run
+    first, copy c holding ceil((n - c) / K) tiles: slot e x n_decl + c. Every
+    slot holds BLOCK_M rows per tile routed to it, and no slot at copy K or
+    past it is touched."""
     import torch
     e, top_k, bm, n_decl = CFG.num_experts, CFG.top_k, PW.DEFAULT_BLOCK_M, 9
     ids = balanced_flat_ids(e, tiles * bm, top_k)
     out = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl, k)
     flat, orig = out.reshape(-1).long(), ids.reshape(-1).long()
     tile = _rank_within_expert(ids) // bm
+    want = torch.tensor(_run_copies(tiles, k))
     assert torch.equal(flat // n_decl, orig)          # still its own expert
-    assert torch.equal(flat % n_decl, tile % k)       # copy j mod K
+    assert torch.equal(flat % n_decl, want[tile])     # the copy of its run
     counts = torch.bincount(flat, minlength=PW.expert_space(e, n_decl))
     for ex in range(e):
         for c in range(n_decl):
@@ -6526,6 +6560,49 @@ def test_private_k_routes_tile_j_of_every_expert_to_copy_j_mod_k(k, tiles):
             assert int(counts[PW.copy_slot(ex, c, n_decl)]) == routed * bm, (ex, c)
     assert int((flat % n_decl).max()) + 1 == PW.copies_read(PW.PRIVATE, tiles, k)
     assert out.dtype == ids.dtype
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+@pytest.mark.parametrize("tiles", PK_TREADS)
+def test_private_k_reads_each_copy_in_one_run_in_the_kernels_order(k, tiles):
+    """PK-1, THE ORDER THE KERNEL RUNS. The alignment sorts by slot and the
+    kernel walks the sorted blocks, so each expert runs ALL of copy 0's tiles
+    and then all of copy 1's: 0,0,0,1,1,1 at K=2 and n=6, never the cyclic
+    0,1,0,1,0,1 a first build registered. Rank tile j is the j-th tile the
+    kernel runs; the module's registered order (`private_k_copy_order`, which
+    the plan page prints) is that order; each copy is one run, so every
+    re-read is of the copy the tile just before read, SHARED's distance; and
+    the default arm is 0..n-1, the shared arm all copy 0."""
+    import torch
+    e, top_k, bm, n_decl = CFG.num_experts, CFG.top_k, PW.DEFAULT_BLOCK_M, 9
+    ids = balanced_flat_ids(e, tiles * bm, top_k)
+    out = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl, k)
+    kernel = _kernel_copy_order(out, n_decl, bm)
+    flat, orig = out.reshape(-1).long(), ids.reshape(-1).long()
+    rank_tile = _rank_within_expert(ids) // bm
+    assert sorted(kernel) == list(range(e))
+    for ex in range(e):
+        by_rank = [int((flat[(orig == ex) & (rank_tile == j)] % n_decl)
+                       .unique().item()) for j in range(tiles)]
+        assert by_rank == kernel[ex], (ex, by_rank, kernel[ex])
+        assert kernel[ex] == PW.private_k_copy_order(tiles, k), ex
+        assert kernel[ex] == [PW.private_copy_index(j * bm, bm, k, tiles=tiles)
+                              for j in range(tiles)]
+        assert kernel[ex] == sorted(kernel[ex])        # one run per copy
+        assert len(set(kernel[ex])) == min(tiles, k)
+        rereads = [i for i in range(1, tiles)
+                   if kernel[ex][i] in kernel[ex][:i]]
+        assert all(kernel[ex][i - 1] == kernel[ex][i] for i in rereads)
+        assert len(rereads) == tiles - min(tiles, k)
+    full = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl)
+    shared = PW.shared_topk_ids(ids, n_decl)
+    assert all(seq == list(range(tiles)) == PW.private_k_copy_order(tiles, None)
+               for seq in _kernel_copy_order(full, n_decl, bm).values())
+    assert all(seq == [0] * tiles
+               for seq in _kernel_copy_order(shared, n_decl, bm).values())
+    assert torch.equal(PW.private_copy_index(torch.arange(tiles) * bm, bm, k,
+                                             tiles=tiles),
+                       torch.tensor(kernel[0]))
 
 
 @pytest.mark.parametrize("k", PRIVATE_K)
@@ -6571,7 +6648,18 @@ def test_copies_read_is_min_n_k_under_private_k_and_one_for_the_other_arms():
     rank = 5 * 32 + 7                                 # a row of tile 5
     assert PW.private_copy_index(rank, 32) == 5
     for k in PRIVATE_K:
-        assert PW.private_copy_index(rank, 32, k) == 5 % k
+        for tiles in range(6, 10):
+            assert (PW.private_copy_index(rank, 32, k, tiles=tiles)
+                    == _run_copies(tiles, k)[5]), (k, tiles)
+        # The run a tile falls in depends on the expert's tile count, so K
+        # without it is refused rather than guessed.
+        with pytest.raises(PW.PrivateWeightRefusal, match="tile count"):
+            PW.private_copy_index(rank, 32, k)
+    for tiles in range(1, 13):
+        for k in range(1, 13):
+            assert PW.private_k_copy_order(tiles, k) == _run_copies(tiles, k)
+            assert PW.private_k_runs(tiles, k) == [
+                _run_copies(tiles, k).count(c) for c in range(min(tiles, k))]
 
 
 def _dry(extra=()):
@@ -6606,13 +6694,58 @@ def test_the_private_k_plan_allocates_the_default_arms_copies_and_reads_k():
                 + ", ".join(f"n={n}:{min(n, k)}" for n in range(1, n_max + 1))
                 in got.stdout)
         assert f"proof's {PW.proof_calls(k, n_decl)} extra" in got.stdout
-        assert f"READS {k} (PRIVATE-K: tile j reads copy j mod {k}" in got.stdout
+        assert (f"READS {k} (PRIVATE-K: each expert's tiles read copies "
+                f"0..{k - 1}, one run of consecutive tiles per copy"
+                in got.stdout)
+        assert "tile j reads copy j mod" not in got.stdout
+
+
+def _ols_slope(points) -> float:
+    """Least-squares slope, written here so a test's expected F is not the
+    module's own arithmetic."""
+    pts = list(points)
+    xs, ys = [float(x) for x, _ in pts], [float(y) for _, y in pts]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    return (sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
+            / sum((x - mx) ** 2 for x in xs))
+
+
+def test_the_private_k_plan_prints_the_kernels_order_and_what_each_reading_predicts():
+    """PK-1 ON THE PLAN PAGE. The copy sequence the plan registers for every
+    tread is the one the kernel runs on the sweep's own balanced ids, and the
+    prediction lines give F under each reading over the claim's window:
+    the least-squares slope of min(n, K) for (a) and (b1), 1 for (b2), and
+    say that this order cannot separate (a) from (b1)."""
+    e, top_k, bm = CFG.num_experts, CFG.top_k, PW.DEFAULT_BLOCK_M
+    base = _dry()
+    n_decl = int(re.search(r"n_decl = (\d+) against", base.stdout).group(1))
+    window = [n for n in PK_TREADS if n >= PW.CLAIM_MIN_TREAD]
+    for k in PRIVATE_K:
+        got = _dry(["--private-copies", str(k)])
+        for n in PK_TREADS:
+            ids = balanced_flat_ids(e, n * bm, top_k)
+            order = _kernel_copy_order(
+                PW.private_topk_ids(ids, e, bm, n * bm, n_decl, k), n_decl, bm)
+            assert len({tuple(v) for v in order.values()}) == 1
+            seq = "".join(str(c) for c in order[0])
+            assert f"n={n}:{seq}" in got.stdout, (k, n, seq)
+        f_runs = _ols_slope((n, min(n, k)) for n in window)
+        assert PW.private_k_run_fraction(k, window) == pytest.approx(f_runs)
+        for tag, _says, runs_only in PW.PRIVATE_K_READINGS:
+            want = f"{f_runs:.4f}" if runs_only else "1"
+            assert re.search(re.escape(tag) + r": [^\n]*\. F = " + re.escape(want)
+                             + r"\n", got.stdout), (k, tag, want)
+        assert "THIS ORDER CANNOT SEPARATE THEM" in got.stdout
+        assert f"over treads {PW.span_text(window)}:" in got.stdout
+    assert PW.private_k_run_fraction(2, window) == pytest.approx(0.0, abs=1e-12)
+    assert 0.0 < PW.private_k_run_fraction(3, window) < 1.0
 
 
 def test_the_buffer_proof_passes_private_k_on_exactly_k_distinct_copies():
-    """V2 UNDER K. Three tiles at K=2 read copies 0, 1, 0. The proof, told K
-    copies are read, zeroes copy 1 (it must move exactly its own tokens) and
-    copy 2 (allocated and never read: neither output may move)."""
+    """V2 UNDER K. Three tiles at K=2 read copies 0, 0, 1 in the kernel's
+    order. The proof, told K copies are read, zeroes copy 1 (it must move
+    exactly its own tokens) and copy 2 (allocated and never read: neither
+    output may move)."""
     import torch
     proof, calls, before, after = _cpu_proof(private_copies=2)
     assert proof.verdict == exit_codes.PASS, proof.lines()
@@ -6749,18 +6882,32 @@ def _planted(world, k, *, noise=0.0, seed=0):
 
 
 @pytest.mark.parametrize("k", PRIVATE_K)
-def test_the_reuse_world_puts_private_ks_slope_between_shared_and_the_full_arm(k):
-    """READING (a), PLANTED. Tiles past the K-th re-read the copy K tiles back
-    at a fraction below a whole read, so slope(private-K) sits strictly
-    between slope(shared) and the full private arm's, the full arm being the
-    same world with no K. The first K treads are the full arm's cells, and
-    READING (b), a whole re-read, puts private-K on the full arm."""
+def test_the_planted_readings_put_f_where_the_kernels_order_registers_it(k):
+    """READINGS (a) AND (b2), PLANTED, IN THE ORDER THE KERNEL RUNS. The
+    reuse world re-reads a copy only from the tile just before it, at the
+    shared arm's own alpha, and pays a whole read at the first tile of each
+    of the min(n, K) runs, so F = (slope(private-K) - slope(shared)) /
+    (slope(private) - slope(shared)) is the least-squares slope of min(n, K)
+    over the claim's window: private-K ON the shared slope at K=2 and
+    strictly between at K=3. The full arm is the same world with no K. The
+    first K treads are the full arm's cells, and reading (b2), every tile at
+    a whole read, puts private-K on the full arm (F = 1) at either K."""
     import dataclasses
     world = dataclasses.replace(PW.WORLDS["private-k-reuse"], private_copies=k)
+    assert world.private_k_alpha == world.alpha        # SHARED's own re-read
     pk_samples, pk = _planted(world, k)
     full_samples, full = _planted(world, None)
     assert pk[PW.SHARED] == full[PW.SHARED]           # the shared arm is one arm
-    assert pk[PW.SHARED] < pk[PW.PRIVATE] < full[PW.PRIVATE], (pk, full)
+    window = [n for n in PK_TREADS if n >= PW.CLAIM_MIN_TREAD]
+    f_runs = _ols_slope((n, min(n, k)) for n in window)
+    gap = full[PW.PRIVATE] - pk[PW.SHARED]
+    assert gap > 0
+    assert ((pk[PW.PRIVATE] - pk[PW.SHARED]) / gap
+            == pytest.approx(f_runs, abs=1e-9)), (k, pk, full)
+    if f_runs == 0:
+        assert pk[PW.PRIVATE] == pytest.approx(pk[PW.SHARED], rel=1e-9)
+    else:
+        assert pk[PW.SHARED] < pk[PW.PRIVATE] < full[PW.PRIVATE], (pk, full)
 
     def cells(samples, n):
         return sorted(s.ms_p50 for s in samples
@@ -6769,8 +6916,20 @@ def test_the_reuse_world_puts_private_ks_slope_between_shared_and_the_full_arm(k
         assert (cells(pk_samples, n) == cells(full_samples, n)) == (n <= k), n
     assert {s.copies for s in pk_samples if s.arm == PW.PRIVATE
             and s.tiles == PK_TREADS[-1]} == {k}
-    _b, per_copy = _planted(dataclasses.replace(world, private_k_alpha=1.0), k)
-    assert per_copy[PW.PRIVATE] == pytest.approx(full[PW.PRIVATE], rel=1e-12)
+    _b, footprint = _planted(dataclasses.replace(world, private_k_alpha=1.0), k)
+    assert footprint[PW.PRIVATE] == pytest.approx(full[PW.PRIVATE], rel=1e-12)
+    # The traffic the planted private arm carries is the kernel's order's:
+    # one whole read per run start, the shared re-read for every other tile.
+    for n in PK_TREADS:
+        a = PW.private_k_tread_alpha(n, k, world.alpha)
+        order = _kernel_copy_order(
+            PW.private_topk_ids(balanced_flat_ids(CFG.num_experts, n * 32,
+                                                  CFG.top_k),
+                                CFG.num_experts, 32, n * 32, 9, k), 9, 32)[0]
+        starts = sum(1 for i, c in enumerate(order)
+                     if i == 0 or c != order[i - 1])
+        assert (PW.SWEEP.q_of_tiles(n, a)
+                == pytest.approx(starts + world.alpha * (n - starts))), n
 
 
 def test_a_planted_world_runs_at_its_own_k_and_refuses_another(no_cuda):
@@ -6893,3 +7052,37 @@ def test_a_private_k_page_says_its_ratio_is_not_alpha_and_a_rescore_keeps_it(
     page = run(["--read", str(path), "--rescore", "--draws", "30"])
     assert re.search(r"^private_copies\s+2$", page.stdout, re.M), page.stdout[-1500:]
     assert "NOT alpha" in page.stdout
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+def test_a_private_k_page_registers_the_kernels_order_and_the_split_it_cannot_make(k):
+    """PK-1 ON THE REPORT. Under the fits the page prints each window
+    tread's copy sequence in the kernel's order (the one the alignment
+    runs, checked here against its simulation), F under every registered
+    reading over the ladder's own window, and that this order cannot
+    separate reuse (a) from a per-switch cost (b1); C1's detail carries the
+    same F. Nothing on it says tile j reads copy j mod K."""
+    import dataclasses
+    world = dataclasses.replace(PW.WORLDS["private-k-reuse"], private_copies=k)
+    samples, _slopes = _planted(world, k, noise=0.004, seed=5)
+    report = _analyse(samples, PK_TREADS, draws=30, private_copies=k)
+    text = report.text()
+    window = [n for n in PK_TREADS if n >= PW.CLAIM_MIN_TREAD]
+    orders = []
+    for n in window:
+        ids = balanced_flat_ids(CFG.num_experts, n * 32, CFG.top_k)
+        seq = _kernel_copy_order(PW.private_topk_ids(
+            ids, CFG.num_experts, 32, n * 32, 9, k), 9, 32)[0]
+        orders.append(f"n={n}:" + "".join(str(c) for c in seq))
+    assert "copies in the kernel's order: " + ", ".join(orders) in text
+    f_runs = _ols_slope((n, min(n, k)) for n in window)
+    for tag, _says, runs_only in PW.PRIVATE_K_READINGS:
+        want = f"{f_runs:.4f}" if runs_only else "1"
+        assert re.search(re.escape(tag) + r": [^\n]*\. F = " + re.escape(want)
+                         + r"\n", text), (tag, want)
+    assert "THIS ORDER CANNOT SEPARATE THEM" in text
+    c1 = {g.tag: g for g in report.gates}["C1"]
+    assert any(f"{f_runs:.4f} under (a) reuse and (b1)" in ln for ln in c1.lines)
+    assert "j mod" not in text.replace(f"copy j mod {k} in the kernel's order",
+                                       "")
+    assert f"tiles j and j+{k}" not in text

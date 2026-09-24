@@ -437,18 +437,42 @@ A pair across the gap sizing (a duty run before 2026-09-23 and one after) is
 refused and cannot be re-scored: `duty_gap_from_burst` is a design key, and
 the cells were measured under two instruments.
 
-**PRIVATE-K, by hand after the chain (registered 2026-09-23).** Session 5 read
-shared/private at 0.915 at G=1, and timing cannot tell reuse in the shared arm
-(about 7.6% L2 hits) from a per-copy cost in the private arm (TLB, DRAM pages
-of many distinct copies). `--private-copies K` routes M-tile j of an expert to
-copy j mod K, so the private arm reads K copies and re-reads them; the shared
-and native arms, the declaration, the allocation (all `n_decl` copies) and
-the gates do not move. Unset is every tile its own copy, which is K = the
-deepest tread's tile count; K below 2 or at or above that is refused. K is a
-design key and in the run id (`copiesk<K>`), so `--replicate-of` and `--read`
-never pool it with a full private run. The chain does not run it. After the
-chain has finished, never beside it, from the chain's own results root and
-session tag (its header prints both as `results` and `session`):
+**PRIVATE-K, by hand after the chain (registered 2026-09-23, order corrected
+2026-09-24). NOT BOOKED UNTIL THE OWNER RE-APPROVES IT: the arm below is not
+the cyclic design first approved.** Session 5 read shared/private at 0.915 at
+G=1, and timing cannot tell reuse in the shared arm (about 7.6% L2 hits) from
+a per-copy cost in the private arm (TLB, DRAM pages of many distinct copies).
+`--private-copies K` routes an expert's M-tiles to copies 0..K-1, and the
+kernel runs them in BLOCKS, not cyclically: `moe_align_block_size` sorts by
+slot and the kernel walks the sorted blocks, so each expert runs all of copy
+0's tiles, then all of copy 1's (000111 at K=2 and n=6, 001122 at K=3; never
+010101). A re-reading tile re-reads the copy the tile just before it read,
+the shared arm's distance. The shared and native arms, the declaration, the
+allocation (all `n_decl` copies) and the gates do not move. Unset is every
+tile its own copy, which is K = the deepest tread's tile count; K below 2 or
+at or above that is refused. K is a design key and in the run id
+(`copiesk<K>`), so `--replicate-of` and `--read` never pool it with a full
+private run.
+
+What the blocked order separates, as F = (slope(private-K) - slope(shared)) /
+(slope(private) - slope(shared)) over treads 2..6, the full arm being the
+chain's own `r3-g1-s0` page (the same flags without `--private-copies`):
+(a) reuse between a tile and the one before it on one copy, and (b1) a cost
+paid by a tile whose predecessor read another copy, both charge only the
+first tile of each run, so both predict F = the slope of min(n, K) over the
+window, 0 at K=2 and 0.2 at K=3; (b2) a cost every tile of a call reading two
+or more copies pays, in full from the first extra copy, predicts F = 1 at
+either K. So K=2 separates (b2) from (a) and (b1), K=3 checks that (b2) is
+paid in full on the first extra copy, and NEITHER separates (a) from (b1).
+Each page prints these predictions beside its own slopes. The cyclic order
+that would split (a) from (b1) cannot be built by routing: slot s is read at
+base + s x stride(0), so a copy cannot recur after another copy's tile unless
+two slots are aliased onto one copy's physical pages (CUDA virtual memory
+mapping, which keeps the full arm's virtual, TLB, footprint) or the kernel's
+block table is permuted after the alignment. Which of those, if either, is
+the owner's call. The chain does not run it. If the owner books it, after
+the chain has finished, never beside it, from the chain's own results root
+and session tag (its header prints both as `results` and `session`):
 
 ```
 cd /workspace/repo
@@ -465,12 +489,8 @@ done
 The same line from the base venv with `--dry-run --capability 9.0
 --device-memory-gb 140` added prices a run (the private arm at alpha = 1, an
 upper bound under K); add the chain's 60 s of compiles and weight build
-(`R3_RUN_OVERHEAD_S`). The full private arm to read each against is the
-chain's own `r3-g1-s0` page, the same flags without `--private-copies`: if (b),
-a per-copy cost paid in full on the first extra copy, slope(private-K) at K=2
-sits on the full arm's slope; if (a), it moves toward the shared slope as K
-shrinks. Each page prints its private-K slope against its shared slope; its
-C1 and C2 are scored by the usual rules and say that the ratio is not alpha.
+(`R3_RUN_OVERHEAD_S`). Each page's C1 and C2 are scored by the usual rules and
+say that the ratio is not alpha.
 
 ---
 
