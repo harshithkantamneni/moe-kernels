@@ -131,7 +131,7 @@ Three things it will refuse rather than do:
 | PF2 wheel | each venv's `torch.version.cuda` major <= the driver's CUDA major, and a kernel launches |
 | PF3 stack | torch, triton and vllm are the versions `requirements/resolved-*.txt` pin; `fused_experts` imports |
 | PF4 metrics | `ncu --query-metrics` lists every STRICT metric of the r3-arms family; absent recorded ones are listed as dropped |
-| PF5 probe | `dram_counter_route.py --probe --family r3-arms` under the door reads OPEN, exit 0: a counter was READ |
+| PF5 probe | `dram_counter_route.py --probe --family r3-arms` under the door reads OPEN, exit 0, and its per-metric record holds every STRICT metric as a number: a counter was READ, and so was every metric the run refuses without |
 | PF6 census | `--run --family r3-arms --census-only` passes (two GEMMs per call, grids, memory plan) |
 | PF7 RAM | when the card cannot hold ncu's first-pass save beside R3's allocation, host RAM holds 1.5x it |
 

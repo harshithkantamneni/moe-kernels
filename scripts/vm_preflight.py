@@ -26,16 +26,19 @@ because an earlier one already failed, and it counts against the box.
               CROSS-CHECK metrics leave their gate unasked. When ncu's output
               names its lock file, that is the cause PF4 reports.
   PF5 probe   `dram_counter_route.py --probe --family r3-arms` under the
-              counter door reads OPEN, exit 0, and its RESULT lines agree:
-              a counter was actually READ. THE GATE. Nothing else here can
-              pass a box on which no counter came back.
+              counter door reads OPEN, exit 0, and its RESULT lines agree,
+              and its per-metric record (`metrics_proven`) holds every
+              metric of the family's STRICT class: a counter was actually
+              READ, and so was every metric the run refuses without. THE
+              GATE. Nothing else here can pass a box on which no counter
+              came back, and a payload with no per-metric record fails.
   PF6 census  `dram_counter_route.py --run --family r3-arms --census-only`
               exits 0 (GEMMS_PER_CALL = 2, grids match, memory plan fits).
   PF7 RAM     when the card cannot hold ncu's first-pass save beside R3's
               allocation, host RAM holds 1.5x the footprint.
 
-THE r3-arms FAMILY IS dram_counter_route.py's, not this file's. PF4 reads its
-metric classes (`R3_STRICT_METRICS`, `R3_CROSSCHECK_METRICS`,
+THE r3-arms FAMILY IS dram_counter_route.py's, not this file's. PF4 and PF5
+read its metric classes (`R3_STRICT_METRICS`, `R3_CROSSCHECK_METRICS`,
 `R3_RECORDED_METRICS`) and PF5/PF6 run its CLI; a checkout whose
 dram_counter_route.py has no `--family` fails all three, saying so. PF7's
 footprint is R3's own `memory_plan` at R3's own defaults with no flush buffer
@@ -64,8 +67,8 @@ from moe.bench import exit_codes  # noqa: E402  (torch-free)
 PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
 #: The family the R3 counter run is registered under in dram_counter_route.py.
 FAMILY = "r3-arms"
-#: The three metric classes PF4 reads off dram_counter_route.py, in the order
-#: STRICT (the run refuses without them), CROSS-CHECK, RECORDED.
+#: The three metric classes PF4 and PF5 read off dram_counter_route.py, in the
+#: order STRICT (the run refuses without them), CROSS-CHECK, RECORDED.
 METRIC_CLASSES = ("R3_STRICT_METRICS", "R3_CROSSCHECK_METRICS", "R3_RECORDED_METRICS")
 #: The card every timed page of the study was measured on (H200 sessions 1-5).
 #: A page from any other card is that card's, and says so.
@@ -392,11 +395,19 @@ def family_supported(help_text: str) -> bool:
 
 
 def pf5_probe(rc: int | None, payload: dict | None, log_text: str, *,
-              why_not_run: str = "") -> Check:
-    """PASS iff a counter came back: exit 0, verdict OPEN, the route open by
-    dram_counter_route's own `counter_route_is_open`, and the log's RESULT
-    lines imply the same exit code the process returned."""
-    what = f"dram_counter_route.py --probe --family {FAMILY} READ a counter here"
+              strict: tuple[str, ...] | None, why_not_run: str = "") -> Check:
+    """PASS iff every STRICT metric came back: exit 0, verdict OPEN, the route
+    open by dram_counter_route's own `counter_route_is_open`, the log's RESULT
+    lines imply the same exit code the process returned, AND the probe's
+    per-metric record (`metrics_proven`, the metrics that came back as numbers
+    on one profiled launch) holds every metric in `strict`, the family's
+    STRICT class. One counter read is not the run's metrics read: the run
+    refuses a page whose STRICT metric is not numeric, so a box that proved
+    only `dram__bytes_read.sum` would be called READY and refuse on paid
+    time. A payload with no per-metric record fails, so a probe that did not
+    record one cannot pass."""
+    what = (f"dram_counter_route.py --probe --family {FAMILY} READ every STRICT metric "
+            "here")
     if why_not_run:
         return Check("PF5", what, FAIL, why_not_run)
     from dram_counter_route import counter_route_is_open
@@ -415,7 +426,24 @@ def pf5_probe(rc: int | None, payload: dict | None, log_text: str, *,
     if rc != exit_codes.DONE or payload.get("verdict") != "OPEN" or not counter_route_is_open(ncu):
         return Check("PF5", what, FAIL, f"verdict {payload.get('verdict')}, exit {rc}: "
                      f"{_one(ncu.get('cause') or ncu.get('why') or 'no cause recorded')}", data)
-    return Check("PF5", what, PASS, _one(ncu.get("cause") or "OPEN"), data)
+    if not strict:
+        return Check("PF5", what, FAIL, f"this checkout's dram_counter_route.py registers no "
+                     f"STRICT metric class for {FAMILY}, so there is nothing to hold the "
+                     "probe's reading to", data)
+    proven = ncu.get("metrics_proven")
+    data["metrics_proven"] = proven
+    if not isinstance(proven, list):
+        return Check("PF5", what, FAIL, "the probe read a counter but recorded no per-metric "
+                     "reading (metrics_proven), so it has not shown that every STRICT metric "
+                     f"came back as a number: {_one(ncu.get('cause') or 'OPEN')}", data)
+    unread = [m for m in strict if m not in proven]
+    data["strict_unread"] = unread
+    if unread:
+        return Check("PF5", what, FAIL, f"OPEN, but STRICT metric(s) not read back as numbers "
+                     f"by the probe: {', '.join(unread)}; the run would refuse its pages on "
+                     "them", data)
+    return Check("PF5", what, PASS, f"all {len(strict)} STRICT metrics read back: "
+                 f"{_one(ncu.get('cause') or 'OPEN')}", data)
 
 
 def pf6_census(rc: int | None, wrote: bool, log_text: str, *, skip_why: str = "") -> Check:
@@ -563,7 +591,8 @@ def main(argv: list[str] | None = None) -> int:
         _, profiling = run([*launcher, ncu, "--query-metrics"], 300)
         _, launch = run([*launcher, ncu, "--query-metrics-collection", "launch"], 300)
         (session / "ncu-query-metrics.txt").write_text(profiling + "\n--- launch\n" + launch)
-    checks.append(pf4_metrics(family_metric_classes(D), profiling, launch, ncu=ncu))
+    classes = family_metric_classes(D)
+    checks.append(pf4_metrics(classes, profiling, launch, ncu=ncu))
 
     why = ""
     if not ncu:
@@ -588,7 +617,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = json.loads(out.read_text())
         except (OSError, json.JSONDecodeError):
             payload = None
-    checks.append(pf5_probe(rc, payload, log_text, why_not_run=why))
+    checks.append(pf5_probe(rc, payload, log_text, why_not_run=why,
+                            strict=classes["strict"] if classes else None))
 
     if checks[-1].verdict != PASS:
         checks.append(pf6_census(None, False, "", skip_why="PF5 did not read a counter, so a "

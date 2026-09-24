@@ -50,25 +50,61 @@ NOTHING_WORLD = dict(returncode=0, stdout="", stderr="",
                      log_text="==WARNING== No kernels were profiled.\n")
 
 
+#: A planted STRICT class, shaped like dram_counter_route's R3_STRICT_METRICS.
+STRICT = ("dram__bytes_read.sum", "launch__grid_size")
+
+
+def _proven(payload: dict, metrics) -> dict:
+    """`payload` with the probe's per-metric record planted: the r3-arms probe
+    writes `ncu.metrics_proven`, the metrics that came back as numbers on one
+    profiled launch. This checkout's probe chain (the ladder family) writes
+    none, which is itself a payload PF5 must fail."""
+    return {**payload, "ncu": {**payload["ncu"], "metrics_proven": list(metrics)}}
+
+
 def test_pf5_passes_only_on_a_counter_that_came_back():
     """THE GATE the preflight exists for. A box on which ncu profiled a kernel
-    and handed back a number is the only box PF5 passes; a refused read, a
-    probe that profiled nothing, a payload that disagrees with its own log,
-    and a probe that could not run all fail."""
+    and handed back a number for every STRICT metric is the only box PF5
+    passes; a refused read, a probe that profiled nothing, a payload that
+    disagrees with its own log, and a probe that could not run all fail, even
+    with a per-metric record planted beside them."""
     rc, payload, log = _probe_world(**OPEN_WORLD)
     assert (rc, payload["verdict"]) == (exit_codes.DONE, "OPEN")
-    assert VP.pf5_probe(rc, payload, log).verdict == VP.PASS
+    assert VP.pf5_probe(rc, _proven(payload, STRICT), log, strict=STRICT).verdict == VP.PASS
     for world in (BLOCKED_WORLD, NOTHING_WORLD):
         rc, payload, log = _probe_world(**world)
-        assert VP.pf5_probe(rc, payload, log).verdict == VP.FAIL, payload["verdict"]
+        check = VP.pf5_probe(rc, _proven(payload, STRICT), log, strict=STRICT)
+        assert check.verdict == VP.FAIL, payload["verdict"]
     rc, payload, log = _probe_world(**OPEN_WORLD)
+    payload = _proven(payload, STRICT)
     liar = VP.pf5_probe(exit_codes.DONE, {**payload, "ncu": {**payload["ncu"],
-                                                             "counters_read": False}}, log)
+                                                             "counters_read": False}}, log,
+                        strict=STRICT)
     assert liar.verdict == VP.FAIL, "an OPEN word with no counter read is not a counter"
-    mismatch = VP.pf5_probe(exit_codes.CLAIM_FAIL, payload, log)
+    mismatch = VP.pf5_probe(exit_codes.CLAIM_FAIL, payload, log, strict=STRICT)
     assert mismatch.verdict == VP.FAIL and "DEFECT" in mismatch.detail
-    assert VP.pf5_probe(exit_codes.DONE, None, "").verdict == VP.FAIL
-    assert VP.pf5_probe(None, None, "", why_not_run="no ncu on PATH").verdict == VP.FAIL
+    assert VP.pf5_probe(exit_codes.DONE, None, "", strict=STRICT).verdict == VP.FAIL
+    assert VP.pf5_probe(None, None, "", strict=STRICT,
+                        why_not_run="no ncu on PATH").verdict == VP.FAIL
+
+
+def test_pf5_fails_an_open_probe_that_did_not_read_every_strict_metric():
+    """PF5 passed on ONE counter (`counters_read`), and the run refuses a page
+    whose STRICT metric is not numeric (its V2), so a box that proved only
+    dram__bytes_read.sum was READY and then refused the run on paid time. An
+    OPEN probe whose per-metric record lacks a STRICT metric fails, naming
+    it; so does an OPEN probe that recorded no per-metric reading at all
+    (the ladder family's payload), and a checkout with no STRICT class."""
+    rc, payload, log = _probe_world(**OPEN_WORLD)
+    assert (rc, payload["verdict"]) == (exit_codes.DONE, "OPEN")
+    short = VP.pf5_probe(rc, _proven(payload, ["dram__bytes_read.sum"]), log, strict=STRICT)
+    assert short.verdict == VP.FAIL and "launch__grid_size" in short.detail, short.detail
+    assert short.data["strict_unread"] == ["launch__grid_size"]
+    unrecorded = VP.pf5_probe(rc, payload, log, strict=STRICT)
+    assert "metrics_proven" not in payload["ncu"]
+    assert unrecorded.verdict == VP.FAIL and "no per-metric reading" in unrecorded.detail
+    classless = VP.pf5_probe(rc, _proven(payload, STRICT), log, strict=None)
+    assert classless.verdict == VP.FAIL and "STRICT" in classless.detail
 
 
 def test_pf4_needs_every_strict_metric_and_drops_absent_recorded_ones():

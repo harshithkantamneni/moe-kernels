@@ -73,7 +73,8 @@
 #                 PATH, the counter launcher, the card. And the exfil line.
 #   S8 PREFLIGHT  scripts/vm_preflight.py, never cached: PASS only when a
 #                 counter was actually READ (dram_counter_route.py --probe
-#                 --family r3-arms says OPEN) and the census fits. Writes
+#                 --family r3-arms says OPEN and read back every STRICT
+#                 metric as a number) and the census fits. Writes
 #                 $HOME/moe/session/PREFLIGHT.txt and PREFLIGHT.json.
 #
 # EXIT CODES, the repo's table (moe/bench/exit_codes.py; a test holds these to
@@ -879,7 +880,8 @@ preflight_stage() {
   if (( DRY_RUN )); then
     say "would run: . $ENV_SH && python3 $REPO/scripts/vm_preflight.py"
     say "  PF1 card, PF2 wheel vs driver, PF3 stack, PF4 ncu metrics, PF5 the r3-arms probe"
-    say "  (must read OPEN), PF6 the census, PF7 host RAM; exit 0 only when all pass"
+    say "  (must read OPEN with every STRICT metric numeric), PF6 the census, PF7 host RAM;"
+    say "  exit 0 only when all pass"
     return 0
   fi
   [[ -f "$ENV_SH" ]] || fail "no $ENV_SH: run setup_vm.sh without --preflight-only first"
