@@ -1,4 +1,4 @@
-"""Whether a SAMPLED GPU metric can stand in for the DRAM counter ncu refuses.
+"""Whether a SAMPLED GPU metric can stand in for the DRAM counter no rented pod let ncu read.
 
 THE QUESTION THESE TESTS PIN DOWN. Every byte figure in this study is
 compulsory-traffic arithmetic, and `alpha` -- refit 2026-08-31 from 0.10 to

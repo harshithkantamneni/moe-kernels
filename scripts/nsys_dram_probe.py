@@ -16,8 +16,8 @@ tenant cannot set, or a capability the provider grants.
 dram__bytes_read.sum is a counter; nothing traces it", and docs/RUNPOD.md,
 docs/POD_RUNBOOK.md and docs/FINDINGS.md have repeated it ever since.
 
-`nsys --gpu-metrics-device` neither traces nor uses the CUPTI profiling API that
-ncu is blocked on: it SAMPLES the GPU's hardware performance monitor through a
+`nsys --gpu-metrics-device` neither traces nor uses the CUPTI profiling API
+ncu's refused reads went through: it SAMPLES the GPU's hardware performance monitor through a
 separate path. Whether that path is gated on the same flag is an empirical
 question, `grep` finds zero references to the option anywhere in this repository,
 and docs/FINDINGS.md calls it "the open path, not a closed door". This is the
