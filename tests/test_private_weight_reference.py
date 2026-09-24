@@ -6464,3 +6464,250 @@ def test_a_run_prints_and_stores_the_discrimination_floor_off_its_own_shared_lad
     assert ("DISCRIMINATION FLOOR over treads 2..6, the claim's window, from "
             "this run's own shared ladder") in page.stdout
     assert f"alpha = {got.floor.alpha:.4f}" in page.stdout
+
+
+# --------------------------------------------------------------------------
+# THE ARMS' CALLS, ONE CONSTRUCTION FOR TWO CONSUMERS (2026-09-24), and the
+# counter child `scripts/dram_counter_route.py --family r3-arms` runs.
+# --------------------------------------------------------------------------
+
+def test_pinned_config_is_the_dict_main_built_inline():
+    """A pure extraction: the dict `_main` built with `dict(SWEEP.FIXED, ...)`,
+    key order included, so a pinned block in a report does not move."""
+    got = PW.pinned_config(128, 4, 3)
+    want = dict(PW.SWEEP.FIXED, num_stages=3, GROUP_SIZE_M=4, BLOCK_SIZE_N=128)
+    assert got == want and list(got) == list(want)
+
+
+def test_main_pins_the_timed_ladder_through_pinned_config(monkeypatch):
+    seen = []
+    real = PW.pinned_config
+
+    def spy(block_n, group_m, num_stages):
+        seen.append((block_n, group_m, num_stages))
+        return real(block_n, group_m, num_stages)
+    monkeypatch.setattr(PW, "pinned_config", spy)
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc = PW.main(["--dry-run", "--device-memory-gb", "140", "--group-m", "4"])
+    assert rc == exit_codes.REFUSED
+    assert seen == [(PW.SWEEP.FIXED["BLOCK_SIZE_N"], 4, PW.SWEEP.FIXED["num_stages"])]
+
+
+def test_run_sweep_builds_every_arm_through_arm_inputs_and_arm_call(monkeypatch, tmp_path):
+    """The timed ladder's inputs and calls come from the module-level
+    `arm_inputs` and `arm_call`, the two functions the counter child builds
+    with, and not from closures of its own: one construction, two consumers.
+    Driven through the REAL `run_sweep` with the card-side pieces planted and
+    every cell refused by a planted instrument, so nothing is timed."""
+    import torch
+    treads = list(range(1, PW.DEFAULT_TREADS + 1))
+    block_m = PW.DEFAULT_BLOCK_M
+    copies, _why = PW.declared_copies_for(CFG, treads, block_m, None)
+    declared = {a: PW.declared_experts(a, CFG.num_experts, copies) for a in PW.ARMS}
+    census = PW.path_census(CFG, treads, block_m, declared)
+    args = PW.build_parser().parse_args(["--repeats", "1", "--device-memory-gb", "140"])
+    _stand_in_for_vllm(monkeypatch)
+    monkeypatch.setattr(sys.modules["vllm.model_executor.layers.fused_moe"],
+                        "override_config", lambda conf: contextlib.nullcontext())
+    monkeypatch.setenv("TRITON_CACHE_DIR", str(tmp_path / "unused"))
+    monkeypatch.setattr(PW, "probe_alignment", lambda cfg, **k: None)
+    passed = PW.Gate("V8", PW.VALIDITY, "planted", PW.PASS, "planted", "planted",
+                     "planted")
+    monkeypatch.setattr(PW, "gate_v8_alignment", lambda probe, **k: passed)
+    for name in ("reset_peak_memory_stats", "synchronize"):
+        monkeypatch.setattr(torch.cuda, name, lambda *a, **k: None)
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda *a, **k: 0)
+    monkeypatch.setattr(PW, "build_private_weights", lambda cfg, dtype, c, seed, **k: (
+        torch.zeros(CFG.num_experts * c, 2, 2), torch.zeros(CFG.num_experts * c, 2, 2), 0))
+    built, made = [], []
+
+    def inputs(cfg, n, bm, copies_declared, seed, dtype, w_dtype, **k):
+        assert (bm, copies_declared) == (block_m, copies)
+        built.append(n)
+        return n, object(), {a: f"{a}-{n}" for a in PW.ARMS}, object(), {}
+
+    def call(fused, arm, w1, w2, n1, n2, declared_by_arm, x, ids, weights, kw):
+        assert declared_by_arm == declared
+        made.append((arm, ids[arm]))
+        return lambda: None
+
+    def refused(*a, **k):
+        raise RuntimeError("planted: nothing is timed off a card")
+
+    def proof(call_for, w1, w2, **k):
+        for arm in PW.ARMS:
+            call_for(arm)
+        return PW.BufferProof(parts={}, detail={})
+    monkeypatch.setattr(PW, "arm_inputs", inputs)
+    monkeypatch.setattr(PW, "arm_call", call)
+    monkeypatch.setattr(PW, "time_cell", refused)
+    monkeypatch.setattr(PW, "prove_distinct_buffers", proof)
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    store = PW.Store(out_dir / "cells.csv", PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    with contextlib.redirect_stdout(io.StringIO()):
+        samples, *_rest = PW.run_sweep(
+            args, CFG, block_m=block_m, treads=treads,
+            pinned=PW.pinned_config(64, 1, 4), csv_path=out_dir / "cells.csv",
+            cache_root=out_dir / "triton-cache", store=store, prov=None, dtype="bf16",
+            copies_declared=copies, census=census, stream_ms=1.0)
+    assert built == treads + [treads[-1]], "one build per tread, then the proof's"
+    assert len(made) == len(treads) * len(PW.ARMS) + len(PW.ARMS)
+    assert {a for a, _ids in made} == set(PW.ARMS)
+    assert all(ids == f"{a}-{n}" for (a, ids), n in zip(
+        made, [n for n in treads for _ in PW.ARMS], strict=False))
+    assert len(samples) == len(treads) * len(PW.ARMS)
+    assert all(s.status == "failed" and "planted" in s.detail for s in samples)
+
+
+def _counter_plan(**over) -> dict:
+    """The registered plan the counter family writes at G=4, off any card."""
+    treads = list(over.pop("treads", [1, 2, 3, 4, 6]))
+    arms = list(over.pop("arms", PW.ARMS))
+    copies, reason = PW.counter_declaration(CFG, PW.DEFAULT_BLOCK_M)
+    plan = {"family": "r3-arms", "kind": "measure", "model": PW.DEFAULT_MODEL,
+            "dtype": "bf16", "block_m": PW.DEFAULT_BLOCK_M, "block_n": 64,
+            "num_stages": 4, "group_m": 4, "treads": treads, "arms": arms,
+            "cells": [[a, n] for a in arms for n in treads],
+            "copies_declared": copies, "declared_reason": reason,
+            "calls_per_cell": 3, "warmup_calls": 2,
+            "gemms_per_call": PW.GEMMS_PER_CALL, "seed": 0,
+            "manifest": "unused.manifest.json", "triton_cache": "unused-cache"}
+    plan.update(over)
+    return plan
+
+
+def test_counter_schedule_puts_warmups_first_and_prices_the_window():
+    plan = _counter_plan()
+    sched = PW.counter_schedule(plan)
+    cells = len(plan["cells"])
+    assert len(sched.warmups) == plan["warmup_calls"] * cells
+    assert len(sched.measured) == plan["calls_per_cell"] * cells
+    assert sched.launch_skip == PW.GEMMS_PER_CALL * plan["warmup_calls"] * cells
+    assert sched.launch_count == PW.GEMMS_PER_CALL * plan["calls_per_cell"] * cells
+    assert [c for c, _n in sched.warmups[:2]] == ["native", "native"]
+    assert sched.measured[:3] == (("native", 1, 0), ("native", 1, 1), ("native", 1, 2))
+    census = PW.counter_schedule(_counter_plan(kind="census", calls_per_cell=1,
+                                               warmup_calls=1, arms=["native"],
+                                               treads=[1, 6]))
+    assert (census.launch_skip, census.launch_count) == (0, None)
+    for bad in ({"calls_per_cell": 1}, {"warmup_calls": 0}):
+        with pytest.raises(PW.CounterPlanRefused):
+            PW.counter_schedule(_counter_plan(**bad))
+
+
+def test_the_counter_plan_must_be_r3s_own_call():
+    """A tread outside R3's ladder, another declaration, an arm R3 does not
+    have, or cells out of manifest order: each would profile a call R3 never
+    timed, and each is refused before a card is touched."""
+    PW.validate_counter_plan(_counter_plan())
+    for bad, needle in (({"treads": [1, 2, 7]}, "not a subset of R3's ladder"),
+                        ({"copies_declared": 8}, "not R3's declaration"),
+                        ({"arms": ["shared", "sideways"]}, "not a subset"),
+                        ({"gemms_per_call": 3}, "not the cited"),
+                        ({"kind": "guess"}, "is not one of")):
+        with pytest.raises(PW.CounterPlanRefused, match=needle):
+            PW.validate_counter_plan(_counter_plan(**bad))
+    shuffled = _counter_plan()
+    shuffled["cells"] = list(reversed(shuffled["cells"]))
+    with pytest.raises(PW.CounterPlanRefused, match="manifest order"):
+        PW.validate_counter_plan(shuffled)
+
+
+def _child_log(tmp_path, plan: dict) -> tuple[int, str]:
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(plan))
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW.main(["--counter-child", str(path)])
+    return rc, log.getvalue()
+
+
+def test_the_counter_child_refuses_off_a_gpu_and_refuses_a_plan_that_is_not_r3s(
+        tmp_path, monkeypatch):
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    rc, out = _child_log(tmp_path, _counter_plan())
+    assert rc == exit_codes.REFUSED and "no CUDA device" in out, out
+    for bad in ({"treads": [1, 2, 7]}, {"copies_declared": 12}, {"calls_per_cell": 1}):
+        rc, out = _child_log(tmp_path, _counter_plan(**bad))
+        assert rc == exit_codes.REFUSED and "REFUSED:" in out, (bad, out)
+    assert exit_codes.parse_result_lines(out) == []
+
+
+def test_the_counter_child_builds_its_calls_through_the_same_three_functions(
+        monkeypatch):
+    """`counter_child` on the CPU with a planted stack: its inputs through
+    `arm_inputs`, its calls through `arm_call`, its pin through
+    `pinned_config`, every warmup before every measured call, one NVTX range
+    per measured call, and the grids from the planted alignment's buffer."""
+    import torch
+    plan = _counter_plan()
+    copies = plan["copies_declared"]
+    spies = {"arm_inputs": [], "arm_call": [], "pinned_config": []}
+    for name in spies:
+        real = getattr(PW, name)
+
+        def spy(*a, _name=name, _real=real, **k):
+            spies[_name].append(a)
+            return _real(*a, **k)
+        monkeypatch.setattr(PW, name, spy)
+
+    def tiny_inputs(cfg, n, bm, c, seed, dtype, w_dtype, **k):
+        spies["arm_inputs"].append((n,))
+        tokens = PW.SWEEP.tokens_for_rows(cfg, n * bm)
+        ids = torch.arange(tokens * cfg.top_k).reshape(tokens, cfg.top_k) % cfg.num_experts
+        return tokens, torch.zeros(tokens, 2), {a: ids for a in PW.ARMS}, None, {}
+    monkeypatch.setattr(PW, "arm_inputs", tiny_inputs)
+    monkeypatch.setattr(PW, "build_private_weights", lambda cfg, dtype, c, seed, **k: (
+        torch.zeros(CFG.num_experts * c, 2, 2), torch.zeros(CFG.num_experts * c, 2, 2), None))
+    monkeypatch.setattr(PW, "prove_distinct_buffers",
+                        lambda call_for, w1, w2, **k: PW.planted_proof(True))
+    order, ranges = [], []
+
+    def fused(hidden_states, w1, w2, topk_weights, topk_ids, global_num_experts, **k):
+        order.append(("call", global_num_experts, len(ranges)))
+        return hidden_states
+
+    @contextlib.contextmanager
+    def nvtx(name):
+        ranges.append(name)
+        yield
+
+    stack = PW.CounterStack(
+        fused_experts=fused, override_config=lambda conf: contextlib.nullcontext(),
+        align=lambda ids, bm, declared, emap: (
+            torch.empty(PW.predicted_sorted_ids(ids.numel(), declared, bm)),),
+        device="cpu", synchronize=lambda: None, nvtx_range=nvtx,
+        device_free=lambda: (None, "planted"), versions={"planted": True},
+        device_identity={"name": "planted", "uuid": "planted"})
+    manifest = PW.counter_child(plan, stack)
+    cells = len(plan["cells"])
+    assert [n for (n,) in spies["arm_inputs"]] == plan["treads"]
+    assert len(spies["arm_call"]) == cells
+    assert spies["pinned_config"] == [(64, 4, 4)]
+    sched = PW.counter_schedule(plan)
+    assert len(order) == len(sched.warmups) + len(sched.measured)
+    warm = order[:len(sched.warmups)]
+    assert all(r == 0 for _c, _e, r in warm), "every warmup before the first range"
+    assert ranges[0] == "r3/native/g4/n1" and len(ranges) == len(sched.measured)
+    assert manifest["launch_skip"] == sched.launch_skip
+    assert manifest["launch_count"] == sched.launch_count
+    for arm, n in plan["cells"]:
+        tokens = PW.SWEEP.tokens_for_rows(CFG, n * plan["block_m"])
+        em = PW.predicted_sorted_ids(tokens * CFG.top_k,
+                                     PW.declared_experts(arm, CFG.num_experts, copies),
+                                     plan["block_m"])
+        assert manifest["grids"][f"{arm}/{n}"] == PW.expected_grids(
+            CFG, em=em, tokens=tokens, block_m=plan["block_m"], block_n=64)
+    assert manifest["proof"]["verdict"] == exit_codes.PASS
+
+
+def test_the_grid_is_vllms_grid_lambda():
+    """`cdiv(EM, BLOCK_M) x cdiv(N, BLOCK_N)`, with EM cut to one tile's worth
+    of rows when the A operand is shorter than a tile, as vLLM's
+    `invoke_fused_moe_kernel` forms it; the census holds it to the card."""
+    assert PW.fused_moe_grid(504, 128, 2, 32, 64, 28672) == 16 * 448
+    assert PW.fused_moe_grid(504, 8, 2, 32, 64, 4096) == (8 * 2 * 32 // 32) * 64
+    grids = PW.expected_grids(CFG, em=504, tokens=128, block_m=32, block_n=64)
+    assert grids == {"w1": 16 * 448, "w2": 16 * 64}

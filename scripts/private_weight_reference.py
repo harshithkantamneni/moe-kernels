@@ -18,6 +18,10 @@
     python scripts/private_weight_reference.py --probe-check
                                        # on the card, from the vLLM venv: V8's
                                        # probe instrument alone, nothing written
+    python scripts/private_weight_reference.py --counter-child PLAN.json
+                                       # under ncu, launched by the r3-arms
+                                       # counter family: the arms' calls, no
+                                       # timing, and a manifest; not by hand
 
 WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
 routed expert weight set that is re-read per extra M-tile. Every estimate of it
@@ -7067,6 +7071,522 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
     return BufferProof(parts=parts, detail=detail, synthetic=False)
 
 
+# --------------------------------------------------------------------------
+# THE ARMS' CALLS, built once for two consumers: the timed ladder
+# (`run_sweep`) and the counter child (`--counter-child`, which
+# `scripts/dram_counter_route.py --family r3-arms` runs under ncu). Until
+# 2026-09-24 the construction lived in two closures inside `run_sweep`, and a
+# second consumer would have had to copy them; a copy is how two halves of a
+# study come to measure two different calls under one name.
+# --------------------------------------------------------------------------
+
+def pinned_config(block_n: int, group_m: int, num_stages: int) -> dict:
+    """The tile knobs every arm compiles at, BLOCK_SIZE_M aside.
+
+    The sweep's FIXED values (BLOCK_SIZE_K and num_warps among them) with the
+    three knobs this arm exposes put over them. `_main` pins the timed ladder
+    with it and the counter child pins its calls with it, so the two build a
+    configuration by one rule. NOTHING REFUSES A COUNTER PLAN for pinning one
+    R3 has not timed: `validate_counter_plan` checks the treads, the
+    declaration, the arms and GEMMS_PER_CALL, not BLOCK_SIZE_N or num_stages,
+    because those are knobs R3 may vary. The join is where one configuration
+    is enforced: the r3-arms counter family's C5 refuses a timed report whose
+    model, dtype, BLOCK_M or pinned block (GROUP_SIZE_M aside) differs from
+    the counter page's design (`dram_counter_route.timed_reference_mismatch`).
+    Until 2026-09-24 this said the plan was refused, and no code did either.
+    """
+    return dict(SWEEP.FIXED, num_stages=num_stages, GROUP_SIZE_M=group_m,
+                BLOCK_SIZE_N=block_n)
+
+
+def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
+               dtype: str, w_dtype, *, device: str = "cuda"):
+    """`(tokens, x, ids_by_arm, weights, kw)` for tread `n`, shared by all arms.
+
+    `ids_by_arm` holds the three arms' routing: NATIVE's balanced ids, SHARED's
+    relabelling onto copy 0 and PRIVATE's onto one copy per M-tile
+    (`shared_topk_ids`, `private_topk_ids`). `kw` is vLLM's call kwargs with
+    the activation rebuilt as its enum. The inputs are built ONCE per tread
+    and every arm reads the same `x`, which is what makes the arms' comparison
+    a comparison. `seed` names the BenchSpec the kwargs come from; `x` is drawn
+    from torch's global generator, as it always was.
+    """
+    import torch
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+
+    from moe.baselines._framework_config import vllm_call_kwargs
+    from moe.spec import BenchSpec, RoutingSpec
+
+    rows = n * block_m
+    tokens = SWEEP.tokens_for_rows(cfg, rows)
+    spec = BenchSpec(cfg, num_tokens=tokens, dtype=dtype,
+                     routing=RoutingSpec("uniform", 0.0), seed=seed)
+    x = torch.randn((tokens, cfg.hidden_size), device=device, dtype=w_dtype)
+    ids = SWEEP.balanced_ids(cfg, tokens, device)
+    weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
+                         device=device)
+    private_ids = private_topk_ids(ids, cfg.num_experts, block_m, rows,
+                                   copies_declared)
+    shared_ids = shared_topk_ids(ids, copies_declared)
+    kw = vllm_call_kwargs(spec)
+    kw["activation"] = MoEActivation(kw["activation"])
+    return tokens, x, {NATIVE: ids, SHARED: shared_ids,
+                       PRIVATE: private_ids}, weights, kw
+
+
+def arm_call(fused_experts, arm: str, w1, w2, native_w1, native_w2,
+             declared_by_arm: dict[str, int], x, ids_by_arm, weights, kw):
+    """A zero-argument callable making `arm`'s one `fused_experts` call.
+
+    ONE DECLARATION FOR BOTH RATIO ARMS AT EVERY TREAD, over the whole
+    allocation; NATIVE is the study's call over copy 0 through the strided
+    view `w1[::n_decl]`. The caller wraps the call in `override_config`; this
+    builds it and pins nothing.
+    """
+    experts = declared_by_arm[arm]
+    a1, a2 = (native_w1, native_w2) if arm == NATIVE else (w1, w2)
+    args_kw = dict(kw, global_num_experts=experts)
+    use_ids = ids_by_arm[arm]
+
+    def call():
+        return fused_experts(hidden_states=x, w1=a1, w2=a2,
+                             topk_weights=weights, topk_ids=use_ids, **args_kw)
+    return call
+
+
+# --------------------------------------------------------------------------
+# THE COUNTER CHILD. `scripts/dram_counter_route.py --family r3-arms --run`
+# writes a plan and runs this script under ncu with `--counter-child PLAN`;
+# the child builds the arms through the functions above, times NOTHING and
+# makes an exact, planned number of calls, so the profile's launch list can
+# be attributed launch by launch (the PER-CALL TRAP of the ladder family,
+# whose instrument chooses its own call count, does not arise).
+# --------------------------------------------------------------------------
+
+#: `fused_moe_kernel` launches per `fused_experts` call. CITED: vLLM v0.27.1
+#: `fused_experts_impl` makes two `dispatch_fused_moe_kernel` calls, the w1
+#: (gate+up) GEMM and then the w2 (down) GEMM, and has no chunk loop at these
+#: token counts. MEASURED on the box by the census (`--census-only`), which
+#: profiles a mini plan with no skip and no cap and refuses unless it holds
+#: exactly this many launches per call.
+GEMMS_PER_CALL = 2
+
+#: The two GEMMs in launch order, named by the weight slab each one reads.
+GEMMS: tuple[str, str] = ("w1", "w2")
+
+#: What a plan may ask the child for. `measure` is one G's page; `census` is
+#: the mini plan that proves GEMMS_PER_CALL and the grids before any page.
+COUNTER_KINDS: tuple[str, str] = ("measure", "census")
+
+#: The keys a counter plan must carry. The writer is
+#: `dram_counter_route.r3_plan`; the reader is `validate_counter_plan`.
+COUNTER_PLAN_KEYS: tuple[str, ...] = (
+    "family", "kind", "model", "dtype", "block_m", "block_n", "num_stages",
+    "group_m", "treads", "arms", "cells", "copies_declared", "calls_per_cell",
+    "warmup_calls", "gemms_per_call", "seed", "manifest", "triton_cache")
+
+#: The NVTX range each measured call runs inside, for a human reading the
+#: .ncu-rep. Nothing filters on it: attribution is by launch order and grid.
+NVTX_FORMAT = "r3/{arm}/g{group_m}/n{n}"
+
+
+class CounterPlanRefused(PrivateWeightRefusal):
+    """A counter plan the child will not run: not R3's call, or not countable."""
+
+
+def counter_ladder(cfg, block_m: int) -> list[int]:
+    """R3's own tread ladder, `DEFAULT_TREADS` deep. A counter plan measures a
+    SUBSET of it, and the declaration below is this ladder's, not the
+    subset's: the declaration sizes the launch grid, so recomputing it from
+    the subset would profile a call R3 never timed."""
+    return ladder_treads(cfg, block_m, DEFAULT_TREADS)
+
+
+def counter_declaration(cfg, block_m: int) -> tuple[int, str]:
+    """`declared_copies_for` over R3's own ladder: the copies every counter
+    plan declares (9 for mixtral at BLOCK_M 32, E x 9 = 72 slots)."""
+    return declared_copies_for(cfg, counter_ladder(cfg, block_m), block_m)
+
+
+def validate_counter_plan(plan: dict):
+    """The plan's model config, or `CounterPlanRefused` naming what is wrong.
+
+    Pure, so it refuses on a laptop exactly as on the box. Refuses a plan that
+    is missing a key, of an unknown kind, whose treads are not a subset of
+    R3's ladder, whose declaration is not R3's rule, whose arms are not R3's,
+    or whose GEMMs per call is not the cited `GEMMS_PER_CALL`.
+    """
+    missing = [k for k in COUNTER_PLAN_KEYS if k not in plan]
+    if missing:
+        raise CounterPlanRefused(f"the counter plan has no {missing}")
+    if plan["kind"] not in COUNTER_KINDS:
+        raise CounterPlanRefused(
+            f"plan kind {plan['kind']!r} is not one of {COUNTER_KINDS}")
+    try:
+        cfg = MODEL_CONFIGS[plan["model"]]
+    except KeyError:
+        raise CounterPlanRefused(f"unknown model {plan['model']!r}") from None
+    block_m = int(plan["block_m"])
+    ladder = counter_ladder(cfg, block_m)
+    treads = [int(n) for n in plan["treads"]]
+    outside = sorted(set(treads) - set(ladder))
+    if outside or not treads:
+        raise CounterPlanRefused(
+            f"treads {treads} are not a subset of R3's ladder {ladder} at "
+            f"BLOCK_M={block_m}; a counter plan profiles R3's own calls "
+            f"(outside: {outside or 'none given'})")
+    copies, _why = counter_declaration(cfg, block_m)
+    if int(plan["copies_declared"]) != copies:
+        raise CounterPlanRefused(
+            f"copies_declared {plan['copies_declared']} is not R3's "
+            f"declaration {copies} (declared_copies_for over R3's ladder "
+            f"{ladder}); the declaration sizes the launch grid, so any other "
+            "count profiles a call R3 never timed")
+    arms = list(plan["arms"])
+    if not arms or set(arms) - set(ARMS):
+        raise CounterPlanRefused(f"arms {arms} are not a subset of {list(ARMS)}")
+    cells = [(str(a), int(n)) for a, n in plan["cells"]]
+    want = [(a, n) for a in arms for n in treads]
+    if cells != want:
+        raise CounterPlanRefused(
+            f"the plan's cells {cells} are not its arms x treads in manifest "
+            f"order {want}")
+    if int(plan["gemms_per_call"]) != GEMMS_PER_CALL:
+        raise CounterPlanRefused(
+            f"gemms_per_call {plan['gemms_per_call']} is not the cited "
+            f"{GEMMS_PER_CALL}; the census measures it and the plan may not "
+            "restate it")
+    return cfg
+
+
+@dataclass(frozen=True)
+class CounterSchedule:
+    """The child's calls in the order it makes them, and ncu's window.
+
+    `warmups` are `(arm, n)` and come first: they compile, and they are
+    skipped by ncu (`launch_skip`). `measured` are `(arm, n, call)`, K per
+    cell in manifest order, and are exactly the `launch_count` profiled
+    launches. `launch_count` is None for a census, which caps nothing.
+    """
+
+    warmups: tuple[tuple[str, int], ...]
+    measured: tuple[tuple[str, int, int], ...]
+    launch_skip: int
+    launch_count: int | None
+
+
+def counter_schedule(plan: dict) -> CounterSchedule:
+    """The one rule for the child's call order and ncu's skip and count.
+
+    Pure, and called by BOTH sides: the child makes these calls and
+    `dram_counter_route` hands ncu its launch skip and launch count from the
+    same object, so the profiled window and the calls cannot drift apart.
+
+      measure  U warmups for EVERY cell first, then K calls per cell.
+               skip = GEMMS_PER_CALL x U x cells, count = GEMMS_PER_CALL x K
+               x cells. REFUSES K < 2 (the repeat gate needs a spread) and
+               U < 1 (the first call compiles).
+      census   the same order with skip 0 and no cap: every launch, warmups
+               included, is profiled, so the census counts GEMMS_PER_CALL
+               rather than assuming it. Refuses K < 1 and U < 1.
+    """
+    kind = plan.get("kind", "measure")
+    k = int(plan["calls_per_cell"])
+    u = int(plan["warmup_calls"])
+    gpc = int(plan.get("gemms_per_call", GEMMS_PER_CALL))
+    if u < 1:
+        raise CounterPlanRefused(
+            f"warmup_calls {u}: the first call of a cell compiles, so at least "
+            "one warmup per cell must run before the profiled window")
+    if kind == "measure" and k < 2:
+        raise CounterPlanRefused(
+            f"calls_per_cell {k}: the repeat gate reads the spread of a cell's "
+            "calls, and one call has none")
+    if kind == "census" and k < 1:
+        raise CounterPlanRefused(f"calls_per_cell {k}: a census needs a call")
+    cells = [(str(a), int(n)) for a, n in plan["cells"]]
+    if not cells:
+        raise CounterPlanRefused("the plan has no cells")
+    warmups = tuple(c for c in cells for _ in range(u))
+    measured = tuple((a, n, i) for a, n in cells for i in range(k))
+    if kind == "census":
+        return CounterSchedule(warmups, measured, 0, None)
+    return CounterSchedule(warmups, measured, gpc * u * len(cells),
+                           gpc * k * len(cells))
+
+
+def fused_moe_grid(em: int, a_rows: int, top_k: int, block_m: int,
+                   block_n: int, n_cols: int) -> int:
+    """`fused_moe_kernel`'s launch grid, as vLLM's grid lambda forms it.
+
+    CITED from vLLM's `invoke_fused_moe_kernel`: `EM` is the sorted-id
+    buffer's length, cut to `A.size(0) x top_k x BLOCK_M` when the A operand
+    has fewer rows than one M-tile, and the grid is `cdiv(EM, BLOCK_M) x
+    cdiv(N, BLOCK_N)` with `N = B.size(1)`. The w1 GEMM's A is `[T, H]` at
+    top_k k; the w2 GEMM's A is `[T k, F]` at top_k 1. MEASURED on the box:
+    the census and every page refuse a launch whose `launch__grid_size` is
+    not this.
+    """
+    if a_rows < block_m:
+        em = min(em, a_rows * top_k * block_m)
+    return -(-em // block_m) * -(-n_cols // block_n)
+
+
+def expected_grids(cfg, *, em: int, tokens: int, block_m: int,
+                   block_n: int) -> dict[str, int]:
+    """Both GEMMs' grids for one arm at one tread, from its sorted-id length."""
+    return {"w1": fused_moe_grid(em, tokens, cfg.top_k, block_m, block_n,
+                                 2 * cfg.intermediate_size),
+            "w2": fused_moe_grid(em, tokens * cfg.top_k, 1, block_m, block_n,
+                                 cfg.hidden_size)}
+
+
+def predicted_sorted_ids(numel: int, declared: int, block_m: int) -> int:
+    """The sorted-id buffer vLLM documents allocating, `numel + declared x
+    (BLOCK_M - 1)`. For the PLAN PAGE only: the child reads the real length
+    off vLLM's own `moe_align_block_size` and never uses this."""
+    return numel + declared * (block_m - 1)
+
+
+def ids_digest(ids) -> str:
+    """sha256 of a routing tensor's int64 bytes, recorded in the manifest so
+    a page names the exact ids each arm passed."""
+    import hashlib
+
+    import torch
+    flat = ids.detach().to("cpu", torch.int64).contiguous().numpy().tobytes()
+    return hashlib.sha256(flat).hexdigest()
+
+
+def _cell_key(arm: str, n: int) -> str:
+    return f"{arm}/{n}"
+
+
+@dataclass
+class CounterStack:
+    """What the child needs from the box, handed in so a test can plant it.
+
+    On the box `_counter_child_mode` builds it from torch and vLLM; the suite
+    builds one on the CPU with a recording `fused_experts`.
+    """
+
+    fused_experts: object
+    override_config: object
+    align: object
+    device: str
+    synchronize: object
+    nvtx_range: object
+    device_free: object
+    versions: dict
+    device_identity: dict
+
+
+def counter_child(plan: dict, stack: CounterStack) -> dict:
+    """Build R3's arms, make the plan's calls, and return the manifest.
+
+    1. The weights, once: every declared copy, expert-first, through
+       `build_private_weights` at the plan's seed.
+    2. Per tread, the inputs through `arm_inputs`; per cell, the call through
+       `arm_call` and the grid it will launch, from vLLM's own
+       `moe_align_block_size` over that arm's ids (outside the profiled
+       window: it launches alignment kernels only, and ncu filters on
+       `fused_moe_kernel`).
+    3. `counter_schedule`'s warmups, then its measured calls, each measured
+       call inside an NVTX range and followed by a synchronize, every call
+       under `override_config(pinned_config(...))` as in R3.
+    4. For a `measure` plan with SHARED and PRIVATE at a tread of 2 or more,
+       R3's five-part buffer proof at the deepest tread, after the profiled
+       window has closed.
+    """
+    cfg = validate_counter_plan(plan)
+    sched = counter_schedule(plan)
+    block_m, copies = int(plan["block_m"]), int(plan["copies_declared"])
+    dtype = plan["dtype"]
+    treads = [int(n) for n in plan["treads"]]
+    free, free_source = stack.device_free()
+    mem = memory_plan(cfg, dtype, dtype_bytes(dtype), copies,
+                      SWEEP.tokens_for_rows(cfg, max(treads) * block_m),
+                      free, free_source,
+                      flush=(0, "the counter child times nothing, so no "
+                                "flush buffer"),
+                      copies_read=max(treads))
+    if mem.fits is False:
+        raise CounterPlanRefused(
+            f"the weight copies do not fit: predicted peak "
+            f"{mem.predicted_peak_bytes / 1e9:.2f} GB against {mem.headroom:.0%} "
+            f"of {mem.device_free_bytes / 1e9:.2f} GB ({mem.device_source})")
+    conf = dict(pinned_config(int(plan["block_n"]), int(plan["group_m"]),
+                              int(plan["num_stages"])), BLOCK_SIZE_M=block_m)
+    w1, w2, _delta = build_private_weights(cfg, dtype, copies, int(plan["seed"]),
+                                           device=stack.device)
+    native_w1, native_w2 = w1[::copies], w2[::copies]
+    declared_by_arm = {arm: declared_experts(arm, cfg.num_experts, copies)
+                       for arm in ARMS}
+    inputs = {n: arm_inputs(cfg, n, block_m, copies, int(plan["seed"]), dtype,
+                            w1.dtype, device=stack.device) for n in treads}
+    calls, grids, em, digests = {}, {}, {}, {}
+    for arm, n in [(str(a), int(n)) for a, n in plan["cells"]]:
+        tokens, x, ids_by_arm, weights, kw = inputs[n]
+        key = _cell_key(arm, n)
+        calls[key] = arm_call(stack.fused_experts, arm, w1, w2, native_w1,
+                              native_w2, declared_by_arm, x, ids_by_arm,
+                              weights, kw)
+        sorted_ids = stack.align(ids_by_arm[arm], block_m,
+                                 declared_by_arm[arm], None)[0]
+        em[key] = int(sorted_ids.shape[0])
+        grids[key] = expected_grids(cfg, em=em[key], tokens=tokens,
+                                    block_m=block_m,
+                                    block_n=int(plan["block_n"]))
+        digests[key] = ids_digest(ids_by_arm[arm])
+    stack.synchronize()
+    for arm, n in sched.warmups:
+        with stack.override_config(conf):
+            calls[_cell_key(arm, n)]()
+        stack.synchronize()
+    ranges = []
+    for arm, n, _i in sched.measured:
+        name = NVTX_FORMAT.format(arm=arm, group_m=plan["group_m"], n=n)
+        with stack.nvtx_range(name), stack.override_config(conf):
+            calls[_cell_key(arm, n)]()
+            stack.synchronize()
+        ranges.append(name)
+    proof = None
+    deepest = max(treads)
+    if (plan["kind"] == "measure" and deepest >= 2
+            and {SHARED, PRIVATE} <= set(plan["arms"])):
+        tokens, x, ids_by_arm, weights, kw = inputs[deepest]
+        with stack.override_config(conf):
+            got = prove_distinct_buffers(
+                lambda arm: arm_call(stack.fused_experts, arm, w1, w2,
+                                     native_w1, native_w2, declared_by_arm, x,
+                                     ids_by_arm, weights, kw),
+                w1, w2, cfg=cfg, copies_read=deepest, dtype=dtype,
+                private_ids=ids_by_arm[PRIVATE], copies_declared=copies)
+        proof = {"parts": dict(got.parts), "detail": dict(got.detail),
+                 "verdict": got.verdict, "tread": deepest}
+    return {
+        "family": plan["family"], "kind": plan["kind"],
+        "order": [[a, n] for a, n in plan["cells"]],
+        "calls_per_cell": int(plan["calls_per_cell"]),
+        "warmup_calls": int(plan["warmup_calls"]),
+        "gemms_per_call": GEMMS_PER_CALL,
+        "launch_skip": sched.launch_skip, "launch_count": sched.launch_count,
+        "tokens": {str(n): inputs[n][0] for n in treads},
+        "copies_declared": copies,
+        "declared_by_arm": declared_by_arm,
+        "ids_sha256": digests, "sorted_ids_len": em, "grids": grids,
+        "nvtx_ranges": ranges, "pinned": conf, "proof": proof,
+        "memory_plan": asdict(mem), "versions": dict(stack.versions),
+        "device": dict(stack.device_identity),
+    }
+
+
+def counter_child_refusal() -> str:
+    """"" when `--counter-child` can run in this interpreter, else why not:
+    no torch, no CUDA device, or no vLLM (looked for, not imported). The same
+    questions `probe_check_refusal` asks, for this mode's own reasons."""
+    try:
+        import torch
+    except ImportError:
+        return ("no torch in this interpreter, so no card to run R3's calls on")
+    try:
+        cuda = torch.cuda.is_available()
+    except Exception:                                     # noqa: BLE001
+        cuda = False
+    if not cuda:
+        return ("no CUDA device: --counter-child makes R3's fused_experts "
+                "calls under ncu on the card, and there is no card here. Off "
+                "GPU the suite drives `counter_child` with a planted stack")
+    try:
+        found = importlib.util.find_spec("vllm") is not None
+    except (ImportError, ValueError):
+        found = False
+    if not found:
+        return ("vLLM is not importable in this interpreter, and the calls "
+                "--counter-child makes are vLLM's. Run the counter family from "
+                "the vLLM venv (PY_VLLM)")
+    return ""
+
+
+def _package_versions() -> dict:
+    from importlib import metadata
+    out = {"python": sys.version.split()[0]}
+    for dist in ("torch", "triton", "vllm"):
+        try:
+            out[dist] = metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            out[dist] = None
+    return out
+
+
+def _counter_child_mode(args) -> int:
+    """COUNTER-CHILD MODE: run a counter plan's calls and write its manifest.
+
+    REFUSED (2), before anything heavy, when the plan is not R3's call (a
+    tread outside R3's ladder, another declaration, an unknown kind), when
+    its schedule is not countable (K < 2 on a page, U < 1), and when there is
+    no card or no vLLM. Otherwise it makes the calls, writes the manifest the
+    plan names, and exits DONE: it scores nothing, because the page is scored
+    by the parent from the profile.
+    """
+    other = [flag for flag, given in (
+        ("--read", args.read is not None), ("--rescore", args.rescore),
+        ("--self-test", args.self_test is not None),
+        ("--dry-run", args.dry_run), ("--probe-check", args.probe_check))
+        if given]
+    if other:
+        print(f"REFUSED: --counter-child is a mode of its own; drop "
+              f"{' and '.join(other)}")
+        return exit_codes.REFUSED
+    path = Path(args.counter_child)
+    try:
+        plan = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"REFUSED: cannot read the counter plan {path}: {exc}")
+        return exit_codes.REFUSED
+    try:
+        validate_counter_plan(plan)
+        counter_schedule(plan)
+    except CounterPlanRefused as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    why = counter_child_refusal()
+    if why:
+        print(f"REFUSED: {why}")
+        return exit_codes.REFUSED
+    cache = Path(plan["triton_cache"])
+    cache.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_CACHE_DIR"] = str(cache)
+    import torch
+    override_config, _where = SWEEP.find_override()
+    from vllm.model_executor.layers.fused_moe import fused_experts
+    from vllm.model_executor.layers.fused_moe.moe_align_block_size import (
+        moe_align_block_size,
+    )
+
+    def device_free():
+        free, _total = torch.cuda.mem_get_info()
+        return int(free), "free on the attached device, asked of the driver"
+
+    stack = CounterStack(
+        fused_experts=fused_experts, override_config=override_config,
+        align=moe_align_block_size, device="cuda",
+        synchronize=torch.cuda.synchronize, nvtx_range=torch.cuda.nvtx.range,
+        device_free=device_free, versions=_package_versions(),
+        device_identity={"name": torch.cuda.get_device_name(0),
+                         "uuid": device_identity()})
+    try:
+        manifest = counter_child(plan, stack)
+    except CounterPlanRefused as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    Path(plan["manifest"]).write_text(json.dumps(manifest, indent=2))
+    print(f"COUNTER CHILD: {len(manifest['order'])} cells, "
+          f"{manifest['calls_per_cell']} calls each after "
+          f"{manifest['warmup_calls']} warmups; manifest {plan['manifest']}")
+    return exit_codes.DONE
+
+
 def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
               csv_path: Path, cache_root: Path, store: Store, prov,
               dtype: str, copies_declared: int, census: PathCensus,
@@ -7094,7 +7614,6 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     import torch
 
     from moe.bench import timing
-    from moe.spec import BenchSpec, RoutingSpec
 
     reference_clock, clock_source = SWEEP.reference_clock_mhz()
     print("reference clock: "
@@ -7109,9 +7628,6 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
 
     override_config, where = SWEEP.find_override()
     from vllm.model_executor.layers.fused_moe import fused_experts
-    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-
-    from moe.baselines._framework_config import vllm_call_kwargs
 
     print(f"override hook: {where}.override_config")
     print(f"triton cache: {cache_root} (fresh for this run)")
@@ -7178,36 +7694,17 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     samples = read_samples(csv_path)
     conf = dict(pinned, BLOCK_SIZE_M=block_m)
 
+    # THE ARMS' INPUTS AND CALLS ARE BUILT BY `arm_inputs` AND `arm_call`, the
+    # module-level functions the counter child (`--counter-child`) builds its
+    # calls with too, so the timed ladder and the counter measure one
+    # construction of each arm's call and not two.
     def inputs_for(n: int):
-        rows = n * block_m
-        tokens = SWEEP.tokens_for_rows(cfg, rows)
-        spec = BenchSpec(cfg, num_tokens=tokens, dtype=dtype,
-                         routing=RoutingSpec("uniform", 0.0), seed=args.seed)
-        x = torch.randn((tokens, cfg.hidden_size), device="cuda",
-                        dtype=w1.dtype)
-        ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
-        weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
-                             device="cuda")
-        private_ids = private_topk_ids(ids, e, block_m, rows, copies_declared)
-        shared_ids = shared_topk_ids(ids, copies_declared)
-        kw = vllm_call_kwargs(spec)
-        kw["activation"] = MoEActivation(kw["activation"])
-        return tokens, x, {NATIVE: ids, SHARED: shared_ids,
-                           PRIVATE: private_ids}, weights, kw
+        return arm_inputs(cfg, n, block_m, copies_declared, args.seed, dtype,
+                          w1.dtype)
 
     def call_for(arm: str, x, ids_by_arm, weights, kw):
-        # ONE DECLARATION FOR BOTH RATIO ARMS AT EVERY TREAD, over the whole
-        # allocation; native is the study's call over copy 0 through a view.
-        experts = declared_by_arm[arm]
-        a1, a2 = (native_w1, native_w2) if arm == NATIVE else (w1, w2)
-        args_kw = dict(kw, global_num_experts=experts)
-        use_ids = ids_by_arm[arm]
-
-        def call():
-            return fused_experts(hidden_states=x, w1=a1, w2=a2,
-                                 topk_weights=weights, topk_ids=use_ids,
-                                 **args_kw)
-        return call
+        return arm_call(fused_experts, arm, w1, w2, native_w1, native_w2,
+                        declared_by_arm, x, ids_by_arm, weights, kw)
 
     started = time.time()
     for rep in range(args.repeats):
@@ -7635,6 +8132,17 @@ def build_parser() -> argparse.ArgumentParser:
                          "and in the base venv the on-card test can only skip "
                          "(no vLLM). Measures nothing else and writes nothing; "
                          "REFUSED (2) with no CUDA device or no vLLM")
+    ap.add_argument("--counter-child", default=None, metavar="PLAN",
+                    help="run a counter plan's calls under ncu and write its "
+                         "manifest: the child that the r3-arms counter family "
+                         "of scripts/dram_counter_route.py launches in its run "
+                         "mode, never a mode to run by hand. It builds the "
+                         "three arms through the same "
+                         "arm_inputs / arm_call / pinned_config the timed "
+                         "ladder uses, times nothing, and makes exactly the "
+                         "calls counter_schedule lists. REFUSED (2) for a plan "
+                         "outside R3's ladder or declaration, and with no card "
+                         "or no vLLM")
     ap.add_argument("--self-test", default=None, choices=sorted(WORLDS),
                     help="score the gates against a planted world, off GPU")
     ap.add_argument("--plant-noise", type=float, default=0.004,
@@ -7676,6 +8184,10 @@ def _main(argv=None) -> int:
     which the ledger already reads as a finished result.
     """
     args = build_parser().parse_args(argv)
+    if args.counter_child is not None:
+        # FIRST: the counter family's child needs no ridge, no plan page and
+        # no run id; its plan file is the whole of its input.
+        return _counter_child_mode(args)
     if args.probe_check:
         # FIRST, and on its own: the chain runs it from the vLLM venv before
         # the pilot, and it needs neither a ridge nor a plan.
@@ -7827,8 +8339,7 @@ def _main(argv=None) -> int:
                       free_bytes, mem_source, copies_read=treads[-1])
 
     card = detect_card_slug()
-    pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
-                  GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
+    pinned = pinned_config(args.block_n, args.group_m, args.num_stages)
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or SWEEP.results_root()) / "private_weight_reference" / run_id
     csv_path = out_dir / "cells.csv"

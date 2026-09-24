@@ -9,6 +9,13 @@
     python scripts/dram_counter_route.py --analyse c.json   # score ONE counter run
     python scripts/dram_counter_route.py --contrast a.json b.json  # score the RATIO across runs
 
+    python scripts/dram_counter_route.py --dry-run --family r3-arms   # R3's arms: plan, price
+    python scripts/dram_counter_route.py --probe --family r3-arms     # every metric its pages ask
+    python scripts/dram_counter_route.py --run --family r3-arms --census-only --out census.json
+    python scripts/dram_counter_route.py --run --family r3-arms --group-m 4 \
+                                         --census census.json --out r3c-g4.json
+    python scripts/dram_counter_route.py --analyse r3c-g1.json r3c-g4.json  # alpha(G)
+
 WHY THIS EXISTS. Every alpha in this study is `B / L`, the fraction of one full
 weight read that a second M-tile costs, and `L` is an EXTRAPOLATION of the fitted
 memory branch back to a single tile. The 2026-09 adversarial evaluation showed
@@ -63,6 +70,18 @@ WHAT IS NOT HERE. No kernel. The cell profiled is the one
 `override_config` -- and this file only prints the command line that wraps it.
 Writing a second kernel to measure the first one's traffic would measure the
 second kernel.
+
+TWO CELL FAMILIES (`--family`). Everything above is the `ladder` family, the
+default, and it behaves exactly as it did before the second family landed.
+The `r3-arms` family (2026-09-24) profiles R3's three arms
+(`scripts/private_weight_reference.py`) under the counter, one GROUP_SIZE_M
+per invocation, the arm GEMMs only, through R3's own `--counter-child`, and
+scores the bytes against a card-free model of the kernel's schedule, SHARED's
+weight reads bracketed by the activation re-read its PRIVATE control measured
+(`r3_weight_bracket`); see "THE R3 ARMS UNDER A DRAM COUNTER" below and
+docs/COUNTERS.md section 6. It
+reads no ridge, no bandwidth and no calibration, and every page it writes
+names the live card on its first line.
 
 THE ONE ARITHMETIC IDEA, stated once because everything below depends on it.
 At `n` M-tiles per expert the model says DRAM read traffic is
@@ -153,12 +172,14 @@ from moe.bench import provenance as PV  # noqa: E402
 # `activation_bytes_per_row` are the SAME functions the ladder fit is scored
 # against, so if they move, this file's predictions move with them and
 # tests/test_dram_counter_route.py pins the numbers so the move is visible.
-from moe.spec import MODEL_CONFIGS  # noqa: E402  (after sys.path insert)
+from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402  (after sys.path insert)
 from scripts.block_m_crossing_sweep import FIXED as SWEEP_FIXED  # noqa: E402
 from scripts.block_m_crossing_sweep import (  # noqa: E402
     activation_bytes_per_row,
     ai_cap,
+    gemm_operand_read_bytes_per_row,
     q_of_tiles,
+    tokens_for_rows,
     weight_bytes_per_expert,
 )
 
@@ -269,7 +290,55 @@ NCU_METRIC_UNITS: dict[str, tuple[str, dict[str, float]]] = {
     "gpu__time_duration.sum": ("nsecond", {
         "nsecond": 1.0, "usecond": 1e3, "msecond": 1e6, "second": 1e9}),
     "lts__t_sector_op_read_hit_rate.pct": ("%", {"%": 1.0, "percent": 1.0}),
+    # THE SECTOR METRICS, the r3-arms family's (`--family r3-arms`). An L2
+    # sector is 32 bytes; ncu prints the count in sectors and rescales it with
+    # the same decimal prefixes as bytes. `--print-units base` asks for the
+    # bare "sector", and the prefixed spellings are here because the CSV of a
+    # capture made without that flag rescales per launch like every other
+    # metric does.
+    **{m: ("sector", {"sector": 1.0, "Ksector": 1e3, "Msector": 1e6,
+                      "Gsector": 1e9})
+       for m in ("lts__t_sectors_srcunit_tex_op_read.sum",
+                 "lts__d_sectors_fill_device.sum",
+                 "lts__t_sectors_op_read_lookup_miss.sum",
+                 "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+                 "lts__t_sectors_srcunit_ltcfabric.sum")},
 }
+
+#: THE ONE PLACE AN EMPTY UNIT IS ACCEPTED, and it is a separate table so the
+#: rule above ("no byte, time, rate or sector table carries the empty unit")
+#: stays true of `NCU_METRIC_UNITS` and is still tested there. Every metric
+#: here is a `launch__*` launch attribute that ncu prints either with no unit
+#: at all (a count or a ratio) or with the one unit listed: a grid size, a
+#: wave count, an occupancy limit in blocks, registers per thread. None of
+#: them is rescaled, so an empty unit means "unitless" here and cannot mean
+#: "ncu dropped the prefix". A unit not listed still REFUSES, loudly, at the
+#: probe; `tests/test_dram_counter_route.py` holds that every metric with an
+#: empty entry is a `launch__*` metric.
+UNITLESS = ""
+NCU_LAUNCH_UNITS: dict[str, tuple[str, dict[str, float]]] = {
+    "launch__grid_size": (UNITLESS, {UNITLESS: 1.0}),
+    "launch__waves_per_multiprocessor": (UNITLESS, {UNITLESS: 1.0}),
+    "launch__registers_per_thread": ("register/thread", {
+        "register/thread": 1.0, UNITLESS: 1.0}),
+    **{m: ("block", {"block": 1.0, UNITLESS: 1.0})
+       for m in ("launch__occupancy_limit_blocks",
+                 "launch__occupancy_limit_registers",
+                 "launch__occupancy_limit_shared_mem",
+                 "launch__occupancy_limit_warps")},
+}
+
+
+def unit_table(metric: str) -> tuple[str, dict[str, float]]:
+    """`(canonical unit, accepted units)` for a registered metric. One lookup
+    over both tables, so the parser never scales a metric it has no table for."""
+    if metric in NCU_METRIC_UNITS:
+        return NCU_METRIC_UNITS[metric]
+    return NCU_LAUNCH_UNITS[metric]
+
+
+def registered_metric(metric: str) -> bool:
+    return metric in NCU_METRIC_UNITS or metric in NCU_LAUNCH_UNITS
 
 #: The byte metrics, the ones divided by the call count. A rate and a duration
 #: are not; the rate is a weighted mean and the duration is per call because it
@@ -372,6 +441,17 @@ NCU_PROBE_KERNEL = REPO / "moe" / "bench" / "counter_probe_kernel.py"
 #: eighth of the one minute" until 2026-09-15, which inverted the comparison it
 #: was making: 180 s is three times sixty, not an eighth of it.
 NCU_PROBE_TIMEOUT_S = 180
+
+#: THE CELL FAMILIES `--family` chooses between. `ladder` is the cell this
+#: file registered before 2026-09-24: the whole-layer `fused_experts` call
+#: under the timed sweep's instrument, one tile count per ncu invocation. It
+#: is the default and every mode behaves byte-identically under it. `r3-arms`
+#: is R3's three arms (`scripts/private_weight_reference.py`) under the
+#: counter, one GROUP_SIZE_M per invocation; see "THE R3 ARMS UNDER A DRAM
+#: COUNTER" below and docs/COUNTERS.md section 6.
+LADDER_FAMILY = "ladder"
+R3_FAMILY = "r3-arms"
+FAMILIES: tuple[str, str] = (LADDER_FAMILY, R3_FAMILY)
 
 
 # --------------------------------------------------------------------------
@@ -1633,8 +1713,13 @@ def probe_module_flag() -> dict:
     return {"available": False, "why": "the parameter is not listed by this driver"}
 
 
-def ncu_probe_argv(binary: str, log_file: Path) -> list[str]:
-    """The probe invocation: one registered metric over one real kernel.
+def ncu_probe_argv(binary: str, log_file: Path,
+                   metrics: tuple[str, ...] = (NCU_PROBE_METRIC,)) -> list[str]:
+    """The probe invocation: the registered metrics over one real kernel.
+
+    The ladder family asks its one metric. The r3-arms family asks its WHOLE
+    list (`r3_probe_metrics`): a probe that proves one counter readable says
+    nothing about the sector and launch metrics the R3 pages are gated on.
 
     Four flags and each is load-bearing.
 
@@ -1663,7 +1748,7 @@ def ncu_probe_argv(binary: str, log_file: Path) -> list[str]:
                            interleave in one stream, and the child's stdout is
                            where the probe kernel's marker line lands.
     """
-    return [binary, "--metrics", NCU_PROBE_METRIC,
+    return [binary, "--metrics", ",".join(metrics),
             "--launch-count", "1", "--target-processes", "all",
             "--csv", "--page", "raw", "--log-file", str(log_file),
             "--", sys.executable, str(NCU_PROBE_KERNEL)]
@@ -1687,7 +1772,7 @@ def probe_kernel_word(blob: str) -> tuple[str, str]:
     return "", ""
 
 
-def probe_ncu() -> dict:
+def probe_ncu(family: str = LADDER_FAMILY) -> dict:
     """Is ncu installed, and CAN IT READ A COUNTER ON THIS BOX?
 
     THE DEFECT THIS REPLACES, measured on a rented H200 on 2026-09-15. This
@@ -1729,22 +1814,119 @@ def probe_ncu() -> dict:
     single launch. Against an arm the session books a minute for and counter
     arms it books two hours for, fifteen seconds to find out whether those two
     hours can happen at all is the cheapest thing in the session.
+    
+    THE r3-arms FAMILY ASKS MORE (`--probe --family r3-arms`, and `--run
+    --family r3-arms`, which calls this). It first asks ncu which metrics this
+    chip offers (`query_metric_names`), refuses when a STRICT one is absent,
+    drops the cross-check and recorded ones it lacks, and then asks the probe
+    kernel for every metric left. OPEN then means every STRICT metric came
+    back as a number; which cross-check and recorded metrics came back is
+    recorded (`metrics_proven`), and those are the only ones a page gates on.
+
+    ONE UNKNOWN NAME MUST NOT COST THE VERDICT. A name this ncu does not know
+    refuses the whole invocation, and a readable metric list does not rule
+    that out: the `launch__*` names pass the list check unverified
+    (`r3_probe_metrics`). So whenever the whole ask read no counter for a
+    reason other than ERR_NVGPUCTRPERM, whatever the list said, the probe asks
+    again: first STRICT plus the cross-check and recorded metrics the list
+    verified (no `launch__*` optional), then STRICT alone, skipping an ask it
+    has already made and stopping at the first ask that reads a counter or is
+    refused permission. `attempts` records every ask and `first_attempt`
+    says why the earlier ones read nothing; an optional metric the last ask
+    left out is listed in `metrics_unproven`, so no page gates on it. Until
+    2026-09-24 the retry ran only when the list could not be read, so one
+    `launch__` name this ncu does not know read REFUSE on a box whose
+    counters work, and `--run --family r3-arms` refused with it.
     """
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
         return {"present": False, "counters_read": False, "why": "no ncu on PATH"}
     rc, out, err = _run([binary, "--version"], timeout=30)
     version = (out or err).strip().splitlines()[-1] if (out or err) else ""
+    if family != R3_FAMILY:
+        return _probe_once(binary, version, (NCU_PROBE_METRIC,), ())
+    names, query = query_metric_names(binary)
+    strict, optional, dropped, refused = r3_probe_metrics(names)
+    if refused:
+        return {"present": True, "binary": binary, "version": version,
+                "family": R3_FAMILY, "returncode": None, "metric": strict,
+                "probe_kernel": "NOT_RUN", "probe_kernel_detail": "",
+                "counters_read": False, "permission_refused": False,
+                "metric_value": None, "metrics_query": query,
+                "metrics_dropped": dropped, "cause": refused, "output_head": ""}
+    verified = () if names is None else tuple(m for m in optional
+                                              if not m.startswith("launch__"))
+    asks: list[tuple[str, ...]] = []
+    for ask in (optional, verified, ()):
+        if ask not in asks:
+            asks.append(ask)
+    attempts: list[dict] = []
+    info: dict = {}
+    for ask in asks:
+        info = _probe_once(binary, version, strict, ask, family=R3_FAMILY)
+        error = next((ln.strip() for ln in str(info.get("output_head") or "").splitlines()
+                      if "==ERROR==" in ln), "")
+        attempts.append({"metrics": list(strict + ask),
+                         "counters_read": bool(info["counters_read"]),
+                         "permission_refused": bool(info["permission_refused"]),
+                         "ncu_error": error, "cause": info.get("cause")})
+        if info["counters_read"] or info["permission_refused"]:
+            break
+    if len(attempts) > 1:
+        info["first_attempt"] = "; ".join(
+            f"attempt {i + 1} ({len(a['metrics'])} metrics) read no counter: "
+            + (f"ncu said {a['ncu_error']!r}; " if a["ncu_error"] else "") + str(a["cause"])
+            for i, a in enumerate(attempts[:-1]))
+        last = set(attempts[-1]["metrics"])
+        unproven = info.setdefault("metrics_unproven", {})
+        for m in optional:
+            if m not in last:
+                unproven[m] = (f"asked by attempt 1, which read no counter, and left "
+                               f"out of attempt {len(attempts)}, the one this verdict "
+                               "is read off")
+    info["attempts"] = attempts
+    info["metrics_query"] = query
+    info["metrics_dropped"] = dropped
+    return info
+
+
+def _probe_once(binary: str, version: str, strict: tuple[str, ...],
+                optional: tuple[str, ...], family: str = LADDER_FAMILY) -> dict:
+    """One profiled launch of the probe kernel asking `strict + optional`."""
     with tempfile.TemporaryDirectory(prefix="ncu-counter-probe-") as tmp:
         log_file = Path(tmp) / "probe.csv"
-        rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file),
+        rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file, strict + optional),
                                timeout=NCU_PROBE_TIMEOUT_S)
         log_text = log_file.read_text() if log_file.exists() else ""
-    return probe_reading(binary, version, rc2, out2, err2, log_text)
+    return probe_reading(binary, version, rc2, out2, err2, log_text,
+                         strict=strict, optional=optional, family=family)
+
+
+def query_metric_names(binary: str) -> tuple[frozenset[str] | None, str]:
+    """`(the base metric names this ncu offers on this box, how that was
+    read)`, or `(None, why not)`.
+
+    `ncu --query-metrics` lists the metrics of the attached chip, one base
+    name per row (`dram__bytes_read`, with its `.sum` rollup listed beside it
+    rather than in the name). Parsed as every token shaped like a metric
+    name, so a column reordering in a future ncu cannot empty the set; an
+    empty set, or a nonzero exit, is `None` and the caller asks the whole
+    list instead.
+    """
+    rc, out, err = _run([binary, "--query-metrics"], timeout=120)
+    names = frozenset(re.findall(r"\b[a-z][a-z0-9]*__[a-z0-9_]+\b", out or ""))
+    if rc != 0 or not names:
+        return None, (f"ncu --query-metrics exited {rc} and listed {len(names)} "
+                      f"metric names ({(err or out or '').strip()[:160]}); the "
+                      "whole list is asked of the probe kernel instead")
+    return names, f"ncu --query-metrics listed {len(names)} base metric names"
 
 
 def probe_reading(binary: str, version: str, returncode: int,
-                  stdout: str, stderr: str, log_text: str) -> dict:
+                  stdout: str, stderr: str, log_text: str, *,
+                  strict: tuple[str, ...] = (NCU_PROBE_METRIC,),
+                  optional: tuple[str, ...] = (),
+                  family: str = LADDER_FAMILY) -> dict:
     """What `probe_ncu` CONCLUDES, separated from what it RUNS. Pure.
 
     Split out on 2026-09-15 so `--self-test` can plant the four worlds and
@@ -1755,6 +1937,13 @@ def probe_reading(binary: str, version: str, returncode: int,
     in exactly that position until this split. There is ONE copy: `probe_ncu`
     runs the child and hands its bytes here, `self_test_probe` plants bytes and
     hands them here, and neither restates a rule the other applies.
+
+    `strict` are the metrics OPEN needs as numbers on one profiled launch;
+    `optional` are asked and recorded, never required. The ladder family
+    passes its one metric and nothing optional, which is the reading this
+    function has always made. The r3-arms family passes its STRICT class and
+    everything else it asked, and its payload gains the proven and unproven
+    lists and the CSV layout the parser read.
     """
     rc2, out2, err2 = returncode, stdout, stderr
     # ncu's own errors go to the log file when one is given, and the child's
@@ -1785,18 +1974,36 @@ def probe_reading(binary: str, version: str, returncode: int,
                          "module flag or its container capabilities, both recorded beside "
                          "this -- and not a broken instrument")
         return info
+    if family == R3_FAMILY:
+        info.update({"family": R3_FAMILY, "metric": list(strict),
+                     "metrics_asked": list(strict) + list(optional),
+                     "metrics_proven": [], "metrics_unproven": {}})
     try:
-        launches = parse_ncu_csv(log_text)
-        values = [lz.metrics[NCU_PROBE_METRIC] for lz in launches
-                  if NCU_PROBE_METRIC in lz.metrics]
-        if not values:
+        launches = parse_ncu_csv(log_text, soft=frozenset(optional))
+        first = next((lz for lz in launches if all(m in lz.metrics for m in strict)),
+                     None)
+        if first is None:
             raise CounterRunRefused(
                 f"ncu profiled {len(launches)} launch(es) and none reported "
-                f"{NCU_PROBE_METRIC}")
+                + (strict[0] if len(strict) == 1 else f"every one of {list(strict)}"))
         info["counters_read"] = True
-        info["metric_value"] = values[0]
-        info["cause"] = (f"counters readable: {NCU_PROBE_METRIC} came back as "
-                         f"{values[0]:.6g} on a profiled launch of the probe kernel")
+        info["metric_value"] = first.metrics[strict[0]]
+        if family != R3_FAMILY:
+            info["cause"] = (f"counters readable: {NCU_PROBE_METRIC} came back as "
+                             f"{info['metric_value']:.6g} on a profiled launch of the "
+                             "probe kernel")
+            return info
+        proven = [m for m in (*strict, *optional) if m in first.metrics]
+        info["metrics_proven"] = proven
+        info["metrics_unproven"] = {m: first.unreadable.get(m, "not reported")
+                                    for m in optional if m not in first.metrics}
+        info["csv_layout"], info["csv_header"] = ncu_csv_layout(log_text)
+        info["cause"] = (f"counters readable: all {len(strict)} STRICT metrics of the "
+                         f"r3-arms family came back as numbers on a profiled launch of "
+                         f"the probe kernel ({strict[0]} {info['metric_value']:.6g}); "
+                         f"{len(proven) - len(strict)} of {len(optional)} cross-check "
+                         f"and recorded metrics proven; the CSV was "
+                         f"{info['csv_layout'].upper()}")
         return info
     except CounterRunRefused as exc:
         unreadable = str(exc)
@@ -1881,6 +2088,20 @@ def route_verdict(caps: dict, flag: dict, ncu: dict, nsys: dict) -> tuple[str, l
     open for two weeks; a probe that cannot tell says so.
     """
     notes = []
+    if counter_route_is_open(ncu) and ncu.get("family") == R3_FAMILY:
+        unproven = ncu.get("metrics_unproven") or {}
+        dropped = ncu.get("metrics_dropped") or []
+        return "OPEN", [
+            f"ncu read every STRICT metric of the r3-arms family off a profiled launch "
+            f"of the probe kernel, from a {str(ncu.get('csv_layout')).upper()} CSV: the "
+            "R3 counter run can happen on this box. Next: --run --family r3-arms "
+            "--census-only, then one --run --family r3-arms --group-m G --census "
+            "<census.json> per registered G (--dry-run --family r3-arms prints them "
+            "and their price).",
+            f"proven beyond STRICT: {ncu.get('metrics_proven', [])[len(R3_STRICT_METRICS):]}"
+            f"; not proven, so never gated: {sorted(unproven) or 'none'}; dropped by "
+            f"the metric query: {dropped or 'none'}"
+            + (f"; {ncu['first_attempt']}" if ncu.get("first_attempt") else "")]
     if counter_route_is_open(ncu):
         return "OPEN", [f"ncu read {ncu.get('metric')} off a profiled launch of the probe "
                         f"kernel ({ncu.get('metric_value')}): a counter is READABLE on "
@@ -1997,10 +2218,12 @@ def probe_exit(verdict: str, gates: list[Gate]) -> int:
 
 
 def do_probe(args) -> int:
+    family = getattr(args, "family", LADDER_FAMILY)
     caps, flag = probe_capabilities(), probe_module_flag()
-    ncu, nsys = probe_ncu(), probe_nsys()
+    ncu, nsys = probe_ncu(family), probe_nsys()
     verdict, notes = route_verdict(caps, flag, ncu, nsys)
-    print("ROUTE PROBE")
+    print("ROUTE PROBE" + (f"  family {R3_FAMILY}: every metric its pages ask"
+                           if family == R3_FAMILY else ""))
     print(f"  host      {os.uname().sysname} {os.uname().machine}")
     print(f"  caps      {caps}")
     print(f"  module    {flag}")
@@ -2011,6 +2234,13 @@ def do_probe(args) -> int:
         # never had: which world the CHILD landed in is what decides whether the
         # ncu line above is about counters at all.
         print(f"  kernel    {ncu.get('probe_kernel')}  {ncu.get('probe_kernel_detail', '')}")
+    if family == R3_FAMILY and ncu.get("present"):
+        print(f"  metrics   query: {ncu.get('metrics_query', 'not run')}")
+        print(f"            proven {ncu.get('metrics_proven', [])}")
+        print(f"            unproven {sorted(ncu.get('metrics_unproven') or {})}"
+              f"  dropped {ncu.get('metrics_dropped') or []}")
+        if ncu.get("csv_layout"):
+            print(f"  csv       {ncu['csv_layout']}: {str(ncu.get('csv_header'))[:160]}")
     if nsys.get("present"):
         # "importer MISSING" is only meaningful when nsys is here at all; printing it
         # for a machine with no nsys would report the pod's failure on a laptop.
@@ -2040,10 +2270,12 @@ def do_probe(args) -> int:
         for g in gates:
             for line in g.render():
                 print(line)
-    payload = stamped({"verdict": verdict, "notes": notes, "capabilities": caps,
-                       "module_flag": flag, "ncu": ncu, "nsys": nsys,
-                       "gates": [asdict(g) for g in gates]},
-                      mode="probe", args=args, card=live_card(),
+    body = {"verdict": verdict, "notes": notes, "capabilities": caps,
+            "module_flag": flag, "ncu": ncu, "nsys": nsys,
+            "gates": [asdict(g) for g in gates]}
+    if family == R3_FAMILY:
+        body["family"] = R3_FAMILY
+    payload = stamped(body, mode="probe", args=args, card=live_card(),
                       instrument=PROBE_INSTRUMENT)
     if args.out:
         out = Path(args.out)
@@ -2064,6 +2296,10 @@ class Launch:
     launch_id: str
     kernel: str
     metrics: dict[str, float]
+    #: A SOFT metric (asked, never gated) whose cell could not be read, and
+    #: why. Empty unless the caller named soft metrics: every other metric
+    #: still refuses the whole parse on an unreadable cell.
+    unreadable: dict[str, str] = field(default_factory=dict)
 
 
 def _metric_value(metric: str, unit: str, raw: str) -> float:
@@ -2086,7 +2322,7 @@ def _metric_value(metric: str, unit: str, raw: str) -> float:
         value = float(text)
     except ValueError as exc:
         raise CounterRunRefused(f"{metric}: cannot read {raw!r} as a number") from exc
-    canonical, table = NCU_METRIC_UNITS[metric]
+    canonical, table = unit_table(metric)
     key = (unit or "").strip()
     if key not in table:
         raise CounterRunRefused(
@@ -2098,43 +2334,107 @@ def _metric_value(metric: str, unit: str, raw: str) -> float:
     return value * table[key]
 
 
-def parse_ncu_csv(text: str) -> list[Launch]:
-    """`ncu --csv --page raw` output to one `Launch` per profiled launch.
+#: The two shapes ncu's CSV is parsed in. LONG is one row per (launch,
+#: metric) under `ID`, `Kernel Name`, `Metric Name`, `Metric Unit`, `Metric
+#: Value`, which is the shape this parser was written against. WIDE is one row
+#: per launch with one column per metric and a units row under the header.
+#: NO LIVE ncu CSV HAS EVER BEEN CAPTURED IN THIS REPOSITORY (the only raw ncu
+#: output committed is an ERR_NVGPUCTRPERM, `profiles/q2_kernel_names.txt`),
+#: NVIDIA's CLI documentation does not state which shape `--csv --page raw`
+#: prints, and the recollection this file's r3-arms family was designed on is
+#: that it is WIDE. A parser that read one shape would turn a box whose
+#: counters work into a probe that reads REFUSE ("no ncu CSV header"), which
+#: is the gate that decides a booking. So both are read, the probe records
+#: which one it parsed (`ncu_csv_layout`), and the r3-arms family keeps the
+#: `.ncu-rep` so the CSV can be regenerated off the box.
+CSV_LONG = "long"
+CSV_WIDE = "wide"
 
-    The raw page is one row per (launch, metric), so the launches are recovered
-    by grouping on the launch ID column. The ID is REQUIRED: without it the only
-    other way to tell two launches of the same kernel apart is the kernel time
-    string, which repeats, and merging two launches into one halves the traffic
-    the reduction then divides by the call count.
 
-    Everything before the header is skipped rather than parsed. ncu prefixes its
-    own progress with `==PROF==` and the profiled process writes its own stdout
-    into the same stream when no `--log-file` is given; `--run` always passes
-    one, and this still skips, because a parser that trusts line 1 is a parser
-    that breaks the first time ncu prints a warning.
+def _ncu_csv_header(text: str) -> tuple[str, list[str], list[list[str]]]:
+    """`(layout, header, rows after the header)`, or the no-header refusal.
+
+    Everything before the header is skipped rather than parsed. ncu prefixes
+    its own progress with `==PROF==` and the profiled process writes its own
+    stdout into the same stream when no `--log-file` is given; `--run` always
+    passes one, and this still skips, because a parser that trusts line 1 is
+    a parser that breaks the first time ncu prints a warning.
     """
     import csv as _csv
     rows = list(_csv.reader(text.splitlines()))
-    header = None
     for i, row in enumerate(rows):
-        if {"Kernel Name", "Metric Name", "Metric Value"} <= set(row):
-            header, rows = row, rows[i + 1:]
-            break
-    if header is None:
-        raise CounterRunRefused(
-            "no ncu CSV header in this output: expected a row carrying "
-            "'Kernel Name', 'Metric Name' and 'Metric Value'. THIS IS NOT A FLAG "
-            "PROBLEM -- `ncu_argv` already passes --csv --page raw --log-file, and "
-            "telling the operator to pass them is where this message used to send "
-            "them. A header-less log means ncu collected nothing: either no kernel "
-            "was launched inside the profiled process, or the counter read was "
-            "refused (grep the log for ERR_NVGPUCTRPERM). `--probe` separates those "
-            "two and a re-run with the same flags will not")
+        cols = set(row)
+        if {"Kernel Name", "Metric Name", "Metric Value"} <= cols:
+            return CSV_LONG, row, rows[i + 1:]
+        if "Kernel Name" in cols and any(registered_metric(c) for c in cols):
+            return CSV_WIDE, row, rows[i + 1:]
+    raise CounterRunRefused(
+        "no ncu CSV header in this output: expected a row carrying 'Kernel "
+        "Name', 'Metric Name' and 'Metric Value' (one row per launch and "
+        "metric) or 'Kernel Name' beside a registered metric's own column (one "
+        "row per launch). THIS IS NOT A FLAG "
+        "PROBLEM -- `ncu_argv` already passes --csv --page raw --log-file, and "
+        "telling the operator to pass them is where this message used to send "
+        "them. A header-less log means ncu collected nothing: either no kernel "
+        "was launched inside the profiled process, or the counter read was "
+        "refused (grep the log for ERR_NVGPUCTRPERM). `--probe` separates those "
+        "two and a re-run with the same flags will not")
+
+
+def ncu_csv_layout(text: str) -> tuple[str, str]:
+    """`(layout, the header row as ncu printed it)`, for the probe's record:
+    the first box whose counters work closes the question of which shape
+    `--csv --page raw` prints, and this is where the answer is written down."""
+    layout, header, _rows = _ncu_csv_header(text)
+    return layout, ",".join(f'"{c}"' for c in header)
+
+
+def _no_id_refusal(header: list[str]) -> CounterRunRefused:
+    return CounterRunRefused(
+        f"the ncu CSV has no 'ID' column (columns: {header}). Without a launch "
+        "id two launches of one kernel cannot be told apart and the per-call "
+        "division would be wrong by their count")
+
+
+def _read_value(launch_id: str, metric: str, unit: str, raw: str, soft,
+                metrics: dict, unreadable: dict) -> None:
+    """One cell into `metrics`, or, for a SOFT metric only, its refusal into
+    `unreadable`. A hard metric's refusal propagates and refuses the file."""
+    try:
+        metrics[metric] = _metric_value(metric, unit, raw)
+    except CounterRunRefused as exc:
+        if metric not in soft:
+            raise
+        unreadable[metric] = f"launch {launch_id}: {exc}"
+
+
+def parse_ncu_csv(text: str, *, soft=frozenset()) -> list[Launch]:
+    """`ncu --csv --page raw` output to one `Launch` per profiled launch.
+
+    BOTH LAYOUTS (`CSV_LONG`, `CSV_WIDE`; see there for why). In the long one
+    the launches are recovered by grouping on the launch ID column; in the
+    wide one each row is a launch and the row under the header carries the
+    units. The ID is REQUIRED in both: without it the only other way to tell
+    two launches of the same kernel apart is the kernel time string, which
+    repeats, and merging two launches into one halves the traffic the
+    reduction then divides by the call count. The units are REQUIRED in both,
+    as the `Metric Unit` column or as the units row: ncu rescales per launch.
+
+    `soft` names metrics that are asked and never gated (the r3-arms family's
+    RECORDED class, and at the probe every metric outside the STRICT class):
+    an unreadable cell of one of those lands in `Launch.unreadable` instead of
+    refusing the file. Every other metric refuses on an unreadable cell, as
+    it always has.
+    """
+    layout, header, rows = _ncu_csv_header(text)
     if "ID" not in header:
-        raise CounterRunRefused(
-            f"the ncu CSV has no 'ID' column (columns: {header}). Without a launch "
-            "id two launches of one kernel cannot be told apart and the per-call "
-            "division would be wrong by their count")
+        raise _no_id_refusal(header)
+    if layout == CSV_WIDE:
+        return _parse_wide(header, rows, frozenset(soft))
+    return _parse_long(header, rows, frozenset(soft))
+
+
+def _parse_long(header: list[str], rows: list[list[str]], soft) -> list[Launch]:
     if "Metric Unit" not in header:
         # REQUIRED, and it was optional until 2026-09-10: the column was picked
         # up `if name in header` and its absence left `unit` empty, which the
@@ -2154,33 +2454,70 @@ def parse_ncu_csv(text: str) -> list[Launch]:
     idx = {name: header.index(name) for name in
            ("ID", "Kernel Name", "Metric Name", "Metric Unit", "Metric Value")}
     order: list[str] = []
-    seen: dict[str, tuple[str, dict[str, float]]] = {}
+    seen: dict[str, tuple[str, dict[str, float], dict[str, str]]] = {}
     for row in rows:
         if len(row) != len(header) or row == header:
             continue
         metric = row[idx["Metric Name"]].strip()
-        if metric not in NCU_METRIC_UNITS:
+        if not registered_metric(metric):
             continue
         launch_id = row[idx["ID"]].strip()
         kernel = row[idx["Kernel Name"]].strip()
-        value = _metric_value(metric, row[idx["Metric Unit"]], row[idx["Metric Value"]])
         if launch_id not in seen:
             order.append(launch_id)
-            seen[launch_id] = (kernel, {})
-        known_kernel, metrics = seen[launch_id]
-        if metric in metrics:
+            seen[launch_id] = (kernel, {}, {})
+        known_kernel, metrics, unreadable = seen[launch_id]
+        if metric in metrics or metric in unreadable:
             raise CounterRunRefused(
                 f"launch {launch_id} reports {metric} twice; the ID column is not "
                 "unique in this file and the launches cannot be separated")
         if kernel != known_kernel:
             raise CounterRunRefused(
                 f"launch {launch_id} is named both {known_kernel!r} and {kernel!r}")
-        metrics[metric] = value
+        _read_value(launch_id, metric, row[idx["Metric Unit"]],
+                    row[idx["Metric Value"]], soft, metrics, unreadable)
     if not order:
         raise CounterRunRefused(
             "the ncu CSV carries no row for any registered metric. A profile that "
             "measured nothing also reports no failures")
-    return [Launch(i, seen[i][0], seen[i][1]) for i in order]
+    return [Launch(i, seen[i][0], seen[i][1], seen[i][2]) for i in order]
+
+
+def _parse_wide(header: list[str], rows: list[list[str]], soft) -> list[Launch]:
+    id_at, kernel_at = header.index("ID"), header.index("Kernel Name")
+    columns = [(i, name) for i, name in enumerate(header) if registered_metric(name)]
+    body = [r for r in rows if len(r) == len(header) and r != header]
+    if not body or body[0][id_at].strip():
+        # THE UNITS ROW IS THE WIDE LAYOUT'S `Metric Unit` COLUMN, and it is
+        # required for the same reason: ncu rescales per launch.
+        raise CounterRunRefused(
+            f"the wide ncu CSV has no units row under its header (columns: "
+            f"{header}); the first row under it carries launch id "
+            f"{body[0][id_at]!r}" if body else
+            f"the wide ncu CSV has a header and no rows under it (columns: "
+            f"{header})")
+    units, launches = body[0], body[1:]
+    order: list[str] = []
+    seen: dict[str, Launch] = {}
+    for row in launches:
+        launch_id = row[id_at].strip()
+        if not launch_id:
+            continue
+        if launch_id in seen:
+            raise CounterRunRefused(
+                f"launch {launch_id} appears twice; the ID column is not unique in "
+                "this file and the launches cannot be separated")
+        metrics: dict[str, float] = {}
+        unreadable: dict[str, str] = {}
+        for i, name in columns:
+            _read_value(launch_id, name, units[i], row[i], soft, metrics, unreadable)
+        seen[launch_id] = Launch(launch_id, row[kernel_at].strip(), metrics, unreadable)
+        order.append(launch_id)
+    if not order:
+        raise CounterRunRefused(
+            "the wide ncu CSV carries a header and a units row and no launch. A "
+            "profile that measured nothing also reports no failures")
+    return [seen[i] for i in order]
 
 
 def normalise_per_call(launches: list[Launch], *, calls_floor: int,
@@ -2297,11 +2634,20 @@ def sweep_argv(args, n: int, out_dir: Path) -> list[str]:
             "--cell-budget-ms", "1", "--no-l2-flush", "--out", str(out_dir)]
 
 
+def ncu_common_flags(cache_control: str) -> list[str]:
+    """The replay and cache flags every profiled invocation in this file
+    passes, written once: the ladder family's `ncu_argv` and the r3-arms
+    family's `r3_ncu_argv` both take them from here. Kernel replay, so every
+    profiled launch is replayed once per metric pass, and ncu's cache control,
+    which with "all" flushes every cache before each pass."""
+    return ["--replay-mode", "kernel", "--cache-control", cache_control]
+
+
 def ncu_argv(binary: str, cache_control: str, log_file: Path) -> list[str]:
     """The profiler wrapper. `--log-file` is not optional here: without it ncu's
     CSV and the profiled process's own stdout interleave in one stream."""
     return [binary, "--metrics", ",".join(NCU_METRICS),
-            "--replay-mode", "kernel", "--cache-control", cache_control,
+            *ncu_common_flags(cache_control),
             "--csv", "--page", "raw", "--target-processes", "all",
             "--log-file", str(log_file)]
 
@@ -2585,12 +2931,20 @@ def run_id_for(mode: str, args, card: str) -> str:
     """
     if mode == "probe":
         knobs: dict = {"mode": mode}
+        if getattr(args, "family", LADDER_FAMILY) == R3_FAMILY:
+            knobs["family"] = R3_FAMILY
     elif mode == "bracket":
         knobs = {"mode": mode,
                  "published": sorted(str(p) for p in (args.published or []))}
     elif mode == "analyse":
-        knobs = {"mode": mode, "payload": str(args.analyse),
+        # ONE payload keeps the id it always had; several are the r3-arms
+        # family's summary, keyed on the set of pages it joined.
+        paths = list(args.analyse) if isinstance(args.analyse, list) else [args.analyse]
+        knobs = {"mode": mode,
+                 "payload": str(paths[0]) if len(paths) == 1 else sorted(map(str, paths)),
                  "anchor": dict(args.anchor or {})}
+        if getattr(args, "timed_reference", None):
+            knobs["timed_reference"] = sorted(map(str, args.timed_reference))
     elif mode == "contrast":
         # The payloads compared and the window that scores them. Two contrasts
         # over different payload sets, or the same set at a different tolerance,
@@ -2599,6 +2953,15 @@ def run_id_for(mode: str, args, card: str) -> str:
                  "tolerance": CONTRAST_TOLERANCE}
     elif mode == "self-test":
         knobs = {"mode": mode}
+    elif mode in ("r3-run", "r3-census"):
+        # The r3-arms family's page and census: the cell (model, dtype, the
+        # pinned tile, the G), the treads, and the call schedule. `--card` is
+        # not a knob here: the page's card is the live device, in `card=`.
+        knobs = {"mode": mode, "family": R3_FAMILY, "model": args.model,
+                 "dtype": args.dtype, "group_m": args.group_m,
+                 "block_n": args.block_n, "block_m": args.block_m,
+                 "num_stages": args.num_stages, "tiles": list(args.tiles),
+                 "calls": R3_CALLS_PER_CELL, "warmups": R3_WARMUP_CALLS}
     elif mode == "run":
         # Everything the profiler consumed, and the two knobs a timed run does
         # not have: the cache-control mode and the marker the call count was
@@ -3530,6 +3893,13 @@ def do_self_test(args) -> int:
         probe_ok &= passed
         print(f"  {label:<58} {'PASS' if passed else 'FAIL'}  {detail}")
     ok &= probe_ok
+
+    print("\n  THE R3-ARMS FAMILY, on planted pages through --run's own reduction.")
+    r3_ok = True
+    for label, passed, detail in self_test_r3():
+        r3_ok &= passed
+        print(f"  {label:<58} {'PASS' if passed else 'FAIL'}  {detail}")
+    ok &= r3_ok
     print(f"\n  SELF TEST {'PASS' if ok else 'FAIL'}")
     # A SELF TEST IS A VALIDITY GATE ON THE ANALYSIS HALF, so its failure is
     # INVALID (3) and not CLAIM_FAIL (1): an estimator that cannot recover a
@@ -3539,8 +3909,9 @@ def do_self_test(args) -> int:
     # line like every other gate in this file, so the log and the code agree.
     gate = Gate("S1", "VALIDITY",
                 "the estimator, the bracket, C1's registration, the contrast scorer, "
-                "the runner's parser and the probe's verdict recover planted alphas, "
-                "ratios, call counts, refusals and routes",
+                "the runner's parser, the probe's verdict and the r3-arms family's "
+                "group model, attribution and gates recover planted alphas, ratios, "
+                "call counts, refusals, routes and worlds",
                 PASS if ok else FAIL, "every planted row above",
                 "all rows PASS", "everything this file computes, everything --run "
                 "would write, everything --contrast would read and the gate that "
@@ -3799,7 +4170,8 @@ def do_contrast(args) -> int:
 
 
 def do_analyse(args) -> int:
-    payload = json.loads(Path(args.analyse).read_text())
+    path = args.analyse[0] if isinstance(args.analyse, list) else args.analyse
+    payload = json.loads(Path(path).read_text())
     gates, summary = score_counter_run(payload)
     print(f"COUNTER RUN  {payload.get('device')}  {payload.get('model')}  "
           f"BLOCK_M={payload.get('block_m')}  cache-control={payload.get('cache_control')}")
@@ -3816,6 +4188,2697 @@ def do_analyse(args) -> int:
     # counter run was recorded as a refuted claim; 3 is INVALID, which would
     # have latched a perfectly good refutation.
     return exit_codes.classify(g.scored() for g in gates)
+
+
+# ==========================================================================
+# THE R3 ARMS UNDER A DRAM COUNTER (`--family r3-arms`).
+#
+# alpha(G) is the fraction of an expert's weight set each extra M-tile
+# re-reads from DRAM, G being Triton's GROUP_SIZE_M swizzle. R3
+# (`scripts/private_weight_reference.py`) builds three arms over one tread
+# ladder: NATIVE (vLLM as shipped), SHARED (72 declared slots over one copy,
+# reuse possible) and PRIVATE (one copy per M-tile, no reuse possible). Its
+# timing could not identify alpha at G >= 4 on the H200, because an on-chip
+# floor hides the traffic, and brackets alpha(1) in [0.915, 1.0]. A DRAM
+# counter reads the traffic itself. This family profiles R3's OWN calls under
+# ncu, one G per invocation, and scores the bytes against a card-free model of
+# the kernel's schedule (`group_reads`).
+#
+# WHAT THE BYTES HOLD BESIDES WEIGHTS. The byte model charges each GEMM's A
+# operand once per M-tile, and the kernel requests it once per N-tile CTA;
+# where a group's column pass outgrows the L2 (`r3_exposure`), the repeats
+# reach DRAM inside the same GEMM total as the weights. PRIVATE's excess over
+# n measures its own share and bounds SHARED's, so every weight claim is
+# scored on SHARED's weight-only bracket (`r3_weight_bracket`).
+#
+# WHY IT LIVES HERE AND NOT IN A NEW SCRIPT. This file already owns the
+# permission probe, the CSV parser and its unit tables, Gate and the exit
+# codes, provenance stamping and git visibility. A parallel script would fork
+# the parser and the probe, which is the "one rule at two call sites" defect
+# this file keeps documenting. R3 is imported LAZILY (`_r3`), inside family
+# functions, so the ladder family's import graph does not change.
+#
+# WHAT IT DOES NOT DO. It uses no ridge, no bandwidth and no calibration, so
+# `--card` is not read and `measured_ridge` does not gate it. Its bytes are
+# the ATTACHED card's: every page's first line names that card
+# (`card_line`), and none of them is the study's H200.
+# ==========================================================================
+
+#: The metrics the family asks, in three classes, and the reason for each.
+#:
+#: STRICT. The run refuses without them, and V2 fails a page missing one on
+#: any launch. `dram__bytes_read.sum` is the traffic; `dram__bytes_write.sum`
+#: says whether a write share is hiding in the read model; the L2 read sectors
+#: the SMs request (`lts__t_sectors_srcunit_tex_op_read.sum`) are what V6 holds
+#: equal across the three arms, which issue identical loads; `launch__grid_size`
+#: attributes every launch to its cell (`attribute_launches`); the duration is
+#: replay time at the base clock and is never compared with a ladder.
+R3_STRICT_METRICS: tuple[str, ...] = (
+    "dram__bytes_read.sum",
+    "dram__bytes_write.sum",
+    "lts__t_sectors_srcunit_tex_op_read.sum",
+    "launch__grid_size",
+    "gpu__time_duration.sum",
+)
+#: CROSS-CHECK. Asked when this chip offers them, and a gate reads one only
+#: when the probe PROVED it readable (`metrics_proven`); the dry run says so.
+#: V8 holds DRAM bytes against the L2 sectors filled from DRAM.
+R3_CROSSCHECK_METRICS: tuple[str, ...] = (
+    "lts__d_sectors_fill_device.sum",
+    "lts__t_sectors_op_read_lookup_miss.sum",
+    "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+    "lts__t_sector_op_read_hit_rate.pct",
+)
+#: RECORDED, never gated. The four occupancy limits set the co-residency
+#: window C1 reads at G=1 (`coresident_window`); if they were not proven, that
+#: claim is not asked. An unreadable cell of one of these never refuses a
+#: page: they are parsed SOFT.
+R3_RECORDED_METRICS: tuple[str, ...] = (
+    "launch__occupancy_limit_blocks",
+    "launch__occupancy_limit_registers",
+    "launch__occupancy_limit_shared_mem",
+    "launch__occupancy_limit_warps",
+    "launch__registers_per_thread",
+    "launch__waves_per_multiprocessor",
+    "lts__t_sectors_srcunit_ltcfabric.sum",
+)
+R3_OCCUPANCY_LIMITS: tuple[str, ...] = R3_RECORDED_METRICS[:4]
+R3_ALL_METRICS: tuple[str, ...] = (R3_STRICT_METRICS + R3_CROSSCHECK_METRICS
+                                   + R3_RECORDED_METRICS)
+
+#: The page field each summed or averaged metric lands in. `launch__grid_size`
+#: lands in `grid_size`, per GEMM, and the recorded ones in `recorded`.
+R3_FIELDS: dict[str, str] = {
+    "dram__bytes_read.sum": "dram_bytes_read",
+    "dram__bytes_write.sum": "dram_bytes_write",
+    "lts__t_sectors_srcunit_tex_op_read.sum": "l2_tex_read_sectors",
+    "gpu__time_duration.sum": "gpu_time_ns",
+    "lts__d_sectors_fill_device.sum": "l2_fill_device_sectors",
+    "lts__t_sectors_op_read_lookup_miss.sum": "l2_read_miss_sectors",
+    "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum": "l2_tex_read_hit_sectors",
+    "lts__t_sector_op_read_hit_rate.pct": "l2_read_hit_pct",
+}
+#: The per-GEMM fields V2 requires as numbers on every cell.
+R3_STRICT_FIELDS: tuple[str, ...] = ("dram_bytes_read", "dram_bytes_write",
+                                     "l2_tex_read_sectors", "gpu_time_ns",
+                                     "grid_size")
+#: A rate, which is weighted across the two GEMMs rather than summed.
+R3_RATE_FIELDS: tuple[str, ...] = ("l2_read_hit_pct",)
+
+#: Bytes per L2 sector. V8 converts sector counts to bytes with it.
+L2_SECTOR_BYTES = 32
+
+#: THE REGISTERED G, IN THE ORDER THEY RUN. 64 first because it has the
+#: sharpest prediction (one read per weight byte) and carries the private
+#: arm's +15.8% timed cost at fixed bytes; 1 is the traffic-bound regime; 4 is
+#: the first G whose timing is floored; 2 is the regime locator. 16 is
+#: optional (`R3_OPTIONAL_GROUP`): it bridges session 5's timed set and tests
+#: the group model's 1.3 / 1.075 / 1.0 at G = 4 / 16 / 64.
+R3_GROUPS: tuple[int, ...] = (64, 1, 4, 2)
+R3_OPTIONAL_GROUP = 16
+
+#: THE TREADS. n=1 is the identity tread (SHARED and PRIVATE are one call);
+#: n=6 is R3's deepest; n=3 is required (four points for an OLS residual, the
+#: first tread where G=2 pays a second group, G=4's mid-step); n=4 is where
+#: tiles align with groups at G=4 and G=16 and the group model predicts a DROP
+#: from n=3, which no per-tile scalar alpha can produce. n=5 is omitted: its
+#: q equals q(6) at G=2 and G=4.
+R3_TREADS: tuple[int, ...] = (1, 2, 3, 4, 6)
+#: The census's mini plan: NATIVE at these treads, one warmup, one call.
+R3_CENSUS_TREADS: tuple[int, ...] = (1, 6)
+
+#: K, the measured calls per cell (V3 reads their spread), and U, the warmup
+#: calls per cell ahead of the profiled window (the first compiles).
+R3_CALLS_PER_CELL = 3
+R3_WARMUP_CALLS = 2
+
+#: ncu's kernel filter: the fused MoE GEMM only, by function name.
+R3_KERNEL_FILTER = "regex:^fused_moe_kernel$"
+
+#: The script whose `--counter-child` mode ncu runs.
+R3_CHILD = REPO / "scripts" / "private_weight_reference.py"
+
+#: The card the study's timing pages were measured on. Every page and
+#: summary says whether it is this one; none of the counter boxes is.
+STUDY_CARD = "nvidia_h200"
+
+#: The keys a card block carries, and the ones V0 requires non-empty.
+R3_CARD_KEYS: tuple[str, ...] = ("name", "slug", "uuid", "sm_count", "l2_bytes",
+                                 "capability", "memory_bytes", "driver",
+                                 "study_card", "same_card_as_study")
+R3_CARD_REQUIRED: tuple[str, ...] = ("name", "uuid", "sm_count", "l2_bytes",
+                                     "capability", "driver")
+
+#: VALIDITY thresholds, each a tolerance on a comparison and none a quantity
+#: derived from a calibration.
+R3_REPEAT_TOL = 0.01              # V3: (max - min) / median of a cell's K calls
+R3_IDENTITY_FLOOR = 0.005         # V4: |R_S(1) / R_P(1) - 1| at least this wide
+R3_SPREAD_FACTOR = 3.0            # V4, V7: the floor widens to 3x the repeat spread
+R3_Q1_BAND: tuple[float, float] = (0.97, 1.03)     # V4: every arm's q(1)
+R3_PRIVATE_BAND: tuple[float, float] = (0.97, 1.5)  # V5: q_P(n) / n and its slope
+R3_REQUEST_TOL = 0.005            # V6: requested L2 sectors across arms
+R3_DECLARATION_FLOOR = 0.01       # V7: native against shared DRAM reads
+R3_COUNTER_TOL = 0.02             # V8: DRAM bytes against 32 x L2 fill sectors
+#: CLAIM thresholds.
+R3_GROUP_TOL = 0.05               # C1: w1 within 5% of group_reads, G >= 2
+R3_FULL_REREAD_MIN = 0.95         # C1 at G=1: q_S,w1(n) >= 0.95 n
+R3_W2_CEILING = 1.05              # C2: q_S,w2(n) <= 1.05 group_reads
+R3_PRIVATE_EXCESS = 0.03          # C6: q_P,total(n) <= 1.03 n
+R3_ALPHA1_CEILING = 1.03          # C5 at G=1: the bracket's upper edge, widened by V4's band
+
+#: GPU TIME, priced by these registered constants and multiplied by the dry
+#: run; the page re-prices the rest from the first G's own per-launch time.
+#: Per G on 1x H100 SXM5: the child's torch and vLLM import, the weight build,
+#: the Triton compiles, ncu's per-launch overhead (a device-side save of the
+#: ~26 GB footprint included), and the proof and reduction.
+R3_COST_S: dict[str, float] = {"child_start": 25.0, "weight_build": 2.0,
+                               "compile": 60.0, "proof_and_reduce": 12.0}
+R3_COST_PER_LAUNCH_S = 1.5
+R3_COST_PER_LAUNCH_PESSIMISTIC_S = 5.0
+#: The metric query, the probe and the census, once per box.
+R3_COST_PREFLIGHT_S = 180.0
+#: The VM booking the dry run recommends: venv downloads, measurement, one
+#: parser or door debug loop, and exfiltration.
+R3_VM_BOOKING_H = 1.5
+
+#: The instruments the family's modes stamp. None is `timing.TIMING_BASIS`.
+R3_RUN_INSTRUMENT = ("nsight-compute/dram-counters/replay-mode-kernel/cache-control-all/"
+                     "clock-control-base/r3-arms-fused_moe_kernel-launches-attributed-"
+                     "by-order-and-grid; NOT timing.TIMING_BASIS")
+R3_CENSUS_INSTRUMENT = ("nsight-compute/launch-census/no-skip-no-cap/fused_moe_kernel-only; "
+                        "counts launches and reads grids, times nothing")
+R3_ANALYSE_INSTRUMENT = "arithmetic-over-r3-counter-pages/no-kernel-timed"
+
+R3_SCHEMA_VERSION = 1
+
+#: The keys an r3-arms page carries, the ONE place they are named. The writer
+#: (`check_r3_page`, called on every page `--run` writes) and the schema block
+#: below are both checked against these by the test suite.
+R3_TOP_KEYS: tuple[str, ...] = (
+    "family", "schema", "run_id", "provenance", "card", "stack", "ncu", "design",
+    "byte_model", "census", "proof", "cells", "group_model", "estimates", "gates")
+R3_CELL_KEYS: tuple[str, ...] = (
+    "arm", "n", "tokens", "declared", "calls", "launches", "grid", "per_call",
+    "per_gemm", "per_call_values", "spread_rel", "recorded")
+
+R3_SCHEMA_TEXT = """\
+{
+  "family": "r3-arms", "schema": 1, "run_id": "<live card slug>-...",
+  "provenance": {...},     # commit, dirty, host: the PV stamp
+  "card": {"name", "slug", "uuid", "sm_count", "l2_bytes", "capability",
+           "memory_bytes", "driver", "study_card": "nvidia_h200",
+           "same_card_as_study"},        # THE LIVE DEVICE, never --card
+  "stack": {"torch", "triton", "vllm", "python"},
+  "ncu": {"binary", "version", "argv", "replay_mode": "kernel",
+          "cache_control": "all", "clock_control": "base", "report",
+          "report_sha256", "csv", "csv_layout": "wide"|"long",
+          "metrics_asked", "metrics_dropped", "capture_commit"},
+  "design": {"model", "dtype", "block_m", "block_n", "block_k", "num_warps",
+             "num_stages", "group_m", "treads", "arms", "copies_declared",
+             "declared_reason", "declared_by_arm", "calls_per_cell",
+             "warmup_calls", "gemms_per_call", "launch_skip", "launch_count",
+             "seed"},
+  "byte_model": {"W", "W_w1", "W_w2", "operand_per_tile_w1",
+                 "operand_per_tile_w2", "source"},
+  "census": {"path", "sha256", "gemms_per_call"},
+  "proof": {"parts", "detail", "verdict", "tread"},   # R3's five-part proof
+  "cells": [ {"arm": "shared", "n": 3, "tokens": 384, "declared": 72,
+              "calls": 3, "launches": 6, "grid": {"w1": ..., "w2": ...},
+              "per_call": {"dram_bytes_read", "dram_bytes_write",
+                           "l2_tex_read_sectors", "gpu_time_ns", ...},
+              "per_gemm": {"w1": {..., "grid_size"}, "w2": {...}},
+              "per_call_values": [K reads], "spread_rel": 0.001,
+              "recorded": {"w1": {occupancy ...}, "w2": {...}} }, ... ],
+  "group_model": {"model", "q": {"n": group_reads(E, n, G)}},
+  "estimates": {"alpha_bracket": {"total", "w1", "w2"}: [lo, hi],
+                "e_P", "q_S_bracket", "alpha_slope": {"total", "w1", "w2"},
+                "residual", "alpha_ratio", "alpha_diff", "q_S", "q_P", "q_N"},
+  "gates": [asdict(Gate), ...]
+}
+
+  PER CALL means one fused_experts call: its w1 launch plus its w2 launch,
+  the mean over the cell's K measured calls. `per_call_values` are the K
+  individual per-call DRAM reads the repeat gate reads. The byte fields sum
+  the two GEMMs; `l2_read_hit_pct` is the two GEMMs' rates weighted by their
+  requested L2 read sectors. Cross-check fields are present only when the
+  probe proved their metric; recorded ones never gate. `grid` is the grid the
+  child derived from vLLM's own sorted-id buffer, and `per_gemm[g].grid_size`
+  is the one ncu read off every launch.
+
+  THE WEIGHT-ONLY BRACKET. e_P[g][n] = max(q_P,g(n) - n, 0) is PRIVATE's
+  excess over n: its weights are read exactly n times, so e is its activation
+  re-read, which bounds SHARED's. q_S_bracket[g][n] = [q_S - e, q_S] holds
+  SHARED's weight-only q; alpha_bracket is the least and greatest OLS slope
+  over it, and alpha_slope the upper edge's slope. C1, C2, C3 and C5 at G=1
+  are scored on both edges and read UNKNOWN where they disagree.
+"""
+
+
+def _r3():
+    """R3's module, imported on first use by a family function and never by
+    the ladder family, so `--family ladder`'s import graph is what it was."""
+    scripts = str(REPO / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import private_weight_reference as r3
+    return r3
+
+
+# --------------------------------------------------------------------------
+# The card-free model of the kernel's schedule.
+# --------------------------------------------------------------------------
+
+def group_reads(num_experts: int, n: int, group_m: int) -> float:
+    """Weight reads per `fused_experts` call, in units of one weight set, if L2
+    serves every re-read INSIDE a GROUP_SIZE_M group and none across groups.
+
+    FROM vLLM v0.27.1's pid mapping in `fused_moe_kernel`: `group_id = pid //
+    (GROUP_SIZE_M x num_pid_n)`, `first_pid_m = group_id x GROUP_SIZE_M`, and
+    pid_m varies fastest within a group. The sorted tiles are expert-major in
+    every arm (`private_topk_ids` keeps PRIVATE's copies of expert e
+    contiguous), and the dead tiles the wider declaration adds sit at the
+    tail, so expert e owns M-tiles [e n, e n + n) and every group starts at
+    pid_m 0. Each (expert, N-tile) weight slab is read once per group its
+    expert's tiles fall in, so
+
+        q(n) = (1/E) sum_e ( floor((e n + n - 1) / G) - floor(e n / G) + 1 )
+
+    CARD-FREE: nothing here reads a cache size or an SM count. Where the card
+    enters (co-resident CTAs sharing w2 slabs across groups) the claims read
+    the page's own recorded occupancy (`coresident_window`).
+    """
+    if num_experts < 1 or n < 1 or group_m < 1:
+        raise ValueError(f"group_reads needs E, n and G >= 1, got {num_experts}, "
+                         f"{n}, {group_m}")
+    groups = sum((e * n + n - 1) // group_m - (e * n) // group_m + 1
+                 for e in range(num_experts))
+    return groups / num_experts
+
+
+def pid_mapping_reads(num_experts: int, n: int, group_m: int, *,
+                      num_pid_n: int = 3, dead_tiles: int = 5) -> float:
+    """`group_reads` by brute force: walk every pid of the launch grid through
+    vLLM's pid mapping, dead tail tiles included, and count the distinct
+    (expert, group) pairs whose weights a CTA reads. `--self-test` holds the
+    closed form to this; the test suite holds both to its own walk."""
+    num_pid_m = num_experts * n + dead_tiles
+    in_group = group_m * num_pid_n
+    seen: list[set[int]] = [set() for _ in range(num_experts)]
+    for pid in range(num_pid_m * num_pid_n):
+        group_id = pid // in_group
+        first = group_id * group_m
+        size = min(num_pid_m - first, group_m)
+        pid_m = first + ((pid % in_group) % size)
+        if pid_m < num_experts * n:
+            seen[pid_m // n].add(group_id)
+    return sum(len(s) for s in seen) / num_experts
+
+
+def coresident_window(sm_count: int, ctas_per_sm: int) -> int:
+    """CTAs in flight at once: SMs times the CTAs one SM holds, the latter the
+    smallest of the four occupancy limits the page recorded."""
+    return int(sm_count) * int(ctas_per_sm)
+
+
+def pid_n_count(n_cols: int, block_n: int) -> int:
+    """`num_pid_n`, the N-tiles per M-row: 2F / BLOCK_N for w1, H / BLOCK_N
+    for w2."""
+    return -(-int(n_cols) // int(block_n))
+
+
+def ols_slope(xs, ys) -> float:
+    return ols(list(xs), list(ys))[1]
+
+
+def ols_slope_bounds(xs, lo, hi) -> tuple[float, float]:
+    """The least and the greatest OLS slope over every series y with
+    lo_i <= y_i <= hi_i. The slope is linear in y, with weight (x_i - mean) /
+    Sxx on point i, so each bound takes each point's edge by the sign of its
+    weight. Exact, so a series inside every per-point bracket has its slope
+    inside this one; the slopes of the two edge series are not bounds."""
+    xs = [float(x) for x in xs]
+    if len(xs) < 2 or len(lo) != len(xs) or len(hi) != len(xs):
+        raise ValueError(f"ols_slope_bounds needs two or more points, one bracket "
+                         f"each; got {len(xs)} x, {len(lo)} lo, {len(hi)} hi")
+    mean = statistics.fmean(xs)
+    sxx = sum((x - mean) ** 2 for x in xs)
+    if sxx <= 0:
+        raise ValueError("ols_slope_bounds needs two distinct x")
+    w = [(x - mean) / sxx for x in xs]
+    top = sum(wi * (h if wi > 0 else lo_i) for wi, lo_i, h in zip(w, lo, hi, strict=True))
+    bottom = sum(wi * (lo_i if wi > 0 else h) for wi, lo_i, h in zip(w, lo, hi, strict=True))
+    return bottom, top
+
+
+# --------------------------------------------------------------------------
+# Activation re-reads: what the byte model's once-per-M-tile charge assumes
+# of L2, where it can fail, and how far.
+# --------------------------------------------------------------------------
+
+#: THE PARTITIONS of both target cards' L2. An H100 SXM5's and an A100's L2
+#: is two partitions, and data that every SM reads can count on about one of
+#: them. So a column pass over half the L2 is EXPOSED and one over all of it
+#: is BEYOND: a label for a fully associative LRU, printed as one, which
+#: names cells in advance and decides no gate.
+R3_L2_PARTITIONS = 2
+
+#: The two cards the plan is written for and their L2, as NVIDIA's datasheets
+#: give it, for the dry run only: a page labels against its own card's L2,
+#: read off torch (`live_card_block`).
+R3_TARGET_L2: dict[str, int] = {"H100 SXM5": 50 * 2 ** 20, "A100 40GB SXM4": 40 * 2 ** 20}
+
+#: The planted "activation-thrash" world's extra A passes per call, by the
+#: planted card's label for the cell's working set: none where L2 holds a
+#: column pass, a few where it is EXPOSED, most where it is BEYOND. Planted
+#: numbers, chosen under the full-thrash ceiling, not a model of any card.
+R3_PLANTED_THRASH_PASSES: dict[str, int] = {"held": 0, "EXPOSED": 4, "BEYOND": 12}
+
+
+def r3_gemm_geometry(cfg, gemm: str) -> tuple[int, int]:
+    """`(K, N)` of one GEMM: w1 reads A [rows, H] against [2F, H], w2 reads
+    A [rows, F] against [H, F]."""
+    if gemm == "w1":
+        return cfg.hidden_size, 2 * cfg.intermediate_size
+    if gemm == "w2":
+        return cfg.intermediate_size, cfg.hidden_size
+    raise ValueError(f"no GEMM {gemm!r}; the r3-arms GEMMs are w1 and w2")
+
+
+def r3_activation_ceiling(block_m: int, block_n: int, n_cols: int) -> float:
+    """The most A re-reads one more tread can add to q_g, in units of W_g: an
+    M-tile's A (BM x K) is requested num_pid_n times and charged once, so a
+    full thrash adds (num_pid_n - 1) BM K b per M-tile against the E N K b of
+    W_g per tread, which is (BM/BN)(1 - 1/num_pid_n)."""
+    pid_n = pid_n_count(n_cols, block_n)
+    return (block_m / block_n) * (1.0 - 1.0 / pid_n)
+
+
+def r3_exposure(cfg, dtype: str, block_m: int, block_n: int, group_m: int,
+                n: int) -> dict[str, dict]:
+    """ONE COLUMN PASS OF THE FULLEST GROUP, per GEMM and per arm, in bytes.
+
+    vLLM's pid mapping walks pid_m fastest inside a GROUP_SIZE_M group, so
+    between an M-tile's CTA in one column and its CTA in the next, the group
+    touches every live M-tile's A tile (BM x K x b each) and the column's
+    weight slabs (BN x K x b each): one per EXPERT in the group for SHARED and
+    NATIVE, one per M-TILE for PRIVATE, whose tiles each read their own copy.
+    That sum is the reuse distance of an M-tile's A under sequential CTA
+    order, and the byte model's once-per-M-tile charge holds only while L2
+    keeps it. CTAs in flight together lengthen it (their columns' slabs are
+    touched in between too), so this is the floor of the distance: a cell it
+    names is exposed, and a cell it does not name is not thereby safe. The
+    page measures what happened instead (PRIVATE's excess over n).
+
+    Card-free: `exposure_word` puts a card's L2 beside it. Each arm's row is
+    its fullest group; expert e owns M-tiles [e n, e n + n) and every group
+    starts at pid_m 0 (`group_reads`).
+    """
+    b = dtype_bytes(dtype)
+    live_total = cfg.num_experts * int(n)
+    out: dict[str, dict] = {}
+    for gemm in ("w1", "w2"):
+        k, n_cols = r3_gemm_geometry(cfg, gemm)
+        a_tile, slab = block_m * k * b, block_n * k * b
+        arms: dict[str, dict] = {}
+        for first in range(0, live_total, int(group_m)):
+            tiles = range(first, min(first + int(group_m), live_total))
+            experts = len({m // int(n) for m in tiles})
+            for arm, slabs in (("shared", experts), ("private", len(tiles))):
+                row = {"live_tiles": len(tiles), "slabs": slabs,
+                       "a_bytes": len(tiles) * a_tile, "slab_bytes": slabs * slab,
+                       "working_set": len(tiles) * a_tile + slabs * slab}
+                if arm not in arms or row["working_set"] > arms[arm]["working_set"]:
+                    arms[arm] = row
+        out[gemm] = {"num_pid_n": pid_n_count(n_cols, block_n),
+                     "ceiling_per_tread": r3_activation_ceiling(block_m, block_n, n_cols),
+                     **arms}
+    return out
+
+
+def exposure_word(working_set: float, l2_bytes) -> str:
+    """`held`, `EXPOSED` (over one of the L2's `R3_L2_PARTITIONS`) or `BEYOND`
+    (over the whole L2), or `unknown` without an L2 size. A label, not a
+    gate: it names in advance the cells where L2 may not keep A."""
+    if not l2_bytes:
+        return "unknown"
+    if working_set > l2_bytes:
+        return "BEYOND"
+    if working_set > l2_bytes / R3_L2_PARTITIONS:
+        return "EXPOSED"
+    return "held"
+
+
+def r3_weight_bracket(q: dict, treads) -> tuple[dict, dict, dict]:
+    """`(e, lo, hi)`, each `{part: {n: value}}`: SHARED's WEIGHT-ONLY q lies in
+    [lo, hi] = [q_S - e, q_S], e being PRIVATE's excess over n.
+
+    PRIVATE reads its weights exactly n times by construction (every slab
+    belongs to one M-tile, so no slab is read twice), so its excess over n is
+    what it re-read of everything else, activations above all. SHARED makes
+    the same loads in the same order over fewer distinct slabs, so on an LRU
+    it evicts A no more often: its own activation re-read lies in [0, e]. e
+    is clamped at 0, since a PRIVATE reading under n is noise and V5 floors it.
+    """
+    e = {p: {n: max(q["private"][p][n] - n, 0.0) for n in treads}
+         for p in ("total", "w1", "w2")}
+    hi = {p: {n: q["shared"][p][n] for n in treads} for p in e}
+    lo = {p: {n: hi[p][n] - e[p][n] for n in treads} for p in e}
+    return e, lo, hi
+
+
+def bracket_verdict(lo: float, hi: float, floor: float = -math.inf,
+                    ceiling: float = math.inf) -> str | None:
+    """A claim `floor <= x <= ceiling` scored on a bracket [lo, hi] that holds
+    x: PASS when the whole bracket satisfies it, FAIL when none of it does,
+    None when the edges disagree. For a two-sided claim a bracket that
+    straddles both limits is None too: both edges fail, on opposite sides."""
+    if floor <= lo and hi <= ceiling:
+        return PASS
+    if hi < floor or lo > ceiling:
+        return FAIL
+    return None
+
+
+def claim_over_treads(verdicts: dict) -> str:
+    """A claim at EVERY tread: FAIL when any tread fails it outright, PASS
+    when every tread passes it, else REFUSE, which the RESULT line spells
+    UNKNOWN: the claim is not established, and it is not refuted either."""
+    vals = list(verdicts.values())
+    if any(v == FAIL for v in vals):
+        return FAIL
+    if vals and all(v == PASS for v in vals):
+        return PASS
+    return REFUSE
+
+
+def metric_base(metric: str) -> str:
+    """`dram__bytes_read.sum` -> `dram__bytes_read`: the name ncu's metric
+    query lists, with the rollup suffix off."""
+    return metric.split(".", 1)[0]
+
+
+def r3_probe_metrics(names) -> tuple[tuple[str, ...], tuple[str, ...], list[str], str]:
+    """`(strict, optional, dropped, refusal)` for the probe, from the chip's
+    metric list. `names` None (the query could not be read) asks everything;
+    a STRICT name the chip lacks is a refusal; a cross-check or recorded name
+    it lacks is DROPPED and listed, never asked.
+
+    THE `launch__*` ATTRIBUTES ARE NOT HELD TO THE LIST. They are launch
+    statistics ncu records itself rather than hardware counters, and whether
+    `--query-metrics` lists them is not verified here; holding them to it
+    would let a list that omits them refuse a box whose counters work. The
+    probe's own launch proves them or does not, and one this ncu does not
+    know costs `probe_ncu` a retry without them, never the verdict.
+    """
+    rest = R3_CROSSCHECK_METRICS + R3_RECORDED_METRICS
+    if names is None:
+        return R3_STRICT_METRICS, rest, [], ""
+
+    def offered(m: str) -> bool:
+        return m.startswith("launch__") or metric_base(m) in names
+    missing = [m for m in R3_STRICT_METRICS if not offered(m)]
+    if missing:
+        return (R3_STRICT_METRICS, (), [],
+                f"this ncu's metric list for the attached chip does not offer the "
+                f"STRICT metric(s) {missing}, and every r3-arms page is gated on "
+                "them; the route is not open for this family on this box. Read "
+                "`ncu --query-metrics` and the ncu version before booking a run")
+    return (R3_STRICT_METRICS, tuple(m for m in rest if offered(m)),
+            [m for m in rest if not offered(m)], "")
+
+
+# --------------------------------------------------------------------------
+# The card, which is the live device and never a flag.
+# --------------------------------------------------------------------------
+
+def live_card_block() -> dict | None:
+    """The attached card, read off torch and nvidia-smi, or None with no card.
+
+    The r3-arms page's card is the device it ran on: `--card` is a calibration
+    knob of the ladder family and is not read here.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return None
+        props = torch.cuda.get_device_properties(torch.cuda.current_device())
+    except Exception:                                     # noqa: BLE001
+        return None
+    name = str(props.name)
+    driver, _why = PV._nvidia_smi_driver_version()
+    slug = PV.card_slug(name)
+    return {"name": name, "slug": slug,
+            "uuid": str(getattr(props, "uuid", "") or "") or None,
+            "sm_count": int(props.multi_processor_count),
+            "l2_bytes": int(getattr(props, "L2_cache_size", 0) or 0) or None,
+            "capability": f"{props.major}.{props.minor}",
+            "memory_bytes": int(props.total_memory), "driver": driver,
+            "study_card": STUDY_CARD, "same_card_as_study": slug == STUDY_CARD}
+
+
+def card_line(card) -> str:
+    """THE FIRST LINE OF EVERY PAGE AND SUMMARY: which card every number on it
+    belongs to, and that it is not the study's H200 unless it is."""
+    if not isinstance(card, dict) or not card.get("name"):
+        return ("CARD none: this page carries no card block, so nothing on it names "
+                "the card it came from, and V0 fails it; the study's timing pages "
+                f"are {STUDY_CARD}.")
+    cc = str(card.get("capability") or "?").replace(".", "")
+    l2 = card.get("l2_bytes")
+    l2_text = f"{l2 / 2 ** 20:g}" if l2 else "?"
+    return (f"CARD {card['name']} ({card.get('slug')}, UUID {card.get('uuid')}, "
+            f"sm_{cc}, {card.get('sm_count')} SMs, {l2_text} MiB L2): every number "
+            f"here is THIS card's; the study's timing pages are {STUDY_CARD}.")
+
+
+def r3_stack_versions() -> dict:
+    """torch, triton and vLLM as this interpreter has them, and the Python."""
+    import platform
+    from importlib import metadata
+    out: dict = {"python": platform.python_version()}
+    for dist in ("torch", "triton", "vllm"):
+        try:
+            out[dist] = metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            out[dist] = None
+    return out
+
+
+def _sha256(path: Path) -> str | None:
+    import hashlib
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+# --------------------------------------------------------------------------
+# The plan, the byte model, and the argv, all off GPU.
+# --------------------------------------------------------------------------
+
+def r3_byte_model(cfg, dtype: str, block_m: int) -> dict:
+    """W and the per-tread GEMM operand reads, from their owners.
+
+    `W_w1`, `W_w2` from `moe.bench.weights.routed_expert_weight_bytes_by_gemm`;
+    the operand terms are `gemm_operand_read_bytes_per_row` times E x BLOCK_M,
+    the A-operand bytes one more M-tile per expert makes each GEMM read ONCE:
+    the compulsory read, cold because ncu flushes every cache before each
+    profiled launch.
+
+    ONCE IS AN ASSUMPTION ABOUT L2, NOT ABOUT THE KERNEL. Every (M-tile,
+    N-tile) CTA reads its whole A tile, so an M-tile's A is requested
+    num_pid_n times (2F/BN on w1, H/BN on w2: 448 and 64 for mixtral at BN
+    64), and the charge holds only while L2 keeps it between column passes.
+    At G=1 consecutive CTAs share it; where one column pass of a group (every
+    live M-tile's A plus the column's weight slabs, `r3_exposure`) outgrows
+    the L2, the repeats reach DRAM and land in q as if they were weight
+    re-reads, up to (BM/BN)(1 - 1/num_pid_n) of W_g per tread
+    (`r3_activation_ceiling`). The page bounds them with PRIVATE's measured
+    excess over n (`r3_weight_bracket`); until 2026-09-24 nothing did.
+    """
+    from moe.bench import weights as WEIGHTS
+    by = WEIGHTS.routed_expert_weight_bytes_by_gemm(cfg, dtype)
+    row = gemm_operand_read_bytes_per_row(cfg, dtype_bytes(dtype))
+    return {"W": by["w1"] + by["w2"], "W_w1": by["w1"], "W_w2": by["w2"],
+            "operand_per_tile_w1": cfg.num_experts * block_m * row["w1"],
+            "operand_per_tile_w2": cfg.num_experts * block_m * row["w2"],
+            "source": ("moe.bench.weights.routed_expert_weight_bytes_by_gemm; "
+                       "block_m_crossing_sweep.gemm_operand_read_bytes_per_row x E "
+                       "x BLOCK_M")}
+
+
+def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: int,
+            group_m: int, treads, kind: str, arms, calls: int, warmups: int,
+            profile_dir: Path, stem: str) -> dict:
+    """The plan the child runs, validated by R3 before anything touches a box.
+
+    The declaration is R3's own (`counter_declaration`, over R3's whole ladder
+    and not over this subset), and `validate_counter_plan` and
+    `counter_schedule` refuse it here exactly as the child would.
+    """
+    r3 = _r3()
+    cfg = MODEL_CONFIGS[model]
+    copies, reason = r3.counter_declaration(cfg, block_m)
+    treads = [int(n) for n in treads]
+    plan = {"family": R3_FAMILY, "kind": kind, "model": model, "dtype": dtype,
+            "block_m": int(block_m), "block_n": int(block_n),
+            "num_stages": int(num_stages), "group_m": int(group_m),
+            "treads": treads, "arms": list(arms),
+            "cells": [[a, n] for a in arms for n in treads],
+            "copies_declared": copies, "declared_reason": reason,
+            "calls_per_cell": int(calls), "warmup_calls": int(warmups),
+            "gemms_per_call": r3.GEMMS_PER_CALL, "seed": 0,
+            "manifest": str(Path(profile_dir) / f"{stem}.manifest.json"),
+            "triton_cache": str(Path(profile_dir) / f"{stem}.triton-cache")}
+    r3.validate_counter_plan(plan)
+    r3.counter_schedule(plan)
+    return plan
+
+
+def r3_design(plan: dict) -> dict:
+    """The page's `design` block, read off the plan and R3's own pin."""
+    r3 = _r3()
+    cfg = MODEL_CONFIGS[plan["model"]]
+    sched = r3.counter_schedule(plan)
+    pinned = r3.pinned_config(plan["block_n"], plan["group_m"], plan["num_stages"])
+    copies = int(plan["copies_declared"])
+    return {"model": plan["model"], "dtype": plan["dtype"],
+            "block_m": int(plan["block_m"]), "block_n": pinned["BLOCK_SIZE_N"],
+            "block_k": pinned["BLOCK_SIZE_K"], "num_warps": pinned["num_warps"],
+            "num_stages": pinned["num_stages"], "group_m": pinned["GROUP_SIZE_M"],
+            "treads": list(plan["treads"]), "arms": list(plan["arms"]),
+            "copies_declared": copies, "declared_reason": plan.get("declared_reason"),
+            "declared_by_arm": {a: r3.declared_experts(a, cfg.num_experts, copies)
+                                for a in r3.ARMS},
+            "calls_per_cell": int(plan["calls_per_cell"]),
+            "warmup_calls": int(plan["warmup_calls"]),
+            "gemms_per_call": int(plan["gemms_per_call"]),
+            "launch_skip": sched.launch_skip, "launch_count": sched.launch_count,
+            "seed": int(plan["seed"])}
+
+
+def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
+                launch_skip: int, launch_count: int | None,
+                python: str | None = None, child: Path = R3_CHILD) -> list[str]:
+    """ncu over R3's child: the arm GEMMs only, at a cold L2, a base clock,
+    and exactly the planned launch window.
+
+      `--cache-control all`   (from `ncu_common_flags`) flushes every cache
+                              before each replay pass of every profiled launch,
+                              so each GEMM starts cold. `none` is NOT run:
+                              under kernel replay ncu's first-pass save of all
+                              accessible memory streams through L2 just before
+                              the kernel, so "none" is "the L2 ncu's save left".
+      `--clock-control base`  passed and recorded: the documented default has
+                              moved between versions, and bytes should not
+                              care, so no default is trusted.
+      `-k regex:^fused_moe_kernel$ --kernel-name-base function`
+                              the GEMM launches only; the alignment, the
+                              activation and the reduction run unprofiled.
+      `--launch-skip`, `--launch-count`
+                              from `counter_schedule`: the warmups are
+                              skipped, and exactly K calls per cell are kept.
+      `--nvtx`                the child's ranges, for a human; nothing filters
+                              on them.
+
+    `python` is this interpreter unless the dry run prints a placeholder: the
+    child runs under whichever interpreter runs this file, so --run is run
+    from the vLLM venv.
+    """
+    argv = [binary, "--target-processes", "all", *ncu_common_flags("all"),
+            "--clock-control", "base", "--nvtx", "-k", R3_KERNEL_FILTER,
+            "--kernel-name-base", "function", "--launch-skip", str(launch_skip)]
+    if launch_count is not None:
+        argv += ["--launch-count", str(launch_count)]
+    return argv + ["--metrics", ",".join(metrics), "--export", str(report_path),
+                   "--force-overwrite", "--", python or sys.executable, str(child),
+                   "--counter-child", str(plan_path)]
+
+
+def r3_import_argv(binary: str, report_path: Path) -> list[str]:
+    """The reduction, split from the capture: a parser defect costs a laptop
+    fix and not a re-rent, because the `.ncu-rep` is kept."""
+    return [binary, "--import", str(report_path), "--csv", "--page", "raw",
+            "--print-units", "base"]
+
+
+# --------------------------------------------------------------------------
+# Attribution and reduction: every launch to its (cell, call, GEMM).
+# --------------------------------------------------------------------------
+
+def r3_launch_sequence(manifest: dict) -> list[tuple[str, int, str, bool]]:
+    """`(cell key, call, gemm, warmup)` for every launch ncu profiled, in order.
+
+    A page profiles the K measured calls per cell, cells in manifest order,
+    each call's w1 launch then its w2 launch. A census (no launch count)
+    profiles the warmups too, all of them first, as the child makes them.
+    """
+    gemms = _r3().GEMMS
+    if int(manifest["gemms_per_call"]) != len(gemms):
+        raise CounterRunRefused(
+            f"the manifest says {manifest['gemms_per_call']} GEMMs per call and the "
+            f"attribution knows {len(gemms)}")
+    order = [(str(a), int(n)) for a, n in manifest["order"]]
+    seq: list[tuple[str, int, str, bool]] = []
+    if manifest.get("launch_count") is None:
+        for a, n in order:
+            for u in range(int(manifest["warmup_calls"])):
+                seq += [(f"{a}/{n}", u, g, True) for g in gemms]
+    for a, n in order:
+        for k in range(int(manifest["calls_per_cell"])):
+            seq += [(f"{a}/{n}", k, g, False) for g in gemms]
+    return seq
+
+
+def _launch_order(launches: list[Launch]) -> list[Launch]:
+    """By ncu's launch ID when every ID is an integer, else as printed."""
+    try:
+        return sorted(launches, key=lambda ln: int(ln.launch_id))
+    except ValueError:
+        return list(launches)
+
+
+def attribute_launches(launches: list[Launch], manifest: dict) -> list[dict]:
+    """Every profiled launch mapped to the manifest's (cell, call, GEMM).
+
+    EXACT, not a floor and not "at least": the profile must hold exactly the
+    launches the manifest planned, launch i is the i-th entry of
+    `r3_launch_sequence`, and every launch's `launch__grid_size` must equal the
+    grid the child derived for that arm, tread and GEMM from vLLM's own
+    sorted-id buffer. Any extra, missing or mis-gridded launch raises
+    `CounterRunRefused`, which exits INVALID: a byte total that cannot be
+    attributed launch by launch is the per-call trap in another form.
+    """
+    seq = r3_launch_sequence(manifest)
+    ordered = _launch_order(launches)
+    if len(ordered) != len(seq):
+        raise CounterRunRefused(
+            f"the profile holds {len(ordered)} fused_moe_kernel launches and the "
+            f"manifest planned EXACTLY {len(seq)} ({len(manifest['order'])} cells x "
+            f"{manifest['calls_per_cell']} calls x {manifest['gemms_per_call']} "
+            "GEMMs); an extra or a missing launch shifts every attribution after "
+            "it, so nothing may be divided")
+    out = []
+    for i, (ln, (key, call, gemm, warm)) in enumerate(zip(ordered, seq, strict=True)):
+        if GEMM_MARKER not in ln.kernel:
+            raise CounterRunRefused(
+                f"launch {i} (ID {ln.launch_id}) is {ln.kernel!r}, not {GEMM_MARKER}; "
+                "the kernel filter let through a launch the manifest never planned")
+        grid = ln.metrics.get("launch__grid_size")
+        want = int(manifest["grids"][key][gemm])
+        if grid is None or int(round(grid)) != want:
+            raise CounterRunRefused(
+                f"launch {i} (ID {ln.launch_id}) is attributed to {key} call {call} "
+                f"{gemm} and ran a grid of {grid}, where the child derived {want} from "
+                "vLLM's own sorted-id buffer; the launch order and the manifest "
+                "disagree, so no launch after it can be attributed")
+        out.append({"key": key, "call": call, "gemm": gemm, "warmup": warm,
+                    "launch": ln})
+    return out
+
+
+def r3_spread(values) -> float | None:
+    """(max - min) / median of a cell's per-call reads, or None when fewer
+    than two readings exist or any is missing."""
+    vals = list(values)
+    if len(vals) < 2 or any(v is None for v in vals):
+        return None
+    med = statistics.median(vals)
+    return (max(vals) - min(vals)) / med if med > 0 else None
+
+
+def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> list[dict]:
+    """The attributed launches as page cells: per GEMM, per call, the K values.
+
+    PER CALL is one fused_experts call, its w1 launch plus its w2 launch,
+    averaged over the cell's K measured calls. K is read off the manifest and
+    is also the number of calls counted from the attributed launches; the two
+    must agree or the cell refuses.
+    """
+    gemms = _r3().GEMMS
+    k = int(manifest["calls_per_cell"])
+    asked = set(metrics_asked)
+    by_key: dict[str, dict[int, dict[str, Launch]]] = {}
+    for rec in attributed:
+        if rec["warmup"]:
+            continue
+        by_key.setdefault(rec["key"], {}).setdefault(rec["call"], {})[rec["gemm"]] = \
+            rec["launch"]
+    cells = []
+    for arm, n in manifest["order"]:
+        key = f"{arm}/{n}"
+        calls = by_key.get(key, {})
+        if sorted(calls) != list(range(k)) or any(set(c) != set(gemms)
+                                                   for c in calls.values()):
+            raise CounterRunRefused(
+                f"cell {key} counted {len(calls)} complete calls against the "
+                f"manifest's {k}; K is read off the manifest AND off the launch list, "
+                "and the two must agree")
+        per_gemm: dict[str, dict] = {}
+        recorded: dict[str, dict] = {}
+        for g in gemms:
+            runs = [calls[i][g] for i in range(k)]
+            vals: dict = {}
+            for metric, name in R3_FIELDS.items():
+                if metric not in asked:
+                    continue
+                xs = [ln.metrics.get(metric) for ln in runs]
+                vals[name] = (statistics.fmean(xs) if all(x is not None for x in xs)
+                              else None)
+            grids = {int(round(ln.metrics["launch__grid_size"])) for ln in runs}
+            vals["grid_size"] = grids.pop() if len(grids) == 1 else None
+            per_gemm[g] = vals
+            rec = {}
+            for metric in R3_RECORDED_METRICS:
+                xs = [ln.metrics[metric] for ln in runs if metric in ln.metrics]
+                if len(xs) == k:
+                    rec[metric] = statistics.fmean(xs)
+            recorded[g] = rec
+        per_call_values = []
+        for i in range(k):
+            xs = [calls[i][g].metrics.get("dram__bytes_read.sum") for g in gemms]
+            per_call_values.append(None if any(x is None for x in xs) else sum(xs))
+        per_call: dict = {}
+        for name in per_gemm[gemms[0]]:
+            if name == "grid_size":
+                continue
+            xs = [per_gemm[g].get(name) for g in gemms]
+            if any(x is None for x in xs):
+                per_call[name] = None
+            elif name in R3_RATE_FIELDS:
+                w = [per_gemm[g].get("l2_tex_read_sectors") or 0.0 for g in gemms]
+                per_call[name] = (sum(x * wi for x, wi in zip(xs, w, strict=True)) / sum(w)
+                                  if sum(w) > 0 else statistics.fmean(xs))
+            else:
+                per_call[name] = sum(xs)
+        cells.append({
+            "arm": str(arm), "n": int(n),
+            "tokens": int(manifest["tokens"][str(n)]),
+            "declared": int(manifest["declared_by_arm"][arm]),
+            "calls": k, "launches": k * len(gemms),
+            "grid": {g: int(manifest["grids"][key][g]) for g in gemms},
+            "per_call": per_call, "per_gemm": per_gemm,
+            "per_call_values": per_call_values,
+            "spread_rel": r3_spread(per_call_values), "recorded": recorded})
+    return cells
+
+
+# --------------------------------------------------------------------------
+# The estimators: no bandwidth, no ridge, no intercept, no calibration.
+# --------------------------------------------------------------------------
+
+def _cell_map(payload: dict) -> dict[tuple[str, int], dict]:
+    return {(str(c["arm"]), int(c["n"])): c for c in payload["cells"]}
+
+
+def r3_q(payload: dict, byte_model: dict | None = None) -> dict:
+    """`{arm: {"total"|"w1"|"w2": {n: q}}}`, q(n) = (R(n) - n x operand) / W.
+
+    R is `dram__bytes_read.sum` per call, per GEMM or both GEMMs together;
+    the operand term is the GEMM's A-operand read per extra tread, charged
+    ONCE, and is 0.33% of W on mixtral at BLOCK_M 32. An A re-read L2 did not
+    absorb is not subtracted, so q counts it as a weight re-read; SHARED's
+    weight-only q is bracketed by `r3_weight_bracket`.
+    """
+    design = payload["design"]
+    bm = byte_model or r3_byte_model(MODEL_CONFIGS[design["model"]], design["dtype"],
+                                     int(design["block_m"]))
+    op = {"w1": bm["operand_per_tile_w1"], "w2": bm["operand_per_tile_w2"]}
+    weight = {"w1": bm["W_w1"], "w2": bm["W_w2"], "total": bm["W"]}
+    out: dict = {}
+    for (arm, n), c in _cell_map(payload).items():
+        q = out.setdefault(arm, {"total": {}, "w1": {}, "w2": {}})
+        q["total"][n] = (c["per_call"]["dram_bytes_read"] - n * (op["w1"] + op["w2"])) \
+            / weight["total"]
+        for g in ("w1", "w2"):
+            q[g][n] = (c["per_gemm"][g]["dram_bytes_read"] - n * op[g]) / weight[g]
+    return out
+
+
+def r3_estimates(payload: dict) -> dict:
+    """The page's estimates, recomputed from its cells.
+
+    The PRIMARY product is q_S(n) per tread beside `group_reads`: the model
+    predicts a staircase, so per-tread counts are the result and alpha is a
+    summary of them.
+
+    ACTIVATION RE-READS ARE IN q_S, and the counter cannot split them from
+    weight re-reads inside one GEMM. So SHARED's WEIGHT-ONLY q is a bracket,
+    `q_S_bracket` = [q_S - e, q_S], e = `e_P` being PRIVATE's excess over n
+    (`r3_weight_bracket`), and `alpha_bracket` is the least and greatest OLS
+    slope over it (`ols_slope_bounds`): alpha(G) as a bracket. `alpha_slope`
+    is the OLS slope of q_S, the upper edge's, which counts every activation
+    re-read as a weight re-read; it is printed with its max relative residual
+    and labelled a scalar summary, meaningful where the ladder is affine.
+    `alpha_ratio` is slope(R_S) / slope(R_P), the byte analogue of R3's timed
+    ratio, over every byte both arms read. `alpha_diff` is 1 - (slope_P -
+    slope_S) / W, the slope of the unclamped lower edge q_S - (q_P - n): it
+    cancels an activation term only where it is IDENTICAL in both arms, and
+    PRIVATE's wider slab traffic evicts A at least as often as SHARED's.
+    """
+    design = payload["design"]
+    cfg = MODEL_CONFIGS[design["model"]]
+    bm = r3_byte_model(cfg, design["dtype"], int(design["block_m"]))
+    q = r3_q(payload, bm)
+    shared, private = "shared", "private"
+    treads = sorted(q[shared]["total"])
+    cells = _cell_map(payload)
+
+    def slope(arm: str, part: str) -> float:
+        return ols_slope(treads, [q[arm][part][n] for n in treads])
+
+    a_s, b_s = ols(treads, [q[shared]["total"][n] for n in treads])
+    resid = max(abs((a_s + b_s * n) - q[shared]["total"][n]) / abs(q[shared]["total"][n])
+                for n in treads)
+    raw_s = ols_slope(treads, [cells[(shared, n)]["per_call"]["dram_bytes_read"]
+                               for n in treads])
+    raw_p = ols_slope(treads, [cells[(private, n)]["per_call"]["dram_bytes_read"]
+                               for n in treads])
+    excess, lo, hi = r3_weight_bracket(q, treads)
+    return {
+        "alpha_bracket": {p: list(ols_slope_bounds(treads, [lo[p][n] for n in treads],
+                                                   [hi[p][n] for n in treads]))
+                          for p in ("total", "w1", "w2")},
+        "alpha_bracket_note": ("the least and greatest OLS slope over SHARED's weight-"
+                               "only q in [q_S - e, q_S], e PRIVATE's excess over n"),
+        "e_P": {p: {str(n): v for n, v in excess[p].items()} for p in excess},
+        "q_S_bracket": {p: {str(n): [lo[p][n], hi[p][n]] for n in treads} for p in lo},
+        "alpha_slope": {p: slope(shared, p) for p in ("total", "w1", "w2")},
+        "residual": resid,
+        "residual_note": "a scalar summary; meaningful where the ladder is affine",
+        "alpha_slope_private": {p: slope(private, p) for p in ("total", "w1", "w2")},
+        "alpha_ratio": raw_s / raw_p if raw_p else None,
+        "alpha_diff": 1.0 - (raw_p - raw_s) / bm["W"],
+        "q_S": {p: {str(n): v for n, v in q[shared][p].items()} for p in q[shared]},
+        "q_P": {p: {str(n): v for n, v in q[private][p].items()} for p in q[private]},
+        "q_N": ({p: {str(n): v for n, v in q["native"][p].items()} for p in q["native"]}
+                if "native" in q else None),
+    }
+
+
+# --------------------------------------------------------------------------
+# The gates. VALIDITY fails exit INVALID and void the page; CLAIM fails exit
+# CLAIM_FAIL and are results.
+# --------------------------------------------------------------------------
+
+#: The design a timed report must share with a counter page before C5 may
+#: compare them: the kernel R3 timed, G aside (C5 matches G itself). The
+#: timed report's key, and the page design key it is held to.
+R3_TIMED_DESIGN: tuple[tuple[str, str], ...] = (
+    ("model", "model"), ("dtype", "dtype"), ("block_m", "block_m"),
+    ("pinned.BLOCK_SIZE_N", "block_n"), ("pinned.BLOCK_SIZE_K", "block_k"),
+    ("pinned.num_warps", "num_warps"), ("pinned.num_stages", "num_stages"))
+
+
+def _timed_value(rep: dict, key: str):
+    if key.startswith("pinned."):
+        return (rep.get("pinned") or {}).get(key.split(".", 1)[1])
+    return rep.get(key)
+
+
+def load_timed_reference(paths) -> dict[int, dict]:
+    """R3's timed report.json files, grouped by GROUP_SIZE_M: the ratio each
+    reads, their mean and sd across seeds, the card they were timed on, and
+    each run's duty and fit window. READ, never typed: the 0.915 / 0.706 /
+    0.680 / 0.617 of session 5 are whatever these files hold.
+
+    REFUSES what R3 itself would not pool as a replicate. Until 2026-09-24
+    this read only the experiment, the ratio, G, the card, the seed and the
+    window, so C5 scored a page's bytes against a planted report, an INVALID
+    one, or one from another tile, model, dtype or duty. Now a report that is
+    not R3's, formed no ratio, is planted (`synthetic`), or whose own VALIDITY
+    gates did not all PASS is refused; the runs pooled at one G must share
+    R3's design (`R3_TIMED_DESIGN`, the duty and the fit window), because a
+    mean and sd over two designs is two estimators in one envelope; and the
+    page's own design is held to them by `timed_reference_mismatch`.
+    """
+    r3 = _r3()
+    by_g: dict[int, list[dict]] = {}
+    for p in paths or ():
+        rep = json.loads(Path(p).read_text())
+        if rep.get("experiment") != "private_weight_reference" or rep.get("ratio") is None:
+            raise CounterRunRefused(
+                f"{p} is not an R3 report with a ratio; --timed-reference reads "
+                "private_weight_reference report.json files")
+        if rep.get("synthetic"):
+            raise CounterRunRefused(f"{p} is a planted (--self-test) R3 report; C5 "
+                                    "compares bytes with a measured timing")
+        gates = rep.get("gates") or []
+        broken = [f"{g.get('tag') or g.get('number')} {g.get('verdict')}" for g in gates
+                  if g.get("kind") == "VALIDITY" and g.get("verdict") != PASS]
+        if not gates or broken:
+            raise CounterRunRefused(
+                f"{p} is not a VALID R3 page ("
+                + (f"VALIDITY gates {broken}" if broken else "it carries no gates")
+                + "); its ratio is not quotable, so C5 does not compare with it")
+        g = int(rep["pinned"]["GROUP_SIZE_M"])
+        by_g.setdefault(g, []).append({
+            "path": str(p), "ratio": float(rep["ratio"]), "card": rep.get("card"),
+            "seed": rep.get("seed"),
+            "duty": float(r3.design_value(rep, "duty")),
+            "claim_min_tread": int(r3.design_value(rep, "claim_min_tread")),
+            "design": {k: _timed_value(rep, k) for k, _page_key in R3_TIMED_DESIGN}})
+    out = {}
+    for g, rows in by_g.items():
+        for key in ("design", "duty", "claim_min_tread"):
+            seen = {json.dumps(r[key], sort_keys=True) for r in rows}
+            if len(seen) > 1:
+                raise CounterRunRefused(
+                    f"the timed reports at G={g} differ in {key} ({sorted(seen)}); a "
+                    "mean and sd over two designs pools two estimators, which R3 "
+                    "refuses for its own replicates")
+        ratios = [r["ratio"] for r in rows]
+        out[g] = {"G": g, "mean": statistics.fmean(ratios),
+                  "sd": statistics.stdev(ratios) if len(ratios) >= 2 else 0.0,
+                  "runs": rows, "cards": sorted({str(r["card"]) for r in rows}),
+                  "design": rows[0]["design"], "duty": rows[0]["duty"],
+                  "windows": sorted({int(r["claim_min_tread"]) for r in rows})}
+    return out
+
+
+def timed_reference_mismatch(ref: dict, design: dict) -> list[str]:
+    """How a G's timed reports differ from a counter page's design, G aside:
+    `[]` when C5 may compare them. Called by `--analyse` before any page is
+    scored (it refuses the join) and by C5 itself, so one rule decides both."""
+    return [f"{key} {ref['design'].get(key)!r} against the page's {page_key} "
+            f"{design.get(page_key)!r}"
+            for key, page_key in R3_TIMED_DESIGN
+            if ref["design"].get(key) != design.get(page_key)]
+
+
+def _worst(items) -> str:
+    return "; ".join(items[:4]) + (f"; and {len(items) - 4} more" if len(items) > 4 else "")
+
+
+def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gate], dict]:
+    """Score one r3-arms page. Pure over the payload, recomputing every number
+    from its cells; nothing stored under `estimates` is trusted.
+
+    WHAT IS DELIBERATELY NOT HERE: the ladder family's V3 (monotone) and V4
+    (affine) are not applied to SHARED. The group model predicts non-monotone,
+    non-affine shared ladders at G = 2, 4 and 16 (q(4) = 1 < q(3) = 1.5 at
+    G=4), and those two gates would void a correct page. A test holds that a
+    planted G=4 staircase with its n=4 drop is VALID.
+    """
+    for key in ("family", "design", "cells"):
+        if key not in payload:
+            raise KeyError(f"r3 counter page has no '{key}'; refusing to score a "
+                           "partial page")
+    if payload["family"] != R3_FAMILY:
+        raise KeyError(f"family {payload['family']!r} is not {R3_FAMILY!r}")
+    r3 = _r3()
+    design = payload["design"]
+    cfg = MODEL_CONFIGS[design["model"]]
+    e = cfg.num_experts
+    g_m = int(design["group_m"])
+    treads = sorted(int(n) for n in design["treads"])
+    arms = list(design["arms"])
+    cells = _cell_map(payload)
+    k = int(design["calls_per_cell"])
+    gemms = r3.GEMMS
+    gates: list[Gate] = []
+    summary: dict = {"group_m": g_m, "estimates": None, "not_asked": []}
+
+    # V0 THE CARD.
+    card = payload.get("card")
+    absent = [c for c in R3_CARD_REQUIRED
+              if not isinstance(card, dict) or card.get(c) in (None, "")]
+    gates.append(Gate(
+        "V0", "VALIDITY", "the page names the live card it was measured on",
+        PASS if not absent else FAIL,
+        card_line(card) if not absent else f"card block missing {absent}",
+        f"a card block with {list(R3_CARD_REQUIRED)}",
+        "every number on the page: bytes without the card they came from cannot be "
+        "compared with anything, least of all the study's H200"))
+
+    # V1 COUNT AND ATTRIBUTION, and the census that proved GEMMS_PER_CALL.
+    want = [(a, n) for a in arms for n in treads]
+    missing = [f"{a}/{n}" for a, n in want if (a, n) not in cells]
+    extra = [f"{a}/{n}" for a, n in cells if (a, n) not in want]
+    problems = []
+    if missing or extra:
+        problems.append(f"cells missing {missing}, extra {extra}")
+    if len(treads) < 4:
+        problems.append(f"{len(treads)} treads; the scorer needs four for an OLS "
+                        "residual")
+    if set(arms) != set(r3.ARMS):
+        problems.append(f"arms {arms}, not R3's {list(r3.ARMS)}")
+    total = 0
+    for (a, n), c in cells.items():
+        if int(c.get("calls", -1)) != k:
+            problems.append(f"{a}/{n} made {c.get('calls')} calls against K={k}")
+        if int(c.get("launches", -1)) != k * int(design["gemms_per_call"]):
+            problems.append(f"{a}/{n} holds {c.get('launches')} launches")
+        total += int(c.get("launches", 0) or 0)
+        for g in gemms:
+            got = ((c.get("per_gemm") or {}).get(g) or {}).get("grid_size")
+            planned = (c.get("grid") or {}).get(g)
+            if got is None or planned is None or int(got) != int(planned):
+                problems.append(f"{a}/{n} {g} grid {got} against {planned}")
+    if design.get("launch_count") is None or total != int(design["launch_count"]):
+        problems.append(f"{total} launches attributed against the planned "
+                        f"{design.get('launch_count')}")
+    census = payload.get("census") or {}
+    if int(design["gemms_per_call"]) != r3.GEMMS_PER_CALL or \
+            census.get("gemms_per_call") != r3.GEMMS_PER_CALL:
+        problems.append(f"GEMMs per call: design {design['gemms_per_call']}, census "
+                        f"{census.get('gemms_per_call')}, cited {r3.GEMMS_PER_CALL}")
+    gates.append(Gate(
+        "V1", "VALIDITY", "every launch is attributed: exact count, every grid "
+        "equal to the child's, and a census that measured GEMMS_PER_CALL",
+        PASS if not problems else FAIL,
+        _worst(problems) if problems else
+        f"{total} launches over {len(cells)} cells, every grid matched",
+        f"exact count; grids equal; census GEMMS_PER_CALL = {r3.GEMMS_PER_CALL}",
+        "every byte on the page: a launch counted twice or into the wrong cell "
+        "is the per-call trap in another form, and it still fits a line"))
+    if missing or len(treads) < 4 or set(arms) != set(r3.ARMS):
+        summary["reason"] = "V1 failed on the cell set; nothing else is scored"
+        return gates, summary
+
+    # V2 METRICS.
+    holes = []
+    for (a, n), c in sorted(cells.items()):
+        for g in gemms:
+            for f in R3_STRICT_FIELDS:
+                v = ((c.get("per_gemm") or {}).get(g) or {}).get(f)
+                if not isinstance(v, (int, float)) or not math.isfinite(v):
+                    holes.append(f"{a}/{n} {g} {f}={v}")
+        if any(not isinstance(v, (int, float)) for v in c.get("per_call_values") or [None]):
+            holes.append(f"{a}/{n} per-call reads {c.get('per_call_values')}")
+    gates.append(Gate(
+        "V2", "VALIDITY", "every STRICT metric is a number on every launch",
+        PASS if not holes else FAIL,
+        _worst(holes) if holes else f"{len(R3_STRICT_FIELDS)} fields x "
+                                    f"{len(cells) * len(gemms)} GEMM cells",
+        "no missing value, never a 0.0 default",
+        "every estimate: a metric that was not measured is not a zero"))
+    if holes:
+        summary["reason"] = "V2 failed; no estimate is formed over a missing metric"
+        return gates, summary
+
+    # V3 REPEAT.
+    spreads = {key: r3_spread(c["per_call_values"]) for key, c in cells.items()}
+    over = [f"{a}/{n} " + ("unformed" if s is None else f"{s:.4f}")
+            for (a, n), s in sorted(spreads.items()) if s is None or s > R3_REPEAT_TOL]
+    worst_spread = max((s for s in spreads.values() if s is not None), default=math.nan)
+    gates.append(Gate(
+        "V3", "VALIDITY", "each cell's K calls read the same bytes",
+        PASS if not over else FAIL,
+        f"worst (max - min) / median {worst_spread:.4%}" + (f"; over: {_worst(over)}"
+                                                            if over else ""),
+        f"<= {R3_REPEAT_TOL:.0%} in every cell",
+        "the L2 state or the attribution: with a cold cache per launch the same "
+        "call reads the same bytes, and a spread says it did not"))
+
+    bm = r3_byte_model(cfg, design["dtype"], int(design["block_m"]))
+    q = r3_q(payload, bm)
+    est = r3_estimates(payload)
+    summary["estimates"] = est
+    gm = {n: group_reads(e, n, g_m) for n in treads}
+    summary["group_model"] = gm
+    l2 = card.get("l2_bytes") if isinstance(card, dict) else None
+    exposure = {n: r3_exposure(cfg, design["dtype"], int(design["block_m"]),
+                               int(design["block_n"]), g_m, n) for n in treads}
+    summary["exposure"], summary["l2_bytes"] = exposure, l2
+    e_q, lo_q, hi_q = r3_weight_bracket(q, treads)
+
+    def exposed(gemm: str, arm: str, ns=None) -> list[int]:
+        """The treads whose column pass is not held by THIS card's L2."""
+        return [n for n in (treads if ns is None else ns)
+                if exposure_word(exposure[n][gemm][arm]["working_set"], l2) != "held"]
+
+    def exposure_line(gemm: str) -> str:
+        return (f"{gemm} column passes not held by this card's "
+                + (f"{l2 / 2 ** 20:g} MiB L2" if l2 else "L2 (size unread)")
+                + f": SHARED at n={exposed(gemm, 'shared') or 'none'}, PRIVATE at "
+                f"n={exposed(gemm, 'private') or 'none'} (r3_exposure; a floor on the "
+                "reuse distance, so a cell not named is not thereby safe)")
+
+    def bracket_lines(verdicts: dict, gemm: str) -> list[str]:
+        open_at = [n for n, v in verdicts.items() if v is None]
+        if not open_at:
+            return [exposure_line(gemm)]
+        return [f"INCONCLUSIVE at n={open_at}: the two edges of SHARED's weight-only "
+                f"bracket [q_S - e, q_S] disagree there; e (PRIVATE's excess over n, "
+                + ", ".join(f"n={n} {e_q[gemm][n]:.4f}" for n in open_at)
+                + ") is the activation re-read PRIVATE measured, which bounds SHARED's, "
+                "and the counter cannot split weight from activation bytes inside one "
+                "GEMM", exposure_line(gemm)]
+
+    def spread_of(*keys) -> float:
+        return max((spreads.get(x) or 0.0) for x in keys)
+
+    # V4 IDENTITY at n = 1.
+    lines = []
+    if 1 not in treads:
+        v4, measured = FAIL, "no n=1 tread on the page"
+    else:
+        rs = cells[("shared", 1)]["per_call"]["dram_bytes_read"]
+        rp = cells[("private", 1)]["per_call"]["dram_bytes_read"]
+        tol = max(R3_IDENTITY_FLOOR,
+                  R3_SPREAD_FACTOR * spread_of(("shared", 1), ("private", 1)))
+        q1 = {a: q[a]["total"][1] for a in arms}
+        off = abs(rs / rp - 1.0)
+        lo, hi = R3_Q1_BAND
+        v4 = PASS if off <= tol and all(lo <= v <= hi for v in q1.values()) else FAIL
+        measured = (f"|R_S(1)/R_P(1) - 1| = {off:.4%} against {tol:.4%}; q(1) "
+                    + ", ".join(f"{a} {v:.4f}" for a, v in q1.items()))
+        lines.append("at n=1 SHARED and PRIVATE route every tile to copy 0: they are "
+                     "the same call, so their bytes must agree")
+        at1 = [g for g in gemms if exposed(g, "shared", [1])]
+        if at1:
+            lines.append(f"{at1} at n=1 is not held by this card's L2 (r3_exposure): an "
+                         "activation re-read there lifts q(1) in every arm alike, so a "
+                         "FAIL on the q(1) band here may be the byte model's once-per-M-"
+                         "tile charge and not the apparatus")
+    gates.append(Gate(
+        "V4", "VALIDITY", "at n=1 the arms are one call and each reads one weight set",
+        v4, measured,
+        f"<= max({R3_IDENTITY_FLOOR:.1%}, {R3_SPREAD_FACTOR:g} x the repeat spread); "
+        f"q(1) in [{R3_Q1_BAND[0]}, {R3_Q1_BAND[1]}]",
+        "the byte model's intercept: if one call reads other than W at n=1, q is "
+        "not a re-read fraction", lines))
+
+    # V5 THE PRIVATE CONTROL.
+    lo, hi = R3_PRIVATE_BAND
+    bad = [f"n={n} {p} q_P {q['private'][p][n]:.4f}" for n in treads
+           for p in ("w1", "w2", "total")
+           if not (lo * n <= q["private"][p][n] <= hi * n)]
+    slope_p = est["alpha_slope_private"]["total"]
+    if not (lo <= slope_p <= hi):
+        bad.append(f"slope q_P,total {slope_p:.4f}")
+    gates.append(Gate(
+        "V5", "VALIDITY", "the PRIVATE arm re-reads the whole weight set per tile",
+        PASS if not bad else FAIL,
+        _worst(bad) if bad else f"every q_P(n)/n in [{lo}, {hi}]; slope {slope_p:.4f}",
+        f"{lo} n <= q_P(n) <= {hi} n per GEMM; slope of q_P,total in [{lo}, {hi}]",
+        "the apparatus. Below the floor, weight bytes are MISSING, which is "
+        "impossible for an arm whose every tile reads its own copy: the counter, "
+        "the attribution or the relabelling is broken (V9 should agree). Above "
+        f"{hi} n is a per-call or double-count error",
+        ["PRIVATE's excess over n is activation re-read, and a full thrash adds at "
+         "most " + ", ".join(f"{exposure[treads[0]][g]['ceiling_per_tread']:.4f} of W_{g}"
+                             for g in gemms)
+         + " per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell "
+         "a thrash from a sound page, and C6 reads it"]))
+
+    # V6 REQUESTED IDENTITY.
+    mism = []
+    for n in treads:
+        for g in gemms:
+            vals = [cells[(a, n)]["per_gemm"][g]["l2_tex_read_sectors"] for a in arms]
+            rel = max(vals) / min(vals) - 1.0 if min(vals) > 0 else math.inf
+            if rel > R3_REQUEST_TOL:
+                mism.append(f"n={n} {g} {rel:.4%}")
+    gates.append(Gate(
+        "V6", "VALIDITY", "the three arms request the same L2 read sectors",
+        PASS if not mism else FAIL,
+        _worst(mism) if mism else "every (n, GEMM) within tolerance",
+        f"max/min - 1 <= {R3_REQUEST_TOL:.1%} across arms",
+        "the arms' identity: they issue identical loads (the dead CTAs the wider "
+        "72-slot declaration adds each load one expert id and exit), so a "
+        "difference in requests is a different call"))
+
+    # V7 DECLARATION.
+    decl = []
+    for n in treads:
+        tol = max(R3_DECLARATION_FLOOR,
+                  R3_SPREAD_FACTOR * spread_of(("native", n), ("shared", n)))
+        for g in gemms:
+            rn = cells[("native", n)]["per_gemm"][g]["dram_bytes_read"]
+            rs = cells[("shared", n)]["per_gemm"][g]["dram_bytes_read"]
+            if abs(rn / rs - 1.0) > tol:
+                decl.append(f"n={n} {g} {rn / rs - 1.0:+.4%} against {tol:.4%}")
+    gates.append(Gate(
+        "V7", "VALIDITY", "NATIVE and SHARED read the same DRAM bytes",
+        PASS if not decl else FAIL,
+        _worst(decl) if decl else "every (n, GEMM) within tolerance",
+        f"|R_N/R_S - 1| <= max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x the "
+        "repeat spread)",
+        "SHARED as the study's call: if the declaration moved the bytes, SHARED "
+        "measures a call vLLM does not make"))
+
+    # V8 COUNTER CONSISTENCY, asked only when its metric was proven.
+    asked = set((payload.get("ncu") or {}).get("metrics_asked") or [])
+    v8 = None
+    if "lts__d_sectors_fill_device.sum" in asked:
+        off8 = []
+        for (a, n), c in sorted(cells.items()):
+            for g in gemms:
+                fill = c["per_gemm"][g].get("l2_fill_device_sectors")
+                r = c["per_gemm"][g]["dram_bytes_read"]
+                if not fill or abs(r / (L2_SECTOR_BYTES * fill) - 1.0) > R3_COUNTER_TOL:
+                    off8.append(f"{a}/{n} {g} fill {fill}")
+        v8 = (PASS if not off8 else FAIL, _worst(off8) if off8 else
+              "every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors",
+              f"|dram_bytes_read / (32 x lts__d_sectors_fill_device) - 1| <= "
+              f"{R3_COUNTER_TOL:.0%}")
+    elif "lts__t_sectors_op_read_lookup_miss.sum" in asked:
+        off8 = []
+        for (a, n), c in sorted(cells.items()):
+            for g in gemms:
+                miss = c["per_gemm"][g].get("l2_read_miss_sectors")
+                r = c["per_gemm"][g]["dram_bytes_read"]
+                if miss is None or r > (1 + R3_COUNTER_TOL) * L2_SECTOR_BYTES * miss:
+                    off8.append(f"{a}/{n} {g} miss {miss}")
+        v8 = (PASS if not off8 else FAIL, _worst(off8) if off8 else
+              "every GEMM cell's DRAM bytes under 1.02 x 32 x L2 read misses",
+              f"dram_bytes_read <= {1 + R3_COUNTER_TOL:g} x 32 x "
+              "lts__t_sectors_op_read_lookup_miss")
+    if v8 is None:
+        summary["not_asked"].append("V8: neither L2 fill nor L2 miss sectors were "
+                                    "proven readable on this box")
+    else:
+        gates.append(Gate("V8", "VALIDITY", "the DRAM counter and the L2 counters agree",
+                          v8[0], v8[1], v8[2],
+                          "the counter itself: DRAM bytes and the L2 sectors filled "
+                          "from DRAM are two readings of one traffic"))
+
+    # V9 R3's BUFFER PROOF, through R3's own gate.
+    proof = payload.get("proof") or {}
+    bp = r3.BufferProof(parts=dict(proof.get("parts") or {}),
+                        detail=dict(proof.get("detail") or {}),
+                        synthetic=bool(proof.get("synthetic", False)))
+    g9 = r3.gate_v2_distinct_buffers(bp)
+    gates.append(Gate("V9", "VALIDITY", g9.claim, g9.verdict, g9.measured, g9.threshold,
+                      g9.consequence, list(g9.lines)))
+
+    # C1 GROUP ARITHMETIC ON w1, C2 AND C3: SCORED ON BOTH EDGES of SHARED's
+    # weight-only bracket [q_S - e, q_S] (`r3_weight_bracket`). A verdict only
+    # where the two edges agree; where they disagree the claim reads UNKNOWN,
+    # which is not established and not refuted. Until 2026-09-24 they read
+    # q_S itself, so an activation re-read L2 did not absorb was scored as a
+    # weight re-read: a G=64 page whose weights read the group model exactly
+    # failed C2 and printed an alpha(64) above 0.
+    def show(gemm: str, model: dict | None = None) -> str:
+        return ", ".join(f"n={n} [{lo_q[gemm][n]:.4f}, {hi_q[gemm][n]:.4f}]"
+                         + (f"/{model[n]:.4f}" if model else "") for n in treads)
+
+    edge_note = ("scored on both edges of [q_S - e, q_S], e PRIVATE's excess over n; "
+                 "UNKNOWN where the edges disagree")
+    if g_m >= 2:
+        v1 = {n: bracket_verdict(lo_q["w1"][n], hi_q["w1"][n],
+                                 gm[n] * (1 - R3_GROUP_TOL), gm[n] * (1 + R3_GROUP_TOL))
+              for n in treads}
+        gates.append(Gate(
+            "C1", "CLAIM", "SHARED's w1 weight reads are what the group model counts",
+            claim_over_treads(v1), show("w1", gm),
+            f"|q_S,w1(n) - group_reads| <= {R3_GROUP_TOL:.0%} x group_reads at every n, "
+            + edge_note,
+            "the pid-order reuse model: w1 has 2F/BN N-tiles per M-row, far more "
+            "than the CTAs in flight, so nothing is shared across groups",
+            bracket_lines(v1, "w1")))
+    else:
+        window, why = _r3_window(payload, cells, cfg)
+        n_w1 = pid_n_count(2 * cfg.intermediate_size, int(design["block_n"]))
+        if window is None:
+            summary["not_asked"].append(f"C1 at G=1: {why}")
+        elif window >= n_w1:
+            summary["not_asked"].append(
+                f"C1 at G=1: the co-residency window {window} is not below "
+                f"num_pid_n(w1) = {n_w1}, so a full w1 re-read is not predicted")
+        else:
+            v1 = {n: bracket_verdict(lo_q["w1"][n], hi_q["w1"][n],
+                                     floor=R3_FULL_REREAD_MIN * n) for n in treads}
+            gates.append(Gate(
+                "C1", "CLAIM", "at G=1, SHARED re-reads w1's weights whole at every tread",
+                claim_over_treads(v1), show("w1"),
+                f"q_S,w1(n) >= {R3_FULL_REREAD_MIN} n, asked because the window "
+                f"{window} < num_pid_n(w1) = {n_w1}; " + edge_note,
+                "the co-residency reading of G=1: w1's M-row outlasts the CTAs in "
+                "flight, so no w1 slab survives to the next tile",
+                bracket_lines(v1, "w1")))
+
+    # C2 w2's WEIGHT READS NEVER ABOVE THE GROUP MODEL.
+    v2 = {n: bracket_verdict(lo_q["w2"][n], hi_q["w2"][n],
+                             ceiling=R3_W2_CEILING * gm[n]) for n in treads}
+    gates.append(Gate(
+        "C2", "CLAIM", "SHARED's w2 weight reads never exceed the group model's count",
+        claim_over_treads(v2), show("w2", gm),
+        f"q_S,w2(n) <= {R3_W2_CEILING} x group_reads at every n, " + edge_note,
+        "the model's ceiling: co-residency can only remove WEIGHT reads, never add "
+        "them. An activation re-read is not a weight read, and q_S counts one as if "
+        "it were: at G >= E n every live M-tile is in one group, every column pass "
+        "walks them all, and where that pass outgrows the L2 the A repeats reach "
+        "DRAM (up to (BM/BN)(1 - 1/num_pid_n) of W_w2 per tread). The lower edge "
+        "takes them out, so only a FAIL on both edges refutes the model",
+        bracket_lines(v2, "w2")))
+
+    # C3 AT G=1, w2 SHARED BY CO-RESIDENT TILES.
+    if g_m == 1:
+        (lo1, hi1), (lo2, hi2) = est["alpha_bracket"]["w1"], est["alpha_bracket"]["w2"]
+        v3 = PASS if hi2 < lo1 else (FAIL if lo2 >= hi1 else REFUSE)
+        gates.append(Gate(
+            "C3", "CLAIM", "at G=1, w2 is re-read less than w1",
+            v3, f"alpha_w2 [{lo2:.4f}, {hi2:.4f}] against alpha_w1 [{lo1:.4f}, {hi1:.4f}]",
+            "alpha_w2 < alpha_w1 on every slope the two weight-only brackets allow; "
+            "UNKNOWN where the brackets overlap",
+            "the co-residency reading of G=1's reuse: w1 has 2F/H = 7x more N-tiles "
+            "per M-row than w2, so fewer of an expert's M-tiles are in flight together "
+            "on w1"))
+
+    # C6 THE PRIVATE EXCESS.
+    q_pt = q["private"]["total"]
+    whole = [n for n in treads if g_m >= e * n]
+    gates.append(Gate(
+        "C6", "CLAIM", "PRIVATE reads no more than one weight set per tile",
+        PASS if all(q_pt[n] <= (1 + R3_PRIVATE_EXCESS) * n for n in treads) else FAIL,
+        ", ".join(f"n={n} {q_pt[n] / n - 1:+.4f}" for n in treads)
+        + "  (q_P/n - 1; w1 " + ", ".join(f"{q['private']['w1'][n] / n - 1:+.4f}"
+                                          for n in treads)
+        + "; w2 " + ", ".join(f"{q['private']['w2'][n] / n - 1:+.4f}" for n in treads)
+        + ")",
+        f"q_P,total(n) <= {1 + R3_PRIVATE_EXCESS:g} n at every n",
+        "a FAIL is a finding about BYTES: PRIVATE reads its weights exactly n times "
+        "by construction, so its excess over n is what it re-read of everything "
+        "else, activations above all, and the per-GEMM split localises it. It says "
+        "the private arm's timed G-cost is bytes SHARED does not pay only as far as "
+        "SHARED re-reads less, which the bracket bounds and does not measure",
+        ([f"at n={whole} (G >= E n = {e} n) every live M-tile sits in one group and "
+          "every column pass walks them all, in SHARED as in PRIVATE: SHARED is "
+          "exposed to the same re-reads there, over narrower slabs"] if whole else [])
+        + [exposure_line(g) for g in gemms]))
+
+    # C5 CROSS-CARD, only with --timed-reference.
+    ref = (timed or {}).get(g_m)
+    mismatch = timed_reference_mismatch(ref, design) if ref is not None else []
+    if timed is not None and ref is None:
+        summary["not_asked"].append(f"C5: no timed reference page at G={g_m}")
+    elif mismatch:
+        summary["not_asked"].append(
+            f"C5: the timed reports at G={g_m} are another kernel ({'; '.join(mismatch)}), "
+            "so their ratio is not this page's to compare with")
+    elif ref is not None:
+        cross = [f"CROSS-CARD: the timed pages are {ref['cards']}, this page is "
+                 f"{(card or {}).get('slug')}; the same sm_90 kernel on 132 SMs where "
+                 "both are H100/H200, a different card either way",
+                 "timed ratios read from "
+                 + "; ".join(f"{r['path']} (seed {r['seed']}, duty {r['duty']:g}, fit "
+                             f"window n >= {r['claim_min_tread']})" for r in ref["runs"])
+                 + f"; timed at duty {ref['duty']:g}, where this page's bytes carry no "
+                 "duty: a timed ratio belongs to its duty's operating point"]
+        if g_m == 1:
+            got_lo, got_hi = est["alpha_bracket"]["total"]
+            lo_edge = ref["mean"] - ref["sd"]
+            v5 = bracket_verdict(got_lo, got_hi, lo_edge, R3_ALPHA1_CEILING)
+            gates.append(Gate(
+                "C5", "CLAIM", "alpha(1) from bytes lies inside the timed bracket",
+                v5 or REFUSE,
+                f"alpha(1) in [{got_lo:.4f}, {got_hi:.4f}] against [{ref['mean']:.4f} - "
+                f"sd {ref['sd']:.4f}, 1.0]",
+                f"timed mean - sd <= alpha(1) <= {R3_ALPHA1_CEILING}, on both edges of "
+                "alpha(1)'s weight-only bracket; UNKNOWN where they disagree",
+                "inside refutes co-residency sharing as the source of G=1 reuse; "
+                "below says the timed lower edge's equal-rate assumption fails on "
+                "this architecture (the private arm pays a per-copy rate cost)",
+                cross))
+        elif g_m >= 4:
+            got = est["alpha_ratio"]
+            edge = ref["mean"] - ref["sd"]
+            gates.append(Gate(
+                "C5", "CLAIM", "the byte ratio sits below the timed ratio",
+                PASS if got is not None and got < edge else FAIL,
+                f"byte ratio {got:.4f} against timed {ref['mean']:.4f} (sd "
+                f"{ref['sd']:.4f})",
+                "slope(R_S)/slope(R_P) < timed mean - its seed sd",
+                "finding 4.2's floor reading: a byte ratio equal to the timed ratio "
+                "refutes it, and says the timed ratios at G >= 4 are traffic "
+                "fractions after all",
+                cross + ["the byte ratio counts every byte both arms read, activation "
+                         "re-reads included, as the timed ratio's time pays for them"]))
+        else:
+            summary["not_asked"].append(f"C5: no registered C5 at G={g_m}")
+    return gates, summary
+
+
+def _r3_window(payload: dict, cells: dict, cfg) -> tuple[int | None, str]:
+    """The co-residency window from the page's own recorded occupancy, or
+    `(None, why)` when the four limits were not proven readable."""
+    card = payload.get("card") or {}
+    sm = card.get("sm_count")
+    rec = (cells.get(("shared", 1)) or next(iter(cells.values())))["recorded"].get("w1") or {}
+    limits = [rec.get(m) for m in R3_OCCUPANCY_LIMITS]
+    if sm is None or any(v is None for v in limits):
+        return None, ("the occupancy limits were not proven readable on this box, so "
+                      "the co-residency window is unknown and the claim is not asked")
+    return coresident_window(int(sm), int(min(limits))), ""
+
+
+# --------------------------------------------------------------------------
+# The page.
+# --------------------------------------------------------------------------
+
+def build_r3_page(*, plan: dict, manifest: dict, cells: list[dict], card, stack: dict,
+                  ncu: dict, census: dict) -> dict:
+    """The page body, before scoring and stamping."""
+    cfg = MODEL_CONFIGS[plan["model"]]
+    g_m = int(plan["group_m"])
+    page = {"family": R3_FAMILY, "schema": R3_SCHEMA_VERSION, "card": card,
+            "stack": stack, "ncu": ncu, "design": r3_design(plan),
+            "byte_model": r3_byte_model(cfg, plan["dtype"], int(plan["block_m"])),
+            "census": census, "proof": manifest.get("proof"), "cells": cells,
+            "group_model": {"model": "group_reads: vLLM v0.27.1's pid mapping, a pure "
+                                     "L2 inside a GROUP_SIZE_M group and none across",
+                            "q": {str(n): group_reads(cfg.num_experts, int(n), g_m)
+                                  for n in plan["treads"]}},
+            "estimates": None, "gates": []}
+    try:
+        page["estimates"] = r3_estimates(page)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
+        page["estimates"] = {"refused": f"{type(exc).__name__}: {exc}"}
+    return page
+
+
+def check_r3_page(payload: dict) -> None:
+    """The WRITE SITE's check against the schema: refuses a page missing a key
+    `R3_TOP_KEYS` or `R3_CELL_KEYS` names, before it is written."""
+    absent = [k for k in R3_TOP_KEYS if k not in payload]
+    if absent:
+        raise CounterRunRefused(f"the r3-arms schema names {absent} and this page has "
+                                "none; refusing to write a page --analyse would default")
+    for c in payload["cells"]:
+        gone = [k for k in R3_CELL_KEYS if k not in c]
+        if gone:
+            raise CounterRunRefused(f"cell {c.get('arm')}/{c.get('n')} is missing {gone}")
+
+
+def r3_page_lines(payload: dict, gates: list[Gate], summary: dict) -> list[str]:
+    """What a human reads: the card first, the per-tread q beside the group
+    model, the estimates, and every gate."""
+    d = payload["design"]
+    out = [card_line(payload.get("card")),
+           f"R3 ARMS UNDER A DRAM COUNTER  G={d['group_m']}  {d['model']} {d['dtype']} "
+           f"BLOCK_M={d['block_m']} BLOCK_N={d['block_n']} BLOCK_K={d['block_k']} "
+           f"num_warps={d['num_warps']} num_stages={d['num_stages']}",
+           f"  arms {d['arms']} x treads {d['treads']}; {d['calls_per_cell']} measured "
+           f"calls per cell after {d['warmup_calls']} warmups; {d['launch_count']} "
+           "profiled launches; declared "
+           f"{d['copies_declared']} copies ({d['declared_by_arm']})"]
+    est = summary.get("estimates")
+    gm = summary.get("group_model")
+    if est and gm:
+        out += ["", "  q(n) = (R(n) - n x operand) / W, one weight set per unit, the group "
+                "model beside it;",
+                "  e = q_P - n is PRIVATE's excess, its activation re-read; SHARED's "
+                "weight-only q is in [q_S - e, q_S]",
+                f"  {'n':>3}{'model':>8}{'q_S':>9}{'q_S,w1':>9}{'q_S,w2':>9}"
+                f"{'q_N':>9}{'q_P':>9}{'q_P,w1':>9}{'q_P,w2':>9}{'e_w1':>9}{'e_w2':>9}"]
+        for n in sorted(gm):
+            s = str(n)
+            out.append(f"  {n:>3}{gm[n]:>8.4f}{est['q_S']['total'][s]:>9.4f}"
+                       f"{est['q_S']['w1'][s]:>9.4f}{est['q_S']['w2'][s]:>9.4f}"
+                       f"{est['q_N']['total'][s]:>9.4f}{est['q_P']['total'][s]:>9.4f}"
+                       f"{est['q_P']['w1'][s]:>9.4f}{est['q_P']['w2'][s]:>9.4f}"
+                       f"{est['e_P']['w1'][s]:>9.4f}{est['e_P']['w2'][s]:>9.4f}")
+        a, ab = est["alpha_slope"], est["alpha_bracket"]
+        out += ["",
+                f"  alpha(G={d['group_m']}) in [{ab['total'][0]:.4f}, {ab['total'][1]:.4f}] "
+                f"(w1 [{ab['w1'][0]:.4f}, {ab['w1'][1]:.4f}], w2 [{ab['w2'][0]:.4f}, "
+                f"{ab['w2'][1]:.4f}]): {est['alpha_bracket_note']}",
+                f"  the upper edge's OLS slope, every activation re-read counted as a "
+                f"weight re-read: {a['total']:.4f} (w1 {a['w1']:.4f}, w2 {a['w2']:.4f}), "
+                f"max relative residual {est['residual']:.2%}: {est['residual_note']}",
+                f"  alpha_ratio slope(R_S)/slope(R_P) = {est['alpha_ratio']:.4f}; "
+                f"alpha_diff 1 - (slope_P - slope_S)/W = {est['alpha_diff']:.4f}, the "
+                "lower edge's slope; none uses a bandwidth, a ridge, an intercept or a "
+                "calibration"]
+    exposure, l2 = summary.get("exposure"), summary.get("l2_bytes")
+    if exposure:
+        out += ["", "  ACTIVATION RE-READS, named in advance (r3_exposure): one column pass "
+                "of the fullest group, MiB, A + slabs = working set, against this card's "
+                + (f"{l2 / 2 ** 20:g} MiB L2 ({l2 / R3_L2_PARTITIONS / 2 ** 20:g} per "
+                   "partition)" if l2 else "L2, whose size the card block does not carry")]
+        for n in sorted(exposure):
+            row = []
+            for g in ("w1", "w2"):
+                for arm, tag in (("shared", "S"), ("private", "P")):
+                    c = exposure[n][g][arm]
+                    row.append(f"{g} {tag} {c['a_bytes'] / 2 ** 20:.1f}+"
+                               f"{c['slab_bytes'] / 2 ** 20:.1f}="
+                               f"{c['working_set'] / 2 ** 20:.1f} "
+                               f"{exposure_word(c['working_set'], l2)}")
+            out.append(f"  n={n}  " + "  ".join(row))
+    for why in summary.get("not_asked") or []:
+        out.append(f"  NOT ASKED  {why}")
+    out.append("")
+    for g in gates:
+        out += g.render()
+    return out
+
+
+# --------------------------------------------------------------------------
+# --dry-run --family r3-arms: the plan, its predictions and its price.
+# --------------------------------------------------------------------------
+
+def r3_group_rows(num_experts: int, treads, groups) -> list[tuple[int, list[float], float]]:
+    """`(G, [group_reads at each tread], OLS slope)` for the dry run's table."""
+    rows = []
+    for g in groups:
+        qs = [group_reads(num_experts, int(n), int(g)) for n in treads]
+        rows.append((int(g), qs, ols_slope(list(treads), qs)))
+    return rows
+
+
+def r3_exposure_lines(cfg, dtype: str, block_m: int, block_n: int, groups,
+                      treads) -> list[str]:
+    """The dry run's ACTIVATION RE-READS block: `r3_exposure`'s working set per
+    (G, GEMM, arm, n) in MiB, then the cells each target card's L2 does not
+    hold (`R3_TARGET_L2`, `exposure_word`), named before anything runs."""
+    mib = 2 ** 20
+    n1 = r3_gemm_geometry(cfg, "w1")[1]
+    n2 = r3_gemm_geometry(cfg, "w2")[1]
+    out = ["ACTIVATION RE-READS, named before anything runs. Every (M-tile, N-tile) CTA",
+           "  reads its whole A tile, so an M-tile's A is requested num_pid_n times (w1 "
+           f"{pid_n_count(n1, block_n)}, w2 {pid_n_count(n2, block_n)})",
+           "  and the byte model charges it once. L2 absorbs the repeats while it keeps "
+           "one column",
+           "  pass of the group: every live M-tile's A plus the column's weight slabs (one "
+           "per expert",
+           "  for SHARED and NATIVE, one per M-tile for PRIVATE). Where it does not, they "
+           "reach DRAM",
+           f"  and land in q, at most {r3_activation_ceiling(block_m, block_n, n1):.4f} of "
+           f"W_w1 and {r3_activation_ceiling(block_m, block_n, n2):.4f} of W_w2 per tread "
+           "((BM/BN)(1 - 1/num_pid_n)).",
+           "  The page brackets them with PRIVATE's excess over n. One column pass of the "
+           "fullest group,",
+           "  MiB (r3_exposure: the sequential-order floor of the reuse distance; CTAs in "
+           "flight together",
+           "  lengthen it): A, every live M-tile's A; SHARED and PRIVATE, A plus that arm's "
+           "column slabs:",
+           "  " + f"{'':<16}" + "".join(f"{f'n={n}':>9}" for n in treads)]
+    exp = {(g, n): r3_exposure(cfg, dtype, block_m, block_n, g, n)
+           for g in groups for n in treads}
+    for g in groups:
+        for gemm in ("w1", "w2"):
+            out.append("  " + f"G={g:<3}{gemm} {'A':<8}"
+                       + "".join(f"{exp[(g, n)][gemm]['private']['a_bytes'] / mib:>9.1f}"
+                                 for n in treads))
+            for arm, tag in (("shared", "SHARED"), ("private", "PRIVATE")):
+                out.append("  " + f"G={g:<3}{gemm} {tag:<8}"
+                           + "".join(f"{exp[(g, n)][gemm][arm]['working_set'] / mib:>9.1f}"
+                                     for n in treads))
+    out.append("  NOT HELD, by card (! = beyond the whole L2, else beyond one partition):")
+    for card, l2 in R3_TARGET_L2.items():
+        out.append(f"    {card}, {l2 / mib:g} MiB L2 ({l2 / R3_L2_PARTITIONS / mib:g} per "
+                   "partition):")
+        named = 0
+        for g in groups:
+            for gemm in ("w1", "w2"):
+                for arm in ("shared", "private"):
+                    words = {n: exposure_word(exp[(g, n)][gemm][arm]["working_set"], l2)
+                             for n in treads}
+                    ns = [f"{n}!" if w == "BEYOND" else str(n)
+                          for n, w in words.items() if w != "held"]
+                    if ns:
+                        named += 1
+                        out.append(f"      G={g} {gemm} {arm.upper()} n={','.join(ns)}")
+        if not named:
+            out.append("      none")
+    return out
+
+
+def r3_cost_s(launch_count: int, per_launch_s: float = R3_COST_PER_LAUNCH_S) -> float:
+    """One G's GPU seconds at the registered constants."""
+    return sum(R3_COST_S.values()) + launch_count * per_launch_s
+
+
+def do_dry_run_r3(args) -> int:
+    r3 = _r3()
+    cfg = MODEL_CONFIGS[args.model]
+    bm, treads = args.block_m, list(args.tiles)
+    groups = list(R3_GROUPS) + [R3_OPTIONAL_GROUP]
+    try:
+        plans = {g: r3_plan(model=args.model, dtype=args.dtype, block_m=bm,
+                            block_n=args.block_n, num_stages=args.num_stages,
+                            group_m=g, treads=treads, kind="measure", arms=r3.ARMS,
+                            calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
+                            profile_dir=Path("$R") / f"r3c-g{g}.profiles",
+                            stem=f"g{g}") for g in groups}
+    except r3.CounterPlanRefused as exc:
+        print(f"REFUSE: {exc}")
+        return exit_codes.REFUSED
+    first = plans[groups[0]]
+    byte = r3_byte_model(cfg, args.dtype, bm)
+    pinned = r3.pinned_config(args.block_n, groups[0], args.num_stages)
+    e = cfg.num_experts
+    a = byte["operand_per_tile_w1"] + byte["operand_per_tile_w2"]
+    print(f"DRAM COUNTER RUN -- PLAN  family {R3_FAMILY}: R3's three arms under the "
+          "counter, one GROUP_SIZE_M per ncu invocation")
+    print()
+    print("CARD: DECIDED ON THE BOX. The page's card is the live device, read off torch")
+    print("  and nvidia-smi; --card is not read. The target is 1x H100 SXM5 (80 GB, 132")
+    print("  SMs, 50 MB L2), with an optional A100 40 GB shake-out first. Neither is the")
+    print(f"  study's {STUDY_CARD}: every alpha a page prints is the attached card's own, and")
+    print("  every page's first line says which card that is.")
+    print()
+    print(f"  model           {args.model} {args.dtype}  E={e} k={cfg.top_k} "
+          f"H={cfg.hidden_size} F={cfg.intermediate_size}")
+    print(f"  pinned          BLOCK_SIZE_M={bm} BLOCK_SIZE_N={pinned['BLOCK_SIZE_N']} "
+          f"BLOCK_SIZE_K={pinned['BLOCK_SIZE_K']} num_warps={pinned['num_warps']} "
+          f"num_stages={pinned['num_stages']} (R3's pinned_config)")
+    print(f"  declared        {first['copies_declared']} copies, "
+          f"{e * first['copies_declared']} slots: {first['declared_reason']}")
+    print(f"  arms            {list(r3.ARMS)}; declared experts "
+          f"{ {x: r3.declared_experts(x, e, first['copies_declared']) for x in r3.ARMS} }")
+    print(f"  treads          {treads} (n=5 omitted: its q equals q(6) at G=2 and G=4)")
+    mem = r3.memory_plan(cfg, args.dtype, dtype_bytes(args.dtype),
+                         first["copies_declared"],
+                         tokens_for_rows(cfg, max(treads) * bm), None,
+                         "decided on the box",
+                         flush=(0, "the counter child times nothing, so no flush buffer"),
+                         copies_read=max(treads))
+    print(f"  memory          R3's memory_plan, no flush buffer: predicted peak "
+          f"{mem.predicted_peak_bytes / 1e9:.1f} GB ({mem.copies} copies at "
+          f"{mem.per_copy_bytes / 1e9:.4f} GB); fits a card with at least "
+          f"{mem.predicted_peak_bytes / mem.headroom / 1e9:.1f} GB free at the "
+          f"{mem.headroom:.0%} headroom. The child refuses otherwise.")
+    print(f"  G               {list(R3_GROUPS)} in this order, then optionally "
+          f"{R3_OPTIONAL_GROUP}")
+    print()
+    print("THE BYTE MODEL, from its owners; no bandwidth, ridge or calibration anywhere.")
+    print(f"  W   = {byte['W'] / 1e9:.4f} GB  (W_w1 {byte['W_w1'] / 1e9:.4f}, W_w2 "
+          f"{byte['W_w2'] / 1e9:.4f})  routed_expert_weight_bytes_by_gemm")
+    print(f"  a   = {a / 1e6:.3f} MB per tread (w1 {byte['operand_per_tile_w1'] / 1e6:.3f}, "
+          f"w2 {byte['operand_per_tile_w2'] / 1e6:.3f}), {a / byte['W']:.2%} of W: the "
+          "GEMMs' A-operand reads, charged ONCE per M-tile")
+    print("      (the kernel requests them once per N-tile CTA; ACTIVATION RE-READS below)")
+    print("  q(n) = (R(n) - n a) / W, R = dram__bytes_read.sum per fused_experts call "
+          "(w1 launch + w2 launch)")
+    print()
+    print("THE GROUP MODEL, registered before anything runs: q(n) = group_reads(E, n, G),")
+    print("  from vLLM v0.27.1's pid mapping, a pure L2 inside a GROUP_SIZE_M group and")
+    print("  none across groups. Card-free. PRIVATE reads q(n) = n at every G by")
+    print("  construction; SHARED and NATIVE are predicted to read these:")
+    print("  " + f"{'G':>4}" + "".join(f"{f'n={n}':>9}" for n in treads) + f"{'slope':>10}")
+    for g, qs, slope in r3_group_rows(e, treads, groups):
+        print(f"  G={g:<2}" + "".join(f"{v:>9.4f}" for v in qs) + f"{slope:>10.4f}")
+    ratios = "  ".join(f"G={g} {(slope * byte['W'] + a) / (byte['W'] + a):.3f}"
+                       for g, _qs, slope in r3_group_rows(e, treads, groups))
+    print(f"  the byte ratio slope(R_S)/slope(R_P) this predicts, (slope W + a)/(W + a): "
+          f"{ratios}")
+    print("  At G=4 and G=16 the ladder DROPS at n=4, where the tiles align with the")
+    print("  groups: no per-tile scalar alpha produces a drop, which is why n=4 is on")
+    print("  the ladder and why the ladder family's monotone and affine gates are NOT")
+    print("  applied to SHARED here.")
+    print(f"  w1 has 2F/BN = {pid_n_count(2 * cfg.intermediate_size, args.block_n)} N-tiles "
+          "per M-row, so the model binds w1 at every G >= 2; w2 has "
+          f"{pid_n_count(cfg.hidden_size, args.block_n)} and may read LESS where the")
+    print("  co-residency window (SMs x CTAs per SM, the page's own occupancy) exceeds")
+    print("  G x that; C2 holds w2 under the model, never at it.")
+    print()
+    print("PREDICTIONS IN BYTES per call, GB: FULL RE-READ R = n (W + a) against the")
+    print("  GROUP MODEL R = q W + n a.")
+    for g, qs, _slope in r3_group_rows(e, treads, groups):
+        full = [n * (byte["W"] + a) / 1e9 for n in treads]
+        grp = [(qv * byte["W"] + n * a) / 1e9 for n, qv in zip(treads, qs, strict=True)]
+        print(f"  G={g:<2} full   " + " ".join(f"{v:8.3f}" for v in full))
+        print("        group  " + " ".join(f"{v:8.3f}" for v in grp))
+    print()
+    for line in r3_exposure_lines(cfg, args.dtype, bm, args.block_n, groups, treads):
+        print(line)
+    print()
+    print("GATES, registered. VALIDITY fails exit INVALID and no alpha may be quoted:")
+    print("  V0 live card block; V1 exact launch count, every grid, census "
+          f"GEMMS_PER_CALL = {r3.GEMMS_PER_CALL}; V2 every STRICT metric a number;")
+    print(f"  V3 K calls within {R3_REPEAT_TOL:.0%}; V4 at n=1 |R_S/R_P - 1| <= "
+          f"max({R3_IDENTITY_FLOOR:.1%}, {R3_SPREAD_FACTOR:g} x spread) and q(1) in "
+          f"{list(R3_Q1_BAND)};")
+    print(f"  V5 {R3_PRIVATE_BAND[0]} n <= q_P(n) <= {R3_PRIVATE_BAND[1]} n per GEMM; V6 "
+          f"requested L2 sectors equal across arms within {R3_REQUEST_TOL:.1%}; V7 NATIVE "
+          f"= SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x spread);")
+    print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
+          "if proven; V9 R3's five-part buffer proof.")
+    print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
+    print(f"CLAIMS, a failure is a result: C1 w1 within {R3_GROUP_TOL:.0%} of the group "
+          "model at every n for G >= 2; at G=1 q_S,w1(n) >= "
+          f"{R3_FULL_REREAD_MIN} n, asked only when the page's")
+    print("  co-residency window is below num_pid_n(w1), and NOT ASKED when the occupancy "
+          f"limits were not proven readable; C2 w2 <= {R3_W2_CEILING} x the model;")
+    print(f"  C3 at G=1 alpha_w2 < alpha_w1; C6 q_P,total(n) <= {1 + R3_PRIVATE_EXCESS:g} n; "
+          "C5 only with --timed-reference, labelled cross-card.")
+    print("  C1, C2, C3 and C5 at G=1 read SHARED's WEIGHT-ONLY q, the bracket [q_S - e, q_S],")
+    print("  e = q_P - n being PRIVATE's excess (its activation re-read, which bounds")
+    print("  SHARED's), on both edges: FAIL only where both edges fail, UNKNOWN where")
+    print("  they disagree, so an activation re-read is never scored as a refutation.")
+    print()
+    print("METRICS, three classes. The box asks only what its probe proved readable.")
+    print(f"  STRICT, refused without:   {', '.join(R3_STRICT_METRICS)}")
+    print(f"  CROSS-CHECK, gated if proven: {', '.join(R3_CROSSCHECK_METRICS)}")
+    print(f"  RECORDED, never gated:     {', '.join(R3_RECORDED_METRICS)}")
+    print()
+    sched = r3.counter_schedule(first)
+    cells = len(first["cells"])
+    print("LAUNCH ARITHMETIC, from counter_schedule, the rule the child runs:")
+    print(f"  {cells} cells ({len(r3.ARMS)} arms x {len(treads)} treads); U = "
+          f"{R3_WARMUP_CALLS} warmups per cell first (they compile), then K = "
+          f"{R3_CALLS_PER_CELL} calls per cell")
+    print(f"  GEMMS_PER_CALL = {r3.GEMMS_PER_CALL} (cited from vLLM v0.27.1, measured by "
+          "the census)")
+    print(f"  --launch-skip {sched.launch_skip} = {r3.GEMMS_PER_CALL} x {R3_WARMUP_CALLS} x "
+          f"{cells};  --launch-count {sched.launch_count} = {r3.GEMMS_PER_CALL} x "
+          f"{R3_CALLS_PER_CELL} x {cells}")
+    print("  grids PREDICTED from vLLM's documented sorted-id buffer (numel + declared x "
+          "(BM - 1)); the child reads the real one and every launch is held to it:")
+    for arm in r3.ARMS:
+        declared = r3.declared_experts(arm, e, first["copies_declared"])
+        grids = []
+        for n in treads:
+            tokens = tokens_for_rows(cfg, n * bm)
+            em = r3.predicted_sorted_ids(tokens * cfg.top_k, declared, bm)
+            gr = r3.expected_grids(cfg, em=em, tokens=tokens, block_m=bm,
+                                   block_n=args.block_n)
+            grids.append(f"n={n} {gr['w1']}/{gr['w2']}")
+        print(f"    {arm:<8} " + "  ".join(grids))
+    print()
+    print("THE COMMANDS, on a box where --probe --family r3-arms says OPEN, from the vLLM")
+    print("  venv so the child is sys.executable ($S the session directory, $R results).")
+    print("  Every census and page is matched by commit and refuses a tree git cannot name;")
+    print("  under a sudo counter door (root running git in the login user's checkout) run")
+    print("  once, as the login user: git config --global --add safe.directory <checkout>")
+    print(f"  python scripts/dram_counter_route.py --probe --family {R3_FAMILY} "
+          "--out $S/probe.json")
+    print(f"  $PY_VLLM scripts/dram_counter_route.py --run --family {R3_FAMILY} "
+          "--census-only --out $S/census.json")
+    for g in groups:
+        tag = "" if g != R3_OPTIONAL_GROUP else "   # optional"
+        print(f"  $PY_VLLM scripts/dram_counter_route.py --run --family {R3_FAMILY} "
+              f"--group-m {g} --census $S/census.json --out $R/r3c-g{g}.json{tag}")
+    print("  python scripts/dram_counter_route.py --analyse "
+          + " ".join(f"$R/r3c-g{g}.json" for g in R3_GROUPS)
+          + " [--timed-reference <R3 report.json ...>] [--out summary.json]")
+    print("  a page refused on the parser is rebuilt off the box after the fix, from the")
+    print("  kept profiles, with no card and no child:")
+    print(f"  python scripts/dram_counter_route.py --run --family {R3_FAMILY} --reduce-only "
+          "--group-m G --census $S/census.json --out $R/r3c-gG.json")
+    print("  publish each box's pages, census and summary under")
+    print("  results/published/<date>-<slug>-r3-counters/, <slug> being the one every "
+          "page's CARD line names")
+    print("  each --run profiles through this argv, and reduces the kept .ncu-rep with")
+    print("  ncu --import <rep> --csv --page raw --print-units base > <csv>:")
+    for g in groups:
+        p = plans[g]
+        s = r3.counter_schedule(p)
+        prof = Path(p["manifest"]).parent
+        argv = r3_ncu_argv("ncu", prof / f"g{g}.plan.json", prof / f"g{g}.ncu-rep",
+                           R3_ALL_METRICS, launch_skip=s.launch_skip,
+                           launch_count=s.launch_count, python="$PY_VLLM",
+                           child=R3_CHILD.relative_to(REPO))
+        print(f"  G={g}: " + " ".join(argv))
+    print()
+    per_g = r3_cost_s(sched.launch_count)
+    four = len(R3_GROUPS) * per_g
+    print("COST, at the registered constants (R3_COST_S, per launch "
+          f"{R3_COST_PER_LAUNCH_S:g} s); the first G's measured per-launch time re-prices")
+    print("  the rest.")
+    print(f"  per G: child start {R3_COST_S['child_start']:.0f} s + weight build "
+          f"{R3_COST_S['weight_build']:.0f} s + compiles {R3_COST_S['compile']:.0f} s + "
+          f"{sched.launch_count} profiled launches x {R3_COST_PER_LAUNCH_S:g} s + proof "
+          f"and reduce {R3_COST_S['proof_and_reduce']:.0f} s = {per_g / 60:.1f} min")
+    print(f"  {len(R3_GROUPS)} G: {four / 60:.0f} min; with G={R3_OPTIONAL_GROUP}: "
+          f"{(four + per_g) / 60:.0f} min; preflight (metric query, probe, census) "
+          f"{R3_COST_PREFLIGHT_S / 60:.0f} min")
+    pess = r3_cost_s(sched.launch_count, R3_COST_PER_LAUNCH_PESSIMISTIC_S)
+    print(f"  at a pessimistic {R3_COST_PER_LAUNCH_PESSIMISTIC_S:g} s per launch: "
+          f"{len(R3_GROUPS)} G {len(R3_GROUPS) * pess / 60:.0f} min, with "
+          f"G={R3_OPTIONAL_GROUP} {(len(R3_GROUPS) + 1) * pess / 60:.0f} min")
+    print(f"  book {R3_VM_BOOKING_H:g} h of VM: venv downloads, measurement, one parser "
+          "or door debug loop, and exfiltration")
+    print("  an A100 40 GB shake-out at G in {1, 64}: ncu's first-pass save of the ~26 GB")
+    print("  footprint goes to HOST memory there (device free < footprint), about 1 s per")
+    print("  launch over PCIe, and needs ~30 GB of host RAM")
+    print()
+    print("SCHEMA each page is written in, so --analyse can score it:")
+    print(R3_SCHEMA_TEXT)
+    return exit_codes.DONE
+
+
+# --------------------------------------------------------------------------
+# --run --family r3-arms: the census and one G's page.
+# --------------------------------------------------------------------------
+
+def r3_commit() -> tuple[str | None, str]:
+    """`(sha, "")` for the tree this file runs from, or `(None, why)`.
+
+    A CENSUS LICENSES A PAGE BY COMMIT, and `None == None` is not a match.
+    `provenance._git` returns no sha on any git failure, and the expected one
+    on a counter box is git refusing to run as root in a repository another
+    user owns ("detected dubious ownership"), which is exactly what the sudo
+    counter door (`sudo -E env PATH=... HOME=...`) does. Until 2026-09-24 the
+    census stored `commit: None`, the page compared `None != None` as a match,
+    and `--analyse` joined pages over the commit set `{'None'}`: a page could be
+    written and joined with no commit at all. Every r3-arms write site now
+    asks here and refuses without a sha, printing provenance's own reason and
+    the remedy for the root-in-a-user-repository case.
+    """
+    prov = PV.provenance_block(instrument=R3_RUN_INSTRUMENT)
+    if prov.git_sha:
+        return prov.git_sha, ""
+    reason = prov.missing.get("git_sha") or "provenance named no git sha and no reason"
+    remedy = ("run from a git checkout of this repository" if "dubious" not in reason else
+              "git refuses to run as this user in a repository another user owns, which "
+              "is what the sudo counter door does: add the checkout to safe.directory in "
+              "the gitconfig the launcher's HOME points at (as the login user, `git "
+              f"config --global --add safe.directory {REPO}`), then run again")
+    return None, (f"this tree has no commit git could name ({reason}), and every "
+                  f"r3-arms census and page is matched by commit: {remedy}")
+
+
+def _r3_capture(argv: list[str], log_path: Path, timeout: float) -> tuple[int, str]:
+    rc, out, err = _run(argv, timeout=timeout)
+    log_path.write_text((out or "") + (err or ""))
+    return rc, ((err or out or "").strip()[-600:])
+
+
+def _r3_reduce(binary: str, report: Path, csv_path: Path) -> str:
+    rc, out, err = _run(r3_import_argv(binary, report), timeout=600)
+    csv_path.write_text(out or "")
+    if rc != 0 or not out:
+        raise CounterRunRefused(
+            f"ncu --import {report.name} exited {rc} and printed no CSV ({(err or '')[:300]}); "
+            "the .ncu-rep is kept, so the reduction can be redone off the box")
+    return out
+
+
+def do_run_r3(args) -> int:
+    """The census or one G's page. REFUSED before the child runs when the route
+    is not open for this family, when there is no card, when git cannot name
+    this tree's commit (`r3_commit`), when a page is asked for without its G
+    or its census, and when the census is another card's, another commit's or
+    another vLLM's, or names no commit."""
+    if not args.out:
+        print("REFUSE: --run needs --out <path>; a measurement nobody wrote down is "
+              "not a measurement.")
+        return exit_codes.REFUSED
+    if args.census_only and args.census:
+        print("REFUSE: --census-only writes a census and reads none; drop --census")
+        return exit_codes.REFUSED
+    if not args.census_only:
+        if not getattr(args, "group_m_given", False):
+            print(f"REFUSE: a page is one G, and --group-m names it: the registered G "
+                  f"are {list(R3_GROUPS)} in that order, then optionally "
+                  f"{R3_OPTIONAL_GROUP}. It is not defaulted.")
+            return exit_codes.REFUSED
+        if not args.census:
+            print("REFUSE: a page needs --census <census.json>, the census THIS card, "
+                  "commit and vLLM wrote. Run --census-only first.")
+            return exit_codes.REFUSED
+    ncu = probe_ncu(R3_FAMILY)
+    if not counter_route_is_open(ncu):
+        print("REFUSE: the r3-arms family's counters could not be read on this box. "
+              f"--probe --family {R3_FAMILY} says: {ncu.get('cause', ncu.get('why'))}")
+        return exit_codes.REFUSED
+    card = live_card_block()
+    if card is None or not card.get("uuid"):
+        print("REFUSE: no card, or a card whose UUID could not be read; every page "
+              "names its card and a census is matched to it by UUID")
+        return exit_codes.REFUSED
+    stack = r3_stack_versions()
+    commit, no_commit = r3_commit()
+    if commit is None:
+        print(f"REFUSE: {no_commit}")
+        return exit_codes.REFUSED
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    profiles = Path(args.profile_dir) if args.profile_dir else \
+        out.parent / f"{out.stem}.profiles"
+    profiles.mkdir(parents=True, exist_ok=True)
+    metrics = tuple(ncu.get("metrics_proven") or R3_STRICT_METRICS)
+    r3 = _r3()
+    if args.census_only:
+        return r3_census(args, ncu, card, stack, commit, out, profiles)
+
+    census_path = Path(args.census)
+    try:
+        census = json.loads(census_path.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"REFUSE: cannot read the census {census_path}: {exc}")
+        return exit_codes.REFUSED
+    why = []
+    if census.get("family") != R3_FAMILY or census.get("kind") != "census":
+        why.append("it is not an r3-arms census")
+    if (census.get("card") or {}).get("uuid") != card["uuid"]:
+        why.append(f"card {(census.get('card') or {}).get('uuid')} is not this card "
+                   f"{card['uuid']}")
+    if not census.get("commit"):
+        why.append("it names no commit, and a census licenses a page by commit")
+    elif census.get("commit") != commit:
+        why.append(f"commit {census.get('commit')} is not this tree's {commit}")
+    if (census.get("stack") or {}).get("vllm") != stack.get("vllm"):
+        why.append(f"vLLM {(census.get('stack') or {}).get('vllm')} is not "
+                   f"{stack.get('vllm')}")
+    if census.get("gemms_per_call_measured") != r3.GEMMS_PER_CALL \
+            or census.get("verdict") != PASS:
+        why.append(f"it measured {census.get('gemms_per_call_measured')} GEMMs per call "
+                   f"with verdict {census.get('verdict')}")
+    if why:
+        print(f"REFUSE: the census {census_path} cannot license this page: "
+              + "; ".join(why))
+        return exit_codes.REFUSED
+
+    g_m, stem = args.group_m, f"g{args.group_m}"
+    try:
+        plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
+                       block_n=args.block_n, num_stages=args.num_stages, group_m=g_m,
+                       treads=args.tiles, kind="measure", arms=r3.ARMS,
+                       calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
+                       profile_dir=profiles, stem=stem)
+    except r3.CounterPlanRefused as exc:
+        print(f"REFUSE: {exc}")
+        return exit_codes.REFUSED
+    sched = r3.counter_schedule(plan)
+    plan_path = profiles / f"{stem}.plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2))
+    report = profiles / f"{stem}.ncu-rep"
+    csv_path = profiles / f"{stem}.csv"
+    argv = r3_ncu_argv(ncu["binary"], plan_path, report, metrics,
+                       launch_skip=sched.launch_skip, launch_count=sched.launch_count)
+    print(card_line(card))
+    print(f"R3 COUNTER RUN  G={g_m}  {len(plan['cells'])} cells, {sched.launch_count} "
+          f"profiled launches after {sched.launch_skip} skipped")
+    print(f"  ncu        {ncu.get('binary')}  [{ncu.get('version', '')}]")
+    print(f"  metrics    {len(metrics)} asked: {', '.join(metrics)}")
+    print(f"  profiles   {profiles}")
+    rc, tail = _r3_capture(argv, profiles / f"{stem}.ncu.log", args.ncu_timeout)
+    manifest_path = Path(plan["manifest"])
+    absent = [str(p) for p in (manifest_path, report) if not p.exists()]
+    if absent:
+        raise CounterRunRefused(
+            f"ncu exited {rc} and the capture left no {absent}; the child writes the "
+            f"manifest only after its last call. ncu's log ends: {tail}")
+    # THE CAPTURE'S OWN RECORD, written before anything is parsed: the page a
+    # later `--reduce-only` rebuilds from these profiles names the card, the
+    # stack, the commit and the argv of THIS capture, not the reducing tree's.
+    capture = {"argv": argv, "binary": ncu.get("binary"), "version": ncu.get("version"),
+               "returncode": rc, "metrics_asked": list(metrics),
+               "metrics_dropped": sorted(set(ncu.get("metrics_dropped") or [])
+                                         | set(ncu.get("metrics_unproven") or {})),
+               "card": card, "stack": stack, "commit": commit}
+    capture_path = profiles / f"{stem}.capture.json"
+    capture_path.write_text(json.dumps(capture, indent=2))
+    csv_text = _r3_reduce(ncu["binary"], report, csv_path)
+    return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
+                          census=census, report=report, csv_path=csv_path,
+                          csv_text=csv_text, out=out)
+
+
+def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census: dict,
+                   report: Path, csv_path: Path, csv_text: str, out: Path) -> int:
+    """Parse, attribute, reduce, score, stamp and write one G's page. The one
+    path both `--run` and `--reduce-only` take after the capture."""
+    manifest = json.loads(Path(plan["manifest"]).read_text())
+    card = capture["card"]
+    if (manifest.get("device") or {}).get("uuid") != card["uuid"]:
+        raise CounterRunRefused(
+            f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
+            f"page's card is {card['uuid']}")
+    metrics = capture["metrics_asked"]
+    launches = parse_ncu_csv(csv_text, soft=frozenset(R3_RECORDED_METRICS))
+    cells = r3_reduce_cells(attribute_launches(launches, manifest), manifest, metrics)
+    layout, _header = ncu_csv_layout(csv_text)
+    page = build_r3_page(
+        plan=plan, manifest=manifest, cells=cells, card=card, stack=capture["stack"],
+        ncu={"binary": capture.get("binary"), "version": capture.get("version"),
+             "argv": capture["argv"], "replay_mode": "kernel", "cache_control": "all",
+             "clock_control": "base", "report": str(report),
+             "report_sha256": _sha256(report), "csv": str(csv_path),
+             "csv_layout": layout, "metrics_asked": list(metrics),
+             "metrics_dropped": list(capture.get("metrics_dropped") or []),
+             "capture_commit": capture.get("commit")},
+        census={"path": str(census_path), "sha256": _sha256(census_path),
+                "gemms_per_call": census.get("gemms_per_call_measured")})
+    gates, summary = score_r3_page(page)
+    page["gates"] = [asdict(g) for g in gates]
+    payload = stamped(page, mode="r3-run", args=args, card=card["name"],
+                      instrument=R3_RUN_INSTRUMENT)
+    check_r3_page(payload)
+    out.write_text(json.dumps(payload, indent=2))
+    for line in r3_page_lines(payload, gates, summary):
+        print(line)
+    print(f"wrote {out}")
+    print(f"git   {git_visibility(out)}")
+    return exit_codes.classify(g.scored() for g in gates)
+
+
+def do_reduce_r3(args) -> int:
+    """`--run --family r3-arms --reduce-only`: rebuild one G's page from the
+    profiles a capture left, with no card, no probe and no child.
+
+    THE CAPTURE AND THE REDUCTION ARE SPLIT so that a parser defect found on
+    the box costs a laptop fix and not a re-rent: the `.ncu-rep`, the plan, the
+    manifest and the capture's own record (`g<G>.capture.json`) are kept under
+    `<out>.profiles/`. With an ncu on PATH the CSV is regenerated from the
+    `.ncu-rep`; without one the CSV the capture reduced is read. The card, the
+    stack, the argv and the commit on the page are the CAPTURE's, from its
+    record, and the reducing tree's commit is the provenance stamp beside them.
+    """
+    if not args.out or not getattr(args, "group_m_given", False) or not args.census:
+        print("REFUSE: --reduce-only rebuilds one G's page: it needs --group-m, the "
+              "--census the capture was licensed by, and the --out whose .profiles "
+              "directory the capture wrote")
+        return exit_codes.REFUSED
+    out = Path(args.out)
+    profiles = Path(args.profile_dir) if args.profile_dir else \
+        out.parent / f"{out.stem}.profiles"
+    stem = f"g{args.group_m}"
+    need = {name: profiles / f"{stem}.{name}" for name in
+            ("plan.json", "capture.json", "manifest.json")}
+    absent = [str(p) for p in need.values() if not p.exists()]
+    if absent:
+        print(f"REFUSE: no capture to reduce: {absent} do not exist")
+        return exit_codes.REFUSED
+    plan = json.loads(need["plan.json"].read_text())
+    capture = json.loads(need["capture.json"].read_text())
+    if not capture.get("commit"):
+        print(f"REFUSE: the capture {need['capture.json']} names no commit, so the page "
+              "it would rebuild could be joined with nothing")
+        return exit_codes.REFUSED
+    here, no_commit = r3_commit()
+    if here is None:
+        print(f"REFUSE: {no_commit}")
+        return exit_codes.REFUSED
+    census_path = Path(args.census)
+    census = json.loads(census_path.read_text())
+    if (census.get("card") or {}).get("uuid") != (capture.get("card") or {}).get("uuid"):
+        print(f"REFUSE: the census is card {(census.get('card') or {}).get('uuid')} and "
+              f"the capture is card {(capture.get('card') or {}).get('uuid')}")
+        return exit_codes.REFUSED
+    report, csv_path = profiles / f"{stem}.ncu-rep", profiles / f"{stem}.csv"
+    binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
+    if binary and report.exists():
+        csv_text = _r3_reduce(binary, report, csv_path)
+    elif csv_path.exists() and csv_path.read_text().strip():
+        csv_text = csv_path.read_text()
+    else:
+        print(f"REFUSE: no ncu on PATH to import {report} and no CSV at {csv_path}")
+        return exit_codes.REFUSED
+    print(card_line(capture.get("card")))
+    print(f"R3 COUNTER REDUCTION  G={args.group_m}  from {profiles}, captured at "
+          f"commit {capture.get('commit')}; nothing is measured here")
+    return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
+                          census=census, report=report, csv_path=csv_path,
+                          csv_text=csv_text, out=out)
+
+
+def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
+              profiles: Path) -> int:
+    """PROVE GEMMS_PER_CALL AND THE GRIDS BEFORE ANY PAGE. A mini plan (NATIVE
+    at n in {1, 6}, one warmup, one call) under the same kernel filter with no
+    skip and no cap: the report must hold exactly GEMMS_PER_CALL x 4 launches
+    and their grids must equal the child's vLLM-derived ones. The child
+    builds R3's whole declaration, so its memory plan is checked too. A census
+    with no commit licenses nothing, so none is written (`r3_commit`)."""
+    if not commit:
+        print(f"REFUSE: {r3_commit()[1]}")
+        return exit_codes.REFUSED
+    r3 = _r3()
+    g_m = args.group_m if getattr(args, "group_m_given", False) else R3_GROUPS[0]
+    try:
+        plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
+                       block_n=args.block_n, num_stages=args.num_stages, group_m=g_m,
+                       treads=R3_CENSUS_TREADS, kind="census", arms=(r3.NATIVE,),
+                       calls=1, warmups=1, profile_dir=profiles, stem="census")
+    except r3.CounterPlanRefused as exc:
+        print(f"REFUSE: {exc}")
+        return exit_codes.REFUSED
+    sched = r3.counter_schedule(plan)
+    plan_path = profiles / "census.plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2))
+    report = profiles / "census.ncu-rep"
+    argv = r3_ncu_argv(ncu["binary"], plan_path, report, R3_STRICT_METRICS,
+                       launch_skip=sched.launch_skip, launch_count=sched.launch_count)
+    print(card_line(card))
+    print(f"R3 COUNTER CENSUS  {len(plan['cells'])} cells, "
+          f"{len(sched.warmups) + len(sched.measured)} calls, no skip and no cap")
+    rc, tail = _r3_capture(argv, profiles / "census.ncu.log", args.ncu_timeout)
+    manifest_path = Path(plan["manifest"])
+    if not manifest_path.exists() or not report.exists():
+        raise CounterRunRefused(f"ncu exited {rc} and the census child left no manifest "
+                                f"or no report: {tail}")
+    manifest = json.loads(manifest_path.read_text())
+    launches = _launch_order(parse_ncu_csv(
+        _r3_reduce(ncu["binary"], report, profiles / "census.csv")))
+    seq = r3_launch_sequence(manifest)
+    calls = len(sched.warmups) + len(sched.measured)
+    seen = [int(round(ln.metrics.get("launch__grid_size", -1))) for ln in launches]
+    want = [int(manifest["grids"][key][g]) for key, _c, g, _w in seq]
+    per_call = len(launches) / calls
+    gates = [
+        Gate("CEN1", "VALIDITY", f"one fused_experts call makes exactly "
+             f"{r3.GEMMS_PER_CALL} fused_moe_kernel launches",
+             PASS if len(launches) == r3.GEMMS_PER_CALL * calls else FAIL,
+             f"{len(launches)} launches over {calls} calls = {per_call:g} per call",
+             f"{r3.GEMMS_PER_CALL} x {calls} = {r3.GEMMS_PER_CALL * calls}",
+             "every page's skip and count, which are GEMMS_PER_CALL multiples"),
+        Gate("CEN2", "VALIDITY", "every launch's grid is the grid the child derived "
+             "from vLLM's own sorted-id buffer", PASS if seen == want else FAIL,
+             f"seen {seen}", f"want {want}",
+             "the attribution every page makes, launch by launch"),
+        Gate("CEN3", "VALIDITY", "the child ran on this card",
+             PASS if (manifest.get("device") or {}).get("uuid") == card["uuid"] else FAIL,
+             str((manifest.get("device") or {}).get("uuid")), card["uuid"],
+             "the census's card, which every page is matched to"),
+    ]
+    rc_all = exit_codes.classify(g.scored() for g in gates)
+    body = {"family": R3_FAMILY, "kind": "census", "card": card, "stack": stack,
+            "commit": commit, "plan": plan, "calls": calls, "launches": len(launches),
+            "gemms_per_call_measured": (int(per_call) if per_call == int(per_call)
+                                        else per_call),
+            "grids_expected": want, "grids_seen": seen,
+            "memory_plan": manifest.get("memory_plan"),
+            "ncu": {"binary": ncu.get("binary"), "version": ncu.get("version"),
+                    "argv": argv, "report": str(report),
+                    "report_sha256": _sha256(report)},
+            "gates": [asdict(g) for g in gates],
+            "verdict": PASS if rc_all == exit_codes.DONE else FAIL}
+    payload = stamped(body, mode="r3-census", args=args, card=card["name"],
+                      instrument=R3_CENSUS_INSTRUMENT)
+    out.write_text(json.dumps(payload, indent=2))
+    for g in gates:
+        for line in g.render():
+            print(line)
+    print(f"wrote {out}")
+    print(f"git   {git_visibility(out)}")
+    return rc_all
+
+
+# --------------------------------------------------------------------------
+# --analyse over r3-arms pages: one page's gates, or the alpha(G) table.
+# --------------------------------------------------------------------------
+
+def _page_commit(d: dict):
+    return d.get("git_sha") or (d.get("provenance") or {}).get("git_sha")
+
+
+def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
+    """Score each page; with several, print the alpha(G) table and REFUSE a
+    join across two card UUIDs, two commits, two vLLM versions or two designs
+    (the design with its G taken out)."""
+    families = {d.get("family") for _p, d in loaded}
+    if families != {R3_FAMILY}:
+        print(f"REFUSED: --analyse was given {sorted(map(str, families))}; an r3-arms "
+              "summary joins r3-arms pages only")
+        return exit_codes.REFUSED
+    if len(loaded) > 1:
+        bare = [str(p) for p, d in loaded if not _page_commit(d)]
+        if bare:
+            print(f"REFUSED: {bare} name no commit; an alpha(G) table joins pages of one "
+                  "commit, and pages that name none cannot show they share one")
+            return exit_codes.REFUSED
+        apparatus = {
+            "card UUID": lambda d: (d.get("card") or {}).get("uuid"),
+            "commit": _page_commit,
+            "vLLM": lambda d: (d.get("stack") or {}).get("vllm"),
+            "design": lambda d: json.dumps({k: v for k, v in d["design"].items()
+                                            if k != "group_m"}, sort_keys=True),
+        }
+        for name, read in apparatus.items():
+            values = sorted({str(read(d)) for _p, d in loaded})
+            if len(values) > 1:
+                print(f"REFUSED: the pages carry {len(values)} values of {name} "
+                      f"({values}); an alpha(G) table across them compares two "
+                      "apparatuses, not two G")
+                return exit_codes.REFUSED
+        gs = [int(d["design"]["group_m"]) for _p, d in loaded]
+        if len(set(gs)) != len(gs):
+            print(f"REFUSED: two pages at one G ({sorted(gs)}); the table has one row per G")
+            return exit_codes.REFUSED
+    try:
+        timed = (load_timed_reference(args.timed_reference)
+                 if getattr(args, "timed_reference", None) else None)
+    except (OSError, ValueError, KeyError, CounterRunRefused) as exc:
+        print(f"REFUSED: --timed-reference: {exc}")
+        return exit_codes.REFUSED
+    for g_ref, ref in sorted((timed or {}).items()):
+        mismatch = timed_reference_mismatch(ref, loaded[0][1]["design"])
+        if mismatch:
+            print(f"REFUSED: --timed-reference: the reports at G={g_ref} timed another "
+                  f"kernel than these pages measured ({'; '.join(mismatch)}); C5 compares "
+                  "one kernel configuration's bytes with its own timing")
+            return exit_codes.REFUSED
+    loaded = sorted(loaded, key=lambda pd: int(pd[1]["design"]["group_m"]))
+    scored = []
+    for path, d in loaded:
+        gates, summary = score_r3_page(d, timed=timed)
+        scored.append((path, d, gates, summary))
+    card = loaded[0][1].get("card")
+    all_gates: list[Gate] = []
+    if len(scored) == 1:
+        path, d, gates, summary = scored[0]
+        for line in r3_page_lines(d, gates, summary):
+            print(line)
+        all_gates = gates
+    else:
+        print(card_line(card))
+        print(f"ALPHA(G) OVER {len(scored)} PAGES, one card, one commit, one vLLM, one "
+              "design")
+        print("  alpha lo/hi: the least and greatest OLS slope over SHARED's weight-only "
+              "q in [q_S - e, q_S],")
+        print("  e PRIVATE's excess over n; slope: the upper edge's, every activation "
+              "re-read counted as a weight re-read")
+        print(f"  {'G':>4}{'alpha lo':>10}{'alpha hi':>10}{'slope':>9}{'w1':>9}{'w2':>9}"
+              f"{'resid':>9}{'ratio':>9}{'diff':>9}  exit")
+        for _path, d, gates, summary in scored:
+            est = summary.get("estimates")
+            rc = exit_codes.classify(g.scored() for g in gates)
+            if est:
+                a = est["alpha_slope"]
+                lo_a, hi_a = est["alpha_bracket"]["total"]
+                ratio = est["alpha_ratio"]
+                print(f"  {d['design']['group_m']:>4}{lo_a:>10.4f}{hi_a:>10.4f}"
+                      f"{a['total']:>9.4f}{a['w1']:>9.4f}"
+                      f"{a['w2']:>9.4f}{est['residual']:>9.2%}"
+                      + (f"{ratio:>9.4f}" if ratio is not None else f"{'none':>9}")
+                      + f"{est['alpha_diff']:>9.4f}  {exit_codes.describe(rc)}")
+            else:
+                print(f"  {d['design']['group_m']:>4}  no estimate: "
+                      f"{summary.get('reason')}  {exit_codes.describe(rc)}")
+        print()
+        print("  q per (G, arm, GEMM) beside the group model:")
+        for _path, d, _gates, summary in scored:
+            est, gm = summary.get("estimates"), summary.get("group_model")
+            if not est or not gm:
+                continue
+            for label, key in (("shared", "q_S"), ("native", "q_N"), ("private", "q_P"),
+                               ("e", "e_P")):
+                for part in ("total", "w1", "w2"):
+                    vals = est[key][part]
+                    print(f"  G={d['design']['group_m']:<3}{label:<8}{part:<6}"
+                          + " ".join(f"{vals[str(n)]:8.4f}" for n in sorted(gm)))
+            print(f"  G={d['design']['group_m']:<3}{'model':<14}"
+                  + " ".join(f"{gm[n]:8.4f}" for n in sorted(gm)))
+        print()
+        for path, d, gates, summary in scored:
+            tag = f"g{d['design']['group_m']}"
+            print(f"PAGE {path}  G={d['design']['group_m']}")
+            for why in summary.get("not_asked") or []:
+                print(f"  NOT ASKED  {why}")
+            for g in gates:
+                renamed = Gate(f"{tag}.{g.number}", g.kind, g.claim, g.verdict,
+                               g.measured, g.threshold, g.invalidates, g.lines)
+                for line in renamed.render():
+                    print(line)
+                all_gates.append(renamed)
+            print()
+    if args.out:
+        out = Path(args.out)
+        body = {"family": R3_FAMILY, "kind": "summary", "card": card,
+                "commit": _page_commit(loaded[0][1]),
+                "pages": [{"path": str(p), "group_m": d["design"]["group_m"],
+                           "exit": exit_codes.classify(g.scored() for g in gates),
+                           "estimates": s.get("estimates"),
+                           "group_model": {str(n): v for n, v in
+                                           (s.get("group_model") or {}).items()},
+                           "not_asked": s.get("not_asked")}
+                          for p, d, gates, s in scored],
+                "timed_reference": timed,
+                "gates": [asdict(g) for g in all_gates]}
+        out.write_text(json.dumps(stamped(
+            body, mode="analyse", args=args,
+            card=(card or {}).get("name") or NO_CARD,
+            instrument=R3_ANALYSE_INSTRUMENT), indent=2))
+        print(f"wrote {out}")
+        print(f"git   {git_visibility(out)}")
+    return exit_codes.classify(g.scored() for g in all_gates)
+
+
+def do_analyse_any(args) -> int:
+    """`--analyse` over one or more payloads, dispatched on the `family` key.
+    One ladder payload is scored exactly as it always was; several ladder
+    payloads are refused (their ratio is --contrast's); r3-arms pages go to
+    `do_analyse_r3`."""
+    paths = [Path(p) for p in args.analyse]
+    if len(paths) == 1 and not paths[0].exists():
+        return do_analyse(args)
+    loaded = []
+    for p in paths:
+        if not p.exists():
+            print(f"REFUSED: no such payload: {p}")
+            return exit_codes.REFUSED
+        loaded.append((p, json.loads(p.read_text())))
+    if any(d.get("family") == R3_FAMILY for _p, d in loaded):
+        return do_analyse_r3(args, loaded)
+    if len(loaded) > 1:
+        print("REFUSED: several ladder-family payloads; --analyse scores one, and the "
+              "ratio across ladder runs is --contrast's")
+        return exit_codes.REFUSED
+    return do_analyse(args)
+
+
+# --------------------------------------------------------------------------
+# The family, planted: a manifest, ncu CSV and a page, off any GPU, pushed
+# through the SAME reduction and scorer `--run` uses.
+# --------------------------------------------------------------------------
+
+#: A card no nvidia-smi can print, for planted pages only. Its SM count and
+#: occupancy make the co-residency window 132 x 1 = 132, below w1's 448
+#: N-tiles, so C1 is asked at G=1.
+R3_PLANTED_CARD: dict = {
+    "name": "PLANTED-CARD-not-a-device", "slug": "planted_card_not_a_device",
+    "uuid": "planted-0000", "sm_count": 132, "l2_bytes": 50 * 2 ** 20,
+    "capability": "9.0", "memory_bytes": 80 * 10 ** 9, "driver": "planted",
+    "study_card": STUDY_CARD, "same_card_as_study": False}
+
+#: The planted worlds: why each exists and the exit it must score.
+R3_WORLDS: dict[str, tuple[str, int, str | None]] = {
+    "group": ("SHARED and NATIVE read the group model (w2 shared by co-resident "
+              "tiles at G=1), PRIVATE reads n: the prediction come true",
+              exit_codes.DONE, None),
+    "no-reuse": ("SHARED re-reads the whole set at every G: the group model refuted",
+                 exit_codes.CLAIM_FAIL, "C1"),
+    "private-reads-copy-0": ("PRIVATE reads like SHARED: the relabelling did not take",
+                             exit_codes.INVALID, "V5"),
+    "declaration": ("NATIVE reads 5% more than SHARED", exit_codes.INVALID, "V7"),
+    "noisy": ("the K calls of every cell spread by 2%", exit_codes.INVALID, "V3"),
+    "request-mismatch": ("PRIVATE requests 1% more L2 sectors", exit_codes.INVALID, "V6"),
+    "uncarded": ("the page carries no card block", exit_codes.INVALID, "V0"),
+    "activation-thrash": ("SHARED reads the group model's weights and PRIVATE reads n, "
+                          "and both re-read activations wherever a column pass of the "
+                          "group is not held by the planted card's L2, PRIVATE more "
+                          "(its slabs are wider): C1 holds, C2's edges disagree and it "
+                          "reads UNKNOWN, not a refutation, and C6 fails on PRIVATE's "
+                          "activation bytes", exit_codes.CLAIM_FAIL, "C6"),
+}
+
+#: The G each planted world is scored at by `--self-test`, where not 4.
+#: "activation-thrash" is a G=64 world: every live M-tile is in one group
+#: there, and that is where the column passes outgrow the L2.
+R3_WORLD_GROUPS: dict[str, tuple[int, ...]] = {"group": (1, 4), "activation-thrash": (64,)}
+
+#: The gates a planted world must NOT fail, beside the one it must: the
+#: activation-thrash world exists to hold that activation bytes are never
+#: scored as a refutation of the group model.
+R3_WORLD_NOT_FAIL: dict[str, tuple[str, ...]] = {"activation-thrash": ("C1", "C2")}
+
+#: The co-resident w2 sharing the "group" world plants at G=1: w2's q grows
+#: at half the rate of w1's, so alpha_w2 < alpha_w1 and C3 passes.
+R3_PLANTED_W2_SHARE = 0.5
+
+
+def planted_r3_manifest(plan: dict, *, device_uuid: str) -> dict:
+    """What the child would write for `plan`, from arithmetic alone: the grids
+    come from vLLM's documented buffer size and the proof is planted."""
+    r3 = _r3()
+    cfg = MODEL_CONFIGS[plan["model"]]
+    sched = r3.counter_schedule(plan)
+    copies, bm = int(plan["copies_declared"]), int(plan["block_m"])
+    declared = {a: r3.declared_experts(a, cfg.num_experts, copies) for a in r3.ARMS}
+    tokens = {int(n): tokens_for_rows(cfg, int(n) * bm) for n in plan["treads"]}
+    grids = {}
+    for arm, n in plan["cells"]:
+        em = r3.predicted_sorted_ids(tokens[int(n)] * cfg.top_k, declared[arm], bm)
+        grids[f"{arm}/{n}"] = r3.expected_grids(cfg, em=em, tokens=tokens[int(n)],
+                                                block_m=bm, block_n=int(plan["block_n"]))
+    return {"family": R3_FAMILY, "kind": plan["kind"], "order": plan["cells"],
+            "calls_per_cell": int(plan["calls_per_cell"]),
+            "warmup_calls": int(plan["warmup_calls"]),
+            "gemms_per_call": r3.GEMMS_PER_CALL, "launch_skip": sched.launch_skip,
+            "launch_count": sched.launch_count,
+            "tokens": {str(n): t for n, t in tokens.items()},
+            "copies_declared": copies, "declared_by_arm": declared,
+            "grids": grids, "pinned": r3.pinned_config(plan["block_n"], plan["group_m"],
+                                                       plan["num_stages"]),
+            "proof": {"parts": {name: True for name, _ in r3.PROOF_PARTS},
+                      "detail": {name: "planted" for name, _ in r3.PROOF_PARTS},
+                      "verdict": PASS, "tread": max(int(n) for n in plan["treads"]),
+                      "synthetic": True},
+            "memory_plan": None, "versions": {"planted": True},
+            "device": {"name": "planted", "uuid": device_uuid}}
+
+
+def r3_world_launch(world: str, cfg, *, block_m: int, group_m: int, arm: str, n: int,
+                    gemm: str, call: int, calls: int, grid: int,
+                    block_n: int | None = None) -> dict[str, float]:
+    """One planted launch's metrics in `world`, in canonical units."""
+    byte = r3_byte_model(cfg, "bf16", block_m)
+    weight = byte["W_w1"] if gemm == "w1" else byte["W_w2"]
+    op = byte[f"operand_per_tile_{gemm}"]
+    gr = group_reads(cfg.num_experts, n, group_m)
+    if arm == "private":
+        q = gr if world == "private-reads-copy-0" else float(n)
+    elif world == "no-reuse":
+        q = float(n)
+    else:
+        q = gr
+        if gemm == "w2" and group_m == 1:
+            q = 1.0 + (gr - 1.0) * R3_PLANTED_W2_SHARE
+    read = q * weight + n * op
+    if world == "activation-thrash":
+        bn = int(block_n or _r3().SWEEP.FIXED["BLOCK_SIZE_N"])
+        cell = r3_exposure(cfg, "bf16", block_m, bn, group_m, n)[gemm][
+            "private" if arm == "private" else "shared"]
+        word = exposure_word(cell["working_set"], R3_PLANTED_CARD["l2_bytes"])
+        read += R3_PLANTED_THRASH_PASSES[word] * n * op
+    if world == "declaration" and arm == "native":
+        read *= 1.05
+    centre = (calls - 1) / 2.0
+    wobble = (0.02 / max(calls - 1, 1)) if world == "noisy" else 1e-5
+    read *= 1.0 + wobble * (call - centre)
+    requested = (n * weight + n * op) / L2_SECTOR_BYTES
+    if world == "request-mismatch" and arm == "private":
+        requested *= 1.01
+    fill = read / L2_SECTOR_BYTES
+    return {"dram__bytes_read.sum": read, "dram__bytes_write.sum": 4096.0 * n,
+            "lts__t_sectors_srcunit_tex_op_read.sum": requested,
+            "launch__grid_size": float(grid),
+            "gpu__time_duration.sum": 1e9 * read / 3.0e12,
+            "lts__d_sectors_fill_device.sum": fill,
+            "lts__t_sectors_op_read_lookup_miss.sum": fill,
+            "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum": max(requested - fill, 0.0),
+            "lts__t_sector_op_read_hit_rate.pct": 100.0 * max(1.0 - fill / requested, 0.0),
+            "launch__occupancy_limit_blocks": 32.0,
+            "launch__occupancy_limit_registers": 1.0,
+            "launch__occupancy_limit_shared_mem": 1.0,
+            "launch__occupancy_limit_warps": 8.0,
+            "launch__registers_per_thread": 128.0,
+            "launch__waves_per_multiprocessor": grid / 132.0,
+            "lts__t_sectors_srcunit_ltcfabric.sum": 0.0}
+
+
+def canned_r3_csv(manifest: dict, world: str, *, model: str = "mixtral-8x7b",
+                  block_m: int = 32, group_m: int, layout: str = CSV_WIDE,
+                  drop_launch: int | None = None, extra_launch: bool = False,
+                  swap_grid_at: int | None = None) -> str:
+    """ncu's CSV for a planted run of `manifest` in `world`, in either layout.
+
+    The three knobs at the end plant the attribution's failures: a launch
+    dropped, a launch added, and one launch's grid swapped with its partner's.
+    """
+    cfg = MODEL_CONFIGS[model]
+    seq = r3_launch_sequence(manifest)
+    k = int(manifest["calls_per_cell"])
+    launches = []
+    for key, call, gemm, _warm in seq:
+        arm, n = key.split("/")
+        launches.append((key, r3_world_launch(
+            world, cfg, block_m=block_m, group_m=group_m, arm=arm, n=int(n), gemm=gemm,
+            call=call, calls=k, grid=int(manifest["grids"][key][gemm]),
+            block_n=int((manifest.get("pinned") or {}).get("BLOCK_SIZE_N") or 0) or None)))
+    if swap_grid_at is not None:
+        i = swap_grid_at
+        a, b = launches[i][1], launches[i + 1][1]
+        a["launch__grid_size"], b["launch__grid_size"] = (b["launch__grid_size"],
+                                                           a["launch__grid_size"])
+    if drop_launch is not None:
+        launches.pop(drop_launch)
+    if extra_launch:
+        launches.append(launches[-1])
+    head = ["==PROF== Connected to process 1 (python)",
+            "==PROF== Disconnected from process 1"]
+    units = {m: unit_table(m)[0] for m in R3_ALL_METRICS}
+    if layout == CSV_WIDE:
+        fixed = ["ID", "Process ID", "Process Name", "Host Name", "Kernel Name",
+                 "Context", "Stream", "Block Size", "Grid Size", "Device", "CC"]
+        rows = [",".join(f'"{c}"' for c in fixed + list(R3_ALL_METRICS)),
+                ",".join(['""'] * len(fixed) + [f'"{units[m]}"' for m in R3_ALL_METRICS])]
+        for i, (_key, vals) in enumerate(launches):
+            lead = [str(i), "1", "python", "127.0.0.1", GEMM_MARKER, "1", "7",
+                    "(256, 1, 1)", f"({int(vals['launch__grid_size'])}, 1, 1)", "0", "9.0"]
+            rows.append(",".join(f'"{c}"' for c in lead)
+                        + "," + ",".join(f'"{vals[m]!r}"' for m in R3_ALL_METRICS))
+        return "\n".join(head + rows) + "\n"
+    rows = ['"ID","Process ID","Process Name","Kernel Name","Metric Name",'
+            '"Metric Unit","Metric Value"']
+    for i, (_key, vals) in enumerate(launches):
+        for m in R3_ALL_METRICS:
+            rows.append(f'"{i}","1","python","{GEMM_MARKER}","{m}","{units[m]}",'
+                        f'"{vals[m]!r}"')
+    return "\n".join(head + rows) + "\n"
+
+
+def planted_r3_plan(group_m: int, *, kind: str = "measure") -> dict:
+    """The registered plan at `group_m`, as `--run` would write it."""
+    r3 = _r3()
+    fixed = r3.SWEEP.FIXED
+    if kind == "census":
+        return r3_plan(model="mixtral-8x7b", dtype="bf16", block_m=r3.DEFAULT_BLOCK_M,
+                       block_n=fixed["BLOCK_SIZE_N"], num_stages=fixed["num_stages"],
+                       group_m=group_m, treads=R3_CENSUS_TREADS, kind="census",
+                       arms=(r3.NATIVE,), calls=1, warmups=1,
+                       profile_dir=Path("planted"), stem="census")
+    return r3_plan(model="mixtral-8x7b", dtype="bf16", block_m=r3.DEFAULT_BLOCK_M,
+                   block_n=fixed["BLOCK_SIZE_N"], num_stages=fixed["num_stages"],
+                   group_m=group_m, treads=R3_TREADS, kind="measure", arms=r3.ARMS,
+                   calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
+                   profile_dir=Path("planted"), stem=f"g{group_m}")
+
+
+def planted_r3_page(world: str, group_m: int, *, layout: str = CSV_WIDE) -> dict:
+    """A whole page in `world` at `group_m`: plan, manifest, ncu CSV, parse,
+    attribution, reduction, page and gates, every step the code `--run`
+    runs, with only the child and ncu planted."""
+    r3 = _r3()
+    plan = planted_r3_plan(group_m)
+    manifest = planted_r3_manifest(plan, device_uuid=R3_PLANTED_CARD["uuid"])
+    text = canned_r3_csv(manifest, world, block_m=int(plan["block_m"]), group_m=group_m,
+                         layout=layout)
+    launches = parse_ncu_csv(text, soft=frozenset(R3_RECORDED_METRICS))
+    cells = r3_reduce_cells(attribute_launches(launches, manifest), manifest,
+                            R3_ALL_METRICS)
+    page = build_r3_page(
+        plan=plan, manifest=manifest, cells=cells,
+        card=None if world == "uncarded" else dict(R3_PLANTED_CARD),
+        stack={"torch": "planted", "triton": "planted", "vllm": "planted",
+               "python": "planted"},
+        ncu={"binary": "/planted/ncu", "version": "planted", "argv": [],
+             "replay_mode": "kernel", "cache_control": "all", "clock_control": "base",
+             "report": "planted", "report_sha256": None, "csv": "planted",
+             "csv_layout": layout, "metrics_asked": list(R3_ALL_METRICS),
+             "metrics_dropped": []},
+        census={"path": "planted", "sha256": None, "gemms_per_call": r3.GEMMS_PER_CALL})
+    gates, _summary = score_r3_page(page)
+    page["gates"] = [asdict(g) for g in gates]
+    return page
+
+
+def self_test_r3() -> list[tuple[str, bool, str]]:
+    """The family's arithmetic, parser, attribution and gates on planted
+    pages, off any GPU: the group model against vLLM's pid mapping walked by
+    brute force, both CSV layouts to identical cells, the attribution's three
+    refusals, and every world scoring the exit it was registered to score."""
+    out: list[tuple[str, bool, str]] = []
+    worst = 0.0
+    for e in (8, 64):
+        for n in range(1, 9):
+            for g in (1, 2, 3, 4, 8, 16, 64):
+                worst = max(worst, abs(group_reads(e, n, g) - pid_mapping_reads(e, n, g)))
+    out.append(("group_reads against vLLM's pid mapping by brute force", worst < 1e-12,
+                f"largest difference {worst:.2e} over E in {{8, 64}}, n 1..8, 7 G"))
+    wide = planted_r3_page("group", 4)
+    long = planted_r3_page("group", 4, layout=CSV_LONG)
+    same = [c["per_call"] for c in wide["cells"]] == [c["per_call"] for c in long["cells"]]
+    out.append(("both ncu CSV layouts reduce to the same cells", same,
+                f"{len(wide['cells'])} cells from a wide and a long planted CSV"))
+    plan = planted_r3_plan(4)
+    manifest = planted_r3_manifest(plan, device_uuid="planted")
+    for label, knob in (("one launch more than planted", {"extra_launch": True}),
+                        ("one launch fewer than planted", {"drop_launch": 3}),
+                        ("a w1 launch's grid swapped with its w2", {"swap_grid_at": 0})):
+        text = canned_r3_csv(manifest, "group", group_m=4, **knob)
+        try:
+            attribute_launches(parse_ncu_csv(text), manifest)
+            out.append((f"attribution refuses {label}", False, "it attributed them"))
+        except CounterRunRefused as exc:
+            out.append((f"attribution refuses {label}", True,
+                        f"REFUSED as required: {str(exc)[:70]}"))
+    for world, (_why, want, gate) in R3_WORLDS.items():
+        for g_m in R3_WORLD_GROUPS.get(world, (4,)):
+            page = planted_r3_page(world, g_m)
+            gates = [Gate(**d) for d in page["gates"]]
+            rc = exit_codes.classify(g.scored() for g in gates)
+            named = [g for g in gates if g.number == gate] if gate else []
+            spared = [g.number for g in gates if g.number in R3_WORLD_NOT_FAIL.get(world, ())
+                      and g.verdict != FAIL]
+            good = (rc == want and (gate is None or (named and named[0].verdict == FAIL))
+                    and len(spared) == len(R3_WORLD_NOT_FAIL.get(world, ())))
+            # Lower case on purpose: a self-test log carries the word FAIL only
+            # when a row of the self-test itself failed.
+            out.append((f"planted {world} world at G={g_m}", good,
+                        f"exit {rc}, wanted {want}"
+                        + (f"; {gate} reads {named[0].verdict.lower() if named else 'absent'}"
+                           ", as registered" if gate else "")
+                        + (f"; {spared} asked and not refuted" if spared else "")))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -3835,9 +6898,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--run", action="store_true",
                     help="drive ncu over the chosen cell and write the JSON --analyse "
                          "consumes. Needs the box and an open route; refuses otherwise")
-    ap.add_argument("--analyse", metavar="JSON",
-                    help="score ONE measured counter run. The ratio ACROSS runs, which "
-                         "is what the contrast turns on, is --contrast")
+    ap.add_argument("--analyse", nargs="+", metavar="JSON", default=None,
+                    help="score a measured counter run, dispatched on the payload's "
+                         "family. ONE ladder payload is scored exactly as it always "
+                         "was (the ratio ACROSS ladder runs is --contrast). r3-arms "
+                         "pages: one page's gates, or with several the alpha(G) "
+                         "table, refusing pages from two card UUIDs, two commits, two "
+                         "vLLM versions or two designs")
     ap.add_argument("--contrast", nargs="+", metavar="JSON", default=None,
                     help="score the RATIO across two or more counter runs, which is "
                          "the reading the extended plan takes and the one no single "
@@ -3846,6 +6913,35 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--published", nargs="*", default=None,
                     help="published run directories for --bracket (default: every "
                          "results/published/*alpha-surface*)")
+    ap.add_argument("--family", default=LADDER_FAMILY, choices=FAMILIES,
+                    help="which registered cell family. 'ladder' (the default, "
+                         "unchanged) is the timed sweep's whole-layer call, one tile "
+                         "count per ncu invocation. 'r3-arms' is R3's three arms "
+                         "(native, shared, private) under the counter, one "
+                         "GROUP_SIZE_M per invocation, the arm GEMMs only: its "
+                         "--block-m, --block-n, --num-stages and --tiles default to "
+                         "R3's (32, 64, 4, treads 1 2 3 4 6), --card is not read (the "
+                         "page's card is the live device), and no ridge, bandwidth or "
+                         "calibration enters it. See docs/COUNTERS.md section 6")
+    ap.add_argument("--census-only", action="store_true",
+                    help="with --run --family r3-arms: profile the census mini plan "
+                         "(native at n 1 and 6, one warmup and one call each, no "
+                         "skip and no cap) and write census.json: it must hold "
+                         "exactly GEMMS_PER_CALL launches per call at the child's "
+                         "grids, and every page needs it")
+    ap.add_argument("--census", default="",
+                    help="with --run --family r3-arms: the census.json this card, "
+                         "commit and vLLM wrote; a page refuses any other")
+    ap.add_argument("--reduce-only", action="store_true",
+                    help="with --run --family r3-arms --group-m G --census C --out "
+                         "P: rebuild the page from the profiles a capture left under "
+                         "P's .profiles directory (plan, manifest, capture record, "
+                         ".ncu-rep or CSV), with no card, no probe and no child, so a "
+                         "parser fix never needs the box again")
+    ap.add_argument("--timed-reference", nargs="+", default=None, metavar="REPORT",
+                    help="with --analyse over r3-arms pages: R3's timed report.json "
+                         "files, whose ratios C5 compares the bytes with, labelled "
+                         "cross-card. Read, never typed")
     ap.add_argument("--card", default="nvidia_h200",
                     choices=sorted(DATASHEET_PEAK_GBPS),
                     help="which card the plan is written for. The H200 by default, "
@@ -3911,10 +7007,35 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _given(argv: list[str], flag: str) -> bool:
+    """Whether the operator typed `flag`, as opposed to argparse defaulting it."""
+    return any(a == flag or a.startswith(flag + "=") for a in argv)
+
+
+def resolve_r3_defaults(args, argv: list[str]) -> None:
+    """The r3-arms family's defaults for the knobs the operator did not type:
+    R3's BLOCK_M, its pinned BLOCK_N and num_stages, and the family's treads.
+    The ladder family's defaults stay the parser's, which `build_parser()
+    .parse_args([])` still returns unchanged."""
+    r3 = _r3()
+    if not _given(argv, "--block-m"):
+        args.block_m = r3.DEFAULT_BLOCK_M
+    if not _given(argv, "--block-n"):
+        args.block_n = r3.SWEEP.FIXED["BLOCK_SIZE_N"]
+    if not _given(argv, "--num-stages"):
+        args.num_stages = r3.SWEEP.FIXED["num_stages"]
+    if not _given(argv, "--tiles"):
+        args.tiles = R3_TREADS
+
+
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
     if args.anchor:
         args.anchor = [(k, float(v)) for k, v in args.anchor]
+    args.group_m_given = _given(argv, "--group-m")
+    if args.family == R3_FAMILY:
+        resolve_r3_defaults(args, argv)
     chosen = [args.dry_run, args.bracket, args.probe, args.self_test, args.run,
               bool(args.analyse), bool(args.contrast)]
     if sum(bool(c) for c in chosen) != 1:
@@ -3922,6 +7043,22 @@ def main(argv=None) -> int:
               "--self-test / --run / --analyse / --contrast. Running two would "
               "interleave a plan with a result and this study has been burned by "
               "exactly that.")
+        return exit_codes.REFUSED
+    if (args.census_only or args.census or args.reduce_only) and not (
+            args.run and args.family == R3_FAMILY):
+        print("REFUSE: --census-only, --census and --reduce-only belong to --run "
+              "--family r3-arms")
+        return exit_codes.REFUSED
+    if args.reduce_only and args.census_only:
+        print("REFUSE: --reduce-only rebuilds a page; a census is never reduced apart "
+              "from its capture")
+        return exit_codes.REFUSED
+    if args.timed_reference and not args.analyse:
+        print("REFUSE: --timed-reference is read by --analyse over r3-arms pages")
+        return exit_codes.REFUSED
+    if args.family == R3_FAMILY and (args.bracket or args.contrast):
+        print("REFUSE: --bracket and --contrast are the ladder family's; the r3-arms "
+              "family's reading across pages is --analyse over several pages")
         return exit_codes.REFUSED
     if args.contrast:
         try:
@@ -3935,7 +7072,7 @@ def main(argv=None) -> int:
                                          str(exc).replace("\n", " ")[:160]))
             return exit_codes.INVALID
     if args.analyse:
-        return do_analyse(args)
+        return do_analyse_any(args)
     if args.probe:
         return do_probe(args)
     if args.bracket:
@@ -3944,6 +7081,8 @@ def main(argv=None) -> int:
         return do_self_test(args)
     if args.run:
         try:
+            if args.family == R3_FAMILY:
+                return do_reduce_r3(args) if args.reduce_only else do_run_r3(args)
             return do_run(args)
         except (CounterRunRefused, CorpusMissing) as exc:
             # INVALID (3), not CLAIM_FAIL and not ERROR. The profiler ran and the
@@ -3956,6 +7095,8 @@ def main(argv=None) -> int:
             print(exit_codes.result_line("VALIDITY", "R1", exit_codes.FAIL,
                                          str(exc).replace("\n", " ")[:160]))
             return exit_codes.INVALID
+    if args.family == R3_FAMILY:
+        return do_dry_run_r3(args)
     return do_dry_run(args)
 
 

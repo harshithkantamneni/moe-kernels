@@ -656,6 +656,29 @@ def activation_bytes_per_row(cfg, act_b: int = 2) -> int:
     return cfg_terms * act_b
 
 
+def gemm_operand_read_bytes_per_row(cfg, b: int = 2) -> dict[str, int]:
+    """The A-operand bytes each of the two GEMMs READS per routed row, ONCE.
+
+        {"w1": H * b, "w2": F * b}
+
+    The up GEMM reads the permuted input row `[H]` and the down GEMM reads the
+    activated row `[F]`. Once is the compulsory read: the kernel requests a
+    row's A once per N-tile CTA (num_pid_n times, 2F / BLOCK_N on w1 and
+    H / BLOCK_N on w2), and only L2 makes the repeats free. What it does not
+    absorb reaches DRAM beyond this figure, and a caller that subtracts this
+    from a DRAM count has to bound the rest itself (the r3-arms family does,
+    with its PRIVATE control). This is the read half of `activation_bytes_per_row`
+    for ONE GEMM at a time, and it exists for a counter that profiles the two
+    GEMM launches alone (`scripts/dram_counter_route.py --family r3-arms`):
+    there the whole-layer term above would charge the gate+up output, the
+    down output and the activation kernel's traffic, none of which runs
+    inside a profiled launch. `activation_bytes_per_row` stays the whole-layer
+    term the ladder family and the fitted sweep use, because both of those
+    charge every kernel of the call.
+    """
+    return {"w1": cfg.hidden_size * b, "w2": cfg.intermediate_size * b}
+
+
 def useful_flops(cfg, rows_total: float) -> float:
     """`6 F H` per row: up is `2 F H` MACs, down is `F H`, two flops each."""
     return 6.0 * rows_total * cfg.intermediate_size * cfg.hidden_size
