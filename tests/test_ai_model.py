@@ -833,6 +833,30 @@ def test_the_byte_count_is_moe_specs_and_not_a_second_copy_of_the_arithmetic():
     assert seen >= 4 * len(MODEL_CONFIGS), "the sweep over models did not run"
 
 
+def test_the_weight_set_split_by_gemm_sums_to_it_for_every_model():
+    """`routed_expert_weight_bytes_by_gemm` is the same byte count split by the
+    GEMM that streams each slab (w1, the fused gate+up, and w2, the down): a
+    DRAM counter reads the two GEMM launches apart, and a per-GEMM re-read
+    fraction divides by each one's own set. Read off the same slab shapes, so
+    the split sums to the whole for every model and dtype, and w1 is twice
+    w2 because gate and up are fused."""
+    from moe.bench.weights import routed_expert_weight_bytes_by_gemm
+    seen = 0
+    for name, cfg in sorted(MODEL_CONFIGS.items()):
+        for dtype in ("bf16", "fp16", "fp8_e4m3", "fp32"):
+            try:
+                whole = routed_expert_weight_bytes(name, dtype)
+            except WeightSetRefused:
+                with pytest.raises(WeightSetRefused):
+                    routed_expert_weight_bytes_by_gemm(name, dtype)
+                continue
+            by = routed_expert_weight_bytes_by_gemm(cfg, dtype)
+            assert by["w1"] + by["w2"] == whole, (name, dtype)
+            assert by["w1"] == 2 * by["w2"], (name, dtype)
+            seen += 1
+    assert seen >= 4 * len(MODEL_CONFIGS)
+
+
 def test_the_weight_set_scales_with_the_dtype_and_nothing_else():
     """Per dtype, as the function's contract says. fp8 halves it, fp32 doubles
     it, and the geometry is untouched."""

@@ -2643,3 +2643,17 @@ def test_a_label_and_a_geometry_that_name_two_models_are_refused():
     nothing that exists; it refuses the next caller that gets it wrong."""
     with pytest.raises(ValueError, match="name two different models"):
         analyse(cells_at(REFIT), alpha=REFIT, model_name="qwen2-57b-a14b")
+
+
+def test_the_gemm_operand_read_is_each_gemms_own_a_operand():
+    """`gemm_operand_read_bytes_per_row` is the A-operand read of ONE GEMM per
+    routed row: the permuted input `[H]` for the up GEMM and the activated row
+    `[F]` for the down GEMM. It is the read half of the whole-layer
+    `activation_bytes_per_row` and never replaces it: the ladder family and
+    the fitted sweep charge every kernel of the call, and the r3-arms counter
+    family profiles the two GEMM launches alone."""
+    for cfg in (MIXTRAL, MODEL_CONFIGS["qwen2-57b-a14b"]):
+        for b in (1, 2, 4):
+            row = BM.gemm_operand_read_bytes_per_row(cfg, b)
+            assert row == {"w1": cfg.hidden_size * b, "w2": cfg.intermediate_size * b}
+            assert sum(row.values()) < BM.activation_bytes_per_row(cfg, b)

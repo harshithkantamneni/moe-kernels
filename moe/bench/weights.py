@@ -147,6 +147,29 @@ def routed_expert_weight_bytes(model: str | MoEConfig, dtype: str) -> int:
     return cfg.weight_bytes(dtype)
 
 
+def routed_expert_weight_bytes_by_gemm(model: str | MoEConfig,
+                                       dtype: str) -> dict[str, int]:
+    """`routed_expert_weight_bytes`, split by the GEMM that reads each slab.
+
+        {"w1": E * 2F * H * b, "w2": E * H * F * b}
+
+    `w1` is the fused gate+up slab the first GEMM streams and `w2` the down
+    slab the second streams. A DRAM counter reads each GEMM's launch apart, so
+    a per-GEMM re-read fraction needs each GEMM's own weight set as its
+    denominator; the R3 counter family (`scripts/dram_counter_route.py
+    --family r3-arms`) divides by these.
+
+    READ OFF THE SAME SHAPES `routed_expert_weight_bytes` DELEGATES TO,
+    `MoEConfig.w1_shape` and `w2_shape`, so the two cannot disagree on a slab
+    dimension, and `tests/test_ai_model.py` checks that the two values sum
+    to it over every model in `MODEL_CONFIGS` and every dtype.
+    """
+    cfg = _resolve(model)
+    b = _dtype_bytes(dtype)
+    return {"w1": cfg.w1_shape[0] * cfg.w1_shape[1] * cfg.w1_shape[2] * b,
+            "w2": cfg.w2_shape[0] * cfg.w2_shape[1] * cfg.w2_shape[2] * b}
+
+
 def layer_weight_bytes(model: str | MoEConfig, dtype: str) -> int:
     """Every expert weight byte one MoE layer reads in a full pass, or a refusal.
 
