@@ -166,16 +166,23 @@ def _one(text: str) -> str:
 # reading the box: pure parsers
 # --------------------------------------------------------------------------
 
-def parse_smi(query: str, header: str) -> dict | None:
+def parse_smi(query: str, header: str, returncode: int = 0) -> dict | None:
     """nvidia-smi's first card, from `--query-gpu=name,uuid,driver_version,
     memory.total,memory.free --format=csv,noheader,nounits` and the plain
-    header's `CUDA Version: X.Y`. None when no card is listed."""
-    rows = [r for r in query.splitlines() if r.strip()]
+    header's `CUDA Version: X.Y`. None when no card is listed or nvidia-smi
+    exited nonzero.
+
+    A card is a row of exactly five fields whose driver is a version number,
+    setup_vm.sh S0's rule for its four-field query: any other line nvidia-smi
+    prints (an NVML error, a warning) is neither the first card nor counted."""
+    if returncode != 0:
+        return None
+    rows = [parts for parts in ([p.strip() for p in r.split(",")]
+                                for r in query.splitlines() if r.strip())
+            if len(parts) == 5 and re.match(r"\d+\.", parts[2])]
     if not rows:
         return None
-    parts = [p.strip() for p in rows[0].split(",")]
-    if len(parts) < 5:
-        return None
+    parts = rows[0]
     m = re.search(r"CUDA Version:\s*([0-9.]+)", header or "")
 
     def mib(v: str) -> int | None:
@@ -264,7 +271,8 @@ def card_line(t: dict, slug: str) -> str:
 def pf1_card(smi: dict | None, base: dict, vllm: dict) -> Check:
     what = "nvidia-smi and torch in both venvs name one card"
     if smi is None:
-        return Check("PF1", what, FAIL, "nvidia-smi lists no card")
+        return Check("PF1", what, FAIL, "nvidia-smi lists no card with a driver version "
+                     "(or exited nonzero)")
     names = {"nvidia-smi": smi.get("name"), "base": base.get("name"),
              "vllm": vllm.get("name")}
     uuids = {"nvidia-smi": bare_uuid(smi.get("uuid")), "base": bare_uuid(base.get("uuid")),
@@ -576,10 +584,10 @@ def main(argv: list[str] | None = None) -> int:
 
     smi = None
     if shutil.which("nvidia-smi"):
-        _, q = run(["nvidia-smi", "--query-gpu=name,uuid,driver_version,memory.total,memory.free",
-                    "--format=csv,noheader,nounits"], 60)
+        smi_rc, q = run(["nvidia-smi", "--query-gpu=name,uuid,driver_version,memory.total,"
+                         "memory.free", "--format=csv,noheader,nounits"], 60)
         _, header = run(["nvidia-smi"], 60)
-        smi = parse_smi(q, header)
+        smi = parse_smi(q, header, smi_rc)
     base, vllm = torch_view(args.py_base, "base"), torch_view(args.py_vllm, "vllm")
     checks = [pf1_card(smi, base, vllm), pf2_wheel(smi, base, vllm),
               pf3_stack(base, vllm, resolved_pins(ROOT / "requirements"))]

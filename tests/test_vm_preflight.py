@@ -241,3 +241,22 @@ def test_pf4_names_ncus_lock_file_when_ncu_reports_it():
     clean = VP.pf4_metrics(VP.family_metric_classes(Family), "dram__bytes_read", "",
                            ncu="/x/ncu")
     assert clean.verdict == VP.PASS and "lock_file" not in clean.data
+
+
+def test_parse_smi_counts_a_card_by_setup_vms_rule():
+    """setup_vm.sh S0 counted an NVML error's lines as cards; the preflight's
+    reader took the FIRST line as the card, so a leading warning read as "no
+    card" on a working box, and counted every line nvidia-smi printed. One
+    rule now: a card is a row of the queried fields with a numeric driver,
+    and a nonzero exit lists none."""
+    row = f"{H100}, {UUID}, 580.95.05, 81559, 81000"
+    header = "CUDA Version: 13.0"
+    warned = VP.parse_smi(f"WARNING: infoROM is corrupted at gpu 0000:04:00.0\n{row}\n", header)
+    assert warned is not None and warned["driver"] == "580.95.05" and warned["count"] == 1
+    trailing = VP.parse_smi(f"{row}\nFailed to initialize NVML: Unknown Error\n", header)
+    assert trailing["count"] == 1
+    mismatch = ("Failed to initialize NVML: Driver/library version mismatch\n"
+                "NVML library version: 580.95\n")
+    assert VP.parse_smi(mismatch, "", 18) is None
+    assert VP.parse_smi(row, header, 18) is None
+    assert VP.pf1_card(None, _torch(), _torch()).verdict == VP.FAIL
