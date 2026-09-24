@@ -795,11 +795,35 @@ def test_the_runbook_states_the_counter_probe_and_no_platform_fact():
     assert "`COUNTERS`" in sec and "`COUNTERS.json`" in sec
     text = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
     for stale in ("`ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`",
-                  "`ncu` is walled off on a rented pod by `ERR_NVGPUCTRPERM`"):
+                  "`ncu` is walled off on a rented pod by `ERR_NVGPUCTRPERM`",
+                  "BLOCKED is the ANSWER on a rented pod", "expect BLOCKED",
+                  "while every rented pod refused the counter"):
         assert stale not in text, stale
     start = text.index("| `ncu` says ERR_NVGPUCTRPERM |")
     playbook = text[start:text.index("| override_config appears", start)]
     assert "counter-probe" in playbook, "the playbook row names the chain's step"
+
+
+def test_the_counter_plan_row_sends_the_operator_to_the_probe_not_to_a_platform_fact():
+    """The runbook's `counter_plan` arm row said "BLOCKED is the ANSWER on a
+    rented pod" and closed on "expect BLOCKED" after two other passages of the
+    same file had been rewritten to read the probe instead. The row now says
+    BLOCKED is an answer about the pod, gives the committed record (each
+    profile-logged refusal by its run's own date, and 2026-09-15), and names
+    the chain's counter-probe step that asks on every pass."""
+    text = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
+    start = text.index("| `counter_plan` | ")
+    row = text[start:text.index("| `counter-n32-m64` | ", start)]
+    for stale in ("BLOCKED is the ANSWER on a rented pod", "expect BLOCKED",
+                  "while every rented pod refused"):
+        assert stale not in row, stale
+    assert "BLOCKED is an answer about this pod" in row
+    assert "not the platform's answer" in row
+    assert "Read the probe rather than expect either word" in row
+    for _path, day in _committed_refusals():
+        assert day in row, day
+    assert "2026-09-15" in row and "session 5 attempted none" in row
+    assert "`counter-probe` step" in row
 
 
 # --------------------------------------------------------------------------
