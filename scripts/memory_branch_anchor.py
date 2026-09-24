@@ -86,8 +86,10 @@ the bracket is built on the anchor-free slope regardless, because "small" is not
 "independent".
 
 WHAT THIS DOES NOT DO. It does not identify BW inside the bracket. A DRAM
-counter would, and it is blocked: `ncu` fails with ERR_NVGPUCTRPERM on rented
-pods and the RunPod image's `nsys` cannot convert its own capture. NO
+counter would, and none has been read: no `ncu` counter read has succeeded on
+a rented pod in this study (two were refused with ERR_NVGPUCTRPERM, 2026-08-25
+and 2026-09-15, and `scripts/dram_counter_route.py --probe` asks each pod),
+and the RunPod image's `nsys` cannot convert its own capture. NO
 COUNTER-FREE METHOD IDENTIFIES BW ON THE BRANCH, and this file says so rather
 than inventing one. What it delivers instead is an interval whose two ends are
 both measured quantities, which is a defensible object where the point estimate
@@ -1746,10 +1748,11 @@ def render_summary(fits: list[ScoredFit]) -> list[str]:
     out += ["",
             "  READ THE WIDTH AS THE ANSWER, not as a failure of the method. It is the",
             "  gap between what the kernel achieved at n=1 and what the card can do,",
-            "  and only a DRAM counter closes it. ncu returns ERR_NVGPUCTRPERM on a",
-            "  rented pod and the image's nsys cannot convert its own capture, so no",
-            "  counter-free method identifies the branch's bandwidth and this file does",
-            "  not pretend one does.",
+            "  and only a DRAM counter closes it. No ncu counter read has succeeded on",
+            "  a rented pod in this study (dram_counter_route.py --probe asks each pod)",
+            "  and the image's nsys cannot convert its own capture, so no counter-free",
+            "  method identifies the branch's bandwidth and this file does not pretend",
+            "  one does.",
             "",
             "  B IS IDENTIFIED AND L IS NOT, which is the whole finding in one line:",
             f"    dropping the anchor tread moves the slope by at most "
@@ -2185,9 +2188,11 @@ def render_plan(plan: MeasurePlan, out_dir: Path,
         "",
         "  WHAT IT STILL CANNOT DO. It does not identify BW on the branch. That "
         "needs a DRAM",
-        "  counter; ncu returns ERR_NVGPUCTRPERM on rented pods and the image's "
-        "nsys cannot",
-        "  convert its own capture. The deliverable is the interval, not a point.",
+        "  counter, and no ncu counter read has succeeded on a rented pod in this "
+        "study",
+        "  (dram_counter_route.py --probe asks each pod); the image's nsys cannot "
+        "convert",
+        "  its own capture. The deliverable is the interval, not a point.",
         "",
     ]
     lines += render_mde(cfg, plan.dtype, min(plan.block_sizes), spread_rel)

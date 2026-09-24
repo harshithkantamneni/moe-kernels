@@ -1083,6 +1083,24 @@ def test_the_plan_names_its_instrument_and_its_warmup_in_milliseconds(capsys):
     assert "iters is NOT a knob" in out
 
 
+def test_the_printed_pages_state_no_pods_counter_answer_as_the_platforms(capsys, scored):
+    """Both printed pages said "ncu returns ERR_NVGPUCTRPERM on a rented pod":
+    two refused pods (2026-08-25, 2026-09-15) printed as the platform's
+    answer, which session 5's findings list under do-not-believe. They now
+    say no counter read has succeeded here and name the probe that asks."""
+    mba.main(["--measure", "--dry-run", "--card", "nvidia_h200"])
+    plan = " ".join(capsys.readouterr().out.split())
+    fits, _refusals, _cals = scored
+    summary = " ".join("\n".join(mba.render_summary(fits)).split())
+    for name, text, lead in (("plan", plan, "WHAT IT STILL CANNOT DO"),
+                             ("summary", summary, "READ THE WIDTH AS THE ANSWER")):
+        assert lead in text, name
+        assert "ERR_NVGPUCTRPERM on" not in text, name
+        assert ("no ncu counter read has succeeded on a rented pod in this study"
+                in text.lower()), name
+        assert "dram_counter_route.py --probe asks each pod" in text, name
+
+
 def test_the_rescore_report_carries_a_provenance_block(tmp_path):
     """A number nobody can attribute to a commit, a card and a ruler is not a
     measurement. The 26 published report.json files carry none of the three."""

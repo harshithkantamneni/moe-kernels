@@ -76,9 +76,10 @@
 # could produce and it is the last thing on the screen, not a line in a log.
 #
 # WHY nsys IS PROBED IN PRE-FLIGHT AND NOT LATER. Every byte figure in this study
-# is modelled, never counted, because ncu is walled off on a rented pod by
-# ERR_NVGPUCTRPERM. nsys samples DRAM through a different mechanism and MIGHT
-# work here. If it does, steps 2, 3 and 4 and the dtype headline stop being
+# is modelled, never counted: no ncu counter read has succeeded on a rented pod
+# (two H200s refused with ERR_NVGPUCTRPERM, 2026-08-25 and 2026-09-15; whether
+# THIS pod can is scripts/dram_counter_route.py --probe's to answer). nsys
+# samples DRAM through a different mechanism and MIGHT work here. If it does, steps 2, 3 and 4 and the dtype headline stop being
 # inferences from a byte model and become measurements, so it is a force
 # multiplier on everything after it and worth two minutes BEFORE anything is
 # spent. It is never fatal: on a pod where the sampler is blocked the session
@@ -414,9 +415,9 @@ absent_reason() {
 # --------------------------------------------------------------------------
 #
 # EVERY BYTE FIGURE IN THIS STUDY IS COMPULSORY-TRAFFIC ARITHMETIC. Nothing has
-# ever counted a DRAM transaction, because ncu is walled off on a rented pod by
-# ERR_NVGPUCTRPERM, and docs/FINDINGS.md says so under "what this does not
-# settle". Pre-flight P-nsys asks whether nsys can sample DRAM here instead. If it
+# ever counted a DRAM transaction: the two rented pods that attempted an ncu
+# counter read (2026-08-25, 2026-09-15) were refused with ERR_NVGPUCTRPERM, and
+# docs/FINDINGS.md says so under "what this does not settle". Pre-flight P-nsys asks whether nsys can sample DRAM here instead. If it
 # can, the traffic figures behind steps 1 through 4 stop being inferences.
 #
 # THE DISTINCTION HAS TO REACH THE READER, not a log. A number that was modelled
@@ -497,8 +498,9 @@ with_deadline() {
 #: would be worth nothing. Two minutes, before anything is spent.
 #:
 #: IT IS NEVER FATAL AND NEVER EVEN A SOFT FAIL FOR BEING ABSENT. nsys having no
-#: DRAM sampler on a rented pod is the EXPECTED case: ncu is already blocked by
-#: ERR_NVGPUCTRPERM and this route has never been tested. A gate that cries FAIL
+#: DRAM sampler on a rented pod is the EXPECTED case: the two pods that tried
+#: an ncu counter read were refused with ERR_NVGPUCTRPERM, and this route has
+#: never been tested. A gate that cries FAIL
 #: on the expected case is a gate nobody reads, and this one has to be read. So
 #: absence is an INFO row and the consequence is carried as a label rather than a
 #: verdict: every downstream traffic figure says INFERRED.
@@ -1071,14 +1073,19 @@ PYEOF
   note "under results/published/ the raw evidence extensions are re-included on purpose (.ptx .cubin .nsys-rep .ncu-rep .qdrep); everywhere ELSE they are still ignored at any depth, and weight formats (.safetensors .bin .pt .gguf) are ignored everywhere including here, so a dump with a weight extension still exfils as .tar.gz"
 
   head2 "P10  which profiler is actually available"
-  # ncu fails on a rented pod with ERR_NVGPUCTRPERM because GPU performance
-  # counters need a host module flag a container tenant cannot set. nsys uses
-  # CUDA tracing instead and often works. Recorded, not gated: the session is
-  # designed around having neither.
+  # Whether ncu can READ a counter is the pod's to answer, not the platform's:
+  # counters need a host module flag a container tenant cannot set, or a
+  # capability (CAP_PERFMON, CAP_SYS_ADMIN) the provider grants, and the two
+  # rented H200s that tried were refused with ERR_NVGPUCTRPERM (2026-08-25,
+  # 2026-09-15). This row only says whether ncu is on PATH;
+  # scripts/dram_counter_route.py --probe, and the alpha(G) chain's
+  # counter-probe step, launch a kernel and ask. nsys uses CUDA tracing instead
+  # and often works. Recorded, not gated: the session is designed around having
+  # neither.
   local have_nsys=no have_ncu=no
   command -v nsys >/dev/null 2>&1 && have_nsys=yes
   command -v ncu  >/dev/null 2>&1 && have_ncu=yes
-  note "nsys=$have_nsys ncu=$have_ncu (ncu is expected to be present but to fail with ERR_NVGPUCTRPERM)"
+  note "nsys=$have_nsys ncu=$have_ncu (on PATH only; whether ncu can READ a counter is this pod's to answer, not the platform's: two rented H200s refused with ERR_NVGPUCTRPERM, 2026-08-25 and 2026-09-15, and scripts/dram_counter_route.py --probe asks)"
   ledger P10 "profiler availability" INFO "nsys=$have_nsys ncu=$have_ncu" "informational" ""
   [[ "$have_nsys" == "yes" ]] && NSYS_BIN="$(command -v nsys)"
   note "P-nsys below asks the harder question: whether nsys can SAMPLE DRAM here"

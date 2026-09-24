@@ -32,7 +32,6 @@ when it refuses).
 """
 from __future__ import annotations
 
-import csv
 import json
 import math
 import os
@@ -51,6 +50,7 @@ HELPERS = ROOT / "scripts" / "alpha_g_chain_helpers.py"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 import alpha_g_chain_helpers as H  # noqa: E402
+from _committed import ncu_refusals  # noqa: E402
 from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
@@ -727,33 +727,15 @@ def test_the_help_records_the_counter_probe_and_runpods_counter_history():
     assert "The counter probe runs under the same rule over its price" in flat
 
 
-def _committed_refusals() -> list[tuple[str, str]]:
-    """Every ERR_NVGPUCTRPERM refusal a file under profiles/ commits, as (the
-    file, the date its run's own rows carry): read off the log and the rows
-    its run wrote, never typed. The 2026-09-15 refusal is committed only as
-    prose (docs/FINDINGS.md's retraction), so it is not in this list."""
-    found = []
-    for log in sorted((ROOT / "profiles").glob("*.txt")):
-        text = log.read_text(errors="replace")
-        if "ERR_NVGPUCTRPERM" not in text:
-            continue
-        rows = re.search(r"wrote \d+ rows -> (\S+\.csv)", text)
-        assert rows, f"{log.name} names no rows file to date it by"
-        with open(ROOT / rows.group(1), newline="") as fh:
-            row = next(csv.DictReader(fh))
-        assert "H200" in row["gpu_name"], (log.name, row["gpu_name"])
-        found.append((str(log.relative_to(ROOT)), row["timestamp"][:10]))
-    return found
-
-
 def test_runpods_counter_record_counts_every_refusal_this_repo_commits():
     """The chain's header (its --help) and every runbook passage that states
     RunPod's ncu record name each refusal a profile log commits, by its file
     and by its run's own date, and none calls the record one refusal on one
     pod: profiles/q2_kernel_names.txt holds an ERR_NVGPUCTRPERM from ncu over
     the harness's own CLI on an H200, three weeks before 2026-09-15."""
-    refusals = _committed_refusals()
+    refusals = ncu_refusals()
     assert refusals, "profiles/ commits the earlier refusal this record counts"
+    assert all("H200" in card for _p, _d, card in refusals), refusals
     header = " ".join(_header_prose().split()).replace("/ ", "/")
     runbook = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
     chain = " ".join(_runbook_chain_section().split())
@@ -764,7 +746,7 @@ def test_runpods_counter_record_counts_every_refusal_this_repo_commits():
     playbook = runbook[start:runbook.index("| override_config appears", start)]
     for name, text in (("header", header), ("chain section", chain), ("P10", p10),
                        ("P-nsys", pnsys), ("playbook", playbook)):
-        for path, day in refusals:
+        for path, day, _card in refusals:
             assert day in text, (name, day)
             if name != "P-nsys":
                 assert path in text, (name, path)
@@ -820,7 +802,7 @@ def test_the_counter_plan_row_sends_the_operator_to_the_probe_not_to_a_platform_
     assert "BLOCKED is an answer about this pod" in row
     assert "not the platform's answer" in row
     assert "Read the probe rather than expect either word" in row
-    for _path, day in _committed_refusals():
+    for _path, day, _card in ncu_refusals():
         assert day in row, day
     assert "2026-09-15" in row and "session 5 attempted none" in row
     assert "`counter-probe` step" in row

@@ -352,6 +352,23 @@ def dry_run() -> str:
     return r.stdout
 
 
+def test_p10_says_whether_ncu_is_on_path_and_leaves_the_counter_to_the_pod(dry_run):
+    """P10's note told every operator "ncu is expected to be present but to
+    fail with ERR_NVGPUCTRPERM": two refused pods (2026-08-25, 2026-09-15)
+    printed as the platform's answer, which session 5's findings list under
+    do-not-believe. It now says the row looks on PATH only, that the counter
+    is the pod's to answer, and which probe asks."""
+    lines = dry_run.splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.startswith("-- P10 "))
+    note = " ".join(lines[at + 1].split())
+    assert note.startswith("nsys="), note
+    assert "expected to be present but to fail" not in note
+    assert ("(on PATH only; whether ncu can READ a counter is this pod's to answer, "
+            "not the platform's") in note
+    assert "2026-08-25 and 2026-09-15" in note
+    assert "scripts/dram_counter_route.py --probe asks" in note
+
+
 def test_the_table_resolves_the_ridge_from_the_cards_calibration(dry_run):
     """The ridge is READ, with the file it came from, not typed.
 

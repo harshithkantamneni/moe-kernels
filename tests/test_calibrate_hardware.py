@@ -461,6 +461,30 @@ def test_the_default_output_path_is_untracked_and_carries_the_card_and_the_knobs
     assert other.parent != out.parent, "a knob that changes the numbers must change the id"
 
 
+def test_the_ruler_note_names_the_probe_and_states_no_pods_counter_answer():
+    """Every ruler this script wrote said "Nsight Compute is unavailable on a
+    rented pod (ERR_NVGPUCTRPERM)", session 5's included: two refused pods
+    written into the data as the platform's answer. The note now says the
+    ceilings were measured without a counter and names the probe that asks,
+    and the yaml's payload takes its note from that one function, at the
+    pattern the ruler adopted."""
+    import ast
+
+    note = CH.source_note("read_stream")
+    for stale in ("unavailable on a rented pod", "ERR_NVGPUCTRPERM", "cannot be measured"):
+        assert stale not in note, stale
+    assert "scripts/dram_counter_route.py --probe" in note
+    assert "'read_stream' pattern" in note
+    tree = ast.parse((REPO / "scripts" / "calibrate_hardware.py").read_text())
+    values = [v for node in ast.walk(tree) if isinstance(node, ast.Dict)
+              for k, v in zip(node.keys, node.values, strict=True)
+              if isinstance(k, ast.Constant) and k.value == "source_note"]
+    assert len(values) == 1, "one yaml payload carries the note"
+    call = values[0]
+    assert isinstance(call, ast.Call) and getattr(call.func, "id", "") == "source_note"
+    assert ast.unparse(call.args[0]) == "cal.ceiling_pattern"
+
+
 def test_a_run_without_publish_leaves_the_tree_clean(tmp_path):
     """The requirement, tested the way it failed: run the script and ask git.
 

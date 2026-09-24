@@ -78,3 +78,37 @@ def committed_copy(directory: Path, dest: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
     return Path(dest)
+
+
+def ncu_refusals() -> list[tuple[str, str, str]]:
+    """Every ERR_NVGPUCTRPERM refusal a tracked profile log under `profiles/`
+    commits, as (the log's repo path, the date its run's own rows carry, the
+    card those rows name), read off the log and the rows file it names rather
+    than typed anywhere.
+
+    RunPod's ncu record is stated in the chain's help, the runbook, the gaps
+    driver's arm text and the counter docs, and it read "one refusal on one
+    pod" (2026-09-15) in several of them while `profiles/q2_kernel_names.txt`
+    held an earlier one: ncu over the harness's own CLI on an H200, refused,
+    with the rows that run wrote dated 2026-08-25. The tests that hold those
+    texts to the record take it from here. The 2026-09-15 refusal is committed
+    only as prose (docs/FINDINGS.md's retraction), so it is not in this list.
+    """
+    import csv
+    import re
+
+    found = []
+    for log in tracked_files(REPO / "profiles"):
+        if log.suffix != ".txt":
+            continue
+        text = log.read_text(errors="replace")
+        if "ERR_NVGPUCTRPERM" not in text:
+            continue
+        rows = re.search(r"wrote \d+ rows -> (\S+\.csv)", text)
+        if rows is None:
+            raise AssertionError(f"{log.name} names no rows file to date it by")
+        with open(REPO / rows.group(1), newline="") as fh:
+            row = next(csv.DictReader(fh))
+        found.append((log.relative_to(REPO).as_posix(), row["timestamp"][:10],
+                      row["gpu_name"]))
+    return found
