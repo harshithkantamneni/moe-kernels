@@ -609,7 +609,7 @@ def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_p
         assert "3.53 GB" not in text and "1.93 GB" not in text, name
 
 
-#: ONE POD'S ncu REFUSAL STATED AS THE PLATFORM'S. Session 5's findings list
+#: TWO PODS' ncu REFUSALS STATED AS THE PLATFORM'S. Session 5's findings list
 #: "RunPod refuses ncu" under do-not-believe: two rented H200s attempted a
 #: counter read and both were refused with ERR_NVGPUCTRPERM (2026-08-25,
 #: `profiles/q2_kernel_names.txt`; 2026-09-15), the 2026-09-09 and 2026-09-10

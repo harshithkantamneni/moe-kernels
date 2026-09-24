@@ -767,7 +767,7 @@ def test_the_runbook_states_the_reads_as_rule_and_the_bound():
 
 def test_the_runbook_states_the_counter_probe_and_no_platform_fact():
     """The runbook's chain section and its counter rows say what the chain now
-    does, and none of them states one pod's refusal as the platform's."""
+    does, and none of them states the refused pods' answer as the platform's."""
     sec = " ".join(_runbook_chain_section().split())
     assert "The counter probe, INFORMATIONAL: never gated and never latched" in sec
     assert "`INFO`" in sec
