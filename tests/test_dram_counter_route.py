@@ -2721,3 +2721,20 @@ def test_the_family_flags_are_refused_where_they_mean_nothing(capsys):
     assert main(["--dry-run", "--timed-reference", "x.json"]) == exit_codes.REFUSED
     assert main(["--bracket", "--family", "r3-arms"]) == exit_codes.REFUSED
     capsys.readouterr()
+
+
+def test_counters_doc_section_6_quotes_the_numbers_the_family_computes():
+    """docs/COUNTERS.md section 6 prints the r3-arms byte model and the group
+    model's table; both are recomputed here from the functions that own them,
+    so the page fails a test the day either moves."""
+    doc = (REPO / "docs" / "COUNTERS.md").read_text()
+    sec = doc[doc.index("## 6. The R3 arms under the counter"):]
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    for key in ("W", "W_w1", "W_w2", "operand_per_tile_w1", "operand_per_tile_w2"):
+        assert f"{byte[key]:,}" in sec, key
+    for g, qs, slope in DCR.r3_group_rows(8, DCR.R3_TREADS,
+                                          list(DCR.R3_GROUPS) + [DCR.R3_OPTIONAL_GROUP]):
+        row = f"| {g} | " + " | ".join(f"{v:.4f}" for v in qs) + f" | {slope:.4f} |"
+        assert row in sec, row
+    assert "`--family ladder` (the\ndefault) behaves exactly as before" in sec
+    assert "\u2014" not in sec, "no em-dash in the section"

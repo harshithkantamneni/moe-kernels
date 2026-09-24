@@ -17,6 +17,7 @@ This page covers four things, in the order they are worth acting on:
 | [2](#2-which-providers-grant-counter-access) | which providers grant counter access | **partly**: the mechanism is verified from NVIDIA, most provider docs are NOT verified here |
 | [3](#3-counter-free-bounds-on-l) | can `L` be anchored without a counter | **partly, and it already produces a result**: a bracket that excludes four published fits, plus one experiment worth building |
 | [4](#4-the-counter-run-written-as-a-plan) | what exactly would be measured | **written and runnable**: `scripts/dram_counter_route.py --dry-run` |
+| [6](#6-the-r3-arms-under-the-counter) | what R3's three arms read from DRAM at each GROUP_SIZE_M | **written and runnable off GPU**: `scripts/dram_counter_route.py --dry-run --family r3-arms`; never run on a box whose counters were read |
 
 Everything below is re-verifiable from this repository or from a public URL. Where
 something could not be verified in this session it says so in those words.
@@ -667,12 +668,232 @@ check and a test that asserts it.
   planner where the file also measures and compares. Exactly one mode per
   invocation: the parser refuses two, because interleaving a plan with a result
   is what this study has been burned by
-* `tests/test_dram_counter_route.py` -- 108 tests, all off GPU. The count is
-  NOT checked by `tests/test_docs.py` and the claim that it was is retired: it
-  read 46 while the file collected 108, which is what an unchecked count that
-  says it is checked looks like. Re-derive it with the command below
+* `tests/test_dram_counter_route.py`, all off GPU. It held 108 tests when this
+  line last counted them and holds more since the r3-arms family (section 6)
+  landed on 2026-09-24. The count is NOT checked by `tests/test_docs.py`, so
+  this line no longer states one: it read 46 while the file collected 108,
+  which is what an unchecked count looks like. Re-derive it with the command
+  below
+* `--family r3-arms`, section 6: the same file's second registered cell
+  family, which adds a census and a per-G page to `--run` and a several-page
+  summary to `--analyse`, and whose child is
+  `scripts/private_weight_reference.py --counter-child`
 
 ```bash
 .venv/bin/python -m pytest tests/test_dram_counter_route.py -q
 .venv/bin/ruff check scripts/dram_counter_route.py tests/test_dram_counter_route.py
 ```
+
+---
+
+## 6. The R3 arms under the counter
+
+`scripts/dram_counter_route.py --family r3-arms`. Written 2026-09-24. Nothing
+in this section has run on a box whose counters were read: every number below
+is either arithmetic this repository computes (the dry run prints it) or a
+prediction registered before the run.
+
+### 6.1 What it measures, and why in this file
+
+alpha(G) is the fraction of an expert's weight set each extra M-tile re-reads
+from DRAM, G being Triton's GROUP_SIZE_M swizzle in vLLM 0.27.1's fused MoE
+kernel, on mixtral-8x7b bf16 at BLOCK_M 32 (BLOCK_N 64, BLOCK_K 64, as R3
+pins them). R3 (`scripts/private_weight_reference.py`) builds three arms over
+one tread ladder of n M-tiles per expert: NATIVE (vLLM as shipped, 8
+experts declared), SHARED (72 declared slots all over one copy, reuse
+possible) and PRIVATE (9 copies, one per tile, no reuse possible). Session 5's
+timing on the H200 could not identify alpha at G >= 4, because an on-chip
+floor hides the traffic, and it brackets alpha(1) between R3's timed ratio and
+1.0. A DRAM counter reads the traffic itself.
+
+The family lives in `dram_counter_route.py` because that file already owns
+the permission probe, the CSV parser and its unit tables, the gates, the
+exit codes and the provenance stamp. A second script would fork the parser
+and the probe. R3 is imported lazily, inside the family's functions, so the
+ladder family's import graph does not change, and `--family ladder` (the
+default) behaves exactly as before.
+
+The calls are R3's own. `run_sweep`'s two closures became the module-level
+`arm_inputs` and `arm_call`, and `_main`'s pinned dict became
+`pinned_config`: the timed ladder and the counter child build every arm
+through the same three functions.
+
+### 6.2 The cells
+
+Three arms x G in {64, 1, 4, 2} (in that order; 16 optional) x n in
+{1, 2, 3, 4, 6}. n=1 is the identity tread, where SHARED and PRIVATE are one
+call. n=3 is needed for an OLS residual and is where G=2 first pays a second
+group. n=4 is where the tiles align with the groups at G=4 and G=16 and the
+group model predicts a drop, which no per-tile scalar alpha can produce. n=5
+is omitted: its prediction equals n=6's at G=2 and G=4.
+
+The declaration is R3's (`declared_copies_for` over R3's whole ladder, 9
+copies and 72 slots), never recomputed from the subset, because it sizes the
+launch grid. The child refuses a plan whose treads are not a subset of R3's
+ladder or whose declaration is not R3's. Its memory plan is R3's
+`memory_plan` with no flush buffer, checked against the attached card: the
+dry run prints the predicted peak and the free memory it needs.
+
+### 6.3 The metrics
+
+| class | metrics | rule |
+|---|---|---|
+| STRICT | `dram__bytes_read.sum`, `dram__bytes_write.sum`, `lts__t_sectors_srcunit_tex_op_read.sum`, `launch__grid_size`, `gpu__time_duration.sum` | the run refuses without them |
+| CROSS-CHECK | `lts__d_sectors_fill_device.sum`, `lts__t_sectors_op_read_lookup_miss.sum`, `lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum`, `lts__t_sector_op_read_hit_rate.pct` | gated only when the probe proved them readable |
+| RECORDED | the four `launch__occupancy_limit_*`, `launch__registers_per_thread`, `launch__waves_per_multiprocessor`, `lts__t_sectors_srcunit_ltcfabric.sum` | never gated, parsed soft |
+
+`--probe --family r3-arms` asks `ncu --query-metrics` which of these the chip
+offers, refuses when a STRICT one is absent, drops the others it lacks, and
+asks the probe kernel for everything left. OPEN means every STRICT metric came
+back as a number. The unit tables gained a sector table and a separate table
+for the `launch__*` metrics, the only place an empty unit is accepted.
+
+The parser now reads both CSV layouts ncu may print for `--csv --page raw`:
+LONG (one row per launch and metric, which the parser was written against)
+and WIDE (one row per launch, a units row under the header). No live ncu CSV
+has been captured in this repository, and the recollection this design rests
+on is that the raw page is wide; a parser that read only the long layout
+would turn a box whose counters work into a probe that reads REFUSE. The
+probe records the layout it parsed and the header's first line.
+
+### 6.4 Profiling only the arm GEMMs, and the per-call trap
+
+The ladder family's per-call trap exists because the timed instrument chooses
+its own call count. The r3-arms family removes the instrument: the child
+(`private_weight_reference.py --counter-child PLAN`) times nothing and makes
+an exact, planned number of calls (`counter_schedule`): U = 2 warmups for
+every cell first, which compile, then K = 3 measured calls per cell in
+manifest order, each inside an NVTX range and followed by a synchronize. ncu
+runs with `-k regex:^fused_moe_kernel$ --kernel-name-base function`, skips
+GEMMS_PER_CALL x U x cells launches and keeps GEMMS_PER_CALL x K x cells,
+exports a `.ncu-rep`, and the CSV is reduced from it afterwards with
+`ncu --import ... --csv --page raw --print-units base`, so a parser defect is a
+laptop fix and not a re-rent. R3's five-part buffer proof runs last, after
+the profiled window has closed.
+
+GEMMS_PER_CALL = 2 is cited from vLLM 0.27.1's `fused_experts_impl` and
+measured by the census (`--run --family r3-arms --census-only`): NATIVE at
+n in {1, 6}, one warmup and one call, no skip and no cap, must profile
+exactly 2 x 4 launches at the grids the child derived from vLLM's own
+`moe_align_block_size`. Every page needs a census from the same card UUID,
+commit and vLLM version.
+
+Attribution (`attribute_launches`) is exact: the CSV must hold exactly the
+planned launch count, launch i is the i-th (cell, call, GEMM) of the
+manifest, w1 then w2 within a call, and every launch's `launch__grid_size`
+must equal the manifest's grid for its arm, tread and GEMM. Anything else
+exits INVALID.
+
+### 6.5 L2 state
+
+`--cache-control all` flushes every cache before each replay pass of each
+profiled launch, so every GEMM starts cold; the unprofiled kernels between
+them run normally. The timed apparatus flushed once per call, not between the
+two GEMMs, which changes only activation traffic, and the operand model
+charges activations as cold reads for that reason. `--cache-control none` is
+not run: under kernel replay ncu's first-pass save of the ~26 GB footprint
+streams through L2 right before the kernel. `--clock-control base` is passed
+and recorded, because the documented default has moved between versions.
+
+### 6.6 The byte model and the estimators
+
+W = 2,818,572,288 B, split by GEMM as W_w1 = 1,879,048,192 B (the gate+up slab)
+and W_w2 = 939,524,096 B (`moe.bench.weights.routed_expert_weight_bytes_by_gemm`).
+One more tread makes the w1 GEMM read E x BM x H x 2 = 2,097,152 B of A operand
+and the w2 GEMM E x BM x F x 2 = 7,340,032 B
+(`gemm_operand_read_bytes_per_row`), 0.33% of W together.
+
+q(n) = (R(n) - n x operand) / W, per GEMM and in total, R being
+`dram__bytes_read.sum` per `fused_experts` call. The primary product is
+q_SHARED(n) at each tread beside the group model. alpha(G) is the OLS slope of
+q_SHARED over n, printed with its residual as a scalar summary that means
+something only where the ladder is affine. Also printed: the byte ratio
+slope(R_S) / slope(R_P), the analogue of R3's timed ratio; 1 - (slope_P -
+slope_S) / W, which cancels any activation term the arms share; and per-GEMM
+alphas. None uses a bandwidth, a ridge, an intercept or a calibration.
+
+### 6.7 The registered prediction
+
+`group_reads(E, n, G)`: vLLM's pid mapping puts expert e's tiles at
+[e n, e n + n) in every arm, and if L2 serves every re-read inside a
+GROUP_SIZE_M group and none across groups, each weight slab is read once per
+group its expert's tiles fall in. Card-free. `--self-test` and the test suite
+hold the closed form to a brute-force walk of the pid mapping.
+
+| G | n=1 | n=2 | n=3 | n=4 | n=6 | slope |
+|---|---|---|---|---|---|---|
+| 64 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.0000 |
+| 1 | 1.0000 | 2.0000 | 3.0000 | 4.0000 | 6.0000 | 1.0000 |
+| 4 | 1.0000 | 1.0000 | 1.5000 | 1.0000 | 2.0000 | 0.1824 |
+| 2 | 1.0000 | 1.0000 | 2.0000 | 2.0000 | 3.0000 | 0.4189 |
+| 16 | 1.0000 | 1.0000 | 1.1250 | 1.0000 | 1.2500 | 0.0456 |
+
+PRIVATE reads q(n) = n at every G by construction. The model binds w1 at every
+G >= 2 (448 N-tiles per M-row, far more than the CTAs in flight). w2 has 64
+N-tiles per M-row and may read less where the co-residency window (SMs x CTAs
+per SM, from the page's own occupancy) exceeds G x 64. At G=1 two readings are
+registered: co-residency (w1 re-read whole, w2 shared, so alpha(1) can sit
+well below the timed bracket) and the timed edge (both arms at one rate, so
+alpha(1) sits inside it).
+
+### 6.8 The gates
+
+VALIDITY, any failure exits INVALID and no alpha may be quoted: V0 a live card
+block; V1 exact count, every grid, a census that measured GEMMS_PER_CALL; V2
+every STRICT metric a number; V3 each cell's K calls within 1% of each other;
+V4 at n=1 SHARED and PRIVATE agree and every arm's q(1) is in [0.97, 1.03];
+V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM; V6 the three
+arms request the same L2 sectors within 0.5%; V7 NATIVE reads what SHARED reads
+within 1%; V8 DRAM bytes agree with 32 x the L2 fill sectors within 2% (asked
+only if proven); V9 R3's five-part buffer proof.
+
+The ladder family's monotone and affine gates are NOT applied to SHARED: the
+group model predicts non-monotone, non-affine shared ladders at G = 2, 4 and
+16, and those gates would void a correct page. A test holds that a planted G=4
+staircase with its n=4 drop is VALID.
+
+CLAIM, a failure is a result: C1 w1 within 5% of the group model at every n
+for G >= 2, and at G=1 w1 re-read whole where the co-residency window is below
+448 (not asked when the occupancy was not proven); C2 w2 never above 1.05 x the
+model; C3 at G=1 alpha_w2 < alpha_w1; C6 PRIVATE no more than 1.03 n, whose
+failure localises a bytes share of the private arm's timed G-cost by GEMM;
+C5 only with `--timed-reference`, labelled cross-card, comparing alpha(1) with
+the timed bracket and the G >= 4 byte ratios with the timed ratios, every timed
+number read from R3's report.json files and none typed.
+
+### 6.9 The card
+
+Every page's first line reads `CARD <name> (<slug>, UUID <uuid>, sm_<cc>, <SMs>
+SMs, <L2> MiB L2): every number here is THIS card's; the study's timing pages
+are nvidia_h200.` The run id carries the live slug, `--analyse` refuses to join
+pages from two UUIDs, two commits, two vLLM versions or two designs, and a page
+without a card block fails V0. The target is 1x H100 SXM5 (132 SMs, 50 MB L2);
+an A100 40 GB shake-out is possible first. Neither is the study's H200 and no
+alpha either prints is the H200's.
+
+### 6.10 The commands and the cost
+
+```bash
+python scripts/dram_counter_route.py --dry-run --family r3-arms          # off GPU: the plan and its price
+python scripts/dram_counter_route.py --probe --family r3-arms --out $S/probe.json
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --census-only --out $S/census.json
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census.json --out $R/r3c-g64.json
+#   then --group-m 1, 4, 2, and optionally 16
+python scripts/dram_counter_route.py --analyse $R/r3c-g64.json $R/r3c-g1.json $R/r3c-g4.json $R/r3c-g2.json
+```
+
+The dry run prices each G from registered constants (child start, weight
+build, compiles, 90 profiled launches at a per-launch overhead, proof and
+reduction), about 4 minutes per G on 1x H100 SXM5 and about 20 minutes for all
+five, plus a few minutes of preflight; it also prints the pessimistic figure
+and the recommended VM booking. On an A100 40 GB, ncu's first-pass save goes to
+host memory and costs about a second per launch.
+
+### 6.11 What the counter cannot settle
+
+It cannot split weight re-reads from activation re-reads inside one GEMM's
+DRAM total; the group model and the private control bound it. It measures bytes
+at a locked clock with a cold L2 per GEMM, not the timed apparatus's per-call
+flush, which leaves weights unaffected and moves activations slightly. The
+group model is derived from vLLM's pid mapping, not measured: a C1 failure is
+a result, and the brute-force test guards the arithmetic, not the hardware.
