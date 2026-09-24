@@ -2450,11 +2450,21 @@ def test_analyse_refuses_two_card_uuids(tmp_path, capsys):
     assert "card UUID" in out and exit_codes.parse_result_lines(out) == []
 
 
-def _timed_report(tmp_path, g: int, ratio: float, seed: int) -> Path:
-    path = tmp_path / f"timed-g{g}-s{seed}.json"
-    path.write_text(json.dumps({"experiment": "private_weight_reference",
-                                "card": "nvidia_h200", "seed": seed, "ratio": ratio,
-                                "pinned": {"GROUP_SIZE_M": g}, "claim_min_tread": 1}))
+def _timed_report(tmp_path, g: int, ratio: float, seed: int, **over) -> Path:
+    """A measured, VALID R3 report.json at G, with the planted page's design:
+    R3's own `pinned_config` at the page's BLOCK_N and num_stages, so no knob
+    is typed here. `over` replaces any top-level key."""
+    plan = DCR.planted_r3_plan(g)
+    rep = {"experiment": "private_weight_reference", "synthetic": False,
+           "card": "nvidia_h200", "seed": seed, "ratio": ratio,
+           "model": plan["model"], "dtype": plan["dtype"], "block_m": plan["block_m"],
+           "pinned": R3.pinned_config(plan["block_n"], g, plan["num_stages"]),
+           "duty": 0.25, "claim_min_tread": 1,
+           "gates": [{"tag": "V1", "kind": "VALIDITY", "verdict": PASS},
+                     {"tag": "C1", "kind": "CLAIM", "verdict": FAIL}]}
+    rep.update(over)
+    path = tmp_path / f"timed-g{g}-s{seed}-{len(list(tmp_path.glob('timed-*')))}.json"
+    path.write_text(json.dumps(rep))
     return path
 
 
@@ -2481,6 +2491,55 @@ def test_c5_compares_the_bytes_with_the_timed_pages_it_reads(tmp_path, capsys):
     c5 = next(ln for ln in exit_codes.parse_result_lines(capsys.readouterr().out)
               if ln.name == "C5")
     assert c5.verdict == FAIL
+
+
+def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
+        tmp_path, capsys):
+    """Until 2026-09-24 `load_timed_reference` read the ratio, G, the card, the
+    seed and the window, and nothing else, so C5 scored bytes against a timed
+    ratio from another tile, model, dtype or pinned block, or from a planted
+    or INVALID report. Each of those is now refused before any page is
+    scored, the runs pooled at one G must share their duty and window, and
+    the cross-card lines name each run's duty and fit window."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    ratio = DCR.r3_estimates(json.loads(g4.read_text()))["alpha_ratio"]
+    pinned = R3.pinned_config(DCR.planted_r3_plan(4)["block_n"], 4,
+                              DCR.planted_r3_plan(4)["num_stages"])
+    refused = {
+        "another BLOCK_M": {"block_m": 2 * DCR.planted_r3_plan(4)["block_m"]},
+        "another model": {"model": "mixtral-8x22b"},
+        "another dtype": {"dtype": "fp16"},
+        "another BLOCK_N": {"pinned": dict(pinned, BLOCK_SIZE_N=2 * pinned["BLOCK_SIZE_N"])},
+        "another num_stages": {"pinned": dict(pinned, num_stages=pinned["num_stages"] - 1)},
+        "a planted report": {"synthetic": True},
+        "an INVALID report": {"gates": [{"tag": "V5", "kind": "VALIDITY",
+                                         "verdict": FAIL}]},
+        "no gates at all": {"gates": []},
+    }
+    for label, over in refused.items():
+        timed = [_timed_report(tmp_path, 4, ratio + 0.5, s, **over) for s in (0, 1)]
+        assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
+            == exit_codes.REFUSED, label
+        out = capsys.readouterr().out
+        assert "REFUSED: --timed-reference" in out, label
+        assert exit_codes.parse_result_lines(out) == [], label
+    mixed = [_timed_report(tmp_path, 4, ratio + 0.5, 0),
+             _timed_report(tmp_path, 4, ratio + 0.5, 1, duty=1.0)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, mixed)]) \
+        == exit_codes.REFUSED
+    assert "differ in duty" in capsys.readouterr().out
+    timed = [_timed_report(tmp_path, 4, ratio + 0.5, s) for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "duty 0.25, fit window n >= 1" in out and "timed at duty 0.25" in out
+    page = json.loads(g4.read_text())
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 4, ratio + 0.5, 0, block_m=64)])
+    gates, summary = DCR.score_r3_page(page, timed=ref)
+    assert "C5" not in [g.number for g in gates]
+    assert any(s.startswith("C5: the timed reports at G=4 are another kernel")
+               for s in summary["not_asked"])
 
 
 def test_the_self_test_runs_the_family_worlds(capsys):

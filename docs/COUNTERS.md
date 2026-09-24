@@ -871,7 +871,11 @@ model; C3 at G=1 alpha_w2 < alpha_w1; C6 PRIVATE no more than 1.03 n, whose
 failure localises a bytes share of the private arm's timed G-cost by GEMM;
 C5 only with `--timed-reference`, labelled cross-card, comparing alpha(1) with
 the timed bracket and the G >= 4 byte ratios with the timed ratios, every timed
-number read from R3's report.json files and none typed.
+number read from R3's report.json files and none typed. The join refuses a
+timed report that is planted, that is not VALID by its own gates, or whose
+model, dtype, BLOCK_M or pinned block (G aside) differs from the page's
+design, and refuses to pool one G's runs across two duties or two fit
+windows; each run's duty and fit window are printed beside C5.
 
 ### 6.9 The card
 

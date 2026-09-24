@@ -7085,8 +7085,15 @@ def pinned_config(block_n: int, group_m: int, num_stages: int) -> dict:
 
     The sweep's FIXED values (BLOCK_SIZE_K and num_warps among them) with the
     three knobs this arm exposes put over them. `_main` pins the timed ladder
-    with it and the counter child pins its calls with it, so a counter page
-    and a timed page name one kernel configuration or the plan is refused.
+    with it and the counter child pins its calls with it, so the two build a
+    configuration by one rule. NOTHING REFUSES A COUNTER PLAN for pinning one
+    R3 has not timed: `validate_counter_plan` checks the treads, the
+    declaration, the arms and GEMMS_PER_CALL, not BLOCK_SIZE_N or num_stages,
+    because those are knobs R3 may vary. The join is where one configuration
+    is enforced: the r3-arms counter family's C5 refuses a timed report whose
+    model, dtype, BLOCK_M or pinned block (GROUP_SIZE_M aside) differs from
+    the counter page's design (`dram_counter_route.timed_reference_mismatch`).
+    Until 2026-09-24 this said the plan was refused, and no code did either.
     """
     return dict(SWEEP.FIXED, num_stages=num_stages, GROUP_SIZE_M=group_m,
                 BLOCK_SIZE_N=block_n)

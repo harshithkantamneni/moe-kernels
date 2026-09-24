@@ -4952,11 +4952,38 @@ def r3_estimates(payload: dict) -> dict:
 # CLAIM_FAIL and are results.
 # --------------------------------------------------------------------------
 
+#: The design a timed report must share with a counter page before C5 may
+#: compare them: the kernel R3 timed, G aside (C5 matches G itself). The
+#: timed report's key, and the page design key it is held to.
+R3_TIMED_DESIGN: tuple[tuple[str, str], ...] = (
+    ("model", "model"), ("dtype", "dtype"), ("block_m", "block_m"),
+    ("pinned.BLOCK_SIZE_N", "block_n"), ("pinned.BLOCK_SIZE_K", "block_k"),
+    ("pinned.num_warps", "num_warps"), ("pinned.num_stages", "num_stages"))
+
+
+def _timed_value(rep: dict, key: str):
+    if key.startswith("pinned."):
+        return (rep.get("pinned") or {}).get(key.split(".", 1)[1])
+    return rep.get(key)
+
+
 def load_timed_reference(paths) -> dict[int, dict]:
     """R3's timed report.json files, grouped by GROUP_SIZE_M: the ratio each
-    reads, their mean and sd across seeds, and the card they were timed on.
-    READ, never typed: the 0.915 / 0.706 / 0.680 / 0.617 of session 5 are
-    whatever these files hold."""
+    reads, their mean and sd across seeds, the card they were timed on, and
+    each run's duty and fit window. READ, never typed: the 0.915 / 0.706 /
+    0.680 / 0.617 of session 5 are whatever these files hold.
+
+    REFUSES what R3 itself would not pool as a replicate. Until 2026-09-24
+    this read only the experiment, the ratio, G, the card, the seed and the
+    window, so C5 scored a page's bytes against a planted report, an INVALID
+    one, or one from another tile, model, dtype or duty. Now a report that is
+    not R3's, formed no ratio, is planted (`synthetic`), or whose own VALIDITY
+    gates did not all PASS is refused; the runs pooled at one G must share
+    R3's design (`R3_TIMED_DESIGN`, the duty and the fit window), because a
+    mean and sd over two designs is two estimators in one envelope; and the
+    page's own design is held to them by `timed_reference_mismatch`.
+    """
+    r3 = _r3()
     by_g: dict[int, list[dict]] = {}
     for p in paths or ():
         rep = json.loads(Path(p).read_text())
@@ -4964,18 +4991,50 @@ def load_timed_reference(paths) -> dict[int, dict]:
             raise CounterRunRefused(
                 f"{p} is not an R3 report with a ratio; --timed-reference reads "
                 "private_weight_reference report.json files")
+        if rep.get("synthetic"):
+            raise CounterRunRefused(f"{p} is a planted (--self-test) R3 report; C5 "
+                                    "compares bytes with a measured timing")
+        gates = rep.get("gates") or []
+        broken = [f"{g.get('tag') or g.get('number')} {g.get('verdict')}" for g in gates
+                  if g.get("kind") == "VALIDITY" and g.get("verdict") != PASS]
+        if not gates or broken:
+            raise CounterRunRefused(
+                f"{p} is not a VALID R3 page ("
+                + (f"VALIDITY gates {broken}" if broken else "it carries no gates")
+                + "); its ratio is not quotable, so C5 does not compare with it")
         g = int(rep["pinned"]["GROUP_SIZE_M"])
         by_g.setdefault(g, []).append({
             "path": str(p), "ratio": float(rep["ratio"]), "card": rep.get("card"),
-            "seed": rep.get("seed"), "claim_min_tread": rep.get("claim_min_tread", 1)})
+            "seed": rep.get("seed"),
+            "duty": float(r3.design_value(rep, "duty")),
+            "claim_min_tread": int(r3.design_value(rep, "claim_min_tread")),
+            "design": {k: _timed_value(rep, k) for k, _page_key in R3_TIMED_DESIGN}})
     out = {}
     for g, rows in by_g.items():
+        for key in ("design", "duty", "claim_min_tread"):
+            seen = {json.dumps(r[key], sort_keys=True) for r in rows}
+            if len(seen) > 1:
+                raise CounterRunRefused(
+                    f"the timed reports at G={g} differ in {key} ({sorted(seen)}); a "
+                    "mean and sd over two designs pools two estimators, which R3 "
+                    "refuses for its own replicates")
         ratios = [r["ratio"] for r in rows]
         out[g] = {"G": g, "mean": statistics.fmean(ratios),
                   "sd": statistics.stdev(ratios) if len(ratios) >= 2 else 0.0,
                   "runs": rows, "cards": sorted({str(r["card"]) for r in rows}),
+                  "design": rows[0]["design"], "duty": rows[0]["duty"],
                   "windows": sorted({int(r["claim_min_tread"]) for r in rows})}
     return out
+
+
+def timed_reference_mismatch(ref: dict, design: dict) -> list[str]:
+    """How a G's timed reports differ from a counter page's design, G aside:
+    `[]` when C5 may compare them. Called by `--analyse` before any page is
+    scored (it refuses the join) and by C5 itself, so one rule decides both."""
+    return [f"{key} {ref['design'].get(key)!r} against the page's {page_key} "
+            f"{design.get(page_key)!r}"
+            for key, page_key in R3_TIMED_DESIGN
+            if ref["design"].get(key) != design.get(page_key)]
 
 
 def _worst(items) -> str:
@@ -5304,14 +5363,22 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
 
     # C5 CROSS-CARD, only with --timed-reference.
     ref = (timed or {}).get(g_m)
+    mismatch = timed_reference_mismatch(ref, design) if ref is not None else []
     if timed is not None and ref is None:
         summary["not_asked"].append(f"C5: no timed reference page at G={g_m}")
+    elif mismatch:
+        summary["not_asked"].append(
+            f"C5: the timed reports at G={g_m} are another kernel ({'; '.join(mismatch)}), "
+            "so their ratio is not this page's to compare with")
     elif ref is not None:
         cross = [f"CROSS-CARD: the timed pages are {ref['cards']}, this page is "
                  f"{(card or {}).get('slug')}; the same sm_90 kernel on 132 SMs where "
                  "both are H100/H200, a different card either way",
-                 f"timed ratios read from {[r['path'] for r in ref['runs']]} over "
-                 f"claim windows {ref['windows']}"]
+                 "timed ratios read from "
+                 + "; ".join(f"{r['path']} (seed {r['seed']}, duty {r['duty']:g}, fit "
+                             f"window n >= {r['claim_min_tread']})" for r in ref["runs"])
+                 + f"; timed at duty {ref['duty']:g}, where this page's bytes carry no "
+                 "duty: a timed ratio belongs to its duty's operating point"]
         if g_m == 1:
             got = est["alpha_slope"]["total"]
             lo_edge = ref["mean"] - ref["sd"]
@@ -6047,6 +6114,13 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
     except (OSError, ValueError, KeyError, CounterRunRefused) as exc:
         print(f"REFUSED: --timed-reference: {exc}")
         return exit_codes.REFUSED
+    for g_ref, ref in sorted((timed or {}).items()):
+        mismatch = timed_reference_mismatch(ref, loaded[0][1]["design"])
+        if mismatch:
+            print(f"REFUSED: --timed-reference: the reports at G={g_ref} timed another "
+                  f"kernel than these pages measured ({'; '.join(mismatch)}); C5 compares "
+                  "one kernel configuration's bytes with its own timing")
+            return exit_codes.REFUSED
     loaded = sorted(loaded, key=lambda pd: int(pd[1]["design"]["group_m"]))
     scored = []
     for path, d in loaded:
