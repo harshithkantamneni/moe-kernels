@@ -856,6 +856,7 @@ work is already done and unused.
 | `scripts/crossing_report.py` | anywhere | **C2/C5**: reads the crossing off measured TIME |
 | `scripts/efficiency_report.py` | anywhere | is the crossing offset achieved-versus-peak? |
 | `scripts/recompute_ceilings.py` | anywhere | re-derives a published arm's ceiling columns |
+| `scripts/per_tile_model_fit.py` | anywhere | fits the additive and overlap per-M-tile cost models to R1 cells (R3 ladders with `--r3`), side by side, with an alpha(G) scan and leave-one-G-out |
 | `scripts/plot.py` | anywhere | figures, one set per dtype present in the rows |
 | `scripts/publish_results.sh` | pod | commits a result set back to the repo |
 | `scripts/setup_runpod.sh` | pod | builds the venvs and reports what the card is |
