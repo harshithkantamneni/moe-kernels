@@ -768,8 +768,11 @@ runs with `-k regex:^fused_moe_kernel$ --kernel-name-base function`, skips
 GEMMS_PER_CALL x U x cells launches and keeps GEMMS_PER_CALL x K x cells,
 exports a `.ncu-rep`, and the CSV is reduced from it afterwards with
 `ncu --import ... --csv --page raw --print-units base`, so a parser defect is a
-laptop fix and not a re-rent. R3's five-part buffer proof runs last, after
-the profiled window has closed.
+laptop fix and not a re-rent: `--run --family r3-arms --reduce-only` rebuilds a
+page from the kept profiles (plan, manifest, the capture's own record, the
+`.ncu-rep` or its CSV) with no card, no probe and no child, and the page names
+the capture's card, stack and commit. R3's five-part buffer proof runs last,
+after the profiled window has closed.
 
 GEMMS_PER_CALL = 2 is cited from vLLM 0.27.1's `fused_experts_impl` and
 measured by the census (`--run --family r3-arms --census-only`): NATIVE at

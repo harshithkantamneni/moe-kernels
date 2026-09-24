@@ -2678,6 +2678,42 @@ def test_the_r3_run_end_to_end_on_planted_ncu_output(tmp_path, monkeypatch, caps
     assert main(["--analyse", str(page_path)]) == exit_codes.DONE
 
 
+def test_a_page_is_rebuilt_from_its_profiles_with_no_card_and_no_child(
+        tmp_path, monkeypatch, capsys):
+    """THE CAPTURE AND THE REDUCTION ARE SPLIT: after a capture, the page is
+    rebuilt from `<out>.profiles` alone (off the box, after a parser fix) and
+    carries the capture's card, stack, argv and commit. Neither the probe nor
+    the card nor the child is asked; with no ncu on PATH the CSV the capture
+    reduced is read."""
+    _plant_the_box(monkeypatch)
+    census = tmp_path / "census.json"
+    page_path = tmp_path / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page_path)]) == exit_codes.DONE
+    first = json.loads(page_path.read_text())
+    page_path.unlink()
+
+    def off_the_box(*a, **k):
+        raise AssertionError("--reduce-only asked the box")
+    for name in ("probe_ncu", "live_card_block", "r3_stack_versions", "_run"):
+        monkeypatch.setattr(DCR, name, off_the_box)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    capsys.readouterr()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == DCR.card_line(DCR.R3_PLANTED_CARD)
+    again = json.loads(page_path.read_text())
+    assert again["cells"] == first["cells"] and again["card"] == first["card"]
+    assert again["ncu"]["argv"] == first["ncu"]["argv"]
+    assert again["ncu"]["capture_commit"] == first["ncu"]["capture_commit"]
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "16",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.REFUSED
+    assert "no capture to reduce" in capsys.readouterr().out
+
+
 def test_the_r3_run_refuses_without_ncu_and_without_a_card(tmp_path, monkeypatch, capsys):
     shut = {"present": False, "counters_read": False, "why": "no ncu on PATH"}
     census = tmp_path / "census.json"

@@ -4348,7 +4348,7 @@ R3_SCHEMA_TEXT = """\
   "ncu": {"binary", "version", "argv", "replay_mode": "kernel",
           "cache_control": "all", "clock_control": "base", "report",
           "report_sha256", "csv", "csv_layout": "wide"|"long",
-          "metrics_asked", "metrics_dropped"},
+          "metrics_asked", "metrics_dropped", "capture_commit"},
   "design": {"model", "dtype", "block_m", "block_n", "block_k", "num_warps",
              "num_stages", "group_m", "treads", "arms", "copies_declared",
              "declared_reason", "declared_by_arm", "calls_per_cell",
@@ -5569,6 +5569,10 @@ def do_dry_run_r3(args) -> int:
     print("  python scripts/dram_counter_route.py --analyse "
           + " ".join(f"$R/r3c-g{g}.json" for g in R3_GROUPS)
           + " [--timed-reference <R3 report.json ...>] [--out summary.json]")
+    print("  a page refused on the parser is rebuilt off the box after the fix, from the")
+    print("  kept profiles, with no card and no child:")
+    print(f"  python scripts/dram_counter_route.py --run --family {R3_FAMILY} --reduce-only "
+          "--group-m G --census $S/census.json --out $R/r3c-gG.json")
     print("  publish each box's pages, census and summary under")
     print("  results/published/<date>-<slug>-r3-counters/, <slug> being the one every "
           "page's CARD line names")
@@ -5731,23 +5735,45 @@ def do_run_r3(args) -> int:
         raise CounterRunRefused(
             f"ncu exited {rc} and the capture left no {absent}; the child writes the "
             f"manifest only after its last call. ncu's log ends: {tail}")
-    manifest = json.loads(manifest_path.read_text())
+    # THE CAPTURE'S OWN RECORD, written before anything is parsed: the page a
+    # later `--reduce-only` rebuilds from these profiles names the card, the
+    # stack, the commit and the argv of THIS capture, not the reducing tree's.
+    capture = {"argv": argv, "binary": ncu.get("binary"), "version": ncu.get("version"),
+               "returncode": rc, "metrics_asked": list(metrics),
+               "metrics_dropped": sorted(set(ncu.get("metrics_dropped") or [])
+                                         | set(ncu.get("metrics_unproven") or {})),
+               "card": card, "stack": stack, "commit": commit}
+    capture_path = profiles / f"{stem}.capture.json"
+    capture_path.write_text(json.dumps(capture, indent=2))
+    csv_text = _r3_reduce(ncu["binary"], report, csv_path)
+    return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
+                          census=census, report=report, csv_path=csv_path,
+                          csv_text=csv_text, out=out)
+
+
+def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census: dict,
+                   report: Path, csv_path: Path, csv_text: str, out: Path) -> int:
+    """Parse, attribute, reduce, score, stamp and write one G's page. The one
+    path both `--run` and `--reduce-only` take after the capture."""
+    manifest = json.loads(Path(plan["manifest"]).read_text())
+    card = capture["card"]
     if (manifest.get("device") or {}).get("uuid") != card["uuid"]:
         raise CounterRunRefused(
             f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
             f"page's card is {card['uuid']}")
-    csv_text = _r3_reduce(ncu["binary"], report, csv_path)
+    metrics = capture["metrics_asked"]
     launches = parse_ncu_csv(csv_text, soft=frozenset(R3_RECORDED_METRICS))
     cells = r3_reduce_cells(attribute_launches(launches, manifest), manifest, metrics)
     layout, _header = ncu_csv_layout(csv_text)
     page = build_r3_page(
-        plan=plan, manifest=manifest, cells=cells, card=card, stack=stack,
-        ncu={"binary": ncu.get("binary"), "version": ncu.get("version"), "argv": argv,
-             "replay_mode": "kernel", "cache_control": "all", "clock_control": "base",
-             "report": str(report), "report_sha256": _sha256(report),
-             "csv": str(csv_path), "csv_layout": layout, "metrics_asked": list(metrics),
-             "metrics_dropped": sorted(set(ncu.get("metrics_dropped") or [])
-                                       | set(ncu.get("metrics_unproven") or {}))},
+        plan=plan, manifest=manifest, cells=cells, card=card, stack=capture["stack"],
+        ncu={"binary": capture.get("binary"), "version": capture.get("version"),
+             "argv": capture["argv"], "replay_mode": "kernel", "cache_control": "all",
+             "clock_control": "base", "report": str(report),
+             "report_sha256": _sha256(report), "csv": str(csv_path),
+             "csv_layout": layout, "metrics_asked": list(metrics),
+             "metrics_dropped": list(capture.get("metrics_dropped") or []),
+             "capture_commit": capture.get("commit")},
         census={"path": str(census_path), "sha256": _sha256(census_path),
                 "gemms_per_call": census.get("gemms_per_call_measured")})
     gates, summary = score_r3_page(page)
@@ -5761,6 +5787,58 @@ def do_run_r3(args) -> int:
     print(f"wrote {out}")
     print(f"git   {git_visibility(out)}")
     return exit_codes.classify(g.scored() for g in gates)
+
+
+def do_reduce_r3(args) -> int:
+    """`--run --family r3-arms --reduce-only`: rebuild one G's page from the
+    profiles a capture left, with no card, no probe and no child.
+
+    THE CAPTURE AND THE REDUCTION ARE SPLIT so that a parser defect found on
+    the box costs a laptop fix and not a re-rent: the `.ncu-rep`, the plan, the
+    manifest and the capture's own record (`g<G>.capture.json`) are kept under
+    `<out>.profiles/`. With an ncu on PATH the CSV is regenerated from the
+    `.ncu-rep`; without one the CSV the capture reduced is read. The card, the
+    stack, the argv and the commit on the page are the CAPTURE's, from its
+    record, and the reducing tree's commit is the provenance stamp beside them.
+    """
+    if not args.out or not getattr(args, "group_m_given", False) or not args.census:
+        print("REFUSE: --reduce-only rebuilds one G's page: it needs --group-m, the "
+              "--census the capture was licensed by, and the --out whose .profiles "
+              "directory the capture wrote")
+        return exit_codes.REFUSED
+    out = Path(args.out)
+    profiles = Path(args.profile_dir) if args.profile_dir else \
+        out.parent / f"{out.stem}.profiles"
+    stem = f"g{args.group_m}"
+    need = {name: profiles / f"{stem}.{name}" for name in
+            ("plan.json", "capture.json", "manifest.json")}
+    absent = [str(p) for p in need.values() if not p.exists()]
+    if absent:
+        print(f"REFUSE: no capture to reduce: {absent} do not exist")
+        return exit_codes.REFUSED
+    plan = json.loads(need["plan.json"].read_text())
+    capture = json.loads(need["capture.json"].read_text())
+    census_path = Path(args.census)
+    census = json.loads(census_path.read_text())
+    if (census.get("card") or {}).get("uuid") != (capture.get("card") or {}).get("uuid"):
+        print(f"REFUSE: the census is card {(census.get('card') or {}).get('uuid')} and "
+              f"the capture is card {(capture.get('card') or {}).get('uuid')}")
+        return exit_codes.REFUSED
+    report, csv_path = profiles / f"{stem}.ncu-rep", profiles / f"{stem}.csv"
+    binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
+    if binary and report.exists():
+        csv_text = _r3_reduce(binary, report, csv_path)
+    elif csv_path.exists() and csv_path.read_text().strip():
+        csv_text = csv_path.read_text()
+    else:
+        print(f"REFUSE: no ncu on PATH to import {report} and no CSV at {csv_path}")
+        return exit_codes.REFUSED
+    print(card_line(capture.get("card")))
+    print(f"R3 COUNTER REDUCTION  G={args.group_m}  from {profiles}, captured at "
+          f"commit {capture.get('commit')}; nothing is measured here")
+    return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
+                          census=census, report=report, csv_path=csv_path,
+                          csv_text=csv_text, out=out)
 
 
 def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
@@ -6284,6 +6362,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--census", default="",
                     help="with --run --family r3-arms: the census.json this card, "
                          "commit and vLLM wrote; a page refuses any other")
+    ap.add_argument("--reduce-only", action="store_true",
+                    help="with --run --family r3-arms --group-m G --census C --out "
+                         "P: rebuild the page from the profiles a capture left under "
+                         "P's .profiles directory (plan, manifest, capture record, "
+                         ".ncu-rep or CSV), with no card, no probe and no child, so a "
+                         "parser fix never needs the box again")
     ap.add_argument("--timed-reference", nargs="+", default=None, metavar="REPORT",
                     help="with --analyse over r3-arms pages: R3's timed report.json "
                          "files, whose ratios C5 compares the bytes with, labelled "
@@ -6390,8 +6474,14 @@ def main(argv=None) -> int:
               "interleave a plan with a result and this study has been burned by "
               "exactly that.")
         return exit_codes.REFUSED
-    if (args.census_only or args.census) and not (args.run and args.family == R3_FAMILY):
-        print("REFUSE: --census-only and --census belong to --run --family r3-arms")
+    if (args.census_only or args.census or args.reduce_only) and not (
+            args.run and args.family == R3_FAMILY):
+        print("REFUSE: --census-only, --census and --reduce-only belong to --run "
+              "--family r3-arms")
+        return exit_codes.REFUSED
+    if args.reduce_only and args.census_only:
+        print("REFUSE: --reduce-only rebuilds a page; a census is never reduced apart "
+              "from its capture")
         return exit_codes.REFUSED
     if args.timed_reference and not args.analyse:
         print("REFUSE: --timed-reference is read by --analyse over r3-arms pages")
@@ -6421,7 +6511,9 @@ def main(argv=None) -> int:
         return do_self_test(args)
     if args.run:
         try:
-            return do_run_r3(args) if args.family == R3_FAMILY else do_run(args)
+            if args.family == R3_FAMILY:
+                return do_reduce_r3(args) if args.reduce_only else do_run_r3(args)
+            return do_run(args)
         except (CounterRunRefused, CorpusMissing) as exc:
             # INVALID (3), not CLAIM_FAIL and not ERROR. The profiler ran and the
             # reduction refused it: nothing about the world was decided, and
