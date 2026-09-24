@@ -1008,14 +1008,15 @@ def _caps_text(payload: dict) -> str:
 
 def counters(session: str | Path, log: str | Path, rc: str | int, cap: str | int,
              secs: str | int, binary: str, where: str, candidates: str, globs: str) -> str:
-    """THE COUNTER PROBE'S VERDICT, off dram_counter_route.py --probe's own
-    payload ($SESSION/COUNTERS.json) and log, written to $SESSION/COUNTERS and
-    returned as the ledger's one-line note. INFORMATIONAL: nothing gates on
-    it, and the chain never latches it. The first word is the verdict:
+    """THE COUNTER PROBE'S VERDICT, off dram_counter_route.py --probe
+    --family r3-arms's own payload ($SESSION/COUNTERS.json) and log, written
+    to $SESSION/COUNTERS and returned as the ledger's one-line note.
+    INFORMATIONAL: nothing gates on it, and the chain never latches it. The
+    first word is the verdict:
 
-      OPEN      a kernel launched under ncu and dram__bytes_read.sum came back
-                (the probe's OPEN, P1 PASS): findings section 7's counter run
-                can happen on this pod.
+      OPEN      a kernel launched under ncu and every STRICT metric of the
+                r3-arms family came back (the probe's OPEN, P1 PASS): the R3
+                counter run, findings section 7's, can happen on this pod.
       BLOCKED   ncu ran, a kernel launched, and the counter read was refused
                 (the probe's BLOCKED, ERR_NVGPUCTRPERM); the exact line is
                 quoted, with the two capabilities and the module flag.
@@ -1079,7 +1080,8 @@ def counters(session: str | Path, log: str | Path, rc: str | int, cap: str | int
         f"searched    PATH, then {globs}",
         f"candidates  {candidates if found else 'none'}",
         f"access      {caps}",
-        f"probe       scripts/dram_counter_route.py --probe, exit {rc} in {secs} s; its page"
+        f"probe       scripts/dram_counter_route.py --probe --family r3-arms, exit {rc} in "
+        f"{secs} s; its page"
         f" {log}, its payload {session / COUNTERS_JSON}",
     ]
     if off_path:

@@ -709,7 +709,8 @@ def test_the_help_records_the_counter_probe_and_runpods_counter_history():
     assert "counter-probe INFORMATIONAL: NEVER GATED AND NEVER LATCHED" in flat
     globs = _default("NCU_SEARCH")
     assert f"at NCU_SEARCH's globs ({' and '.join(globs.split())} by default)" in flat
-    assert "scripts/dram_counter_route.py --probe, the driver's counter_plan probe" in flat
+    assert ("scripts/dram_counter_route.py --probe --family r3-arms, the R3 counter "
+            "run's own probe" in flat)
     for word in ("OPEN", "BLOCKED", "ABSENT", "UNTESTED", "ERROR"):
         assert word in runs, word
     for fact in ("two rented H200s attempted a counter read and both were refused with"
@@ -1875,14 +1876,20 @@ plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text()) if os.environ.get("
 cfg = plan.get("counter-probe", {})
 if os.environ.get("STUB_COUNTERS"):
     with open(os.environ["STUB_COUNTERS"], "a") as f:
-        f.write("counter-probe\t" + os.environ.get("PATH", "") + "\n")
+        f.write("counter-probe\t" + os.environ.get("PATH", "") + "\t"
+                + " ".join(sys.argv[1:]) + "\n")
 if cfg.get("crash"):
     print("Traceback (most recent call last): a planted crash before any gate")
     sys.exit(4)
 launched = f"{D.PK.MARKER} {D.PK.LAUNCHED} planted card: one add_"
 header = '"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+# THE R3-ARMS FAMILY'S PROBE asks every metric its pages gate on, so an OPEN
+# box answers every one of them: one launch, one row per metric, each in its
+# canonical unit. The ladder family's one metric is the first of them.
+opened = header + "".join(f'"0","probe","{m}","{D.unit_table(m)[0]}","4194304"\n'
+                          for m in D.R3_ALL_METRICS)
 worlds = {
-    "open": (0, launched, "", header + f'"0","probe","{D.NCU_PROBE_METRIC}","byte","4194304"\n'),
+    "open": (0, launched, "", opened),
     "blocked": (1, launched, "@ERR@", ""),
     "nodevice": (1, f"{D.PK.MARKER} {D.PK.NO_CUDA_DEVICE} torch.cuda.is_available() is False",
                  "", ""),
@@ -1893,6 +1900,8 @@ rc, out, err, log_text = worlds[cfg.get("world", "open")]
 def planted_run(argv, timeout=60):
     if "--version" in argv:
         return 0, "NVIDIA (R) Nsight Compute Command Line Profiler\n@VERSION@\n", ""
+    if "--query-metrics" in argv:
+        return 0, "\n".join(D.metric_base(m) + "  planted" for m in D.R3_ALL_METRICS), ""
     Path(argv[argv.index("--log-file") + 1]).write_text(log_text)
     return rc, out, err
 
@@ -2641,7 +2650,7 @@ def test_an_ncu_off_path_is_probed_with_its_directory_first_on_path(tmp_path):
                   STUB_COUNTERS=str(seen))
     assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
     (probed,) = seen.read_text().splitlines()
-    assert probed.split("\t", 1)[1].startswith(f"{ncu.parent}{os.pathsep}"), probed
+    assert probed.split("\t")[1].startswith(f"{ncu.parent}{os.pathsep}"), probed
     payload = json.loads((s / "COUNTERS.json").read_text())
     assert payload["verdict"] == "OPEN" and payload["ncu"]["binary"] == str(ncu)
     (row,) = _counter_rows(s)
@@ -2651,6 +2660,28 @@ def test_an_ncu_off_path_is_probed_with_its_directory_first_on_path(tmp_path):
     assert f"[{STUB_NCU_VERSION}]" in row[6], "the version the probe read"
     text = (s / "COUNTERS").read_text()
     assert f"PATH={ncu.parent}:$PATH" in text and "look on PATH only" in text
+
+
+def test_the_counter_probe_asks_what_the_r3_counter_run_needs(tmp_path):
+    """The chain's OPEN means "the R3 counter run can happen here", so the
+    probe runs with --family r3-arms: it asks the chip's metric list and the
+    probe kernel for every metric the r3-arms pages gate on, not the ladder
+    family's one, and COUNTERS names the command it ran."""
+    import scripts.dram_counter_route as DCR
+    pod = Pod(tmp_path)
+    s = pod.session()
+    ncu = _exe(tmp_path / "bin" / "ncu")
+    seen = tmp_path / "probe-args.txt"
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(ncu.parent),
+                  STUB_COUNTERS=str(seen))
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    (probed,) = seen.read_text().splitlines()
+    argv = probed.split("\t")[2].split()
+    assert argv[:3] == ["--probe", "--family", "r3-arms"], argv
+    assert "--probe --family r3-arms" in (s / "COUNTERS").read_text()
+    payload = json.loads((s / "COUNTERS.json").read_text())
+    assert payload["family"] == DCR.R3_FAMILY and payload["verdict"] == "OPEN"
+    assert payload["ncu"]["metrics_proven"] == list(DCR.R3_ALL_METRICS)
 
 
 def test_a_refused_counter_quotes_the_exact_error_and_the_chain_goes_on(tmp_path):

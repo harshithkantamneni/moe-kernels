@@ -82,10 +82,14 @@
 #                  finds ncu on PATH, then at NCU_SEARCH's globs
 #                  (/usr/local/cuda*/bin/ncu and
 #                  /opt/nvidia/nsight-compute/*/ncu by default), and runs
-#                  scripts/dram_counter_route.py --probe, the driver's
-#                  counter_plan probe, from PY_BASE with the first one's
-#                  directory first on PATH: one real kernel under ncu, and
-#                  dram__bytes_read.sum read back or refused. Its row's state
+#                  scripts/dram_counter_route.py --probe --family r3-arms, the
+#                  R3 counter run's own probe, from PY_BASE with the first
+#                  one's directory first on PATH: the chip's metric list, then
+#                  one real kernel under ncu asked for every metric the
+#                  r3-arms pages gate on, and every STRICT one read back or
+#                  refused, so OPEN means the R3 counter run can happen on
+#                  this pod (the driver's counter_plan asks the ladder
+#                  family's one metric instead). Its row's state
 #                  is INFO; the verdict (OPEN, BLOCKED, ABSENT, UNTESTED or
 #                  ERROR), ncu's path and version, the exact error and the two
 #                  capabilities go into the note and $SESSION/COUNTERS, beside
@@ -904,8 +908,9 @@ counter_probe_price() {
 #: and its row's state is INFO, which no pass latches, so every pass asks
 #: again (a counter route is a property of the pod). $1 its price in seconds,
 #: empty when unpriced. It finds ncu (`ncu-locate`: PATH, then NCU_SEARCH),
-#: runs scripts/dram_counter_route.py --probe (the driver's counter_plan
-#: probe, not a second copy of it) from PY_BASE under the arm cap, with the
+#: runs scripts/dram_counter_route.py --probe --family r3-arms (the R3
+#: counter run's own probe, not a second copy of it: `--run --family r3-arms`
+#: asks the same one before it measures) from PY_BASE under the arm cap, with the
 #: found ncu's directory first on PATH, and hands the probe's payload
 #: ($SESSION/COUNTERS.json) and page to `counters`, which writes
 #: $SESSION/COUNTERS and the note. Returns 0 whatever the probe read.
@@ -929,7 +934,8 @@ counter_probe_step() {
   rm -f "$SESSION/COUNTERS.json"
   t0="$(date +%s)"
   env ${pathenv[@]+"${pathenv[@]}"} ${tmo[@]+"${tmo[@]}"} "$PY_BASE" \
-    "$REPO/scripts/dram_counter_route.py" --probe --out "$SESSION/COUNTERS.json" > "$log" 2>&1 || rc=$?
+    "$REPO/scripts/dram_counter_route.py" --probe --family r3-arms \
+    --out "$SESSION/COUNTERS.json" > "$log" 2>&1 || rc=$?
   secs="$(( $(date +%s) - t0 ))"
   out="$("$PY_BASE" "$HELPERS" counters "$SESSION" "$log" "$rc" "$cap" "$secs" \
          "$bin" "$where" "$cands" "$NCU_SEARCH" 2>&1)" || hrc=$?

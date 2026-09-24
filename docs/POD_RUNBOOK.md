@@ -539,10 +539,13 @@ It runs, in order:
    finds `ncu` on PATH, then at `NCU_SEARCH`'s globs
    (`/usr/local/cuda*/bin/ncu` and `/opt/nvidia/nsight-compute/*/ncu` by
    default, each one's matches newest name first), and runs
-   `scripts/dram_counter_route.py --probe`, the driver's `counter_plan` probe
-   and not a second copy of it, from PY_BASE with the first one's directory
-   first on PATH: one real kernel under ncu, and `dram__bytes_read.sum` read
-   back or refused. Its ledger row's state is `INFO`, which no pass latches,
+   `scripts/dram_counter_route.py --probe --family r3-arms`, the R3 counter
+   run's own probe and not a second copy of it, from PY_BASE with the first
+   one's directory first on PATH: the chip's metric list, then one real kernel
+   under ncu asked for every metric the r3-arms pages gate on, and every
+   STRICT one read back or refused, so OPEN means the R3 counter run can
+   happen on this pod (the driver's `counter_plan` asks the ladder family's
+   one metric instead). Its ledger row's state is `INFO`, which no pass latches,
    so it runs on every measuring pass (a counter route is a property of the
    pod). The note starts with the verdict (OPEN, BLOCKED, ABSENT, UNTESTED or
    ERROR) and carries ncu's path and version, the exact error line and the
