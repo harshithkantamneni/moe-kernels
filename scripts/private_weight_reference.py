@@ -3160,8 +3160,12 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
     THE TREAD FLOOR IS COUNTED IN THE CLAIM'S WINDOW (`min_tread`, DESIGN
     DECISION 16): the slopes the claim reads are fitted there, so a ladder
     whose usable treads were tread 1 and two deeper ones would give the claim
-    a two-point line however many treads it had in all. The all-tread count
-    is printed beside it.
+    a two-point line however many treads it had in all. The measured string
+    on the RESULT line carries the in-window count, the number the floor
+    gates, with the all-tread count beside it, so the line never reads a
+    count the verdict was not taken on. The drift ceiling is over the timed
+    cells at EVERY tread, since V6 and V7 read tread 1's cells too, and the
+    drift-excluded cells are counted per window.
     """
     ok = {(s.arm, s.tiles, s.repeat) for s in samples if s.usable}
     failed = [s for s in samples
@@ -3175,6 +3179,10 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
     dropped = {arm: sum(1 for s in samples
                         if s.arm == arm and s.status == "ok" and s.excluded)
                for arm in ARMS}
+    dropped_in_window = {arm: sum(1 for s in samples
+                                  if s.arm == arm and s.status == "ok"
+                                  and s.excluded and s.tiles >= min_tread)
+                         for arm in ARMS}
     reps = {arm: min([sum(1 for s in samples
                           if s.usable and s.arm == arm and s.tiles == n)
                       for n in treads] or [0])
@@ -3197,11 +3205,14 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
         + ", ".join(f"{arm}:{reps[arm]}" for arm in ARMS)
         + f" (of {repeats} planned, floor {MIN_REPEATS})",
         "cells excluded because the clock DRIFTED across their own trials, and "
-        "so absent from every ladder above: "
+        "so absent from every fit through their tread: "
         + ", ".join(f"{arm}:{dropped[arm]}" for arm in ARMS)
         + (" (none)" if not sum(dropped.values()) else "")
-        + f"; {100 * drift_share:.1f}% of the {timed} timed cells against a "
-          f"ceiling of {100 * MAX_DRIFT_FRACTION:.0f}%",
+        + " at every tread (the every-tread fits), "
+        + ", ".join(f"{arm}:{dropped_in_window[arm]}" for arm in ARMS)
+        + f" in the claim's window, treads {min_tread} and deeper (the claim's "
+          f"fits); {100 * drift_share:.1f}% of the {timed} timed cells at "
+          f"every tread against a ceiling of {100 * MAX_DRIFT_FRACTION:.0f}%",
         f"{len(failed)} cell(s) failed and were not recovered",
     ]
     for s in failed[:5]:
@@ -3216,12 +3227,15 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
     return Gate("V0", VALIDITY, "the run measured the grid it planned",
                 verdict,
                 f"{len(ok)}/{planned} cells, treads "
+                + "/".join(str(in_window[a]) for a in ARMS)
+                + f" in {span_text(window)}, "
                 + "/".join(str(per_arm[a]) for a in ARMS)
-                + f", drift {100 * drift_share:.1f}%",
+                + f" in all, drift {100 * drift_share:.1f}%",
                 f">= {max(MIN_TREADS, 2)} usable treads in the claim's window "
                 f"(treads {min_tread} and deeper) and >= {MIN_REPEATS} "
                 f"repeats per arm, no unrecovered failure, and DRIFT under "
-                f"{100 * MAX_DRIFT_FRACTION:.0f}% of the timed cells",
+                f"{100 * MAX_DRIFT_FRACTION:.0f}% of the timed cells at every "
+                "tread",
                 "every ladder below was fitted on a grid with holes in it, and "
                 "no slope, ratio or interval on this page may be quoted",
                 detail)

@@ -5859,8 +5859,41 @@ def test_v0_counts_its_tread_floor_in_the_claims_window():
     assert window.verdict == exit_codes.FAIL
     assert any("in the claim's window, treads 2 and deeper, which the floor "
                "counts: native:2, shared:2, private:2" in ln for ln in window.lines)
-    assert PW.gate_v0_non_vacuity(rows, planned=planned, treads=[1, 2, 3],
-                                  repeats=3, min_tread=1).verdict == exit_codes.PASS
+    # THE RESULT LINE CARRIES THE COUNT THE FLOOR GATES. It read "treads
+    # 3/3/3" beside a FAIL scored on 2/2/2, a line that contradicted its own
+    # verdict; the all-tread count stands beside the window's.
+    assert window.measured == "27/27 cells, treads 2/2/2 in 2..3, 3/3/3 in " \
+        "all, drift 0.0%", window.measured
+    assert "treads 2/2/2 in 2..3" in window.result_line()
+    every = PW.gate_v0_non_vacuity(rows, planned=planned, treads=[1, 2, 3],
+                                   repeats=3, min_tread=1)
+    assert every.verdict == exit_codes.PASS
+    assert every.measured.startswith("27/27 cells, treads 3/3/3 in 1..3, ")
+
+
+def test_v0_counts_the_drift_excluded_cells_per_window():
+    """The drift line said the excluded cells were "absent from every ladder
+    above" and counted tread 1's among them, which no claim ladder contains:
+    on session 5's G=4 seed 0 page it read private:6 while the claim's
+    private ladder had excluded 5. Each window's count is printed, and the
+    claim window's is the ladder's own."""
+    rows = [_sample(arm, n, rep, 1.0 + n, drift_ok=True) for arm in PW.ARMS
+            for n in (1, 2, 3, 4) for rep in range(3)]
+    # A drifting re-measure of tread 1 and of tread 3 in PRIVATE: each is a
+    # second row for a cell that also has a usable one, so the grid is whole.
+    rows += [_sample(PW.PRIVATE, 1, 0, 2.0, drift_ok=False),
+             _sample(PW.PRIVATE, 3, 1, 4.0, drift_ok=False)]
+    gate = PW.gate_v0_non_vacuity(rows, planned=4 * 3 * len(PW.ARMS),
+                                  treads=[1, 2, 3, 4], repeats=3,
+                                  min_tread=PW.CLAIM_MIN_TREAD)
+    line = next(ln for ln in gate.lines if "DRIFTED" in ln)
+    assert "absent from every ladder above" not in line, line
+    assert "native:0, shared:0, private:2 at every tread" in line, line
+    assert ("native:0, shared:0, private:1 in the claim's window, treads 2 "
+            "and deeper") in line, line
+    claim = PW.ladder_for(rows, PW.PRIVATE, min_tread=PW.CLAIM_MIN_TREAD)
+    assert claim.excluded == 1
+    assert "of the 38 timed cells at every tread" in line, line
 
 
 def test_the_plan_refuses_a_ladder_that_leaves_the_claim_a_two_point_line(
