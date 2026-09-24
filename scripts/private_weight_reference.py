@@ -11,6 +11,10 @@
     python scripts/private_weight_reference.py --read RUN1/report.json \
                                                --replicate-of RUN0/report.json
                                        # off GPU: a stored pair re-read, nothing measured
+    python scripts/private_weight_reference.py --read RUN1/report.json --rescore \
+                                               --replicate-of RUN0/report.json
+                                       # off GPU: the pair re-scored from its cells.csv
+                                       # over this build's claim window
     python scripts/private_weight_reference.py --probe-check
                                        # on the card, from the vLLM venv: V8's
                                        # probe instrument alone, nothing written
@@ -41,6 +45,8 @@ other:
 
     alpha_ratio = slope(SHARED) / slope(PRIVATE)
 
+each slope fitted over treads `CLAIM_MIN_TREAD` = 2 and deeper (DESIGN
+DECISION 16, THE CLAIM'S WINDOW, below).
 No bandwidth, no intercept, no assumed rate anywhere in it. If the PRIVATE
 ladder really re-reads the whole weight set per M-tile, its slope IS the
 alpha = 1 reference in the same units, on the same card, in the same kernel,
@@ -116,7 +122,10 @@ exactly, because the pieces are not equally covered:
     PRIVATE route every tile to copy 0 -- the relabelling is the identity --
     so they are the SAME CALL, and the gap between their timings is this arm's
     own floor for a slope comparison, measured rather than imported. V6
-    requires it to be small. NATIVE is not in that comparison: it differs
+    requires it to be small. It is also BELOW THE CLAIM'S WINDOW: no slope
+    the claim reads is fitted through it (DESIGN DECISION 16), and that is
+    why it can be the instrument's floor and not a point on the line it
+    bounds. NATIVE is not in that comparison: it differs
     from SHARED by a constant declaration at every tread including n = 1, and
     its n = 1 offset is printed as a record. IT IS A PLAN-TIME REQUIREMENT,
     not a post-hoc one: a model whose routing cannot form `r = 1 x BLOCK_M` as
@@ -206,10 +215,21 @@ WHY THE CLOCK SPLIT EXISTS AND HOW IT IS REMOVED (DESIGN DECISION 15). Session
 4's pages were INVALID on V7 because a power-capped card boosts whichever arm
 reads fewer bytes: both arms ran flat out against the 700 W cap and the shared
 arm sat 2% (G=1) to 18% (G=16) above the private one. `--duty D` times every
-cell as bursts of about 40 ms of kernel time, each followed by an idle gap of
-`burst x (1/D - 1)`, the mechanism `clock_elasticity.time_duty` already has
-(imported, not copied), so the same kernel moves the same bytes at a lower
-AVERAGE board power. Whether a duty is low enough that the clock stops
+cell as bursts of about 40 ms of kernel time, each followed by an idle gap,
+the mechanism `clock_elasticity.time_duty` already has (imported, not
+copied), so the same kernel moves the same bytes at a lower AVERAGE board
+power. THE GAP IS SIZED FROM THE BURST IT FOLLOWS (`time_duty`'s
+`GAP_FROM_BURST`): after each burst the host sleeps until that burst's wall
+clock reaches its own measured kernel time over D, so every arm's achieved
+duty is D. Session 5 (2026-09-23) sized the gap from a 20 ms FULL-DUTY
+reading of the call instead, the in-burst call ran faster than that reading
+by an arm-dependent factor k, and the achieved duty was 1/(1 + 3k) at 0.25:
+0.231-0.241 for native and shared (k 1.05-1.12) against 0.246-0.247 for
+private (k 1.01-1.02), so the arms ran at different average power and V7's
+0.76% at G >= 4 was one NVML clock step between them. Every cell records its
+`duty_achieved` and its `gap_basis`, and V7 prints each arm's achieved duty
+against D beside its clocks (`DUTY_ACHIEVED_TOLERANCE`). Whether a duty is
+low enough that the clock stops
 following power is a measured fact about the card, and session 4's clock arm
 measured it (2026-09-21, the G=16 mixtral arm, run 9f91fa91 under
 results/published/2026-09-21-nvidia_h200-session4/ on the pod-h200-session4
@@ -238,6 +258,19 @@ median per tread beside its clocks: the traffic signal that does not go
 through the clock. Beside it goes each arm's median in-burst sag, the change
 inside a burst that one clock read per burst cannot see. Both are scored by
 nothing.
+
+THE CLAIM'S WINDOW (DESIGN DECISION 16). Every slope the claim reads (C1's
+ratio and its clock-corrected print, C2's rate, V5's declaration) is fitted
+over treads `CLAIM_MIN_TREAD` = 2 and deeper, V0 counts and V4 checks
+exactly those treads, and that is the window R1's claim reads
+(`clock_elasticity.CLAIM_MIN_TREAD`), registered by the owner on 2026-09-23
+before the next run. The same fits over EVERY tread, tread 1 included, and
+tread 1's distance from the claim's line are printed beside the claim and
+stored in report.json (`ladders_all_treads`, `ratio_all_treads`,
+`tread1_off_claim_line_ms`); nothing gates them. The window is recorded
+(`claim_min_tread`) and is a design key, so a replicate fitted over another
+window is refused rather than pooled, and `--read --rescore` re-scores a
+stored report from its cells.csv over this build's window.
 
 WHAT ONE RUN'S INTERVAL IS NOT. The bootstrap is over repeats WITHIN a run. Two
 runs of this arm on one card at two seeds, 77 minutes apart (session 4), sat
@@ -395,7 +428,9 @@ DEFAULT_MODEL = "mixtral-8x7b"
 DEFAULT_BLOCK_M = 32
 
 #: DESIGN DECISION 3. Six treads, n = 1 .. 6. The deepest tread sets the memory
-#: bill (`n` complete copies) and the ladder's lever arm at once. Six rather
+#: bill (`n` complete copies) and the ladder's lever arm at once; the claim's
+#: slopes are fitted over treads 2 .. 6 of them, five points (DESIGN DECISION
+#: 16), and tread 1 is V6's identity tread and the all-tread fit's. Six rather
 #: than the eight the depth table above allows at BLOCK_M=32: eight is the
 #: H200's own number and the A100's is seven, so eight is a design that passes
 #: its own depth check by one tread on one card. Six copies of mixtral bf16 is
@@ -435,11 +470,27 @@ INTERVAL_PCT = 90.0
 #: recomputable source. The spread itself is NOT typed here: `--read` over the
 #: committed pair prints it. A replicate is the same DESIGN, not the same
 #: bytes: `--seed` draws the weights and the inputs as well as the bootstrap.
+#:
+#: TWO KEYS SAY HOW A NUMBER WAS FORMED RATHER THAN WHAT WAS SWEPT, and a
+#: replicate that differs in either is refused like one at another duty.
+#: `claim_min_tread` is the window the stored ratio was fitted over (DESIGN
+#: DECISION 16): a report written before the key fitted every tread, so it
+#: reads as 1, and pooling its interval with a window-2 run's would put two
+#: estimators in one envelope. `--read --rescore` re-scores such a report
+#: from its cells.csv over this build's window instead. `duty_gap_from_burst`
+#: is whether each idle gap was sized from the burst it followed (DESIGN
+#: DECISION 15): true on a run below full duty since 2026-09-23, false at
+#: full duty (there is no gap) and on every report before the key, whose
+#: gaps came from a full-duty sizing read and left the arms at different
+#: achieved duties. Those cells cannot be re-scored into the other
+#: instrument, so a pair across it is refused, not re-scored.
 DESIGN_KEYS: tuple[str, ...] = ("experiment", "card", "model", "dtype",
                                 "block_m", "pinned", "treads", "repeats",
-                                "copies_declared", "alpha_band", "duty")
+                                "copies_declared", "alpha_band", "duty",
+                                "claim_min_tread", "duty_gap_from_burst")
 #: What a report written before a design key existed is read as carrying.
-DESIGN_KEY_DEFAULTS: dict[str, object] = {"duty": 1.0}
+DESIGN_KEY_DEFAULTS: dict[str, object] = {"duty": 1.0, "claim_min_tread": 1,
+                                          "duty_gap_from_burst": False}
 
 #: DESIGN DECISION 6. V5's bound on the declaration. `|slope(NATIVE) -
 #: slope(SHARED)|` must be under this fraction of `slope(PRIVATE)`, which is
@@ -549,6 +600,37 @@ MEMORY_HEADROOM = 0.66
 #: was wrong.
 MIN_TREADS = SWEEP.MIN_MEMORY_TREADS      # 3
 
+#: DESIGN DECISION 16. THE CLAIM'S WINDOW: the shallowest tread every slope
+#: the claim reads is fitted over, registered by the owner on 2026-09-23
+#: before the next run and NOT chosen by a fit. It is the number R1
+#: registers for its own claim (`clock_elasticity.CLAIM_MIN_TREAD`, the
+#: owner's D2 of 2026-09-22), so the two arms define the per-M-tile cost over
+#: one window; restated here rather than imported because that module imports
+#: torch and this one stays importable without it, and a test holds the two
+#: equal.
+#:
+#: WHY. Session 5 (2026-09-23, one H200, 12 valid pages at duty 0.25 on the
+#: pod-h200-session5 branch) found the one-tile call off the line every
+#: deeper tread lies on, at G >= 4 only: the native and shared first
+#: increment (n = 1 to 2) was 0.356-0.370 ms against 0.50-0.54 ms for every
+#: later one, and the n = 1 cell sat 0.157-0.164 ms above the line through
+#: treads 2-6 (0.048 ms at G = 1); R1's native call at duty 0.25, a separate
+#: run on the same card, showed the same kink. A straight line through
+#: treads 1-6 reads that point as slope, and the ratio moved by +0.0089 /
+#: +0.0312 / +0.0264 / +0.0094 at G = 1 / 4 / 16 / 64 when tread 1 was
+#: dropped: 5-28x the seed-to-seed sd, the largest systematic on the pages.
+#: WHAT THE ONE-TILE CALL IS remains open; leaving it out is a registration
+#: about which treads lie on the line, not an explanation of why it does not.
+#:
+#: WHAT READS IT: C1's ratio and its bootstrap, the clock-corrected ratio
+#: printed beside it, C2's private slope, V5's slopes and declaration fit,
+#: V4's treads, V0's per-arm tread floor, and the plan's own floor on
+#: `--treads`. WHAT DOES NOT: V6, whose identity tread is 1 by construction;
+#: V7, which scores the clocks at every tread, tread 1 included; V1, V2, V3
+#: and V8. The all-tread fits and tread 1's distance from the claim's line
+#: are printed beside the claim and stored in report.json, never gated.
+CLAIM_MIN_TREAD = 2
+
 #: A tread whose achieved throughput reaches this fraction of the fixed roof is
 #: compute bound, and V4 refuses the whole page if any fitted tread of SHARED
 #: or PRIVATE is. Imported: a second copy of the sweep's threshold would
@@ -599,7 +681,9 @@ def ladder_instrument(duty: float, *, synthetic: bool = False) -> str | None:
     says it is NOT `timing.TIMING_BASIS`, and naming the queue-deep loop there
     would put a duty-cycled page beside a full-duty one as one instrument.
     Below full duty this is that string, the one every row's `instrument`
-    column carries, followed by the duty every row's `duty` column carries.
+    column carries, followed by the duty every row's `duty` column carries
+    and the gap sizing every row's `gap_basis` column carries (DESIGN
+    DECISION 15: each gap from the burst it follows, since 2026-09-23).
     None off-torch, as `timing_basis` is: `clock_elasticity` imports the
     timing module, which imports torch.
     """
@@ -613,7 +697,8 @@ def ladder_instrument(duty: float, *, synthetic: bool = False) -> str | None:
         # Broad for `timing_basis`'s reason: an installed, broken torch raises
         # OSError, and naming the instrument is never worth the report.
         return None
-    return f"{CE.INSTRUMENT} | duty {duty:.2f}"
+    return (f"{CE.INSTRUMENT} | duty {duty:.2f} | each idle gap sized from "
+            f"its own burst (gap_basis {CE.GAP_FROM_BURST})")
 
 
 # --------------------------------------------------------------------------
@@ -750,6 +835,24 @@ def ladder_treads(cfg, block_m: int, max_treads: int) -> list[int]:
             f"{bad} at BLOCK_M={block_m} are not. See "
             "identity_tread_refusal for what that costs this design.")
     return list(range(1, max_treads + 1))
+
+
+def treads_in_window(treads, *, min_tread: int) -> list[int]:
+    """The treads a fit over `min_tread` and deeper reads, in order. THE ONE
+    PLACE the window is applied to a tread list; `min_tread` is keyword-only
+    and required, so every caller says which window it means."""
+    return [n for n in treads if n >= min_tread]
+
+
+def span_text(treads) -> str:
+    """`2..6` for a contiguous run of treads, `2, 4, 5, 6` otherwise, `none`
+    for no tread: how the page names a window's treads."""
+    ts = sorted(set(treads))
+    if not ts:
+        return "none"
+    if ts == list(range(ts[0], ts[-1] + 1)) and len(ts) > 1:
+        return f"{ts[0]}..{ts[-1]}"
+    return ", ".join(str(n) for n in ts)
 
 
 def identity_tread_refusal(cfg, block_m: int) -> str:
@@ -2227,11 +2330,22 @@ class Sample:
     # the burst quantities `time_kernel` does not have.
     #: The GPU-busy fraction the duty timer measured over the trials' wall
     #: clock, a LOWER BOUND (`clock_elasticity.DutyTiming.duty_achieved`).
+    #: Since 2026-09-23 the gap is sized so that this equals `duty`; V7
+    #: prints each arm's median against it (`DUTY_ACHIEVED_TOLERANCE`).
     duty_achieved: float | None = None
-    #: Calls per burst, the first of which is discarded, and the idle gap
-    #: after each burst, ms, sized from `DUTY_SIZING_MS` of full-duty reading.
+    #: Calls per burst, the first of which is discarded, sized from
+    #: `DUTY_SIZING_MS` of full-duty reading; and the idle gap after a burst,
+    #: ms: under `gap_basis` "burst" the MEDIAN of the per-burst gaps, each
+    #: sized from its own burst's measured kernel time, and under "sizing"
+    #: (every row before the column) one gap for the cell, sized from that
+    #: full-duty reading.
     calls_per_burst: int | None = None
     gap_ms: float | None = None
+    #: How the idle gaps were sized, `clock_elasticity.time_duty`'s
+    #: `gap_basis`: "burst" below full duty since 2026-09-23 (DESIGN DECISION
+    #: 15), None at full duty, which has no gap, and on every row written
+    #: before the column, whose gaps came from the full-duty sizing read.
+    gap_basis: str | None = None
     #: Medians of the first and last quarter of a burst's kept per-call
     #: times, and whether they agree within `timing.DRIFT_FRACTION`: R1 gates
     #: this pair as its V5; here V7 prints each arm's median `burst_sag` per
@@ -2348,8 +2462,21 @@ def _opt_int(text: str):
 #: under load, short enough that the governor cannot ramp inside one.
 DUTY_BURST_MS = 40.0
 #: The short full-duty reading that sizes the bursts (calls per burst) before
-#: a duty-cycled cell is timed; not a measurement, never written.
+#: a duty-cycled cell is timed; not a measurement, never written. It sizes
+#: NOTHING ELSE: the idle gap after each burst is sized from that burst's own
+#: measured kernel time (DESIGN DECISION 15), because session 5's gaps, sized
+#: from this reading, left the arms at achieved duties 1/(1 + 3k) apart.
 DUTY_SIZING_MS = 20.0
+#: How far an arm's median achieved duty may sit from the requested one,
+#: as a fraction of the requested duty, before V7's record line calls it
+#: OUTSIDE. CHOSEN, a tolerance and not a quantity derived from any card:
+#: session 5's sizing-read gaps put the median native and shared cell at
+#: 0.229-0.241 and the median private cell at 0.246-0.248 against 0.25, the
+#: arms of one run 2.5-6.9% of the requested duty apart, and a burst-sized
+#: gap leaves only the host's sleep overshoot and the loop between bursts,
+#: well under 1% of a ~120 ms gap. A RECORD: V7 scores the clocks, which are
+#: what an unequal duty would move.
+DUTY_ACHIEVED_TOLERANCE = 0.02
 
 
 @dataclass(frozen=True)
@@ -2383,6 +2510,7 @@ class CellTiming:
     duty_achieved: float | None = None
     calls_per_burst: int | None = None
     gap_ms: float | None = None
+    gap_basis: str | None = None
     head_ms: float | None = None
     tail_ms: float | None = None
     within_burst_ok: bool | None = None
@@ -2403,12 +2531,19 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
     `duty >= 1`: `timing.time_kernel`, the driver's instrument, the queue kept
     full; what every page before 2026-09-22 was timed with. `duty < 1`:
     `clock_elasticity.time_duty` (IMPORTED, not copied), `DUTY_BURST_MS` of
-    kernel time per burst with an idle gap of `burst x (1/duty - 1)` after
-    each, the burst sized off a `DUTY_SIZING_MS` full-duty reading of the same
-    call, the same warmup and trials and L2 flush. The kernel, its bytes and
-    its launch shape do not change between the two; what changes is board
-    power, and with it the clock the cap allows. Pure plumbing: the off-GPU
-    tests drive it with fake timers.
+    kernel time per burst, its calls per burst sized off a `DUTY_SIZING_MS`
+    full-duty reading of the same call, the same warmup and trials and L2
+    flush, and the idle gap after each burst sized FROM THAT BURST
+    (`time_duty`'s `GAP_FROM_BURST`): the host sleeps until the burst's wall
+    clock reaches its own measured kernel time over `duty`, so the achieved
+    duty is `duty` in every arm whatever the sizing read said the call cost.
+    Session 5 sized the gap from the sizing read, and an arm whose in-burst
+    call ran k times faster than that reading achieved 1/(1 + 3k) at 0.25
+    (DESIGN DECISION 15). The kernel, its bytes and its launch shape do not
+    change between the instruments; what changes is board power, and with
+    it the clock the cap allows. Pure plumbing: the off-GPU tests drive it
+    with fake timers, and through the REAL `time_duty` behind injected
+    events, clock reads and sleep.
     """
     if timer is None:
         from moe.bench import timing
@@ -2431,8 +2566,8 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
             power_w=getattr(t, "power_w", None),
             host_bound=getattr(t, "host_bound", None), note="",
             clock_samples_mhz=_joined_clocks(getattr(t, "clock_samples_mhz", ())))
+    import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
     if duty_timer is None:
-        import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
         duty_timer = CE.time_duty
     sizing = timer(call, warmup_ms=min(warmup_ms, DUTY_SIZING_MS),
                    target_ms=DUTY_SIZING_MS, trials=1, l2_flush=l2_flush,
@@ -2440,10 +2575,13 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
     per_call = max(float(sizing.ms_p50), 1e-4)
     calls_per_burst = max(2, round(DUTY_BURST_MS / per_call))
     bursts = max(1, round(cell_budget_ms / DUTY_BURST_MS))
+    # THE GAP FROM THE BURST, not from `per_call`: `per_call` sizes the
+    # burst's length in calls and nothing else here.
     t = duty_timer(call, duty=duty, calls_per_burst=calls_per_burst,
                    bursts=bursts, trials=trials, warm_ms=warmup_ms,
                    l2_flush=l2_flush, per_call_ms=per_call,
-                   reference_clock_mhz=reference_clock_mhz)
+                   reference_clock_mhz=reference_clock_mhz,
+                   gap_basis=CE.GAP_FROM_BURST)
     return CellTiming(
         ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
         # PER TRIAL, as `time_kernel`'s `iters` is: `samples` is the kept
@@ -2458,7 +2596,11 @@ def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
         # tell a split between arms from a card jittering at this duty.
         clock_samples_mhz=_joined_clocks(t.clock_samples_mhz),
         duty_achieved=t.duty_achieved, calls_per_burst=t.calls_per_burst,
-        gap_ms=t.gap_ms, head_ms=t.head_ms, tail_ms=t.tail_ms,
+        gap_ms=t.gap_ms,
+        # What the timer DID, read off its return rather than assumed from
+        # what was asked: a timer that ignored the basis is recorded as one.
+        gap_basis=getattr(t, "gap_basis", None),
+        head_ms=t.head_ms, tail_ms=t.tail_ms,
         within_burst_ok=t.within_burst_ok)
 
 
@@ -2520,6 +2662,7 @@ def read_samples(path: Path) -> list[Sample]:
                 duty_achieved=_opt_float(row.get("duty_achieved", "")),
                 calls_per_burst=_opt_int(row.get("calls_per_burst", "")),
                 gap_ms=_opt_float(row.get("gap_ms", "")),
+                gap_basis=row.get("gap_basis") or None,
                 head_ms=_opt_float(row.get("head_ms", "")),
                 tail_ms=_opt_float(row.get("tail_ms", "")),
                 within_burst_ok=_opt_bool(row.get("within_burst_ok", "")),
@@ -2535,7 +2678,9 @@ def read_samples(path: Path) -> list[Sample]:
 
 @dataclass(frozen=True)
 class Ladder:
-    """One arm's ladder: the per-tread medians and the line through them."""
+    """One arm's ladder: the per-tread medians and the line through them,
+    over the treads `min_tread` and deeper (the claim's window at
+    `CLAIM_MIN_TREAD`, every tread at 1)."""
 
     arm: str
     points: tuple[tuple[int, float], ...]
@@ -2544,10 +2689,20 @@ class Ladder:
     mean_rel_err: float
     spread: float | None
     excluded: int
+    min_tread: int = 1
 
     @property
     def treads(self) -> int:
         return len(self.points)
+
+    @property
+    def span(self) -> str:
+        """The treads the line was fitted over, as the page names them."""
+        return "treads " + span_text(n for n, _ms in self.points)
+
+    def at(self, n: float) -> float:
+        """The line's value at tread `n`."""
+        return self.intercept_ms + self.slope_ms * n
 
 
 def fit_line(points) -> tuple[float, float, float]:
@@ -2579,10 +2734,15 @@ def repeat_indices(samples) -> list[int]:
     return sorted({s.repeat for s in samples if s.usable})
 
 
-def collapse(samples, arm: str, repeats: list[int] | None = None
+def collapse(samples, arm: str, repeats: list[int] | None = None, *,
+             min_tread: int = 1
              ) -> tuple[list[tuple[int, float]], float | None, int]:
     """Per-tread median across repeats, the median across-repeat spread, and the
-    count of treads-by-repeat a DRIFTING clock excluded.
+    count of treads-by-repeat a DRIFTING clock excluded, over the treads
+    `min_tread` and deeper (`treads_in_window`'s rule). EVERY TREAD BY
+    DEFAULT: a table of medians is not a fit, and a caller reading the
+    ladder's shape (the per-tile model fit reads tread 1 on purpose) keeps
+    it whole; `ladder_for`, which IS the fit, takes its window required.
 
     `repeats` IS A LIST OF REPEAT INDICES, possibly with duplicates, and that
     is what makes this a bootstrap OVER REPEATS. What stood here resampled the
@@ -2603,6 +2763,8 @@ def collapse(samples, arm: str, repeats: list[int] | None = None
     for s in samples:
         if s.arm != arm or s.status != "ok" or s.ms_p50 <= 0:
             continue
+        if not treads_in_window([s.tiles], min_tread=min_tread):
+            continue
         if s.excluded:
             dropped += 1
             continue
@@ -2617,12 +2779,17 @@ def collapse(samples, arm: str, repeats: list[int] | None = None
     return points, (statistics.median(spreads) if spreads else None), dropped
 
 
-def ladder_for(samples, arm: str, repeats: list[int] | None = None) -> Ladder:
-    points, spread, dropped = collapse(samples, arm, repeats)
+def ladder_for(samples, arm: str, repeats: list[int] | None = None, *,
+               min_tread: int) -> Ladder:
+    """One arm's line over the treads `min_tread` and deeper. THE CLAIM at
+    `CLAIM_MIN_TREAD`, the all-tread reading printed beside it at 1: the
+    window is keyword-only and required for `per_tile_slope`'s reason in
+    clock_elasticity, so no caller fits a window it did not name."""
+    points, spread, dropped = collapse(samples, arm, repeats, min_tread=min_tread)
     intercept, slope, err = fit_line(points)
     return Ladder(arm=arm, points=tuple(points), intercept_ms=intercept,
                   slope_ms=slope, mean_rel_err=err, spread=spread,
-                  excluded=dropped)
+                  excluded=dropped, min_tread=min_tread)
 
 
 @dataclass(frozen=True)
@@ -2716,6 +2883,8 @@ class ClockCorrection:
     envelope: tuple[float, float] | None
     at_unit: float
     raw: float
+    #: The window every slope in it was fitted over, the claim's.
+    min_tread: int = CLAIM_MIN_TREAD
 
     def as_dict(self) -> dict:
         return {"eta": self.elasticity.eta, "eta_lo": self.elasticity.lo,
@@ -2726,7 +2895,7 @@ class ClockCorrection:
                 "interval": list(self.interval) if self.interval else None,
                 "envelope": list(self.envelope) if self.envelope else None,
                 "ratio_at_eta_1": self.at_unit, "ratio_raw": self.raw,
-                "scored": False}
+                "min_tread": self.min_tread, "scored": False}
 
     def lines(self) -> list[str]:
         e = self.elasticity
@@ -2734,7 +2903,9 @@ class ClockCorrection:
             f"clock-corrected ratio {self.ratio:.4f} at eta = {e.eta:.4f} "
             f"[{e.lo:.4f}, {e.hi:.4f}] ({e.source}), every ratio-arm cell "
             f"carried to {self.f_ref:.0f} MHz ({self.f_ref_source}) by "
-            "(f / f_ref) ** eta before the fit; PRINTED ONLY, the raw ratio "
+            "(f / f_ref) ** eta before the fit over treads "
+            f"{self.min_tread} and deeper, the raw ratio's window; PRINTED "
+            "ONLY, the raw ratio "
             f"above is the one this arm was built to produce (moved "
             f"{self.ratio - self.raw:+.4f})",
             "  " + (f"its own {INTERVAL_PCT:.0f}% paired bootstrap "
@@ -2752,35 +2923,44 @@ class ClockCorrection:
 
 def clock_corrected_ratio(samples, elasticity: ClockElasticity, *,
                           f_ref: float, f_ref_source: str, draws: int,
-                          seed: int) -> ClockCorrection:
+                          seed: int, min_tread: int) -> ClockCorrection:
     """Form the corrected ratio at `eta`, its interval, the envelope over
-    [lo, hi], and the eta = 1 reference point, from the same samples and the
-    same paired bootstrap the raw ratio uses."""
+    [lo, hi], and the eta = 1 reference point, from the same samples, the
+    same window (`min_tread`, the claim's) and the same paired bootstrap the
+    raw ratio uses. R1's per-M-tile eta is read over treads 2 and deeper too,
+    so at `CLAIM_MIN_TREAD` the elasticity and the slopes it carries share
+    one window."""
     def ratio_at(eta: float) -> float:
         cells = clock_corrected(samples, eta, f_ref)
-        return ladder_for(cells, SHARED).slope_ms / ladder_for(cells, PRIVATE).slope_ms
+        return (ladder_for(cells, SHARED, min_tread=min_tread).slope_ms
+                / ladder_for(cells, PRIVATE, min_tread=min_tread).slope_ms)
 
     def interval_at(eta: float) -> tuple[float, float] | None:
         try:
             lo, hi, _n = ratio_interval(clock_corrected(samples, eta, f_ref),
-                                        draws, seed)
+                                        draws, seed, min_tread=min_tread)
         except Unmeasurable:
             return None
         return (lo, hi)
 
-    raw = ladder_for(samples, SHARED).slope_ms / ladder_for(samples, PRIVATE).slope_ms
+    raw = (ladder_for(samples, SHARED, min_tread=min_tread).slope_ms
+           / ladder_for(samples, PRIVATE, min_tread=min_tread).slope_ms)
     point = ratio_at(elasticity.eta)
     interval = interval_at(elasticity.eta)
     ends = [interval_at(elasticity.lo), interval_at(elasticity.hi)]
     envelope = ((min(i[0] for i in ends), max(i[1] for i in ends))
                 if all(ends) else None)
     return ClockCorrection(elasticity, f_ref, f_ref_source, point, interval,
-                           envelope, ratio_at(1.0), raw)
+                           envelope, ratio_at(1.0), raw, min_tread)
 
 
-def ratio_interval(samples, draws: int, seed: int, pct: float = INTERVAL_PCT
-                   ) -> tuple[float, float, int]:
-    """`(lo, hi, draws that produced a ratio)` by percentile bootstrap.
+def ratio_interval(samples, draws: int, seed: int, pct: float = INTERVAL_PCT,
+                   *, min_tread: int) -> tuple[float, float, int]:
+    """`(lo, hi, draws that produced a ratio)` by percentile bootstrap, every
+    draw's two slopes fitted over the treads `min_tread` and deeper, the
+    window the point estimate it brackets reads. The drawn repeat lists
+    depend on `seed` and the repeats alone, so two windows read at one seed
+    are bracketed by the SAME draws.
 
     OVER REPEATS AND PAIRED. One list of repeat indices is drawn per draw and
     BOTH arms are collapsed over that same list, so a repeat in which the whole
@@ -2802,8 +2982,8 @@ def ratio_interval(samples, draws: int, seed: int, pct: float = INTERVAL_PCT
             break
         drawn = [rng.choice(population) for _ in population]
         try:
-            shared = ladder_for(samples, SHARED, drawn)
-            private = ladder_for(samples, PRIVATE, drawn)
+            shared = ladder_for(samples, SHARED, drawn, min_tread=min_tread)
+            private = ladder_for(samples, PRIVATE, drawn, min_tread=min_tread)
         except Unmeasurable:
             continue
         if private.slope_ms == 0:
@@ -2954,7 +3134,7 @@ class Gate:
 
 
 def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
-                        repeats: int) -> Gate:
+                        repeats: int, min_tread: int) -> Gate:
     """Did the run measure the grid it planned.
 
     A CHECK THAT EXAMINED NOTHING REPORTS NO FAILURES. Every gate below reads
@@ -2963,12 +3143,22 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
     gate: cells measured against cells planned, usable treads per arm, repeats
     per cell, and the cells a DRIFTING clock excluded named on their own line
     rather than silently dropped.
+
+    THE TREAD FLOOR IS COUNTED IN THE CLAIM'S WINDOW (`min_tread`, DESIGN
+    DECISION 16): the slopes the claim reads are fitted there, so a ladder
+    whose usable treads were tread 1 and two deeper ones would give the claim
+    a two-point line however many treads it had in all. The all-tread count
+    is printed beside it.
     """
     ok = {(s.arm, s.tiles, s.repeat) for s in samples if s.usable}
     failed = [s for s in samples
               if s.status != "ok" and (s.arm, s.tiles, s.repeat) not in ok]
     per_arm = {arm: len({s.tiles for s in samples if s.usable and s.arm == arm})
                for arm in ARMS}
+    in_window = {arm: len(treads_in_window(
+                     {s.tiles for s in samples if s.usable and s.arm == arm},
+                     min_tread=min_tread))
+                 for arm in ARMS}
     dropped = {arm: sum(1 for s in samples
                         if s.arm == arm and s.status == "ok" and s.excluded)
                for arm in ARMS}
@@ -2976,15 +3166,20 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
                           if s.usable and s.arm == arm and s.tiles == n)
                       for n in treads] or [0])
             for arm in ARMS}
-    short = [arm for arm in ARMS if per_arm[arm] < max(MIN_TREADS, 2)]
+    short = [arm for arm in ARMS if in_window[arm] < max(MIN_TREADS, 2)]
     thin = [arm for arm in ARMS if reps[arm] < MIN_REPEATS]
     timed = sum(1 for s in samples if s.status == "ok")
     drift_share = (sum(dropped.values()) / timed) if timed else 1.0
+    window = treads_in_window(treads, min_tread=min_tread)
     detail = [
         f"{len(ok)} of {planned} planned cells measured and usable",
         "usable treads per arm: "
         + ", ".join(f"{arm}:{per_arm[arm]}" for arm in ARMS)
         + f" (of {len(treads)} planned)",
+        f"usable treads per arm in the claim's window, treads {min_tread} and "
+        "deeper, which the floor counts: "
+        + ", ".join(f"{arm}:{in_window[arm]}" for arm in ARMS)
+        + f" (of {len(window)} planned there: {span_text(window)})",
         "fewest repeats behind any tread, per arm: "
         + ", ".join(f"{arm}:{reps[arm]}" for arm in ARMS)
         + f" (of {repeats} planned, floor {MIN_REPEATS})",
@@ -3010,7 +3205,8 @@ def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
                 f"{len(ok)}/{planned} cells, treads "
                 + "/".join(str(per_arm[a]) for a in ARMS)
                 + f", drift {100 * drift_share:.1f}%",
-                f">= {max(MIN_TREADS, 2)} usable treads and >= {MIN_REPEATS} "
+                f">= {max(MIN_TREADS, 2)} usable treads in the claim's window "
+                f"(treads {min_tread} and deeper) and >= {MIN_REPEATS} "
                 f"repeats per arm, no unrecovered failure, and DRIFT under "
                 f"{100 * MAX_DRIFT_FRACTION:.0f}% of the timed cells",
                 "every ladder below was fitted on a grid with holes in it, and "
@@ -3141,8 +3337,14 @@ def gate_v3_memory(plan: MemoryPlan, *, weight_delta_bytes: int | None,
                 detail)
 
 
-def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
+def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str,
+                         min_tread: int) -> Gate:
     """Is every fitted tread of SHARED and PRIVATE on the memory branch.
+
+    FITTED MEANS THE CLAIM'S WINDOW, treads `min_tread` and deeper (DESIGN
+    DECISION 16): a tread no slope the claim reads is fitted through cannot
+    pull the ratio anywhere, so it is not scored; its fraction of the roof is
+    printed beside the verdict.
 
     A ratio of two slopes is a ratio of two TRAFFIC costs only where traffic is
     what the time is made of. A tread that has run into its compute ceiling has
@@ -3161,17 +3363,31 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
     own-clock fraction is printed beside each tread as issue efficiency and is
     scored by nothing.
     """
-    fitted = [r for r in rows if r["arm"] in RATIO_ARMS]
+    ratio_rows = [r for r in rows if r["arm"] in RATIO_ARMS]
+    fitted = [r for r in ratio_rows
+              if treads_in_window([r["tiles"]], min_tread=min_tread)]
+    outside = [r for r in ratio_rows if r not in fitted]
     hot = [r for r in fitted if r["pct_of_roof"] >= COMPUTE_BOUND_FRACTION]
     worst = max((r["pct_of_roof"] for r in fitted), default=0.0)
+    window = (f"treads {span_text(r['tiles'] for r in fitted)}" if fitted
+              else f"treads {min_tread} and deeper")
     detail = [f"roof {roof_tflops:.1f} TFLOP/s, {roof_source}",
-              f"worst fitted tread of shared/private reaches {worst:.1%} of it"]
+              f"worst fitted tread of shared/private reaches {worst:.1%} of it, "
+              f"over the claim's window, {window}"]
+    if outside:
+        detail.append(
+            "outside the window, printed and not scored: "
+            + ", ".join(f"{r['arm']} n={r['tiles']} {r['pct_of_roof']:.1%}"
+                        for r in outside))
+    wanted = (f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
+              f"fitted tread of shared and private (treads {min_tread} and "
+              "deeper)")
     if not fitted:
         return Gate("V4", VALIDITY,
                     "every fitted tread of both ladders is memory bound",
-                    UNKNOWN, "no shared or private tread was measured",
-                    f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
-                    "fitted tread of shared and private",
+                    UNKNOWN, "no shared or private tread was measured in "
+                    f"the claim's window, treads {min_tread} and deeper",
+                    wanted,
                     "at least one ladder's slope is set by arithmetic and not "
                     "by reads, which pulls the ratio toward 1.0 for a reason "
                     "that is not reuse",
@@ -3188,8 +3404,7 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
                 "every fitted tread of both ladders is memory bound",
                 PASS if not hot else FAIL,
                 f"worst {worst:.1%} of the fixed roof",
-                f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
-                "fitted tread of shared and private",
+                wanted,
                 "at least one ladder's slope is set by arithmetic and not by "
                 "reads, which pulls the ratio toward 1.0 for a reason that is "
                 "not reuse",
@@ -3220,11 +3435,14 @@ class DeclarationFit:
 
 
 def declaration_fit(samples, treads: list[int], switch_tread: int | None,
-                    repeats: list[int] | None = None) -> DeclarationFit:
+                    repeats: list[int] | None = None, *,
+                    min_tread: int) -> DeclarationFit:
     """Fit the NATIVE - SHARED difference, paired per tread over the same
-    repeats, with the step at `switch_tread` when it falls inside the ladder."""
-    native, _sp, _d = collapse(samples, NATIVE, repeats)
-    shared, _sp, _d = collapse(samples, SHARED, repeats)
+    repeats and over the treads `min_tread` and deeper (the claim's window:
+    `b` is a machinery error on the claim's slopes, so it is fitted where
+    they are), with the step at `switch_tread` when it falls inside them."""
+    native, _sp, _d = collapse(samples, NATIVE, repeats, min_tread=min_tread)
+    shared, _sp, _d = collapse(samples, SHARED, repeats, min_tread=min_tread)
     sh = dict(shared)
     pts = [(n, ms - sh[n]) for n, ms in native if n in sh]
     if len(pts) < 3:
@@ -3242,9 +3460,11 @@ def declaration_fit(samples, treads: list[int], switch_tread: int | None,
 
 
 def declaration_interval(samples, treads: list[int], switch_tread: int | None,
-                         draws: int, seed: int, pct: float = INTERVAL_PCT
+                         draws: int, seed: int, pct: float = INTERVAL_PCT, *,
+                         min_tread: int
                          ) -> tuple[tuple[float, float], tuple[float, float] | None, int]:
-    """Percentile bootstrap over repeats, paired, for `b` and for `s`."""
+    """Percentile bootstrap over repeats, paired, for `b` and for `s`, every
+    draw fitted over the treads `min_tread` and deeper."""
     rng = random.Random(seed + 1)
     population = repeat_indices(samples)
     bs: list[float] = []
@@ -3254,7 +3474,8 @@ def declaration_interval(samples, treads: list[int], switch_tread: int | None,
             break
         drawn = [rng.choice(population) for _ in population]
         try:
-            fit = declaration_fit(samples, treads, switch_tread, drawn)
+            fit = declaration_fit(samples, treads, switch_tread, drawn,
+                                  min_tread=min_tread)
         except Unmeasurable:
             continue
         bs.append(fit.per_tile_ms)
@@ -3302,6 +3523,10 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
     trace of it shows up: a footprint cost paid by READING the copies (the
     private ladder's own residual, printed and scored by nothing).
 
+    OVER THE CLAIM'S WINDOW. The three ladders and `fit` come in fitted over
+    the treads the ratio reads (DESIGN DECISION 16), and the page names them:
+    a machinery error is an error on THOSE slopes.
+
     A FAILURE IS A VALIDITY FAILURE AND NOT A FINDING. It does not say the
     ratio is wrong; it says the ratio describes a call the study does not make,
     so nothing on the page is quotable as a statement about the study's alpha.
@@ -3331,6 +3556,8 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
     rel_far = far / abs(private.slope_ms)
     rel_near = near / abs(private.slope_ms)
     detail = [
+        f"every slope below, and b, over the claim's window: {private.span} "
+        f"(treads {private.min_tread} and deeper)",
         f"slope(native)  {native.slope_ms:.6f} ms per M-tile  "
         f"(the study's call: E declared)",
         f"slope(shared)  {shared.slope_ms:.6f} ms per M-tile  "
@@ -3467,6 +3694,12 @@ def gate_v6_identity(samples, *, identity_tread: int = 1) -> Gate:
               f"shared/private gap {rel:.3%} of the faster",
               "this is the floor the ratio's own difference has to stand "
               "above, measured on this card in this session"]
+    if identity_tread < CLAIM_MIN_TREAD:
+        detail.append(
+            f"n={identity_tread} is below the claim's window (treads "
+            f"{CLAIM_MIN_TREAD} and deeper, DESIGN DECISION 16): no slope the "
+            "ratio reads passes through it, which is why it can bound the "
+            "instrument without being a point of the fit it bounds")
     if NATIVE in med and med[SHARED] > 0:
         detail.append(f"native sits {med[NATIVE] / med[SHARED] - 1:+.3%} from "
                       "shared here: the declaration's constant, RECORDED and "
@@ -3532,6 +3765,55 @@ def v7_remedy(duty: float) -> str:
             + f" ({FLAT_DUTY_EVIDENCE})")
 
 
+def duty_achieved_by_arm(samples) -> dict[str, float]:
+    """Each arm's median `duty_achieved` over its usable cells; an arm with
+    none recorded (full duty, or rows before the column) is left out."""
+    out = {}
+    for arm in ARMS:
+        vals = [s.duty_achieved for s in samples
+                if s.usable and s.arm == arm and s.duty_achieved is not None]
+        if vals:
+            out[arm] = statistics.median(vals)
+    return out
+
+
+def duty_outside(achieved: dict[str, float], duty: float) -> list[str]:
+    """The arms whose median achieved duty sits further from `duty` than
+    `DUTY_ACHIEVED_TOLERANCE` of it, in `ARMS` order."""
+    return [a for a in ARMS if a in achieved
+            and abs(achieved[a] - duty) > DUTY_ACHIEVED_TOLERANCE * duty]
+
+
+def duty_parity_lines(samples) -> list[str]:
+    """V7's summary of the achieved duty, a RECORD: each arm's median over the
+    ladder against the requested duty, and which arms sit outside
+    `DUTY_ACHIEVED_TOLERANCE`. Empty when no cell recorded one."""
+    achieved = duty_achieved_by_arm(samples)
+    if not achieved:
+        return []
+    duty = duty_of(samples)
+    out = ["achieved duty over the ladder, each arm's median: "
+           + ", ".join(f"{a} {achieved[a]:.4f}"
+                       for a in (*RATIO_ARMS, NATIVE) if a in achieved)
+           + f" against the requested {duty:.2f}, tolerance "
+           f"+/-{DUTY_ACHIEVED_TOLERANCE:.0%} of it "
+           f"(+/-{DUTY_ACHIEVED_TOLERANCE * duty:.4f})"]
+    bases = sorted({s.gap_basis or "sizing read (before the column)"
+                    for s in samples if s.usable and s.duty_achieved is not None})
+    out.append("  gaps sized from: " + ", ".join(bases))
+    off = duty_outside(achieved, duty)
+    if off:
+        out.append(
+            f"  OUTSIDE for {', '.join(off)}: the idle gaps did not hold "
+            "those arms at the requested duty, so their average board power "
+            "differs from the others' by more than the duty explains; the "
+            "clocks above are the scored consequence (a RECORD, scored by "
+            "nothing)")
+    else:
+        out.append("  every arm within it: the arms ran at one duty")
+    return out
+
+
 def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
     """Did PRIVATE and SHARED run at the same clock, tread by tread.
 
@@ -3561,15 +3843,24 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
 
     PRINTED BESIDE THE CLOCKS AND SCORED BY NOTHING: each arm's median board
     power per tread (`power_w`, NVML's ~1 s average, so duty-averaged below
-    full duty) and each arm's median in-burst sag (`burst_sag`, the duty
-    timer's first and last quarter of a burst). A FAIL is then readable off
-    the page: a systematic power difference between the arms is a split, the
-    same power in both is a card jittering.
+    full duty), each arm's median in-burst sag (`burst_sag`, the duty
+    timer's first and last quarter of a burst), and each arm's median
+    achieved duty per tread and over the ladder against the requested one
+    (`duty_parity_lines`, `DUTY_ACHIEVED_TOLERANCE`). A FAIL is then
+    readable off the page: a systematic power difference between the arms
+    is a split, the same power in both is a card jittering, and arms at
+    different achieved duties are the mechanism session 5's split had.
+
+    EVERY TREAD, NOT THE CLAIM'S WINDOW. The clocks are compared at every
+    tread both ratio arms reached, tread 1 included, which is wider than the
+    window the claim's slopes read (DESIGN DECISION 16): a split at tread 1
+    fails the page although no slope passes through it, and the page says so.
     """
     detail = []
     worst = 0.0
     unread = []
     over = []
+    compared: list[int] = []
     records: list[str] = []
     averaged = (", duty-averaged over bursts and idle gaps"
                 if duty_of(samples) < 1.0 else "")
@@ -3584,6 +3875,7 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
         if not all(a in med for a in RATIO_ARMS):
             unread.append(n)
             continue
+        compared.append(n)
         rel = abs(med[PRIVATE] - med[SHARED]) / med[SHARED]
         worst = max(worst, rel)
         if rel > CLOCK_PARITY:
@@ -3604,6 +3896,12 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                           + ", ".join(f"{a} {sag[a]:+.2%}"
                                       for a in order if a in sag))
             records.append("in-burst sag")
+        achieved = _arm_medians(samples, n, lambda s: s.duty_achieved)
+        if achieved:
+            detail.append("      achieved duty: "
+                          + ", ".join(f"{a} {achieved[a]:.4f}"
+                                      for a in order if a in achieved))
+            records.append("achieved duty")
     if unread:
         detail.append(f"no clock in one or both ratio arms at treads {unread}")
     if not detail:
@@ -3623,6 +3921,13 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                       + (" are" if len(named) > 1 else " is")
                       + " each arm's median over its cells at the tread, "
                       "RECORDS: V7 scores the clocks alone")
+    detail += duty_parity_lines(samples)
+    if compared:
+        detail.append(
+            "scored at every tread both ratio arms reached, tread 1 included: "
+            f"wider than the claim's window (treads {CLAIM_MIN_TREAD} and "
+            "deeper), so a split at a tread no claimed slope passes through "
+            "still fails the page")
     if over:
         detail.append(v7_remedy(duty_of(samples)))
     return Gate("V7", VALIDITY,
@@ -4122,7 +4427,13 @@ def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
 class RunReading:
     """One run's C1 inputs as a report.json stores them, with what the page
     prints beside them. `run_id`, `seed`, `utc` are None for a report written
-    before DESIGN DECISION 14 (the session-4 pair)."""
+    before DESIGN DECISION 14 (the session-4 pair).
+
+    `claim_min_tread` is the window the ratio was fitted over (DESIGN
+    DECISION 16): what the report recorded, 1 for a report that predates the
+    key, or this build's `CLAIM_MIN_TREAD` for a reading `rescore` formed
+    from the report's cells.csv, which then keeps what the report itself
+    stored in `stored_*`."""
     ratio: float
     interval: tuple[float, float]
     path: str | None = None
@@ -4134,6 +4445,10 @@ class RunReading:
     slopes: dict = field(default_factory=dict)
     excluded: dict = field(default_factory=dict)
     git_dirty: bool | None = None
+    claim_min_tread: int = CLAIM_MIN_TREAD
+    stored_ratio: float | None = None
+    stored_interval: tuple[float, float] | None = None
+    stored_min_tread: int | None = None
 
     @property
     def name(self) -> str:
@@ -4160,8 +4475,27 @@ class CrossRun:
     band rule is written once: PASS iff every run's point PASSes against the
     ENVELOPE of all intervals; FAIL iff the envelope misses the band (which
     every point then agrees on); otherwise UNKNOWN. With one reading it is
-    exactly `c1_verdict(ratio, interval)`."""
+    exactly `c1_verdict(ratio, interval)`.
+
+    ONE WINDOW OR NONE: readings fitted over two claim windows are refused
+    at construction, the last line of defence behind `load_replicates`'
+    design-key check, because an envelope over two estimators is not the
+    spread of either."""
     readings: tuple[RunReading, ...]
+
+    def __post_init__(self) -> None:
+        windows = sorted({r.claim_min_tread for r in self.readings})
+        if len(windows) > 1:
+            raise PrivateWeightRefusal(
+                "the readings were fitted over different claim windows "
+                f"(treads {' / '.join(str(w) for w in windows)} and deeper), "
+                "and one envelope over two estimators is not the spread of "
+                "either; re-score them over one window with --read --rescore")
+
+    @property
+    def min_tread(self) -> int | None:
+        """The one window every reading shares, None with no reading."""
+        return self.readings[0].claim_min_tread if self.readings else None
 
     @property
     def points(self) -> list[float]:
@@ -4207,7 +4541,8 @@ class CrossRun:
         n = len(self.readings)
         lo, hi = self.envelope
         out = [f"REPLICATES: {n} run(s) of this design read together; C1 is "
-               "scored on the ENVELOPE of their intervals"]
+               "scored on the ENVELOPE of their intervals, every ratio over "
+               f"treads {self.min_tread} and deeper"]
         for k, r in enumerate(self.readings):
             word = (exit_codes.CODE_NAMES[r.exit_code]
                     if r.exit_code is not None else "unscored")
@@ -4218,6 +4553,15 @@ class CrossRun:
                 + f"; {r.utc or 'utc unrecorded'}; ratio {r.ratio:.4f} "
                 f"[{r.interval[0]:.4f}, {r.interval[1]:.4f}], the point at "
                 f"{r.position:.2f} of its own interval; own exit {word}")
+            if r.stored_min_tread is not None:
+                out.append(
+                    "         RE-SCORED from its cells.csv over treads "
+                    f"{r.claim_min_tread} and deeper; its report stored "
+                    + (f"{r.stored_ratio:.4f}" if r.stored_ratio is not None
+                       else "no ratio")
+                    + (f" [{r.stored_interval[0]:.4f}, {r.stored_interval[1]:.4f}]"
+                       if r.stored_interval else "")
+                    + f" over treads {r.stored_min_tread} and deeper")
             if r.slopes:
                 out.append(
                     "         slopes ms per M-tile: "
@@ -4256,7 +4600,7 @@ class CrossRun:
                 "spread": self.spread, "relative_spread": self.relative_spread,
                 "sd": self.sd, "envelope": list(self.envelope),
                 "disjoint_pairs": [list(p) for p in self.disjoint_pairs()],
-                "verdict": self.verdict,
+                "verdict": self.verdict, "claim_min_tread": self.min_tread,
                 "runs": [asdict(r) for r in self.readings]}
 
 
@@ -4265,8 +4609,11 @@ def cross_run(readings) -> CrossRun:
 
 
 def run_reading(payload: dict, path: Path | None) -> RunReading:
-    """A stored report's C1 inputs. Refuses a payload that formed no ratio or
-    no interval: it is not a replicate READING, whatever else it recorded."""
+    """A stored report's C1 inputs AS STORED, over the window it recorded
+    (`claim_min_tread`, 1 on a report that predates the key). Refuses a
+    payload that formed no ratio or no interval: it is not a replicate
+    READING, whatever else it recorded. `rescore` is the reading of the same
+    report over another window, from its cells."""
     ratio = payload.get("ratio")
     iv = payload.get("ratio_interval") or [None, None]
     if ratio is None or iv[0] is None or iv[1] is None:
@@ -4286,12 +4633,19 @@ def run_reading(payload: dict, path: Path | None) -> RunReading:
         slopes={arm: lad["slope_ms"] for arm, lad in ladders.items()
                 if lad.get("slope_ms") is not None},
         excluded={arm: lad.get("excluded_drifted") for arm, lad in ladders.items()},
-        git_dirty=prov.get("git_dirty"))
+        git_dirty=prov.get("git_dirty"),
+        claim_min_tread=int(design_value(payload, "claim_min_tread")))
+
+
+def design_value(payload: dict, key: str):
+    """A stored report's value of design key `key`, read as
+    `DESIGN_KEY_DEFAULTS` says when the report predates the key."""
+    return payload.get(key, DESIGN_KEY_DEFAULTS.get(key))
 
 
 def load_replicates(paths, *, design: dict, card_known: bool,
-                    this: RunReading | None = None, this_run_id: str = ""
-                    ) -> list[RunReading]:
+                    this: RunReading | None = None, this_run_id: str = "",
+                    rescore_draws: int | None = None) -> list[RunReading]:
     """The replicates named on the command line, or a refusal that names the
     path and what differs. Refused BEFORE the card is touched: a file that is
     missing or not JSON, another experiment's report, a planted (--self-test)
@@ -4300,7 +4654,14 @@ def load_replicates(paths, *, design: dict, card_known: bool,
     replicate or of this run (same file, same run id, or same provenance
     stamp). A replicate whose own gates classify to INVALID or CLAIM_FAIL is
     ADMITTED with its exit word printed: its spread is the information, its
-    ratio is not quotable on its own."""
+    ratio is not quotable on its own.
+
+    THE WINDOW. `claim_min_tread` is a design key, so a replicate fitted over
+    another window is refused with the rest. With `rescore_draws` (`--read
+    --rescore`) every replicate is instead RE-SCORED from the cells.csv beside
+    its report over this build's `CLAIM_MIN_TREAD` (`rescore`, at that many
+    bootstrap draws), and its stored window is not compared: the reading's
+    is, and `design` must carry this build's."""
     seen_paths = {Path(this.path).resolve()} if this and this.path else set()
     seen_ids = {x for x in (this.run_id if this else None, this_run_id) if x}
     seen_stamps = {this.stamp} if this and this.stamp else set()
@@ -4327,14 +4688,19 @@ def load_replicates(paths, *, design: dict, card_known: bool,
                 "replicate is a measured run")
         differ = [k for k in DESIGN_KEYS
                   if (k != "card" or card_known)
-                  and payload.get(k, DESIGN_KEY_DEFAULTS.get(k)) != design.get(k)]
+                  and (k != "claim_min_tread" or rescore_draws is None)
+                  and design_value(payload, k) != design.get(k)]
         if differ:
             raise PrivateWeightRefusal(
                 f"--replicate-of {p}: not a replicate of this design; it "
                 f"differs in {', '.join(differ)}: "
-                + "; ".join(f"{k} {payload.get(k)!r} against {design.get(k)!r}"
-                            for k in differ))
-        r = run_reading(payload, p)
+                + "; ".join(f"{k} {design_value(payload, k)!r} against "
+                            f"{design.get(k)!r}" for k in differ)
+                + ("; a report fitted over another claim window is re-read "
+                   "over this one from its cells.csv with --read --rescore"
+                   if "claim_min_tread" in differ else ""))
+        r = (rescore(payload, p, draws=rescore_draws).reading
+             if rescore_draws is not None else run_reading(payload, p))
         resolved = p.resolve()
         if resolved in seen_paths:
             raise PrivateWeightRefusal(
@@ -4378,8 +4744,16 @@ def replicate_plan_lines(replicates) -> list[str]:
 def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                   *, corrected: float | None,
                   clock: ClockCorrection | None = None,
-                  cross: CrossRun | None = None) -> Gate:
-    """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit.
+                  cross: CrossRun | None = None, min_tread: int,
+                  treads: list[int] | None = None,
+                  all_treads: tuple[float | None, tuple[float, float]] | None
+                  = None) -> Gate:
+    """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit,
+    both slopes over the treads `min_tread` and deeper: THE CLAIM'S WINDOW
+    at `CLAIM_MIN_TREAD` (DESIGN DECISION 16), or the window a stored report
+    recorded when `--read` re-renders it as scored. `treads` names the ones
+    the fit had, for the page; `all_treads` is the same ratio over every
+    tread, `(ratio, interval)`, PRINTED BESIDE IT and scored by nothing.
 
     THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
     (0.529-0.588, 90%). `c1_verdict` scores it from the point and the interval
@@ -4403,8 +4777,16 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
     name, meaning = outcome_for(ratio)
     alone = c1_verdict(ratio, interval)
     verdict = cross.verdict if cross is not None else alone
+    window = (f"treads {span_text(treads)}" if treads
+              else f"treads {min_tread} and deeper")
     detail = [
-        f"ratio = slope(shared) / slope(private) = {ratio:.4f}",
+        f"ratio = slope(shared) / slope(private) = {ratio:.4f}, both slopes "
+        f"over {window}"
+        + (", THE CLAIM'S WINDOW (CLAIM_MIN_TREAD, DESIGN DECISION 16)"
+           if min_tread == CLAIM_MIN_TREAD else
+           f", the window this report was scored over; this build's claim "
+           f"reads treads {CLAIM_MIN_TREAD} and deeper (--rescore re-scores "
+           "it from its cells.csv)"),
         f"{INTERVAL_PCT:.0f}% percentile bootstrap interval "
         f"[{lo:.4f}, {hi:.4f}] over {draws} draws that produced a ratio",
         f"THE WORLD THIS LANDS IN: {name}",
@@ -4412,6 +4794,18 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
         "the registered partition, in full: "
         + "; ".join(f"{n} [{a:.3f}, {b:.3f})" for n, a, b, _ in OUTCOMES),
     ]
+    if all_treads is not None:
+        every, every_iv = all_treads
+        formed = (every_iv is not None and len(every_iv) == 2
+                  and all(v is not None and math.isfinite(v) for v in every_iv))
+        detail.append(
+            "PRINTED BESIDE IT, never gated: the same ratio over EVERY tread, "
+            "tread 1 included, "
+            + (f"{every:.4f}" if every is not None else "not formed")
+            + (f" [{every_iv[0]:.4f}, {every_iv[1]:.4f}] from the same draws"
+               if formed else "")
+            + (f", {every - ratio:+.4f} from the claim"
+               if every is not None else ""))
     if corrected is not None:
         detail.append(
             f"activation-corrected ratio {corrected:.4f}, printed only: it "
@@ -4443,7 +4837,7 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                 "the re-read fraction, measured against a no-reuse reference, "
                 "is the study's refit alpha",
                 verdict,
-                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}"
+                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}, over {window}"
                 + (f"; over {len(cross.readings)} runs: spread "
                    f"{cross.spread:.4f}, envelope [{cross.envelope[0]:.4f}, "
                    f"{cross.envelope[1]:.4f}]" if cross is not None else ""),
@@ -4488,6 +4882,9 @@ def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
     page prices at under 1% of a stream at this tile) taken out first -- would
     make it a claim about the study's denominator rather than a sanity check on
     it, and that is a change to a REGISTERED claim and so the owner's to make.
+
+    THE SLOPE IS THE CLAIM'S, over the window C1's ratio reads (DESIGN
+    DECISION 16), so the rate and the ratio's denominator are one number.
     """
     if private.slope_ms <= 0:
         return Gate("C2", CLAIM,
@@ -4500,8 +4897,9 @@ def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
     w_private = private.slope_ms / stream_ms
     ceiling = bandwidth_gbps * (1.0 + ACHIEVED_RATE_TOLERANCE)
     detail = [
-        f"slope(private) {private.slope_ms:.6f} ms per M-tile moves "
-        f"{weight_bytes / 1e9:.4f} GB, so it delivered "
+        f"slope(private) {private.slope_ms:.6f} ms per M-tile over "
+        f"{private.span}, the claim's window (treads {private.min_tread} and "
+        f"deeper), moves {weight_bytes / 1e9:.4f} GB, so it delivered "
         f"{achieved:.1f} GB/s",
         f"the card's calibrated rate is {bandwidth_gbps:.1f} GB/s "
         f"({bandwidth_source or 'source NOT STATED'}); the gate allows "
@@ -4542,7 +4940,10 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
     out = ["", "PREDICTIONS, registered before the run and printed before any "
                 "measurement",
            "  the quantity: ratio = slope(shared) / slope(private), one "
-           "measured slope over another",
+           "measured slope over another, both over treads "
+           f"{span_text(treads_in_window(treads, min_tread=CLAIM_MIN_TREAD))} "
+           f"(CLAIM_MIN_TREAD {CLAIM_MIN_TREAD}, DESIGN DECISION 16); the same "
+           "ratio over every tread is printed beside it and gates nothing",
            f"  the study's refit alpha {alpha:.3f}, band "
            f"{ALPHA_BAND[0]}-{ALPHA_BAND[1]} (90%), against the retracted "
            f"{RETRACTED_ALPHA}",
@@ -4580,29 +4981,33 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "partition names ISSUE-AND-LATENCY")
     out.append("")
     out.append("  THE GATES, and the thresholds they are scored at:")
-    out.append(f"    V0 all cells, >= {max(MIN_TREADS, 2)} usable treads and "
-               f">= {MIN_REPEATS} repeats per arm")
+    out.append(f"    V0 all cells, >= {max(MIN_TREADS, 2)} usable treads in the "
+               f"claim's window and >= {MIN_REPEATS} repeats per arm")
     out.append("    V1 one tread set, one BLOCK_M, one token count per tread")
     out.append(f"    V2 all {len(PROOF_PARTS)} parts of the buffer proof: "
                + ", ".join(name for name, _ in PROOF_PARTS))
     out.append(f"    V3 weight allocation within {WEIGHT_ALLOC_TOLERANCE:.0%} "
                "of prediction; high-water mark under the plan's ceiling")
-    out.append(f"    V4 every fitted tread of shared and private under "
+    out.append(f"    V4 every fitted tread of shared and private (treads "
+               f"{CLAIM_MIN_TREAD} and deeper) under "
                f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof")
     out.append(f"    V5 the far edge of b's {INTERVAL_PCT:.0f}% band, b the "
                "step-aware native - shared per-tile cost, < "
-               f"{MACHINERY_BOUND:.0%} of slope(private): the wider "
+               f"{MACHINERY_BOUND:.0%} of slope(private), both over the "
+               "claim's window: the wider "
                "declaration's own per-M-tile cost, which ties the matched "
                "ratio to the study's call")
     out.append(f"    V6 shared and private within {IDENTITY_SPREAD:.1%} at n=1, "
-               "where they are the same call")
+               "where they are the same call, below the claim's window")
     out.append(f"    V7 shared and private under-load clocks within "
                f"{CLOCK_PARITY:.0%} at every tread; at FULL duty a card that "
                "cannot lock its clock fails this by construction whenever the "
                "arms draw different power, and below it this holds only at a "
                "duty low enough that the clock stops following power (session "
                f"4's clock arm: flat at {FLAT_DUTY}, still tracking power at "
-               "0.5); --clock-elasticity PRINTS a corrected ratio beside the "
+               "0.5); scored at every tread, tread 1 included; each arm's "
+               "achieved duty is printed beside its clocks; "
+               "--clock-elasticity PRINTS a corrected ratio beside the "
                "raw one, scored by nothing")
     out.append(f"    V8 the probed alignment steps in SHARED's and PRIVATE's id "
                f"sets are worth <= {ALIGN_STEP_RATIO_BUDGET} of the ratio "
@@ -4614,8 +5019,10 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "is scored only if it resolves NATIVE's switch at the census "
                "tread")
     out.append("    C1 PASS: point and whole interval inside ALPHA_BAND; "
-               "FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN")
-    out.append(f"    C2 the delivered weight-read rate is at or under the "
+               "FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN; the ratio "
+               f"over treads {CLAIM_MIN_TREAD} and deeper")
+    out.append(f"    C2 the delivered weight-read rate, off the private slope over "
+               f"treads {CLAIM_MIN_TREAD} and deeper, is at or under the "
                f"card's own, +{ACHIEVED_RATE_TOLERANCE:.0%}")
     out.append("")
     out.append(f"  THE LAYOUT, REGISTERED: copy c of expert e is slot "
@@ -4734,6 +5141,11 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         "arms        " + "; ".join(f"{a}: {ARM_MEANING[a]}" for a in ARMS),
         f"ladder      {len(treads)} treads n={treads[0]}..{treads[-1]}, "
         f"exactly-full tile stacks only (r = n x {block_m})",
+        f"            the claim's slopes are fitted over treads "
+        f"{span_text(treads_in_window(treads, min_tread=CLAIM_MIN_TREAD))} "
+        f"(CLAIM_MIN_TREAD {CLAIM_MIN_TREAD}, DESIGN DECISION 16); tread "
+        f"{treads[0]} is V6's identity tread, and the fits over every tread "
+        "are printed beside the claim and gate nothing",
         "            r per tread: "
         + ", ".join(f"n={n}:r={n * block_m}:T={tokens[n]}" for n in treads),
         f"            {SWEEP.rows_step(cfg)} token step, rows quantum "
@@ -4746,6 +5158,10 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         f"duty        {args.duty:.2f}"
         + (f": every cell timed as bursts of ~{DUTY_BURST_MS:.0f} ms of kernel "
            f"time with idle gaps of {DUTY_BURST_MS * (1 / args.duty - 1):.0f} ms, "
+           "each gap sized from its own burst's measured kernel time so every "
+           "arm achieves this duty (session 5's gaps, sized from a "
+           f"{DUTY_SIZING_MS:.0f} ms full-duty reading, left the arms 2.5-6.9% "
+           "of it apart; V7 prints each arm's achieved duty), "
            "so the arms' AVERAGE board power drops, and with it the clock "
            "split the cap forces at full duty (session 4 at full duty: the "
            "arm reading less boosted 2-18%). Whether this duty is low enough "
@@ -4921,6 +5337,271 @@ def native_switch_source(probe: AlignProbe | None, census: PathCensus
     return native_switch, switch_source
 
 
+def activation_ms_per_tile(cfg, block_m: int, bandwidth_gbps: float) -> float:
+    """The MODELLED activation traffic one M-tile adds, ms at
+    `bandwidth_gbps`: what the activation-corrected ratio subtracts from both
+    slopes before dividing them. A model's number, printed and scored by
+    nothing."""
+    return (cfg.num_experts * block_m * SWEEP.activation_bytes_per_row(cfg)
+            / (bandwidth_gbps * 1e9) * 1e3)
+
+
+@dataclass(frozen=True)
+class WindowFit:
+    """The three ladders and the ratio over ONE window of treads, `min_tread`
+    and deeper: the paired bootstrap interval (`draws_got` of the draws
+    produced a ratio; `interval_refusal` says why none was formed) and the
+    activation-corrected ratio. `analyse` forms it at `CLAIM_MIN_TREAD` for
+    the claim and at 1 for the all-tread reading printed beside it, and
+    `rescore` forms both off a stored run's cells.csv, so the three read one
+    construction (`window_fit`)."""
+    min_tread: int
+    ladders: dict
+    unmeasurable: str
+    ratio: float | None
+    interval: tuple[float, float]
+    draws_got: int
+    interval_refusal: str
+    corrected: float | None
+
+    @property
+    def formed(self) -> bool:
+        """A ratio AND an interval: what a replicate reading needs."""
+        return (self.ratio is not None
+                and all(math.isfinite(v) for v in self.interval))
+
+
+def window_fit(samples, cfg, *, block_m: int, bandwidth_gbps: float,
+               draws: int, seed: int, min_tread: int) -> WindowFit:
+    """Every arm's ladder over the treads `min_tread` and deeper, the ratio of
+    SHARED's slope to PRIVATE's, its paired bootstrap over repeats at `seed`,
+    and the activation-corrected ratio beside it. An arm that cannot be
+    fitted stops the ladders there and says why (`unmeasurable`); a
+    bootstrap that forms no interval leaves it NaN and says why."""
+    ladders: dict[str, Ladder] = {}
+    unmeasurable = ""
+    try:
+        for arm in ARMS:
+            ladders[arm] = ladder_for(samples, arm, min_tread=min_tread)
+    except Unmeasurable as exc:
+        unmeasurable = str(exc)
+    ratio = corrected = None
+    interval = (math.nan, math.nan)
+    got = 0
+    refusal = ""
+    if ladders.get(SHARED) and ladders.get(PRIVATE) and ladders[PRIVATE].slope_ms:
+        ratio = ladders[SHARED].slope_ms / ladders[PRIVATE].slope_ms
+        act_ms = activation_ms_per_tile(cfg, block_m, bandwidth_gbps)
+        denom = ladders[PRIVATE].slope_ms - act_ms
+        if denom > 0:
+            corrected = (ladders[SHARED].slope_ms - act_ms) / denom
+        try:
+            lo, hi, got = ratio_interval(samples, draws, seed,
+                                         min_tread=min_tread)
+            interval = (lo, hi)
+        except Unmeasurable as exc:
+            refusal = str(exc)
+    return WindowFit(min_tread, ladders, unmeasurable, ratio, interval, got,
+                     refusal, corrected)
+
+
+def ratio_treads(fit: WindowFit) -> list[int]:
+    """The treads BOTH ratio arms' lines were fitted through in `fit`: what
+    the page names as the ratio's window, which a ladder with holes in it
+    makes narrower than the planned one."""
+    shared, private = fit.ladders.get(SHARED), fit.ladders.get(PRIVATE)
+    if shared is None or private is None:
+        return []
+    return sorted({n for n, _ms in shared.points}
+                  & {n for n, _ms in private.points})
+
+
+def tread1_off_claim_line(claim: WindowFit, every: WindowFit
+                          ) -> dict[str, tuple[float, float]]:
+    """{arm: (tread 1's measured median, the claim's line at n = 1)}, ms, for
+    every arm with both: how far the one-tile call sits from the line the
+    claim fits through the deeper treads. PRINTED AND STORED, never gated:
+    session 5 read +0.157-0.164 ms at G >= 4 and +0.048 at G = 1 for native
+    and shared (DESIGN DECISION 16)."""
+    out = {}
+    for arm in ARMS:
+        line, full = claim.ladders.get(arm), every.ladders.get(arm)
+        if line is None or full is None:
+            continue
+        at1 = dict(full.points).get(1)
+        if at1 is not None and line.min_tread > 1:
+            out[arm] = (at1, line.at(1))
+    return out
+
+
+@dataclass(frozen=True)
+class DeclarationReading:
+    """V5's inputs: the NATIVE - SHARED fit over the claim's window, the
+    bootstrap bands on its per-tile cost and its step, why a band is absent
+    (`absence`), and the page's lines about any of it (`notes`)."""
+    fit: DeclarationFit | None
+    per_tile_band: tuple[float, float] | None
+    step_band: tuple[float, float] | None
+    absence: str
+    notes: tuple[str, ...]
+
+
+def declaration_reading(samples, treads: list[int], native_switch: int | None,
+                        *, draws: int, seed: int, min_tread: int
+                        ) -> DeclarationReading:
+    """Fit the declaration and bootstrap its bands, each refusal named.
+
+    TWO REFUSALS, TWO SENTENCES. The fit and its bootstrap shared one try, so
+    a failed BOOTSTRAP was reported as a failed FIT -- "the declaration
+    difference NOT FITTED" printed two lines above the fitted declaration.
+    And since V5 reads UNKNOWN when b has no band, the bootstrap's failure
+    decides a verdict, which makes saying which one failed the difference
+    between a page a reader can follow and one that contradicts itself. The
+    ratio's own interval has said it this way since it was written:
+    "interval NOT FORMED: ..."."""
+    try:
+        fit = declaration_fit(samples, treads, native_switch,
+                              min_tread=min_tread)
+    except Unmeasurable as exc:
+        return DeclarationReading(
+            None, None, None, f"the declaration difference was not fitted ({exc})",
+            (f"  declaration difference NOT FITTED: {exc}",))
+    try:
+        b_band, s_band, _n = declaration_interval(
+            samples, treads, native_switch, draws, seed, min_tread=min_tread)
+    except Unmeasurable as exc:
+        return DeclarationReading(
+            fit, None, None, f"b's band was NOT FORMED ({exc})",
+            (f"  b's band NOT FORMED over {draws} draws: {exc} -- the "
+             "declaration IS fitted below; what is missing is the band V5 "
+             "scores its far edge on",))
+    return DeclarationReading(fit, b_band, s_band, "", ())
+
+
+def window_gates(samples, cfg, *, claim: WindowFit, decl: DeclarationReading,
+                 rows: list[dict], treads: list[int], repeats: int,
+                 roof_tflops: float, roof_source: str, dtype: str,
+                 bandwidth_gbps: float, bandwidth_source: str,
+                 stream_ms: float, switch_source: str) -> dict[str, Gate]:
+    """{tag: Gate} for the gates that read the claim's window, V0, V4, V5
+    and C2, built from `claim` (C1 needs the replicates as well, and its
+    caller builds it). ONE CONSTRUCTION for `analyse` and for `rescore`, so a
+    stored report re-scored over its own window reproduces its own gates."""
+    m = claim.min_tread
+    ladders = claim.ladders
+    gates = {
+        "V0": gate_v0_non_vacuity(samples, planned=len(treads) * len(ARMS) * repeats,
+                                  treads=treads, repeats=repeats, min_tread=m),
+        "V4": gate_v4_memory_bound(rows, roof_tflops=roof_tflops,
+                                   roof_source=roof_source, min_tread=m),
+    }
+    if ladders.get(NATIVE) and ladders.get(SHARED) and ladders.get(PRIVATE):
+        gates["V5"] = gate_v5_machinery(ladders[NATIVE], ladders[SHARED],
+                                        ladders[PRIVATE], decl.fit,
+                                        decl.per_tile_band, decl.step_band,
+                                        switch_source, decl.absence)
+    else:
+        gates["V5"] = Gate("V5", VALIDITY,
+                           "the declaration's own per-M-tile cost is bounded",
+                           UNKNOWN, "a ladder was not fitted",
+                           MACHINERY_WANT,
+                           "the ratio's distance from the study's own call is "
+                           "unbounded",
+                           [claim.unmeasurable] if claim.unmeasurable else [])
+    if ladders.get(PRIVATE):
+        gates["C2"] = gate_c2_achieved_rate(
+            ladders[PRIVATE],
+            weight_bytes=WEIGHTS.routed_expert_weight_bytes(cfg, dtype),
+            bandwidth_gbps=bandwidth_gbps, bandwidth_source=bandwidth_source,
+            stream_ms=stream_ms)
+    else:
+        gates["C2"] = Gate("C2", CLAIM,
+                           "the private arm's delivered weight-read rate is at "
+                           "or under the card's own ceiling",
+                           UNKNOWN, "no private ladder", "a relation",
+                           "the denominator of the ratio is not a weight stream",
+                           [])
+    return gates
+
+
+def fit_lines(claim: WindowFit, every: WindowFit, cfg, *, dtype: str,
+              bandwidth_gbps: float, bandwidth_source: str) -> list[str]:
+    """The page's FITS section: the claim's lines over its window, then the
+    same fits over every tread and tread 1's distance from the claim's line,
+    PRINTED BESIDE IT and gated by nothing (DESIGN DECISION 16)."""
+    m = claim.min_tread
+    lines = ["", f"FITS, ms = A + B n over treads {m} and deeper, THE CLAIM'S "
+             f"WINDOW (CLAIM_MIN_TREAD {CLAIM_MIN_TREAD}, DESIGN DECISION 16)"]
+    for arm in ARMS:
+        lad = claim.ladders.get(arm)
+        if lad is None:
+            lines.append(f"  {arm:8s} NOT FITTED: {claim.unmeasurable}")
+            continue
+        stream = WEIGHTS.weight_streams_per_tile(
+            lad.slope_ms, cfg, dtype, bandwidth_gbps,
+            bandwidth_source=bandwidth_source)
+        lines.append(
+            f"  {arm:8s} A={lad.intercept_ms:9.4f} ms  B={lad.slope_ms:9.6f} "
+            f"ms/M-tile  treads={lad.treads} ({lad.span})  mean rel err "
+            f"{lad.mean_rel_err:.3%}"
+            + (f"  across-repeat spread {lad.spread:.3%}" if lad.spread is not None
+               else "  across-repeat spread NOT DETERMINED")
+            + (f"  drifting cells excluded {lad.excluded}" if lad.excluded else ""))
+        lines.append(f"           w = {stream.render()}")
+    if claim.interval_refusal:
+        lines.append(f"  interval NOT FORMED: {claim.interval_refusal}")
+    lines.append("  PRINTED BESIDE IT, never gated: the same fit over EVERY "
+                 "tread, tread 1 included")
+    for arm in ARMS:
+        lad = every.ladders.get(arm)
+        if lad is None:
+            lines.append(f"  {arm:8s} NOT FITTED over every tread: "
+                         f"{every.unmeasurable}")
+            continue
+        lines.append(
+            f"  {arm:8s} A={lad.intercept_ms:9.4f} ms  B={lad.slope_ms:9.6f} "
+            f"ms/M-tile  treads={lad.treads} ({lad.span})  mean rel err "
+            f"{lad.mean_rel_err:.3%}")
+    if every.ratio is not None:
+        lines.append(
+            f"  ratio over every tread {every.ratio:.4f}"
+            + (f" [{every.interval[0]:.4f}, {every.interval[1]:.4f}]"
+               if every.formed else " (interval NOT FORMED: "
+                                    f"{every.interval_refusal or 'no draw'})"))
+    off = tread1_off_claim_line(claim, every)
+    if off:
+        lines.append(f"  tread 1 against the claim's lines through treads {m} "
+                     "and deeper, at n = 1: "
+                     + ", ".join(f"{arm} {got:.4f} ms against {line:.4f} on the "
+                                 f"line ({got - line:+.4f})"
+                                 for arm, (got, line) in off.items()))
+        lines.append("  Tread 1 off those lines is the one-tile call off the "
+                     "line the deeper treads lie on. The claim leaves it out "
+                     "by registration and not by fit, so it moves the "
+                     "every-tread readings above and never the claim.")
+    return lines
+
+
+def ladder_payload(ladders: dict) -> dict:
+    """report.json's block for one window's ladders."""
+    return {arm: {"points": [list(p) for p in lad.points],
+                  "intercept_ms": lad.intercept_ms,
+                  "slope_ms": lad.slope_ms,
+                  "mean_rel_err": lad.mean_rel_err,
+                  "across_repeat_spread": lad.spread,
+                  "excluded_drifted": lad.excluded,
+                  "min_tread": lad.min_tread}
+            for arm, lad in ladders.items()}
+
+
+def json_interval(interval) -> list:
+    """NaN IS NOT JSON. `json.dumps` writes a bare `NaN` token, which is
+    valid for Python's own loader and invalid for every strict parser that
+    reads these reports downstream. An interval that was not formed is
+    `null`, which is what "not formed" means."""
+    return [None if not math.isfinite(v) else v for v in interval]
+
+
 def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             alpha: float, dtype: str, b: int, bandwidth_gbps: float,
             bandwidth_source: str, ridge: float, ridge_source: str,
@@ -4942,8 +5623,12 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     timed row, and reading the duty off the rows there wrote 1.0 for a run
     asked, keyed and instrumented at 0.25. What the rows carry is
     `duty_timed`, null when nothing was timed. No default: a caller that
-    forgot it would record full duty again."""
-    planned = len(treads) * len(ARMS) * repeats
+    forgot it would record full duty again.
+
+    THE CLAIM IS READ OVER `CLAIM_MIN_TREAD` AND DEEPER (DESIGN DECISION 16),
+    and the same fits over every tread are printed beside it and stored under
+    their own keys; `window_fit` and `window_gates` are the construction,
+    which `rescore` shares."""
     if census is None:
         census = path_census(cfg, treads, block_m, {
             arm: declared_experts(arm, cfg.num_experts,
@@ -4969,47 +5654,17 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     if rows and not any(r["roof_at_cell_clock_tflops"] for r in rows):
         lines.append(f"  %own is not scored on any row: {rows[0]['roof_note']}")
 
-    ladders: dict[str, Ladder] = {}
-    unmeasurable = ""
-    try:
-        for arm in ARMS:
-            ladders[arm] = ladder_for(samples, arm)
-    except Unmeasurable as exc:
-        unmeasurable = str(exc)
-
-    lines += ["", "FITS, ms = A + B n over the treads above"]
-    for arm in ARMS:
-        lad = ladders.get(arm)
-        if lad is None:
-            lines.append(f"  {arm:8s} NOT FITTED: {unmeasurable}")
-            continue
-        stream = WEIGHTS.weight_streams_per_tile(
-            lad.slope_ms, cfg, dtype, bandwidth_gbps,
-            bandwidth_source=bandwidth_source)
-        lines.append(
-            f"  {arm:8s} A={lad.intercept_ms:9.4f} ms  B={lad.slope_ms:9.6f} "
-            f"ms/M-tile  treads={lad.treads}  mean rel err {lad.mean_rel_err:.3%}"
-            + (f"  across-repeat spread {lad.spread:.3%}" if lad.spread is not None
-               else "  across-repeat spread NOT DETERMINED")
-            + (f"  drifting cells excluded {lad.excluded}" if lad.excluded else ""))
-        lines.append(f"           w = {stream.render()}")
-
-    ratio = corrected = None
-    interval = (math.nan, math.nan)
-    got_draws = 0
-    if ladders.get(SHARED) and ladders.get(PRIVATE) and ladders[PRIVATE].slope_ms:
-        ratio = ladders[SHARED].slope_ms / ladders[PRIVATE].slope_ms
-        act_ms = (cfg.num_experts * block_m
-                  * SWEEP.activation_bytes_per_row(cfg)
-                  / (bandwidth_gbps * 1e9) * 1e3)
-        denom = ladders[PRIVATE].slope_ms - act_ms
-        if denom > 0:
-            corrected = (ladders[SHARED].slope_ms - act_ms) / denom
-        try:
-            lo, hi, got_draws = ratio_interval(samples, draws, seed)
-            interval = (lo, hi)
-        except Unmeasurable as exc:
-            lines.append(f"  interval NOT FORMED: {exc}")
+    claim = window_fit(samples, cfg, block_m=block_m,
+                       bandwidth_gbps=bandwidth_gbps, draws=draws, seed=seed,
+                       min_tread=CLAIM_MIN_TREAD)
+    every = window_fit(samples, cfg, block_m=block_m,
+                       bandwidth_gbps=bandwidth_gbps, draws=draws, seed=seed,
+                       min_tread=1)
+    ladders = claim.ladders
+    ratio, interval, corrected = claim.ratio, claim.interval, claim.corrected
+    lines += fit_lines(claim, every, cfg, dtype=dtype,
+                       bandwidth_gbps=bandwidth_gbps,
+                       bandwidth_source=bandwidth_source)
     clock_correction = None
     if ratio is not None and clock_elasticity is not None:
         # f_ref is cosmetic for the RATIO (it cancels) and named for the
@@ -5025,7 +5680,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         try:
             clock_correction = clock_corrected_ratio(
                 samples, clock_elasticity, f_ref=f_ref,
-                f_ref_source=f_ref_source, draws=draws, seed=seed)
+                f_ref_source=f_ref_source, draws=draws, seed=seed,
+                min_tread=CLAIM_MIN_TREAD)
         except Unmeasurable as exc:
             lines.append(f"  clock-corrected ratio NOT FORMED: {exc}")
 
@@ -5034,64 +5690,35 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     # WHERE NATIVE'S SWITCH IS TAKEN FROM: the probe when it resolved a step
     # there, else the cited hypothesis. Said on the page either way.
     native_switch, switch_source = native_switch_source(probe, census)
-    decl_fit = None
-    decl_bands: tuple = (None, None)
-    band_absence = ""
+    decl = DeclarationReading(None, None, None, "", ())
     if ladders.get(NATIVE) and ladders.get(SHARED):
-        # TWO REFUSALS, TWO SENTENCES. The fit and its bootstrap shared one
-        # try, so a failed BOOTSTRAP was reported as a failed FIT -- "the
-        # declaration difference NOT FITTED" printed two lines above the
-        # fitted declaration. And since V5 reads UNKNOWN when b has no band,
-        # the bootstrap's failure now decides a verdict, which makes saying
-        # which one failed the difference between a page a reader can follow
-        # and one that contradicts itself. The ratio's own interval has said
-        # it this way since it was written: "interval NOT FORMED: ...".
-        try:
-            decl_fit = declaration_fit(samples, treads, native_switch)
-        except Unmeasurable as exc:
-            band_absence = f"the declaration difference was not fitted ({exc})"
-            lines.append(f"  declaration difference NOT FITTED: {exc}")
-        else:
-            try:
-                b_band, s_band, _n = declaration_interval(
-                    samples, treads, native_switch, draws, seed)
-                decl_bands = (b_band, s_band)
-            except Unmeasurable as exc:
-                band_absence = f"b's band was NOT FORMED ({exc})"
-                lines.append(f"  b's band NOT FORMED over {draws} draws: {exc}"
-                             " -- the declaration IS fitted below; what is "
-                             "missing is the band V5 scores its far edge on")
-    if decl_fit is not None:
-        lines += ["", "DECLARATION, native - shared per tread (no traffic in it): "
-                  + ", ".join(f"n={n}:{d:+.4f}" for n, d in decl_fit.points)]
+        decl = declaration_reading(samples, treads, native_switch, draws=draws,
+                                   seed=seed, min_tread=CLAIM_MIN_TREAD)
+        lines += list(decl.notes)
+    if decl.fit is not None:
+        lines += ["", "DECLARATION, native - shared per tread (no traffic in it), "
+                  "over the claim's window: "
+                  + ", ".join(f"n={n}:{d:+.4f}" for n, d in decl.fit.points)]
 
+    windowed = window_gates(samples, cfg, claim=claim, decl=decl, rows=rows,
+                            treads=treads, repeats=repeats,
+                            roof_tflops=roof_tflops, roof_source=roof_source,
+                            dtype=dtype, bandwidth_gbps=bandwidth_gbps,
+                            bandwidth_source=bandwidth_source,
+                            stream_ms=stream_ms, switch_source=switch_source)
     gates: list[Gate] = [
-        gate_v0_non_vacuity(samples, planned=planned, treads=treads,
-                            repeats=repeats),
+        windowed["V0"],
         gate_v1_matched_geometry(samples, block_m=block_m, treads=treads),
         gate_v2_distinct_buffers(proof),
         gate_v3_memory(mem, weight_delta_bytes=weight_delta_bytes,
                        high_water_bytes=high_water_bytes),
-        gate_v4_memory_bound(rows, roof_tflops=roof_tflops,
-                             roof_source=roof_source),
+        windowed["V4"],
+        windowed["V5"],
+        gate_v6_identity(samples, identity_tread=treads[0]),
+        gate_v7_clock_parity(samples, treads=treads),
+        gate_v8_alignment(probe, treads=treads, census=census,
+                          weight_stream_ms=stream_ms),
     ]
-    if ladders.get(NATIVE) and ladders.get(SHARED) and ladders.get(PRIVATE):
-        gates.append(gate_v5_machinery(ladders[NATIVE], ladders[SHARED],
-                                       ladders[PRIVATE], decl_fit,
-                                       decl_bands[0], decl_bands[1],
-                                       switch_source, band_absence))
-    else:
-        gates.append(Gate("V5", VALIDITY,
-                          "the declaration's own per-M-tile cost is bounded",
-                          UNKNOWN, "a ladder was not fitted",
-                          MACHINERY_WANT,
-                          "the ratio's distance from the study's own call is "
-                          "unbounded",
-                          [unmeasurable] if unmeasurable else []))
-    gates.append(gate_v6_identity(samples, identity_tread=treads[0]))
-    gates.append(gate_v7_clock_parity(samples, treads=treads))
-    gates.append(gate_v8_alignment(probe, treads=treads, census=census,
-                                   weight_stream_ms=stream_ms))
     # THIS RUN IS THE FIRST READING when replicates were named. A run whose
     # interval was not formed contributes no reading; the replicates are still
     # printed together so the page carries their spread, and C1 stays UNKNOWN.
@@ -5100,11 +5727,12 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                                slopes={arm: lad.slope_ms
                                        for arm, lad in ladders.items()},
                                excluded={arm: lad.excluded
-                                         for arm, lad in ladders.items()})
-                    if ratio is not None and all(math.isfinite(v) for v in interval)
-                    else None)
+                                         for arm, lad in ladders.items()},
+                               claim_min_tread=CLAIM_MIN_TREAD)
+                    if claim.formed else None)
     cross = (cross_run(([this_reading] if this_reading else []) + list(replicates))
              if replicates else None)
+    claim_treads = treads_in_window(treads, min_tread=CLAIM_MIN_TREAD)
     if ratio is None or this_reading is None:
         gates.append(Gate("C1", CLAIM,
                           "the re-read fraction, measured against a no-reuse "
@@ -5113,31 +5741,22 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                           "no ratio was formed" if ratio is None
                           else f"{ratio:.4f}, no interval was formed",
                           "point and whole interval inside ALPHA_BAND "
-                          f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]})",
+                          f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}), the ratio over "
+                          f"treads {CLAIM_MIN_TREAD} and deeper",
                           "the refit alpha is not the traffic fraction it is "
                           "quoted as",
-                          ([unmeasurable] if unmeasurable else [])
+                          ([claim.unmeasurable] if claim.unmeasurable else [])
                           + (["this run enters no reading; the replicates "
                               "named are read together below and C1 stays "
                               "UNKNOWN for this run"] + cross.lines()
                              if cross is not None else [])))
     else:
-        gates.append(gate_c1_ratio(ratio, interval, got_draws,
+        gates.append(gate_c1_ratio(ratio, interval, claim.draws_got,
                                    corrected=corrected, clock=clock_correction,
-                                   cross=cross))
-    if ladders.get(PRIVATE):
-        gates.append(gate_c2_achieved_rate(
-            ladders[PRIVATE],
-            weight_bytes=WEIGHTS.routed_expert_weight_bytes(cfg, dtype),
-            bandwidth_gbps=bandwidth_gbps, bandwidth_source=bandwidth_source,
-            stream_ms=stream_ms))
-    else:
-        gates.append(Gate("C2", CLAIM,
-                          "the private arm's delivered weight-read rate is at "
-                          "or under the card's own ceiling",
-                          UNKNOWN, "no private ladder", "a relation",
-                          "the denominator of the ratio is not a weight stream",
-                          []))
+                                   cross=cross, min_tread=CLAIM_MIN_TREAD,
+                                   treads=ratio_treads(claim),
+                                   all_treads=(every.ratio, every.interval)))
+    gates.append(windowed["C2"])
 
     lines += ["", "=" * 72, "GATES", "=" * 72]
     for g in gates:
@@ -5146,6 +5765,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     rc = exit_codes.classify(g.scored() for g in gates)
     lines.append(f"the gates imply {exit_codes.describe(rc)}")
 
+    off = tread1_off_claim_line(claim, every)
+    achieved = duty_achieved_by_arm(samples)
     payload = {
         "experiment": "private_weight_reference",
         "synthetic": synthetic,
@@ -5163,6 +5784,15 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         # that timed nothing.
         "duty": duty,
         "duty_timed": duty_of(samples, default=None),
+        # A DESIGN KEY (DESIGN DECISION 15): whether each idle gap was sized
+        # from the burst it followed. Below full duty since 2026-09-23; false
+        # at full duty, which has no gap, and read false from every report
+        # before the key.
+        "duty_gap_from_burst": duty < 1.0,
+        # RECORDS, scored by nothing: each arm's median achieved duty over
+        # its usable cells, and V7's tolerance on it.
+        "duty_achieved_by_arm": achieved or None,
+        "duty_achieved_tolerance": DUTY_ACHIEVED_TOLERANCE,
         "alpha_refit": alpha,
         "alpha_band": list(ALPHA_BAND),
         "ridge": ridge,
@@ -5181,41 +5811,47 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "buffer_proof": {"parts": dict(proof.parts), "detail": dict(proof.detail),
                          "synthetic": proof.synthetic,
                          "verdict": proof.verdict},
-        "ladders": {arm: {"points": [list(p) for p in lad.points],
-                          "intercept_ms": lad.intercept_ms,
-                          "slope_ms": lad.slope_ms,
-                          "mean_rel_err": lad.mean_rel_err,
-                          "across_repeat_spread": lad.spread,
-                          "excluded_drifted": lad.excluded}
-                    for arm, lad in ladders.items()},
+        # THE CLAIM'S WINDOW (DESIGN DECISION 16), a design key: `ladders`,
+        # `ratio`, `ratio_interval`, `declaration_fit` and every gate that
+        # reads a slope are over treads `claim_min_tread` and deeper. A report
+        # without the key fitted every tread and reads as 1.
+        "claim_min_tread": CLAIM_MIN_TREAD,
+        "claim_treads": claim_treads,
+        "ladders": ladder_payload(ladders),
+        # PRINTED BESIDE THE CLAIM, never gated: the same fits and ratio over
+        # every tread, tread 1 included, and tread 1's distance from the
+        # claim's line per arm (measured minus line, ms).
+        "ladders_all_treads": ladder_payload(every.ladders),
+        "ratio_all_treads": every.ratio,
+        "ratio_all_treads_interval": json_interval(every.interval),
+        "ratio_all_treads_draws": every.draws_got,
+        "tread1_off_claim_line_ms": ({arm: got - line
+                                      for arm, (got, line) in off.items()}
+                                     or None),
         "treads_table": rows,
         "copies_declared": copies_declared,
         "path_census": census.as_dict(),
         "align_probe": probe.as_dict() if probe is not None else None,
-        "declaration_fit": ({"switch_tread": decl_fit.switch_tread,
+        "declaration_fit": ({"switch_tread": decl.fit.switch_tread,
                              "switch_source": switch_source,
-                             "step_ms": decl_fit.step_ms,
-                             "per_tile_ms": decl_fit.per_tile_ms,
-                             "intercept_ms": decl_fit.intercept_ms,
-                             "per_tile_band": (list(decl_bands[0])
-                                               if decl_bands[0] else None),
-                             "step_band": (list(decl_bands[1])
-                                           if decl_bands[1] else None),
-                             "points": [list(p) for p in decl_fit.points],
-                             "dof": decl_fit.dof}
-                            if decl_fit is not None else None),
+                             "step_ms": decl.fit.step_ms,
+                             "per_tile_ms": decl.fit.per_tile_ms,
+                             "intercept_ms": decl.fit.intercept_ms,
+                             "per_tile_band": (list(decl.per_tile_band)
+                                               if decl.per_tile_band else None),
+                             "step_band": (list(decl.step_band)
+                                           if decl.step_band else None),
+                             "points": [list(p) for p in decl.fit.points],
+                             "dof": decl.fit.dof,
+                             "min_tread": CLAIM_MIN_TREAD}
+                            if decl.fit is not None else None),
         "run_id": run_id or None,
         "seed": seed,
         "session_tag": session_tag or None,
         "ratio": ratio,
-        # NaN IS NOT JSON. `json.dumps` writes a bare `NaN` token, which is
-        # valid for Python's own loader and invalid for every strict parser
-        # that reads these reports downstream. An interval that was not formed
-        # is `null`, which is what "not formed" means.
-        "ratio_interval": [None if not math.isfinite(v) else v
-                           for v in interval],
+        "ratio_interval": json_interval(interval),
         "ratio_interval_pct": INTERVAL_PCT,
-        "ratio_draws": got_draws,
+        "ratio_draws": claim.draws_got,
         "ratio_corrected": corrected,
         # WHAT THIS RUN ALONE SAID, beside the joint verdict in gates[C1]: a
         # reader of the document can tell which rule produced the verdict.
@@ -5232,6 +5868,127 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     if prov is not None:
         payload = prov.stamp(payload)
     return Report(lines, gates, payload)
+
+
+#: The gates `rescore` rebuilds from a stored run's cells: every one that
+#: reads the claim's window (`window_gates`) and C1. Every other gate is
+#: re-rendered as the report stored it; none of them reads a slope.
+RESCORED_GATES: tuple[str, ...] = ("V0", "V4", "V5", "C1", "C2")
+
+
+@dataclass(frozen=True)
+class Rescore:
+    """A stored report re-read over this build's window from its cells.csv:
+    the replicate `reading` (with what the report stored kept beside it),
+    the window gates rebuilt (`gates`, C1 alone included), both window
+    fits, and the path of the cells it came from."""
+    reading: RunReading
+    gates: dict[str, Gate]
+    claim: WindowFit
+    every: WindowFit
+    cells: str
+    draws: int
+
+
+def rescore(payload: dict, path: Path | str | None, *, draws: int,
+            min_tread: int = CLAIM_MIN_TREAD) -> Rescore:
+    """Re-score a stored report from the cells.csv beside it, over the treads
+    `min_tread` and deeper: `window_fit` for the claim and for every tread,
+    `declaration_reading` at the switch the report fitted V5 at, and
+    `window_gates` for V0, V4, V5 and C2, with C1 alone off the new reading.
+    The bootstrap is drawn at the report's own seed with `draws` draws, so a
+    report re-scored over the window it was written with reproduces its own
+    ratio, interval and gates (the tests hold that).
+
+    REFUSED, never guessed: no cells.csv beside the report, a model this
+    build does not know, a planted report, or cells that form no ratio or no
+    interval over the window. Nothing is measured and nothing is written."""
+    if path is None:
+        raise PrivateWeightRefusal("a report with no path has no cells.csv "
+                                   "beside it to re-score from")
+    report_path = Path(path)
+    cells = report_path.parent / "cells.csv"
+    if not cells.is_file():
+        raise PrivateWeightRefusal(
+            f"{report_path}: no cells.csv beside it, so it cannot be re-scored "
+            f"over treads {min_tread} and deeper; its stored ratio was fitted "
+            f"over treads {design_value(payload, 'claim_min_tread')} and deeper")
+    if payload.get("synthetic"):
+        raise PrivateWeightRefusal(f"{report_path}: a planted (--self-test) "
+                                   "report; a re-score is of a measured run")
+    cfg = MODEL_CONFIGS.get(payload.get("model"))
+    if cfg is None:
+        raise PrivateWeightRefusal(f"{report_path}: model "
+                                   f"{payload.get('model')!r} is not one this "
+                                   "build knows")
+    samples = read_samples(cells)
+    block_m = int(payload["block_m"])
+    treads = [int(n) for n in payload["treads"]]
+    repeats = int(payload["repeats"])
+    dtype = payload["dtype"]
+    bandwidth = float(payload["bandwidth_gbps"])
+    seed = int(payload.get("seed") or 0)
+    stream_ms = (payload.get("weight_stream_ms")
+                 or WEIGHTS.weight_stream_ms(cfg, dtype, bandwidth))
+    claim = window_fit(samples, cfg, block_m=block_m, bandwidth_gbps=bandwidth,
+                       draws=draws, seed=seed, min_tread=min_tread)
+    every = window_fit(samples, cfg, block_m=block_m, bandwidth_gbps=bandwidth,
+                       draws=draws, seed=seed, min_tread=1)
+    if not claim.formed:
+        raise PrivateWeightRefusal(
+            f"{report_path}: re-scored over treads {min_tread} and deeper, its "
+            "cells form no ratio or no interval ("
+            + (claim.unmeasurable or claim.interval_refusal or "no ratio")
+            + ")")
+    stored_fit = payload.get("declaration_fit") or {}
+    if stored_fit:
+        switch = stored_fit.get("switch_tread")
+        switch_source = (f"{stored_fit.get('switch_source') or 'unrecorded'} "
+                         "(as the stored report fitted it)")
+    else:
+        census = path_census(cfg, treads, block_m, {
+            arm: declared_experts(arm, cfg.num_experts,
+                                  payload.get("copies_declared") or treads[-1])
+            for arm in ARMS})
+        switch = census.switch_tread(NATIVE)
+        switch_source = (f"the cited hypothesis (tread {switch})" if switch
+                         else "the cited hypothesis (no switch)")
+    decl = DeclarationReading(None, None, None, "", ())
+    if claim.ladders.get(NATIVE) and claim.ladders.get(SHARED):
+        decl = declaration_reading(samples, treads, switch, draws=draws,
+                                   seed=seed, min_tread=min_tread)
+    rows = tread_rows(samples, cfg, block_m=block_m,
+                      roof_tflops=float(payload["roof_tflops"]),
+                      reference_mhz=payload.get("reference_clock_mhz"),
+                      reference_grade=payload.get("reference_clock_grade") or "")
+    gates = window_gates(samples, cfg, claim=claim, decl=decl, rows=rows,
+                         treads=treads, repeats=repeats,
+                         roof_tflops=float(payload["roof_tflops"]),
+                         roof_source=payload.get("roof_source") or "",
+                         dtype=dtype, bandwidth_gbps=bandwidth,
+                         bandwidth_source=payload.get("bandwidth_source") or "",
+                         stream_ms=float(stream_ms), switch_source=switch_source)
+    gates["C1"] = gate_c1_ratio(
+        claim.ratio, claim.interval, claim.draws_got, corrected=claim.corrected,
+        min_tread=min_tread, treads=ratio_treads(claim),
+        all_treads=(every.ratio, every.interval))
+    stored = [Gate.from_dict(d) for d in payload.get("gates") or []]
+    merged = [gates.get(g.tag, g) for g in stored]
+    code = (exit_codes.classify(g.scored() for g in merged) if merged else None)
+    prov = payload.get("provenance") or {}
+    iv = payload.get("ratio_interval") or [None, None]
+    reading = RunReading(
+        claim.ratio, claim.interval, path=str(report_path),
+        run_id=payload.get("run_id"), seed=payload.get("seed"),
+        utc=prov.get("utc"), hostname=prov.get("hostname"), exit_code=code,
+        slopes={arm: lad.slope_ms for arm, lad in claim.ladders.items()},
+        excluded={arm: lad.excluded for arm, lad in claim.ladders.items()},
+        git_dirty=prov.get("git_dirty"), claim_min_tread=min_tread,
+        stored_ratio=payload.get("ratio"),
+        stored_interval=((float(iv[0]), float(iv[1]))
+                         if iv[0] is not None and iv[1] is not None else None),
+        stored_min_tread=int(design_value(payload, "claim_min_tread")))
+    return Rescore(reading, gates, claim, every, str(cells), draws)
 
 
 # --------------------------------------------------------------------------
@@ -6424,8 +7181,11 @@ def build_parser() -> argparse.ArgumentParser:
                          "full, the driver's instrument, and stays the "
                          "default so --replicate-of still reads session 4's "
                          "full-duty runs as this design. Below 1 each cell is "
-                         "bursts of ~40 ms of kernel time with idle gaps of "
-                         "burst x (1/duty - 1), lowering average board power. "
+                         "bursts of ~40 ms of kernel time, each followed by "
+                         "an idle gap sized from that burst's own measured "
+                         "kernel time so the burst and its gap span kernel "
+                         "time / duty and every arm achieves the duty asked "
+                         "for, lowering average board power. "
                          "The pod setting is 0.25: session 4's clock arm "
                          "(2026-09-21) read the clock flat at 1965 MHz there, "
                          "and still tracking board power at 0.5 (-1.09 "
@@ -6479,7 +7239,20 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--read", type=Path, default=None, metavar="REPORT",
                     help="score THIS stored report.json together with "
                          "--replicate-of, off GPU: nothing is measured, "
-                         "nothing is written")
+                         "nothing is written. Every report is read over the "
+                         "claim window it recorded (claim_min_tread, 1 on a "
+                         "report before the key), and two windows are "
+                         "refused, not pooled")
+    ap.add_argument("--rescore", action="store_true",
+                    help="with --read: RE-SCORE every named report from the "
+                         "cells.csv beside it over this build's claim window, "
+                         f"treads {CLAIM_MIN_TREAD} and deeper (DESIGN "
+                         "DECISION 16), at the report's own seed and --draws; "
+                         "V0, V4, V5, C1 and C2 are rebuilt from the cells, "
+                         "every other gate is re-rendered as stored, and the "
+                         "stored ratio is printed beside. --replicate-of is "
+                         "then optional. A report with no cells.csv beside it "
+                         "is refused")
     ap.add_argument("--session-tag", default="",
                     help="the driving session's name; in the run id, so a new "
                          "session measures fresh and a resumed one resumes")
@@ -6558,6 +7331,10 @@ def _main(argv=None) -> int:
         # BEFORE the partition check, the ridge and the card: a stored pair is
         # re-read on a laptop with none of them.
         return _read_mode(args)
+    if args.rescore:
+        print("REFUSED: --rescore re-scores STORED reports from their "
+              "cells.csv and measures nothing; give the report with --read")
+        return exit_codes.REFUSED
     cfg = MODEL_CONFIGS[args.model]
     b = dtype_bytes(args.dtype)
     block_m = args.block_m
@@ -6604,6 +7381,19 @@ def _main(argv=None) -> int:
               f"{len(treads) - STEP_FIT_COLUMNS} degrees of freedom, so no "
               "alignment step could be judged against its own error and V8 "
               f"could not fail. Run at least {STEP_FIT_COLUMNS + 1} treads.")
+        return exit_codes.REFUSED
+    # AND THE CLAIM'S OWN FLOOR, IN ITS WINDOW (DESIGN DECISION 16). The
+    # claim's slopes read treads CLAIM_MIN_TREAD and deeper, so the count
+    # MIN_TREADS guards is the count there. At CLAIM_MIN_TREAD 2 V8's floor
+    # above already implies it (four treads leave three in the window); it is
+    # here so a deeper registration cannot quote a two-point line.
+    window = treads_in_window(treads, min_tread=CLAIM_MIN_TREAD)
+    if len(window) < MIN_TREADS:
+        print(f"REFUSED: --treads {args.treads} leaves {len(window)} tread(s) "
+              f"in the claim's window (treads {CLAIM_MIN_TREAD} and deeper, "
+              f"DESIGN DECISION 16), and a slope may not be quoted below "
+              f"{MIN_TREADS}: two points make a line with no residual. Run at "
+              f"least {CLAIM_MIN_TREAD + MIN_TREADS - 1} treads.")
         return exit_codes.REFUSED
     # AND THE SAME FLOOR ON THE REPEATS, WHICH WAS NOT REFUSED AND IS NOW.
     # `--treads 2` cost nothing and said why; `--repeats 2` measured all 36
@@ -6707,7 +7497,9 @@ def _main(argv=None) -> int:
                     "block_m": block_m, "pinned": pinned,
                     "treads": list(treads), "repeats": args.repeats,
                     "copies_declared": copies_declared,
-                    "alpha_band": list(ALPHA_BAND), "duty": args.duty})
+                    "alpha_band": list(ALPHA_BAND), "duty": args.duty,
+                    "claim_min_tread": CLAIM_MIN_TREAD,
+                    "duty_gap_from_burst": args.duty < 1.0})
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
@@ -6966,13 +7758,22 @@ def _read_mode(args) -> int:
     the writer serialised), every stored gate is re-rendered as it was scored,
     and C1 alone is rebuilt through `gate_c1_ratio` with the CrossRun, so the
     joint rule has one home. The exit is `classify` over that set, which is
-    what the pair's page would have exited with."""
+    what the pair's page would have exited with.
+
+    OVER ONE WINDOW. Without --rescore every report is read over the claim
+    window it recorded (`claim_min_tread`, a design key), so reports of two
+    windows are refused, not pooled. With --rescore every report is
+    RE-SCORED from the cells.csv beside it over this build's
+    `CLAIM_MIN_TREAD` (`rescore`), the gates that read that window
+    (`RESCORED_GATES`) are rebuilt from the cells and the rest re-rendered as
+    stored, and --replicate-of is optional."""
     path = Path(args.read)
     if path.is_dir():
         path = path / "report.json"
-    if not args.replicate_of:
+    if not args.replicate_of and not args.rescore:
         print(f"REFUSED: --read {path} names one stored report and nothing to "
-              "read it against; give --replicate-of")
+              "read it against; give --replicate-of, or --rescore to re-score "
+              "it over this build's claim window")
         return exit_codes.REFUSED
     try:
         payload = json.loads(path.read_text())
@@ -6985,23 +7786,31 @@ def _read_mode(args) -> int:
     if payload.get("synthetic"):
         print(f"REFUSED: --read {path} is a planted (--self-test) report")
         return exit_codes.REFUSED
+    design = {k: design_value(payload, k) for k in DESIGN_KEYS}
+    page = None
     try:
-        this = run_reading(payload, path)
+        if args.rescore:
+            page = rescore(payload, path, draws=args.draws)
+            this = page.reading
+            design["claim_min_tread"] = CLAIM_MIN_TREAD
+        else:
+            this = run_reading(payload, path)
         replicates = load_replicates(
-            args.replicate_of, card_known=True, this=this,
-            design={k: payload.get(k, DESIGN_KEY_DEFAULTS.get(k))
-                    for k in DESIGN_KEYS})
+            args.replicate_of, card_known=True, this=this, design=design,
+            rescore_draws=args.draws if args.rescore else None)
+        cross = cross_run([this, *replicates])
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
-    cross = cross_run([this, *replicates])
     prov = payload.get("provenance") or {}
     print(f"READ MODE: nothing measured, nothing written; gates re-rendered "
           f"from {path}")
     print(f"experiment  private_weight_reference / {this.name}")
     for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
-                "repeats", "copies_declared", "duty"):
-        print(f"{key:<12}{payload.get(key, DESIGN_KEY_DEFAULTS.get(key))}")
+                "repeats", "copies_declared", "duty", "duty_gap_from_burst",
+                "claim_min_tread"):
+        # One space at least: a key of twelve or more ran into its value.
+        print(f"{key:<11} {design_value(payload, key)}")
     # What the rows were timed at, beside the requested duty above. Absent
     # from a report written before the key, whose `duty` was read off the
     # rows; null when nothing was timed.
@@ -7013,16 +7822,65 @@ def _read_mode(args) -> int:
     print(f"measured    {prov.get('utc') or 'utc unrecorded'} on "
           f"{prov.get('hostname') or 'an unrecorded host'}, tree "
           f"{prov.get('git_sha') or 'unrecorded'}")
+    if page is not None:
+        window = ratio_treads(page.claim)
+    else:
+        # The treads the stored ratio's two lines were fitted through, off
+        # its own ladders; the planned window when a report carries none.
+        ladders = payload.get("ladders") or {}
+        got = [{int(p[0]) for p in (ladders.get(arm) or {}).get("points") or []}
+               for arm in RATIO_ARMS]
+        window = (sorted(got[0] & got[1]) if all(got) else treads_in_window(
+            [int(n) for n in payload.get("treads") or []],
+            min_tread=this.claim_min_tread))
+    if page is not None:
+        print(f"RE-SCORED   from {page.cells} over treads {span_text(window)} "
+              f"(this build's CLAIM_MIN_TREAD {CLAIM_MIN_TREAD}, DESIGN "
+              f"DECISION 16), {page.draws} bootstrap draws at the report's "
+              f"seed; the report stored "
+              + (f"{this.stored_ratio:.4f}" if this.stored_ratio is not None
+                 else "no ratio")
+              + (f" [{this.stored_interval[0]:.4f}, {this.stored_interval[1]:.4f}]"
+                 if this.stored_interval else "")
+              + f" over treads {this.stored_min_tread} and deeper. "
+              + ", ".join(RESCORED_GATES)
+              + " are rebuilt from the cells; every other gate is re-rendered "
+              "as it was scored")
+        print(f"slopes      over treads {span_text(window)}: "
+              + ", ".join(f"{arm} {lad.slope_ms:.4f}"
+                          for arm, lad in page.claim.ladders.items())
+              + "; over every tread: "
+              + ", ".join(f"{arm} {lad.slope_ms:.4f}"
+                          for arm, lad in page.every.ladders.items())
+              + " (ms per M-tile)")
     print("\n".join(cross.lines()))
     print()
     gates = []
     for d in payload.get("gates") or []:
         g = Gate.from_dict(d)
+        if page is not None and g.tag in page.gates:
+            g = page.gates[g.tag]
         if g.tag == "C1":
-            g = gate_c1_ratio(this.ratio, this.interval,
-                              payload.get("ratio_draws") or 0,
-                              corrected=payload.get("ratio_corrected"),
-                              clock=None, cross=cross)
+            if page is not None:
+                g = gate_c1_ratio(this.ratio, this.interval,
+                                  page.claim.draws_got,
+                                  corrected=page.claim.corrected, clock=None,
+                                  cross=cross, min_tread=this.claim_min_tread,
+                                  treads=window,
+                                  all_treads=(page.every.ratio,
+                                              page.every.interval))
+            else:
+                every = payload.get("ratio_all_treads")
+                g = gate_c1_ratio(this.ratio, this.interval,
+                                  payload.get("ratio_draws") or 0,
+                                  corrected=payload.get("ratio_corrected"),
+                                  clock=None, cross=cross,
+                                  min_tread=this.claim_min_tread, treads=window,
+                                  all_treads=(
+                                      (every, tuple(payload.get(
+                                          "ratio_all_treads_interval")
+                                          or (None, None)))
+                                      if every is not None else None))
         gates.append(g)
         print("\n".join(g.render()))
         print()
@@ -7043,6 +7901,7 @@ def _probe_check_mode(args) -> int:
     no run id, no results directory, no report."""
     other = [flag for flag, given in (
         ("--read", args.read is not None),
+        ("--rescore", args.rescore),
         ("--replicate-of", bool(args.replicate_of)),
         ("--self-test", args.self_test is not None),
         ("--dry-run", args.dry_run)) if given]
@@ -7123,7 +7982,8 @@ def _iters_line(samples) -> str:
         "bursts x (calls per burst - 1) per trial, the first call of every "
         f"burst discarded, the burst count from --cell-budget-ms / "
         f"{DUTY_BURST_MS:.0f} ms and the calls per burst from a "
-        f"{DUTY_SIZING_MS:.0f} ms full-duty reading of the same call.")
+        f"{DUTY_SIZING_MS:.0f} ms full-duty reading of the same call; the idle "
+        "gap after each burst from that burst's own measured kernel time.")
 
 
 def main(argv=None) -> int:

@@ -311,7 +311,15 @@ interval), V6 (shared and private agree at n=1, where they are the same
 call), then C1, which names the world the ratio landed in: ISSUE-AND-LATENCY,
 below/at/above the refit band, or NO-REUSE. C1 UNKNOWN means the point and the
 interval disagree on a world and the claim is unresolved at this precision,
-not that the arm broke. The arm REFUSES at plan time if the under-load clock
+not that the arm broke. Since 2026-09-23 every slope C1, C2 and V5 read, and
+every tread V0 counts and V4 checks, is over treads 2 and deeper (the arm's
+DESIGN DECISION 16, the window R1's claim reads): on session 5's pages the
+one-tile call sat 0.157-0.164 ms above the line through treads 2-6 at G >= 4,
+and fitting it moved the ratio by 5-28x the seed-to-seed sd. The same fits
+over every tread, and tread 1's distance from the claim's line, are printed
+beside the claim and stored in report.json; nothing gates them. V6 still
+reads tread 1, where the two arms are one call, and V7 still scores the
+clocks at every tread. The arm REFUSES at plan time if the under-load clock
 sampler cannot read the card (V7 would be UNKNOWN throughout), and it writes a
 `DEVICE` file with the GPU UUID under its results directory so that a resume
 on another pod of the same card type is refused rather than merged.
@@ -352,7 +360,12 @@ that way, the private arm's clock 2-18% below the shared arm's (2% on
 mixtral-8x7b at G=1 in both of its runs, 12% on qwen2-57b-a14b at G=1, 18% on
 mixtral-8x7b at G=16). `--duty D` times each cell as bursts of about 40 ms of
 kernel time separated by idle gaps, which takes board power off the cap
-without changing a byte the kernel moves. WHY 0.25 AND NOT 0.5 is session 4's
+without changing a byte the kernel moves. Since 2026-09-23 each gap is sized
+from the burst it follows, so every arm achieves the requested duty: session
+5 sized it from a 20 ms full-duty reading of the call, the in-burst call ran
+k times faster than that reading, and the arms of one run achieved duties
+1/(1 + 3k) apart, 2.5-6.9% of 0.25. V7 prints each arm's achieved duty
+beside its clocks, a record, and every row records its `gap_basis`. WHY 0.25 AND NOT 0.5 is session 4's
 clock arm, the same native kernel under the same `time_duty` R3 imports: at
 duty 0.5 the clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz,
 13 of the 78 cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's
@@ -404,6 +417,20 @@ A pair already on disk is re-read on the laptop with
 ```
 
 and that output, not a hand-computed difference, is the figure to quote.
+A report written before 2026-09-23 fitted every tread and records no
+`claim_min_tread`, which then reads as 1; the window is a design key, so
+pairing such a report with a later one is refused rather than pooled.
+`--rescore` re-scores every report it names from the `cells.csv` beside it
+over treads 2 and deeper, prints each stored reading beside its new one, and
+needs no replicate:
+
+```
+.venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --rescore --replicate-of RUN0/report.json
+```
+
+A pair across the gap sizing (a duty run before 2026-09-23 and one after) is
+refused and cannot be re-scored: `duty_gap_from_burst` is a design key, and
+the cells were measured under two instruments.
 
 ---
 

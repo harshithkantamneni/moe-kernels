@@ -127,6 +127,26 @@ INSTRUMENT = (
     "sustained duty cycle, and the SM clock, board power and memory clock read "
     "through NVML with the burst still in flight; NOT timing.TIMING_BASIS")
 
+#: HOW `time_duty` SIZES THE IDLE GAP AFTER A BURST, one of two, named by the
+#: caller. GAP_FROM_SIZING, this arm's own and the default: one gap for the
+#: cell, `calls_per_burst x per_call_ms x (1/duty - 1)`, with `per_call_ms`
+#: the caller's reading of the call before the cell. The gap is then only as
+#: right as that reading: where the call runs k times faster inside a burst
+#: than it did there, the achieved duty is 1 / (1 + k (1/duty - 1)), and this
+#: arm's regressor is the measured clock, never the duty, so the achieved
+#: duty is a record here (`duty_seen`) and not a quantity the fit needs.
+#: GAP_FROM_BURST, which private_weight_reference asks for (its DESIGN
+#: DECISION 15, 2026-09-23): after each burst, warm-up bursts included, the
+#: host sleeps until that burst's wall clock, from its first launch to the
+#: sleep, reaches the burst's own measured kernel time over `duty`, so the
+#: achieved duty (`duty_achieved`, measured the same way) is `duty` up to the
+#: sleep's overshoot, whatever the call costs. That arm compares two ARMS at
+#: one duty, and session 5 found its sizing read left them at achieved duties
+#: 2.5-6.9% of the requested one apart.
+GAP_FROM_SIZING = "sizing"
+GAP_FROM_BURST = "burst"
+GAP_BASES = (GAP_FROM_SIZING, GAP_FROM_BURST)
+
 #: The card label a run that measures NOTHING carries. `provenance.run_id`
 #: refuses an id without a card, and --dry-run and --self-test have none.
 NO_CARD = "no-card-nothing-measured"
@@ -1726,6 +1746,8 @@ class DutyTiming:
     trials: int
     calls_per_burst: int
     burst_ms: float
+    #: The idle gap after a burst, ms: under GAP_FROM_SIZING the one gap the
+    #: cell used, under GAP_FROM_BURST the median of the per-burst gaps.
     gap_ms: float
     duty_requested: float
     #: Measured GPU-busy fraction: the sum of the event intervals over the wall
@@ -1759,6 +1781,8 @@ class DutyTiming:
     host_backlog_iters: float | None
     clock_note: str
     instrument: str = INSTRUMENT
+    #: How the gaps were sized: GAP_FROM_SIZING or GAP_FROM_BURST.
+    gap_basis: str = GAP_FROM_SIZING
 
 
 def _quarter_medians(intervals: list[float]) -> tuple[float | None, float | None]:
@@ -1770,8 +1794,22 @@ def _quarter_medians(intervals: list[float]) -> tuple[float | None, float | None
     return statistics.median(intervals[:q]), statistics.median(intervals[-q:])
 
 
+def _gap_after_burst(basis: str, *, duty: float, fixed_gap_s: float,
+                     busy_ms: float, burst_wall_s: float) -> float:
+    """The idle gap, seconds, after ONE burst, under `basis` (GAP_BASES):
+    the cell's fixed gap under GAP_FROM_SIZING; under GAP_FROM_BURST what
+    brings the burst's wall clock `burst_wall_s`, its first launch to now,
+    up to its own measured kernel time `busy_ms` over `duty`, never below
+    zero. THE ONE PLACE a gap is sized, for the warm-up and the trials both."""
+    if basis == GAP_FROM_BURST:
+        return max(0.0, busy_ms / 1000.0 / max(duty, 1e-6) - burst_wall_s)
+    return fixed_gap_s
+
+
 def _warm_at_duty(fn, *, warm_ms: float, calls: int, gap_s: float, events,
-                  flush, clock_read, sleep) -> tuple[float, int, list[float]]:
+                  flush, clock_read, sleep, duty: float = 1.0,
+                  gap_basis: str = GAP_FROM_SIZING
+                  ) -> tuple[float, int, list[float]]:
     """Deliver `warm_ms` of GPU load AT THE STATE'S OWN CADENCE, then settle.
 
     `timing.warm_until` is the right function for a back-to-back loop and the
@@ -1781,6 +1819,9 @@ def _warm_at_duty(fn, *, warm_ms: float, calls: int, gap_s: float, events,
     kept exactly -- deliver the load, then wait for two consecutive under-load
     reads to agree within one `CLOCK_STEP_MHZ`, capped at
     `SETTLE_CAP_MULTIPLE` times the warm budget -- and only the cadence changes.
+    THE CADENCE IS THE TRIALS' OWN, gap sizing included: each warm-up burst's
+    gap comes from `_gap_after_burst` under the trials' `gap_basis`, so a
+    burst-sized cell is not warmed at the sizing read's duty.
     """
     pairs = events(calls)
     delivered = 0.0
@@ -1789,6 +1830,7 @@ def _warm_at_duty(fn, *, warm_ms: float, calls: int, gap_s: float, events,
     cap = warm_ms * T.SETTLE_CAP_MULTIPLE
     settled = False
     while delivered < warm_ms or (not settled and delivered < cap):
+        t0 = time.perf_counter()
         for i in range(calls):
             if flush is not None:
                 flush()
@@ -1807,8 +1849,11 @@ def _warm_at_duty(fn, *, warm_ms: float, calls: int, gap_s: float, events,
                 settled = True
         elif delivered >= warm_ms:
             settled = True
-        if gap_s > 0:
-            sleep(gap_s)
+        gap = _gap_after_burst(gap_basis, duty=duty, fixed_gap_s=gap_s,
+                               busy_ms=sum(got),
+                               burst_wall_s=time.perf_counter() - t0)
+        if gap > 0:
+            sleep(gap)
     return delivered, made, reads
 
 
@@ -1816,17 +1861,21 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
               trials: int, warm_ms: float, l2_flush: bool,
               per_call_ms: float, reference_clock_mhz: float | None,
               clock_read=None, mem_read=None, events=None, flusher=None,
-              sleep=time.sleep) -> DutyTiming:
+              sleep=time.sleep, gap_basis: str = GAP_FROM_SIZING) -> DutyTiming:
     """Time `fn` at a sustained duty cycle, sampling the clock in flight.
 
     The loop, per trial: `bursts` bursts; per burst, `calls_per_burst` calls
     enqueued back to back, each preceded by the L2 flush and bracketed by its own
     pre-primed event pair; then ONE NVML read while the burst is still queued;
-    then one synchronise; then a host-side sleep of the gap. The FIRST call of
-    every burst is discarded from the samples: it launched into a queue the
-    previous gap had drained, so its interval carries launch latency the others
-    do not, and that latency would otherwise enter the elasticity as a constant
-    offset that does not cancel in a log slope.
+    then one synchronise; then a host-side sleep of the gap, sized under
+    `gap_basis` (GAP_BASES): from `per_call_ms` once for the cell
+    (GAP_FROM_SIZING, this arm's default and every state it runs), or from
+    each burst's own measured kernel time (GAP_FROM_BURST, which
+    private_weight_reference asks for so its arms achieve one duty). The
+    FIRST call of every burst is discarded from the samples: it launched into
+    a queue the previous gap had drained, so its interval carries launch
+    latency the others do not, and that latency would otherwise enter the
+    elasticity as a constant offset that does not cancel in a log slope.
 
     THE GAP IS THE INDEPENDENT VARIABLE AND IT IS OUTSIDE EVERY INTERVAL. It sets
     sustained board power, sustained board power sets the settled clock under the
@@ -1849,6 +1898,10 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
             f"trials={trials} bursts={bursts} calls_per_burst={calls_per_burst}: "
             "a burst needs at least two calls (one is discarded as the "
             "drained-queue lead) and a cell needs at least one of each")
+    if gap_basis not in GAP_BASES:
+        raise T.TimingRefused(
+            f"gap_basis={gap_basis!r} is not one of {GAP_BASES}: a gap sized by "
+            "a rule this timer does not know would set a duty nobody asked for")
     import torch
 
     on_gpu = torch.cuda.is_available()
@@ -1870,13 +1923,16 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
     flush = flusher.flush if l2_flush else None
     flush_mb = int(flusher.megabytes) if l2_flush else 0
 
+    # GAP_FROM_SIZING's one gap for the cell. Under GAP_FROM_BURST it sizes
+    # nothing: `_gap_after_burst` takes each burst's own.
     burst_gpu_ms = calls_per_burst * max(per_call_ms, 1e-4)
     gap_ms = burst_gpu_ms * (1.0 / max(duty, 1e-6) - 1.0)
     gap_s = max(0.0, gap_ms / 1000.0)
 
     delivered, warm_calls, _reads = _warm_at_duty(
         fn, warm_ms=warm_ms, calls=calls_per_burst, gap_s=gap_s, events=events,
-        flush=flush, clock_read=clock_read, sleep=sleep)
+        flush=flush, clock_read=clock_read, sleep=sleep, duty=duty,
+        gap_basis=gap_basis)
 
     pairs = events(calls_per_burst)
     samples: list[float] = []
@@ -1890,6 +1946,7 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
     leads = 0
     busy_ms = 0.0
     wall_s = 0.0
+    gaps_s: list[float] = []
     for _trial in range(trials):
         t_start = time.perf_counter()
         for _burst in range(bursts):
@@ -1909,7 +1966,8 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
             pairs.synchronize()
             t2 = time.perf_counter()
             got = pairs.elapsed(calls_per_burst)
-            busy_ms += sum(got)
+            burst_busy_ms = sum(got)
+            busy_ms += burst_busy_ms
             leads += 1
             kept = got[1:]
             samples.extend(kept)
@@ -1923,8 +1981,15 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
                 clocks.append(float(state.sm_clock_mhz))
             if getattr(state, "power_w", 0.0) > 0:
                 powers.append(float(state.power_w))
-            if gap_s > 0:
-                sleep(gap_s)
+            # Sized LAST, from the burst's wall clock up to this line, so the
+            # host's own work after the synchronise is counted as the burst's
+            # and not added to the gap on top of it.
+            gap = _gap_after_burst(gap_basis, duty=duty, fixed_gap_s=gap_s,
+                                   busy_ms=burst_busy_ms,
+                                   burst_wall_s=time.perf_counter() - t0)
+            gaps_s.append(gap)
+            if gap > 0:
+                sleep(gap)
         wall_s += time.perf_counter() - t_start
 
     notes: list[str] = []
@@ -1970,7 +2035,9 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
         ms_p50=p50, ms_p90=p90, ms_min=lo, ms_std=std, samples=len(samples),
         dropped_leads=leads, bursts=bursts * trials, trials=trials,
         calls_per_burst=calls_per_burst,
-        burst_ms=busy_ms / leads if leads else 0.0, gap_ms=gap_ms,
+        burst_ms=busy_ms / leads if leads else 0.0,
+        gap_ms=(gap_ms if gap_basis == GAP_FROM_SIZING or not gaps_s
+                else 1000.0 * statistics.median(gaps_s)),
         duty_requested=duty,
         duty_achieved=(busy_ms / 1000.0 / wall_s) if wall_s > 0 else 0.0,
         head_ms=head_ms, tail_ms=tail_ms, within_burst_ok=within_ok,
@@ -1984,7 +2051,8 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
         power_w=float(statistics.median(powers)) if powers else None,
         mem_clock_mhz=float(statistics.median(mems)) if mems else None,
         host_bound=host_bound, host_enqueue_ms=host_ms,
-        host_backlog_iters=backlog, clock_note="; ".join(notes))
+        host_backlog_iters=backlog, clock_note="; ".join(notes),
+        gap_basis=gap_basis)
 
 
 class _MemClockReader:
