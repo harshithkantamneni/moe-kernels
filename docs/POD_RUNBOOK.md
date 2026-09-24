@@ -670,6 +670,12 @@ bash scripts/pod_session.sh --dry-run          # every step, printed not run
 # the venv WITHOUT vLLM: `no_gpu` tests skip there (the -ra tail counts them),
 # the gaps-session tests hide the card from every child they spawn, and a
 # `--run`/bare invocation in a test is planted, never inherited from the box.
+# Tests about committed artefacts read git's view (tests/_committed.py): the
+# arms git TRACKS and the rulers git HOLDS, so calibrate's rewrite of the
+# tracked ruler and a stray directory an earlier publish left under
+# results/published fail nothing. Session 5's suite failed on the stray; the
+# ruler tests sit in the half it never reached, and fail with its ruler
+# planted into a laptop checkout of 33d2833.
 # Never run the suite from the vllm venv: an unplanted --run would MEASURE.
 bash scripts/run_all.sh --dry-run --profile crossing-uniform
 .venv/bin/python scripts/alias_ablation.py --synthetic refit   # step 2b, no GPU
@@ -727,7 +733,7 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P4 | `override_config` binds and releases, on a shape vLLM has never seen | steps 2, 3 and 4 are all `override_config` experiments. If the hook does not bind they sweep nothing while printing a full table. deepseek-v3 (`E=256,N=2048`) is the sharpest probe available because vLLM v0.27.1 ships no tuned file for it on any card or dtype, so a bind failure cannot hide behind a file that happens to agree. **FATAL.** |
 | P5 | an isolated `TRITON_CACHE_DIR` really produces PTX | with the shared `$WORKSPACE/triton-cache` inherited, every fused_moe specialisation is already built, nothing recompiles, no `.ptx` is written, and the dump script exits saying the kernel never compiled. This is very likely why the A100 was never successfully dumped. **FATAL.** |
 | P6 | 110 GB on the volume, 10 GB on the container | the 93 GB download, and the several GB of temp space wheel extraction needs. |
-| P7 | `entitled_ridge` still refuses 5 of the 14 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. The count was "2 of the 10" until 2026-09-03; the three ladder arms published since carry no `measured.yaml` and are refused by construction, and `tests/test_docs.py` checks the number. |
+| P7 | `entitled_ridge` still refuses 5 of the 14 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. The count was "2 of the 10" until 2026-09-03; the three ladder arms published since carry no `measured.yaml` and are refused by construction, and `tests/test_docs.py` checks the number. The arms are the directories git TRACKS: an untracked one left on the pod's volume by an earlier publish is not counted. Session 5's checkout carried one (`2026-09-15-nvidia_h200-session3`, which that suite's census tests counted as an arm); P7 did not run there, and with it planted on a laptop the old directory listing reads it as a new refusal and FAILs. |
 | P8 | the weights step 7 pulls are reachable | Asks whether the repos in `moe/spec.py` for `mixtral-8x7b` and `deepseek-v2-lite` resolve, using whatever credentials the box has. It used to check for a TOKEN and justify it with "Mixtral is gated" -- Mistral ungated that repo (apache-2.0, `gated=False`, `config.json` downloads anonymously), so the gate demanded a credential nothing needed and gave a reason that had stopped being true. A token still helps: HF rate-limits anonymous transfers and step 0 pulls 93.4 GB, so its absence is reported as an advisory rather than a failure. |
 | P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. When this row was written zero `.png` files were tracked under `results/published/`; the rule is anchored now and 75 `.png` files are tracked (`git ls-files 'results/published/**/*.png'`, checked by `tests/test_docs.py`). **FATAL.** |
 | P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |

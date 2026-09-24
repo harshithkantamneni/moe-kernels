@@ -884,10 +884,14 @@ def test_a_second_card_restores_none_of_the_first_cards_rows(tmp_path):
 
 
 def test_a_dry_run_on_the_second_card_reports_zero_restorable_rows_and_says_why(
-        tmp_path, capsys):
+        tmp_path, capsys, no_cuda):
     """The plan says what a resume WOULD do before anything is measured. Pinning
     `--run-id` is what makes this reachable even with the card in the id: an
-    operator resuming a killed run supplies the first card's id by hand."""
+    operator resuming a killed run supplies the first card's id by hand.
+
+    The SECOND card is planted as no card (`no_cuda`): on an H200 the rows
+    planted as the H200's are this card's own and ARE restorable, so the test
+    asserted a laptop fact on a pod."""
     planted_card_a(tmp_path / "pinned")
     SE.main(["--dry-run", "--models", "mixtral-8x7b", "--tokens", "256,512",
              "--out-dir", str(tmp_path), "--run-id", "pinned"])
@@ -1970,7 +1974,9 @@ def test_a_card_s_own_calibration_is_what_a_run_on_that_card_prices_against(
     assert "HYPOTHESIS" not in c.ridge_source
 
 
-def test_the_dry_run_provenance_carries_the_hypothesis_label(tmp_path):
+def test_the_dry_run_provenance_carries_the_hypothesis_label(tmp_path, no_cuda):
+    # The no-card world is PLANTED: on a calibrated card the self-test's ridge
+    # is that card's own, labelled "measured on this device", not HYPOTHESIS.
     import json
 
     # THE FULL PUBLISHED GRID, not one model. A one-model grid gives the

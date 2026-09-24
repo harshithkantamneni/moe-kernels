@@ -881,6 +881,17 @@ PYEOF
   # disagree, or no ceiling for the dtype the rows were swept in) is the guard
   # doing its job. Folding them into one number is how "5" looked like a
   # regression when four of the five were the first kind.
+  #
+  # AND THE ARMS ARE THE ONES GIT TRACKS (2026-09-23). It listed the directory.
+  # Session 5's checkout carried an untracked session-3 directory
+  # (2026-09-15-nvidia_h200-session3), which that suite's census tests counted
+  # as an arm; listed, it reads as a newly refusing arm missing from the census
+  # and P7 prints FAIL on a guard that has not changed. P7 did not run on
+  # session 5 (the alpha_g chain never calls this script): the FAIL is a laptop
+  # reproduction with that directory planted, where
+  # test_p7_passes_against_the_repositorys_own_census fails on 33d2833.
+  # tests/test_calibration_provenance.py reads the same view, through
+  # tests/_committed.py.
   local refusals
   refusals="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
 import re
@@ -889,8 +900,19 @@ sys.path.insert(0, ".")
 from pathlib import Path
 from moe.bench.published import entitled_ridge
 
+import subprocess
+
 root = Path("results/published")
-arms = sorted(p for p in root.iterdir() if p.is_dir())
+# THE ARMS GIT TRACKS, not every directory on disk. A pod checkout can carry
+# an untracked published directory (session 5 carried the session 3 one, left
+# by its publish without its KIND file), and counting it makes P7 report drift
+# no arm caused (reproduced on a laptop with it planted; P7 did not run on
+# session 5). The census this is compared with describes tracked arms.
+listed = subprocess.run(["git", "ls-files", "-z", "--", str(root)],
+                        capture_output=True, check=True).stdout.decode()
+names = {Path(p).parts[2] for p in listed.split(chr(0))
+         if p and len(Path(p).parts) > 3}
+arms = sorted(root / n for n in names)
 
 live_norows, live_prov = set(), set()
 for arm in arms:
@@ -1131,9 +1153,16 @@ PYEOF
     ! "$PY_BASE" -c "import vllm" 2>/dev/null; verdict P11c "suite interpreter carries no vLLM" $? \
       "$PY_BASE" "vllm not importable" soft \
       "Run the suite from a venv without vLLM (the tests plant every refusal door; the arms themselves exercise the vLLM paths)."
+    # The census, README-count, superseded-marker and thermal-floor tests read
+    # the arms git TRACKS (tests/_committed.py), so an untracked directory here
+    # no longer fails them; every other test that globs results/published still
+    # reads what is on disk, and a MODIFIED tracked file fails the census. The
+    # warning is written after the log is emptied and pytest APPENDS, because
+    # `pytest > log` used to truncate the very file the warning was teed into.
+    : > "$tlog"
     [[ -z "$(git -C "$REPO" status --porcelain results/published)" ]] \
-      || echo "P12: results/published is not clean; the arm-count and provenance tests read the directory, not git" | tee -a "$tlog"
-    "$PY_BASE" -m pytest tests/ -q > "$tlog" 2>&1
+      || echo "P12: results/published is not clean; the census and arm-count tests read git's index and skip untracked arms, every other test that globs it reads the disk" | tee -a "$tlog"
+    "$PY_BASE" -m pytest tests/ -q >> "$tlog" 2>&1
     local trc=$? tline
     tline="$(tail -3 "$tlog" | grep -E '[0-9]+ (passed|failed)' | tail -1)"
     [[ "$trc" == "0" ]]; verdict P12 "test suite" $? \

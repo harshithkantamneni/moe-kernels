@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import csv
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,9 @@ from moe.bench.published import (
 )
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "tests"))
+from _committed import tracked_children  # noqa: E402
+
 PUBLISHED = REPO / "results" / "published"
 WHOLE_LAYER = PUBLISHED / "2026-08-28-nvidia_h200-h200-whole-layer"
 V2LITE = PUBLISHED / "2026-08-28-nvidia_h200-h200-v2lite"
@@ -356,6 +360,12 @@ def test_every_published_arm_has_a_declared_verdict():
     Two arms can prove their calibration is their own. Seven differ on the
     commit or the date while their ceilings match exactly, which means the rows
     WERE stamped from the file beside them. One cannot: whole-layer.
+
+    THE ARMS ARE THE DIRECTORIES GIT TRACKS (`_committed.tracked_children`),
+    not every directory on disk. Session 4's and session 5's pod checkouts each
+    carried an UNTRACKED `2026-09-15-nvidia_h200-session3` without its `KIND`
+    file, and this test failed on an `unknown` nobody had published. A new arm
+    is declared here when it is `git add`ed, which is when it becomes one.
     """
     expected = {
         "2026-08-22-first-smoke": DIFFERENT_SESSION,
@@ -398,7 +408,7 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-09-10-nvidia_h200-gaps-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
-           for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}
+           for p in tracked_children(PUBLISHED)}
     assert got == expected
 
 
@@ -415,10 +425,13 @@ def test_only_whole_layer_is_blocked_among_arms_that_carry_rows():
     Collapsing the two would let a real provenance failure hide among a growing
     pile of report directories, which is precisely the shape of the defect this
     whole module exists to catch.
+
+    Over the arms git tracks, as the census above is: an untracked directory
+    on a pod's checkout is not a published arm and blocks nothing.
     """
     arms, reports = [], []
-    for p in sorted(PUBLISHED.iterdir()):
-        if not p.is_dir() or not calibration_provenance(p).blocking_reason:
+    for p in tracked_children(PUBLISHED):
+        if not calibration_provenance(p).blocking_reason:
             continue
         (arms if list(p.glob("merged.csv")) else reports).append(p.name)
     assert arms == ["2026-08-28-nvidia_h200-h200-whole-layer"]
@@ -490,12 +503,24 @@ def test_the_published_ridges_are_the_ones_the_findings_table_quotes():
 def test_the_committed_report_is_what_the_code_produces_today():
     """The artifact exists so the next reader inherits the answer instead of
     md5-ing ten directories. It is only worth inheriting if it is current, so it
-    is regenerated here and compared byte for byte."""
+    is regenerated here and compared byte for byte.
+
+    Regenerated over the arms git TRACKS, because the file is committed and
+    describes what is committed. `REPORT_COMMAND` globs the directory, which is
+    the same set on a clean checkout; on one carrying an untracked directory
+    the two differ, and the message says so rather than advising a
+    regeneration that would write the stray directory into the census."""
     report = PUBLISHED / "CALIBRATION_PROVENANCE.md"
     assert report.exists(), f"missing; regenerate with:\n    {REPORT_COMMAND}"
-    arms = [p for p in PUBLISHED.iterdir() if p.is_dir()]
+    arms = tracked_children(PUBLISHED)
+    stray = sorted(p.name for p in PUBLISHED.iterdir()
+                   if p.is_dir() and p not in arms)
     assert report.read_text() == provenance_report(arms), (
-        f"stale. Regenerate with:\n    {REPORT_COMMAND}")
+        f"stale. Regenerate with:\n    {REPORT_COMMAND}\n"
+        "compared over the arms git tracks"
+        + (f"; NOT TRACKED here, so not in the comparison and not to be "
+           f"regenerated into the census until added: {', '.join(stray)}"
+           if stray else ""))
 
 
 # --- the publish gate ---------------------------------------------------------

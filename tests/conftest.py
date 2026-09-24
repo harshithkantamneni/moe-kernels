@@ -7,6 +7,7 @@ fused vs unfused tilings can both be tested on a laptop, without CUDA.
 import os
 import pathlib
 import shutil
+import types
 
 import pytest
 import torch
@@ -112,6 +113,60 @@ def no_cuda(monkeypatch):
     file plants it the same way. It hides CUDA, not NVML or an absent package:
     a door behind those takes the `no_gpu` marker instead."""
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+
+#: What `an_h200` reports for device 0: the session-5 pod's own card as torch
+#: described it, so a detector that reads the name, the capability, the SM
+#: count, the L2 size or the memory size on a pod reads the same values here.
+#: Every field is copied from that pod's row, not from a spec sheet: the
+#: pin-probe CSV `alpha_g-nvidia_h200-20260923T163248Z/pin-probe-n64-g1/
+#: run_7d76ae4fe744_vllm.csv` records gpu_name NVIDIA H200, sm_capability 9.0,
+#: sm_count 132, l2_bytes 62914560 and total_memory 150109880320, and the
+#: pod's calibrate wrote the same l2_bytes into its ruler.
+PLANTED_H200 = types.SimpleNamespace(
+    name="NVIDIA H200", major=9, minor=0, multi_processor_count=132,
+    total_memory=150_109_880_320, L2_cache_size=62_914_560)
+
+
+@pytest.fixture
+def an_h200(monkeypatch):
+    """Plant the attached-card world in THIS process: the mirror of `no_cuda`.
+
+    torch.cuda answers every DETECTOR question the way the session-5 pod did
+    (available, one device, 'NVIDIA H200', sm_90, 132 SMs, a 60 MiB L2 and
+    the memory size `PLANTED_H200` cites), so a test can walk
+    the pod's detection path on a laptop and fail there first. Session 5's pod
+    suite failed ten tests on paths no laptop could reach: a self-test whose
+    planted worlds stood on the ATTACHED card's roof, and tests asserting the
+    no-card answer on a box with a card. It plants detection only. Nothing
+    here can launch a kernel, and code that goes past the detectors to time
+    something fails in the test, which is where it should.
+    """
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_name",
+                        lambda *a, **k: PLANTED_H200.name)
+    monkeypatch.setattr(torch.cuda, "get_device_properties",
+                        lambda *a, **k: PLANTED_H200)
+    monkeypatch.setattr(torch.cuda, "get_device_capability",
+                        lambda *a, **k: (PLANTED_H200.major, PLANTED_H200.minor))
+    return PLANTED_H200
+
+
+@pytest.fixture(scope="session")
+def committed_hardware(tmp_path_factory):
+    """The COMMITTED rulers (`moe/bench/hardware/`, as git's index holds them),
+    copied to a directory of their own, for tests whose subject is a committed
+    artefact and the calibration it was made against. A pod's `calibrate`
+    rewrites the tracked `measured_<card>.yaml` before the end suite, and five
+    tests in the half of session 5's suite that never ran compared committed
+    reports and transcripts with that working copy (reproduced on a laptop by
+    planting the pod's ruler). See tests/_committed.py."""
+    from _committed import committed_copy
+    return committed_copy(
+        pathlib.Path(__file__).resolve().parents[1] / "moe" / "bench" / "hardware",
+        tmp_path_factory.mktemp("committed_hardware"))
 
 
 @pytest.fixture(autouse=True, scope="session")

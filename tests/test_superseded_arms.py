@@ -16,9 +16,13 @@ dropped input that nobody sees is how the double count happened.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from moe.bench.published import SUPERSEDED_MARKER, filter_superseded, is_superseded
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _committed import tracked_files  # noqa: E402
 
 
 def test_a_marked_directory_is_superseded(tmp_path):
@@ -70,7 +74,10 @@ def test_the_real_repo_marks_exactly_two_arms():
     pub = Path(__file__).resolve().parent.parent / "results" / "published"
     if not pub.exists():
         return
-    marked = sorted(p.parent.name for p in pub.glob(f"*/{SUPERSEDED_MARKER}"))
+    # The markers git TRACKS: an untracked directory on a pod's checkout is not
+    # a published arm, and neither is a marker inside one.
+    marked = sorted(p.parent.name for p in tracked_files(pub)
+                    if p.name == SUPERSEDED_MARKER and p.parent.parent == pub)
     assert marked == ["2026-08-26-nvidia_h200-full-three-way",
                       "2026-08-28-nvidia_h200-h200-fp8-three-kernel"], marked
     assert superseded_impls(pub / marked[0] / "merged.csv") is None

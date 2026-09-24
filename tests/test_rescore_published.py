@@ -102,17 +102,21 @@ def test_the_a100_report_carries_its_own_ridge_and_says_where_it_came_from():
     assert doc["ridge_source"] == "measured_nvidia_a100_sxm4_80gb.yaml"
 
 
-def test_every_published_report_now_cites_its_own_card():
+def test_every_published_report_now_cites_its_own_card(committed_hardware):
     # Each card's ridge as its COMMITTED calibration reads today. The H200's
     # was 162.8 until its 2026-09-09 session sampled the dense GEMM's clock
     # under load and put it at 152.8, and every H200 report was rescored
     # against that: a report citing a ruler the tree no longer ships is the
     # whole-layer defect, which is what this whole module exists to prevent.
+    # COMMITTED means git's (`committed_hardware`): a pod's calibrate rewrites
+    # the tracked H200 file before the end suite, and session 5's working copy
+    # (152.9) would have called every committed H200 report a stranger.
     from moe.bench import roofline as RL
 
     expected = {
         slug[len("measured_"):]: round(
-            RL.load_hardware(slug).ridge_point("bf16"), 1)
+            RL.load_hardware(slug, directory=committed_hardware)
+            .ridge_point("bf16"), 1)
         for slug in ("measured_nvidia_a100_sxm4_80gb", "measured_nvidia_h200")
     }
     seen = set()
@@ -147,6 +151,66 @@ def test_the_a100_note_exists_and_names_both_numbers():
 # checks below are what a copied NOTE fails: it names the wrong directory, it
 # states the wrong report count, and it quotes a ridge its own reports do not
 # carry.
+
+def test_a_report_git_does_not_track_is_not_one_this_tool_rescores(tmp_path):
+    """Session 5's pod checkout carried an UNTRACKED published directory whose
+    run directories hold `report.json` files of other arms' shapes. These tests
+    sit in the half of that suite that never ran; with the directory planted
+    on a laptop the walk reads them, `plan` dies on `KeyError: 'alpha'` before
+    a gate prints, and the committed-report tests count ten arms of three.
+    Inside a work tree the walk is what git tracks; outside one (every copy a
+    writing test makes) it is the whole directory, as before."""
+    root = tmp_path / "repo"
+    published = root / "results" / "published"
+    kept = published / "2026-01-01-nvidia_h200-kept" / "x.report.json"
+    stray = (published / "2026-01-02-nvidia_h200-stray" / "cells" / "run"
+             / "report.json")
+    for path in (kept, stray):
+        path.parent.mkdir(parents=True)
+        path.write_text("{}")
+    for args in (["init", "-q"], ["add", "--", str(kept)]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
+    assert RS.report_paths(published) == [kept]
+    # And the same tree outside git is walked whole.
+    copy = tmp_path / "copy"
+    shutil.copytree(published, copy)
+    assert RS.tracked_under(copy) is None
+    assert len(RS.report_paths(copy)) == 2
+
+
+def test_a_root_of_only_untracked_reports_is_refused_as_untracked(tmp_path):
+    """A root inside a work tree whose reports git does not track (an arm
+    published but not yet added, a git-ignored run directory) used to be
+    refused as "no report.json ... under ROOT", which is false: the reports
+    are there and the walk left them out. The refusal now says how many, why,
+    and what to do, and a root with tracked reports beside untracked ones
+    rescores the tracked ones and says how many it left alone."""
+    root = tmp_path / "repo"
+    arm = root / "results" / "published" / A100_ARM.name
+    shutil.copytree(A100_ARM, arm)
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True,
+                   capture_output=True)
+    reports = sorted(arm.glob("*.report.json"))
+    assert len(reports) >= 2
+
+    got = _run(["--dry-run", str(arm)])
+    assert got.returncode == X.REFUSED, got.stdout + got.stderr
+    assert (f"REFUSED: {len(reports)} report(s) under {arm} are not tracked "
+            "by git") in got.stdout
+    assert "git add them first" in got.stdout
+    assert "no report.json" not in got.stdout
+    assert RS.report_paths(arm) == []
+    assert RS.untracked_reports(arm) == reports
+
+    subprocess.run(["git", "-C", str(root), "add", "--", str(reports[0])],
+                   check=True, capture_output=True)
+    got = _run(["--dry-run", str(arm)])
+    assert "REFUSED" not in got.stdout.splitlines()[0], got.stdout
+    assert "# rescoring 1 published report(s)" in got.stdout
+    assert (f"# left alone: {len(reports) - 1} report(s) under "
+            f"{RS._relative(arm)} that git does not track") in got.stdout
+
 
 def _rescored_arms() -> dict[Path, list[Path]]:
     arms: dict[Path, list[Path]] = {}
@@ -224,12 +288,22 @@ def test_asking_to_write_and_to_dry_run_at_once_refuses(arm_copy, tmp_path):
     assert {p: p.read_bytes() for p in RS.report_paths(arm_copy)} == snapshot
 
 
-def test_running_the_tool_on_the_committed_tree_now_changes_nothing():
-    """Idempotence, on the real tree, as a plan that proposes no rewrite."""
-    got = _run([])
-    assert got.returncode == 0, got.stderr
-    assert "0 to rewrite" in got.stdout
-    assert "12 to rewrite" not in got.stdout
+def test_running_the_tool_on_the_committed_tree_now_changes_nothing(
+        capsys, monkeypatch, committed_hardware):
+    """Idempotence, on the real tree, as a plan that proposes no rewrite.
+
+    AGAINST THE COMMITTED RULERS, and in process so they can be planted. The
+    tool rescores against whatever `moe/bench/hardware/` holds, which on a pod
+    is the file `calibrate` just rewrote: against session 5's (152.9) the plan
+    proposed rewriting all 19 H200 reports, which is the tool doing its job on
+    an uncommitted ruler, not a failure of idempotence on the committed one.
+    """
+    from moe.bench import roofline as RL
+    monkeypatch.setattr(RL, "HARDWARE_DIR", committed_hardware)
+    assert RS.main([]) == 0
+    out = capsys.readouterr().out
+    assert "0 to rewrite" in out
+    assert "12 to rewrite" not in out
 
 
 # --------------------------------------------------------------------------

@@ -471,7 +471,9 @@ def test_as_dict_is_json_serialisable_and_stable():
     assert list(d["missing"]) == sorted(d["missing"])
 
 
-def test_as_columns_keys_all_start_with_prov_and_are_scalar():
+def test_as_columns_keys_all_start_with_prov_and_are_scalar(no_cuda):
+    # The no-card world is PLANTED: `gpu_name=` in `prov_missing` is the
+    # no-card answer, and on a box with a card the block names it instead.
     cols = PV.provenance_block(iters=50).as_columns()
     assert cols
     assert all(k.startswith(PV.COLUMN_PREFIX) for k in cols)

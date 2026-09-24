@@ -766,7 +766,8 @@ def test_the_tuned_card_refusal_announces_refused_rather_than_invalid():
     TVF.require_card_to_measure(H200)          # the PASS branch of the same gate
 
 
-def test_an_unnamed_card_buys_no_tuned_side_to_compare_against(tmp_path, capsys):
+def test_an_unnamed_card_buys_no_tuned_side_to_compare_against(
+        tmp_path, capsys, no_cuda):
     """R6's substantive half: the LOOKUP, not the label.
 
     The lookup decides which tuned file `resolve_tile` reads, so it decides
@@ -775,6 +776,10 @@ def test_an_unnamed_card_buys_no_tuned_side_to_compare_against(tmp_path, capsys)
     file and almost nothing else does, so defaulting the lookup to an H200 made
     the premise true by construction on every machine, under a label that said
     only that the CARD was assumed.
+
+    The no-card world is PLANTED (`no_cuda`) for the `main` half: on a box with
+    a card attached the lookup is that card, and the plan prints it rather than
+    NONE, which is the right answer there and not the one asserted here.
     """
     env = {"gpu_name": None}
     args = TVF.build_parser().parse_args([])

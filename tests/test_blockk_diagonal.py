@@ -919,20 +919,39 @@ def test_the_census_refuses_a_cell_that_could_not_compile(bk):
 
 
 def test_an_absent_card_may_be_named_and_a_present_one_may_not_be_contradicted(
-        bk, capsys):
+        bk, capsys, no_cuda):
     """`detect_card_slug` returns the STRING `nocard` and never None, so a
     reader that takes its return as "a card was detected" makes every `--card`
     on a laptop contradict a device that is not there. The refusal then says
     the opposite of what it means, and it fires on exactly the machine the flag
-    exists for."""
-    assert bk.SWEEP.detect_card_slug() in (bk.SWEEP.NO_CARD_SLUG,), (
-        "this test box has a CUDA device; the laptop path is what is asserted "
-        "here")
+    exists for.
+
+    THE ABSENT CARD IS PLANTED (`no_cuda`). This used to ASSERT the box had no
+    device, which session 5's pod failed with its H200 attached; the subject is
+    the script's reading of the answer, so the pod checks it too. The present
+    half is the test below."""
+    assert bk.SWEEP.detect_card_slug() == bk.SWEEP.NO_CARD_SLUG
     rc = bk.main(["--dry-run", "--capability", "9.0", "--card", "nvidia_h200"])
     out = capsys.readouterr().out
     assert rc == exit_codes.REFUSED, "a dry run refuses AFTER printing its plan"
     assert "may never contradict" not in out
     assert "run id      nvidia_h200-" in out
+
+
+def test_a_present_card_may_be_named_by_name_and_may_not_be_contradicted(
+        bk, capsys, an_h200):
+    """The second half of the name above, which only a pod used to reach: with
+    a card attached, `--card` naming it (as a NAME or a slug) is accepted and
+    `--card` naming another card is refused before anything is planned."""
+    for same in (an_h200.name, "nvidia_h200"):
+        bk.main(["--dry-run", "--capability", "9.0", "--card", same])
+        assert "may never contradict" not in capsys.readouterr().out, same
+    rc = bk.main(["--dry-run", "--capability", "9.0",
+                  "--card", "nvidia_a100_sxm4_80gb"])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert "may never contradict" in out
+    assert "'nvidia_h200'" in out
 
 
 def test_the_report_never_prints_a_w_without_the_rate_it_was_divided_by(bk,

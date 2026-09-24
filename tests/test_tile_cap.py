@@ -897,12 +897,16 @@ def test_git_visibility_says_unverified_rather_than_tracked_when_it_cannot_ask()
     assert "WILL KEEP" not in note
 
 
-def test_a_synthetic_report_says_so_in_the_only_machine_readable_artefact(tmp_path):
+def test_a_synthetic_report_says_so_in_the_only_machine_readable_artefact(
+        tmp_path, no_cuda):
     """`report.json` must not be mistakable for a measurement.
 
     A `--self-test 0.10` report carries the retracted alpha, 162 measured cells
     and a zero timing spread. Without `synthetic` there is nothing in the file
     that separates it from a pod run that measured the retracted world.
+
+    `card == nocard` is the no-card answer, so that world is PLANTED
+    (`no_cuda`): on a box with a card the report names the card it ran beside.
     """
     out = tmp_path / "r"
     assert CAP.main(["--self-test", "0.10", "--out", str(out)]) == 1

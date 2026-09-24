@@ -3025,24 +3025,141 @@ def test_both_spreads_on_the_design_power_record_are_the_same_realisations():
         set(power.alpha_b_sds)) == 1
 
 
-def test_the_four_height_self_test_still_separates_its_planted_worlds(capsys):
+#: The ruler the four-height self-test's command line NAMES: ridge 155.93 Op/B
+#: over 4374.3 GB/s, the 2026-09-10 H200 calibration. The ceiling its planted
+#: worlds are built on is planted as their product, the relation a ruler is,
+#: rather than read from whichever machine runs the test.
+FOUR_HEIGHT_RIDGE = 155.93
+FOUR_HEIGHT_BANDWIDTH_GBPS = 4374.3
+
+
+def _plant_the_named_ruler(monkeypatch) -> float:
+    """Build `main`'s planted worlds on the ruler the command line names.
+
+    `main` takes the ceiling from the ATTACHED card's calibration and, with
+    none, from `_hypothesis_ceiling`; `--ridge` and `--bandwidth-gbps` do not
+    reach it. So the same argv planted a different world on every box: 669.6
+    TFLOP/s on session 5's pod, and a transcription of the 2026-09-02
+    calibration (712.259) on a laptop. Both doors are closed here and the
+    ceiling is ridge x bandwidth.
+    """
+    from moe.bench import roofline
+    ceiling = FOUR_HEIGHT_RIDGE * FOUR_HEIGHT_BANDWIDTH_GBPS / 1e3
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: None)
+    monkeypatch.setattr(BND, "_hypothesis_ceiling", lambda dtype: (
+        ceiling, "planted: the ridge x bandwidth this command line names"))
+    return ceiling
+
+
+def test_the_four_height_self_test_still_separates_its_planted_worlds(
+        capsys, monkeypatch, no_cuda):
     """The design self-test, at the pinning the arm runs and at four heights.
 
     The claim is unchanged: C2 PASSES in TRUTH and in NO-A and FAILS in the two
     worlds with a term the model does not contain. Run through `main`, so the
     subject default is what a pod would get.
+
+    WHAT A POD GETS IS 3 INVALID, AND S4 IS WHY. This asserted DONE until
+    2026-09-23, which held only on a laptop: its worlds were planted on the
+    712.259 transcription, while sessions 4 and 5 planted them on their own
+    calibrations and printed sd(alpha_a) 0.0440 against 0.0076 here, with
+    identical point estimates. Nothing about CUDA differs; the ceiling does,
+    and S4 at this pinning is a STEP in it (the test below). The world is now
+    planted on the ruler this command line names, on every box, and at that
+    ruler, as at every H200 calibration since the one 712.259 transcribes,
+    S4 FAILS and the other four gates PASS.
     """
-    assert BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+    _plant_the_named_ruler(monkeypatch)
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
                      "--reps", "17", "--plant-noise", "0.008",
-                     "--sm-count", "132", "--ridge", "155.93",
-                     "--bandwidth-gbps", "4374.3",
-                     "--draws", "200", "--power-seeds", "2"]) == exit_codes.DONE
+                     "--sm-count", "132", "--ridge", str(FOUR_HEIGHT_RIDGE),
+                     "--bandwidth-gbps", str(FOUR_HEIGHT_BANDWIDTH_GBPS),
+                     "--draws", "200", "--power-seeds", "2"])
     out = capsys.readouterr().out
-    assert "RESULT: VALIDITY S2 PASS" in out
+    verdicts = {r.name: r.verdict for r in exit_codes.parse_result_lines(out)}
+    assert verdicts == {"S1": exit_codes.PASS, "S2": exit_codes.PASS,
+                        "S3": exit_codes.PASS, "S4": exit_codes.FAIL,
+                        "S5": exit_codes.PASS}, verdicts
+    assert code == exit_codes.INVALID
     assert "TRUTH: C2=True, MISSING: C2=False" in out
     assert "NO-A: C2=True, BN-DRIFT: C2=False" in out
     # Four heights are in the planted grid, not three.
     assert "subjects     [16, 32, 64, 128]" in out
+
+
+def test_the_laptop_ceiling_is_labelled_a_transcription_not_the_repos_ruler(
+        capsys, monkeypatch, no_cuda):
+    """The label said "the 2026-09-01 H200 bf16 calibration in this repo" of a
+    number committed on 2026-09-02 and replaced three times since (the repo's
+    ruler reads 663.0), and that number decides S4 (the test below). What is
+    asserted is the WORDING, never the transcribed value."""
+    from moe.bench import roofline
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: None)
+    BND.main(["--dry-run", "--capability", "9.0"])
+    line = next(ln for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("ceiling"))
+    assert "TRANSCRIBED" in line and "HYPOTHESIS" in line, line
+    assert "in this repo" not in line, line
+
+
+def test_s4_at_the_four_height_pinning_is_a_step_in_the_ceiling_made_by_one_reference(
+        monkeypatch):
+    """WHY THE POD AND THE LAPTOP DISAGREED, found 2026-09-23 after two sessions
+    recorded it as unexplained.
+
+    The planted bandwidth is `PLANT_COMPUTE_FRACTION x ceiling / rho`, so every
+    planted time scales as 1/ceiling while `--overhead-ms` stays 0.15 ms. At
+    GROUP_SIZE_M=16 the TRUTH world's BLOCK_N=32 reference (BLOCK_M=256) is
+    MEMORY bound, and `compute_reference` refuses it on its through-origin
+    error, which sits at the 5% bound; the arm imports a reference instead. The
+    lower the ceiling, the smaller the fixed cost's share and the closer that
+    error comes to 5%, until some bootstrap draw qualifies the memory-bound
+    ladder as the arm's OWN compute branch. Those draws put alpha_a near -0.5,
+    and one of 200 is enough to move the pstdev from 0.0076 to 0.0440 (seed 0;
+    seed 1 has four such draws and reads 0.0841, against 0.0082 without them).
+    At seed 0 the step lies between 690 and 700 TFLOP/s: the 712.259
+    transcription is above it, and every H200 calibration since the one it
+    transcribes (668.5, 668.9, 682.1, 663.0, 669.6) is below. Both ceilings
+    here are INPUTS, planted, not rulers read.
+    """
+    seen: list[tuple[float, str, float | None]] = []
+    real = BND.arm_alphas
+
+    def spy(samples, cfg, **kw):
+        cells, verdicts, spreads = real(samples, cfg, **kw)
+        if kw.get("rng") is not None:           # a bootstrap draw
+            bn32 = next(v for v in verdicts if v.block_n == 32)
+            seen.append((kw["ceiling_tflops"], bn32.basis,
+                         BND.decompose(cells, cfg, "EXA").alpha_a))
+        return cells, verdicts, spreads
+
+    monkeypatch.setattr(BND, "arm_alphas", spy)
+    args = args_for(capability="9.0", group_m=16, reps=17, draws=200)
+    low = FOUR_HEIGHT_RIDGE * FOUR_HEIGHT_BANDWIDTH_GBPS / 1e3
+    high = 712.259
+    got = {}
+    for ceiling in (low, high):
+        _, pay = BND.planted_world_gates(
+            MIXTRAL, args, alpha_b=BND.planted_alpha_b(16), alpha_a=0.14,
+            extra=None, noise=0.008, b=2, ceiling_tflops=ceiling,
+            capability=(9, 0), block_ns=(32, 64, 128),
+            subjects=BND.SUBJECT_BLOCK_M, sm_count=132, draws=200)
+        got[ceiling] = pay
+    # The same estimate either side of the step: only the spread moved.
+    assert got[low]["fits"]["pooled_exact"]["alpha_a"] == pytest.approx(
+        got[high]["fits"]["pooled_exact"]["alpha_a"], abs=1e-3)
+    sd_low = got[low]["bootstrap"]["alpha_a_sd"]
+    sd_high = got[high]["bootstrap"]["alpha_a_sd"]
+    assert sd_high <= BND.ALPHA_A_SD_CEILING < sd_low
+    # And the whole difference is the draws in which BLOCK_N=32 qualified its
+    # own BLOCK_M=256 ladder: none above the step, some below it, and without
+    # them the spread below the step is the spread above it.
+    own = {c: [a for cc, basis, a in seen if cc == c and basis == "OWN"]
+           for c in (low, high)}
+    assert own[high] == [] and own[low], own
+    rest = [a for c, basis, a in seen if c == low and basis != "OWN"]
+    assert statistics.pstdev(rest) == pytest.approx(sd_high, rel=0.2)
+    assert statistics.pstdev(rest) <= BND.ALPHA_A_SD_CEILING
 
 
 def test_the_fit_carries_the_same_w_the_cell_does():

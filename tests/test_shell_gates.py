@@ -394,17 +394,26 @@ def _repo_farm(tmp_path: Path) -> Path:
     P7 reads `results/published` relative to the repository root, and the point
     of the test is to change what is in it. Symlinking the code rather than
     copying keeps the scripts under test byte-identical to the ones that ship.
+    It is a GIT repository because P7 counts the arms git tracks: an arm lands
+    by being added, and `_fixture_arm` adds it unless told it is a stray.
     """
     root = tmp_path / "farm"
     root.mkdir()
     for name in ("moe", "scripts", "tests", "requirements", "pyproject.toml"):
         (root / name).symlink_to(REPO / name)
     (root / "results" / "published").mkdir(parents=True)
+    for args in (["init", "-q", "-b", "main"],
+                 ["config", "user.email", "t@example.com"],
+                 ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
     return root
 
 
-def _fixture_arm(published: Path, name: str, *, dtype: str = "bf16") -> Path:
-    """One published arm with enough of a row for `entitled_ridge` to answer."""
+def _fixture_arm(published: Path, name: str, *, dtype: str = "bf16",
+                 tracked: bool = True) -> Path:
+    """One published arm with enough of a row for `entitled_ridge` to answer,
+    `git add`ed unless `tracked` is False (the stray a pod's volume carries)."""
     arm = published / name
     arm.mkdir()
     from moe.bench.schema import COLUMNS, SCHEMA_VERSION
@@ -418,6 +427,9 @@ def _fixture_arm(published: Path, name: str, *, dtype: str = "bf16") -> Path:
                    dtype=dtype, achieved_bw_gbps=4374.0,
                    achieved_peak_tflops=716.0)
         w.writerow(row)
+    if tracked:
+        subprocess.run(["git", "-C", str(published.parents[1]), "add", "--",
+                        str(arm)], check=True, capture_output=True)
     return arm
 
 
@@ -463,6 +475,31 @@ def test_p7_fails_when_an_arm_is_not_in_the_census(tmp_path):
     assert line, r.stdout
     assert "FAIL" in line[0], line[0]
     assert "fixture-unlisted" in line[0]
+
+
+def test_p7_does_not_count_a_directory_git_does_not_track(tmp_path):
+    """Session 5's pod checkout carried an UNTRACKED published directory
+    (session 3's, left on the volume by its publish and missing its KIND file),
+    and that suite's census tests counted it as an arm. P7 did not run there,
+    but it listed the directory too: with the directory planted on a laptop it
+    reads as a newly refusing arm absent from the census, and P7 FAILs on a
+    guard that has not changed (test_p7_passes_against_the_repositorys_own_
+    census fails on 33d2833). An arm is a directory git tracks, so a stray
+    beside the listed arm leaves P7 passing."""
+    root = _repo_farm(tmp_path)
+    published = root / "results" / "published"
+    _fixture_arm(published, "2026-01-01-fixture-listed")
+    _fixture_arm(published, "2026-01-02-fixture-stray", tracked=False)
+    # The listed arm refuses live (its one row names no single ridge), so the
+    # census lists it refused, and that census alone is correct.
+    _census(published, {"2026-01-01-fixture-listed": "**refused**"})
+    r = sh(root / "scripts" / "pod_session.sh", "--dry-run", "--skip-tests",
+           "--no-download", "--session-dir", str(tmp_path / "session"),
+           cwd=root, env={"PYTHONPATH": str(REPO)})
+    line = [ln for ln in r.stdout.splitlines() if ln.startswith("P7")]
+    assert line, r.stdout
+    assert "PASS" in line[0], line[0]
+    assert "fixture-stray" not in line[0]
 
 
 def test_the_dry_run_prints_the_download_it_would_actually_run(tmp_path):

@@ -24,6 +24,21 @@ import torch
 
 from moe.bench import timing as T
 
+
+@pytest.fixture(autouse=True)
+def _fakes_meet_no_device(request, monkeypatch):
+    """EVERY TEST HERE BUT THE `gpu` ONE drives the instrument with fakes, and
+    until 2026-09-23 a card could still reach them: `time_kernel` defaults its
+    `clock_reader` to the ATTACHED device's NVML clock whenever CUDA is
+    available, so on a pod each fake trial also warmed against the real H200's
+    clock, and a missing or refusing NVML prefixed "the warmup could not settle
+    on the clock" to the note two tests assert on. The no-card world is planted
+    for the non-`gpu` tests; a test that plants CUDA itself does so after this
+    and wins."""
+    if request.node.get_closest_marker("gpu") is None:
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+
 # --- fakes -------------------------------------------------------------------
 
 class _FakeEvent:

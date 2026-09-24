@@ -35,6 +35,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import calibrate_hardware as CH  # noqa: E402
+from _committed import tracked_files  # noqa: E402
 from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes as EX  # noqa: E402
@@ -763,7 +764,13 @@ def test_the_floor_fraction_separates_the_published_rows_from_the_fault():
     2026-09-11 pair, recorded in `timing.THERMAL_FAULT_OBSERVED_MHZ` and never
     read at gate time. The fraction has to sit strictly between them with real
     margin on both sides, or it either refuses healthy cards or admits the
-    fault."""
+    fault.
+
+    THE COMMITTED CORPUS IS GIT'S, so the cells are the ones git tracks
+    (`_committed.tracked_files`) and not every `cells.csv` on disk: a pod's
+    checkout carries untracked published directories (sessions 4 and 5 each
+    had one) and a run directory from a faulted card left there would move
+    the healthy end this bound is derived from."""
     import csv
     import hashlib
 
@@ -771,7 +778,7 @@ def test_the_floor_fraction_separates_the_published_rows_from_the_fault():
     if not published.is_dir():
         pytest.skip("no published corpus in this checkout")
     seen, loads = set(), []
-    for path in sorted(published.rglob("cells.csv")):
+    for path in (p for p in tracked_files(published) if p.name == "cells.csv"):
         digest = hashlib.md5(path.read_bytes()).hexdigest()
         if digest in seen:          # the 2026-09-10 session duplicates its tree
             continue
