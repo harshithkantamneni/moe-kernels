@@ -467,32 +467,33 @@ def test_a_plan_that_does_not_fit_the_named_card_is_refused_before_it_runs():
 # 6. the depth arithmetic, which is what chose the default tile
 # --------------------------------------------------------------------------
 
-def test_a_taller_tile_runs_out_of_memory_bound_treads_sooner():
+def test_a_taller_tile_runs_into_the_fixed_roof_sooner():
     """THE REASON THE DEFAULT TILE IS 32 AND NOT 64. The compute an M-tile does
     scales with the tile height and the weight traffic an extra M-tile costs
     does not, so a LOW-alpha ladder climbs to its roof faster on a taller tile.
     Asserted as an ORDERING, so it survives any ridge this repo calibrates."""
     ridge, bw = 160.0, 4000.0
-    depths = [PW.deepest_memory_bound_tread(
+    depths = [PW.deepest_under_roof_tread(
         CFG, block_m=bm, alpha=PW.RETRACTED_ALPHA, ridge=ridge,
         bandwidth_gbps=bw, b=2, limit=128) for bm in (16, 32, 64)]
     assert depths[0] > depths[1] > depths[2], depths
     # And in the refit world every one of them is deep enough that the tile
     # choice is not what decides the design.
-    rich = [PW.deepest_memory_bound_tread(
+    rich = [PW.deepest_under_roof_tread(
         CFG, block_m=bm, alpha=PW.ALPHA, ridge=ridge, bandwidth_gbps=bw, b=2,
         limit=128) for bm in (16, 32, 64)]
     assert all(d >= PW.DEFAULT_TREADS for d in rich), rich
 
 
-def test_the_discrimination_floor_is_below_the_world_the_default_registers():
+def test_v4s_fixed_roof_floor_is_below_the_world_the_default_registers():
     """The design must be able to REPORT its own registered alternative. Below
-    the floor the shared ladder is compute bound before the deepest tread, V4
-    voids the page, and the pod minutes buy nothing."""
+    V4's fixed-roof floor the model puts the shared ladder at the fixed roof
+    before the deepest tread, V4 voids the page, and the pod minutes buy
+    nothing."""
     ridge, bw = 160.0, 4000.0
-    floor = PW.discrimination_floor(CFG, block_m=PW.DEFAULT_BLOCK_M,
-                                    treads=PW.DEFAULT_TREADS, ridge=ridge,
-                                    bandwidth_gbps=bw, b=2)
+    floor = PW.fixed_roof_floor(CFG, block_m=PW.DEFAULT_BLOCK_M,
+                                treads=PW.DEFAULT_TREADS, ridge=ridge,
+                                bandwidth_gbps=bw, b=2)
     assert floor < PW.RETRACTED_ALPHA, floor
     assert PW.depth_refusal(CFG, block_m=PW.DEFAULT_BLOCK_M,
                             treads=PW.DEFAULT_TREADS, ridge=ridge,
@@ -501,7 +502,8 @@ def test_the_discrimination_floor_is_below_the_world_the_default_registers():
     # report the retracted world at all.
     why = PW.depth_refusal(CFG, block_m=64, treads=PW.DEFAULT_TREADS,
                            ridge=ridge, bandwidth_gbps=bw, b=2)
-    assert why and "discrimination floor" in why
+    assert why and "V4's fixed-roof floor" in why
+    assert "discrimination floor" not in why.lower()
 
 
 def test_the_depth_refusal_reaches_the_command_line():
@@ -1108,11 +1110,11 @@ def test_v7_and_v4_read_unknown_when_they_examined_nothing():
     natives = [s for s in _pair_world() if s.arm == PW.NATIVE]
     assert PW.gate_v7_clock_parity(natives, treads=[1, 2, 3]).verdict \
         == exit_codes.UNKNOWN
-    assert PW.gate_v4_memory_bound([], roof_tflops=600.0, roof_source="x",
+    assert PW.gate_v4_compute_roof([], roof_tflops=600.0, roof_source="x",
                                    min_tread=PW.CLAIM_MIN_TREAD
                                    ).verdict == exit_codes.UNKNOWN
     rows = [{"arm": PW.NATIVE, "tiles": 1, "pct_of_roof": 0.99}]
-    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+    assert PW.gate_v4_compute_roof(rows, roof_tflops=600.0, roof_source="x",
                                    min_tread=PW.CLAIM_MIN_TREAD
                                    ).verdict == exit_codes.UNKNOWN
 
@@ -3972,7 +3974,7 @@ def test_no_description_promises_v7_by_construction_below_full_duty():
     v7 = " ".join(PW.gate_v7_clock_parity.__doc__.split())
     assert "`clock_elasticity.time_duty`'s one NVML read per burst" in v7
     assert "AT FULL DUTY" in v7
-    v4 = " ".join(PW.gate_v4_memory_bound.__doc__.split())
+    v4 = " ".join(PW.gate_v4_compute_roof.__doc__.split())
     assert "every cell here run under one board power cap" not in v4
     assert "Below full duty" in v4 and "conservative for this gate" in v4
     # Finding 18: the power description matches what both instruments do.
@@ -5837,14 +5839,14 @@ def test_v4_scores_the_claims_window_and_prints_tread_1_beside_it():
              {"arm": PW.PRIVATE, "tiles": 1, "pct_of_roof": 0.97}]
             + [{"arm": arm, "tiles": n, "pct_of_roof": 0.30}
                for arm in PW.RATIO_ARMS for n in (2, 3, 4)])
-    gate = PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+    gate = PW.gate_v4_compute_roof(rows, roof_tflops=600.0, roof_source="x",
                                    min_tread=PW.CLAIM_MIN_TREAD)
     assert gate.verdict == exit_codes.PASS, gate.lines
     assert "treads 2 and deeper" in gate.threshold
     assert any("over the claim's window, treads 2..4" in ln for ln in gate.lines)
     assert any(ln.startswith("outside the window, printed and not scored: "
                              "shared n=1 97.0%") for ln in gate.lines)
-    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+    assert PW.gate_v4_compute_roof(rows, roof_tflops=600.0, roof_source="x",
                                    min_tread=1).verdict == exit_codes.FAIL
 
 
@@ -5925,6 +5927,8 @@ def test_the_plan_page_names_the_claims_window():
     assert "one measured slope over another, both over treads 2..6" in got.stdout
     assert "V4 every fitted tread of shared and private (treads 2 and deeper)" \
         in got.stdout
+    assert ("no tread at the compute roof, which is not the same as memory "
+            "bound") in got.stdout
     helped = run(["--help"])
     assert "--rescore" in helped.stdout and "claim window" in helped.stdout
 
@@ -6257,3 +6261,206 @@ def test_a_cells_gap_basis_travels_through_the_csv(tmp_path):
     path = _write_cells(tmp_path, [row])
     assert PW.read_samples(path) == [row]
     assert "gap_basis" in PW.CSV_FIELDS
+
+
+# --------------------------------------------------------------------------
+# 28. V4 says what it tests, and the discrimination floor is read off the
+#     run's own shared ladder (the owner's decision of 2026-09-24)
+# --------------------------------------------------------------------------
+
+def test_v4_claims_the_fixed_compute_roof_and_not_memory_bound():
+    """V4 compares each fitted tread's achieved rate with 95% of the FIXED
+    roof and nothing else. Session 5 passed it at 20.7-25.5% of that roof on
+    every page while the shared per-M-tile cost sat on a clock-scaled on-chip
+    floor, so "memory bound" was a claim the gate never tested. The claim is
+    the gate's own now, on every branch and on the page a run writes, and a
+    PASS says what it does not show."""
+    rows = [{"arm": arm, "tiles": n, "pct_of_roof": 0.25}
+            for arm in PW.RATIO_ARMS for n in range(1, 7)]
+    gate = PW.gate_v4_compute_roof(rows, roof_tflops=600.0, roof_source="x",
+                                   min_tread=PW.CLAIM_MIN_TREAD)
+    assert gate.verdict == exit_codes.PASS
+    assert gate.claim == PW.V4_CLAIM
+    assert "fixed compute roof" in gate.claim
+    assert "memory bound" not in gate.claim
+    assert any("not that the ladders are memory bound" in ln
+               for ln in gate.lines), gate.lines
+    assert PW.gate_v4_compute_roof([], roof_tflops=600.0, roof_source="x",
+                                   min_tread=PW.CLAIM_MIN_TREAD
+                                   ).claim == PW.V4_CLAIM
+    _rc, payload, log = _payload_for(["--self-test", "refit"])
+    v4 = next(g for g in payload["gates"] if g["tag"] == "V4")
+    assert v4["claim"] == PW.V4_CLAIM
+    assert "is memory bound" not in log
+
+
+def test_the_plan_prints_v4s_fixed_roof_floor_and_leaves_the_discrimination_floor_to_the_run():
+    """The fixed-roof number is where V4 would void the page, and until
+    2026-09-24 the plan printed it as the DISCRIMINATION FLOOR (0.0531 on
+    session 5's pages, against about 0.6 read off those runs' own ladders).
+    The plan has no ladder, so it names the fixed-roof number for what it is
+    and says the discrimination floor is read after the run."""
+    ridge, bw = 160.0, 4000.0
+    treads = list(range(1, PW.DEFAULT_TREADS + 1))
+    text = "\n".join(PW.depth_lines(CFG, block_m=PW.DEFAULT_BLOCK_M,
+                                    treads=treads, ridge=ridge,
+                                    bandwidth_gbps=bw, b=2, alpha=PW.ALPHA))
+    roof = PW.fixed_roof_floor(CFG, block_m=PW.DEFAULT_BLOCK_M,
+                               treads=len(treads), ridge=ridge,
+                               bandwidth_gbps=bw, b=2)
+    assert f"V4'S FIXED-ROOF FLOOR: alpha={roof:.4f}" in text
+    assert "DISCRIMINATION FLOOR: not determined before the run" in text
+    assert not re.search(r"DISCRIMINATION FLOOR: alpha=", text), text
+    got = run(["--dry-run", "--device-memory-gb", "140"])
+    assert "DISCRIMINATION FLOOR: not determined before the run" in got.stdout
+    assert "V4'S FIXED-ROOF FLOOR: alpha=" in got.stdout
+    assert "DISCRIMINATION FLOOR: alpha=" not in got.stdout
+
+
+def _overlap_ms(n, alpha, *, tau, c, t0=0.05):
+    """The overlap model's shared call at tread n, at one clock:
+    `T0 + max((1 + alpha (n - 1)) tau, n c)`. PLANTED: tau and c are the
+    caller's, and neither is a card's."""
+    return t0 + max((1.0 + alpha * (n - 1)) * tau, n * c)
+
+
+def _floored_ladder(alpha, *, tau, c):
+    """The shared ladder over the claim's window, fitted from planted cells
+    under `_overlap_ms`."""
+    samples = [_sample(PW.SHARED, n, rep, _overlap_ms(n, alpha, tau=tau, c=c))
+               for n in range(1, 7) for rep in range(3)]
+    return PW.ladder_for(samples, PW.SHARED, min_tread=PW.CLAIM_MIN_TREAD)
+
+
+def _floor_of(shared, tau, bw=4000.0):
+    return PW.discrimination_floor(shared, stream_ms=tau, bandwidth_gbps=bw,
+                                   bandwidth_source="planted")
+
+
+def test_the_discrimination_floor_is_where_a_floored_shared_ladder_stops_moving_with_alpha():
+    """THE DEFINITION, planted. Under the overlap model a shared ladder on an
+    on-chip floor c reads `T0 + n c` at every alpha at or under
+    `(n0 c / tau - 1) / (n0 - 1)`, n0 the claim window's shallowest tread, and
+    no timing tells those alphas apart; one alpha above it lifts tread n0. The
+    floor is read off the SHARED ladder and one stream at the page's bandwidth,
+    so the private slope, which the ratio divides by, does not move it."""
+    bw = 4000.0
+    tau = WEIGHTS.weight_stream_ms(CFG, "bf16", bw)
+    c = 0.8 * tau
+    n0 = PW.CLAIM_MIN_TREAD
+    base = _floored_ladder(0.0, tau=tau, c=c)
+    floor = _floor_of(base, tau, bw)
+    assert floor.shallowest_tread == n0 and floor.not_determined == ""
+    assert floor.onchip_ms == pytest.approx(c)
+    assert floor.alpha == pytest.approx((n0 * c / tau - 1) / (n0 - 1))
+    assert 0.0 < floor.alpha < 1.0
+    for a in (0.25 * floor.alpha, 0.75 * floor.alpha, floor.alpha):
+        same = _floored_ladder(a, tau=tau, c=c)
+        assert [ms for _n, ms in same.points] == pytest.approx(
+            [ms for _n, ms in base.points]), a
+        assert _floor_of(same, tau, bw).alpha == pytest.approx(floor.alpha)
+    lifted = _floored_ladder(floor.alpha + 0.05, tau=tau, c=c)
+    assert dict(lifted.points)[n0] > dict(base.points)[n0] + 1e-9
+    # The page names the source of every number in it and the condition the
+    # number holds under.
+    text = "\n".join(floor.lines())
+    assert f"c = {c:.4f} ms the shared ladder's per-M-tile cost" in text
+    assert f"tau = {tau:.4f} ms one stream of the routed weight set" in text
+    assert PW.FLOOR_MEMBERSHIP_NOT_DETERMINED in text
+    assert floor.as_dict()["on_floor"] == PW.FLOOR_MEMBERSHIP_NOT_DETERMINED
+
+
+def test_the_discrimination_floor_is_held_to_zero_and_one_and_names_the_worlds_under_it():
+    """A shared per-M-tile cost at or over one stream blinds every alpha, the
+    no-reuse world included; one under half a stream (n0 = 2) blinds none.
+    Between them the page names the registered worlds at or under it."""
+    tau = WEIGHTS.weight_stream_ms(CFG, "bf16", 4000.0)
+    over = _floor_of(_floored_ladder(0.0, tau=tau, c=1.2 * tau), tau)
+    assert over.alpha == 1.0 and over.raw > 1.0
+    assert "held to [0, 1]" in "\n".join(over.lines())
+    assert any("no-reuse" in w for w in over.worlds_under())
+    straight = [_sample(PW.SHARED, n, rep, 0.05 + n * 0.3 * tau)
+                for n in range(2, 7) for rep in range(3)]
+    under = _floor_of(PW.ladder_for(straight, PW.SHARED,
+                                    min_tread=PW.CLAIM_MIN_TREAD), tau)
+    assert under.alpha == 0.0 and under.raw < 0.0
+    assert under.worlds_under() == []
+    lo, hi = PW.ALPHA_BAND
+    mid = _floor_of(_floored_ladder(0.0, tau=tau, c=(1 + hi) / 2 * tau * 1.01),
+                    tau)
+    assert mid.alpha > hi
+    assert any(f"the whole refit band [{lo}, {hi})" == w
+               for w in mid.worlds_under()), mid.worlds_under()
+
+
+def test_the_discrimination_floor_is_not_determined_without_its_inputs():
+    """No number is invented: a run with no shared slope over the window, a
+    slope that is not a per-M-tile cost, a page with no one-stream time, or a
+    window that reaches tread 1 prints the floor as not determined, with the
+    reason."""
+    tau = WEIGHTS.weight_stream_ms(CFG, "bf16", 4000.0)
+    none = PW.discrimination_floor(None, stream_ms=tau, bandwidth_gbps=4000.0,
+                                   bandwidth_source="x",
+                                   why_no_ladder="the private arm has no slope")
+    assert none.alpha is None
+    assert "the private arm has no slope" in none.not_determined
+    assert none.lines()[0].startswith(
+        f"DISCRIMINATION FLOOR: {PW.FLOOR_NOT_DETERMINED}: ")
+    assert none.as_dict()["alpha"] is None
+    assert none.as_dict()["on_floor"] is None
+    shared = _floored_ladder(0.0, tau=tau, c=0.8 * tau)
+    no_stream = PW.discrimination_floor(shared, stream_ms=None,
+                                        bandwidth_gbps=None,
+                                        bandwidth_source="")
+    assert no_stream.alpha is None
+    assert "no one-stream time" in no_stream.not_determined
+    samples = [_sample(PW.SHARED, n, rep, _overlap_ms(n, 0.0, tau=tau,
+                                                      c=0.8 * tau))
+               for n in range(1, 7) for rep in range(3)]
+    every = PW.ladder_for(samples, PW.SHARED, min_tread=1)
+    at_one = _floor_of(every, tau)
+    assert at_one.alpha is None and "tread 1" in at_one.not_determined
+    flat = [_sample(PW.SHARED, n, rep, 1.0) for n in range(2, 7)
+            for rep in range(3)]
+    level = _floor_of(PW.ladder_for(flat, PW.SHARED,
+                                    min_tread=PW.CLAIM_MIN_TREAD), tau)
+    assert level.alpha is None
+    assert "not a per-M-tile cost" in level.not_determined
+    # A non-finite input is null in report.json beside the reason, never NaN.
+    broken = PW.Ladder(arm=PW.SHARED, points=((2, 1.0), (3, 1.1)),
+                       intercept_ms=0.0, slope_ms=math.nan, mean_rel_err=0.0,
+                       spread=None, excluded=0, min_tread=PW.CLAIM_MIN_TREAD)
+    nan = PW.discrimination_floor(broken, stream_ms=math.nan,
+                                  bandwidth_gbps=math.nan, bandwidth_source="")
+    assert nan.alpha is None
+    json.dumps(nan.as_dict(), allow_nan=False)
+
+
+def test_a_run_prints_and_stores_the_discrimination_floor_off_its_own_shared_ladder(
+        tmp_path):
+    """`analyse` prints the floor with the fits and stores it in report.json,
+    and `--read --rescore` prints it off the RE-SCORED shared ladder, so a
+    stored run (session 5's twelve pages among them) reads its own floor
+    without a pod."""
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(
+        PW.WORLDS["refit"], CFG, block_m=32, treads=treads, repeats=3,
+        alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=0.004, seed=5, copies_declared=9, native_switch=4)
+    report = _analyse(samples, treads, draws=10)
+    shared = PW.ladder_for(samples, PW.SHARED, min_tread=PW.CLAIM_MIN_TREAD)
+    want = _floor_of(shared, WEIGHTS.weight_stream_ms(CFG, "bf16", 4000.0))
+    stored = report.payload["discrimination_floor"]
+    assert stored["alpha"] == pytest.approx(want.alpha)
+    assert stored["onchip_ms_per_tile"] == pytest.approx(shared.slope_ms)
+    assert stored["shallowest_tread"] == PW.CLAIM_MIN_TREAD
+    assert "DISCRIMINATION FLOOR over treads 2..6" in report.text()
+    path, payload = _report_with_cells(tmp_path, "run-f", samples, treads,
+                                       seed=5, draws=30)
+    got = PW.rescore(payload, path, draws=30)
+    assert got.floor is not None
+    assert got.floor.as_dict() == payload["discrimination_floor"]
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert ("DISCRIMINATION FLOOR over treads 2..6, the claim's window, from "
+            "this run's own shared ladder") in page.stdout
+    assert f"alpha = {got.floor.alpha:.4f}" in page.stdout

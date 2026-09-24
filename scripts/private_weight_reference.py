@@ -400,12 +400,12 @@ RETRACTED_ALPHA = SWEEP.RETRACTED_ALPHA   # 0.10, the world the study retracted
 DEFAULT_MODEL = "mixtral-8x7b"
 
 #: DESIGN DECISION 2. One BLOCK_M per run, 32 by default, and it is in the run
-#: id. NOT 64, and the reason is `discrimination_floor`, not taste: the compute
+#: id. NOT 64, and the reason is `fixed_roof_floor`, not taste: the compute
 #: per M-tile scales with the tile height while the weight traffic per M-tile
-#: does not, so a taller tile runs into its compute ceiling at a shallower
+#: does not, so a taller tile runs into its compute roof at a shallower
 #: tread in exactly the world this arm exists to be able to find. Computed off
 #: GPU at this repo's H200 ridge and triad, the deepest tread whose SHARED
-#: ladder is still memory bound is:
+#: ladder the model keeps under V4's threshold, 95% of the FIXED roof, is:
 #:
 #:     BLOCK_M     alpha=1.0   alpha=0.558   alpha=0.10   alpha=0.05
 #:         16        deeper      deeper        deeper          18
@@ -422,11 +422,24 @@ DEFAULT_MODEL = "mixtral-8x7b"
 #: void the page in the one outcome that would turn the study's negative result
 #: into a positive one -- and a design that cannot resolve one of its own
 #: registered outcomes is not a design. 32 keeps the whole planned ladder
-#: memory bound down to alpha ~ 0.05, is in the study's forced tile set, and is
-#: a tile alpha is quoted at. `--block-m 16` is safer still and `--block-m 64`
-#: is available; the plan page prints the floor for whichever is chosen and
-#: REFUSES when the registered alternative world falls below it.
+#: under V4's threshold down to alpha ~ 0.05, is in the study's forced tile
+#: set, and is a tile alpha is quoted at. `--block-m 16` is safer still and
+#: `--block-m 64` is available; the plan page prints V4's fixed-roof floor for
+#: whichever is chosen and REFUSES when the registered alternative world falls
+#: below it.
 #: A second tile is a second run and a second directory, not a second column.
+#:
+#: THAT IS WHAT V4 LETS THROUGH, NOT WHAT TIMING CAN RESOLVE. Under the fixed
+#: roof is not memory bound. Session 5 (2026-09-23, one H200, this tile, a
+#: kernel compiled to mma.sync with no wgmma) passed V4 at 20.7-25.5% of the
+#: fixed roof on all 12 pages while R1 read CLOCK-CARRIES at G = 4 and 64:
+#: the shared per-M-tile cost there sat on a clock-scaled on-chip floor of
+#: about 0.52 ms, and a floored numerator reads the same at every alpha up to
+#: about 0.5-0.6. That blind window is the DISCRIMINATION FLOOR, read off each
+#: run's own shared ladder after the run (`discrimination_floor`); the fixed
+#: roof does not set it, the plan cannot print it, and this decision was
+#: argued against the fixed roof alone. Which tile has the lowest on-chip
+#: floor against one weight stream is not measured.
 DEFAULT_BLOCK_M = 32
 
 #: DESIGN DECISION 3. Six treads, n = 1 .. 6. The deepest tread sets the memory
@@ -635,10 +648,11 @@ MIN_TREADS = SWEEP.MIN_MEMORY_TREADS      # 3
 #: are printed beside the claim and stored in report.json, never gated.
 CLAIM_MIN_TREAD = 2
 
-#: A tread whose achieved throughput reaches this fraction of the fixed roof is
-#: compute bound, and V4 refuses the whole page if any fitted tread of SHARED
-#: or PRIVATE is. Imported: a second copy of the sweep's threshold would
-#: disagree with it one day.
+#: A tread whose achieved throughput reaches this fraction of the fixed roof has
+#: reached the compute roof, and V4 refuses the whole page if any fitted tread
+#: of SHARED or PRIVATE has. The converse does not hold: a tread under it is
+#: not thereby memory bound (`gate_v4_compute_roof`). Imported: a second copy
+#: of the sweep's threshold would disagree with it one day.
 COMPUTE_BOUND_FRACTION = SWEEP.COMPUTE_BOUND_FRACTION   # 0.95
 
 #: Repeats a cell needs before its median is a median.
@@ -894,8 +908,9 @@ def modelled_roof_fraction(cfg, *, block_m: int, tiles: int, alpha: float,
     The study's own `model_ms` -- `overhead + max(traffic, padded compute)` --
     divided into the useful FLOPs of the same tread. It is the MODEL and
     nothing that reads it is evidence for it; its job here is to say, before a
-    pod is rented, whether the design can still see traffic at this depth in
-    each world it registers.
+    pod is rented, whether V4 would let the design's ladder through at this
+    depth in each world it registers. Under the fixed roof is not the same as
+    seeing traffic (DESIGN DECISION 2).
     """
     rows = tiles * block_m
     ms = SWEEP.model_ms(cfg, rows, block_m, alpha=alpha, ridge=ridge,
@@ -907,19 +922,22 @@ def modelled_roof_fraction(cfg, *, block_m: int, tiles: int, alpha: float,
     return tflops / roof if roof > 0 else math.inf
 
 
-def deepest_memory_bound_tread(cfg, *, block_m: int, alpha: float, ridge: float,
-                               bandwidth_gbps: float, b: int,
-                               limit: int = 256) -> int:
-    """The deepest `n` whose SHARED ladder is still under the compute ceiling.
+def deepest_under_roof_tread(cfg, *, block_m: int, alpha: float, ridge: float,
+                             bandwidth_gbps: float, b: int,
+                             limit: int = 256) -> int:
+    """The deepest `n` whose SHARED ladder the model keeps under V4's
+    threshold, `COMPUTE_BOUND_FRACTION` of the FIXED roof.
 
     THE DESIGN QUESTION THIS ANSWERS. The compute an M-tile does scales with
     the tile height and the weight traffic an extra M-tile costs does not, so a
     ladder in a LOW-alpha world climbs toward its roof as it deepens: at
-    BLOCK_M=64 on mixtral at this repo's H200 ridge, a world of alpha=0.10 is
-    compute bound from tread 3. A ladder fitted through such treads has a slope
-    set by arithmetic, and the ratio it feeds moves toward 1.0 -- toward the
-    NO-REUSE reading -- for a reason that has nothing to do with reuse. V4
-    catches that AFTER the pod is paid for; this catches it before.
+    BLOCK_M=64 on mixtral at this repo's H200 ridge, a world of alpha=0.10
+    reaches the fixed roof from tread 3. A ladder fitted through such treads
+    has a slope set by arithmetic, and the ratio it feeds moves toward 1.0 --
+    toward the NO-REUSE reading -- for a reason that has nothing to do with
+    reuse. V4 catches that AFTER the pod is paid for; this catches it before.
+    A tread under the roof is not thereby on the traffic branch: an on-chip
+    floor below the roof is invisible here and to V4 (`discrimination_floor`).
     """
     last = 0
     for n in range(1, limit + 1):
@@ -932,20 +950,29 @@ def deepest_memory_bound_tread(cfg, *, block_m: int, alpha: float, ridge: float,
     return last
 
 
-def discrimination_floor(cfg, *, block_m: int, treads: int, ridge: float,
-                         bandwidth_gbps: float, b: int) -> float:
-    """The LOWEST alpha at which this design's own shared ladder still sees traffic.
+def fixed_roof_floor(cfg, *, block_m: int, treads: int, ridge: float,
+                     bandwidth_gbps: float, b: int) -> float:
+    """The LOWEST alpha at which the model keeps this design's whole planned
+    shared ladder under V4's threshold of the FIXED roof: V4'S FIXED-ROOF
+    FLOOR.
 
-    Bisected on a monotone predicate: more re-read is more traffic is more
-    memory bound, so "the whole planned ladder is under the compute ceiling" is
-    monotone increasing in alpha. Below the number this returns the design
-    cannot report an ISSUE-AND-LATENCY world at all, because its own shared
-    ladder would be compute bound before the deepest tread and V4 would void
-    the page. It is a property of the DESIGN and belongs on the plan page
+    Bisected on a monotone predicate: more re-read is more traffic is a lower
+    fraction of the roof, so "the whole planned ladder is under the threshold"
+    is monotone increasing in alpha. Below the number this returns the model
+    puts the shared ladder at the fixed roof before the deepest tread and V4
+    would void the page, so the design cannot report an ISSUE-AND-LATENCY
+    world at all. It is a property of the DESIGN and belongs on the plan page
     beside the depth, not in a post mortem.
+
+    IT IS NOT THE ALPHA TIMING CAN RESOLVE, and until 2026-09-24 the plan page
+    printed it as the DISCRIMINATION FLOOR. The fixed roof is not what floors
+    this tile's per-M-tile cost: session 5's pages printed 0.0531 here, while
+    at G >= 4, where R1 read CLOCK-CARRIES, a shared ladder on its on-chip
+    floor reads the same at every alpha up to about 0.5-0.6
+    (`discrimination_floor`, read off each run's own ladder).
     """
     def ok(alpha: float) -> bool:
-        return deepest_memory_bound_tread(
+        return deepest_under_roof_tread(
             cfg, block_m=block_m, alpha=alpha, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, b=b, limit=treads) >= treads
 
@@ -965,30 +992,31 @@ def discrimination_floor(cfg, *, block_m: int, treads: int, ridge: float,
 
 def depth_refusal(cfg, *, block_m: int, treads: int, ridge: float,
                   bandwidth_gbps: float, b: int) -> str:
-    """"" when the design can still discriminate its registered worlds, else why not.
+    """"" when V4 would let the design report its registered worlds, else why not.
 
     ASKED BEFORE THE POD IS RENTED. The registered alternative this arm exists
     to be able to FIND is the ISSUE-AND-LATENCY world, whose registered
-    representative is the study's own retracted alpha. If this design's shared
-    ladder would be compute bound at that alpha before the deepest planned
-    tread, then a run in that world returns INVALID on V4 rather than the
-    finding, and the pod minutes buy nothing.
+    representative is the study's own retracted alpha. If the model puts this
+    design's shared ladder at the fixed roof at that alpha before the deepest
+    planned tread, then a run in that world returns INVALID on V4 rather than
+    the finding, and the pod minutes buy nothing. Passing this says V4 will
+    not void the page; what timing can resolve is read after the run
+    (`discrimination_floor`).
     """
-    floor = discrimination_floor(cfg, block_m=block_m, treads=treads,
-                                 ridge=ridge, bandwidth_gbps=bandwidth_gbps,
-                                 b=b)
+    floor = fixed_roof_floor(cfg, block_m=block_m, treads=treads,
+                             ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b)
     if floor <= RETRACTED_ALPHA:
         return ""
-    deepest = deepest_memory_bound_tread(
+    deepest = deepest_under_roof_tread(
         cfg, block_m=block_m, alpha=RETRACTED_ALPHA, ridge=ridge,
         bandwidth_gbps=bandwidth_gbps, b=b, limit=treads + 64)
     return (
         f"at BLOCK_M={block_m} on {cfg.name}, a world of alpha="
         f"{RETRACTED_ALPHA} puts the SHARED ladder over "
         f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof from tread "
-        f"{deepest + 1}, and this run plans {treads}. The design's "
-        f"discrimination floor is alpha={floor:.4f}: below it the shared "
-        "ladder is compute bound before the deepest tread, V4 voids the page, "
+        f"{deepest + 1}, and this run plans {treads}. V4's fixed-roof floor "
+        f"is alpha={floor:.4f}: below it the shared ladder reaches the fixed "
+        "roof before the deepest tread, V4 voids the page, "
         "and the ISSUE-AND-LATENCY world -- the one outcome that would turn "
         "this study's negative result into a positive one -- cannot be "
         f"reported at all. Lower --treads to {deepest}, or lower --block-m: "
@@ -998,32 +1026,41 @@ def depth_refusal(cfg, *, block_m: int, treads: int, ridge: float,
 
 def depth_lines(cfg, *, block_m: int, treads: list[int], ridge: float,
                 bandwidth_gbps: float, b: int, alpha: float) -> list[str]:
-    """The depth table, printed on the plan page in every registered world."""
-    floor = discrimination_floor(cfg, block_m=block_m, treads=len(treads),
-                                 ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b)
+    """The depth table, printed on the plan page in every registered world:
+    what V4 lets through. The DISCRIMINATION FLOOR is not on it, because the
+    plan has no ladder to read it off (`discrimination_floor`)."""
+    floor = fixed_roof_floor(cfg, block_m=block_m, treads=len(treads),
+                             ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b)
     out = ["depth       the deepest tread whose SHARED ladder is still under "
            f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof, per world, at this "
            "run's own ridge:"]
     for label, a in (("no-reuse ", 1.0), ("refit    ", alpha),
                      ("retracted", RETRACTED_ALPHA)):
-        deepest = deepest_memory_bound_tread(
+        deepest = deepest_under_roof_tread(
             cfg, block_m=block_m, alpha=a, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, b=b, limit=len(treads) + 64)
-        # THE SEARCH CAP IS NOT A MEASUREMENT. `deepest_memory_bound_tread`
+        # THE SEARCH CAP IS NOT A MEASUREMENT. `deepest_under_roof_tread`
         # returns its `limit` when the ladder never reaches the ceiling, and
-        # the cap here is len(treads) + 64, so a world that is memory bound
-        # forever printed "tread 70 against the 6 planned" and read as a
+        # the cap here is len(treads) + 64, so a world that stays under the
+        # roof forever printed "tread 70 against the 6 planned" and read as a
         # measured depth. Past the cap the honest word is "deeper than".
         cap = len(treads) + 64
         reached = f"{deepest:>3d}" if deepest < cap else f">{cap - 1}"
         out.append(f"            alpha={a:<5.3f} {label}  tread "
                    f"{reached:>4s}   against the {len(treads)} planned")
-    out.append(f"            DISCRIMINATION FLOOR: alpha={floor:.4f}. Below "
-               "it this design's own shared ladder is compute bound before the "
-               "deepest tread, V4 voids the page, and no ISSUE-AND-LATENCY "
-               "result can be reported. The arm can therefore separate the "
-               f"registered worlds down to alpha={floor:.4f} and no further, "
-               "and that is a property of the design and not of the card.")
+    out.append(f"            V4'S FIXED-ROOF FLOOR: alpha={floor:.4f}. Below it "
+               "the model puts this design's shared ladder over "
+               f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof before the "
+               "deepest tread and V4 voids the page. It is NOT the alpha this "
+               "design can resolve: under the fixed roof is not memory bound, "
+               "and an on-chip floor below the roof blinds the ratio as the "
+               "roof would "
+               "(session 5, BLOCK_M=32: V4 passed at 20-25% of the fixed roof "
+               "while the shared per-M-tile cost sat on a clock-scaled floor).")
+    out.append("            DISCRIMINATION FLOOR: not determined before the "
+               "run. It is read off the run's own shared ladder over treads "
+               f"{CLAIM_MIN_TREAD} and deeper, against one weight stream at "
+               "this page's bandwidth, and printed under FITS.")
     return out
 
 
@@ -3364,21 +3401,42 @@ def gate_v3_memory(plan: MemoryPlan, *, weight_delta_bytes: int | None,
                 detail)
 
 
-def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str,
+#: V4's claim, written once: the gate and its UNKNOWN branch both print it.
+#: WHAT IT SAYS IS WHAT THE GATE TESTS, and until 2026-09-24 it said more:
+#: "every fitted tread of both ladders is memory bound". The gate compares each
+#: tread's achieved rate with the FIXED compute roof and nothing else, so a
+#: PASS rules out one thing, a tread at that roof.
+V4_CLAIM = "no fitted tread of either ladder reaches the fixed compute roof"
+
+
+def gate_v4_compute_roof(rows, *, roof_tflops: float, roof_source: str,
                          min_tread: int) -> Gate:
-    """Is every fitted tread of SHARED and PRIVATE on the memory branch.
+    """Does any fitted tread of SHARED or PRIVATE reach the FIXED compute roof.
 
     FITTED MEANS THE CLAIM'S WINDOW, treads `min_tread` and deeper (DESIGN
     DECISION 16): a tread no slope the claim reads is fitted through cannot
     pull the ratio anywhere, so it is not scored; its fraction of the roof is
     printed beside the verdict.
 
-    A ratio of two slopes is a ratio of two TRAFFIC costs only where traffic is
-    what the time is made of. A tread that has run into its compute ceiling has
-    a slope set by the tile's arithmetic and not by its reads, and including one
-    in either ladder drags that ladder's slope toward the other's, which moves
-    the ratio toward 1.0 -- toward the NO-REUSE reading -- for a reason that has
-    nothing to do with reuse.
+    A tread at the compute roof has a slope set by the tile's arithmetic and not
+    by its reads, and including one in either ladder drags that ladder's slope
+    toward the other's, which moves the ratio toward 1.0 -- toward the NO-REUSE
+    reading -- for a reason that has nothing to do with reuse. That is what a
+    FAIL catches.
+
+    WHAT A PASS DOES NOT SAY: that the ladders are memory bound. A tile's own
+    on-chip floor (issue rate, operand delivery, latency: whatever scales with
+    the SM clock) can set its per-M-tile cost far below the roof, a slope on
+    that floor is as blind to reads as one at the roof, and this gate cannot
+    see it. Its claim used to say "memory bound", and session 5 (2026-09-23,
+    one H200, BLOCK_M=32, a kernel compiled to mma.sync with no wgmma) showed
+    that it could not fail at this tile: it passed at 20.7-25.5% of the fixed
+    roof on all 12 pages while R1 read CLOCK-CARRIES at G = 4 and 64, where the
+    shared per-M-tile cost sat on a clock-scaled floor of about 0.52 ms. How far
+    such a floor blinds the ratio is the DISCRIMINATION FLOOR printed under
+    FITS (`discrimination_floor`), read off the run's own shared ladder. The
+    threshold and the verdict here are what they were; the relabel gates
+    nothing new.
 
     SCORED AGAINST THE FIXED ROOF, which is what `roofline.ROOF_NOTE_SCORED`
     says a compute-bound gate reads: the calibration's GEMM ran against the
@@ -3409,33 +3467,32 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str,
     wanted = (f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
               f"fitted tread of shared and private (treads {min_tread} and "
               "deeper)")
+    consequence = ("at least one ladder's slope is set by the compute roof and "
+                   "not by reads, which pulls the ratio toward 1.0 for a reason "
+                   "that is not reuse")
     if not fitted:
-        return Gate("V4", VALIDITY,
-                    "every fitted tread of both ladders is memory bound",
+        return Gate("V4", VALIDITY, V4_CLAIM,
                     UNKNOWN, "no shared or private tread was measured in "
                     f"the claim's window, treads {min_tread} and deeper",
-                    wanted,
-                    "at least one ladder's slope is set by arithmetic and not "
-                    "by reads, which pulls the ratio toward 1.0 for a reason "
-                    "that is not reuse",
+                    wanted, consequence,
                     detail + ["nothing to examine: a check that examined "
                               "nothing reports no failures, so this is UNKNOWN "
                               "and not PASS"])
     for r in hot[:5]:
-        detail.append(f"  COMPUTE BOUND: {r['arm']} n={r['tiles']} at "
+        detail.append(f"  AT THE COMPUTE ROOF: {r['arm']} n={r['tiles']} at "
                       f"{r['pct_of_roof']:.1%} of the fixed roof")
+    detail.append("a PASS says no fitted tread is at the fixed roof, not that "
+                  "the ladders are memory bound: an on-chip floor under the "
+                  "roof sets a slope this gate cannot see, and the "
+                  "DISCRIMINATION FLOOR under FITS says how far such a floor "
+                  "at the shared ladder's own per-M-tile cost blinds the ratio")
     detail.append("own-clock issue efficiency is printed per tread in the "
                   "ladder table and is scored by nothing here; "
                   + roofline.ROOF_NOTE_SCORED)
-    return Gate("V4", VALIDITY,
-                "every fitted tread of both ladders is memory bound",
+    return Gate("V4", VALIDITY, V4_CLAIM,
                 PASS if not hot else FAIL,
                 f"worst {worst:.1%} of the fixed roof",
-                wanted,
-                "at least one ladder's slope is set by arithmetic and not by "
-                "reads, which pulls the ratio toward 1.0 for a reason that is "
-                "not reuse",
-                detail)
+                wanted, consequence, detail)
 
 
 @dataclass(frozen=True)
@@ -5049,7 +5106,11 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "of prediction; high-water mark under the plan's ceiling")
     out.append(f"    V4 every fitted tread of shared and private (treads "
                f"{CLAIM_MIN_TREAD} and deeper) under "
-               f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof")
+               f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof: "
+               "no tread at the compute roof, which is not the same as memory "
+               "bound (an on-chip floor under the roof is invisible to it; "
+               "the DISCRIMINATION FLOOR, read off the run's shared ladder, "
+               "is printed with the fits)")
     out.append(f"    V5 the far edge of b's {INTERVAL_PCT:.0f}% band, b the "
                "step-aware native - shared per-tile cost, < "
                f"{MACHINERY_BOUND:.0%} of slope(private), both over the "
@@ -5495,6 +5556,177 @@ def tread1_off_claim_line(claim: WindowFit, every: WindowFit
     return out
 
 
+#: What one run can say about whether its shared ladder sits on the tile's
+#: on-chip floor, which is the condition `DiscriminationFloor.alpha` holds
+#: under. Written once: the page and report.json both carry it.
+FLOOR_MEMBERSHIP_NOT_DETERMINED = (
+    "NOT DETERMINED BY THIS RUN: each arm holds one clock, and what tells a "
+    "shared ladder on the on-chip floor from one on its traffic branch is the "
+    "shared call's clock response (R1's per-M-tile elasticity, CLOCK-CARRIES "
+    "on the floor)")
+
+
+@dataclass(frozen=True)
+class DiscriminationFloor:
+    """The alpha below which timing at this tile cannot tell traffic from the
+    tile's on-chip floor, read off one run's own shared ladder
+    (`discrimination_floor`). `alpha` is None when the run does not determine
+    it and `not_determined` says why; `raw` is the formula before it is held
+    to [0, 1]."""
+    alpha: float | None
+    raw: float | None
+    onchip_ms: float | None
+    stream_ms: float | None
+    shallowest_tread: int | None
+    treads: str
+    bandwidth_gbps: float | None
+    bandwidth_source: str
+    not_determined: str = ""
+
+    def worlds_under(self) -> list[str]:
+        """The registered worlds at or under the floor: the ones this run
+        cannot tell from the on-chip floor if its shared ladder sits on it."""
+        if self.alpha is None:
+            return []
+        lo, hi = ALPHA_BAND
+        out = []
+        if self.alpha >= 1.0:
+            out.append("the no-reuse world, alpha 1.0")
+        if hi <= self.alpha:
+            out.append(f"the whole refit band [{lo}, {hi})")
+        elif lo <= self.alpha:
+            out.append(f"the refit band [{lo}, {hi}) up to the floor")
+        if RETRACTED_ALPHA <= self.alpha:
+            out.append(f"the retracted alpha {RETRACTED_ALPHA}")
+        return out
+
+    def lines(self) -> list[str]:
+        if self.alpha is None:
+            return [f"DISCRIMINATION FLOOR: {FLOOR_NOT_DETERMINED}: "
+                    f"{self.not_determined}"]
+        n0 = self.shallowest_tread
+        held = ("" if self.raw == self.alpha else
+                f" (the formula reads {self.raw:.4f}, held to [0, 1])")
+        under = self.worlds_under()
+        return [
+            f"DISCRIMINATION FLOOR over treads {self.treads}, the claim's "
+            "window, from this run's own shared ladder:",
+            f"  alpha = {self.alpha:.4f}{held} = (n0 c / tau - 1) / (n0 - 1), "
+            f"n0 = {n0} the window's shallowest tread, c = "
+            f"{self.onchip_ms:.4f} ms the shared ladder's per-M-tile cost "
+            f"there, tau = {self.stream_ms:.4f} ms one stream of the routed "
+            f"weight set at this page's {self.bandwidth_gbps:.1f} GB/s "
+            f"({self.bandwidth_source or 'source not stated'})",
+            "  IF the shared ladder sits on the tile's on-chip floor, every "
+            "alpha at or under this gives the same shared ladder, and the "
+            "ratio reads that floor over the private slope and not alpha; on "
+            "a straight traffic branch the floor is lower and the ratio reads "
+            "alpha",
+            f"  whether it sits there: {FLOOR_MEMBERSHIP_NOT_DETERMINED}",
+            "  registered worlds at or under it, not told from the floor if "
+            "the ladder sits on it: "
+            + ("; ".join(under) if under else "none"),
+            "  the fixed roof sets none of this: V4's fixed-roof floor on the "
+            "plan is where V4 would void the page, not what timing resolves",
+        ]
+
+    def as_dict(self) -> dict:
+        return {"alpha": self.alpha, "raw": self.raw,
+                "onchip_ms_per_tile": self.onchip_ms,
+                "stream_ms": self.stream_ms,
+                "shallowest_tread": self.shallowest_tread,
+                "treads": self.treads,
+                "bandwidth_gbps": self.bandwidth_gbps,
+                "bandwidth_source": self.bandwidth_source or None,
+                "formula": "(n0 c / tau - 1) / (n0 - 1), held to [0, 1]",
+                "source": ("c: the shared ladder's slope over the claim's "
+                           "window; tau: weight_stream_ms at bandwidth_gbps"),
+                "on_floor": (FLOOR_MEMBERSHIP_NOT_DETERMINED
+                             if self.alpha is not None else None),
+                "not_determined": self.not_determined or None}
+
+
+#: How the page says the floor has no number, beside the reason.
+FLOOR_NOT_DETERMINED = "not determined by this run"
+
+
+def discrimination_floor(shared: Ladder | None, *, stream_ms: float | None,
+                         bandwidth_gbps: float | None, bandwidth_source: str,
+                         why_no_ladder: str = "") -> DiscriminationFloor:
+    """THE DISCRIMINATION FLOOR, from one run's own shared ladder: the alpha at
+    or under which that ladder reads the same whatever alpha is, IF it sits on
+    the tile's on-chip floor.
+
+    THE MODEL IS THE OVERLAP ONE `per_tile_model_fit.py` fits, at one clock:
+    the shared call at tread n costs
+
+        T0 + max((1 + alpha (n - 1)) tau, n c)
+
+    with tau one stream of the routed weight set (W / BW) and c the tile's
+    on-chip cost per M-tile (issue, operand delivery, latency: whatever scales
+    with the SM clock). Tread n is FLOORED, its traffic at or under its floor,
+    when alpha <= (n c / tau - 1) / (n - 1). That bound rises with n while
+    c < tau, so every tread of the claim's window is floored exactly when alpha
+    is at or under its value at the window's SHALLOWEST tread n0. There the
+    shared ladder is T0 + n c at every such alpha, no timing of this tile tells
+    them apart, and the ratio reads c over the private slope, not alpha. It
+    replaces `fixed_roof_floor` on the page, which put the window at 0.0531 on
+    session 5's pages; that session's findings put it at about 0.51-0.60 at
+    G >= 4 from the overlap fit over its R1 cells (n0 = 2, tau and c fitted).
+
+    FROM THIS RUN: c is the SHARED ladder's per-M-tile cost over the claim's
+    window, the numerator the ratio reads, and tau is `weight_stream_ms` at
+    the page's own bandwidth: W / BW as the model fitter defines tau, with BW
+    the page's calibrated rate rather than a fitted one, and the one-stream
+    time the page already prints. NOT the private slope: in session 5 the
+    private arm's per-M-tile cost rose 16% (treads 1-6) to 19% (treads 2-6)
+    from G = 1 to 64 at fixed bytes, with no identified mechanism, and that
+    rise would pass straight into the floor. The shared slope IS c only when
+    the shared ladder sits on the floor, and one run cannot say whether it
+    does (`FLOOR_MEMBERSHIP_NOT_DETERMINED`): on a straight traffic branch c
+    is under the slope and the floor lower, and a ladder that crosses from
+    one branch to the other inside the window is curved, which its mean
+    relative error in the FITS table shows. So the number is the floor under
+    that condition, and the page prints the condition beside it.
+
+    NOT DETERMINED, a reason and no number, when the run has no shared slope
+    over the window, the slope is not a positive per-M-tile cost, the page
+    carries no one-stream time, or the window reaches tread 1, where the bound
+    has no n - 1 to divide by.
+    """
+    def finite(x):
+        return x if x is not None and math.isfinite(x) else None
+
+    def none(why: str, *, treads: str = "none", onchip=None, n0=None):
+        # NaN IS NOT JSON (`json_interval`): a non-finite input is stored as
+        # null beside the reason, never as the bare token.
+        return DiscriminationFloor(None, None, finite(onchip), finite(stream_ms),
+                                   n0, treads, finite(bandwidth_gbps),
+                                   bandwidth_source, why)
+
+    if shared is None:
+        return none("no shared ladder was fitted over the claim's window"
+                    + (f" ({why_no_ladder})" if why_no_ladder else ""))
+    treads = span_text(n for n, _ms in shared.points)
+    n0 = min(n for n, _ms in shared.points)
+    c = shared.slope_ms
+    if not math.isfinite(c) or c <= 0:
+        return none(f"the shared slope over treads {treads} is {c:.4f} ms, "
+                    "not a per-M-tile cost", treads=treads, onchip=c, n0=n0)
+    if stream_ms is None or not math.isfinite(stream_ms) or stream_ms <= 0:
+        return none("the page carries no one-stream time of the weight set "
+                    "(no bandwidth), and the floor is c against it",
+                    treads=treads, onchip=c, n0=n0)
+    if n0 < 2:
+        return none(f"the shared ladder reaches tread {n0}, where every alpha "
+                    "reads one stream and the bound has no n - 1 to divide "
+                    "by; the floor is read over treads 2 and deeper",
+                    treads=treads, onchip=c, n0=n0)
+    raw = (n0 * c / stream_ms - 1.0) / (n0 - 1)
+    return DiscriminationFloor(min(1.0, max(0.0, raw)), raw, c, stream_ms, n0,
+                               treads, bandwidth_gbps, bandwidth_source)
+
+
 @dataclass(frozen=True)
 class DeclarationReading:
     """V5's inputs: the NATIVE - SHARED fit over the claim's window, the
@@ -5554,7 +5786,7 @@ def window_gates(samples, cfg, *, claim: WindowFit, decl: DeclarationReading,
     gates = {
         "V0": gate_v0_non_vacuity(samples, planned=len(treads) * len(ARMS) * repeats,
                                   treads=treads, repeats=repeats, min_tread=m),
-        "V4": gate_v4_memory_bound(rows, roof_tflops=roof_tflops,
+        "V4": gate_v4_compute_roof(rows, roof_tflops=roof_tflops,
                                    roof_source=roof_source, min_tread=m),
     }
     if ladders.get(NATIVE) and ladders.get(SHARED) and ladders.get(PRIVATE):
@@ -5748,6 +5980,11 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             lines.append(f"  clock-corrected ratio NOT FORMED: {exc}")
 
     stream_ms = WEIGHTS.weight_stream_ms(cfg, dtype, bandwidth_gbps)
+    floor = discrimination_floor(ladders.get(SHARED), stream_ms=stream_ms,
+                                 bandwidth_gbps=bandwidth_gbps,
+                                 bandwidth_source=bandwidth_source,
+                                 why_no_ladder=claim.unmeasurable)
+    lines += [""] + floor.lines()
 
     # WHERE NATIVE'S SWITCH IS TAKEN FROM: the probe when it resolved a step
     # there, else the cited hypothesis. Said on the page either way.
@@ -5891,6 +6128,11 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "tread1_off_claim_line_ms": ({arm: got - line
                                       for arm, (got, line) in off.items()}
                                      or None),
+        # PRINTED, never gated: the alpha at or under which the shared ladder
+        # over the claim's window reads the same whatever alpha is, IF it sits
+        # on the tile's on-chip floor (`discrimination_floor`), and whether
+        # this run determines that it does (it does not).
+        "discrimination_floor": floor.as_dict(),
         "treads_table": rows,
         "copies_declared": copies_declared,
         "path_census": census.as_dict(),
@@ -5968,6 +6210,9 @@ class Rescore:
     every: WindowFit
     cells: str
     draws: int
+    #: The DISCRIMINATION FLOOR off the re-scored shared ladder, at the
+    #: report's own bandwidth.
+    floor: DiscriminationFloor | None = None
 
 
 def rescore(payload: dict, path: Path | str | None, *, draws: int,
@@ -6075,7 +6320,13 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
         stored_interval=((float(iv[0]), float(iv[1]))
                          if iv[0] is not None and iv[1] is not None else None),
         stored_min_tread=int(design_value(payload, "claim_min_tread")))
-    return Rescore(reading, gates, claim, every, str(cells), draws)
+    floor = discrimination_floor(claim.ladders.get(SHARED),
+                                 stream_ms=float(stream_ms),
+                                 bandwidth_gbps=bandwidth,
+                                 bandwidth_source=(payload.get("bandwidth_source")
+                                                   or ""),
+                                 why_no_ladder=claim.unmeasurable)
+    return Rescore(reading, gates, claim, every, str(cells), draws, floor)
 
 
 # --------------------------------------------------------------------------
@@ -7648,9 +7899,10 @@ def _main(argv=None) -> int:
     # A DESIGN THAT CANNOT REPORT ITS OWN REGISTERED ALTERNATIVE IS REFUSED
     # HERE, not measured and then voided on V4. The compute an M-tile does
     # scales with the tile height and the weight traffic an extra M-tile costs
-    # does not, so the deepest tread that still sees traffic depends on the
-    # world, and the shallowest world this arm registers is the one that
-    # decides the depth.
+    # does not, so the deepest tread V4 lets through (under the fixed roof)
+    # depends on the world, and the shallowest world this arm registers is
+    # the one that decides the depth. Under the fixed roof is not seeing
+    # traffic: that is the DISCRIMINATION FLOOR, read after the run.
     short = depth_refusal(cfg, block_m=block_m, treads=len(treads), ridge=ridge,
                           bandwidth_gbps=bandwidth, b=b)
     if short:
@@ -7961,6 +8213,8 @@ def _read_mode(args) -> int:
               + ", ".join(f"{arm} {lad.slope_ms:.4f}"
                           for arm, lad in page.every.ladders.items())
               + " (ms per M-tile)")
+        if page.floor is not None:
+            print("\n".join(page.floor.lines()))
     print("\n".join(cross.lines()))
     print()
     gates = []
