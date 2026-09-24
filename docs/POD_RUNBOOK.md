@@ -437,6 +437,41 @@ A pair across the gap sizing (a duty run before 2026-09-23 and one after) is
 refused and cannot be re-scored: `duty_gap_from_burst` is a design key, and
 the cells were measured under two instruments.
 
+**PRIVATE-K, by hand after the chain (registered 2026-09-23).** Session 5 read
+shared/private at 0.915 at G=1, and timing cannot tell reuse in the shared arm
+(about 7.6% L2 hits) from a per-copy cost in the private arm (TLB, DRAM pages
+of many distinct copies). `--private-copies K` routes M-tile j of an expert to
+copy j mod K, so the private arm reads K copies and re-reads them; the shared
+and native arms, the declaration, the allocation (all `n_decl` copies) and
+the gates do not move. Unset is every tile its own copy, which is K = the
+deepest tread's tile count; K below 2 or at or above that is refused. K is a
+design key and in the run id (`copiesk<K>`), so `--replicate-of` and `--read`
+never pool it with a full private run. The chain does not run it. After the
+chain has finished, never beside it, from the chain's own results root and
+session tag (its header prints both as `results` and `session`):
+
+```
+cd /workspace/repo
+export MOE_RESULTS_DIR=<the chain's results line>
+TAG=<the chain's session directory name>
+for K in 2 3; do
+  /workspace/venvs/vllm/bin/python scripts/private_weight_reference.py \
+    --model mixtral-8x7b --block-m 32 --treads 6 --repeats 9 --group-m 1 \
+    --duty 0.25 --seed 0 --session-tag "$TAG" --private-copies $K \
+    > "<the chain's session directory>/pk-g1-s0-k$K.log" 2>&1
+done
+```
+
+The same line from the base venv with `--dry-run --capability 9.0
+--device-memory-gb 140` added prices a run (the private arm at alpha = 1, an
+upper bound under K); add the chain's 60 s of compiles and weight build
+(`R3_RUN_OVERHEAD_S`). The full private arm to read each against is the
+chain's own `r3-g1-s0` page, the same flags without `--private-copies`: if (b),
+a per-copy cost paid in full on the first extra copy, slope(private-K) at K=2
+sits on the full arm's slope; if (a), it moves toward the shared slope as K
+shrinks. Each page prints its private-K slope against its shared slope; its
+C1 and C2 are scored by the usual rules and say that the ratio is not alpha.
+
 ---
 
 ## The alpha(G) chain (2026-09-22): the next session's command

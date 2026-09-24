@@ -18,6 +18,9 @@
     python scripts/private_weight_reference.py --probe-check
                                        # on the card, from the vLLM venv: V8's
                                        # probe instrument alone, nothing written
+    python scripts/private_weight_reference.py --duty 0.25 --private-copies 2
+                                       # PRIVATE-K: tile j reads copy j mod 2
+                                       # (the G=1 split, below); its own design
 
 WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
 routed expert weight set that is re-read per extra M-tile. Every estimate of it
@@ -68,7 +71,8 @@ two one call with one difference:
     PRIVATE   the same declaration, the same tensors, M-tile `j` of expert `e`
               routed to slot `e x n_decl + j`. Reuse across M-tiles is
               impossible: copy j is read by tile j and by nothing else. This
-              is the denominator.
+              is the denominator. Under `--private-copies K` the slot is
+              `e x n_decl + (j mod K)` instead (PRIVATE-K, below).
     NATIVE    the study's own call: `E` experts declared, `w1[::n_decl]` -- a
               strided view whose rows ARE copy 0 of each expert, the same bytes
               SHARED reads at the same addresses -- and the unrelabelled ids.
@@ -172,6 +176,47 @@ exactly, because the pieces are not equally covered:
     is printed per arm in the ladder table. NO GATE READS IT, and gating it, or
     adding a fourth arm that spreads the addresses at fixed traffic, are the
     two ways to close this and are the owner's to choose.
+
+PRIVATE-K (`--private-copies K`), THE OWNER'S NEXT EXPERIMENT AFTER SESSION 5.
+At G=1 session 5 read shared/private at 0.915, and timing cannot tell which of
+two things the 8.5% gap is: (a) real reuse in the SHARED arm, about 7.6% of
+its reads hitting L2, or (b) a per-copy cost in the PRIVATE arm of exactly
+the shape the last bullet says nothing bounds (TLB reach, DRAM page effects
+of reading many distinct copies). With K set, M-tile `j` of expert `e` reads
+copy `j mod K`, slot `e x n_decl + (j mod K)`, so the private arm reads K
+distinct copies at every tread past K and re-reads them; everything else is
+the default design's: the declaration, the allocation, the tread ladder, the
+shared and native arms, the timing and the gates. If (b), a cost paid in full
+on the first extra copy, PRIVATE-K at K=2 already reads like the full private
+arm; if (a), its slope moves toward SHARED's as K shrinks. At `n <= K` tile
+`j` reads copy `j`, so those treads ARE the full private arm's call.
+
+  * THE DEFAULT IS UNSET: every M-tile its own copy, which is K = n_max, the
+    deepest tread's copy count (6 at the default ladder), since `j < n <=
+    n_max` makes `j mod n_max` equal to `j`. So `K >= n_max` is the default
+    arm under another name and is REFUSED (`private_copies_refusal`), as is
+    `K < 2`: at K = 1 every tile reads copy 0, which is the SHARED arm, whose
+    ratio is 1 by construction and whose buffer proof cannot pass.
+  * ALL `n_decl` COPIES ARE STILL ALLOCATED AND FILLED; K ARE READ. SHARED and
+    PRIVATE pass one `w1` and one `w2` and the kernel reads slot `s` at `base +
+    s x stride(0)`, so with the declaration held at `E x n_decl`, expert-first,
+    no single stride addresses a K-copy allocation: allocating K would need a
+    K-copy declaration (another alignment path and launch grid, the defect the
+    fixed declaration removed) or a copy-first layout (the tile-order defect),
+    and would change SHARED's allocation too. And a cost of shape (b) is paid by
+    READING copies, not by allocating them. So V3 prices the `n_decl` copies
+    the build fills, the memory plan says how many are read, and V2's proof
+    zeroes copies 1..K-1 one at a time (each must change exactly the tokens
+    routed to it) and copies K..n_decl-1 (neither output may move): K distinct
+    copies read, proven.
+  * THE RATIO UNDER K IS NOT ALPHA. Tiles `j` and `j + K` read one copy, so
+    the denominator is not a no-reuse reference. C1 and C2 are scored by the
+    same rules and their text says what they read instead; the reading this
+    run exists for is its private slope against SHARED's and against the full
+    private arm's from a run of the same design without the flag.
+    `private_copies` is one of `DESIGN_KEYS` and is in the run id, so
+    `--replicate-of` and `--read` refuse to pool a PRIVATE-K run with a full
+    private one or with another K.
 
 THE ASSUMPTION THE RATIO KEEPS, REGISTERED. `slope(SHARED)/slope(PRIVATE)`
 removes the assumed RATE -- no bandwidth and no intercept enter the number --
@@ -370,6 +415,20 @@ ARM_MEANING = {
              "denominator)",
 }
 
+
+def arm_meaning(arm: str, private_copies: int | None = None) -> str:
+    """`ARM_MEANING[arm]`, or PRIVATE-K's own sentence when `--private-copies
+    K` routes the private arm: one place for the plan page and the report to
+    say which denominator a run had."""
+    if arm != PRIVATE or private_copies is None:
+        return ARM_MEANING[arm]
+    return (f"E x n_decl experts declared, M-tile j of expert e routed to copy "
+            f"j mod {private_copies} (PRIVATE-K, --private-copies "
+            f"{private_copies}): {private_copies} distinct copies read and "
+            f"re-read, so tiles j and j+{private_copies} share one and reuse "
+            "is possible; the denominator of a ratio that is not alpha")
+
+
 # --------------------------------------------------------------------------
 # Everything this script argues about, before any of it is used. The study's
 # constants are IMPORTED, never restated: a local copy of alpha that drifted
@@ -499,13 +558,20 @@ INTERVAL_PCT = 90.0
 #: gaps came from a full-duty sizing read and left the arms at different
 #: achieved duties. Those cells cannot be re-scored into the other
 #: instrument, so a pair across it is refused, not re-scored.
+#:
+#: AND `private_copies`, the K of PRIVATE-K (`--private-copies`): null for
+#: the default arm, every M-tile its own copy, and read null from every report
+#: before the key, which was that arm. A PRIVATE-K run's denominator is
+#: another arm, so its interval never enters a full private run's envelope.
 DESIGN_KEYS: tuple[str, ...] = ("experiment", "card", "model", "dtype",
                                 "block_m", "pinned", "treads", "repeats",
                                 "copies_declared", "alpha_band", "duty",
-                                "claim_min_tread", "duty_gap_from_burst")
+                                "claim_min_tread", "duty_gap_from_burst",
+                                "private_copies")
 #: What a report written before a design key existed is read as carrying.
 DESIGN_KEY_DEFAULTS: dict[str, object] = {"duty": 1.0, "claim_min_tread": 1,
-                                          "duty_gap_from_burst": False}
+                                          "duty_gap_from_burst": False,
+                                          "private_copies": None}
 
 #: DESIGN DECISION 6. V5's bound on the declaration. `|slope(NATIVE) -
 #: slope(SHARED)|` must be under this fraction of `slope(PRIVATE)`, which is
@@ -1145,8 +1211,10 @@ class MemoryPlan:
     device_free_bytes: int | None
     device_source: str
     headroom: float
-    #: Copies the deepest tread READS. The difference is the padding that
-    #: keeps the ratio arms on one alignment kernel (`declared_copies_for`).
+    #: Copies the deepest tread READS (`copies_read`): `n_max`, or K under
+    #: `--private-copies K`. The difference is the padding that keeps the
+    #: ratio arms on one alignment kernel (`declared_copies_for`) and, under
+    #: K, the copies K..n_max-1 that PRIVATE-K allocates and no tile reads.
     copies_read: int = 0
 
     @property
@@ -1226,16 +1294,19 @@ def copy_slot(expert, copy, copies_declared: int):
     return expert * copies_declared + copy
 
 
-def private_copy_index(ranks, block_m: int):
+def private_copy_index(ranks, block_m: int, private_copies: int | None = None):
     """Which copy a routing slot reads, from its rank within its own expert.
 
     Split out and named because it is the one line the whole arm rests on:
     the `j`-th M-tile of an expert holds ranks `[j BM, (j+1) BM)`, so the copy
-    a slot reads is its rank floor-divided by the tile height. Takes and
-    returns anything supporting `//`, which is both a torch tensor and an int,
-    so the test suite can check it without a device.
+    a slot reads is its rank floor-divided by the tile height. Under
+    `--private-copies K` (PRIVATE-K) it is that tile index mod K, so tiles `j`
+    and `j + K` read one copy; `None`, the default, is every tile its own
+    copy. Takes and returns anything supporting `//` and `%`, which is both a
+    torch tensor and an int, so the test suite can check it without a device.
     """
-    return ranks // block_m
+    tile = ranks // block_m
+    return tile if private_copies is None else tile % private_copies
 
 
 def shared_topk_ids(ids, copies_declared: int):
@@ -1249,7 +1320,7 @@ def shared_topk_ids(ids, copies_declared: int):
 
 
 def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int,
-                     copies_declared: int):
+                     copies_declared: int, private_copies: int | None = None):
     """Relabel `[T, k]` expert ids so every M-tile reads its own weight copy.
 
     Slot `(t, j)` currently naming expert `e` is renamed to
@@ -1259,6 +1330,15 @@ def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int,
     rows each, CONTIGUOUS in slot number, so `moe_align_block_size`'s sort by
     slot runs expert 0's tiles, then expert 1's -- the shared arm's order --
     and builds the same number of M-tiles, with zero padding.
+
+    UNDER `private_copies` K (PRIVATE-K) the copy is that tile index mod K
+    (`private_copy_index`): expert `e`'s rows fill `min(n, K)` slots, copy
+    `c` holding the rows of every tile `j` with `j mod K == c`, still
+    contiguous in slot number and still in expert order, so the sort runs the
+    same tiles in the same expert order and builds the same M-tile count
+    with zero padding (every slot holds a whole number of tiles). What moves
+    is only which copy a tile's weights are read from. At `n <= K` the ids
+    are the default arm's, bit for bit.
 
     THE ROW ORDER INSIDE AN EXPERT DOES NOT HAVE TO MATCH THE KERNEL'S SORT.
     If the alignment groups an expert's rows in a different order from this
@@ -1282,11 +1362,17 @@ def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int,
         raise PrivateWeightRefusal(
             f"{rows_per_expert} rows per expert is not a whole number of "
             f"BLOCK_M={block_m} tiles; this arm fits exactly-full stacks only")
-    if rows_per_expert // block_m > copies_declared:
+    if private_copies is not None and private_copies < 1:
         raise PrivateWeightRefusal(
-            f"{rows_per_expert // block_m} tiles per expert need that many "
-            f"copies and only {copies_declared} are declared; expert-first, "
-            "the extra tiles would read the next expert's weights")
+            f"--private-copies {private_copies}: a tile reads copy j mod K, "
+            "and there is no such copy below K = 1")
+    tiles = rows_per_expert // block_m
+    reads = tiles if private_copies is None else min(tiles, private_copies)
+    if reads > copies_declared:
+        raise PrivateWeightRefusal(
+            f"{tiles} tiles per expert read {reads} copies and only "
+            f"{copies_declared} are declared; expert-first, the extra tiles "
+            "would read the next expert's weights")
     flat = ids.reshape(-1).to(torch.int64)
     counts = torch.bincount(flat, minlength=num_experts)
     if int(counts.min()) != rows_per_expert or int(counts.max()) != rows_per_expert:
@@ -1300,7 +1386,7 @@ def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int,
     starts = torch.cumsum(counts, 0) - counts
     ranks = (torch.arange(flat.numel(), device=flat.device, dtype=torch.int64)
              - starts[sorted_e])
-    copies = private_copy_index(ranks, block_m)
+    copies = private_copy_index(ranks, block_m, private_copies)
     renamed = copy_slot(sorted_e, copies, copies_declared)
     out = torch.empty_like(flat)
     out[order] = renamed
@@ -1326,9 +1412,68 @@ def declared_experts(arm: str, num_experts: int, copies_declared: int) -> int:
                                                           copies_declared)
 
 
-def copies_read(arm: str, tiles: int) -> int:
-    """How many distinct copies an arm's call READS at tread `tiles`."""
-    return tiles if arm == PRIVATE else 1
+def copies_read(arm: str, tiles: int, private_copies: int | None = None) -> int:
+    """How many distinct copies an arm's call READS at tread `tiles`: one for
+    shared and native, `tiles` for private, and `min(tiles, K)` for
+    PRIVATE-K (`--private-copies K`), whose tile `j` reads copy `j mod K`."""
+    if arm != PRIVATE:
+        return 1
+    return tiles if private_copies is None else min(tiles, private_copies)
+
+
+def private_copies_refusal(private_copies: int | None, treads: list[int]) -> str:
+    """"" when `--private-copies` is unset or names a PRIVATE-K arm this
+    ladder can form, else why not. A plan-time refusal, before a pod is
+    rented.
+
+    THE DEFAULT (unset) IS EVERY M-TILE ITS OWN COPY, which is K = n_max, the
+    deepest tread's copy count: tile `j < n <= n_max` reads copy `j mod n_max
+    = j`. So K at or above `n_max` is the default arm under another name, and
+    a run of it under a PRIVATE-K run id would be a second default run that
+    `--replicate-of` could never pool with the first. K = 1 routes every tile
+    to copy 0, which is the SHARED arm: the ratio is 1 by construction and
+    V2's buffer proof has no second copy to read, so the page would latch
+    INVALID after the ladder was paid for. So K runs 2 .. n_max - 1."""
+    if private_copies is None:
+        return ""
+    n_max = treads[-1]
+    if private_copies < 2:
+        return (f"--private-copies {private_copies}: PRIVATE-K reads copy j mod "
+                f"K, and at K = {private_copies} "
+                + ("there is no such copy" if private_copies < 1 else
+                   "every tile reads copy 0, which is the SHARED arm: a ratio "
+                   "of 1 by construction, and a buffer proof with no second "
+                   "copy to read, so V2 would void the page after the ladder "
+                   "was paid for")
+                + f". K runs 2..{n_max - 1} on this ladder")
+    if private_copies >= n_max:
+        return (f"--private-copies {private_copies}: the deepest tread has "
+                f"{n_max} tiles per expert, so tile j reads copy j mod "
+                f"{private_copies} = j at every tread and this is the default "
+                "private arm (every M-tile its own copy) under another run id. "
+                f"Drop the flag for that arm; PRIVATE-K runs 2..{n_max - 1} "
+                "on this ladder")
+    return ""
+
+
+def private_copies_lines(private_copies: int | None,
+                         treads: list[int]) -> list[str]:
+    """The plan page's line on which copy each private tile reads: the
+    default arm and what K it equals, or PRIVATE-K with the copies read at
+    every tread."""
+    n_max = treads[-1]
+    if private_copies is None:
+        return [f"private     every M-tile its own copy (--private-copies "
+                f"unset, which is K = n_max = {n_max}, the deepest tread's "
+                "copy count)"]
+    k = private_copies
+    return [f"private     PRIVATE-K, --private-copies {k}: tile j of an expert "
+            f"reads copy j mod {k}; copies read per tread "
+            + ", ".join(f"n={n}:{copies_read(PRIVATE, n, k)}" for n in treads),
+            f"            treads {treads[0]}..{min(k, n_max)} are the full "
+            f"private arm's call; past tread {k} tiles re-read copies. A "
+            "design key and in the run id: this run pools with no full "
+            "private run and no other K"]
 
 
 # --------------------------------------------------------------------------
@@ -1983,10 +2128,12 @@ def probe_cells(cfg, *, block_m: int, treads: list[int],
                 declared_by_arm: dict[str, int], copies_declared: int,
                 reference_clock: float | None, repeats: int,
                 calls_per_replay: int, op, sync, graph_timer, eager_timer,
-                device: str = "cuda") -> AlignProbe:
+                device: str = "cuda",
+                private_copies: int | None = None) -> AlignProbe:
     """The probe's loop with its op and instrument injected, so the plumbing
     runs off-GPU with fakes: `op(ids, block_m, declared)` is the alignment
-    call, `sync` the device synchronise.
+    call, `sync` the device synchronise. PRIVATE's series is timed on the
+    ids the sweep's private arm passes, PRIVATE-K's under `private_copies`.
 
     ONE SERIES, ONE INSTRUMENT. Every cell is tried under the graph; a
     `NotCapturable` on ANY cell, first or later, discards what was collected
@@ -2007,15 +2154,16 @@ def probe_cells(cfg, *, block_m: int, treads: list[int],
                 # ONE LABEL PER ARM, at that arm's declaration and on that
                 # arm's own ids. SHARED and PRIVATE share a declaration and
                 # differ in the id SET: PRIVATE spreads each expert's rows
-                # over n copies, so the alignment's per-expert counters see
-                # different contention. Probing both is what measures that
-                # asymmetry and what checks the "common to both arms" premise
-                # of `step_bias`.
+                # over n copies (min(n, K) under --private-copies K), so the
+                # alignment's per-expert counters see different contention.
+                # Probing both is what measures that asymmetry and what
+                # checks the "common to both arms" premise of `step_bias`.
                 use_by_arm = {
                     NATIVE: ids,
                     SHARED: shared_topk_ids(ids, copies_declared),
                     PRIVATE: private_topk_ids(ids, cfg.num_experts, block_m,
-                                              n * block_m, copies_declared),
+                                              n * block_m, copies_declared,
+                                              private_copies),
                 }
                 for arm in ARMS:
                     d = declared_by_arm[arm]
@@ -2048,16 +2196,18 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                     reference_clock: float | None,
                     repeats: int = PROBE_REPEATS,
                     calls_per_replay: int = PROBE_CALLS_PER_REPLAY,
-                    graph_timer=None, eager_timer=None) -> AlignProbe:
+                    graph_timer=None, eager_timer=None,
+                    private_copies: int | None = None) -> AlignProbe:
     """Time vLLM's alignment op ALONE, once per ARM, along the ladder, on the
     attached build, UNDER A CUDA GRAPH (`PROBE_CALLS_PER_REPLAY` calls per
     replay, so each cell is GPU time; eager is the fallback when the capture
     is refused, and the probe's note says so).
 
     Three series: NATIVE's own declaration, and SHARED's and PRIVATE's ID
-    SETS at the ratio arms' shared declaration. The two id sets are timed
-    apart because they are what differs between the arms whose slopes the
-    ratio divides, and V8 bounds the step over both of them.
+    SETS at the ratio arms' shared declaration (PRIVATE-K's ids under
+    `private_copies`). The two id sets are timed apart because they are what
+    differs between the arms whose slopes the ratio divides, and V8 bounds
+    the step over both of them.
 
     The op is `moe_align_block_size(topk_ids, BLOCK_M, declared)`, called as
     `fused_experts_impl` calls it, on the ids each arm passes. It is the one
@@ -2081,7 +2231,8 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                        reference_clock=reference_clock, repeats=repeats,
                        calls_per_replay=calls_per_replay,
                        op=moe_align_block_size, sync=torch.cuda.synchronize,
-                       graph_timer=graph_timer, eager_timer=eager_timer)
+                       graph_timer=graph_timer, eager_timer=eager_timer,
+                       private_copies=private_copies)
 
 
 #: The one gate `--probe-check` scores. Not a V number: it is scored before a
@@ -2334,7 +2485,8 @@ class Sample:
     rows_per_expert: int
     tokens: int
     #: Copies of the weight set this call READ (`copies_read`): `n` for
-    #: private, 1 for shared and native. Every arm could ADDRESS the whole
+    #: private (`min(n, K)` under `--private-copies K`), 1 for shared and
+    #: native. Every arm could ADDRESS the whole
     #: `n_decl` allocation except native, which sees copy 0 through a view;
     #: `experts_declared` is the column that says how much was in reach.
     copies: int
@@ -3071,10 +3223,11 @@ PROOF_PARTS: tuple[tuple[str, str], ...] = (
     ("sentinels", "a distinct value written into each copy reads back from "
                   "that copy and from no other, and the original bytes are "
                   "restored before anything else reads them"),
-    ("kernel_read", "zeroing ONE copy c at a time, for every c >= 1, changes "
-                    "EXACTLY the private output rows of the tokens routed to "
-                    "copy c and no others, so every tile reads its own copy "
-                    "and no tile reads another's"),
+    ("kernel_read", "zeroing ONE copy c at a time, for every read c >= 1, "
+                    "changes EXACTLY the private output rows of the tokens "
+                    "routed to copy c and no others, so every tile reads the "
+                    "copy its slot names (copy j, or j mod K under "
+                    "--private-copies K) and no other"),
     ("shared_blind", "each of those zeroings leaves the shared arm's output "
                      "bitwise unchanged, and restoring the copy restores the "
                      "private output bitwise, so the changes above are the "
@@ -3324,7 +3477,8 @@ def gate_v1_matched_geometry(samples, *, block_m: int, treads: list[int]) -> Gat
                 detail)
 
 
-def gate_v2_distinct_buffers(proof: BufferProof) -> Gate:
+def gate_v2_distinct_buffers(proof: BufferProof,
+                             private_copies: int | None = None) -> Gate:
     """Did the private arm allocate AND READ distinct weight buffers.
 
     PROVEN, NOT ASSERTED, in five parts counted from `PROOF_PARTS`. The part
@@ -3336,15 +3490,28 @@ def gate_v2_distinct_buffers(proof: BufferProof) -> Gate:
     ONE AT A TIME because zeroing copies 1..n-1 together, which an earlier
     version did, also passes a bug that sends every tile with c >= 1 to copy
     1. `shared_blind` is the control on that control.
+
+    UNDER `--private-copies K` the same proof runs with K as the copies read:
+    copies 1..K-1 must each move exactly their tokens and copies K..n_decl-1,
+    which PRIVATE-K allocates and never reads, must move neither output. The
+    claim says K distinct copies, and the FAIL line says what a PRIVATE-K
+    ladder then is not.
     """
     passed = sum(1 for name, _ in PROOF_PARTS if proof.parts.get(name))
-    return Gate("V2", VALIDITY,
-                "the private arm allocated and READ distinct weight copies",
-                proof.verdict,
+    if private_copies is None:
+        claim = "the private arm allocated and READ distinct weight copies"
+        fail = ("the private ladder is not a no-reuse reference at all, and "
+                "the ratio is a number about the apparatus")
+    else:
+        claim = (f"the private arm allocated its copies and READ exactly "
+                 f"{private_copies} distinct ones, tile j copy j mod "
+                 f"{private_copies} (PRIVATE-K)")
+        fail = (f"the private ladder is not PRIVATE-K at K={private_copies}, "
+                "so its slope says nothing about how many copies were read, "
+                "and the ratio is a number about the apparatus")
+    return Gate("V2", VALIDITY, claim, proof.verdict,
                 f"{passed} of {len(PROOF_PARTS)} parts",
-                f"all {len(PROOF_PARTS)} parts of the proof",
-                "the private ladder is not a no-reuse reference at all, and the "
-                "ratio is a number about the apparatus",
+                f"all {len(PROOF_PARTS)} parts of the proof", fail,
                 proof.lines())
 
 
@@ -4271,8 +4438,9 @@ def private_ids_lines(probe: AlignProbe, shared: ProbeReading,
     tread, and whether the two arms' steps are one step.
 
     The plan page registers the counter asymmetry -- SHARED's E counters take
-    BLOCK_M n increments each, PRIVATE's E x n take BLOCK_M each -- as a
-    per-tread term in the numerator alone. This is that term, MEASURED:
+    BLOCK_M n increments each, PRIVATE's E x n take BLOCK_M each (PRIVATE-K's
+    E x min(n, K) take BLOCK_M per tile routed to them) -- as a per-tread
+    term in the numerator alone. This is that term, MEASURED:
     `slope(private ids) - slope(shared ids)` in us per tread, and in the
     ratio's units against the weight stream. Printed, not scored."""
     series = probe.series(SHARED)
@@ -4863,13 +5031,21 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                   cross: CrossRun | None = None, min_tread: int,
                   treads: list[int] | None = None,
                   all_treads: tuple[float | None, tuple[float, float]] | None
-                  = None) -> Gate:
+                  = None, private_copies: int | None = None) -> Gate:
     """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit,
     both slopes over the treads `min_tread` and deeper: THE CLAIM'S WINDOW
     at `CLAIM_MIN_TREAD` (DESIGN DECISION 16), or the window a stored report
     recorded when `--read` re-renders it as scored. `treads` names the ones
     the fit had, for the page; `all_treads` is the same ratio over every
     tread, `(ratio, interval)`, PRINTED BESIDE IT and scored by nothing.
+
+    UNDER `private_copies` K (PRIVATE-K) the rule and the verdict are the
+    same and the WORDS are not: the denominator re-reads K copies, tiles `j`
+    and `j + K` sharing one, so it is not a no-reuse reference and the ratio
+    is not alpha. The claim says what is compared, the partition is printed
+    as where the ratio falls rather than as a world, and the page says the
+    reading is this private slope against SHARED's and the full private
+    arm's.
 
     THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
     (0.529-0.588, 90%). `c1_verdict` scores it from the point and the interval
@@ -4895,9 +5071,11 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
     verdict = cross.verdict if cross is not None else alone
     window = (f"treads {span_text(treads)}" if treads
               else f"treads {min_tread} and deeper")
+    k = private_copies
+    denominator = "private" if k is None else f"private-K, K={k}"
     detail = [
-        f"ratio = slope(shared) / slope(private) = {ratio:.4f}, both slopes "
-        f"over {window}"
+        f"ratio = slope(shared) / slope({denominator}) = {ratio:.4f}, both "
+        f"slopes over {window}"
         + (", THE CLAIM'S WINDOW (CLAIM_MIN_TREAD, DESIGN DECISION 16)"
            if min_tread == CLAIM_MIN_TREAD else
            f", the window this report was scored over; this build's claim "
@@ -4905,11 +5083,27 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
            "it from its cells.csv)"),
         f"{INTERVAL_PCT:.0f}% percentile bootstrap interval "
         f"[{lo:.4f}, {hi:.4f}] over {draws} draws that produced a ratio",
-        f"THE WORLD THIS LANDS IN: {name}",
-        f"  {meaning}",
-        "the registered partition, in full: "
-        + "; ".join(f"{n} [{a:.3f}, {b:.3f})" for n, a, b, _ in OUTCOMES),
     ]
+    if k is None:
+        detail += [f"THE WORLD THIS LANDS IN: {name}", f"  {meaning}"]
+    else:
+        detail += [
+            f"PRIVATE-K (--private-copies {k}): tile j read copy j mod {k}, so "
+            f"tiles j and j+{k} shared one and the denominator is NOT a "
+            "no-reuse reference. This ratio is not alpha, and the partition "
+            "below is registered for a no-reuse denominator: it names where "
+            "this ratio falls, not a world",
+            f"WHERE IT FALLS: {name}",
+            "THE READING THIS RUN EXISTS FOR is slope(private-K) against "
+            "slope(shared) here and against the full private arm's slope from "
+            "a run of this design without the flag: level with the full arm "
+            "is a per-copy cost paid on the first extra copy, toward shared "
+            "is reuse among tiles sharing a copy, which the full arm's "
+            "private copies prevent",
+        ]
+    detail.append("the registered partition, in full: "
+                  + "; ".join(f"{n} [{a:.3f}, {b:.3f})"
+                              for n, a, b, _ in OUTCOMES))
     if all_treads is not None:
         every, every_iv = all_treads
         formed = (every_iv is not None and len(every_iv) == 2
@@ -4949,10 +5143,7 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
             "unresolved at this precision"
             + (" (over the ENVELOPE of every run's interval)"
                if cross is not None else ""))
-    return Gate("C1", CLAIM,
-                "the re-read fraction, measured against a no-reuse reference, "
-                "is the study's refit alpha",
-                verdict,
+    return Gate("C1", CLAIM, c1_claim(k), verdict,
                 f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}, over {window}"
                 + (f"; over {len(cross.readings)} runs: spread "
                    f"{cross.spread:.4f}, envelope [{cross.envelope[0]:.4f}, "
@@ -4963,15 +5154,37 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                 + ("; with replicates: every run's point in the band and the "
                    "ENVELOPE of their intervals inside it"
                    if cross is not None else ""),
-                "the refit alpha is not the traffic fraction it is quoted as, "
+                c1_fail_means(k), detail)
+
+
+def c1_claim(private_copies: int | None = None) -> str:
+    """C1's claim line, written once for the scored gate and its UNKNOWN
+    branch: the refit claim for the default arm, and what is compared, and
+    that it is not alpha, under PRIVATE-K."""
+    if private_copies is None:
+        return ("the re-read fraction, measured against a no-reuse reference, "
+                "is the study's refit alpha")
+    return (f"slope(shared) / slope(private-K), K={private_copies}, sits in "
+            "the refit band; NOT alpha, because tiles j and "
+            f"j+{private_copies} share a copy and the denominator is not a "
+            "no-reuse reference")
+
+
+def c1_fail_means(private_copies: int | None = None) -> str:
+    """What a C1 that did not pass means, for the arm the run had."""
+    if private_copies is None:
+        return ("the refit alpha is not the traffic fraction it is quoted as, "
                 "and the page names which of the registered worlds it is "
-                "instead",
-                detail)
+                "instead")
+    return ("slope(shared) / slope(private-K) is outside the refit band, which "
+            "under PRIVATE-K is a statement about neither alpha nor the "
+            "refit: read the private-K slope against the full private arm's")
 
 
 def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
                           bandwidth_gbps: float, bandwidth_source: str,
-                          stream_ms: float) -> Gate:
+                          stream_ms: float,
+                          private_copies: int | None = None) -> Gate:
     """The private slope, read as a delivered bandwidth, against the ceiling.
 
     `weight_bytes / slope(PRIVATE)` is the rate at which the grouped GEMM
@@ -5001,11 +5214,16 @@ def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
 
     THE SLOPE IS THE CLAIM'S, over the window C1's ratio reads (DESIGN
     DECISION 16), so the rate and the ratio's denominator are one number.
+
+    UNDER `private_copies` K (PRIVATE-K) the rule is the same and the rate is
+    the one a whole fresh read per tile WOULD imply: tiles `j` and `j + K`
+    read one copy, so reuse among them lowers the slope, and a rate over the
+    ceiling has a third reading beside the two above, which is the effect
+    PRIVATE-K exists to find. The claim and the FAIL line say so.
     """
+    claim = c2_claim(private_copies)
     if private.slope_ms <= 0:
-        return Gate("C2", CLAIM,
-                    "the private arm's delivered weight-read rate is at or "
-                    "under the card's own ceiling",
+        return Gate("C2", CLAIM, claim,
                     UNKNOWN, "no positive private slope",
                     f"<= the calibrated rate x {1 + ACHIEVED_RATE_TOLERANCE:.2f}",
                     "the denominator of the ratio is not a weight stream", [])
@@ -5024,20 +5242,40 @@ def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
         "1.0000 is what a full fresh read per tile at the calibrated rate "
         "would give, and the excess over 1 is the shortfall of the achieved "
         "rate against the calibrated one",
-        "THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w "
-        "divides a slope by a stream time computed at an ASSUMED rate; this "
-        "row says what that assumption was worth on this card in this kernel.",
     ]
-    return Gate("C2", CLAIM,
-                "the private arm's delivered weight-read rate is at or under "
-                "the card's own ceiling",
+    if private_copies is None:
+        detail.append(
+            "THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w "
+            "divides a slope by a stream time computed at an ASSUMED rate; "
+            "this row says what that assumption was worth on this card in "
+            "this kernel.")
+        fail = ("either the private arm did not read every copy (V2 answers "
+                "that) or the calibrated bandwidth this study divides every "
+                "slope by is not a ceiling")
+    else:
+        detail.append(
+            f"UNDER PRIVATE-K (--private-copies {private_copies}) THIS IS NOT "
+            "THE STUDY'S DENOMINATOR: the rate above assumes a whole fresh "
+            f"read per tile, and tiles j and j+{private_copies} read one "
+            "copy, so a w under 1 here can be reuse among them")
+        fail = ("the private-K arm did not read its copies (V2 answers that), "
+                "the calibrated bandwidth is not a ceiling, or tiles sharing "
+                "a copy under PRIVATE-K reused it, which is the effect the "
+                "arm exists to find")
+    return Gate("C2", CLAIM, claim,
                 PASS if achieved <= ceiling else FAIL,
                 f"{achieved:.1f} GB/s, w={w_private:.4f}",
-                f"<= {ceiling:.1f} GB/s",
-                "either the private arm did not read every copy (V2 answers "
-                "that) or the calibrated bandwidth this study divides every "
-                "slope by is not a ceiling",
-                detail)
+                f"<= {ceiling:.1f} GB/s", fail, detail)
+
+
+def c2_claim(private_copies: int | None = None) -> str:
+    """C2's claim line, written once for every branch that builds C2."""
+    if private_copies is None:
+        return ("the private arm's delivered weight-read rate is at or under "
+                "the card's own ceiling")
+    return (f"the rate a whole fresh read per M-tile would imply off the "
+            f"private-K slope (K={private_copies}) is at or under the card's "
+            "own ceiling")
 
 
 # --------------------------------------------------------------------------
@@ -5048,15 +5286,18 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                      bandwidth_gbps: float, bw_source: str, dtype: str,
                      stream_ms: float, ridge: float, ridge_source: str,
                      copies_declared: int,
-                     census: PathCensus | None = None) -> list[str]:
+                     census: PathCensus | None = None,
+                     private_copies: int | None = None) -> list[str]:
     weight = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
     act_per_tile = (cfg.num_experts * block_m
                     * SWEEP.activation_bytes_per_row(cfg))
     act_share = act_per_tile / weight
+    k = private_copies
     out = ["", "PREDICTIONS, registered before the run and printed before any "
                 "measurement",
-           "  the quantity: ratio = slope(shared) / slope(private), one "
-           "measured slope over another, both over treads "
+           "  the quantity: ratio = slope(shared) / slope("
+           + ("private" if k is None else f"private-K, K={k}")
+           + "), one measured slope over another, both over treads "
            f"{span_text(treads_in_window(treads, min_tread=CLAIM_MIN_TREAD))} "
            f"(CLAIM_MIN_TREAD {CLAIM_MIN_TREAD}, DESIGN DECISION 16); the same "
            "ratio over every tread is printed beside it and gates nothing",
@@ -5086,15 +5327,35 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "difference is V5")
     out.append(f"    shared   slope ~ alpha x one stream + activations "
                f"= {alpha:.3f} + {act_share:.4f} streams per M-tile")
-    out.append(f"    private  slope ~ one stream + activations = 1.0000 + "
-               f"{act_share:.4f} streams per M-tile, BY CONSTRUCTION")
-    out.append(f"    so the ratio is predicted at "
-               f"{(alpha + act_share) / (1.0 + act_share):.4f} in the refit "
-               f"world and {(1.0 + act_share) / (1.0 + act_share):.4f} in the "
-               "no-reuse world")
-    out.append(f"    and at {(RETRACTED_ALPHA + act_share) / (1.0 + act_share):.4f} "
-               f"in the retracted alpha={RETRACTED_ALPHA} world, which the "
-               "partition names ISSUE-AND-LATENCY")
+    if k is None:
+        out.append(f"    private  slope ~ one stream + activations = 1.0000 + "
+                   f"{act_share:.4f} streams per M-tile, BY CONSTRUCTION")
+        out.append(f"    so the ratio is predicted at "
+                   f"{(alpha + act_share) / (1.0 + act_share):.4f} in the "
+                   f"refit world and "
+                   f"{(1.0 + act_share) / (1.0 + act_share):.4f} in the "
+                   "no-reuse world")
+        out.append(f"    and at "
+                   f"{(RETRACTED_ALPHA + act_share) / (1.0 + act_share):.4f} "
+                   f"in the retracted alpha={RETRACTED_ALPHA} world, which the "
+                   "partition names ISSUE-AND-LATENCY")
+    else:
+        out.append(f"    private-K (K={k}) at treads 1..{k} IS the full "
+                   f"private arm's call (tile j reads copy j), 1.0000 + "
+                   f"{act_share:.4f} streams per M-tile; past tread {k} tile "
+                   f"j re-reads copy j mod {k}, the copy tile j-{k} read, so "
+                   "each later increment sits between shared's and one "
+                   "stream, NOT BY CONSTRUCTION")
+        out.append("    THE TWO READINGS OF SESSION 5's G=1 GAP, registered: "
+                   "(b) a per-copy address cost paid in full on the first "
+                   "extra copy puts slope(private-K) level with the full "
+                   "private arm's at any K >= 2; (a) reuse in the shared arm "
+                   "moves slope(private-K) toward slope(shared) as K shrinks. "
+                   "The full private arm is not on this page: it is a run of "
+                   "this design without --private-copies")
+        out.append("    so no ratio is predicted: under PRIVATE-K the ratio "
+                   "is not alpha and the partition names where it falls, not "
+                   "a world")
     out.append("")
     out.append("  THE GATES, and the thresholds they are scored at:")
     out.append(f"    V0 all cells, >= {max(MIN_TREADS, 2)} usable treads in the "
@@ -5142,11 +5403,19 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "tread")
     out.append("    C1 PASS: point and whole interval inside ALPHA_BAND; "
                "FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN; the ratio "
-               f"over treads {CLAIM_MIN_TREAD} and deeper")
+               f"over treads {CLAIM_MIN_TREAD} and deeper"
+               + ("" if k is None else
+                  "; the same rule under PRIVATE-K, and the verdict is not "
+                  "about alpha"))
     out.append(f"    C2 the delivered weight-read rate, off the private slope over "
                f"treads {CLAIM_MIN_TREAD} and deeper, is at or under the "
-               f"card's own, +{ACHIEVED_RATE_TOLERANCE:.0%}")
+               f"card's own, +{ACHIEVED_RATE_TOLERANCE:.0%}"
+               + ("" if k is None else
+                  "; under PRIVATE-K the rate a whole fresh read per tile "
+                  "would imply, which reuse among tiles sharing a copy can "
+                  "put over it"))
     out.append("")
+    reads = copies_read(PRIVATE, treads[-1], k)
     out.append(f"  THE LAYOUT, REGISTERED: copy c of expert e is slot "
                f"e x {copies_declared} + c, and shared and private declare all "
                f"E x {copies_declared} = "
@@ -5155,9 +5424,15 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "grid, the dead launches and the tile order, and differ ONLY in "
                "the addresses their tiles read. Of those "
                f"{copies_declared} copies the deepest tread READS "
-               f"{treads[-1]}; the rest are padding, filled and never read, "
-               "and the buffer proof zeroes each of them and requires neither "
-               "arm's output to move.")
+               f"{reads}"
+               + ("; the rest are padding, filled and never read, "
+                  if k is None else
+                  f" (PRIVATE-K: tile j reads copy j mod {k}; all "
+                  f"{copies_declared} are allocated so that SHARED's "
+                  "allocation and the declaration do not move); the rest are "
+                  "filled and never read, ")
+               + "and the buffer proof zeroes each of them and requires "
+               "neither arm's output to move.")
     out.append("  THE CAVEAT, REGISTERED: those addresses are also the TLB "
                "footprint and the DRAM page locality, so slope(private) is a "
                "BOUNDED PROXY for the no-reuse case and not the no-reuse case "
@@ -5169,7 +5444,12 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "DRAM-page locality cost. NATIVE does not read them and n=1 has "
                "one. The only trace such a cost leaves here is the private "
                "ladder's own mean relative residual, printed in the ladder "
-               "table and SCORED BY NOTHING.")
+               "table and SCORED BY NOTHING."
+               + ("" if k is None else
+                  f" PRIVATE-K is the probe of it: this run's private arm "
+                  f"reads {k} copies where the full arm reads n, so such a "
+                  "cost paid on the first extra copy is here in full, and "
+                  "reuse among tiles sharing a copy is here too"))
     native_switch = census.switch_tread(NATIVE) if census is not None else None
     out.append("  THE ALIGNMENT KERNEL, SEPARATED THREE WAYS: vLLM switches "
                "moe_align_block_size kernel at the cited id and expert bounds, "
@@ -5220,8 +5500,15 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "the scan kernel, `count_and_sort_expert_tokens` does one "
                "atomic add per id into a per-expert counter, so SHARED's "
                f"{cfg.num_experts} counters take {block_m} n increments each "
-               f"while PRIVATE's {cfg.num_experts} x n take {block_m} each; a "
-               "per-tread term in the numerator alone. The probe times the "
+               + (f"while PRIVATE's {cfg.num_experts} x n take {block_m} each"
+                  if k is None else
+                  f"while PRIVATE-K's {cfg.num_experts} x min(n, {k}) take "
+                  f"{block_m} per tile routed to them")
+               + ("; a per-tread term in the numerator alone"
+                  if k is None else
+                  "; a per-tread term in both arms past tread "
+                  f"{k}, larger in the numerator")
+               + ". The probe times the "
                "alignment op on PRIVATE's id set as well as SHARED's, and V8 "
                "prints slope(private ids) - slope(shared ids) in us per tread "
                "and in the ratio's units: MEASURED, printed, not scored. And "
@@ -5252,7 +5539,8 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
                pinned: dict, run_id: str, resources, card: str, git_note: str,
                mem: MemoryPlan, tokens: dict[int, int], ridge: float,
                alpha: float, copies_declared: int, declared_reason: str,
-               census: PathCensus, replicates: tuple = ()) -> list[str]:
+               census: PathCensus, replicates: tuple = (),
+               private_copies: int | None = None) -> list[str]:
     deepest = treads[-1]
     return [
         f"experiment  private_weight_reference / {run_id}",
@@ -5260,7 +5548,9 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         f"{args.dtype} ({b} bytes)",
         f"tile        BLOCK_M={block_m}, one tile per run and in the run id",
         f"pinned      {pinned}",
-        "arms        " + "; ".join(f"{a}: {ARM_MEANING[a]}" for a in ARMS),
+        "arms        " + "; ".join(f"{a}: {arm_meaning(a, private_copies)}"
+                                   for a in ARMS),
+        *private_copies_lines(private_copies, treads),
         f"ladder      {len(treads)} treads n={treads[0]}..{treads[-1]}, "
         f"exactly-full tile stacks only (r = n x {block_m})",
         f"            the claim's slopes are fitted over treads "
@@ -5336,7 +5626,9 @@ def estimated_seconds(cfg, *, treads: list[int], block_m: int, repeats: int,
     The private arm is priced at `alpha = 1`, which is what it is by
     construction, and native at the shared arm's traffic, which is what it
     reads. Pricing all three at the study's alpha would under-book the one
-    arm whose whole design is to move more bytes.
+    arm whose whole design is to move more bytes. PRIVATE-K
+    (`--private-copies`) is priced the same way, and there `alpha = 1` is an
+    UPPER bound: reuse among tiles sharing a copy can only lower it.
     """
     total = 0.0
     for arm in ARMS:
@@ -5775,12 +6067,14 @@ def window_gates(samples, cfg, *, claim: WindowFit, decl: DeclarationReading,
                  rows: list[dict], treads: list[int], repeats: int,
                  roof_tflops: float, roof_source: str, dtype: str,
                  bandwidth_gbps: float, bandwidth_source: str,
-                 stream_ms: float, switch_source: str) -> dict[str, Gate]:
+                 stream_ms: float, switch_source: str,
+                 private_copies: int | None = None) -> dict[str, Gate]:
     """{tag: Gate} for the gates that read the claim's window, V0, V4, V5
     and C2, built from `claim` (C1 needs the replicates as well and V8 the
     probe, and their callers build them over the same window). ONE
     CONSTRUCTION for `analyse` and for `rescore`, so a stored report
-    re-scored over its own window reproduces its own gates."""
+    re-scored over its own window reproduces its own gates. C2's words
+    follow `private_copies`, the K of a PRIVATE-K run."""
     m = claim.min_tread
     ladders = claim.ladders
     gates = {
@@ -5807,11 +6101,9 @@ def window_gates(samples, cfg, *, claim: WindowFit, decl: DeclarationReading,
             ladders[PRIVATE],
             weight_bytes=WEIGHTS.routed_expert_weight_bytes(cfg, dtype),
             bandwidth_gbps=bandwidth_gbps, bandwidth_source=bandwidth_source,
-            stream_ms=stream_ms)
+            stream_ms=stream_ms, private_copies=private_copies)
     else:
-        gates["C2"] = Gate("C2", CLAIM,
-                           "the private arm's delivered weight-read rate is at "
-                           "or under the card's own ceiling",
+        gates["C2"] = Gate("C2", CLAIM, c2_claim(private_copies),
                            UNKNOWN, "no private ladder", "a relation",
                            "the denominator of the ratio is not a weight stream",
                            [])
@@ -5876,6 +6168,34 @@ def fit_lines(claim: WindowFit, every: WindowFit, cfg, *, dtype: str,
     return lines
 
 
+def private_k_lines(ladders: dict, private_copies: int | None) -> list[str]:
+    """The page's PRIVATE-K reading under the fits: where the private-K slope
+    sits against SHARED's on this page, and what the full private arm's
+    slope, which is not on this page, is needed for. Nothing for the
+    default arm. Printed, scored by nothing."""
+    if private_copies is None:
+        return []
+    k = private_copies
+    out = ["", f"PRIVATE-K, K={k} (--private-copies {k}): tile j of an expert "
+               f"read copy j mod {k}"]
+    shared, pk = ladders.get(SHARED), ladders.get(PRIVATE)
+    if shared is None or pk is None:
+        out.append("  NOT READ: a ratio arm's ladder was not fitted")
+        return out
+    out.append(f"  slope(private-K) {pk.slope_ms:.6f} ms per M-tile, "
+               f"slope(shared) {shared.slope_ms:.6f}, over {pk.span}: "
+               f"private-K sits {pk.slope_ms - shared.slope_ms:+.6f} ms per "
+               "M-tile above shared")
+    out.append("  THE FULL PRIVATE ARM IS NOT ON THIS PAGE. Its slope comes "
+               "from a run of this design without --private-copies, and the "
+               "reading is (slope(private-K) - slope(shared)) / "
+               "(slope(private) - slope(shared)): 1 is a per-copy cost paid "
+               "in full on the first extra copy, below 1 is reuse among tiles "
+               "sharing a copy. The design keys refuse to pool the two runs; "
+               "each report's ladders carry its slopes")
+    return out
+
+
 def ladder_payload(ladders: dict) -> dict:
     """report.json's block for one window's ladders."""
     return {arm: {"points": [list(p) for p in lad.points],
@@ -5910,7 +6230,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             copies_declared: int | None = None,
             clock_elasticity: ClockElasticity | None = None,
             run_id: str = "", session_tag: str = "",
-            replicates: tuple = (), duty: float) -> Report:
+            replicates: tuple = (), duty: float,
+            private_copies: int | None = None) -> Report:
     """The page and report.json from the cells. `duty` is the REQUESTED duty
     (`--duty`), recorded as the payload's `duty` whatever was timed: a page
     whose sweep was skipped (V8 FAIL) or whose every cell failed has no
@@ -5922,7 +6243,12 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     THE CLAIM IS READ OVER `CLAIM_MIN_TREAD` AND DEEPER (DESIGN DECISION 16),
     and the same fits over every tread are printed beside it and stored under
     their own keys; `window_fit` and `window_gates` are the construction,
-    which `rescore` shares."""
+    which `rescore` shares.
+
+    `private_copies` is the K of a PRIVATE-K run (`--private-copies`), None
+    for the default arm. It is recorded as the payload's `private_copies`, a
+    design key; it sets the words of V2, C1 and C2, and the page prints the
+    PRIVATE-K reading under the fits. No verdict rule moves with it."""
     if census is None:
         census = path_census(cfg, treads, block_m, {
             arm: declared_experts(arm, cfg.num_experts,
@@ -5959,6 +6285,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     lines += fit_lines(claim, every, cfg, dtype=dtype,
                        bandwidth_gbps=bandwidth_gbps,
                        bandwidth_source=bandwidth_source)
+    lines += private_k_lines(ladders, private_copies)
     clock_correction = None
     if ratio is not None and clock_elasticity is not None:
         # f_ref is cosmetic for the RATIO (it cancels) and named for the
@@ -6004,11 +6331,12 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                             roof_tflops=roof_tflops, roof_source=roof_source,
                             dtype=dtype, bandwidth_gbps=bandwidth_gbps,
                             bandwidth_source=bandwidth_source,
-                            stream_ms=stream_ms, switch_source=switch_source)
+                            stream_ms=stream_ms, switch_source=switch_source,
+                            private_copies=private_copies)
     gates: list[Gate] = [
         windowed["V0"],
         gate_v1_matched_geometry(samples, block_m=block_m, treads=treads),
-        gate_v2_distinct_buffers(proof),
+        gate_v2_distinct_buffers(proof, private_copies),
         gate_v3_memory(mem, weight_delta_bytes=weight_delta_bytes,
                        high_water_bytes=high_water_bytes),
         windowed["V4"],
@@ -6034,17 +6362,16 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
              if replicates else None)
     claim_treads = treads_in_window(treads, min_tread=CLAIM_MIN_TREAD)
     if ratio is None or this_reading is None:
-        gates.append(Gate("C1", CLAIM,
-                          "the re-read fraction, measured against a no-reuse "
-                          "reference, is the study's refit alpha",
+        gates.append(Gate("C1", CLAIM, c1_claim(private_copies),
                           UNKNOWN,
                           "no ratio was formed" if ratio is None
                           else f"{ratio:.4f}, no interval was formed",
                           "point and whole interval inside ALPHA_BAND "
                           f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}), the ratio over "
                           f"treads {CLAIM_MIN_TREAD} and deeper",
-                          "the refit alpha is not the traffic fraction it is "
-                          "quoted as",
+                          ("the refit alpha is not the traffic fraction it is "
+                           "quoted as" if private_copies is None
+                           else c1_fail_means(private_copies)),
                           ([claim.unmeasurable] if claim.unmeasurable else [])
                           + (["this run enters no reading; the replicates "
                               "named are read together below and C1 stays "
@@ -6055,7 +6382,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                                    corrected=corrected, clock=clock_correction,
                                    cross=cross, min_tread=CLAIM_MIN_TREAD,
                                    treads=ratio_treads(claim),
-                                   all_treads=(every.ratio, every.interval)))
+                                   all_treads=(every.ratio, every.interval),
+                                   private_copies=private_copies))
     gates.append(windowed["C2"])
 
     lines += ["", "=" * 72, "GATES", "=" * 72]
@@ -6135,6 +6463,10 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "discrimination_floor": floor.as_dict(),
         "treads_table": rows,
         "copies_declared": copies_declared,
+        # A DESIGN KEY: the K of PRIVATE-K (`--private-copies`), whose tile j
+        # read copy j mod K; null for the default arm, every tile its own
+        # copy, and read null from every report before the key.
+        "private_copies": private_copies,
         "path_census": census.as_dict(),
         "align_probe": probe.as_dict() if probe is not None else None,
         "declaration_fit": ({"switch_tread": decl.fit.switch_tread,
@@ -6225,7 +6557,8 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
     same window (left as stored when the report stored no probe). The
     bootstrap is drawn at the report's own seed with `draws` draws, so a
     report re-scored over the window it was written with reproduces its own
-    ratio, interval and gates (the tests hold that).
+    ratio, interval and gates (the tests hold that). A PRIVATE-K report's C1
+    and C2 keep its words: K is read off its `private_copies`.
 
     REFUSED, never guessed: no cells.csv beside the report, a model this
     build does not know, a planted report, or cells that form no ratio or no
@@ -6251,6 +6584,7 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
     samples = read_samples(cells)
     block_m = int(payload["block_m"])
     treads = [int(n) for n in payload["treads"]]
+    private_copies = design_value(payload, "private_copies")
     repeats = int(payload["repeats"])
     dtype = payload["dtype"]
     bandwidth = float(payload["bandwidth_gbps"])
@@ -6294,11 +6628,13 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
                          roof_source=payload.get("roof_source") or "",
                          dtype=dtype, bandwidth_gbps=bandwidth,
                          bandwidth_source=payload.get("bandwidth_source") or "",
-                         stream_ms=float(stream_ms), switch_source=switch_source)
+                         stream_ms=float(stream_ms), switch_source=switch_source,
+                         private_copies=private_copies)
     gates["C1"] = gate_c1_ratio(
         claim.ratio, claim.interval, claim.draws_got, corrected=claim.corrected,
         min_tread=min_tread, treads=ratio_treads(claim),
-        all_treads=(every.ratio, every.interval))
+        all_treads=(every.ratio, every.interval),
+        private_copies=private_copies)
     probe = stored_probe(payload)
     if probe is not None:
         gates["V8"] = gate_v8_alignment(probe, treads=treads, census=census,
@@ -6349,7 +6685,8 @@ class World:
     why: str
     expect: dict[str, str]
     #: The re-read fraction the SHARED arm is generated at. The private arm is
-    #: always generated at 1.0, which is what it is by construction.
+    #: generated at 1.0, which is what it is by construction, except past
+    #: tread K in a world that plants PRIVATE-K (`private_k_alpha`).
     alpha: float = ALPHA
     #: Milliseconds per M-tile the native arm costs OVER the shared arm: the
     #: declaration, planted, which is what V5 measures. Charged on `n - n0`
@@ -6427,6 +6764,17 @@ class World:
     #: every arm registered V1 FAIL once and got PASS, correctly: the gates
     #: measure different failures and a world has to produce the one it names.
     drop_treads_from: tuple[str, tuple[int, ...]] | None = None
+    #: The K this world routes the private arm with (PRIVATE-K,
+    #: `--private-copies`); None is the default arm. A world that plants K
+    #: runs at it under `--self-test` without the flag, and refuses another.
+    private_copies: int | None = None
+    #: The re-read fraction each PRIVATE-K tile past the K-th is generated at:
+    #: tile `j >= K` reads the copy tile `j - K` read. The first K tiles read
+    #: fresh copies, as in the full arm, so treads `n <= K` are generated at
+    #: 1.0 whatever this is. 1.0 is reading (b), a per-copy cost paid in full
+    #: on the first extra copy; below 1 is reading (a), reuse among tiles
+    #: sharing a copy. Read only when K is set.
+    private_k_alpha: float = 1.0
 
     def check(self, report: Report) -> list[str]:
         got = {g.tag: g.verdict for g in report.gates}
@@ -6627,6 +6975,20 @@ WORLDS: dict[str, World] = {
         "of two ladders measured over different grids, which is what V1 is "
         "for and what dropping from every arm does not produce",
         {"V0": FAIL, "V1": FAIL}, drop_treads_from=(PRIVATE, (2, 3))),
+    "private-k-reuse": World(
+        "private-k-reuse",
+        "PRIVATE-K at K=2 in reading (a) of session 5's G=1 gap: tiles past "
+        "the second re-read the copy two tiles back at a fraction halfway "
+        f"between the shared arm's alpha={ALPHA} and a whole fresh read, so "
+        "slope(private-K) sits between slope(shared) and the full private "
+        "arm's. Every validity gate passes, and C1 and C2 FAIL, which is the "
+        "registration: the ratio lands above the refit band because the "
+        "denominator is not a no-reuse reference, and the rate a whole read "
+        "per tile would imply beats the card's ceiling because tiles sharing "
+        "a copy reused it. Neither is a finding about alpha or the ruler; "
+        "the page says so in the words of both gates",
+        dict(ALL_PASS, C1=FAIL, C2=FAIL), private_copies=2,
+        private_k_alpha=(ALPHA + 1.0) / 2.0),
 }
 
 
@@ -6634,12 +6996,20 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                     repeats: int, alpha_shared: float, ridge: float,
                     bandwidth_gbps: float, b: int, noise: float,
                     seed: int, copies_declared: int | None = None,
-                    native_switch: int | None = None) -> list[Sample]:
+                    native_switch: int | None = None,
+                    private_copies: int | None = None) -> list[Sample]:
     """Cells GENERATED from the study's own traffic model at a stated alpha.
 
     Every row carries `SYNTHETIC_INSTRUMENT`, so "not measured" is a VALUE on
     the row and not an absence a reader has to notice. Nothing here was
     measured and the report says so on its own line.
+
+    UNDER `private_copies` K the private arm is PRIVATE-K: at tread `n` its
+    weight traffic is `min(n, K) + private_k_alpha x max(0, n - K)` whole
+    reads, the first K tiles fresh copies and each later tile a re-read of
+    the copy tile `j - K` read. Carried through the sweep's own model as the
+    one re-read fraction that gives that traffic at `n`
+    (`private_k_tread_alpha`), so treads `n <= K` are the full arm's cells.
     """
     rng = random.Random(seed)
     out: list[Sample] = []
@@ -6655,7 +7025,9 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                         and arm == world.drop_treads_from[0]
                         and n in world.drop_treads_from[1]):
                     continue
-                a = 1.0 if arm == PRIVATE else alpha_shared
+                a = (private_k_tread_alpha(n, private_copies,
+                                           world.private_k_alpha)
+                     if arm == PRIVATE else alpha_shared)
                 ms = SWEEP.model_ms(cfg, rows, block_m, alpha=a, ridge=ridge,
                                     bandwidth_gbps=bandwidth_gbps, b=b)
                 if arm == NATIVE:
@@ -6679,7 +7051,7 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                 out.append(Sample(
                     arm=arm, repeat=rep, block_m=block_m, tiles=n,
                     rows_per_expert=rows, tokens=tokens,
-                    copies=copies_read(arm, n),
+                    copies=copies_read(arm, n, private_copies),
                     experts_declared=declared_experts(arm, cfg.num_experts,
                                                       n_decl),
                     ms_p50=ms, ms_min=ms,
@@ -6688,6 +7060,19 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                     sm_clock_load_mhz=clock, clock_level_ok=None,
                     clock_level_side="", clock_drift_ok=None, l2_flush=False))
     return out
+
+
+def private_k_tread_alpha(tiles: int, private_copies: int | None,
+                          private_k_alpha: float) -> float:
+    """The re-read fraction `SWEEP.model_ms` takes for the PRIVATE arm at
+    tread `tiles`: 1.0 for the default arm, and for PRIVATE-K the one alpha
+    whose `q_of_tiles` is `min(n, K) + private_k_alpha x max(0, n - K)`, the
+    first K tiles fresh reads and each later one a re-read at
+    `private_k_alpha`. 1.0 at `n <= K`, where PRIVATE-K is the full arm."""
+    if private_copies is None or tiles <= private_copies or tiles <= 1:
+        return 1.0
+    q = private_copies + private_k_alpha * (tiles - private_copies)
+    return (q - 1.0) / (tiles - 1)
 
 
 #: What a world plants at native's declaration when it plants no sweep step:
@@ -6805,6 +7190,8 @@ def build_private_weights(cfg, dtype: str, copies: int, seed: int,
     through `stride(0)`, and vLLM asserts only `stride(-1) == 1`). `copies` is
     the DECLARED count, which `declared_copies_for` may set above the deepest
     tread's: the extra copies are filled like the others and never read.
+    PRIVATE-K (`--private-copies K`) builds the same allocation and reads
+    copies 0..K-1 of it: the footprint it varies is the one the tiles read.
 
     Every copy is FILLED, not merely reserved: an untouched copy is a page
     table entry, not a byte on the bus, and the arm's whole claim is about
@@ -6922,10 +7309,14 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
     `call_for(arm)` returns a zero-argument callable producing that arm's
     `[T, H]` output at the deepest tread; `private_ids` are the `[T, k]` slot
     ids that call passes, from which the tokens routed to each copy are read.
-    `copies_read` is the deepest tread's count; `copies_declared`, at or above
-    it, is the allocation. A declared-but-never-read copy is zeroed too, and
-    NEITHER arm's output may move: that is the check that the padding
-    `declared_copies_for` adds is inert.
+    `copies_read` is the copies the private arm reads at the deepest tread
+    (`copies_read`): its tile count, or K under PRIVATE-K
+    (`--private-copies K`); `copies_declared`, at or above it, is the
+    allocation. A declared-but-never-read copy is zeroed too, and NEITHER
+    arm's output may move: that is the check that the padding
+    `declared_copies_for` adds is inert, and under PRIVATE-K that copies K
+    and up, which it allocates, are never read, so the proof is of exactly K
+    distinct copies read.
 
     ONE COPY AT A TIME, AND RESTORED. For every copy `c >= 1` the proof zeroes
     that copy alone, checks that the private output changed on EXACTLY the
@@ -7118,13 +7509,17 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
 
     e = cfg.num_experts
     deepest = treads[-1]
+    # PRIVATE-K (`--private-copies`): None is the default arm, every tile its
+    # own copy. It reaches the probe's private series, the private ids, each
+    # row's `copies` and the buffer proof, and nothing else here.
+    k = args.private_copies
     declared_by_arm = {arm: declared_experts(arm, e, copies_declared)
                        for arm in ARMS}
     probe = probe_alignment(cfg, block_m=block_m, treads=treads,
                             declared_by_arm=declared_by_arm,
                             copies_declared=copies_declared,
                             reference_clock=reference_clock,
-                            repeats=args.probe_repeats)
+                            repeats=args.probe_repeats, private_copies=k)
     early = gate_v8_alignment(probe, treads=treads, census=census,
                               weight_stream_ms=stream_ms,
                               min_tread=CLAIM_MIN_TREAD)
@@ -7163,9 +7558,11 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     w1, w2, weight_delta = build_private_weights(cfg, dtype, copies_declared,
                                                  args.seed)
     native_w1, native_w2 = w1[::copies_declared], w2[::copies_declared]
-    print(f"private weights: {copies_declared} copies declared ({deepest} read "
-          f"at the deepest tread), {weight_delta / 1e9:.4f} GB allocated and "
-          "filled")
+    print(f"private weights: {copies_declared} copies declared "
+          f"({copies_read(PRIVATE, deepest, k)} read at the deepest tread"
+          + (f", PRIVATE-K: tile j reads copy j mod {k}" if k is not None
+             else "")
+          + f"), {weight_delta / 1e9:.4f} GB allocated and filled")
 
     # A DRIFTED CELL IS NOT DONE. Keyed on `status == "ok"`, a resume of the
     # same command skipped every cell the clock had drifted through -- the one
@@ -7188,7 +7585,8 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
         ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
         weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
                              device="cuda")
-        private_ids = private_topk_ids(ids, e, block_m, rows, copies_declared)
+        private_ids = private_topk_ids(ids, e, block_m, rows, copies_declared,
+                                       k)
         shared_ids = shared_topk_ids(ids, copies_declared)
         kw = vllm_call_kwargs(spec)
         kw["activation"] = MoEActivation(kw["activation"])
@@ -7225,7 +7623,7 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                 if (arm, n, rep) in done:
                     continue
                 call = call_for(arm, x, ids_by_arm, weights, kw)
-                copies = copies_read(arm, n)
+                copies = copies_read(arm, n, k)
                 experts = declared_by_arm[arm]
                 try:
                     with override_config(conf):
@@ -7290,8 +7688,9 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     with override_config(conf):
         proof = prove_distinct_buffers(
             lambda arm: call_for(arm, x, ids_by_arm, weights, kw),
-            w1, w2, cfg=cfg, copies_read=deepest, dtype=dtype,
-            private_ids=ids_by_arm[PRIVATE], copies_declared=copies_declared)
+            w1, w2, cfg=cfg, copies_read=copies_read(PRIVATE, deepest, k),
+            dtype=dtype, private_ids=ids_by_arm[PRIVATE],
+            copies_declared=copies_declared)
     return (samples, proof, weight_delta, torch.cuda.max_memory_allocated(),
             probe)
 
@@ -7459,6 +7858,11 @@ def default_run_id(args, card: str) -> str:
     every probed cell and its repeat index, so the count is recoverable from
     the artefact this key exists to protect.
 
+    AND `--private-copies`, PRIVATE-K's K, when it is set: it moves which
+    copy every private tile reads, so a PRIVATE-K run never resumes into, or
+    is read as, the default arm's directory. A world that plants K has it
+    set by `_main` before the id is formed.
+
     A SELF-TEST IS PREFIXED AND ITS WORLD IS IN THE KEY. A planted report
     written into a metered run's directory would overwrite the only
     machine-readable artefact of an arm that cost pod minutes, with a synthetic
@@ -7490,6 +7894,13 @@ def default_run_id(args, card: str) -> str:
         # rather than append wider rows under it, and --read still re-reads
         # its report.json.
         **({"duty": args.duty} if args.duty != 1.0 else {}),
+        # PRIVATE-K's K moves which copy every private tile reads; in the key
+        # WHEN IT IS SET, for the duty's reason: the default arm's command
+        # names the directory it always named. Named to sort early, so the K
+        # stays in the id's visible part (`provenance._VISIBLE_MAX`) on a
+        # card whose slug is long, and not only in its hash.
+        **({"copiesk": args.private_copies}
+           if args.private_copies is not None else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
     return prefix + PV.run_id(card=card, **swept)
@@ -7609,6 +8020,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--session-tag", default="",
                     help="the driving session's name; in the run id, so a new "
                          "session measures fresh and a resumed one resumes")
+    ap.add_argument("--private-copies", type=int, default=None, metavar="K",
+                    help="PRIVATE-K: M-tile j of an expert reads copy j mod K "
+                         "instead of copy j, so the private arm reads K "
+                         "distinct copies and re-reads them; the shared and "
+                         "native arms, the declaration, the allocation and "
+                         "the gates do not move. Unset, the default, is "
+                         "every M-tile its own copy, which is K = the "
+                         "deepest tread's tile count (--treads); K below 2 "
+                         "or at or above that is refused. The ratio is then "
+                         "not alpha: the reading is the private slope "
+                         "against the full private arm's from a run without "
+                         "the flag. A design key and in the run id")
     ap.add_argument("--declared-copies", type=int, default=0,
                     help="copies SHARED and PRIVATE declare and the build "
                          "allocates; 0 = the rule in declared_copies_for, "
@@ -7692,6 +8115,23 @@ def _main(argv=None) -> int:
     b = dtype_bytes(args.dtype)
     block_m = args.block_m
     synthetic = args.self_test is not None
+    if synthetic:
+        # A WORLD THAT PLANTS PRIVATE-K RUNS AT ITS OWN K, before the run id
+        # is formed, as a world that plants an eta runs at its own eta: its
+        # registration is about that routing and no other.
+        planted_k = WORLDS[args.self_test].private_copies
+        if args.private_copies is None:
+            args.private_copies = planted_k
+        elif args.private_copies != planted_k:
+            print(f"REFUSED: the {args.self_test!r} world "
+                  + (f"plants --private-copies {planted_k}"
+                     if planted_k is not None else "plants no PRIVATE-K")
+                  + f" and --private-copies {args.private_copies} was given; "
+                  "a planted world's registration is about its own routing "
+                  "(the worlds that plant one: "
+                  + ", ".join(n for n, w in sorted(WORLDS.items())
+                              if w.private_copies is not None) + ")")
+            return exit_codes.REFUSED
     if not 0.0 < args.duty <= 1.0:
         print(f"REFUSED: --duty {args.duty} is not in (0, 1]: a duty cycle is "
               "the fraction of wall clock the kernel is busy, 1.0 is the "
@@ -7747,6 +8187,12 @@ def _main(argv=None) -> int:
               f"DESIGN DECISION 16), and a slope may not be quoted below "
               f"{MIN_TREADS}: two points make a line with no residual. Run at "
               f"least {CLAIM_MIN_TREAD + MIN_TREADS - 1} treads.")
+        return exit_codes.REFUSED
+    # PRIVATE-K'S K, against the ladder it routes: below 2 is the shared arm
+    # or nothing, and at or above the deepest tread it is the default arm.
+    why = private_copies_refusal(args.private_copies, treads)
+    if why:
+        print(f"REFUSED: {why}")
         return exit_codes.REFUSED
     # AND THE SAME FLOOR ON THE REPEATS, WHICH WAS NOT REFUSED AND IS NOW.
     # `--treads 2` cost nothing and said why; `--repeats 2` measured all 36
@@ -7824,7 +8270,9 @@ def _main(argv=None) -> int:
     census = path_census(cfg, treads, block_m, declared_by_arm)
     free_bytes, mem_source = _device_memory(args)
     mem = memory_plan(cfg, args.dtype, b, copies_declared, tokens[treads[-1]],
-                      free_bytes, mem_source, copies_read=treads[-1])
+                      free_bytes, mem_source,
+                      copies_read=copies_read(PRIVATE, treads[-1],
+                                              args.private_copies))
 
     card = detect_card_slug()
     pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
@@ -7852,7 +8300,8 @@ def _main(argv=None) -> int:
                     "copies_declared": copies_declared,
                     "alpha_band": list(ALPHA_BAND), "duty": args.duty,
                     "claim_min_tread": CLAIM_MIN_TREAD,
-                    "duty_gap_from_burst": args.duty < 1.0})
+                    "duty_gap_from_burst": args.duty < 1.0,
+                    "private_copies": args.private_copies})
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
@@ -7870,14 +8319,16 @@ def _main(argv=None) -> int:
                         tokens=tokens, ridge=ridge, alpha=args.alpha,
                         copies_declared=copies_declared,
                         declared_reason=declared_reason, census=census,
-                        replicates=tuple(replicates))
+                        replicates=tuple(replicates),
+                        private_copies=args.private_copies)
     header += prediction_lines(cfg, block_m=block_m, treads=treads,
                                alpha=args.alpha, bandwidth_gbps=bandwidth,
                                bw_source=bw_source, dtype=args.dtype,
                                stream_ms=stream_ms, ridge=ridge,
                                ridge_source=ridge_source,
                                copies_declared=copies_declared,
-                               census=census)
+                               census=census,
+                               private_copies=args.private_copies)
     print("\n".join(header))
 
     if refused:
@@ -7945,11 +8396,15 @@ def _main(argv=None) -> int:
                   f"of kernel time takes about {ladder_secs / args.duty:.0f} s, "
                   "the idle gaps between bursts being the point; the probe is "
                   "timed at full duty")
+        if args.private_copies is not None:
+            print(f"PRIVATE-K (--private-copies {args.private_copies}) is priced "
+                  "at alpha = 1 like the full private arm, an upper bound: "
+                  "reuse among tiles sharing a copy can only shorten it")
         print("NOT IN THAT FIGURE: the Triton compiles, and the private weight "
               f"build, which copies {mem.weight_bytes / 1e9:.2f} GB "
               "device-to-device once, and the five-part buffer proof's "
-              f"{proof_calls(treads[-1], copies_declared)} extra fused_experts "
-              "calls at the deepest tread.")
+              f"{proof_calls(mem.copies_read, copies_declared)} extra "
+              "fused_experts calls at the deepest tread.")
         # REFUSED (2) AND NOT DONE (0). A dry run scores no gate, prints no
         # RESULT line, and `exit_codes.classify_text` over this log raises
         # `NoGatesScored`, which that module documents as what a REFUSED log
@@ -7996,7 +8451,8 @@ def _main(argv=None) -> int:
             alpha_shared=world.alpha, ridge=ridge, bandwidth_gbps=bandwidth,
             b=b, noise=args.plant_noise, seed=args.seed,
             copies_declared=copies_declared,
-            native_switch=census.switch_tread(NATIVE))
+            native_switch=census.switch_tread(NATIVE),
+            private_copies=args.private_copies)
         probe = planted_probe(world, cfg, block_m=block_m, treads=treads,
                               declared_by_arm=declared_by_arm, census=census,
                               noise=args.plant_noise, seed=args.seed,
@@ -8067,7 +8523,8 @@ def _main(argv=None) -> int:
         prov=_observed_iters(prov, samples), probe=probe, census=census,
         copies_declared=copies_declared, clock_elasticity=clock_elasticity,
         run_id=run_id, session_tag=args.session_tag,
-        replicates=tuple(replicates), duty=args.duty)
+        replicates=tuple(replicates), duty=args.duty,
+        private_copies=args.private_copies)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -8121,7 +8578,11 @@ def _read_mode(args) -> int:
     `CLAIM_MIN_TREAD` (`rescore`), the gates that read that window
     (`RESCORED_GATES`: V8 from the stored probe cells, when there are any)
     are rebuilt from the cells and the rest re-rendered as stored, and
-    --replicate-of is optional."""
+    --replicate-of is optional.
+
+    AND ONE ARM. `private_copies` is a design key, so a PRIVATE-K report and
+    a full private one, or two Ks, are refused as a pair; C1 is re-rendered
+    in the words of the arm the reports had."""
     path = Path(args.read)
     if path.is_dir():
         path = path / "report.json"
@@ -8163,7 +8624,7 @@ def _read_mode(args) -> int:
     print(f"experiment  private_weight_reference / {this.name}")
     for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
                 "repeats", "copies_declared", "duty", "duty_gap_from_burst",
-                "claim_min_tread"):
+                "claim_min_tread", "private_copies"):
         # One space at least: a key of twelve or more ran into its value.
         print(f"{key:<11} {design_value(payload, key)}")
     # What the rows were timed at, beside the requested duty above. Absent
@@ -8230,7 +8691,8 @@ def _read_mode(args) -> int:
                                   cross=cross, min_tread=this.claim_min_tread,
                                   treads=window,
                                   all_treads=(page.every.ratio,
-                                              page.every.interval))
+                                              page.every.interval),
+                                  private_copies=design["private_copies"])
             else:
                 every = payload.get("ratio_all_treads")
                 g = gate_c1_ratio(this.ratio, this.interval,
@@ -8242,7 +8704,8 @@ def _read_mode(args) -> int:
                                       (every, tuple(payload.get(
                                           "ratio_all_treads_interval")
                                           or (None, None)))
-                                      if every is not None else None))
+                                      if every is not None else None),
+                                  private_copies=design["private_copies"])
         gates.append(g)
         print("\n".join(g.render()))
         print()

@@ -70,6 +70,8 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     # checked against its own exit code. The test under it now asserts this
     # list covers WORLDS, so a twelfth world cannot be added and left out.
     (("--self-test", "faster-than-its-ruler"), True),
+    # PRIVATE-K's planted world, run at the K it plants with no flag given.
+    (("--self-test", "private-k-reuse"), True),
 )
 
 
@@ -848,7 +850,7 @@ def test_every_knob_that_moves_a_millisecond_is_in_the_run_id():
                         ("--num-stages", 3), ("--block-n", 128),
                         ("--group-m", 16), ("--seed", 3), ("--duty", 0.5),
                         ("--session-tag", "gaps-nvidia_h200-20260918"),
-                        ("--declared-copies", 9)):
+                        ("--declared-copies", 9), ("--private-copies", 2)):
         other = PW.default_run_id(_args(**{flag: value}), "NVIDIA H200")
         assert other != base, flag
 
@@ -1174,15 +1176,22 @@ def _reference_fused(x, w1, w2, topk_weights, topk_ids):
     return y
 
 
-def _cpu_proof(*, misroute=None, declared=None):
+def _cpu_proof(*, misroute=None, declared=None, private_copies=None,
+               copies_read=None):
     """The whole proof on the toy model, off GPU. `misroute(ids, declared)`
     plants a broken relabelling into the private arm; `declared` above the
-    three copies read plants the padding `declared_copies_for` adds."""
+    three copies read plants the padding `declared_copies_for` adds.
+    `private_copies` routes the private arm as PRIVATE-K, and the proof is
+    told it reads `copies_read` copies (`PW.copies_read` of that routing at
+    the three-tile tread, unless a test plants a different count)."""
     import torch
     toy = MODEL_CONFIGS["toy"]
     e, k, bm, copies = toy.num_experts, toy.top_k, 4, 3
     declared = declared or copies
     rows = copies * bm
+    if copies_read is None:
+        copies_read = (copies if private_copies is None else
+                       PW.copies_read(PW.PRIVATE, copies, private_copies))
     w1, w2, _ = PW.build_private_weights(toy, "bf16", declared, seed=0,
                                          device="cpu")
     ids = balanced_flat_ids(e, rows, k, seed=3).to(torch.int64)
@@ -1190,7 +1199,9 @@ def _cpu_proof(*, misroute=None, declared=None):
     x = torch.randn((tokens, toy.hidden_size), dtype=torch.bfloat16,
                     generator=torch.Generator().manual_seed(1))
     weights = torch.full(ids.shape, 1.0 / k)
-    private = PW.private_topk_ids(ids, e, bm, rows, declared)
+    private = (PW.private_topk_ids(ids, e, bm, rows, declared)
+               if private_copies is None else
+               PW.private_topk_ids(ids, e, bm, rows, declared, private_copies))
     if misroute is not None:
         private = misroute(private, declared)
     by_arm = {PW.NATIVE: ids, PW.SHARED: PW.shared_topk_ids(ids, declared),
@@ -1207,7 +1218,7 @@ def _cpu_proof(*, misroute=None, declared=None):
         return call
     before = (w1.clone(), w2.clone())
     proof = PW.prove_distinct_buffers(call_for, w1, w2, cfg=toy,
-                                      copies_read=copies, dtype="bf16",
+                                      copies_read=copies_read, dtype="bf16",
                                       private_ids=private,
                                       copies_declared=declared)
     return proof, calls, before, (w1, w2)
@@ -4642,7 +4653,8 @@ def _payload_for(argv: list[str]) -> tuple[int, dict, str]:
 
 def _analyse(samples, treads: list[int], *, block_m: int = 32,
              draws: int = 10, copies: int = 9, replicates=(), run_id="",
-             pinned=None, seed: int = 0, duty: float = 1.0):
+             pinned=None, seed: int = 0, duty: float = 1.0,
+             private_copies: int | None = None):
     """`PW.analyse` over planted cells, with what a planted run hands it.
 
     The memory plan and the buffer proof `_main` builds for a synthetic world,
@@ -4663,7 +4675,11 @@ def _analyse(samples, treads: list[int], *, block_m: int = 32,
         high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=seed,
         header=[], card="no card", synthetic=True,
         model_name=PW.DEFAULT_MODEL, pinned=(pinned or {}), copies_declared=copies,
-        run_id=run_id, replicates=tuple(replicates), duty=duty)
+        run_id=run_id, replicates=tuple(replicates), duty=duty,
+        # Passed only when set, so every caller that plants no PRIVATE-K
+        # drives `analyse` with the arguments it always took.
+        **({"private_copies": private_copies}
+           if private_copies is not None else {}))
 
 
 def test_an_interval_that_was_not_formed_is_null_in_the_payload_and_not_nan():
@@ -5941,7 +5957,7 @@ def _write_cells(dirpath: Path, samples) -> Path:
 
 
 def _report_with_cells(tmp_path, name, samples, treads, *, seed=0, draws=30,
-                       old_window=False, duty=1.0):
+                       old_window=False, duty=1.0, private_copies=None):
     """A measured-shaped report.json WITH the cells.csv it was scored from.
     `old_window` writes what a report before DESIGN DECISION 16 stored: the
     every-tread ratio and interval in `ratio` and `ratio_interval`, and no
@@ -5950,7 +5966,7 @@ def _report_with_cells(tmp_path, name, samples, treads, *, seed=0, draws=30,
     pinned = dict(PW.SWEEP.FIXED, num_stages=defaults.num_stages,
                   GROUP_SIZE_M=defaults.group_m, BLOCK_SIZE_N=defaults.block_n)
     report = _analyse(samples, treads, draws=draws, run_id=name, pinned=pinned,
-                      seed=seed, duty=duty)
+                      seed=seed, duty=duty, private_copies=private_copies)
     payload = dict(report.payload)
     payload["synthetic"] = False
     payload["provenance"] = {"utc": f"2026-09-23T1{seed}:00:00Z",
@@ -6464,3 +6480,416 @@ def test_a_run_prints_and_stores_the_discrimination_floor_off_its_own_shared_lad
     assert ("DISCRIMINATION FLOOR over treads 2..6, the claim's window, from "
             "this run's own shared ladder") in page.stdout
     assert f"alpha = {got.floor.alpha:.4f}" in page.stdout
+
+
+# --------------------------------------------------------------------------
+# PRIVATE-K (--private-copies K): tile j of an expert reads copy j mod K. The
+# owner's next experiment after session 5, the G=1 split between reuse in the
+# shared arm and a per-copy cost in the private one
+# --------------------------------------------------------------------------
+
+#: The Ks the pod commands run. Both below the default ladder's deepest tread.
+PRIVATE_K = (2, 3)
+PK_TREADS = list(range(1, PW.DEFAULT_TREADS + 1))
+
+
+def _rank_within_expert(ids):
+    """Each slot's rank among the slots naming its expert, in flattened index
+    order, which is the order the relabelling hands out M-tiles in."""
+    import torch
+    seen: dict[int, int] = {}
+    ranks = []
+    for e in ids.reshape(-1).tolist():
+        ranks.append(seen.get(e, 0))
+        seen[e] = seen.get(e, 0) + 1
+    return torch.tensor(ranks)
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+@pytest.mark.parametrize("tiles", PK_TREADS)
+def test_private_k_routes_tile_j_of_every_expert_to_copy_j_mod_k(k, tiles):
+    """THE ROUTING. The j-th M-tile of expert e (ranks [j BM, (j+1) BM)) reads
+    copy j mod K, slot e x n_decl + (j mod K): every slot holds BLOCK_M rows
+    per tile routed to it, and no slot at copy K or past it is touched."""
+    import torch
+    e, top_k, bm, n_decl = CFG.num_experts, CFG.top_k, PW.DEFAULT_BLOCK_M, 9
+    ids = balanced_flat_ids(e, tiles * bm, top_k)
+    out = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl, k)
+    flat, orig = out.reshape(-1).long(), ids.reshape(-1).long()
+    tile = _rank_within_expert(ids) // bm
+    assert torch.equal(flat // n_decl, orig)          # still its own expert
+    assert torch.equal(flat % n_decl, tile % k)       # copy j mod K
+    counts = torch.bincount(flat, minlength=PW.expert_space(e, n_decl))
+    for ex in range(e):
+        for c in range(n_decl):
+            routed = sum(1 for j in range(tiles) if j % k == c)
+            assert int(counts[PW.copy_slot(ex, c, n_decl)]) == routed * bm, (ex, c)
+    assert int((flat % n_decl).max()) + 1 == PW.copies_read(PW.PRIVATE, tiles, k)
+    assert out.dtype == ids.dtype
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+def test_private_k_is_the_full_private_arm_at_and_below_k_and_not_past_it(k):
+    """At n <= K every tile j < K reads copy j mod K = j, so those treads ARE
+    the default arm's call, id for id. Past K they are not. And at n = 1 it
+    is the SHARED call, which is what V6 compares."""
+    e, top_k, bm, n_decl = CFG.num_experts, CFG.top_k, PW.DEFAULT_BLOCK_M, 9
+    for tiles in PK_TREADS:
+        ids = balanced_flat_ids(e, tiles * bm, top_k, seed=tiles)
+        full = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl)
+        pk = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl, k)
+        assert bool((pk == full).all()) == (tiles <= k), tiles
+        if tiles == 1:
+            assert bool((pk == PW.shared_topk_ids(ids, n_decl)).all())
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+@pytest.mark.parametrize("tiles", [3, 4, 6])
+def test_private_k_keeps_the_shared_arms_expert_order_and_whole_tiles(k, tiles):
+    """Only the copy a tile reads moves. The sort by slot still runs expert
+    0's tiles, then expert 1's, and every slot holds whole tiles, so the
+    alignment builds the shared arm's M-tile count with no padding row."""
+    import torch
+    e, top_k, bm, n_decl = CFG.num_experts, CFG.top_k, 32, 9
+    ids = balanced_flat_ids(e, tiles * bm, top_k)
+    pk = PW.private_topk_ids(ids, e, bm, tiles * bm, n_decl, k)
+    shared = PW.shared_topk_ids(ids, n_decl)
+    assert _slot_order_by_expert(pk, n_decl) == _slot_order_by_expert(
+        shared, n_decl)
+    used = [int(c) for c in torch.bincount(pk.reshape(-1).long()) if c > 0]
+    assert all(c % bm == 0 for c in used)
+    assert sum(c // bm for c in used) == e * tiles
+
+
+def test_copies_read_is_min_n_k_under_private_k_and_one_for_the_other_arms():
+    for n in PK_TREADS:
+        assert PW.copies_read(PW.PRIVATE, n) == n
+        for k in PRIVATE_K:
+            assert PW.copies_read(PW.PRIVATE, n, k) == min(n, k)
+            assert PW.copies_read(PW.SHARED, n, k) == 1
+            assert PW.copies_read(PW.NATIVE, n, k) == 1
+    rank = 5 * 32 + 7                                 # a row of tile 5
+    assert PW.private_copy_index(rank, 32) == 5
+    for k in PRIVATE_K:
+        assert PW.private_copy_index(rank, 32, k) == 5 % k
+
+
+def _dry(extra=()):
+    return run(["--dry-run", "--device-memory-gb", "140", *extra])
+
+
+def test_the_private_k_plan_allocates_the_default_arms_copies_and_reads_k():
+    """ALL n_decl COPIES ARE ALLOCATED AND K ARE READ. The weight bill and
+    the declaration are the default arm's, read off the default plan and not
+    typed here; the memory line says K are read and the rest never are, and
+    the buffer proof is priced at K copies read."""
+    base = _dry()
+    counts = re.search(r"n_decl = (\d+) against n_max = (\d+) read", base.stdout)
+    assert counts, base.stdout[-2000:]
+    n_decl, n_max = int(counts.group(1)), int(counts.group(2))
+    bill = re.search(r"copies declared and filled \([^)]*\)\s+([\d.]+) GB",
+                     base.stdout).group(1)
+    for k in PRIVATE_K:
+        got = _dry(["--private-copies", str(k)])
+        assert "reason: --dry-run was given" in got.stdout, got.stdout[-2000:]
+        filled = re.search(r"x (\d+) copies declared and filled \((\d+) read "
+                           r"at the deepest tread, (\d+) never read\)\s+"
+                           r"([\d.]+) GB", got.stdout)
+        assert filled, got.stdout[-2000:]
+        assert (int(filled.group(1)), int(filled.group(2)),
+                int(filled.group(3))) == (n_decl, k, n_decl - k)
+        assert filled.group(4) == bill
+        assert (f"declare E x n_decl = "
+                f"{PW.expert_space(CFG.num_experts, n_decl)} at EVERY tread"
+                in got.stdout)
+        assert ("copies read per tread "
+                + ", ".join(f"n={n}:{min(n, k)}" for n in range(1, n_max + 1))
+                in got.stdout)
+        assert f"proof's {PW.proof_calls(k, n_decl)} extra" in got.stdout
+        assert f"READS {k} (PRIVATE-K: tile j reads copy j mod {k}" in got.stdout
+
+
+def test_the_buffer_proof_passes_private_k_on_exactly_k_distinct_copies():
+    """V2 UNDER K. Three tiles at K=2 read copies 0, 1, 0. The proof, told K
+    copies are read, zeroes copy 1 (it must move exactly its own tokens) and
+    copy 2 (allocated and never read: neither output may move)."""
+    import torch
+    proof, calls, before, after = _cpu_proof(private_copies=2)
+    assert proof.verdict == exit_codes.PASS, proof.lines()
+    assert len(calls) == PW.proof_calls(2, 3)
+    assert "c=2 (never read)" in proof.detail["kernel_read"]
+    assert torch.equal(before[0], after[0]) and torch.equal(before[1], after[1])
+    gate = PW.gate_v2_distinct_buffers(proof, 2)
+    assert "READ exactly 2 distinct" in gate.claim
+    assert gate.verdict == exit_codes.PASS
+
+
+def test_a_private_k_proof_fails_an_arm_that_read_more_or_fewer_than_k_copies():
+    """Planted both ways. The default relabelling reads copy 2 at the third
+    tile, so a proof told K=2 finds a never-read copy that moves the output;
+    a relabelling back to copy 0 reads one copy, not two."""
+    more, *_ = _cpu_proof(copies_read=2)
+    assert more.parts["shared_blind"] is False, more.lines()
+    assert more.verdict == exit_codes.FAIL
+    fewer, *_ = _cpu_proof(private_copies=2,
+                           misroute=lambda p, declared: p - p % declared)
+    assert fewer.parts["kernel_read"] is False, fewer.lines()
+    assert PW.gate_v2_distinct_buffers(fewer, 2).verdict == exit_codes.FAIL
+
+
+def _chain_args(extra=()):
+    """The chain's r3_cmd flags, the ones the pod command adds K to."""
+    return PW.build_parser().parse_args(
+        ["--model", "mixtral-8x7b", "--block-m", "32", "--treads", "6",
+         "--repeats", "9", "--group-m", "1", "--duty", "0.25", "--seed", "0",
+         "--session-tag", "alpha_g-nvidia_h200-20260924T000000Z", *extra])
+
+
+def test_private_k_is_in_the_run_id_and_absent_from_the_default_arms():
+    """K is in the key WHEN SET, under a name that sorts early so the visible
+    part of an H200 id carries it and not only the hash; unset, the key is
+    absent, so the default arm's command names the directory it always
+    named."""
+    card = "NVIDIA H200"
+    assert _chain_args().private_copies is None
+    ids = {None: PW.default_run_id(_chain_args(), card)}
+    for k in PRIVATE_K:
+        ids[k] = PW.default_run_id(_chain_args(["--private-copies", str(k)]),
+                                   card)
+        assert f"-copiesk{k}-" in ids[k], ids[k]
+    assert "copiesk" not in ids[None]
+    assert len(set(ids.values())) == len(ids)
+
+
+def _main_log(argv) -> tuple[int, str]:
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW._main(list(argv))
+    return rc, log.getvalue()
+
+
+def test_private_k_below_two_or_at_the_deepest_tread_is_refused_before_the_plan(
+        no_cuda):
+    """K = 1 is the shared arm and below it there is no copy; K at or above
+    the deepest tread is the default arm under another run id. Each is
+    REFUSED before a plan is printed, and the bound follows the ladder."""
+    base = ["--dry-run", "--device-memory-gb", "140"]
+    n_max = PW.DEFAULT_TREADS
+    for k in (-1, 0, 1, n_max, n_max + 1):
+        rc, log = _main_log(base + ["--private-copies", str(k)])
+        assert rc == exit_codes.REFUSED
+        assert f"REFUSED: --private-copies {k}" in log, log[-800:]
+        assert "experiment  private_weight_reference" not in log
+        assert PW.private_copies_refusal(k, PK_TREADS)
+    rc, log = _main_log(base + ["--private-copies", str(n_max)])
+    assert "the default private arm" in log
+    rc, log = _main_log(base + ["--private-copies", "1"])
+    assert "which is the SHARED arm" in log
+    for k in range(2, n_max):
+        rc, log = _main_log(base + ["--private-copies", str(k)])
+        assert "REFUSED: --private-copies" not in log, log[-800:]
+        assert "reason: --dry-run was given" in log
+        assert PW.private_copies_refusal(k, PK_TREADS) == ""
+    # A shallower ladder moves the bound with it.
+    rc, log = _main_log(base + ["--treads", "5", "--private-copies", "5"])
+    assert "REFUSED: --private-copies 5" in log
+    rc, log = _main_log(base + ["--treads", "5", "--private-copies", "4"])
+    assert "REFUSED: --private-copies" not in log
+    assert PW.private_copies_refusal(None, PK_TREADS) == ""
+
+
+def test_a_private_k_report_is_never_pooled_with_a_full_private_one_or_another_k(
+        tmp_path):
+    """`private_copies` is a design key: a PRIVATE-K report and a full private
+    one, or two Ks, are refused as a pair by --replicate-of and by --read; a
+    report written before the key reads as the default arm and pools with
+    one."""
+    full, payload = _measured_shaped_report(tmp_path, "full", PW.ALPHA,
+                                            PK_TREADS)
+    assert payload["private_copies"] is None
+
+    def write(name, **over):
+        p = tmp_path / f"{name}.json"
+        body = dict(payload, run_id=name, **over)
+        body["provenance"] = dict(payload["provenance"], utc=f"stamp-{name}")
+        p.write_text(json.dumps(body))
+        return p
+    pk2, pk3 = write("pk2", private_copies=2), write("pk3", private_copies=3)
+    old = tmp_path / "old.json"
+    before_key = {k: v for k, v in payload.items() if k != "private_copies"}
+    before_key.update(run_id="old", provenance=dict(payload["provenance"],
+                                                    utc="stamp-old"))
+    old.write_text(json.dumps(before_key))
+    design = {k: PW.design_value(payload, k) for k in PW.DESIGN_KEYS}
+    with pytest.raises(PW.PrivateWeightRefusal, match="private_copies"):
+        PW.load_replicates([pk2], design=design, card_known=True)
+    with pytest.raises(PW.PrivateWeightRefusal, match="private_copies 3"):
+        PW.load_replicates([pk3], design=dict(design, private_copies=2),
+                           card_known=True)
+    assert len(PW.load_replicates([old], design=design, card_known=True)) == 1
+    page = run(["--read", str(pk2), "--replicate-of", str(full)])
+    assert page.returncode == exit_codes.REFUSED
+    assert "differs in private_copies" in page.stdout, page.stdout[-800:]
+    plan = run(["--dry-run", "--device-memory-gb", "140", "--repeats", "3",
+                "--private-copies", "2", "--replicate-of", str(full)])
+    assert "REFUSED: --replicate-of" in plan.stdout
+    assert "differs in private_copies" in plan.stdout, plan.stdout[-800:]
+
+
+def _planted(world, k, *, noise=0.0, seed=0):
+    samples = PW.planted_samples(
+        world, CFG, block_m=32, treads=PK_TREADS, repeats=3,
+        alpha_shared=world.alpha, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=noise, seed=seed, copies_declared=9, native_switch=4,
+        private_copies=k)
+    slopes = {arm: PW.ladder_for(samples, arm,
+                                 min_tread=PW.CLAIM_MIN_TREAD).slope_ms
+              for arm in PW.RATIO_ARMS}
+    return samples, slopes
+
+
+@pytest.mark.parametrize("k", PRIVATE_K)
+def test_the_reuse_world_puts_private_ks_slope_between_shared_and_the_full_arm(k):
+    """READING (a), PLANTED. Tiles past the K-th re-read the copy K tiles back
+    at a fraction below a whole read, so slope(private-K) sits strictly
+    between slope(shared) and the full private arm's, the full arm being the
+    same world with no K. The first K treads are the full arm's cells, and
+    READING (b), a whole re-read, puts private-K on the full arm."""
+    import dataclasses
+    world = dataclasses.replace(PW.WORLDS["private-k-reuse"], private_copies=k)
+    pk_samples, pk = _planted(world, k)
+    full_samples, full = _planted(world, None)
+    assert pk[PW.SHARED] == full[PW.SHARED]           # the shared arm is one arm
+    assert pk[PW.SHARED] < pk[PW.PRIVATE] < full[PW.PRIVATE], (pk, full)
+
+    def cells(samples, n):
+        return sorted(s.ms_p50 for s in samples
+                      if s.arm == PW.PRIVATE and s.tiles == n)
+    for n in PK_TREADS:
+        assert (cells(pk_samples, n) == cells(full_samples, n)) == (n <= k), n
+    assert {s.copies for s in pk_samples if s.arm == PW.PRIVATE
+            and s.tiles == PK_TREADS[-1]} == {k}
+    _b, per_copy = _planted(dataclasses.replace(world, private_k_alpha=1.0), k)
+    assert per_copy[PW.PRIVATE] == pytest.approx(full[PW.PRIVATE], rel=1e-12)
+
+
+def test_a_planted_world_runs_at_its_own_k_and_refuses_another(no_cuda):
+    """The world plants K=2 and runs at it with no flag; its page records K,
+    its run id carries it, and every registered verdict comes back. Another
+    K on it, or a K on a world that plants none, is REFUSED."""
+    rc, payload, log = _payload_for(["--self-test", "private-k-reuse",
+                                     "--draws", "30"])
+    world = PW.WORLDS["private-k-reuse"]
+    assert payload["private_copies"] == world.private_copies == 2
+    assert "-copiesk2-" in payload["run_id"]
+    assert "SELF-TEST OK" in log, log[-2000:]
+    got = {g["tag"]: g for g in payload["gates"]}
+    assert {t: g["verdict"] for t, g in got.items()} == world.expect
+    assert rc == exit_codes.CLAIM_FAIL
+    for argv in (["--self-test", "private-k-reuse", "--private-copies", "3"],
+                 ["--self-test", "refit", "--private-copies", "2"]):
+        rc, log = _main_log(argv)
+        assert rc == exit_codes.REFUSED and "REFUSED: the" in log, log[-800:]
+        assert "private-k-reuse" in log
+        assert exit_codes.parse_result_lines(log) == []
+
+
+def test_the_probe_times_private_ks_ids_as_the_private_series():
+    """V8's PRIVATE series is timed on the ids the sweep's private arm
+    passes: under K, PRIVATE-K's, derived from the same tread's native ids."""
+    seen: list = []
+    treads = [1, 2, 3, 4]
+    PW.probe_cells(
+        CFG, block_m=32, treads=treads,
+        declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72},
+        copies_declared=9, reference_clock=None, repeats=1, calls_per_replay=0,
+        op=lambda ids, bm, d: seen.append((ids.clone(), d)), sync=lambda: None,
+        graph_timer=_fake_timer(0.16, []), eager_timer=_fake_timer(0.03, []),
+        device="cpu", private_copies=2)
+    # Per tread, per arm in ARMS order: the warm call, then the timed one.
+    per_tread = 2 * len(PW.ARMS)
+    assert len(seen) == per_tread * len(treads)
+    at = {arm: 2 * i for i, arm in enumerate(PW.ARMS)}
+    for t, n in enumerate(treads):
+        native, d_native = seen[per_tread * t + at[PW.NATIVE]]
+        private, d_private = seen[per_tread * t + at[PW.PRIVATE]]
+        assert (d_native, d_private) == (8, 72)
+        want = PW.private_topk_ids(native, CFG.num_experts, 32, n * 32, 9, 2)
+        assert bool((private == want).all()), n
+        assert int((private % 9).max()) + 1 == min(n, 2)
+
+
+def test_the_sweep_hands_private_k_to_the_probe(monkeypatch, tmp_path):
+    """`run_sweep`'s own probe call carries K: driven to its V8 early return
+    in a world whose probe FAILS V8, before any weight is built."""
+    treads, block_m = PK_TREADS, PW.DEFAULT_BLOCK_M
+    copies_declared, _why = PW.declared_copies_for(CFG, treads, block_m, None)
+    declared_by_arm = {arm: PW.declared_experts(arm, CFG.num_experts,
+                                                copies_declared)
+                       for arm in PW.ARMS}
+    census = PW.path_census(CFG, treads, block_m, declared_by_arm)
+    args = PW.build_parser().parse_args(["--device-memory-gb", "140",
+                                         "--private-copies", "2"])
+    stream_ms = WEIGHTS.weight_stream_ms(CFG, args.dtype, 4000.0)
+    asked: dict = {}
+
+    def planted(cfg, **kwargs):
+        asked.update(kwargs)
+        return PW.planted_probe(PW.WORLDS["ratio-path-split"], cfg,
+                                block_m=block_m, treads=treads,
+                                declared_by_arm=declared_by_arm, census=census,
+                                noise=0.0, seed=0, weight_stream_ms=stream_ms)
+
+    def never(*a, **k):
+        raise AssertionError("build_private_weights ran past the early return")
+
+    _stand_in_for_vllm(monkeypatch)
+    monkeypatch.setenv("TRITON_CACHE_DIR", str(tmp_path / "unused-cache"))
+    monkeypatch.setattr(PW, "probe_alignment", planted)
+    monkeypatch.setattr(PW, "build_private_weights", never)
+    store = PW.Store(tmp_path / "cells.csv",
+                     PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    samples, *_ = PW.run_sweep(
+        args, CFG, block_m=block_m, treads=treads, pinned={},
+        csv_path=tmp_path / "cells.csv", cache_root=tmp_path / "triton-cache",
+        store=store, prov=None, dtype=args.dtype,
+        copies_declared=copies_declared, census=census, stream_ms=stream_ms)
+    assert samples == []
+    assert asked["private_copies"] == 2
+
+
+def test_a_private_k_page_says_its_ratio_is_not_alpha_and_a_rescore_keeps_it(
+        tmp_path):
+    """The rules are the default arm's and the WORDS are not: C1 says the
+    ratio is not alpha and names where it falls rather than a world, C2 that
+    its rate assumes a whole read per tile, V2 that K copies were read, and
+    the page prints the PRIVATE-K reading. A rescore and --read keep them;
+    the default arm's page keeps its own."""
+    world = PW.WORLDS["private-k-reuse"]
+    samples, _slopes = _planted(world, 2, noise=0.004, seed=5)
+    report = _analyse(samples, PK_TREADS, draws=30, private_copies=2)
+    gates = {g.tag: g for g in report.gates}
+    assert report.payload["private_copies"] == 2
+    assert "NOT alpha" in gates["C1"].claim
+    assert "private-K" in gates["C2"].claim
+    assert "READ exactly 2 distinct" in gates["V2"].claim
+    text = report.text()
+    assert "PRIVATE-K, K=2 (--private-copies 2)" in text
+    assert "WHERE IT FALLS" in text and "THE WORLD THIS LANDS IN" not in text
+    assert "THIS IS NOT THE STUDY'S DENOMINATOR" in text
+    default = _analyse(_planted(PW.WORLDS["refit"], None, noise=0.004,
+                                seed=5)[0], PK_TREADS, draws=30)
+    plain = {g.tag: g for g in default.gates}
+    assert default.payload["private_copies"] is None
+    assert plain["C1"].claim == PW.c1_claim() and "NOT alpha" not in plain["C1"].claim
+    assert "THE WORLD THIS LANDS IN" in default.text()
+    assert "PRIVATE-K" not in default.text()
+    path, payload = _report_with_cells(tmp_path, "pk2", samples, PK_TREADS,
+                                       seed=5, draws=30, private_copies=2)
+    got = PW.rescore(payload, path, draws=30)
+    for tag in ("C1", "C2"):
+        assert got.gates[tag].claim == gates[tag].claim, tag
+        assert got.gates[tag].verdict == gates[tag].verdict, tag
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert re.search(r"^private_copies\s+2$", page.stdout, re.M), page.stdout[-1500:]
+    assert "NOT alpha" in page.stdout
