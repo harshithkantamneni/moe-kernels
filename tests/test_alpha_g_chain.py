@@ -1190,6 +1190,10 @@ def test_the_tables_carry_a_legend_off_the_arms_own_constants(tmp_path):
     assert f"{PWR.INTERVAL_PCT:.0f}% percentile bootstrap over repeats" in legend
     assert f"ALPHA_BAND [{PWR.ALPHA_BAND[0]}, {PWR.ALPHA_BAND[1]})" in legend
     assert "NOT a quotability flag" in legend
+    # R3's ratio says which treads its two slopes read (its DESIGN DECISION 16)
+    legend_flat = " ".join(legend.split())
+    assert ("Both slopes over the window the report records (claim_min_tread): "
+            f"treads {PWR.CLAIM_MIN_TREAD} and deeper") in legend_flat
     # R1's interval is the 2.5th to 97.5th percentile of its own bootstrap
     source = Path(CE.__file__).read_text()
     assert "_percentile(values, 0.025)" in source and "_percentile(values, 0.975)" in source

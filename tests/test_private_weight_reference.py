@@ -675,8 +675,8 @@ def test_the_ratio_recovers_the_planted_fraction_exactly(alpha):
     edges = {lo for _n, lo, _hi, _m in PW.OUTCOMES} | {PW.NO_REUSE_MIN}
     assert alpha not in edges, "a planted fraction is sitting on a band edge"
     samples = _noiseless(alpha)
-    shared = PW.ladder_for(samples, PW.SHARED)
-    private = PW.ladder_for(samples, PW.PRIVATE)
+    shared = PW.ladder_for(samples, PW.SHARED, min_tread=PW.CLAIM_MIN_TREAD)
+    private = PW.ladder_for(samples, PW.PRIVATE, min_tread=PW.CLAIM_MIN_TREAD)
     assert shared.slope_ms == pytest.approx(alpha, rel=1e-9)
     assert private.slope_ms == pytest.approx(1.0, rel=1e-9)
     assert shared.slope_ms / private.slope_ms == pytest.approx(alpha, rel=1e-9)
@@ -697,7 +697,8 @@ def test_the_interval_counts_the_draws_that_produced_a_ratio():
     """An interval standing on a third of its draws must not read like one
     standing on all of them."""
     samples = _noiseless(0.558)
-    lo, hi, draws = PW.ratio_interval(samples, 200, seed=1)
+    lo, hi, draws = PW.ratio_interval(samples, 200, seed=1,
+                                      min_tread=PW.CLAIM_MIN_TREAD)
     assert draws == 200
     assert lo <= 0.558 <= hi
     # A noiseless world has a degenerate interval, which is the correct answer
@@ -720,7 +721,8 @@ def test_the_interval_widens_with_the_scatter_it_is_made_of():
                                     (0.5 + 0.558 * n) * (1 + rng.gauss(0, spread))))
                 rows.append(_sample(PW.PRIVATE, n, rep,
                                     (0.5 + 1.0 * n) * (1 + rng.gauss(0, spread))))
-        lo, hi, _ = PW.ratio_interval(rows, 400, seed=3)
+        lo, hi, _ = PW.ratio_interval(rows, 400, seed=3,
+                                      min_tread=PW.CLAIM_MIN_TREAD)
         widths.append(hi - lo)
     assert widths[1] > widths[0], widths
 
@@ -959,10 +961,12 @@ def test_one_drifted_cell_does_not_void_a_run_that_met_every_floor():
     planned = 6 * 9 * len(PW.ARMS)
     treads = list(range(1, 7))
     clean = PW.gate_v0_non_vacuity(_full_grid(), planned=planned,
-                                   treads=treads, repeats=9)
+                                   treads=treads, repeats=9,
+                                   min_tread=PW.CLAIM_MIN_TREAD)
     assert clean.verdict == PW.PASS, clean.measured
     one = PW.gate_v0_non_vacuity(_full_grid(drifted={(PW.PRIVATE, 4, 2)}),
-                                 planned=planned, treads=treads, repeats=9)
+                                 planned=planned, treads=treads, repeats=9,
+                                 min_tread=PW.CLAIM_MIN_TREAD)
     assert one.verdict == PW.PASS, one.measured
     assert "drift" in one.measured
 
@@ -975,7 +979,8 @@ def test_drift_past_the_registered_ceiling_still_voids_the_page():
     heavy = {(arm, n, rep) for arm in PW.ARMS for n in treads
              for rep in range(9) if (n + rep) % 3 == 0}
     gate = PW.gate_v0_non_vacuity(_full_grid(drifted=heavy), planned=planned,
-                                  treads=treads, repeats=9)
+                                  treads=treads, repeats=9,
+                                  min_tread=PW.CLAIM_MIN_TREAD)
     assert gate.verdict == PW.FAIL, gate.measured
     assert f"{100 * PW.MAX_DRIFT_FRACTION:.0f}%" in gate.threshold
 
@@ -1005,7 +1010,7 @@ def test_the_interval_is_over_repeats_and_paired_across_the_two_arms():
         for n in range(1, 7):
             rows.append(_sample(PW.SHARED, n, rep, (0.3 + 0.558 * n) * factor))
             rows.append(_sample(PW.PRIVATE, n, rep, (0.3 + 1.000 * n) * factor))
-    lo, hi, drawn = PW.ratio_interval(rows, 500, 0)
+    lo, hi, drawn = PW.ratio_interval(rows, 500, 0, min_tread=PW.CLAIM_MIN_TREAD)
     assert drawn == 500
     assert hi - lo < 1e-9, (lo, hi)
     assert abs(lo - 0.558) < 1e-9, lo
@@ -1019,7 +1024,8 @@ def test_a_paired_draw_takes_both_arms_from_the_same_repeats():
             for arm in (PW.SHARED, PW.PRIVATE)
             for n in (1, 2, 3) for rep in (0, 1, 2)]
     assert PW.repeat_indices(rows) == [0, 1, 2]
-    points, _spread, _dropped = PW.collapse(rows, PW.SHARED, [1, 1, 1])
+    points, _spread, _dropped = PW.collapse(rows, PW.SHARED, [1, 1, 1],
+                                            min_tread=1)
     # Every point is repeat 1's own time, because repeat 1 is the whole draw.
     assert points == [(1, 3.0), (2, 4.0), (3, 5.0)], points
 
@@ -1102,11 +1108,13 @@ def test_v7_and_v4_read_unknown_when_they_examined_nothing():
     natives = [s for s in _pair_world() if s.arm == PW.NATIVE]
     assert PW.gate_v7_clock_parity(natives, treads=[1, 2, 3]).verdict \
         == exit_codes.UNKNOWN
-    assert PW.gate_v4_memory_bound([], roof_tflops=600.0,
-                                   roof_source="x").verdict == exit_codes.UNKNOWN
+    assert PW.gate_v4_memory_bound([], roof_tflops=600.0, roof_source="x",
+                                   min_tread=PW.CLAIM_MIN_TREAD
+                                   ).verdict == exit_codes.UNKNOWN
     rows = [{"arm": PW.NATIVE, "tiles": 1, "pct_of_roof": 0.99}]
-    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0,
-                                   roof_source="x").verdict == exit_codes.UNKNOWN
+    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+                                   min_tread=PW.CLAIM_MIN_TREAD
+                                   ).verdict == exit_codes.UNKNOWN
 
 
 def test_the_proof_keeps_no_backup_of_a_copy_it_zeroes():
@@ -1399,6 +1407,69 @@ def test_v8_budget_is_a_bias_on_the_ratio_and_not_a_step_in_microseconds():
                                 weight_stream_ms=0.2).verdict == exit_codes.FAIL
 
 
+def _slope(points) -> float:
+    """The least-squares slope of `(n, ms)` points, computed here and not
+    through the module, so the ratio's move below is an independent number."""
+    xs = [float(n) for n, _ in points]
+    ys = [ms for _, ms in points]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    return (sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
+            / sum((x - mx) ** 2 for x in xs))
+
+
+@pytest.mark.parametrize("split", [3, 4, 5])
+def test_v8_prices_a_step_at_the_leverage_of_the_claims_window(split):
+    """V8 IS AN UPPER BOUND ON WHAT A STEP DOES TO THE RATIO C1 READS, and C1
+    reads lines fitted over treads CLAIM_MIN_TREAD and deeper. V8 turned the
+    probed step into slope with the leverage of EVERY tread (1..6), so at the
+    census switch for mixtral BM=32 (tread 4) it reported 0.257 of the step
+    where the claim's line reads 0.300: 0.00514 against a true move of
+    0.00600, and a step worth up to 1.17 budgets passed.
+
+    A noiseless world: the shared arm 0.5 + 0.6 n with a 0.02 ms alignment
+    step at `split`, the private arm 0.5 + n (so its slope is the weight
+    stream, 1.0 ms). The probe carries the same step in SHARED's series and
+    none in PRIVATE's, where `pair_step_bias` is exact, not merely a bound.
+    V8's bias must equal the move of the ratio over the claim's window."""
+    treads = [1, 2, 3, 4, 5, 6]
+    step = 0.02
+    window = [n for n in treads if n >= PW.CLAIM_MIN_TREAD]
+    flat = _slope([(n, 0.5 + 0.6 * n) for n in window])
+    stepped = _slope([(n, 0.5 + 0.6 * n + (step if n >= split else 0.0))
+                      for n in window])
+    private = _slope([(n, 0.5 + 1.0 * n) for n in window])
+    move = stepped / private - flat / private
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(step, split),
+                         PW.PRIVATE: _series(0.0, split)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=private)
+    bias = float(re.search(r"bias <= ([0-9.]+)", gate.measured).group(1))
+    assert bias == pytest.approx(move, abs=5e-5), (gate.measured, move)
+    lever = move * private / step
+    assert any(f"at leverage {lever:.3f}" in ln for ln in gate.lines), gate.lines
+    assert any("treads 2 and deeper" in ln and "leverage" in ln
+               for ln in gate.lines), gate.lines
+    assert "treads 2 and deeper" in gate.threshold, gate.threshold
+
+
+def test_a_step_at_or_before_the_claims_first_tread_is_worth_nothing_to_it():
+    """A step at the window's first tread is a constant over every tread the
+    claim's lines pass through: an intercept, no slope, no bias. V8 still FITS
+    the step over the whole probed series (tread 1 included) and prints it;
+    it prices it at zero leverage."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, PW.CLAIM_MIN_TREAD),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    assert gate.measured.startswith("bias <= 0.0000"), gate.measured
+    assert any(f"at tread {PW.CLAIM_MIN_TREAD}, at leverage 0.000" in ln
+               for ln in gate.lines), gate.lines
+
+
 def test_the_planted_probe_puts_natives_step_where_the_census_does():
     census = _census()
     probe = PW.planted_probe(PW.WORLDS["refit"], CFG, block_m=32,
@@ -1424,12 +1495,15 @@ def test_the_declaration_fit_takes_natives_step_out_of_v5():
                                  ridge=160.0, bandwidth_gbps=4000.0, b=2,
                                  noise=0.0, seed=0, copies_declared=9,
                                  native_switch=4)
-    fit = PW.declaration_fit(samples, treads, 4)
+    w = PW.CLAIM_MIN_TREAD
+    window = PW.treads_in_window(treads, min_tread=w)
+    fit = PW.declaration_fit(samples, treads, 4, min_tread=w)
     assert fit.step_ms == pytest.approx(world.alignment_step_ms, rel=1e-6)
     assert abs(fit.per_tile_ms) < 1e-9
-    native, shared, private = (PW.ladder_for(samples, a) for a in PW.ARMS)
+    native, shared, private = (PW.ladder_for(samples, a, min_tread=w)
+                               for a in PW.ARMS)
     raw = abs(native.slope_ms - shared.slope_ms) / private.slope_ms
-    assert raw == pytest.approx(PW.leverage(treads, 4) * world.alignment_step_ms
+    assert raw == pytest.approx(PW.leverage(window, 4) * world.alignment_step_ms
                                 / private.slope_ms, rel=1e-6)
     assert raw > PW.MACHINERY_BOUND, "the planted step is not load-bearing"
     assert PW.gate_v5_machinery(native, shared, private).verdict == exit_codes.FAIL
@@ -1438,12 +1512,14 @@ def test_the_declaration_fit_takes_natives_step_out_of_v5():
     # samples PASSES.
     assert PW.gate_v5_machinery(native, shared, private, fit).verdict \
         == exit_codes.UNKNOWN
-    band, _s, _n = PW.declaration_interval(samples, treads, 4, 50, 0)
+    band, _s, _n = PW.declaration_interval(samples, treads, 4, 50, 0,
+                                           min_tread=w)
     assert PW.gate_v5_machinery(native, shared, private, fit, band).verdict \
         == exit_codes.PASS
-    # And with no switch inside the ladder the fit is the plain line.
-    line = PW.declaration_fit(samples, treads, None)
-    assert line.step_ms is None and line.dof == 4
+    # And with no switch inside the ladder the fit is the plain line, over
+    # the claim's window: two parameters on its treads.
+    line = PW.declaration_fit(samples, treads, None, min_tread=w)
+    assert line.step_ms is None and line.dof == len(window) - 2
 
 
 def test_the_declaration_fit_still_finds_a_real_per_tile_cost_beside_a_step():
@@ -1454,7 +1530,7 @@ def test_the_declaration_fit_still_finds_a_real_per_tile_cost_beside_a_step():
         CFG, block_m=32, treads=treads, repeats=3, alpha_shared=world.alpha,
         ridge=160.0, bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
         copies_declared=9, native_switch=4)
-    fit = PW.declaration_fit(samples, treads, 4)
+    fit = PW.declaration_fit(samples, treads, 4, min_tread=PW.CLAIM_MIN_TREAD)
     assert fit.per_tile_ms == pytest.approx(0.35, rel=1e-6)
     assert fit.step_ms == pytest.approx(0.4, rel=1e-6)
 
@@ -1666,11 +1742,18 @@ def test_a_step_at_the_alignment_budget_is_still_found_by_the_new_rule():
     above are only worth having beside this one. The steps here are named in
     the units V8 actually gates on: `step_bias` of 0.010 and 0.015 of the
     ratio, one and one-and-a-half `ALIGN_STEP_RATIO_BUDGET`, converted to
-    milliseconds through `leverage` at the six-tread ladder's split of 4 and
-    the 0.64 ms weight stream the other V8 tests use. At the same per-cell
-    noise the false-positive simulation runs at, `resolved` finds the smaller
-    in 383 of 400 worlds (0.9575) and the larger in 399 (0.9975), and puts
-    the split at tread 4 every time it fires.
+    milliseconds through `leverage` at the six-tread ladder's split of 4 over
+    the claim's window (treads 2..6, leverage 0.300, where V8 prices a step)
+    and the 0.64 ms weight stream the other V8 tests use: 21.3 and 32.0 us.
+    At the same per-cell noise the false-positive simulation runs at,
+    `resolved` finds the smaller in 374 of 400 worlds (0.935) and the larger
+    in 395 (0.9875), and puts the split at tread 4 every time it fires.
+
+    THE WINDOW COST POWER, stated rather than hidden. Priced over every tread
+    (leverage 0.257) a budget was a 24.9 us step, found in 383 of 400 worlds
+    (0.9575) and 399 at 1.5 budgets (0.9975). Pricing it where the claim is
+    fitted makes a budget a smaller step, and the same rule on the same noise
+    resolves a smaller step less often.
 
     WHAT THE t QUANTILE COST, stated rather than hidden. Before it, a step
     worth a fifth of the budget was found 0.9525 of the time; now 0.2475, and
@@ -1683,16 +1766,18 @@ def test_a_step_at_the_alignment_budget_is_still_found_by_the_new_rule():
     a "safer" edit that raised either -- or an `_ols_se` that overstated
     `step_se` -- would trade this power away silently, and V8 would answer
     UNKNOWN on a design whose step really is over budget, which is the answer
-    that costs a pod session. The 0.90 floor sits 5.7 binomial standard errors
-    (sqrt(0.9575 x 0.0425 / 400) = 0.0101) below the measured 0.9575.
+    that costs a pod session. The 0.90 floor sits 2.8 binomial standard errors
+    (sqrt(0.935 x 0.065 / 400) = 0.0123) below the measured 0.935; the trial
+    is seeded, so the rates are the same on every run.
     """
     treads = [1, 2, 3, 4, 5, 6]
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     weight_stream_ms = 0.64
     worth = {frac: frac * PW.ALIGN_STEP_RATIO_BUDGET * weight_stream_ms
-             / PW.leverage(treads, 4) for frac in (1.0, 1.5)}
-    assert PW.step_bias(worth[1.0], treads, 4, weight_stream_ms) \
+             / PW.leverage(window, 4) for frac in (1.0, 1.5)}
+    assert PW.step_bias(worth[1.0], window, 4, weight_stream_ms) \
         == pytest.approx(0.010)
-    assert PW.step_bias(worth[1.5], treads, 4, weight_stream_ms) \
+    assert PW.step_bias(worth[1.5], window, 4, weight_stream_ms) \
         == pytest.approx(0.015)
     _, small_rate, small_found, _, _ = _step_rule_trial(
         repeats=3, worlds=400, step_ms=worth[1.0])
@@ -1755,9 +1840,10 @@ def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one(
     the resolved one -- it now reads FAIL. The branch therefore carries its
     noise where the new rule looks: in the series itself, through `_series`'s
     own `noise=`. At seed 2 that series fits a step of +0.141 ms at tread 4,
-    worth 0.056 of the ratio -- 5.6 times `ALIGN_STEP_RATIO_BUDGET` -- against
-    a threshold of 0.272 ms, so the step is 0.52 of what it would have to be:
-    over budget, unresolved, and therefore neither shown sound nor unsound.
+    worth 0.066 of the ratio at its leverage over the claim's window (treads
+    2..6) -- 6.6 times `ALIGN_STEP_RATIO_BUDGET` -- against a threshold of
+    0.837 ms, so the step is 0.17 of what it would have to be: over budget,
+    unresolved, and therefore neither shown sound nor unsound.
     """
     treads = [1, 2, 3, 4, 5, 6]
     flat = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)})
@@ -1775,7 +1861,8 @@ def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one(
     noisy = _probe_from({PW.NATIVE: _series(0.02, 4),
                          PW.SHARED: _series(0.1, 4, noise=0.3, seed=2)})
     fit = PW.step_fit(noisy.series(PW.SHARED))
-    assert PW.step_bias(fit.step_ms, treads, fit.split_tread, 0.64) \
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    assert PW.step_bias(fit.step_ms, window, fit.split_tread, 0.64) \
         > PW.ALIGN_STEP_RATIO_BUDGET
     assert abs(fit.step_ms) < fit.threshold_ms()
     doubted = PW.gate_v8_alignment(noisy, treads=treads, census=_census(),
@@ -1914,10 +2001,12 @@ def test_v8_reads_the_host_bound_verdict_before_the_budget_so_an_over_budget_rea
     assert hot.verdict == exit_codes.UNKNOWN, hot.lines
     # Both scored the SAME over-budget real step, so the budget cannot be what
     # separated them: the 0.5 ms step sits at tread 4, whose leverage over
-    # these six treads is 4.5/17.5 = 0.2571, and 0.2571 x 0.5 / 0.64 ms of
-    # weight stream is a bias of 0.2009 -- twenty times ALIGN_STEP_RATIO_BUDGET.
-    assert hot.measured == cool.measured == "bias <= 0.2009, a REAL step"
-    assert PW.step_bias(0.5, treads, 4, 0.64) > 20 * PW.ALIGN_STEP_RATIO_BUDGET
+    # the claim's window (treads 2..6, where V8 prices it) is 3/10 = 0.300,
+    # and 0.300 x 0.5 / 0.64 ms of weight stream is a bias of 0.2344 --
+    # twenty-three times ALIGN_STEP_RATIO_BUDGET.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    assert hot.measured == cool.measured == "bias <= 0.2344, a REAL step"
+    assert PW.step_bias(0.5, window, 4, 0.64) > 20 * PW.ALIGN_STEP_RATIO_BUDGET
     # WHY `cool` IS FAIL AND NOT UNKNOWN, recorded because it is not obvious
     # from the verdict alone: the planted series fits the step term EXACTLY, so
     # the residual is at the rounding floor (RSS 5.1e-31) and `step_se` is
@@ -2243,9 +2332,11 @@ def test_v8_does_not_fail_on_a_step_its_own_rule_called_noise():
     sh = PW.step_fit(probe.series(PW.SHARED))
     pv = PW.step_fit(probe.series(PW.PRIVATE))
     assert sh.resolved() and not pv.resolved(), (sh, pv)
+    # Over the claim's window, where V8 prices both steps.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     wide = PW.pair_step_bias((sh.step_ms, sh.split_tread),
-                             (pv.step_ms, pv.split_tread), treads, 0.64)
-    narrow = PW.pair_step_bias((sh.step_ms, sh.split_tread), None, treads, 0.64)
+                             (pv.step_ms, pv.split_tread), window, 0.64)
+    narrow = PW.pair_step_bias((sh.step_ms, sh.split_tread), None, window, 0.64)
     assert wide > PW.ALIGN_STEP_RATIO_BUDGET >= narrow, (wide, narrow)
     gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
                                 weight_stream_ms=0.64)
@@ -2320,8 +2411,10 @@ def test_a_planted_world_steps_one_ratio_arm_and_not_the_other():
     assert abs(shared.step_ms) < 1e-12, shared
     assert private.split_tread == 4 and private.step_ms > 0
     # And the step is worth the budgets the world registers, through the
-    # bound that needed no common-step premise.
-    bias = PW.pair_step_bias(None, (private.step_ms, 4), treads, stream)
+    # bound that needed no common-step premise, at the leverage V8 prices it
+    # at: over the claim's window.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    bias = PW.pair_step_bias(None, (private.step_ms, 4), window, stream)
     assert bias == pytest.approx(1.5 * PW.ALIGN_STEP_RATIO_BUDGET, rel=1e-9)
     gate = PW.gate_v8_alignment(probe, treads=treads, census=census,
                                 weight_stream_ms=stream)
@@ -2330,7 +2423,7 @@ def test_a_planted_world_steps_one_ratio_arm_and_not_the_other():
     # THE PUNCHLINE: the common-step bound this replaced reads SHARED's series
     # alone, which is flat, so it scores this same probe at ~0 and PASSES it.
     # This world is the one place in the table where the two bounds disagree.
-    old_rule = PW.step_bias(shared.step_ms, treads, shared.split_tread or 4,
+    old_rule = PW.step_bias(shared.step_ms, window, shared.split_tread or 4,
                             stream)
     assert old_rule < PW.ALIGN_STEP_RATIO_BUDGET / 100 < bias
     # ITS TWIN plants the same size in BOTH arms and reads the same bias, so
@@ -2595,9 +2688,9 @@ def test_the_clock_corrected_ratio_does_not_depend_on_the_reference_clock():
     samples = _pair_world(private_clock=1425.0, shared_clock=1455.0)
     eta = PW.ClockElasticity(0.7436, 0.7277, 0.7559, "x")
     a = PW.clock_corrected_ratio(samples, eta, f_ref=1455.0, f_ref_source="a",
-                                 draws=50, seed=0)
+                                 draws=50, seed=0, min_tread=PW.CLAIM_MIN_TREAD)
     b = PW.clock_corrected_ratio(samples, eta, f_ref=1000.0, f_ref_source="b",
-                                 draws=50, seed=0)
+                                 draws=50, seed=0, min_tread=PW.CLAIM_MIN_TREAD)
     assert a.ratio == pytest.approx(b.ratio, rel=1e-12)
     assert a.at_unit == pytest.approx(b.at_unit, rel=1e-12)
 
@@ -2619,13 +2712,14 @@ def test_a_planted_clock_split_with_a_known_eta_corrects_back_to_the_planted_alp
     elastic = PW.planted_samples(world, CFG, alpha_shared=world.alpha, **kw)
     refit = PW.WORLDS["refit"]
     plain = PW.planted_samples(refit, CFG, alpha_shared=refit.alpha, **kw)
-    raw = (PW.ladder_for(elastic, PW.SHARED).slope_ms
-           / PW.ladder_for(elastic, PW.PRIVATE).slope_ms)
-    refit_raw = (PW.ladder_for(plain, PW.SHARED).slope_ms
-                 / PW.ladder_for(plain, PW.PRIVATE).slope_ms)
+    w = PW.CLAIM_MIN_TREAD
+    raw = (PW.ladder_for(elastic, PW.SHARED, min_tread=w).slope_ms
+           / PW.ladder_for(elastic, PW.PRIVATE, min_tread=w).slope_ms)
+    refit_raw = (PW.ladder_for(plain, PW.SHARED, min_tread=w).slope_ms
+                 / PW.ladder_for(plain, PW.PRIVATE, min_tread=w).slope_ms)
     cc = PW.clock_corrected_ratio(
         elastic, PW.ClockElasticity(0.75, 0.75, 0.75, "PLANTED"),
-        f_ref=1500.0, f_ref_source="planted", draws=50, seed=0)
+        f_ref=1500.0, f_ref_source="planted", draws=50, seed=0, min_tread=w)
     assert cc.ratio / raw == pytest.approx((1 - 0.02) ** -0.75, abs=1e-12)
     assert cc.ratio == pytest.approx(refit_raw, abs=1e-9)
     # V7 still fails: the correction is printed, the gate is unmoved.
@@ -2635,11 +2729,13 @@ def test_a_planted_clock_split_with_a_known_eta_corrects_back_to_the_planted_alp
 def test_the_corrected_envelope_covers_the_interval_and_collapses_without_one():
     samples = _pair_world(private_clock=1425.0, shared_clock=1455.0)
     wide = PW.clock_corrected_ratio(samples, PW.ClockElasticity(0.74, 0.70, 0.78, "x"),
-                                    f_ref=1455.0, f_ref_source="a", draws=50, seed=0)
+                                    f_ref=1455.0, f_ref_source="a", draws=50, seed=0,
+                                    min_tread=PW.CLAIM_MIN_TREAD)
     assert wide.interval is not None and wide.envelope is not None
     assert wide.envelope[0] <= wide.interval[0] and wide.interval[1] <= wide.envelope[1]
     fixed = PW.clock_corrected_ratio(samples, PW.ClockElasticity(0.74, 0.74, 0.74, "x"),
-                                     f_ref=1455.0, f_ref_source="a", draws=50, seed=0)
+                                     f_ref=1455.0, f_ref_source="a", draws=50, seed=0,
+                                     min_tread=PW.CLAIM_MIN_TREAD)
     assert fixed.envelope == pytest.approx(fixed.interval)
 
 
@@ -2657,7 +2753,7 @@ def test_c1_prints_the_clock_corrected_ratio_and_scores_the_raw_one():
                                0.9743, (0.9700, 0.9790), (0.9679, 0.9829),
                                0.9809, 0.9551)
     gate = PW.gate_c1_ratio(0.9551, (0.9544, 0.9695), 2000, corrected=None,
-                            clock=clock)
+                            clock=clock, min_tread=PW.CLAIM_MIN_TREAD)
     assert gate.verdict == exit_codes.FAIL          # NO-REUSE, scored RAW
     assert gate.measured.startswith("0.9551 [0.9544, 0.9695]")
     joined = "\n".join(gate.lines)
@@ -3314,6 +3410,10 @@ def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_po
     assert kw["calls_per_burst"] == round(PW.DUTY_BURST_MS / 0.5)     # 80
     assert kw["bursts"] == round(200.0 / PW.DUTY_BURST_MS)          # 5
     assert kw["per_call_ms"] == 0.5 and kw["trials"] == 3
+    # Each gap from the burst it follows (DESIGN DECISION 15), not from the
+    # 0.5 ms the sizing read said.
+    import clock_elasticity as CE
+    assert kw["gap_basis"] == CE.GAP_FROM_BURST
     assert kw["warm_ms"] == 300.0 and kw["l2_flush"] is True
     assert kw["reference_clock_mhz"] == 1455.0
     assert ct.duty == 0.5 and ct.power_w == 480.0 and ct.ms_p50 == 0.52
@@ -3448,12 +3548,14 @@ def test_a_duty_run_stamps_the_duty_timer_as_its_instrument(monkeypatch, tmp_pat
     duty below 1 it named the queue-deep `time_kernel` loop the cells were NOT
     timed with, while each row's own `instrument` column named the duty
     timer. It now names the duty timer's own string, the one those rows carry,
-    and the duty."""
+    and the duty, and since 2026-09-23 how its gaps were sized: from each
+    burst, which session 5's pages, same string and duty, were not."""
     import clock_elasticity as CE
     row_instrument = CE.DutyTiming.__dataclass_fields__["instrument"].default
     got = _provenance_instrument(monkeypatch, tmp_path, "0.25")
     assert got != TIMING.TIMING_BASIS
-    assert got.startswith(row_instrument) and got.endswith("duty 0.25")
+    assert got.startswith(row_instrument) and "| duty 0.25 |" in got
+    assert got.endswith(f"(gap_basis {CE.GAP_FROM_BURST})")
     assert PW.ladder_instrument(0.25) == got
     # Full duty keeps the queue-deep basis, which is what timed its cells.
     assert _provenance_instrument(monkeypatch, tmp_path, "1.0") == TIMING.TIMING_BASIS
@@ -3507,9 +3609,9 @@ def test_iterations_per_trial_mean_one_thing_at_either_duty():
 #: The columns this build adds for the duty timer's diagnostics (findings 17
 #: and 24). Named here so the pre-change header below is the one a cells.csv
 #: written at 12ec932 carries.
-DIAGNOSTIC_COLUMNS = ("duty_achieved", "calls_per_burst", "gap_ms", "head_ms",
-                      "tail_ms", "within_burst_ok", "clock_samples_mhz",
-                      "host_bound")
+DIAGNOSTIC_COLUMNS = ("duty_achieved", "calls_per_burst", "gap_ms", "gap_basis",
+                      "head_ms", "tail_ms", "within_burst_ok",
+                      "clock_samples_mhz", "host_bound")
 
 #: The top-level keys of session 4's published report.json files (written at
 #: 81f80b7, 2026-09-21, on the pod-h200-session4 branch): what a report from
@@ -3541,9 +3643,9 @@ def test_the_duty_timers_diagnostics_travel_through_the_csv_and_an_old_file_read
                       clock_samples_mhz="1455 1440", host_bound=False)
     duty = PW.replace(_sample(PW.PRIVATE, 2, 0, 1.1, load=1965.0), duty=0.25,
                       power_w=300.0, duty_achieved=0.231, calls_per_burst=80,
-                      gap_ms=120.0, head_ms=0.5, tail_ms=0.495,
-                      within_burst_ok=True, clock_samples_mhz="1965 1965 1980",
-                      host_bound=True)
+                      gap_ms=120.0, gap_basis="burst", head_ms=0.5,
+                      tail_ms=0.495, within_burst_ok=True,
+                      clock_samples_mhz="1965 1965 1980", host_bound=True)
     store.append(full)
     store.append(duty)
     back = PW.read_samples(path)
@@ -3676,23 +3778,75 @@ class _BurstEvents:
         return [8.0] + [2.0 + 0.001 * i for i in range(n - 1)]
 
 
-def test_time_cell_over_the_real_duty_timer_fills_every_diagnostic(tmp_path):
-    """No laptop test drove `time_cell` through the REAL `time_duty`, so the
-    names it reads off `DutyTiming` were checked only against a fake written
-    beside them. Here the arm's own timer runs behind injected events, clock
-    reads and sleep, and every diagnostic lands on the row and comes back
-    from cells.csv; the row's instrument is the string the page's provenance
-    starts with."""
-    import functools
+class _FakeHostClock:
+    """The host clock `clock_elasticity.time_duty` reads off GPU:
+    `perf_counter` returns it (monkeypatched onto the `time` module that
+    file calls through), the injected sleep advances it, and `burst_events`
+    makes a burst's synchronise advance it by that burst's kernel time plus
+    `host_ms` per call outside the event pairs (an L2 flush's worth), so a
+    burst's wall clock is what a GPU would have made it and the achieved
+    duty is arithmetic, not a race against the laptop's scheduler."""
 
-    import clock_elasticity as CE
-    reads = iter([1965, 1950, 1965, 1980] * 10)
+    def __init__(self):
+        self.now = 0.0
+        self.slept: list[float] = []
+
+    def perf_counter(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+    def burst_events(self, per_call_ms, *, lead_ms=None, host_ms=0.0):
+        clock = self
+
+        class Events:
+            def __init__(self, n):
+                rec = types.SimpleNamespace(record=lambda: None)
+                self.n = n
+                self.starts, self.ends = [rec] * n, [rec] * n
+
+            def synchronize(self):
+                clock.now += (sum(self.elapsed(self.n)) + host_ms * self.n) / 1e3
+
+            def elapsed(self, n):
+                if callable(per_call_ms):
+                    return per_call_ms(n)
+                lead = per_call_ms if lead_ms is None else lead_ms
+                return [lead] + [per_call_ms] * (n - 1)
+        return Events
+
+
+def _nvml_reads(power_w=300.0, mhz=(1965, 1950, 1965, 1980)):
+    reads = iter(list(mhz) * 1000)
 
     def clock_read():
         return TIMING.ClockState(next(reads), 60, source=TIMING.CLOCK_SOURCE_NVML,
-                                 power_w=300.0)
-    duty_timer = functools.partial(CE.time_duty, events=_BurstEvents,
-                                   clock_read=clock_read, sleep=lambda s: None)
+                                 power_w=power_w)
+    return clock_read
+
+
+def test_time_cell_over_the_real_duty_timer_fills_every_diagnostic(tmp_path,
+                                                                    monkeypatch):
+    """No laptop test drove `time_cell` through the REAL `time_duty`, so the
+    names it reads off `DutyTiming` were checked only against a fake written
+    beside them. Here the arm's own timer runs behind injected events, clock
+    reads, sleep and host clock, and every diagnostic lands on the row and
+    comes back from cells.csv; the row's instrument is the string the page's
+    provenance starts with. The gap is each burst's own kernel time x (1/duty
+    - 1), since 2026-09-23, not the sizing read's."""
+    import functools
+
+    import clock_elasticity as CE
+    host = _FakeHostClock()
+    monkeypatch.setattr(CE.time, "perf_counter", host.perf_counter)
+
+    class Events(_BurstEvents):
+        def synchronize(self):
+            host.now += sum(self.elapsed(len(self.starts))) / 1e3
+    duty_timer = functools.partial(CE.time_duty, events=Events,
+                                   clock_read=_nvml_reads(), sleep=host.sleep)
     ct = PW.time_cell(lambda: None, duty=0.25, warmup_ms=0.0,
                       cell_budget_ms=200.0, trials=2, l2_flush=False,
                       reference_clock_mhz=None,
@@ -3701,7 +3855,10 @@ def test_time_cell_over_the_real_duty_timer_fills_every_diagnostic(tmp_path):
     calls = round(PW.DUTY_BURST_MS / 2.0)
     bursts = round(200.0 / PW.DUTY_BURST_MS)
     assert ct.calls_per_burst == calls and ct.iters == bursts * (calls - 1)
-    assert ct.gap_ms == pytest.approx(calls * 2.0 * (1 / 0.25 - 1))
+    busy = sum(_BurstEvents(calls).elapsed(calls))
+    assert ct.gap_ms == pytest.approx(busy * (1 / 0.25 - 1))
+    assert ct.gap_basis == CE.GAP_FROM_BURST
+    assert ct.duty_achieved == pytest.approx(0.25, rel=1e-9)
     assert ct.head_ms < ct.tail_ms and ct.within_burst_ok is True
     assert ct.duty_achieved is not None and ct.power_w == 300.0
     assert ct.host_bound is not None
@@ -3839,8 +3996,8 @@ def _two_elasticity_world(clock, *, intercept_eta, tile_eta, a=0.3,
 
 def _corrected_ratio(samples, eta):
     cells = PW.clock_corrected(samples, eta, 1500.0)
-    return (PW.ladder_for(cells, PW.SHARED).slope_ms
-            / PW.ladder_for(cells, PW.PRIVATE).slope_ms)
+    return (PW.ladder_for(cells, PW.SHARED, min_tread=PW.CLAIM_MIN_TREAD).slope_ms
+            / PW.ladder_for(cells, PW.PRIVATE, min_tread=PW.CLAIM_MIN_TREAD).slope_ms)
 
 
 def test_one_clock_per_arm_is_carried_exactly_by_the_per_m_tile_elasticity():
@@ -3882,7 +4039,7 @@ def test_the_eta_1_line_is_a_reference_point_the_correction_can_pass():
         intercept_eta=0.2, tile_eta=1.1)
     cc = PW.clock_corrected_ratio(one, PW.ClockElasticity(1.1, 1.1, 1.1, "x"),
                                   f_ref=1500.0, f_ref_source="planted",
-                                  draws=50, seed=0)
+                                  draws=50, seed=0, min_tread=PW.CLAIM_MIN_TREAD)
     assert (cc.ratio - cc.raw) * (cc.ratio - cc.at_unit) > 0
     assert abs(cc.ratio - cc.raw) > abs(cc.at_unit - cc.raw)
     joined = "\n".join(cc.lines())
@@ -4130,28 +4287,30 @@ def test_v8_fails_a_negative_ratio_arm_step_the_positive_only_bias_scored_inside
     `L|s|/(ws - L|s|) > ALIGN_STEP_RATIO_BUDGET`, i.e. when
     `L|s|/ws > 0.01/1.01 = 0.009901`, so every fraction in (0.009901, 0.01] is
     PASS under the old form and, once the step is resolved against its own
-    standard error, FAIL under the new one. At ws = 0.64 ms and L = 4.5/17.5
-    the fraction 0.00995 is a step of 24.76 us, the tens of microseconds an
-    alignment call is, so `gate_v8_alignment` reaching a different verdict here
+    standard error, FAIL under the new one. At ws = 0.64 ms and L = 3/10 (the
+    split at tread 4 over the claim's window, treads 2..6, where V8 prices a
+    step) the fraction 0.00995 is a step of 21.23 us, the tens of
+    microseconds an alignment call is, so `gate_v8_alignment` reaching a different verdict here
     is a reachable design and not an arithmetic curiosity. The same magnitude
     with the sign flipped still PASSES, which is the whole content of the fix:
     the gate now reads a bound that knows which side of the fit the denominator
     shrinks on.
     """
     treads = [1, 2, 3, 4, 5, 6]
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     stream_ms = 0.64
-    lev = PW.leverage(treads, 4)
+    lev = PW.leverage(window, 4)
     budget = PW.ALIGN_STEP_RATIO_BUDGET
     fraction = 0.00995
     assert budget / (1.0 + budget) < fraction <= budget
     step_ms = fraction * stream_ms / lev
-    assert step_ms * 1e3 == pytest.approx(24.76, abs=0.01)
+    assert step_ms * 1e3 == pytest.approx(21.23, abs=0.01)
 
     down = _signed_step_probe(-step_ms)
     read = PW.read_probe(down, PW.SHARED, _census())
     assert read.fit.split_tread == 4 and read.real
     old_form = lev * abs(read.fit.step_ms) / stream_ms
-    corrected = PW.step_bias(read.fit.step_ms, treads, 4, stream_ms)
+    corrected = PW.step_bias(read.fit.step_ms, window, 4, stream_ms)
     assert old_form <= budget < corrected
     gate = PW.gate_v8_alignment(down, treads=treads, census=_census(),
                                 weight_stream_ms=stream_ms)
@@ -4159,7 +4318,7 @@ def test_v8_fails_a_negative_ratio_arm_step_the_positive_only_bias_scored_inside
 
     up = _signed_step_probe(step_ms)
     assert PW.step_bias(PW.read_probe(up, PW.SHARED, _census()).fit.step_ms,
-                        treads, 4, stream_ms) <= budget
+                        window, 4, stream_ms) <= budget
     assert PW.gate_v8_alignment(up, treads=treads, census=_census(),
                                 weight_stream_ms=stream_ms).verdict == exit_codes.PASS
 
@@ -4625,7 +4784,11 @@ def test_every_planted_worlds_whole_report_document_is_strict_json(tmp_path):
             assert (None not in payload["ratio_interval"]) is formed, where
             decl = payload["declaration_fit"]
             assert (decl["per_tile_band"] is not None) is formed, where
-            assert (decl["step_band"] is not None) is formed, where
+            # A step band exists where a step was fitted: in the claim's
+            # window a world that drops treads 2 and 3 starts at native's
+            # switch, which is then collinear with the intercept.
+            stepped = decl["step_ms"] is not None
+            assert (decl["step_band"] is not None) is (formed and stepped), where
 
     # AND ONCE AT THE SHIPPED COUNT. Every pass above trades `DEFAULT_DRAWS`
     # for a count that reaches the same document forty times cheaper; this one
@@ -4956,7 +5119,8 @@ def _v5_ladders(native_per_tile_ms: float):
         block_m=32, treads=[1, 2, 3, 4, 5, 6], repeats=3,
         alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
         noise=0.0, seed=0, copies_declared=9)
-    return tuple(PW.ladder_for(samples, a) for a in PW.ARMS)
+    return tuple(PW.ladder_for(samples, a, min_tread=PW.CLAIM_MIN_TREAD)
+                 for a in PW.ARMS)
 
 
 def test_v5_scores_a_pass_on_the_far_edge_and_a_fail_on_the_near_one():
@@ -5409,7 +5573,7 @@ def test_a_v8_fail_page_records_the_requested_duty_and_null_for_the_timed_one(
     assert payload["duty"] == 0.25
     assert payload["duty_timed"] is None
     assert "duty0.25" in payload["run_id"]
-    assert payload["instrument"].endswith("duty 0.25")
+    assert "| duty 0.25 |" in payload["instrument"]
     v8 = next(g for g in payload["gates"] if g["tag"] == "V8")
     assert v8["verdict"] == exit_codes.FAIL
 
@@ -5546,3 +5710,550 @@ def test_a_v7_fail_at_the_pod_duty_reads_the_same_everywhere_this_file_says_it()
     src = " ".join(SCRIPT.read_text().split())
     assert "not a setting to change" not in src
     assert "finding about the card" not in src
+
+
+# --------------------------------------------------------------------------
+# 27. session 5's two follow-ups (2026-09-23): the claim's slopes are fitted
+#     from tread 2 (DESIGN DECISION 16), and each duty gap is sized from the
+#     burst it follows (DESIGN DECISION 15)
+# --------------------------------------------------------------------------
+
+def _one_tile_call_world(alpha: float, *, kink_ms: float = 0.16,
+                         native_extra_n1: float = 0.0, repeats: int = 3,
+                         treads=(1, 2, 3, 4, 5, 6)):
+    """Session 5's shape, exactly affine from tread 2 and off that line at
+    tread 1 only: native and shared lie on `0.5 + alpha n` for n >= 2 and sit
+    `kink_ms` above it at n = 1; private lies on `0.5 + n` for n >= 2 and is
+    at n = 1 the SAME CALL as shared (so V6 passes), well off its own line.
+    `native_extra_n1` moves native's one-tile call alone, which only V5
+    reads."""
+    t1 = 0.5 + alpha + kink_ms
+    out = []
+    for rep in range(repeats):
+        for n in treads:
+            on = n >= 2
+            out.append(_sample(PW.NATIVE, n, rep,
+                               (0.4 + alpha * n) if on
+                               else t1 - 0.1 + native_extra_n1, load=1965.0))
+            out.append(_sample(PW.SHARED, n, rep,
+                               (0.5 + alpha * n) if on else t1, load=1965.0))
+            out.append(_sample(PW.PRIVATE, n, rep,
+                               (0.5 + 1.0 * n) if on else t1, load=1965.0))
+    return out
+
+
+def test_r3s_claim_window_is_the_one_r1s_claim_reads():
+    """The owner's registration: R3's slopes start where R1's per-tile claim
+    does, so the two arms define the per-M-tile cost over one window. R3
+    restates the number rather than import a module that imports torch, and
+    this is what holds the two equal."""
+    import clock_elasticity as CE
+    assert PW.CLAIM_MIN_TREAD == CE.CLAIM_MIN_TREAD
+    assert PW.treads_in_window([1, 2, 3, 4], min_tread=PW.CLAIM_MIN_TREAD) \
+        == [n for n in (1, 2, 3, 4) if n >= CE.CLAIM_MIN_TREAD]
+    # The median table stays whole unless a window is asked for: the fit
+    # names its window, a reader of the ladder's shape gets every tread.
+    rows = _noiseless(0.5)
+    assert [n for n, _ms in PW.collapse(rows, PW.SHARED)[0]] == [1, 2, 3, 4, 5, 6]
+    assert [n for n, _ms in PW.collapse(rows, PW.SHARED, min_tread=2)[0]] \
+        == [2, 3, 4, 5, 6]
+    assert PW.span_text([2, 3, 4, 5, 6]) == "2..6"
+    assert PW.span_text([4, 5, 6, 2]) == "2, 4, 5, 6"
+    assert PW.span_text([]) == "none"
+
+
+def test_the_claim_reads_treads_2_and_deeper_and_prints_every_tread_beside_it():
+    """Session 5: at G >= 4 the one-tile call sat 0.157-0.164 ms above the
+    line through treads 2-6, and a line through treads 1-6 read that point as
+    slope, moving the ratio by 5-28x the seed sd. Planted here with the ratio
+    over treads 2-6 EXACTLY alpha: the claim reads alpha to rounding, the
+    every-tread reading beside it does not, and the page and report.json
+    carry both under their own names with tread 1's distance from the line.
+    On the parent the stored ratio was the every-tread one."""
+    alpha = PW.ALPHA
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = _one_tile_call_world(alpha)
+    report = _analyse(samples, treads, draws=20)
+    pay = report.payload
+    assert pay["ratio"] == pytest.approx(alpha, abs=1e-12)
+    assert pay["claim_min_tread"] == PW.CLAIM_MIN_TREAD
+    assert pay["claim_treads"] == PW.treads_in_window(treads,
+                                                      min_tread=PW.CLAIM_MIN_TREAD)
+    every = (PW.fit_line([(n, 0.5 + alpha * n + (0.16 if n == 1 else 0.0))
+                          for n in treads])[1]
+             / PW.fit_line([(n, 0.5 + n if n > 1 else 0.5 + alpha + 0.16)
+                            for n in treads])[1])
+    assert pay["ratio_all_treads"] == pytest.approx(every, abs=1e-12)
+    assert abs(pay["ratio_all_treads"] - pay["ratio"]) > 0.01, \
+        "the planted kink is not load-bearing"
+    assert [p[0] for p in pay["ladders"][PW.SHARED]["points"]] == treads[1:]
+    assert [p[0] for p in pay["ladders_all_treads"][PW.SHARED]["points"]] == treads
+    assert pay["ladders"][PW.PRIVATE]["min_tread"] == PW.CLAIM_MIN_TREAD
+    assert pay["tread1_off_claim_line_ms"][PW.SHARED] == pytest.approx(0.16)
+    assert pay["tread1_off_claim_line_ms"][PW.NATIVE] == pytest.approx(0.16)
+    c1 = next(g for g in report.gates if g.tag == "C1")
+    assert c1.measured.startswith(f"{pay['ratio']:.4f}") and "over treads 2..6" in c1.measured
+    joined = "\n".join(c1.lines)
+    assert "both slopes over treads 2..6, THE CLAIM'S WINDOW" in joined
+    assert (f"PRINTED BESIDE IT, never gated: the same ratio over EVERY tread, "
+            f"tread 1 included, {pay['ratio_all_treads']:.4f}") in joined
+    text = report.text()
+    assert "FITS, ms = A + B n over treads 2 and deeper, THE CLAIM'S WINDOW" in text
+    assert "PRINTED BESIDE IT, never gated: the same fit over EVERY tread" in text
+    assert "tread 1 against the claim's lines through treads 2 and deeper" in text
+    # C2 reads the claim's private slope, the one the ratio's denominator is.
+    c2 = next(g for g in report.gates if g.tag == "C2")
+    assert any("over treads 2..6, the claim's window" in ln for ln in c2.lines)
+    # V6 still reads tread 1, and says why it may.
+    v6 = next(g for g in report.gates if g.tag == "V6")
+    assert v6.verdict == exit_codes.PASS
+    assert any("below the claim's window" in ln for ln in v6.lines)
+
+
+def test_v5_fits_the_declaration_over_the_claims_window():
+    """A cost in native's ONE-TILE call alone sits outside every slope the
+    claim reads, so V5, which bounds the declaration's error on those slopes,
+    does not see it. Fitted over every tread, as on the parent, the same
+    offset leaks into b at tread 1's leverage and fails V5."""
+    alpha = PW.ALPHA
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = _one_tile_call_world(alpha, native_extra_n1=0.6)
+    report = _analyse(samples, treads, draws=20)
+    v5 = next(g for g in report.gates if g.tag == "V5")
+    assert v5.verdict == exit_codes.PASS, v5.measured
+    assert any("over the claim's window: treads 2..6" in ln for ln in v5.lines)
+    assert report.payload["declaration_fit"]["min_tread"] == PW.CLAIM_MIN_TREAD
+    wide = PW.declaration_fit(samples, treads, 4, min_tread=1)
+    private = PW.ladder_for(samples, PW.PRIVATE, min_tread=PW.CLAIM_MIN_TREAD)
+    assert abs(wide.per_tile_ms) / private.slope_ms > PW.MACHINERY_BOUND, (
+        "the planted one-tile cost would not have failed an all-tread fit")
+
+
+def test_v4_scores_the_claims_window_and_prints_tread_1_beside_it():
+    """A compute-bound tread no claimed slope passes through cannot pull the
+    ratio anywhere, so V4 scores the treads the claim fits and prints the
+    rest. Over every tread the same rows FAIL."""
+    rows = ([{"arm": PW.SHARED, "tiles": 1, "pct_of_roof": 0.97},
+             {"arm": PW.PRIVATE, "tiles": 1, "pct_of_roof": 0.97}]
+            + [{"arm": arm, "tiles": n, "pct_of_roof": 0.30}
+               for arm in PW.RATIO_ARMS for n in (2, 3, 4)])
+    gate = PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+                                   min_tread=PW.CLAIM_MIN_TREAD)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    assert "treads 2 and deeper" in gate.threshold
+    assert any("over the claim's window, treads 2..4" in ln for ln in gate.lines)
+    assert any(ln.startswith("outside the window, printed and not scored: "
+                             "shared n=1 97.0%") for ln in gate.lines)
+    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0, roof_source="x",
+                                   min_tread=1).verdict == exit_codes.FAIL
+
+
+def test_v0_counts_its_tread_floor_in_the_claims_window():
+    """Three usable treads, 1-3, are three for an every-tread line and two
+    for the claim's: V0's floor is the claim's, and the page prints both."""
+    rows = [_sample(arm, n, rep, 1.0 + n) for arm in PW.ARMS
+            for n in (1, 2, 3) for rep in range(3)]
+    planned = 3 * 3 * len(PW.ARMS)
+    window = PW.gate_v0_non_vacuity(rows, planned=planned, treads=[1, 2, 3],
+                                    repeats=3, min_tread=PW.CLAIM_MIN_TREAD)
+    assert window.verdict == exit_codes.FAIL
+    assert any("in the claim's window, treads 2 and deeper, which the floor "
+               "counts: native:2, shared:2, private:2" in ln for ln in window.lines)
+    # THE RESULT LINE CARRIES THE COUNT THE FLOOR GATES. It read "treads
+    # 3/3/3" beside a FAIL scored on 2/2/2, a line that contradicted its own
+    # verdict; the all-tread count stands beside the window's.
+    assert window.measured == "27/27 cells, treads 2/2/2 in 2..3, 3/3/3 in " \
+        "all, drift 0.0%", window.measured
+    assert "treads 2/2/2 in 2..3" in window.result_line()
+    every = PW.gate_v0_non_vacuity(rows, planned=planned, treads=[1, 2, 3],
+                                   repeats=3, min_tread=1)
+    assert every.verdict == exit_codes.PASS
+    assert every.measured.startswith("27/27 cells, treads 3/3/3 in 1..3, ")
+
+
+def test_v0_counts_the_drift_excluded_cells_per_window():
+    """The drift line said the excluded cells were "absent from every ladder
+    above" and counted tread 1's among them, which no claim ladder contains:
+    on session 5's G=4 seed 0 page it read private:6 while the claim's
+    private ladder had excluded 5. Each window's count is printed, and the
+    claim window's is the ladder's own."""
+    rows = [_sample(arm, n, rep, 1.0 + n, drift_ok=True) for arm in PW.ARMS
+            for n in (1, 2, 3, 4) for rep in range(3)]
+    # A drifting re-measure of tread 1 and of tread 3 in PRIVATE: each is a
+    # second row for a cell that also has a usable one, so the grid is whole.
+    rows += [_sample(PW.PRIVATE, 1, 0, 2.0, drift_ok=False),
+             _sample(PW.PRIVATE, 3, 1, 4.0, drift_ok=False)]
+    gate = PW.gate_v0_non_vacuity(rows, planned=4 * 3 * len(PW.ARMS),
+                                  treads=[1, 2, 3, 4], repeats=3,
+                                  min_tread=PW.CLAIM_MIN_TREAD)
+    line = next(ln for ln in gate.lines if "DRIFTED" in ln)
+    assert "absent from every ladder above" not in line, line
+    assert "native:0, shared:0, private:2 at every tread" in line, line
+    assert ("native:0, shared:0, private:1 in the claim's window, treads 2 "
+            "and deeper") in line, line
+    claim = PW.ladder_for(rows, PW.PRIVATE, min_tread=PW.CLAIM_MIN_TREAD)
+    assert claim.excluded == 1
+    assert "of the 38 timed cells at every tread" in line, line
+
+
+def test_the_plan_refuses_a_ladder_that_leaves_the_claim_a_two_point_line(
+        monkeypatch):
+    """At CLAIM_MIN_TREAD 2, V8's own floor (four treads) already leaves the
+    claim three; the refusal is what stops a deeper registration quoting a
+    two-point line, so it is exercised at one."""
+    def page(argv):
+        log = io.StringIO()
+        with contextlib.redirect_stdout(log):
+            rc = PW._main(argv)
+        return rc, log.getvalue()
+    argv = ["--dry-run", "--device-memory-gb", "140", "--treads", "4"]
+    rc, out = page(argv)
+    assert "tread(s) in the claim's window" not in out, out[-600:]
+    assert "--dry-run was given" in out, "four treads stopped short of the plan"
+    monkeypatch.setattr(PW, "CLAIM_MIN_TREAD", 3)
+    rc, out = page(argv)
+    assert rc == exit_codes.REFUSED
+    assert ("REFUSED: --treads 4 leaves 2 tread(s) in the claim's window "
+            "(treads 3 and deeper") in out
+    assert "RESULT: " not in out
+
+
+def test_the_plan_page_names_the_claims_window():
+    got = run(["--dry-run", "--device-memory-gb", "140"])
+    assert ("the claim's slopes are fitted over treads 2..6 (CLAIM_MIN_TREAD "
+            "2, DESIGN DECISION 16)") in got.stdout
+    assert "one measured slope over another, both over treads 2..6" in got.stdout
+    assert "V4 every fitted tread of shared and private (treads 2 and deeper)" \
+        in got.stdout
+    helped = run(["--help"])
+    assert "--rescore" in helped.stdout and "claim window" in helped.stdout
+
+
+def _write_cells(dirpath: Path, samples) -> Path:
+    store = PW.Store(dirpath / "cells.csv", PW.CSV_FIELDS)
+    for s in samples:
+        store.append(s)
+    return dirpath / "cells.csv"
+
+
+def _report_with_cells(tmp_path, name, samples, treads, *, seed=0, draws=30,
+                       old_window=False, duty=1.0):
+    """A measured-shaped report.json WITH the cells.csv it was scored from.
+    `old_window` writes what a report before DESIGN DECISION 16 stored: the
+    every-tread ratio and interval in `ratio` and `ratio_interval`, and no
+    `claim_min_tread`."""
+    defaults = PW.build_parser().parse_args([])
+    pinned = dict(PW.SWEEP.FIXED, num_stages=defaults.num_stages,
+                  GROUP_SIZE_M=defaults.group_m, BLOCK_SIZE_N=defaults.block_n)
+    report = _analyse(samples, treads, draws=draws, run_id=name, pinned=pinned,
+                      seed=seed, duty=duty)
+    payload = dict(report.payload)
+    payload["synthetic"] = False
+    payload["provenance"] = {"utc": f"2026-09-23T1{seed}:00:00Z",
+                             "hostname": "planted", "git_sha": "0" * 7,
+                             "git_dirty": False}
+    if old_window:
+        payload["ratio"] = payload["ratio_all_treads"]
+        payload["ratio_interval"] = payload["ratio_all_treads_interval"]
+        for key in ("claim_min_tread", "claim_treads", "ladders_all_treads",
+                    "ratio_all_treads", "ratio_all_treads_interval",
+                    "ratio_all_treads_draws", "tread1_off_claim_line_ms"):
+            payload.pop(key)
+    d = tmp_path / name
+    d.mkdir()
+    (d / "report.json").write_text(json.dumps(payload, indent=2))
+    _write_cells(d, samples)
+    return d / "report.json", payload
+
+
+def test_a_rescore_over_the_reports_own_window_reproduces_its_page(tmp_path):
+    """`rescore` shares `window_fit` and `window_gates` with `analyse`, so a
+    report re-scored from its own cells.csv at its own window and seed is the
+    report: the ratio, the interval, and V0, V4, V5 and C2 as scored. At
+    window 1 it is the every-tread reading the report printed beside."""
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(
+        PW.WORLDS["refit"], CFG, block_m=32, treads=treads, repeats=3,
+        alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=0.004, seed=5, copies_declared=9, native_switch=4)
+    path, payload = _report_with_cells(tmp_path, "run-a", samples, treads,
+                                       seed=5, draws=30)
+    got = PW.rescore(payload, path, draws=30)
+    assert got.reading.ratio == payload["ratio"]
+    assert list(got.reading.interval) == payload["ratio_interval"]
+    assert got.reading.claim_min_tread == PW.CLAIM_MIN_TREAD
+    assert got.reading.stored_ratio == payload["ratio"]
+    stored = {g["tag"]: g for g in payload["gates"]}
+    for tag in ("V0", "V4", "V5", "C2"):
+        assert (got.gates[tag].verdict, got.gates[tag].measured) == \
+            (stored[tag]["verdict"], stored[tag]["measured"]), tag
+    assert got.gates["C1"].measured == stored["C1"]["measured"]
+    every = PW.rescore(payload, path, draws=30, min_tread=1)
+    assert every.reading.ratio == payload["ratio_all_treads"]
+    assert list(every.reading.interval) == payload["ratio_all_treads_interval"]
+    assert set(PW.RESCORED_GATES) == {"V0", "V4", "V5", "V8", "C1", "C2"}
+    # This report stored no probe (the planted analyse ran none), so V8 is
+    # not rebuilt and the stored one stands.
+    assert "V8" not in got.gates
+
+
+def test_a_rescore_prices_the_stored_probe_over_the_window_it_rescores_at(
+        tmp_path):
+    """V8 PRICES A PROBED STEP AT ITS LEVERAGE OVER THE CLAIM'S WINDOW, so a
+    report re-scored over another window carries a V8 priced over the old
+    one unless V8 is rebuilt too. A report before DESIGN DECISION 16 priced
+    its steps over treads 1..6 (leverage 0.257 at the split of 4); re-scored
+    over treads 2 and deeper its V8 is rebuilt from the probe cells it
+    stored (`align_probe`), at leverage 0.300. At the report's own window the
+    rebuilt V8 is the stored one, word for word."""
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(
+        PW.WORLDS["refit"], CFG, block_m=32, treads=treads, repeats=3,
+        alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=0.004, seed=5, copies_declared=9, native_switch=4)
+    path, payload = _report_with_cells(tmp_path, "run-old", samples, treads,
+                                       seed=5, draws=30, old_window=True)
+    step = 0.02
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(step, 4),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4)
+    census = PW.path_census(CFG, treads, 32, {
+        arm: PW.declared_experts(arm, CFG.num_experts, 9) for arm in PW.ARMS})
+    stream = payload["weight_stream_ms"]
+    stored = PW.gate_v8_alignment(probe, treads=treads, census=census,
+                                  weight_stream_ms=stream, min_tread=1)
+    payload["align_probe"] = probe.as_dict()
+    payload["gates"] = [stored.as_dict() if g["tag"] == "V8" else g
+                        for g in payload["gates"]]
+    path.write_text(json.dumps(payload, indent=2))
+
+    own = PW.rescore(payload, path, draws=30, min_tread=1).gates["V8"]
+    assert (own.verdict, own.measured, own.lines) == \
+        (stored.verdict, stored.measured, stored.lines)
+    got = PW.rescore(payload, path, draws=30).gates["V8"]
+    window = [n for n in treads if n >= PW.CLAIM_MIN_TREAD]
+    bias = float(re.search(r"bias <= ([0-9.]+)", got.measured).group(1))
+    assert bias == pytest.approx(PW.leverage(window, 4) * step / stream,
+                                 abs=5e-5)
+    assert got.measured != stored.measured
+    assert "treads 2 and deeper" in got.threshold
+
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert "V8 from the probe cells the report stored" in page.stdout, \
+        page.stdout[-1500:]
+    v8 = next(ln for ln in exit_codes.parse_result_lines(page.stdout)
+              if ln.name == "V8")
+    assert f"measured {got.measured}" in v8.detail, v8
+
+    # A report that stored no probe keeps the V8 it stored, and says so.
+    payload.pop("align_probe")
+    path.write_text(json.dumps(payload, indent=2))
+    assert "V8" not in PW.rescore(payload, path, draws=30).gates
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert "V8 is re-rendered as stored" in page.stdout, page.stdout[-1500:]
+
+
+def test_a_replicate_fitted_over_another_window_is_refused_or_rescored(tmp_path):
+    """The window is a design key: a report before DESIGN DECISION 16 fitted
+    every tread and reads as claim_min_tread 1, so pairing it with a
+    window-2 run is refused rather than pooled into one envelope, and the
+    refusal names the way through: --read --rescore, which re-scores every
+    named report from its cells.csv over this build's window."""
+    treads = [1, 2, 3, 4, 5, 6]
+    old_path, old = _report_with_cells(
+        tmp_path, "run-old", _one_tile_call_world(0.60), treads, seed=0,
+        old_window=True)
+    new_path, new = _report_with_cells(
+        tmp_path, "run-new", _one_tile_call_world(0.61), treads, seed=1)
+    assert "claim_min_tread" in PW.DESIGN_KEYS
+    assert PW.DESIGN_KEY_DEFAULTS["claim_min_tread"] == 1
+    design = {k: PW.design_value(new, k) for k in PW.DESIGN_KEYS}
+    with pytest.raises(PW.PrivateWeightRefusal) as exc:
+        PW.load_replicates([old_path], design=design, card_known=True)
+    assert "differs in claim_min_tread: claim_min_tread 1 against 2" in str(exc.value)
+    assert "--read --rescore" in str(exc.value)
+    got = run(["--read", str(new_path), "--replicate-of", str(old_path)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "differs in claim_min_tread" in got.stdout
+    # Re-scored, the pair is one window, and the old report's stored reading
+    # is printed beside its new one.
+    got = run(["--read", str(new_path), "--rescore", "--draws", "30",
+               "--replicate-of", str(old_path)])
+    assert "READ MODE: nothing measured, nothing written" in got.stdout, (
+        got.stdout[-1500:] + got.stderr[-800:])
+    assert "RE-SCORED   from" in got.stdout
+    assert (f"its report stored {old['ratio']:.4f}" in got.stdout
+            and "over treads 1 and deeper" in got.stdout)
+    rescored_old = PW.rescore(old, old_path, draws=30).reading
+    assert rescored_old.ratio == pytest.approx(0.60, abs=1e-12)
+    assert f"ratio {rescored_old.ratio:.4f}" in got.stdout
+    lines = exit_codes.parse_result_lines(got.stdout)
+    assert [ln.name for ln in lines] == [g["tag"] for g in new["gates"]]
+    assert exit_codes.classify_text(got.stdout) == got.returncode
+    # One report re-scored alone needs no replicate.
+    alone = run(["--read", str(old_path), "--rescore", "--draws", "30"])
+    assert "RE-SCORED   from" in alone.stdout, alone.stdout[-800:]
+    c1 = next(ln for ln in exit_codes.parse_result_lines(alone.stdout)
+              if ln.name == "C1")
+    assert c1.verdict == PW.c1_verdict(rescored_old.ratio, rescored_old.interval)
+
+
+def test_a_rescore_refuses_what_it_cannot_re_read(tmp_path):
+    treads = [1, 2, 3, 4, 5, 6]
+    path, payload = _report_with_cells(tmp_path, "run-a",
+                                       _one_tile_call_world(0.6), treads)
+    (path.parent / "cells.csv").unlink()
+    with pytest.raises(PW.PrivateWeightRefusal, match="no cells.csv beside it"):
+        PW.rescore(payload, path, draws=10)
+    got = run(["--read", str(path), "--rescore"])
+    assert got.returncode == exit_codes.REFUSED and "no cells.csv" in got.stdout
+    got = run(["--rescore", "--dry-run", "--device-memory-gb", "140"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "REFUSED: --rescore re-scores STORED reports" in got.stdout
+    got = run(["--probe-check", "--rescore"])
+    assert "REFUSED: --probe-check is a mode of its own" in got.stdout
+    assert "--rescore" in got.stdout
+
+
+def test_readings_of_two_windows_are_never_one_envelope():
+    """The last line behind the design key: a CrossRun over two windows is
+    refused at construction."""
+    with pytest.raises(PW.PrivateWeightRefusal, match="different claim windows"):
+        PW.cross_run([_reading(0.70, claim_min_tread=1), _reading(0.72)])
+    cross = PW.cross_run([_reading(0.70), _reading(0.72)])
+    assert cross.min_tread == PW.CLAIM_MIN_TREAD
+    assert cross.as_dict()["claim_min_tread"] == PW.CLAIM_MIN_TREAD
+    assert "every ratio over treads 2 and deeper" in cross.lines()[0]
+
+
+def test_the_clock_correction_reads_the_claims_window():
+    samples = _pair_world(private_clock=1425.0, shared_clock=1455.0,
+                          treads=(1, 2, 3, 4))
+    cc = PW.clock_corrected_ratio(samples, PW.ClockElasticity(0.9, 0.9, 0.9, "x"),
+                                  f_ref=1455.0, f_ref_source="a", draws=20,
+                                  seed=0, min_tread=PW.CLAIM_MIN_TREAD)
+    assert cc.min_tread == PW.CLAIM_MIN_TREAD
+    assert cc.raw == pytest.approx(
+        PW.ladder_for(samples, PW.SHARED, min_tread=2).slope_ms
+        / PW.ladder_for(samples, PW.PRIVATE, min_tread=2).slope_ms)
+    assert "before the fit over treads 2 and deeper" in cc.lines()[0]
+    assert cc.as_dict()["min_tread"] == PW.CLAIM_MIN_TREAD
+
+
+def test_every_arm_achieves_the_requested_duty_whatever_its_sizing_read_said(
+        monkeypatch):
+    """Session 5: the gap was sized from a 20 ms FULL-DUTY reading of the
+    call, the in-burst call ran k times faster than that reading, and the
+    achieved duty was 1/(1 + 3k) at 0.25: 0.229-0.241 for native and shared
+    (k 1.05-1.12) against 0.246-0.248 for private (k 1.01-1.02). Here two
+    arms whose sizing reads are 10% and 1% slow, with an L2 flush's worth of
+    host time per call outside the event pairs, both achieve the requested
+    duty, because each gap now comes from the burst it follows."""
+    import functools
+
+    import clock_elasticity as CE
+    duty = PW.FLAT_DUTY
+    achieved, cells = {}, {}
+    for arm, (in_burst_ms, k) in {PW.SHARED: (0.52, 1.10),
+                                  PW.PRIVATE: (0.80, 1.01)}.items():
+        host = _FakeHostClock()
+        monkeypatch.setattr(CE.time, "perf_counter", host.perf_counter)
+        flusher = types.SimpleNamespace(megabytes=256, flush=lambda: None)
+        duty_timer = functools.partial(
+            CE.time_duty, events=host.burst_events(in_burst_ms, host_ms=0.07),
+            clock_read=_nvml_reads(), flusher=flusher, sleep=host.sleep)
+        ct = PW.time_cell(lambda: None, duty=duty, warmup_ms=5.0,
+                          cell_budget_ms=200.0, trials=2, l2_flush=True,
+                          reference_clock_mhz=None,
+                          timer=lambda fn, _k=k, _ms=in_burst_ms, **kw:
+                          _CellTiming(ms_p50=_k * _ms),
+                          duty_timer=duty_timer)
+        achieved[arm], cells[arm] = ct.duty_achieved, (ct, k, in_burst_ms)
+        # The law the parent's sizing obeyed, for the record: this arm's cell
+        # would have achieved p / (p + h + (1/D - 1) k p) there.
+        sized = in_burst_ms / (in_burst_ms + 0.07 + (1 / duty - 1) * k * in_burst_ms)
+        assert abs(sized - duty) > 0.005, "the planted k is not load-bearing"
+    assert achieved[PW.SHARED] == pytest.approx(duty, rel=1e-9), achieved
+    assert achieved[PW.PRIVATE] == pytest.approx(duty, rel=1e-9), achieved
+    for ct, k, in_burst_ms in cells.values():
+        assert ct.gap_basis == CE.GAP_FROM_BURST
+        # The sizing read still sizes the burst's LENGTH, and nothing else.
+        assert ct.calls_per_burst == round(PW.DUTY_BURST_MS / (k * in_burst_ms))
+
+
+def test_v7_prints_each_arms_achieved_duty_and_flags_an_arm_off_it():
+    """A RECORD beside the clocks: each arm's achieved duty per tread and
+    over the ladder against the requested one, within DUTY_ACHIEVED_TOLERANCE
+    or OUTSIDE it. V7's verdict is still the clocks'."""
+    duty = PW.FLAT_DUTY
+    tol = PW.DUTY_ACHIEVED_TOLERANCE * duty
+    held = [PW.replace(s, duty_achieved=duty, gap_basis="burst")
+            for s in _powered_pair(duty=duty)]
+    gate = PW.gate_v7_clock_parity(held, treads=[1, 2, 3])
+    assert gate.verdict == exit_codes.PASS
+    joined = "\n".join(gate.lines)
+    assert joined.count("achieved duty: shared 0.2500, private 0.2500, native "
+                        "0.2500") == 3, joined
+    assert ("achieved duty over the ladder, each arm's median: shared 0.2500, "
+            "private 0.2500, native 0.2500 against the requested 0.25") in joined
+    assert "gaps sized from: burst" in joined
+    assert "every arm within it: the arms ran at one duty" in joined
+    off = {PW.NATIVE: duty - 3 * tol, PW.SHARED: duty - 2 * tol,
+           PW.PRIVATE: duty - 0.5 * tol}
+    split = [PW.replace(s, duty_achieved=off[s.arm]) for s in _powered_pair(duty=duty)]
+    gate = PW.gate_v7_clock_parity(split, treads=[1, 2, 3])
+    assert gate.verdict == exit_codes.PASS, "a record moved the verdict"
+    joined = "\n".join(gate.lines)
+    assert "OUTSIDE for native, shared:" in joined
+    assert "gaps sized from: sizing read (before the column)" in joined
+    assert PW.duty_outside(PW.duty_achieved_by_arm(split), duty) == [PW.NATIVE,
+                                                                      PW.SHARED]
+    report = _analyse(split, [1, 2, 3], draws=10, duty=duty)
+    assert report.payload["duty_achieved_by_arm"] == pytest.approx(off)
+    assert report.payload["duty_achieved_tolerance"] == PW.DUTY_ACHIEVED_TOLERANCE
+    # A full-duty page has no achieved duty to print.
+    assert not any("achieved duty" in ln
+                   for ln in PW.gate_v7_clock_parity(_pair_world(), treads=[1, 2, 3]).lines)
+
+
+def test_v7_says_it_scores_every_tread_including_the_one_the_claim_leaves_out():
+    gate = PW.gate_v7_clock_parity(_pair_world(), treads=[1, 2, 3])
+    assert any("scored at every tread both ratio arms reached, tread 1 included"
+               in ln for ln in gate.lines)
+    doc = " ".join(PW.gate_v7_clock_parity.__doc__.split())
+    assert "EVERY TREAD, NOT THE CLAIM'S WINDOW" in doc
+
+
+def test_a_duty_run_below_full_duty_is_a_new_design_from_a_sizing_read_one(
+        tmp_path):
+    """`duty_gap_from_burst` is a design key: a run below full duty since
+    2026-09-23 sized each gap from its burst, session 5's did not, and a
+    replicate across the two is refused like one at another duty. At full
+    duty there is no gap, so session 4's pages and today's still pair."""
+    treads = [1, 2, 3, 4, 5, 6]
+    assert PW.DESIGN_KEY_DEFAULTS["duty_gap_from_burst"] is False
+    _p, quarter = _report_with_cells(tmp_path, "q", _one_tile_call_world(0.6),
+                                     treads, duty=0.25)
+    assert quarter["duty_gap_from_burst"] is True
+    _p, full = _report_with_cells(tmp_path, "f", _one_tile_call_world(0.6),
+                                  treads, seed=1)
+    assert full["duty_gap_from_burst"] is False
+    session5 = {k: v for k, v in quarter.items() if k != "duty_gap_from_burst"}
+    p5 = tmp_path / "s5.json"
+    p5.write_text(json.dumps(dict(session5, run_id="s5", seed=7)))
+    design = {k: PW.design_value(quarter, k) for k in PW.DESIGN_KEYS}
+    with pytest.raises(PW.PrivateWeightRefusal,
+                       match="differs in duty_gap_from_burst"):
+        PW.load_replicates([p5], design=design, card_known=True)
+    got = run(["--dry-run", "--device-memory-gb", "140", "--repeats", "3",
+               "--duty", "0.25", "--replicate-of", str(p5)])
+    assert "differs in" in got.stdout and "duty_gap_from_burst" in got.stdout
+
+
+def test_a_cells_gap_basis_travels_through_the_csv(tmp_path):
+    row = PW.replace(_sample(PW.PRIVATE, 2, 0, 1.1, load=1965.0), duty=0.25,
+                     duty_achieved=0.25, calls_per_burst=50, gap_ms=121.0,
+                     gap_basis="burst")
+    path = _write_cells(tmp_path, [row])
+    assert PW.read_samples(path) == [row]
+    assert "gap_basis" in PW.CSV_FIELDS

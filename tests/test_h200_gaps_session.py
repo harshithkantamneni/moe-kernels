@@ -5399,6 +5399,40 @@ def test_the_private_reference_runs_at_the_owners_duty_on_both_branches(interpre
     assert "holds by construction" not in TEXT
 
 
+def test_every_description_of_the_ratio_names_its_window_and_its_gap_sizing(
+        interpretation_dry):
+    """THE RECURRING DEFECT, ONE LEVEL UP (finding R3W-4). Since DESIGN
+    DECISION 16 the ratio's two slopes, C2 and V5 are fitted over treads
+    CLAIM_MIN_TREAD and deeper, V4 and V0's floor count those treads and V8
+    prices its step over them; and since the same change each idle gap below
+    full duty is sized from the burst it follows. The driver's R1 paragraph
+    named its window; R3's arm_closes, its READ THESE FIRST entry and the
+    runbook's arm-table row described "slope(shared)/slope(private)" and
+    "idle gaps" with neither. Every one now names the window, read off the
+    script, the gates that read it, and the gap sizing."""
+    private = _load_script_module("private_weight_reference")
+    window = f"treads {private.CLAIM_MIN_TREAD} and deeper"
+    _, stdout = interpretation_dry
+    first = stdout.split("READ THESE FIRST", 1)[1].split(
+        "elasticity-m32-n64-g16", 1)[0]
+    row = re.search(r"^\| `private-mixtral-bm32` \|.*$", _RUNBOOK, re.M)
+    assert row, "no runbook row for the private arm"
+    places = {"arm_closes": _private_closes_line(),
+              "READ THESE FIRST": first,
+              "runbook row": row.group(0)}
+    for where, text in places.items():
+        flat = " ".join(text.split())
+        # IN THE SENTENCE ABOUT THE RATIO'S SLOPES: arm_closes already said
+        # "treads 2 and deeper" of R1's elasticity, which is not this window.
+        assert any("both slopes" in sentence.lower()
+                   and window in sentence.lower()
+                   for sentence in _sentences(flat, ".;")), (where, flat[:1500])
+        for gate in ("C2", "V5", "V4", "V0", "V8"):
+            assert gate in flat, (where, gate)
+        assert "printed beside" in flat and "gate nothing" in flat, where
+        assert "sized from the burst it follows" in flat, (where, flat[:1500])
+
+
 def test_the_elasticity_arm_measures_under_this_sessions_tag(interpretation_dry):
     """THE DRIVER'S R1 LINE REPRODUCED SESSION 4'S RUN ID. 8d4eb78 gave
     clock_elasticity `--session-tag` and the chain passed it; this driver's

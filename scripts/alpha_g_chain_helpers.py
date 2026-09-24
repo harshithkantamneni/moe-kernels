@@ -387,6 +387,10 @@ PAIRS.tsv, one row per ratio run (private_weight_reference), G then seed:
   ratio lo hi          the run's OWN reading, slope(shared) / slope(private), and
                        its {pct} percentile bootstrap over repeats WITHIN the run
                        (R3's INTERVAL_PCT). It understates the run-to-run spread.
+                       Both slopes over the window the report records
+                       (claim_min_tread): treads {PWR.CLAIM_MIN_TREAD} and deeper
+                       since 2026-09-23, every tread on a report before it.
+                       Reports of two windows are refused, not pooled.
   exit                 the run's own exit word: classify over its page's gates.
   exit_scope           how C1 inside that word was scored: `alone` on this run's
                        interval; `envelope` on the envelope of this run's interval

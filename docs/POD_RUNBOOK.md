@@ -152,7 +152,7 @@ against `--list` by `tests/test_docs.py`.
 | `calibrate` | 3 | ALLOW | this pod's own ridge and both dtype peaks, published; five arms refuse without it | KEEP: the only file worth committing |
 | `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
 | `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
-| `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Run at `--duty 0.25` on both branches, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's four ratio pages were all INVALID on V7, the two arms' clocks 2-18% apart. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
+| `private-mixtral-bm32` | 10 | KERNEL | ALPHA AS A RATIO OF TWO MEASURED SLOPES, slope(shared)/slope(private), where the private arm gives every M-tile its own copy of the expert weights: no assumed bandwidth and no fitted intercept in it. Both slopes, C2 and V5 are fitted over treads 2 and deeper (DESIGN DECISION 16), V4 and V0's floor count those treads and V8 prices its step over them; the every-tread fits are printed beside them and gate nothing. Run at `--duty 0.25` on both branches, each idle gap sized from the burst it follows, so the ladder's 145 s of kernel time is about 581 s of pod | not in the verdict: ADDED 2026-09-14, rebuilt 2026-09-17 (see "The private-weight reference alone" below). BOOKED 10 SINCE 2026-09-22, off the plan's wall line at `--duty 0.25` plus the probe's 9 s at full duty; it was 3 at full duty, where session 4's four ratio pages were all INVALID on V7, the two arms' clocks 2-18% apart. The row stays KERNEL because the figure still leaves out the compiles and the 25.4 GB weight build |
 | `elasticity-m32-n64-g16` | 40 | WALL | the clock elasticity of the per-M-tile cost at one pinned cell (BLOCK_M=32, BLOCK_N=64, G=16), four duty states from the cap to the boost ceiling (1.0 0.5 0.25 0.1); the band it lands in decides what every alpha below MEANS | not in the verdict: ADDED 2026-09-16. THE STANDALONE ARM, session 4's design read on this session's card; the alpha(G) chain measures its own elasticity once per G of the ratio ladder, and that is the chain's step, not this row. `--session-tag` IS ON BOTH BRANCHES SINCE 2026-09-22: without it the run id on an H200 was session 4's own, and on the shared volume the arm would have re-scored session 4's 416 cells as this session's. Its DEVICE guard, also 2026-09-22, now refuses that directory instead, so the tag is what lets the arm measure |
 | `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
 | `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships. No arm confirms the headline on sm_90: at BLOCK_N=256 no BLOCK_M=256 control fits at ANY warp or stage count (65536 of 65536 registers per block; `bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0` exits 2), and no BLOCK_SIZE_N does either | CUT: REFUSES at `--capability 9.0`; booked zero, the refusal is the finding. It is not one fix away: `--num-warps 16 --num-stages 3` refuses too, so the paper's headline has no confirming arm on this card |
@@ -311,7 +311,19 @@ interval), V6 (shared and private agree at n=1, where they are the same
 call), then C1, which names the world the ratio landed in: ISSUE-AND-LATENCY,
 below/at/above the refit band, or NO-REUSE. C1 UNKNOWN means the point and the
 interval disagree on a world and the claim is unresolved at this precision,
-not that the arm broke. The arm REFUSES at plan time if the under-load clock
+not that the arm broke. Since 2026-09-23 every slope C1, C2 and V5 read, and
+every tread V0 counts and V4 checks, is over treads 2 and deeper (the arm's
+DESIGN DECISION 16, the window R1's claim reads), and V8 prices a probed
+alignment step at its leverage over those treads, where the ratio's lines are
+fitted (the step itself is still fitted over every probed tread; at the
+booked split of 4 that leverage is 0.300, against 0.257 over treads 1-6): on
+session 5's pages the
+one-tile call sat 0.157-0.164 ms above the line through treads 2-6 at G >= 4,
+and fitting it moved the ratio by 5-28x the seed-to-seed sd. The same fits
+over every tread, and tread 1's distance from the claim's line, are printed
+beside the claim and stored in report.json; nothing gates them. V6 still
+reads tread 1, where the two arms are one call, and V7 still scores the
+clocks at every tread. The arm REFUSES at plan time if the under-load clock
 sampler cannot read the card (V7 would be UNKNOWN throughout), and it writes a
 `DEVICE` file with the GPU UUID under its results directory so that a resume
 on another pod of the same card type is refused rather than merged.
@@ -352,7 +364,12 @@ that way, the private arm's clock 2-18% below the shared arm's (2% on
 mixtral-8x7b at G=1 in both of its runs, 12% on qwen2-57b-a14b at G=1, 18% on
 mixtral-8x7b at G=16). `--duty D` times each cell as bursts of about 40 ms of
 kernel time separated by idle gaps, which takes board power off the cap
-without changing a byte the kernel moves. WHY 0.25 AND NOT 0.5 is session 4's
+without changing a byte the kernel moves. Since 2026-09-23 each gap is sized
+from the burst it follows, so every arm achieves the requested duty: session
+5 sized it from a 20 ms full-duty reading of the call, the in-burst call ran
+k times faster than that reading, and the arms of one run achieved duties
+1/(1 + 3k) apart, 2.5-6.9% of 0.25. V7 prints each arm's achieved duty
+beside its clocks, a record, and every row records its `gap_basis`. WHY 0.25 AND NOT 0.5 is session 4's
 clock arm, the same native kernel under the same `time_duty` R3 imports: at
 duty 0.5 the clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz,
 13 of the 78 cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's
@@ -404,6 +421,21 @@ A pair already on disk is re-read on the laptop with
 ```
 
 and that output, not a hand-computed difference, is the figure to quote.
+A report written before 2026-09-23 fitted every tread and records no
+`claim_min_tread`, which then reads as 1; the window is a design key, so
+pairing such a report with a later one is refused rather than pooled.
+`--rescore` re-scores every report it names from the `cells.csv` beside it
+over treads 2 and deeper, rebuilding V0, V4, V5, C1 and C2 from the cells and
+V8 from the probe cells `report.json` stored, prints each stored reading
+beside its new one, and needs no replicate:
+
+```
+.venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --rescore --replicate-of RUN0/report.json
+```
+
+A pair across the gap sizing (a duty run before 2026-09-23 and one after) is
+refused and cannot be re-scored: `duty_gap_from_burst` is a design key, and
+the cells were measured under two instruments.
 
 ---
 

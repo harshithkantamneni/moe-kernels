@@ -650,6 +650,109 @@ def test_the_gap_is_outside_every_measured_interval_and_sets_the_duty():
     assert window[:4] == [("flush", -1), ("start", 0), ("call", -1), ("end", 0)]
 
 
+class _HostClock:
+    """The host clock `time_duty` reads, monkeypatched onto the `time` module
+    it calls: the injected sleep advances it, and `events` makes a burst's
+    synchronise advance it by the burst's kernel time plus `host_ms` per
+    call outside the event pairs (the L2 flush), as a GPU would."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.slept: list[float] = []
+
+    def perf_counter(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+    def events(self, per_call_ms: float, host_ms: float = 0.0):
+        clock = self
+
+        class Events:
+            def __init__(self, n):
+                rec = type("Rec", (), {"record": lambda self: None})()
+                self.n = n
+                self.starts, self.ends = [rec] * n, [rec] * n
+
+            def synchronize(self):
+                clock.now += self.n * (per_call_ms + host_ms) / 1e3
+
+            def elapsed(self, n):
+                return [per_call_ms] * n
+        return Events
+
+
+def _timed_at(monkeypatch, *, k: float, basis=None, host_ms=0.0, warm_ms=0.0,
+              duty=0.25, per_call=2.0, calls=8):
+    """`time_duty` over a call that costs `per_call` ms inside a burst while
+    the caller's reading said `k` times that, on a fake host clock."""
+    clock = _HostClock()
+    monkeypatch.setattr(CE.time, "perf_counter", clock.perf_counter)
+    kw = {} if basis is None else {"gap_basis": basis}
+    got = CE.time_duty(lambda: None, duty=duty, calls_per_burst=calls, bursts=3,
+                       trials=2, warm_ms=warm_ms, l2_flush=True,
+                       per_call_ms=k * per_call, reference_clock_mhz=1650.0,
+                       clock_read=_clock_reader([1800]),
+                       events=clock.events(per_call, host_ms),
+                       flusher=FakeFlusher(), sleep=clock.sleep, **kw)
+    return got, clock
+
+
+@pytest.mark.parametrize("k", [1.01, 1.10])
+def test_a_burst_sized_gap_holds_the_duty_whatever_the_callers_reading_said(
+        monkeypatch, k):
+    """GAP_FROM_BURST, what private_weight_reference asks for: each gap brings
+    its burst's wall clock to the burst's own kernel time over the duty, so
+    the achieved duty is the requested one when the caller's per-call reading
+    was k times off and the flush's host time sits outside the event pairs.
+    The default, GAP_FROM_SIZING, keeps this arm's behaviour: one gap from
+    that reading, and an achieved duty of p / (p + h + (1/D - 1) k p), which
+    is 1/(1 + 3k) at 0.25 with no host time, session 5's law."""
+    duty, p, h = 0.25, 2.0, 0.05
+    burst, clock = _timed_at(monkeypatch, k=k, basis=CE.GAP_FROM_BURST,
+                             host_ms=h)
+    assert burst.duty_achieved == pytest.approx(duty, rel=1e-12)
+    assert burst.gap_basis == CE.GAP_FROM_BURST
+    assert burst.gap_ms == pytest.approx(8 * p / duty - 8 * (p + h))
+    assert all(s == pytest.approx(burst.gap_ms / 1e3) for s in clock.slept)
+    sized, _clock = _timed_at(monkeypatch, k=k, host_ms=h)
+    assert sized.gap_basis == CE.GAP_FROM_SIZING
+    assert sized.gap_ms == pytest.approx(8 * k * p * (1 / duty - 1))
+    assert sized.duty_achieved == pytest.approx(
+        p / (p + h + (1 / duty - 1) * k * p), rel=1e-12)
+    bare, _clock = _timed_at(monkeypatch, k=k)
+    assert bare.duty_achieved == pytest.approx(1 / (1 + 3 * k), rel=1e-12)
+
+
+def test_the_warm_up_runs_at_the_cadence_its_trials_are_sized_at(monkeypatch):
+    """`_warm_at_duty` warms at the state's own cadence, and under
+    GAP_FROM_BURST that cadence is the burst-sized one: warming at the
+    caller's reading would hand the trials a clock from another duty."""
+    p, k, duty = 2.0, 1.10, 0.25
+    got, clock = _timed_at(monkeypatch, k=k, basis=CE.GAP_FROM_BURST,
+                           warm_ms=40.0)
+    warm = clock.slept[:len(clock.slept) - 6]
+    assert warm, "the warm-up delivered no burst"
+    assert all(s == pytest.approx(8 * p * (1 / duty - 1) / 1e3) for s in warm)
+    assert got.duty_achieved == pytest.approx(duty, rel=1e-12)
+    _got, sized = _timed_at(monkeypatch, k=k, warm_ms=40.0)
+    assert all(s == pytest.approx(8 * k * p * (1 / duty - 1) / 1e3)
+               for s in sized.slept)
+
+
+def test_an_unknown_gap_basis_is_refused_and_never_defaulted():
+    with pytest.raises(T.TimingRefused, match="gap_basis='wall'"):
+        CE.time_duty(lambda: None, duty=0.5, calls_per_burst=8, bursts=1,
+                     trials=1, warm_ms=0.0, l2_flush=True, per_call_ms=1.0,
+                     reference_clock_mhz=None, clock_read=_clock_reader([1800]),
+                     events=FakeEvents, flusher=FakeFlusher(), gap_basis="wall")
+    assert CE.GAP_BASES == (CE.GAP_FROM_SIZING, CE.GAP_FROM_BURST)
+    assert inspect.signature(CE.time_duty).parameters["gap_basis"].default \
+        == CE.GAP_FROM_SIZING, "this arm's own states must keep their sizing"
+
+
 def test_duty_one_asks_for_no_gap_at_all():
     got, slept = _drive(duty=1.0)
     assert got.gap_ms == pytest.approx(0.0)
