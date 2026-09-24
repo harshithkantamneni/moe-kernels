@@ -10,9 +10,13 @@
 #   bash scripts/setup_runpod.sh --base-python 3.12   # pin base's interpreter
 #   bash scripts/setup_runpod.sh --isolated base      # base without the image's torch
 #   MOE_FORCE=1 bash scripts/setup_runpod.sh          # rebuild regardless of hashes
+#   MOE_FRAMEWORK_PYTHON=3.12 bash scripts/setup_runpod.sh vllm   # pin vllm/sglang's interpreter
+#   MOE_HOST_KIND=vm bash scripts/setup_runpod.sh     # a VM's local disk, not a volume
 #
 # Everything expensive lives on the volume, so a terminated pod costs nothing
-# but the pod.
+# but the pod. On a VM with no volume (Lambda), scripts/setup_vm.sh calls this
+# script with WORKSPACE on the local disk and MOE_HOST_KIND=vm, and the closing
+# report says that disk dies with the instance.
 #
 # THE PIN USED TO BE A SOURCE EDIT, AND THE EDIT TAINTED EVERY ROW.
 # `docs/RUNPOD.md` told the operator to change this file's `setup_env base
@@ -70,6 +74,16 @@ BASE_PYTHON="${MOE_BASE_PYTHON:-}"
 #: the RunPod image's CUDA-matched torch rather than guessing a wheel tag.
 BASE_ISOLATION="${MOE_BASE_ISOLATION:-system}"
 ISOLATION_SET=0
+#: The interpreter the FRAMEWORK venvs (vllm, sglang) are built on, e.g. 3.12.
+#: Empty keeps the historical behaviour, whatever interpreter uv finds first,
+#: which on the pod image is /usr/bin/python3.12 (the one the resolved sets were
+#: frozen under, profiles/q2_kernel_names.txt) and on an Ubuntu 22.04 VM is
+#: python3.10.
+FRAMEWORK_PYTHON="${MOE_FRAMEWORK_PYTHON:-}"
+#: pod | vm. What the workspace is: a RunPod network volume that outlives the
+#: pod, or a VM's local disk that survives a reboot and dies at termination.
+#: Only the words this script prints depend on it.
+HOST_KIND="${MOE_HOST_KIND:-pod}"
 targets=()
 
 while [[ $# -gt 0 ]]; do
@@ -104,6 +118,11 @@ if [[ -n "$BASE_PYTHON" && "$BASE_ISOLATION" == "system" ]]; then
   BASE_ISOLATION="isolated"
   echo "[setup] --base-python $BASE_PYTHON implies an isolated base venv"
 fi
+
+case "$HOST_KIND" in
+  pod|vm) ;;
+  *) echo "[setup] REFUSING: MOE_HOST_KIND=$HOST_KIND is neither pod nor vm." >&2; exit 2 ;;
+esac
 
 if [[ ${#targets[@]} -eq 0 ]]; then targets=(base vllm sglang); fi
 
@@ -263,7 +282,12 @@ require_space() {
   log "$label: ${avail}G free on $path (want ~${need}G)"
   if (( avail < need )); then
     echo "[setup] ABORT: only ${avail}G free on $path, need about ${need}G." >&2
-    echo "[setup]   Network volumes can be grown in the RunPod console." >&2
+    if [[ "$HOST_KIND" == "vm" ]]; then
+      echo "[setup]   A VM's local disk does not grow: free space on it, or rent an" >&2
+      echo "[setup]   instance type with more disk." >&2
+    else
+      echo "[setup]   Network volumes can be grown in the RunPod console." >&2
+    fi
     echo "[setup]   Or install fewer environments: bash $0 base" >&2
     return 1
   fi
@@ -287,7 +311,11 @@ venv_args() {
   local env="$1"
   if [[ "$env" != "base" ]]; then
     # The framework envs are isolated because they each pin a torch of their own.
-    printf ''
+    if [[ -n "$FRAMEWORK_PYTHON" ]]; then
+      printf -- '--python %s' "$FRAMEWORK_PYTHON"
+    else
+      printf ''
+    fi
     return 0
   fi
   if [[ -n "$BASE_PYTHON" ]]; then
@@ -445,6 +473,8 @@ if (( DRY_RUN )); then
   log "venvs               $VENVS"
   log "base interpreter    ${BASE_PYTHON:-the image interpreter}"
   log "base isolation      $BASE_ISOLATION"
+  log "framework interp.   ${FRAMEWORK_PYTHON:-whatever uv finds first}"
+  log "host kind           $HOST_KIND"
   for env in "${targets[@]}"; do
     [[ -f "$REQ_DIR/${env}.txt" ]] || { log "$env: no requirements/${env}.txt"; continue; }
     vargs="$(venv_args "$env")"
@@ -479,17 +509,25 @@ for env in "${targets[@]}"; do
 done
 
 log "--- environment ---"
-if mountpoint -q "$WORKSPACE" 2>/dev/null; then
+if [[ "$HOST_KIND" == "vm" ]]; then
+  log "workspace           $WORKSPACE"
+  log "                    local disk: survives reboot, lost at termination; exfiltrate results"
+elif mountpoint -q "$WORKSPACE" 2>/dev/null; then
   log "workspace           $WORKSPACE (mounted volume, survives pod termination)"
 else
   log "workspace           $WORKSPACE  *** NOT A MOUNTED VOLUME ***"
   log "                    Everything here is lost when the pod is terminated,"
   log "                    including the venvs you just paid to build."
 fi
-log "free on volume      $(free_gb "$WORKSPACE")G"
+if [[ "$HOST_KIND" == "vm" ]]; then
+  log "free on disk        $(free_gb "$WORKSPACE")G"
+else
+  log "free on volume      $(free_gb "$WORKSPACE")G"
+fi
 log "venvs               $VENVS"
 log "base interpreter    ${BASE_PYTHON:-the image interpreter}"
 log "base isolation      $BASE_ISOLATION"
+log "framework interp.   ${FRAMEWORK_PYTHON:-whatever uv finds first}"
 log "HF_HOME             $HF_HOME"
 log "TRITON_CACHE_DIR    $TRITON_CACHE_DIR"
 if [[ -x "$VENVS/base/bin/python" ]]; then
