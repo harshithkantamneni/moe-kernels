@@ -607,3 +607,65 @@ def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_p
         assert "3.85 GB" in text and "2.06 GB" in text, name
         assert "BLOCK_M=64" in text, name
         assert "3.53 GB" not in text and "1.93 GB" not in text, name
+
+
+#: ONE POD'S ncu REFUSAL STATED AS THE PLATFORM'S. Session 5's findings list
+#: "RunPod refuses ncu" under do-not-believe: two rented H200s attempted a
+#: counter read and both were refused with ERR_NVGPUCTRPERM (2026-08-25,
+#: `profiles/q2_kernel_names.txt`; 2026-09-15), the 2026-09-09 and 2026-09-10
+#: pods were never asked, and `scripts/dram_counter_route.py --probe` answers
+#: for each pod. These are the phrasings that stated it as a fact about every
+#: rented pod, or as the whole record being one pod, in 18 files at ce66195.
+#: `_G` is any run of punctuation and whitespace, so a phrase split across a
+#: wrapped comment, a markdown line or two concatenated string literals is
+#: still one phrase; it spans no word, so it cannot join two sentences' words.
+_G = r"\W{1,40}"
+PLATFORM_FACT_PHRASINGS = (
+    rf"ERR_NVGPUCTRPERM{_G}on{_G}(?:a{_G})?(?:rented{_G}pods?|RunPod)\b",
+    rf"\bon{_G}(?:a{_G})?rented{_G}pods?{_G}\(?`?ERR_NVGPUCTRPERM",
+    rf"\b[Oo]n{_G}(?:a{_G})?rented{_G}pods?{_G}`?ncu`?{_G}(?:fails|returns|is)\b",
+    rf"\b[Oo]n{_G}RunPod{_G}it{_G}fails\b",
+    rf"`?ncu`?{_G}fails{_G}on{_G}(?:a{_G})?(?:rented|RunPod)\b",
+    rf"\bis{_G}blocked{_G}on{_G}RunPod\b",
+    rf"walled{_G}off{_G}on{_G}a{_G}rented",
+    rf"\b[Ee]xpect{_G}BLOCKED\b",
+    rf"\bPROBABLY{_G}BLOCKED\b",
+    rf"Nsight{_G}Compute{_G}(?:is{_G}unavailable|cannot{_G}run){_G}on{_G}a{_G}rented",
+    rf"expected{_G}to{_G}be{_G}present{_G}but{_G}to{_G}fail",
+    rf"BLOCKED{_G}is{_G}the{_G}ANSWER{_G}on{_G}a{_G}rented",
+    rf"\b[Oo]ne{_G}refusal{_G}on{_G}one{_G}pod",
+    rf"\bon{_G}the{_G}one{_G}box{_G}where{_G}a{_G}counter{_G}read",
+    rf"\bncu{_G}is{_G}already{_G}blocked\b",
+    rf"rented{_G}pod{_G}does{_G}not{_G}grant",
+    rf"containers{_G}not{_G}privileged",
+    rf"while{_G}every{_G}rented{_G}pod{_G}refused",
+)
+
+
+def test_no_tracked_text_states_two_pods_ncu_refusals_as_the_platforms():
+    """Every tracked doc, script and module (and each test module's own
+    docstring) says what the committed record shows about ncu on a rented pod
+    and leaves the rest to the probe. Test bodies are not read: they quote
+    the retired phrasings to refuse them. The committed rulers under
+    `moe/bench/hardware/` are data written by the old note and are not
+    rewritten; `results/` and `profiles/` are records."""
+    import ast
+
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "docs", "scripts", "moe", "tests", "README.md"],
+        capture_output=True, text=True, check=True).stdout.split()
+    hits = []
+    for rel in listed:
+        path = ROOT / rel
+        if rel.startswith("moe/bench/hardware/") or path.suffix not in (
+                ".md", ".py", ".sh", ".txt", ".yaml", ".yml", ""):
+            continue
+        text = path.read_text(errors="replace")
+        if rel.startswith("tests/"):
+            if path.suffix != ".py":
+                continue
+            text = ast.get_docstring(ast.parse(text)) or ""
+        for pattern in PLATFORM_FACT_PHRASINGS:
+            for m in re.finditer(pattern, text):
+                hits.append(f"{rel}:{text[:m.start()].count(chr(10)) + 1}: {m.group(0)!r}")
+    assert not hits, "\n".join(hits)

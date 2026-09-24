@@ -1,9 +1,9 @@
 """The counter-free substitutes for Nsight Compute.
 
-Nsight needs GPU performance counters, which need a host permission a rented pod
-does not grant. These are the inferences that replace a direct DRAM-traffic
-measurement; the arithmetic is testable on CPU, the measurement itself is in
-tests/test_gpu.py.
+Nsight needs GPU performance counters, which need a host permission no rented
+pod in this study has granted (two refused with ERR_NVGPUCTRPERM). These are
+the inferences that replace a direct DRAM-traffic measurement; the arithmetic
+is testable on CPU, the measurement itself is in tests/test_gpu.py.
 """
 import pytest
 

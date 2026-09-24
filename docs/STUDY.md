@@ -140,9 +140,10 @@ working state.
   never read. On 2026-09-15 a rented H200 booked two 120-minute arms on that
   word and both died in 35 seconds with ERR_NVGPUCTRPERM, reproduced by hand
   over a torch matmul on that pod, which also held neither CAP_SYS_ADMIN nor
-  CAP_PERFMON. WHAT IS ACTUALLY KNOWN: on the one box where a counter read was
-  ever attempted it was REFUSED; the 2026-09-09 and 2026-09-10 pods were never
-  asked, and nothing is known about them either way. The probe now launches a
+  CAP_PERFMON. WHAT IS ACTUALLY KNOWN: on both boxes where a counter read was
+  ever attempted it was REFUSED (a rented H200 on 2026-08-25,
+  `profiles/q2_kernel_names.txt`, and this one); the 2026-09-09 and 2026-09-10
+  pods were never asked, and nothing is known about them either way. The probe now launches a
   real kernel (`moe/bench/counter_probe_kernel.py`) and reports OPEN only when
   ncu returns a number for the registered metric.
   `alpha_b` as a NUMBER rather than an interval is still the study's
@@ -300,7 +301,8 @@ profiled.` in the field the probe captured and never read. On 2026-09-15 a
 rented H200 booked two 120-minute arms on that word and both died in 35
 seconds with ERR_NVGPUCTRPERM, reproduced by hand over a torch matmul on that
 pod, which also held neither CAP_SYS_ADMIN nor CAP_PERFMON. WHAT IS ACTUALLY
-KNOWN: on the one box where a counter read was ever attempted it was REFUSED;
+KNOWN: on both boxes where a counter read was ever attempted it was REFUSED
+(a rented H200 on 2026-08-25, `profiles/q2_kernel_names.txt`, and this one);
 the 2026-09-09 and 2026-09-10 pods were never asked, and nothing is known
 about them either way. The probe now launches a real kernel
 (`moe/bench/counter_probe_kernel.py`) and reports OPEN only when ncu returns a

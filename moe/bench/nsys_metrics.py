@@ -11,7 +11,9 @@ byte. Nothing in this repository has ever counted one.
 `ncu` would count them and cannot: `dram__bytes_read.sum` is a hardware
 performance counter, and reading counters needs
 `NVreg_RestrictProfilingToAdminUsers=0`, a host kernel-module flag a container
-tenant cannot set. On RunPod it fails with ERR_NVGPUCTRPERM.
+tenant cannot set. The two rented H200s that tried were refused with
+ERR_NVGPUCTRPERM (2026-08-25, 2026-09-15); whether a pod can read one is
+`scripts/dram_counter_route.py --probe`'s to answer.
 `scripts/profile_open_questions.sh` concluded from that "Q1 traffic -> ncu ONLY.
 dram__bytes_read.sum is a counter; nothing traces it", and docs/RUNPOD.md,
 docs/POD_RUNBOOK.md and docs/FINDINGS.md have all repeated it since.

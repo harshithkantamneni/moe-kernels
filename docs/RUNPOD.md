@@ -288,15 +288,22 @@ gh auth login          # or set up a fine-grained PAT with contents:write
 If push fails the commit is still made locally, so nothing is lost; you can push
 later or copy the directory off with `runpodctl send`.
 
-## Profiling is not available, and what replaces it
+## Counters are not assumed, and what replaces them
 
-`ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`. GPU performance counters
-are gated behind a host kernel-module flag
+No `ncu` counter read has succeeded on a rented pod in this study. GPU
+performance counters are gated behind a host kernel-module flag
 (`NVreg_RestrictProfilingToAdminUsers=0`) that a container tenant cannot set,
-and RunPod containers are not privileged. Assume no counters and design around
-it rather than planning a session that discovers this at the console.
+or a capability (`CAP_PERFMON`, `CAP_SYS_ADMIN`) the provider grants the
+container. Two rented H200s attempted a read and both were refused with
+`ERR_NVGPUCTRPERM`: 2026-08-25 (`profiles/q2_kernel_names.txt`) and 2026-09-15
+(a pod holding neither capability); the 2026-09-09 and 2026-09-10 pods were
+never asked. Two pods are a record, not the platform:
+`python scripts/dram_counter_route.py --probe` answers for the pod it runs on in
+about fifteen seconds, and the alpha(G) chain runs it as its `counter-probe`
+step on every pass. Design every session around having no counters, so a
+refused probe changes nothing and an open one is a bonus.
 
-That means **actual DRAM traffic cannot be measured**, so the compulsory-bytes
+Without one, **actual DRAM traffic cannot be measured**, so the compulsory-bytes
 model cannot be validated directly. Three substitutes, none of which need
 counters:
 

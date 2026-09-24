@@ -514,8 +514,10 @@ if [[ -z "$SKIP_TESTS" ]]; then
   "$PY" -m pytest tests/ -q -x
 fi
 
-# Nsight Compute cannot run on a rented pod (ERR_NVGPUCTRPERM), so the roofline
-# would otherwise rest on a datasheet peak. Measure the real ceilings once.
+# No Nsight Compute counter read has succeeded on a rented pod in this study
+# (two refused with ERR_NVGPUCTRPERM; dram_counter_route.py --probe asks each
+# pod), so the roofline would otherwise rest on a datasheet peak. Measure the
+# real ceilings once.
 #
 # Ask the harness, rather than globbing. A glob for measured_*.yaml matches a
 # calibration committed for a DIFFERENT device: on an H100 the repo's

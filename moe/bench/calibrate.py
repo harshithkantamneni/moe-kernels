@@ -1,9 +1,11 @@
 """Measure what this machine can actually do, since we cannot read its counters.
 
 Nsight Compute needs GPU performance counters, which need a host-level
-`NVreg_RestrictProfilingToAdminUsers=0` that a container tenant cannot set. On a
-rented pod `ncu` fails with ERR_NVGPUCTRPERM, so DRAM traffic cannot be measured
-directly.
+`NVreg_RestrictProfilingToAdminUsers=0` that a container tenant cannot set, or a
+capability the provider grants. No counter read has succeeded on a rented pod in
+this study (two were refused with ERR_NVGPUCTRPERM, 2026-08-25 and 2026-09-15;
+`scripts/dram_counter_route.py --probe` asks each pod), so DRAM traffic is not
+measured directly.
 
 What can be measured without any counter access is the machine's *achievable*
 ceilings, using ordinary kernels and a clock. That turns the roofline from a

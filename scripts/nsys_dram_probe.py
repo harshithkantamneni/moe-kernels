@@ -7,9 +7,11 @@
     python scripts/nsys_dram_probe.py --measure            # + the MoE cell vs the model
     python scripts/nsys_dram_probe.py --report r.sqlite    # parse one you already have
 
-WHY THIS EXISTS. `ncu` fails on RunPod with ERR_NVGPUCTRPERM because hardware
-performance counters need `NVreg_RestrictProfilingToAdminUsers=0`, a host
-kernel-module flag a container tenant cannot set.
+WHY THIS EXISTS. `ncu` was refused with ERR_NVGPUCTRPERM on both rented H200s
+that tried (2026-08-25, 2026-09-15; `scripts/dram_counter_route.py --probe`
+asks each pod), because hardware performance counters need
+`NVreg_RestrictProfilingToAdminUsers=0`, a host kernel-module flag a container
+tenant cannot set, or a capability the provider grants.
 `scripts/profile_open_questions.sh` concluded from that "Q1 traffic -> ncu ONLY.
 dram__bytes_read.sum is a counter; nothing traces it", and docs/RUNPOD.md,
 docs/POD_RUNBOOK.md and docs/FINDINGS.md have repeated it ever since.

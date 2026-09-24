@@ -3,10 +3,10 @@
 THE QUESTION THESE TESTS PIN DOWN. Every byte figure in this study is
 compulsory-traffic arithmetic, and `alpha` -- refit 2026-08-31 from 0.10 to
 0.558, and the parameter the whole tile-corrected roofline rests on -- is fitted
-through that same unvalidated model. `ncu` would count real bytes and cannot on
-a rented pod (ERR_NVGPUCTRPERM). `nsys --gpu-metrics-device` SAMPLES the hardware
-monitor through a different path, and docs/FINDINGS.md calls it "the open path,
-not a closed door".
+through that same unvalidated model. `ncu` would count real bytes and has not
+on a rented pod: the two that tried refused with ERR_NVGPUCTRPERM.
+`nsys --gpu-metrics-device` SAMPLES the hardware monitor through a different
+path, and docs/FINDINGS.md calls it "the open path, not a closed door".
 
 The half of that path that can be settled without a GPU is settled here, and the
 answer it reaches is mostly ARITHMETIC rather than empirical:

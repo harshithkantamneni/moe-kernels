@@ -135,11 +135,11 @@ def source_note(pattern: str) -> str:
     """The ruler yaml's `source_note`: what these ceilings are and why they
     exist, with `pattern` the bandwidth pattern the ruler adopted.
 
-    It said "Nsight Compute is unavailable on a rented pod (ERR_NVGPUCTRPERM)"
-    until 2026-09-23, in every yaml this script wrote, session 5's included:
-    two refused pods written into the data as the platform's answer. This
-    script never asks for a counter, so the note says that, and names the
-    probe that does, rather than stating what any pod can read."""
+    Until 2026-09-23 it called Nsight Compute unavailable on every rented pod,
+    citing ERR_NVGPUCTRPERM, in every yaml this script wrote, session 5's
+    included: two refused pods written into the data as the platform's
+    answer. This script never asks for a counter, so the note says that, and
+    names the probe that does, rather than stating what any pod can read."""
     return ("Achievable ceilings, not datasheet peaks, measured with ordinary "
             "kernels and a clock and no DRAM counter: whether this pod can read "
             "one is scripts/dram_counter_route.py --probe's to answer, not this "

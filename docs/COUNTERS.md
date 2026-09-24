@@ -25,12 +25,15 @@ something could not be verified in this session it says so in those words.
 
 ## 0. What is actually known, re-checked
 
-### 0.1 `ncu` is blocked on RunPod. That part stands.
+### 0.1 `ncu` was refused on both RunPod pods that asked. That part stands, for two pods.
 
-`ERR_NVGPUCTRPERM`. Hardware performance counters are gated behind the NVIDIA
-kernel module parameter `NVreg_RestrictProfilingToAdminUsers`, which a container
-tenant cannot set. Recorded in `docs/RUNPOD.md:246` and
-`scripts/profile_open_questions.sh`.
+`ERR_NVGPUCTRPERM`, on a rented H200 on 2026-08-25 (`profiles/q2_kernel_names.txt`,
+ncu over the harness's own CLI) and on another on 2026-09-15 (section 2.1).
+Hardware performance counters are gated behind the NVIDIA kernel module
+parameter `NVreg_RestrictProfilingToAdminUsers`, which a container tenant cannot
+set. Two pods are not the platform: the 2026-09-09 and 2026-09-10 pods were
+never asked, and `scripts/dram_counter_route.py --probe` answers for each pod
+(`docs/RUNPOD.md`, its counters section).
 
 **But the mechanism has two doors, not one.** NVIDIA's own
 [ERR_NVGPUCTRPERM page](https://developer.nvidia.com/nvidia-development-tools-solutions-err_nvgpuctrperm-permission-issue-performance-counters)
@@ -233,9 +236,10 @@ profiled.` and exited 0 without ever attempting a read. The probe reported
 recorded `OPEN` on that basis; both published payloads carry `ncu`'s own
 warning in the `output_head` field the probe captured and never consulted. On
 2026-09-15 a rented H200 booked two 120-minute counter arms on that word and
-both died in 35 seconds with `ERR_NVGPUCTRPERM`. What is known today: on the
-one box where a counter read was ever attempted it was REFUSED, and the
-2026-09-09 and 2026-09-10 pods were never asked.
+both died in 35 seconds with `ERR_NVGPUCTRPERM`. What is known today: on both
+boxes where a counter read was ever attempted it was REFUSED (a rented H200 on
+2026-08-25, `profiles/q2_kernel_names.txt`, and this one), and the 2026-09-09
+and 2026-09-10 pods were never asked.
 
 The four failures it still distinguishes, because they are indistinguishable in
 a log: no `ncu`; a counter read REFUSED by the box (`ERR_NVGPUCTRPERM`, a fact
@@ -265,7 +269,7 @@ is the entire distinction, and it is a property of the *product shape*
 
 | provider | offering | finding | verified? |
 |---|---|---|---|
-| RunPod | container | `ncu` -> `ERR_NVGPUCTRPERM`; containers not privileged | **yes**, measured in this repo (`docs/RUNPOD.md:246`, `profile_open_questions.sh`) |
+| RunPod | container | `ncu` -> `ERR_NVGPUCTRPERM` on both rented H200s that attempted a read (2026-08-25; 2026-09-15, a pod holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`); the 2026-09-09 and 2026-09-10 pods were never asked, so this is two pods and not the platform | **yes, for those two pods**, measured in this repo (`profiles/q2_kernel_names.txt`, docs/FINDINGS.md's 2026-09-15 retraction); `scripts/dram_counter_route.py --probe` answers for each pod |
 | Vast.ai | container | its docs page for instance Docker options lists exactly three settable options: environment variables, hostname, ports. No capabilities, no `--privileged`. | **yes**, [docs.vast.ai/instances/docker-execution-environment](https://docs.vast.ai/instances/docker-execution-environment), read in this session. Caveat: one page only; another surface may expose more |
 | AWS / GCP / Azure / Oracle GPU VMs | VM, root in guest | the module-parameter route in 2.2 applies because you own the guest kernel | **mechanism yes** (NVIDIA's page), **per-provider docs no** |
 | Lambda, CoreWeave, Crusoe, Nebius, Together, Modal, Paperspace | mixed VM and container | **NOT VERIFIED.** I could not read their documentation in this session: the web-search budget was exhausted and I had no reliable direct URLs. Do not quote a claim about these from this page | **no** |
