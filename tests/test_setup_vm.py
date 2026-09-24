@@ -1,12 +1,13 @@
 """scripts/setup_vm.sh and the setup_runpod.sh it calls, checked without a VM.
 
-A Lambda VM is a plain Ubuntu box with root and no network volume: its driver
-is unknown until it boots, ncu may be absent, the counter door is the host's
-module flag rather than a container capability, and everything on its disk is
-lost at termination. `setup_vm.sh` exists for the jobs a RunPod pod never has
-(clone at a pinned commit, pick the torch wheel index off the driver, install
-ncu without moving the driver, pick a counter door, prove a counter readable)
-and hands venv building to `setup_runpod.sh`, which it calls and never copies.
+A Lambda VM is a plain Ubuntu box with root, launched by docs/LAMBDA.md
+without a filesystem: its driver is unknown until it boots, ncu may be absent,
+the counter door is the host's module flag rather than a container capability,
+and everything on its local disk is lost at termination. `setup_vm.sh` exists
+for the jobs a RunPod pod never has (clone at a pinned commit, pick the torch
+wheel index off the driver, install ncu without moving the driver, pick a
+counter door, prove a counter readable) and hands venv building to
+`setup_runpod.sh`, which it calls and never copies.
 
 These run the real scripts as subprocesses with stub binaries on PATH
 (nvidia-smi, sudo, apt-get, dpkg, uv, ncu) and HOME in a temporary directory,

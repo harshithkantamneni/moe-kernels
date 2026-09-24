@@ -1,12 +1,17 @@
 # Lambda runbook: the R3 arms under a DRAM counter
 
 A Lambda Cloud instance is a plain Ubuntu VM with root, Lambda Stack and a
-driver nobody knows until it boots. It has **no network volume**: the local
-disk survives a reboot and is **lost at termination** (Lambda's docs:
-terminating permanently removes the instance), and Lambda instances can only
-be launched, restarted or terminated (there is no stop). The one
-command that turns a fresh instance into a box that can take the measurement
-is `scripts/setup_vm.sh`; this page is everything around it.
+driver nobody knows until it boots. Its local disk survives a reboot and is
+**lost at termination** (Lambda's docs: terminating permanently removes the
+instance), and Lambda instances can only be launched, restarted or terminated
+(there is no stop). Lambda also offers filesystems, networked persistent
+storage attached only when an instance is created (`file_system_names` in the
+launch call, in the instance's region). **This runbook launches without
+one**, so the local disk is all there is and section 4's exfiltration is the
+only copy of the results; attaching one at launch would keep results past
+termination, and a filesystem left behind is billed until it is deleted. The
+one command that turns a fresh instance into a box that can take the
+measurement is `scripts/setup_vm.sh`; this page is everything around it.
 
 **The card is not the study's.** Lambda has no H200. The target is
 `gpu_1x_h100_sxm5` (H100 SXM5: 80 GB HBM3, 132 SMs, 50 MB L2, sm_90), and a
@@ -67,6 +72,9 @@ IP=<ip>
 ```
 
 For the shake-out, the same call with `"instance_type_name": "gpu_1x_a100_sxm4"`.
+No `file_system_names` is passed, by choice (the page's opening paragraph):
+add `"file_system_names": ["<name>"]` to the launch body, for a filesystem
+already created in the same region, to keep a copy past termination.
 Write the instance id down: the terminate call in section 5 needs it.
 
 ## 2. Setup

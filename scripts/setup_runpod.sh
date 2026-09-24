@@ -15,9 +15,10 @@
 #   MOE_HOST_KIND=vm bash scripts/setup_runpod.sh     # a VM's local disk, not a volume
 #
 # Everything expensive lives on the volume, so a terminated pod costs nothing
-# but the pod. On a VM with no volume (Lambda), scripts/setup_vm.sh calls this
-# script with WORKSPACE on the local disk and MOE_HOST_KIND=vm, and the closing
-# report says that disk dies with the instance.
+# but the pod. On a VM launched without a volume (the Lambda runbook's
+# choice), scripts/setup_vm.sh calls this script with WORKSPACE on the local
+# disk and MOE_HOST_KIND=vm, and the closing report says that disk dies with
+# the instance.
 #
 # THE STAMP WAS READ AND NEVER WRITTEN, from 75bd12a to 2026-09-24. The skip
 # below compares `$VENVS/.stamp-<env>` with the environment's inputs, and the

@@ -215,10 +215,11 @@ summary, which is how a 45-minute pod session once produced no vLLM rows.
 
 On the GPU box, see [docs/RUNPOD.md](docs/RUNPOD.md) for the environment and
 [docs/POD_RUNBOOK.md](docs/POD_RUNBOOK.md) for the session driver,
-`scripts/h200_gaps_session.sh`. On a Lambda VM (root, no network volume), the
-counter run's setup is [docs/LAMBDA.md](docs/LAMBDA.md) and
-`scripts/setup_vm.sh`. What the instrument is, and what every gate's
-exit code means, is one page: [docs/APPARATUS.md](docs/APPARATUS.md).
+`scripts/h200_gaps_session.sh`. On a Lambda VM (root, launched without a
+network filesystem), the counter run's setup is
+[docs/LAMBDA.md](docs/LAMBDA.md) and `scripts/setup_vm.sh`. What the
+instrument is, and what every gate's exit code means, is one page:
+[docs/APPARATUS.md](docs/APPARATUS.md).
 
 ## Writing a kernel
 

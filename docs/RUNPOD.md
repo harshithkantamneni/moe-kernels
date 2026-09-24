@@ -361,9 +361,9 @@ container as the container-side remedy, one Linux capability per instance
 rather than a host module flag and a reboot, and nothing in this project has
 asked a provider for it yet (`docs/COUNTERS.md` section 2). Failing that it
 needs bare metal or a VM whose guest kernel you own, not a different RunPod
-template: `docs/LAMBDA.md` and `scripts/setup_vm.sh` set up such a VM (root, no
-network volume), building its venvs through this page's `setup_runpod.sh` with
-`MOE_HOST_KIND=vm`. And before the `nsys` test above: the RunPod image ships a
+template: `docs/LAMBDA.md` and `scripts/setup_vm.sh` set up such a VM (root,
+launched without a network filesystem), building its venvs through this
+page's `setup_runpod.sh` with `MOE_HOST_KIND=vm`. And before the `nsys` test above: the RunPod image ships a
 TARGET-ONLY Nsight Systems, without the `QdstrmImporter` that turns a capture
 into a report, so every 2026-09-01 attempt failed at conversion including the
 control that requested no metrics at all. Check for

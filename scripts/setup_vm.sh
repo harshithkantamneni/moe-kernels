@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # A LAMBDA VM, SET UP FOR THE R3 COUNTER RUN, IN ONE COMMAND.
 #
-# A Lambda instance is a plain Ubuntu VM with root, Lambda Stack, a driver
-# nobody knows until it boots, and NO network volume: its disk survives a
-# reboot and is lost at termination. docs/LAMBDA.md is the runbook around this
+# A Lambda instance is a plain Ubuntu VM with root, Lambda Stack and a driver
+# nobody knows until it boots. Its local disk survives a reboot and is lost at
+# termination. Lambda can attach a networked filesystem at launch; the runbook
+# launches without one, so this script puts everything on the local disk and
+# the results must be exfiltrated. docs/LAMBDA.md is the runbook around this
 # script (launch, run, exfiltrate, terminate, cost).
 #
 #   bash setup_vm.sh --commit <full sha> --bundle moe.bundle   # build, then preflight
