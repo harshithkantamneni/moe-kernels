@@ -9,8 +9,9 @@ cells can see, so the three things that can make its page wrong are:
     the WORLDS     -- an overlap world must come back overlap with its planted
                       parameters, an additive world additive, and the scan must
                       be flat exactly where the traffic branch is hidden
-    the INPUTS     -- the arm's own kept rows, INVALID pages out by default, and
-                      the pin rate read from the session's ruler, never typed
+    the INPUTS     -- the arm's own kept rows, INVALID pages out by default, a
+                      gate spelled outside exit_codes' table refused, and the
+                      pin rate read from the session's ruler, never typed
 
 Every planted number here is a test design choice and not a calibration; the
 pin rate a test asserts against is the one its own planted ruler carries.
@@ -451,6 +452,24 @@ def test_the_paper_forms_pin_floor_holds_the_rate_at_every_cell(session):
     e = f["parameters"]["e"]["value"]
     for c in doc["cells"]:
         assert tau * (doc["f_top_mhz"] / c["mhz"]) ** e >= doc["tau_pin_ms"] * (1 - 1e-12)
+
+
+@pytest.mark.parametrize("gate", [
+    {"kind": "VALIDITY", "number": "7", "verdict": "Fail"},
+    {"kind": "Validity", "number": "7", "verdict": "FAIL"},
+    {"kind": "VALIDITY", "number": "7"},
+])
+def test_a_gate_spelled_outside_the_exit_code_table_refuses(session, capsys, gate):
+    """The page label skipped such a gate, so a failing VALIDITY gate spelled
+    'Fail' labelled the page VALID and it was fitted by default.
+    exit_codes.classify raises MalformedGate on the same gates."""
+    page = session / "results" / "gaps-planted" / "clock_elasticity" / "planted-g4-seed0-00000004"
+    report = _gates()
+    report["gates"][7] = gate
+    (page / "report.json").write_text(json.dumps(report))
+    assert M.main([str(session), "--no-scan", "--no-logo"]) == exit_codes.REFUSED
+    err = capsys.readouterr().err
+    assert str(page / "report.json") in err and "not one of" in err
 
 
 def test_no_ruler_refuses_and_two_rulers_refuse(tmp_path, capsys):

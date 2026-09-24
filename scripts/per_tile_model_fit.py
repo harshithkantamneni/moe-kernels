@@ -27,7 +27,8 @@ with the fitted parameters. The pin rate and the read ceilings are the ruler the
 session published (`calibration/measured_*.yaml` above the page) or --ruler; W
 is `moe.bench.weights.routed_expert_weight_bytes` of the rows' model and dtype.
 A page whose own report.json fails a VALIDITY gate is listed and not fitted
-unless --include-invalid; a page with no report.json unless --include-unscored.
+unless --include-invalid; a page with no report.json unless --include-unscored;
+a gate spelled outside `moe.bench.exit_codes`' table refuses the run.
 
 WHAT IT CANNOT DISTINGUISH. A hard max from a smooth transition near the kink.
 What sets the floor c0: issue rate, L2-to-SM delivery, latency and occupancy all
@@ -257,22 +258,27 @@ def discover(root: Path) -> list[tuple[str, Path]]:
     return out
 
 
-def _label(report: dict | None) -> tuple[str, tuple]:
+def _label(report: dict | None, where: Path) -> tuple[str, tuple]:
+    """UNSCORED with no report.json or no gates; otherwise INVALID or VALID
+    by `exit_codes.classify` over every gate, with the VALIDITY gates that are
+    not PASS. A gate spelled outside exit_codes' table refuses, as classify
+    does: skipping it would label a page with a failing VALIDITY gate VALID."""
     if report is None:
         return UNSCORED, ()
     gates = report.get("gates") or []
-    scored, failed = [], []
-    for g in gates:
-        kind, verdict = g.get("kind"), g.get("verdict")
-        if kind not in exit_codes.KINDS or verdict not in exit_codes.VERDICTS:
-            continue
-        scored.append((kind, verdict))
-        if kind == exit_codes.VALIDITY and verdict != exit_codes.PASS:
-            failed.append(g.get("tag") or f"V{g.get('number', '?')}")
-    if not scored:
+    if not gates:
         return UNSCORED, ()
-    if exit_codes.classify(scored) == exit_codes.INVALID:
-        return INVALID, tuple(failed)
+    try:
+        if not all(isinstance(g, dict) for g in gates):
+            raise exit_codes.MalformedGate("a gate is not a JSON object")
+        code = exit_codes.classify((g.get("kind"), g.get("verdict")) for g in gates)
+    except exit_codes.MalformedGate as exc:
+        raise Refused(f"{where / 'report.json'}: {exc}; a gate outside exit_codes' "
+                      "table cannot be scored, so the page cannot be labelled") from exc
+    if code == exit_codes.INVALID:
+        return INVALID, tuple(g.get("tag") or f"V{g.get('number', '?')}" for g in gates
+                              if g["kind"] == exit_codes.VALIDITY
+                              and g["verdict"] != exit_codes.PASS)
     return VALID, ()
 
 
@@ -288,7 +294,7 @@ def _card(path: Path) -> str:
 
 def load_r1(path: Path) -> Page:
     """One clock_elasticity page: the arm's own kept rows, its own collapse."""
-    label, failed = _label(_report(path))
+    label, failed = _label(_report(path), path)
     page = Page(path=path, kind="R1", run=short_run(path), label=label,
                 failed=failed, card=_card(path))
     rows = CE.read_rows(path / "cells.csv")
@@ -317,7 +323,7 @@ def load_r3(path: Path, arms) -> Page:
     """One private_weight_reference page: the arms' own per-tread medians and
     the median under-load clock over the same usable cells."""
     report = _report(path)
-    label, failed = _label(report)
+    label, failed = _label(report, path)
     page = Page(path=path, kind="R3", run=short_run(path), label=label,
                 failed=failed, card=_card(path))
     samples = PWR.read_samples(path / "cells.csv")
