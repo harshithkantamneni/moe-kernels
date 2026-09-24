@@ -1537,6 +1537,26 @@ def test_the_read_ceiling_is_read_stream_and_never_read_reduce(tmp_path):
         assert "no bound at read_stream" in lines[1] and "at the pin rate 4800.0 GB/s" in lines[1]
 
 
+def test_the_ruler_row_names_its_measurement_or_says_it_has_none(tmp_path):
+    """PAIRS-fixed.tsv's read-ceiling row cites the ruler's own date and
+    commit; a ruler that records no commit says so, rather than a truncated
+    "no comm" standing in for a sha."""
+    import yaml
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    ruler = _ruler(tmp_path / "r.yaml", named=4000.0, read=4500.0, pin=4800.0)
+    doc = yaml.safe_load(ruler.read_text())
+
+    def source():
+        H.pairs_table(session, results, "4", "0", {"ruler": str(ruler)})
+        return {ln.split("\t")[0]: ln.split("\t")[2] for ln in
+                (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}["read_ceiling_gbps"]
+    assert f"measured {doc['checked_on']} at {doc['measured_commit'][:7]}" in source()
+    doc["measured_commit"] = ""
+    ruler.write_text(yaml.safe_dump(doc))
+    assert source().endswith("at no commit recorded"), source()
+
+
 def _exe(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("#!/bin/sh\nexit 0\n")

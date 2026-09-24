@@ -465,7 +465,7 @@ def load_ruler(path: str | Path) -> dict:
             "named_gbps": float(named) if named else None,
             "named_pattern": str(detail.get("ceiling_pattern") or "its named"),
             "checked_on": str(doc.get("checked_on") or "undated"),
-            "commit": str(doc.get("measured_commit") or "no commit recorded")[:7]}
+            "commit": str(doc.get("measured_commit") or "")[:7] or "no commit recorded"}
 
 
 def session_ruler(session: str | Path, card: str | None,
