@@ -65,7 +65,10 @@
 #   S6 DOOR       how the counter steps run: `open` (the module already allows
 #                 it), `sudo` (the default with root or passwordless sudo), or
 #                 `module` (opt-in: rewrite the module option and reload the
-#                 driver, refused while any process holds the GPU).
+#                 driver, refused while any process holds the GPU). Only then
+#                 is ncu first run (--version, --list-chips into ncu.txt), and
+#                 through the door's launcher, so every ncu on the box runs as
+#                 one user and ncu's /tmp lock file is that user's.
 #   S7 ENV        $HOME/moe/env.sh: interpreters, roots, caches, ncu first on
 #                 PATH, the counter launcher, the card. And the exfil line.
 #   S8 PREFLIGHT  scripts/vm_preflight.py, never cached: PASS only when a
@@ -654,18 +657,36 @@ ncu_stage() {
     [[ "$NCU_BIN" != none ]] || fail "$NCU_PACKAGE installed and no ncu found on PATH, at $NCU_SEARCH, or in its file list"
     say "ncu installed: $NCU_BIN (found by $NCU_WHERE)"
   fi
-  (( DRY_RUN )) && return 0
+}
+
+#: ncu's version and chips into $SESSION/ncu.txt, run AFTER S6 and through the
+#: counter door's launcher, the way every later ncu runs (the preflight's
+#: queries and probe, and moe_counter). ncu keeps a lock file under /tmp that
+#: belongs to whichever user ran ncu first: under the sudo door a login-user
+#: ncu here could leave a user-owned lock that root's later open-for-create is
+#: refused on (Ubuntu's fs.protected_regular, sticky /tmp). So no ncu runs as
+#: anyone but the door's user.
+record_ncu() {
+  if (( DRY_RUN )); then
+    say "would record $SESSION/ncu.txt: ncu --version and --list-chips, through the door's launcher"
+    return 0
+  fi
   [[ "$NCU_BIN" != none ]] || return 0
+  local -a launch=()
+  # The launcher as env.sh expands it: its $PATH and $HOME read now.
+  if [[ -n "$LAUNCHER" ]]; then eval "launch=($LAUNCHER)"; fi
   mkdir -p "$SESSION"
   {
     echo "binary     $NCU_BIN"
     echo "found by   $NCU_WHERE"
     echo "candidates $NCU_CANDS"
+    echo "launcher   ${LAUNCHER:-(none: door $DOOR runs ncu as $(id -un))}"
     echo "--- ncu --version"
-    "$NCU_BIN" --version 2>&1 || true
+    ${launch[@]+"${launch[@]}"} "$NCU_BIN" --version 2>&1 || true
     echo "--- ncu --list-chips"
-    "$NCU_BIN" --list-chips 2>&1 || true
+    ${launch[@]+"${launch[@]}"} "$NCU_BIN" --list-chips 2>&1 || true
   } > "$SESSION/ncu.txt"
+  chown_back
   say "recorded $SESSION/ncu.txt: $(grep -m1 -E '^Version ' "$SESSION/ncu.txt" || echo 'ncu printed no Version line')"
 }
 
@@ -908,6 +929,7 @@ if (( DRY_RUN )); then
   venv_stage "$PLAN_REPO"
   ncu_stage "$PLAN_REPO"
   door_stage
+  record_ncu
   env_stage "$PLAN_REPO"
   preflight_stage "$PLAN_REPO"
   if (( ${#REFUSALS[@]} )); then
@@ -962,6 +984,7 @@ system_packages
 venv_stage "$REPO"
 ncu_stage "$REPO"
 door_stage
+record_ncu
 env_stage "$REPO"
 pf_rc=0
 preflight_stage "$REPO" || pf_rc=$?

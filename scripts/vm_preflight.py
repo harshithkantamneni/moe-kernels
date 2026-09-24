@@ -23,7 +23,8 @@ because an earlier one already failed, and it counts against the box.
   PF4 metrics `ncu --query-metrics` (and the launch collection, for
               launch__*) lists every STRICT metric the r3-arms family asks;
               absent RECORDED metrics are dropped and listed, absent
-              CROSS-CHECK metrics leave their gate unasked.
+              CROSS-CHECK metrics leave their gate unasked. When ncu's output
+              names its lock file, that is the cause PF4 reports.
   PF5 probe   `dram_counter_route.py --probe --family r3-arms` under the
               counter door reads OPEN, exit 0, and its RESULT lines agree:
               a counter was actually READ. THE GATE. Nothing else here can
@@ -222,6 +223,16 @@ def metric_names(text: str) -> set[str]:
     return set(re.findall(r"\b([a-z][a-z0-9]*__[a-z0-9_]+)\b", text or ""))
 
 
+#: A line of ncu's output about its lock file (docs/LAMBDA.md: under /tmp,
+#: owned by the first user that ran ncu).
+LOCK_FILE_LINE = re.compile(r"lock ?file|nsight-compute-lock", re.I)
+
+
+def lock_file_line(text: str) -> str:
+    """The first line of ncu's output that names its lock file, or ""."""
+    return next((_one(ln) for ln in (text or "").splitlines() if LOCK_FILE_LINE.search(ln)), "")
+
+
 def base_name(metric: str) -> str:
     """`dram__bytes_read.sum` -> `dram__bytes_read`, as --query-metrics lists it."""
     return metric.split(".", 1)[0]
@@ -356,6 +367,13 @@ def pf4_metrics(classes: dict | None, profiling: str, launch: str, *,
     strict, cross, recorded = (absent(classes[k]) for k in ("strict", "crosscheck", "recorded"))
     data = {"strict_absent": strict, "crosscheck_absent": cross, "recorded_dropped": recorded,
             "listed": {k: len(v) for k, v in listed.items()}}
+    lock = lock_file_line(profiling + "\n" + launch)
+    if lock:
+        data["lock_file"] = lock
+        return Check("PF4", what, FAIL, f"ncu could not take its lock file ({lock}). The lock "
+                     "under /tmp belongs to the first user that ran ncu, and an ncu run as the "
+                     "login user and another as root refuse each other: remove the file ncu "
+                     "names and run every ncu through the counter door's launcher", data)
     if not listed["profiling"]:
         return Check("PF4", what, FAIL, "ncu --query-metrics listed no metric at all", data)
     if strict:

@@ -164,6 +164,13 @@ per-launch time re-prices the rest.
 
 Do not mix doors on one box: ncu's lock file under `/tmp` is created by the
 first user that runs it, and a root-owned one refuses a later unprivileged ncu.
+The reverse can refuse too: with Ubuntu's `fs.protected_regular`, root's
+open-for-create of a user-owned file in sticky `/tmp` is denied. So
+`setup_vm.sh` runs no ncu before S6 has chosen the door, and runs its own
+(`--version` and `--list-chips`, into `~/moe/session/ncu.txt`) through the
+door's launcher, like every ncu after it. When ncu's output names its lock
+file, PF4 fails with that line as the cause: remove the file it names and run
+every ncu through `moe_counter`.
 
 **When PF4 says ncu listed no metric for this card**, the ncu found first
 (PATH is searched before the CUDA directories, as the alpha(G) chain searches)

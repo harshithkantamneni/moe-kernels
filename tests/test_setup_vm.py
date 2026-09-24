@@ -417,7 +417,11 @@ def test_a_bundle_is_accepted_at_a_sha_it_holds_and_refused_at_a_fake_one(tmp_pa
 # setup_vm.sh for real, on a stubbed box: clone, venvs, ncu, door, preflight
 # --------------------------------------------------------------------------
 
+#: An ncu that answers what setup_vm.sh and the preflight ask, and logs each
+#: call with the user it ran as: `sudo` when it came through the sudo stub
+#: (which exports MOE_TEST_VIA=sudo), `login` otherwise.
 NCU_STUB = """#!/bin/sh
+echo "ncu $* via=${MOE_TEST_VIA:-login}" >> "${NCU_LOG:-/dev/null}"
 case "$*" in
   *--version*)
     echo "NVIDIA (R) Nsight Compute Command Line Profiler"
@@ -443,7 +447,7 @@ def _real_world(tmp_path: Path, apt_sim: str) -> dict:
     _stub(tmp_path / "ncu-src", "ncu", NCU_STUB)
     _stub(bindir, "sudo", '#!/bin/sh\necho "sudo $*" >> "$SUDO_LOG"\n'
           'while [ $# -gt 0 ]; do case "$1" in -n|-E) shift;; *) break;; esac; done\n'
-          'exec "$@"\n')
+          'MOE_TEST_VIA=sudo; export MOE_TEST_VIA\nexec "$@"\n')
     (tmp_path / "apt-sim.txt").write_text(apt_sim)
     _stub(bindir, "apt-get", '#!/bin/sh\necho "apt-get $*" >> "$APT_LOG"\ncase "$*" in\n'
           f'  "-s install"*) cat "{tmp_path / "apt-sim.txt"}";;\n'
@@ -453,7 +457,7 @@ def _real_world(tmp_path: Path, apt_sim: str) -> dict:
           '  *cuda-keyring*) echo "install ok installed";;\n  *) exit 1;;\nesac\n')
     env.update({"NCU_SEARCH": str(tmp_path / "nsight" / "*" / "ncu"),
                 "SUDO_LOG": str(tmp_path / "sudo.log"), "APT_LOG": str(tmp_path / "apt.log"),
-                "UV_LOG": str(tmp_path / "uv.log")})
+                "UV_LOG": str(tmp_path / "uv.log"), "NCU_LOG": str(tmp_path / "ncu.log")})
     return env
 
 
@@ -585,6 +589,27 @@ def test_a_driver_nvidia_smi_cannot_reach_is_refused_before_anything_is_spent(tm
     assert not (tmp_path / "home" / "moe" / "repo").exists()
     plan = vm(env, "--commit", tip, "--bundle", str(bundle), "--dry-run", *extra)
     assert plan.returncode == 2 and "no GPU reachable" in plan.stderr, plan.stdout + plan.stderr
+
+
+def test_under_the_sudo_door_every_ncu_runs_through_the_launcher(tmp_path, tiny):
+    """S5 ran `ncu --version` and `--list-chips` as the login user before S6
+    chose the door, and every later ncu (the preflight's queries and probe,
+    moe_counter) runs as root through the launcher. ncu's lock file under
+    /tmp belongs to the first user that runs ncu, and with Ubuntu's
+    fs.protected_regular root's open-for-create of a user-owned file in sticky
+    /tmp is refused. So the first ncu on the box, and every one after it, goes
+    through the door's launcher."""
+    bundle, tip, _ = tiny
+    env = _real_world(tmp_path, APT_NCU_ONLY)
+    r = vm(env, "--commit", tip, "--bundle", str(bundle))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert 'MOE_COUNTER_DOOR="sudo"' in (tmp_path / "home" / "moe" / "env.sh").read_text()
+    calls = Path(env["NCU_LOG"]).read_text().splitlines()
+    assert calls and calls[0].startswith("ncu --version "), calls
+    assert [c for c in calls if not c.endswith(" via=sudo")] == [], calls
+    assert any("--query-metrics" in c for c in calls), "the preflight's PF4 query ran too"
+    ncu_txt = (tmp_path / "home" / "moe" / "session" / "ncu.txt").read_text()
+    assert "Version 2025.3.1.0" in ncu_txt and "launcher   sudo -E env PATH=" in ncu_txt
 
 
 def test_a_checkout_at_another_sha_is_refused_not_moved(tmp_path, tiny):

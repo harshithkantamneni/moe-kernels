@@ -185,3 +185,23 @@ def test_the_runbooks_footprint_is_r3s_own_plan():
     footprint, _ = VP.r3_footprint()
     text = (REPO / "docs" / "LAMBDA.md").read_text()
     assert f"about {footprint / 1e9:.1f} GB, R3's own" in " ".join(text.split())
+
+
+def test_pf4_names_ncus_lock_file_when_ncu_reports_it():
+    """ncu's lock under /tmp belongs to the first user that ran ncu; a login
+    user's and root's refuse each other. PF4 used to report that box as "ncu
+    --query-metrics listed no metric at all", which sends the operator after
+    the wrong ncu. The lock-file line is the cause, quoted."""
+    class Family:
+        R3_STRICT_METRICS = ("dram__bytes_read.sum",)
+        R3_CROSSCHECK_METRICS = ()
+        R3_RECORDED_METRICS = ()
+    said = "==ERROR== Failed to create lock file /tmp/nsight-compute-lock: Permission denied"
+    check = VP.pf4_metrics(VP.family_metric_classes(Family), said, "", ncu="/x/ncu")
+    assert check.verdict == VP.FAIL
+    assert "lock file" in check.detail and "/tmp/nsight-compute-lock" in check.detail
+    assert "listed no metric" not in check.detail
+    assert check.data["lock_file"] == said
+    clean = VP.pf4_metrics(VP.family_metric_classes(Family), "dram__bytes_read", "",
+                           ncu="/x/ncu")
+    assert clean.verdict == VP.PASS and "lock_file" not in clean.data
