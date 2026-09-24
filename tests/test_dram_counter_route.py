@@ -2279,7 +2279,7 @@ def _page_exit(page) -> int:
 #: tree without the family; the test holds the two lists equal.
 WORLD_CASES = (("group", 1), ("group", 4), ("no-reuse", 4),
                ("private-reads-copy-0", 4), ("declaration", 4), ("noisy", 4),
-               ("request-mismatch", 4), ("uncarded", 4))
+               ("request-mismatch", 4), ("uncarded", 4), ("activation-thrash", 64))
 
 
 @pytest.mark.parametrize(("world", "group_m"), WORLD_CASES)
@@ -2294,10 +2294,200 @@ def test_each_planted_world_scores_its_registered_exit(world, group_m):
     assert _page_exit(page) == want, verdicts
     if gate is not None:
         assert verdicts[gate] == FAIL, verdicts
+    for spared in DCR.R3_WORLD_NOT_FAIL.get(world, ()):
+        assert spared in verdicts and verdicts[spared] != FAIL, (spared, verdicts)
     if world == "group":
         assert all(v == PASS for v in verdicts.values()), verdicts
         want_claims = {"C1", "C2", "C6"} | ({"C3"} if group_m == 1 else set())
         assert want_claims <= set(verdicts)
+
+
+def test_the_self_test_scores_each_world_at_the_g_the_cases_name():
+    """`--self-test` and this file score the planted worlds at the same G."""
+    for world in DCR.R3_WORLDS:
+        assert (tuple(sorted(g for w, g in WORLD_CASES if w == world))
+                == tuple(sorted(DCR.R3_WORLD_GROUPS.get(world, (4,))))), world
+
+
+def _result(page, name: str) -> str:
+    """The verdict gate `name`'s RESULT line prints, in the shared spelling."""
+    gate = next(DCR.Gate(**g) for g in page["gates"] if g["number"] == name)
+    return gate.scored()[2]
+
+
+def test_an_activation_thrash_at_g64_is_not_a_group_model_refutation():
+    """D1, 2026-09-24. The byte model charges each GEMM's A operand once per
+    M-tile; the kernel requests it once per N-tile CTA, and at G=64 every
+    column pass walks every live M-tile, so where that pass outgrows the L2
+    the repeats reach DRAM. The planted world reads EXACTLY the group model's
+    weights in SHARED and n in PRIVATE and re-reads activations in both
+    (PRIVATE more). Before this date the page passed every validity gate,
+    FAILED C2 (a group-model refutation) and printed alpha(64) above 0. Now
+    C2 reads UNKNOWN, C1 holds, the alpha bracket contains the model's
+    slope, and C6 names PRIVATE's excess as bytes."""
+    page = DCR.planted_r3_page("activation-thrash", 64)
+    verdicts = _gates(page)
+    assert all(g["verdict"] == PASS for g in page["gates"] if g["kind"] == "VALIDITY")
+    assert verdicts["C1"] == PASS and verdicts["C6"] == FAIL
+    assert verdicts["C2"] == REFUSE and _result(page, "C2") == exit_codes.UNKNOWN
+    assert _page_exit(page) == exit_codes.CLAIM_FAIL
+    est = page["estimates"]
+    model = [DCR.group_reads(8, n, 64) for n in DCR.R3_TREADS]
+    truth = ols(list(DCR.R3_TREADS), model)[1]
+    for part in ("total", "w1", "w2"):
+        lo, hi = est["alpha_bracket"][part]
+        assert lo - 1e-12 <= truth <= hi + 1e-12, (part, lo, hi, truth)
+    assert est["alpha_slope"]["w2"] > truth + DCR.R3_GROUP_TOL, \
+        "the upper edge still reads the re-reads as weights; the bracket is what moved"
+    for n in DCR.R3_TREADS:
+        lo, hi = est["q_S_bracket"]["w2"][str(n)]
+        assert lo - 1e-9 <= DCR.group_reads(8, n, 64) <= hi + 1e-9, (n, lo, hi)
+
+
+def test_activation_bytes_on_a_group_page_are_not_scored_as_weight_reads():
+    """The same defect, planted with nothing the fix added: a G=64 page whose
+    SHARED weights read the group model exactly, with activation re-reads
+    added to both arms' w2 at n >= 2 (PRIVATE's no smaller, its slabs being
+    wider). Before 2026-09-24 C2 read FAIL, a group-model refutation."""
+    page = DCR.planted_r3_page("group", 64)
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    passes = {"native": 6, "shared": 6, "private": 10}
+    for cell in page["cells"]:
+        if cell["n"] < 2:
+            continue
+        extra = passes[cell["arm"]] * cell["n"] * byte["operand_per_tile_w2"]
+        gemm = cell["per_gemm"]["w2"]
+        gemm["dram_bytes_read"] += extra
+        gemm["l2_fill_device_sectors"] += extra / DCR.L2_SECTOR_BYTES
+        gemm["l2_read_miss_sectors"] += extra / DCR.L2_SECTOR_BYTES
+        cell["per_call"]["dram_bytes_read"] += extra
+        cell["per_call_values"] = [v + extra for v in cell["per_call_values"]]
+    gates, summary = DCR.score_r3_page(page)
+    verdicts = {g.number: g.verdict for g in gates}
+    assert all(v == PASS for k, v in verdicts.items() if k.startswith("V")), verdicts
+    assert summary["estimates"]["q_S"]["w2"]["6"] > DCR.R3_W2_CEILING, \
+        "q_S itself sits above C2's ceiling; the verdict must not read it as weights"
+    assert verdicts["C2"] != FAIL and verdicts["C1"] == PASS, verdicts
+    lo, hi = summary["estimates"]["alpha_bracket"]["w2"]
+    assert lo - 1e-12 <= 0.0 <= hi + 1e-12
+
+
+def test_the_weight_bracket_takes_privates_excess_off_shared(monkeypatch):
+    """e = q_P - n (clamped at 0) per GEMM and tread, and SHARED's weight-only
+    q is [q_S - e, q_S]; the scorer's C1 and C2 read those edges."""
+    page = DCR.planted_r3_page("activation-thrash", 64)
+    q = DCR.r3_q(page)
+    e, lo, hi = DCR.r3_weight_bracket(q, DCR.R3_TREADS)
+    for part in ("total", "w1", "w2"):
+        for n in DCR.R3_TREADS:
+            assert e[part][n] == pytest.approx(max(q["private"][part][n] - n, 0.0))
+            assert (lo[part][n], hi[part][n]) == pytest.approx(
+                (q["shared"][part][n] - e[part][n], q["shared"][part][n]))
+    q["private"]["w2"][2] = 2.0 - 1e-6
+    assert DCR.r3_weight_bracket(q, DCR.R3_TREADS)[0]["w2"][2] == 0.0
+
+
+def test_ols_slope_bounds_hold_every_series_inside_the_brackets():
+    """The slope bracket is exact: every series inside the per-tread brackets
+    has its OLS slope inside it, and its two ends are reached."""
+    import random
+    rng = random.Random(20260924)
+    xs = list(DCR.R3_TREADS)
+    for _ in range(200):
+        lo = [rng.uniform(-1, 3) for _ in xs]
+        hi = [v + rng.uniform(0, 2) for v in lo]
+        bottom, top = DCR.ols_slope_bounds(xs, lo, hi)
+        for _ in range(20):
+            ys = [rng.uniform(a, b) for a, b in zip(lo, hi, strict=True)]
+            assert bottom - 1e-12 <= ols(xs, ys)[1] <= top + 1e-12
+        mean = statistics.fmean(xs)
+        up = [b if x > mean else a for x, a, b in zip(xs, lo, hi, strict=True)]
+        down = [a if x > mean else b for x, a, b in zip(xs, lo, hi, strict=True)]
+        assert ols(xs, up)[1] == pytest.approx(top, abs=1e-12)
+        assert ols(xs, down)[1] == pytest.approx(bottom, abs=1e-12)
+
+
+def test_a_two_sided_claim_on_a_straddling_bracket_is_unknown_not_fail():
+    """Both edges fail, on opposite sides: the value may sit inside the band,
+    so that is no verdict. A bracket wholly outside is FAIL, wholly inside
+    PASS, and one tread's outright FAIL fails a claim made at every tread."""
+    assert DCR.bracket_verdict(0.5, 1.5, 0.95, 1.05) is None
+    assert DCR.bracket_verdict(0.96, 1.04, 0.95, 1.05) == PASS
+    assert DCR.bracket_verdict(1.06, 1.5, 0.95, 1.05) == FAIL
+    assert DCR.bracket_verdict(0.5, 0.9, 0.95, 1.05) == FAIL
+    assert DCR.bracket_verdict(1.0, 1.1, ceiling=1.05) is None
+    assert DCR.claim_over_treads({1: PASS, 2: None}) == REFUSE
+    assert DCR.claim_over_treads({1: PASS, 2: None, 3: FAIL}) == FAIL
+    assert DCR.claim_over_treads({1: PASS, 2: PASS}) == PASS
+
+
+def _column_pass_walk(e: int, n: int, g: int, k: int, bm: int, bn: int, b: int,
+                      arm: str, num_pid_n: int = 3, dead: int = 5) -> int:
+    """vLLM v0.27.1's pid mapping walked independently of the module: the
+    bytes of A tiles and weight slabs each (group, column) touches, the
+    largest of them."""
+    num_pid_m = e * n + dead
+    per_group = g * num_pid_n
+    touched: dict[tuple[int, int], tuple[set, set]] = {}
+    for pid in range(num_pid_m * num_pid_n):
+        group_id = pid // per_group
+        first = group_id * g
+        size = min(num_pid_m - first, g)
+        pid_m = first + ((pid % per_group) % size)
+        pid_n = (pid % per_group) // size
+        if pid_m >= e * n:
+            continue
+        a_set, w_set = touched.setdefault((group_id, pid_n), (set(), set()))
+        a_set.add(pid_m)
+        w_set.add((pid_m // n, pid_m % n) if arm == "private" else pid_m // n)
+    return max(len(a) * bm * k * b + len(w) * bn * k * b for a, w in touched.values())
+
+
+def test_r3_exposure_is_one_column_pass_of_vllms_pid_mapping():
+    """`r3_exposure`'s working set is the largest (group, column) pass of the
+    pid mapping, walked by brute force: every live M-tile's A plus one slab
+    per expert (SHARED) or per M-tile (PRIVATE)."""
+    cfg = MIXTRAL
+    for g in (1, 2, 4, 16, 64):
+        for n in (1, 2, 3, 4, 6):
+            exp = DCR.r3_exposure(cfg, "bf16", 32, 64, g, n)
+            for gemm in ("w1", "w2"):
+                k = DCR.r3_gemm_geometry(cfg, gemm)[0]
+                for arm in ("shared", "private"):
+                    assert exp[gemm][arm]["working_set"] == _column_pass_walk(
+                        8, n, g, k, 32, 64, 2, arm), (g, n, gemm, arm)
+    ceiling = DCR.r3_activation_ceiling(32, 64, 2 * cfg.intermediate_size)
+    assert ceiling == pytest.approx((32 / 64) * (1 - 64 / (2 * cfg.intermediate_size)))
+
+
+def test_the_dry_run_names_the_exposed_cells_before_anything_runs(capsys):
+    """The dry run prints `r3_exposure`'s working set per (G, GEMM, arm, n) and,
+    per target card, the cells its L2 does not hold, all computed here."""
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "ACTIVATION RE-READS, named before anything runs" in out
+    groups = list(DCR.R3_GROUPS) + [DCR.R3_OPTIONAL_GROUP]
+    for g in groups:
+        exp = {n: DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, g, n) for n in DCR.R3_TREADS}
+        for gemm in ("w1", "w2"):
+            live_a = [exp[n][gemm]["private"]["a_bytes"] for n in DCR.R3_TREADS]
+            assert live_a == [exp[n][gemm]["shared"]["a_bytes"] for n in DCR.R3_TREADS]
+            row = f"  G={g:<3}{gemm} {'A':<8}" + "".join(f"{v / 2 ** 20:>9.1f}"
+                                                        for v in live_a)
+            assert row in out, row
+            for arm in ("shared", "private"):
+                row = f"  G={g:<3}{gemm} {arm.upper():<8}" + "".join(
+                    f"{exp[n][gemm][arm]['working_set'] / 2 ** 20:>9.1f}" for n in DCR.R3_TREADS)
+                assert row in out, row
+    block = out[out.index("  NOT HELD, by card"):]
+    for card, l2 in DCR.R3_TARGET_L2.items():
+        assert f"    {card}, {l2 / 2 ** 20:g} MiB L2" in block
+    h100 = block[:block.index(list(DCR.R3_TARGET_L2)[1])]
+    exp = {n: DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, 64, n) for n in DCR.R3_TREADS}
+    ns = [f"{n}!" if w == "BEYOND" else str(n) for n in DCR.R3_TREADS
+          for w in [DCR.exposure_word(exp[n]["w2"]["shared"]["working_set"],
+                                      DCR.R3_TARGET_L2["H100 SXM5"])] if w != "held"]
+    assert ns and f"      G=64 w2 SHARED n={','.join(ns)}" in h100
 
 
 def test_a_planted_g4_staircase_with_its_n4_drop_is_valid():
@@ -2995,3 +3185,17 @@ def test_counters_doc_section_6_quotes_the_numbers_the_family_computes():
         assert row in sec, row
     assert "`--family ladder` (the\ndefault) behaves exactly as before" in sec
     assert "\u2014" not in sec, "no em-dash in the section"
+    for gemm in ("w1", "w2"):
+        k, n_cols = DCR.r3_gemm_geometry(MIXTRAL, gemm)
+        assert f"{DCR.r3_activation_ceiling(32, 64, n_cols):.4f} of W_{gemm}" in sec, gemm
+        for arm in ("shared", "private"):
+            row = f"| {gemm} {arm.upper()} | " + " | ".join(
+                f"{DCR.r3_exposure(MIXTRAL, 'bf16', 32, 64, 64, n)[gemm][arm]['working_set'] / 2 ** 20:.1f}"  # noqa: E501
+                for n in DCR.R3_TREADS) + " |"
+            assert row in sec, row
+    one = " ".join(sec.split())
+    first = {card: min(n for n in DCR.R3_TREADS if DCR.exposure_word(
+        DCR.r3_exposure(MIXTRAL, "bf16", 32, 64, 64, n)["w2"]["shared"]["working_set"],
+        l2) != "held") for card, l2 in DCR.R3_TARGET_L2.items()}
+    assert f"w2 is not held from n={first['H100 SXM5']}" in one
+    assert first["A100 40GB SXM4"] == 1 and "not even at n=1" in one

@@ -801,11 +801,38 @@ exits INVALID.
 `--cache-control all` flushes every cache before each replay pass of each
 profiled launch, so every GEMM starts cold; the unprofiled kernels between
 them run normally. The timed apparatus flushed once per call, not between the
-two GEMMs, which changes only activation traffic, and the operand model
-charges activations as cold reads for that reason. `--cache-control none` is
+two GEMMs, which changes only activation traffic. `--cache-control none` is
 not run: under kernel replay ncu's first-pass save of the ~26 GB footprint
 streams through L2 right before the kernel. `--clock-control base` is passed
 and recorded, because the documented default has moved between versions.
+
+**Activation re-reads, added 2026-09-24.** The byte model charges each GEMM's
+A operand ONCE per M-tile, the compulsory cold read. The kernel requests it
+once per N-tile CTA, num_pid_n times per M-tile (448 on w1, 64 on w2 at
+BLOCK_N 64), and the charge holds only while L2 keeps an M-tile's A between
+column passes. vLLM's pid mapping walks pid_m fastest inside a GROUP_SIZE_M
+group, so between two columns the group touches every live M-tile's A and
+the column's weight slabs: one per expert for SHARED and NATIVE, one per
+M-tile for PRIVATE. At G=1 that is one tile and the repeats are absorbed; at
+G >= E n every live M-tile is in one group. Where the pass outgrows the L2,
+the repeats reach DRAM and land in q as if they were weight re-reads, up to
+(BM/BN)(1 - 1/num_pid_n) of W_g per tread: 0.4989 of W_w1 and 0.4922 of W_w2.
+`r3_exposure` computes one pass of the fullest group, which is the
+sequential-order floor of the reuse distance (CTAs in flight together
+lengthen it), and the dry run names the cells neither target card's L2
+holds. At G=64, MiB per pass:
+
+| GEMM, arm | n=1 | n=2 | n=3 | n=4 | n=6 |
+|---|---|---|---|---|---|
+| w1 SHARED | 6.0 | 8.0 | 10.0 | 12.0 | 16.0 |
+| w1 PRIVATE | 6.0 | 12.0 | 18.0 | 24.0 | 36.0 |
+| w2 SHARED | 21.0 | 28.0 | 35.0 | 42.0 | 56.0 |
+| w2 PRIVATE | 21.0 | 42.0 | 63.0 | 84.0 | 126.0 |
+
+Against the H100 SXM5's 50 MiB (25 per partition, and data every SM reads can
+count on about one partition) w2 is not held from n=2; against the A100's
+40 MiB (20 per partition) not even at n=1, where V4's cell sits. The page does
+not assume the re-reads away: it bounds them with the PRIVATE control (6.6).
 
 ### 6.6 The byte model and the estimators
 
@@ -817,12 +844,24 @@ and the w2 GEMM E x BM x F x 2 = 7,340,032 B
 
 q(n) = (R(n) - n x operand) / W, per GEMM and in total, R being
 `dram__bytes_read.sum` per `fused_experts` call. The primary product is
-q_SHARED(n) at each tread beside the group model. alpha(G) is the OLS slope of
-q_SHARED over n, printed with its residual as a scalar summary that means
-something only where the ladder is affine. Also printed: the byte ratio
+q_SHARED(n) at each tread beside the group model. The OLS slope of q_SHARED
+over n is printed with its residual as a scalar summary that means something
+only where the ladder is affine; it is the upper edge of alpha(G), which is a
+bracket (below). Also printed: the byte ratio
 slope(R_S) / slope(R_P), the analogue of R3's timed ratio; 1 - (slope_P -
-slope_S) / W, which cancels any activation term the arms share; and per-GEMM
-alphas. None uses a bandwidth, a ridge, an intercept or a calibration.
+slope_S) / W, the slope of the bracket's unclamped lower edge below, which
+cancels an activation term only where it is identical in both arms; and
+per-GEMM alphas. None uses a bandwidth, a ridge, an intercept or a
+calibration.
+
+THE WEIGHT-ONLY BRACKET. q_SHARED counts every activation re-read of 6.5 as
+a weight re-read, and the counter cannot split the two inside one GEMM.
+PRIVATE reads its weights exactly n times by construction (every slab
+belongs to one M-tile), so its excess e = q_P - n is its activation
+re-read, and SHARED, which makes the same loads over fewer distinct slabs,
+evicts A no more often. SHARED's weight-only q therefore lies in
+[q_S - e, q_S] per GEMM and tread, and alpha(G) is printed as the least and
+greatest OLS slope over that bracket, beside the upper edge's own slope.
 
 ### 6.7 The registered prediction
 
@@ -854,7 +893,9 @@ VALIDITY, any failure exits INVALID and no alpha may be quoted: V0 a live card
 block; V1 exact count, every grid, a census that measured GEMMS_PER_CALL; V2
 every STRICT metric a number; V3 each cell's K calls within 1% of each other;
 V4 at n=1 SHARED and PRIVATE agree and every arm's q(1) is in [0.97, 1.03];
-V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM; V6 the three
+V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM (above the
+full-thrash 1.4989 n, so V5 cannot tell an activation thrash from a sound
+page, and C6 reads it); V6 the three
 arms request the same L2 sectors within 0.5%; V7 NATIVE reads what SHARED reads
 within 1%; V8 DRAM bytes agree with 32 x the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof.
@@ -867,9 +908,18 @@ staircase with its n=4 drop is VALID.
 CLAIM, a failure is a result: C1 w1 within 5% of the group model at every n
 for G >= 2, and at G=1 w1 re-read whole where the co-residency window is below
 448 (not asked when the occupancy was not proven); C2 w2 never above 1.05 x the
-model; C3 at G=1 alpha_w2 < alpha_w1; C6 PRIVATE no more than 1.03 n, whose
-failure localises a bytes share of the private arm's timed G-cost by GEMM;
-C5 only with `--timed-reference`, labelled cross-card, comparing alpha(1) with
+model; C3 at G=1 alpha_w2 < alpha_w1. C1 and C2 read SHARED's weight-only
+bracket of 6.6 and C3 its alpha brackets, on both edges: a verdict only where
+the edges agree, and UNKNOWN (not established, not refuted) where they
+disagree, so an activation re-read is never scored as a refutation of the
+group model. Until 2026-09-24 they read q_S itself, and a G=64 page whose
+weights read the model exactly failed C2 on activation bytes alone; a planted
+world holds that it no longer does. C6 PRIVATE no more than 1.03 n: its
+failure is a finding about bytes, PRIVATE's activation re-read localised by
+GEMM, and it says the private arm's timed G-cost is bytes SHARED does not pay
+only as far as SHARED re-reads less; at G >= E n every live M-tile is in one
+group and SHARED is exposed to the same re-reads.
+C5 only with `--timed-reference`, labelled cross-card, comparing alpha(1)'s bracket with
 the timed bracket and the G >= 4 byte ratios with the timed ratios, every timed
 number read from R3's report.json files and none typed. The join refuses a
 timed report that is planted, that is not VALID by its own gates, or whose
@@ -908,7 +958,12 @@ host memory and costs about a second per launch.
 ### 6.11 What the counter cannot settle
 
 It cannot split weight re-reads from activation re-reads inside one GEMM's
-DRAM total; the group model and the private control bound it. It measures bytes
+DRAM total. The private control bounds the activation share: PRIVATE's excess
+over n is its own activation re-read, which bounds SHARED's, so every weight
+claim is scored on a bracket and reads UNKNOWN where the bracket straddles
+its threshold. Where the exposed cells of 6.5 carry a large excess the
+bracket is wide, and a narrower answer needs a different measurement (a
+tile, or a G, whose column pass the card's L2 holds), not this one. It measures bytes
 at a locked clock with a cold L2 per GEMM, not the timed apparatus's per-call
 flush, which leaves weights unaffected and moves activations slightly. The
 group model is derived from vLLM's pid mapping, not measured: a C1 failure is
