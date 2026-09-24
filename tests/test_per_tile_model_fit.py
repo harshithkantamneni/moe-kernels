@@ -9,9 +9,9 @@ cells can see, so the three things that can make its page wrong are:
     the WORLDS     -- an overlap world must come back overlap with its planted
                       parameters, an additive world additive, and the scan must
                       be flat exactly where the traffic branch is hidden
-    the NUMBERS    -- a parameter or a bandwidth that the fitted cells leave
-                      free (an invisible direction) must print as not
-                      identified, never as where the fitter stopped
+    the NUMBERS    -- a parameter, a bandwidth or a prediction that the fitted
+                      cells leave free (an invisible direction) must print as
+                      not identified, never as where the fitter stopped
     the INPUTS     -- the arm's own kept rows, INVALID pages out by default, a
                       gate spelled outside exit_codes' table refused, and the
                       pin rate read from the session's ruler, never typed
@@ -386,7 +386,27 @@ def test_leave_one_g_out_predicts_a_held_out_g_on_an_overlap_world():
 
 def test_leave_one_g_out_of_a_per_g_model_ties_alpha_and_predicts():
     per = M.leave_one_g_out(BY_KEY["add.split.pin"], additive_cells(), CTX)
-    assert all(per[g] is not None for g in GROUPS if g != 1)
+    assert all(isinstance(per[g], tuple) for g in GROUPS if g != 1)
+
+
+#: alpha(G>1) = 0: the G>1 cells carry no traffic term, so tau is read only
+#: by G=1's prediction (alpha(1) = 1 there).
+NO_REUSE_TRAFFIC = dict(ADDITIVE_WORLD, **{f"alpha({g})": 0.0 for g in GROUPS if g != 1})
+
+
+@pytest.mark.parametrize("key", ["add.split.pin", "add.paper.pin"])
+def test_leave_one_g_out_prints_no_number_for_a_g_the_other_gs_leave_free(key):
+    """On the findings' four pages leave-one-G-out printed a held-out G=1 of
+    74% (add.split.pin) and 55% (add.paper.pin). Along directions that leave
+    the G>1 SSR unchanged, that G=1 rms runs from 74% to 700% and from 8.6% to
+    780%: each printed number was where the fitter stopped, not the model's."""
+    per = M.leave_one_g_out(BY_KEY[key], additive_cells(world=NO_REUSE_TRAFFIC), CTX)
+    assert not isinstance(per[1], tuple)
+    assert all(isinstance(per[g], tuple) for g in GROUPS if g != 1)
+    row = next(line for line in M.logo_lines({key: per}, GROUPS)
+               if line.strip().startswith(key))
+    assert "not identified" in row
+    assert row.count("%") == 2 * (len(GROUPS) - 1)
 
 
 # --------------------------------------------------------------------------
@@ -416,10 +436,13 @@ def _gates(v7="PASS"):
 _TEMPLATE = CE.plant_rows(eps=1.0, duties=(1.0,), mhz=(1500.0,), treads=1, repeats=1)[0]
 
 
-def _r1_page(path: Path, group_m: int, *, report=None, repeats=3, drift_ms=None):
-    """A clock_elasticity page whose cells are the overlap world at `group_m`.
-    `drift_ms` adds one DRIFTING row at tread 2 of state 0 with that time."""
-    cells = [c for c in overlap_cells(noise=0.0) if c.group_m == group_m]
+def _r1_page(path: Path, group_m: int, *, report=None, repeats=3, drift_ms=None,
+             world=None):
+    """A clock_elasticity page whose cells are `world`'s (default: the overlap
+    world, noise-free) at `group_m`. `drift_ms` adds one DRIFTING row at tread
+    2 of state 0 with that time."""
+    world = overlap_cells(noise=0.0) if world is None else world
+    cells = [c for c in world if c.group_m == group_m]
     for rep in range(repeats):
         for c in cells:
             i = int(c.state)
@@ -604,6 +627,27 @@ def test_predict_scores_other_pages_without_fitting_them(session, tmp_path):
     assert doc["predict"]["rms"]["ovl.group"] < 1e-6       # noise-free, same world
     assert {c["group_m"] for c in doc["cells"]} == {1, 4, 64}    # never fitted
     assert "never refitted" in text
+
+
+def test_predict_prints_no_number_for_pages_the_fit_leaves_free(tmp_path):
+    """--predict is leave-one-G-out's second call site: fitted on G>1 pages
+    with no traffic term, add.split.pin cannot say what tau is, and a G=1
+    page's prediction depends on nothing else."""
+    world = additive_cells(world=NO_REUSE_TRAFFIC)
+    fitted = tmp_path / "fitted"
+    _ruler(fitted / "calibration" / "measured_planted.yaml")
+    for g in (4, 16, 64):
+        _r1_page(fitted / "clock_elasticity" / f"run-{g:08x}", g, report=_gates(),
+                 world=world)
+    other = tmp_path / "other"
+    _ruler(other / "calibration" / "measured_planted.yaml")
+    _r1_page(other / "clock_elasticity" / "run-0000cafe", 1, report=_gates(), world=world)
+    text, doc = _run([fitted, "--no-scan", "--no-logo", "--predict", other])
+    assert not isinstance(doc["predict"]["rms"]["add.split.pin"], float)
+    row = next(line for line in text.split("PREDICTED:")[1].splitlines()
+               if line.strip().startswith("add.split.pin "))
+    assert "not identified" in row and "%" not in row
+    assert isinstance(doc["predict"]["rms"]["ovl.group.pin"], float)
 
 
 def _r3_page(path: Path, group_m: int, duty=0.25):

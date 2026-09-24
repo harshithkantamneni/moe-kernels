@@ -25,14 +25,14 @@ rms per G, the rms in both families at a FIXED alpha(G>1) over a grid (alpha(1)
 = 1 and free), a leave-one-G-out check and, with --predict, other pages scored
 with the fitted parameters. An INVISIBLE DIRECTION is one the parameters can
 move along, within their bounds, that changes no fitted cell (first order, from
-the Jacobian at the fit); a parameter or a bandwidth W / tau that one moves
-prints "not identified", not a number. The pin rate and the read ceilings are
-the ruler the session published (`calibration/measured_*.yaml` above the page)
-or --ruler; W is `moe.bench.weights.routed_expert_weight_bytes` of the rows'
-model and dtype. A page whose own report.json fails a VALIDITY gate is listed
-and not fitted unless --include-invalid; a page with no report.json unless
---include-unscored; a gate spelled outside `moe.bench.exit_codes`' table
-refuses the run.
+the Jacobian at the fit); a parameter, a bandwidth W / tau, a held-out G or a
+--predict page that one moves prints "not identified", not a number. The pin
+rate and the read ceilings are the ruler the session published
+(`calibration/measured_*.yaml` above the page) or --ruler; W is
+`moe.bench.weights.routed_expert_weight_bytes` of the rows' model and dtype. A
+page whose own report.json fails a VALIDITY gate is listed and not fitted
+unless --include-invalid; a page with no report.json unless --include-unscored;
+a gate spelled outside `moe.bench.exit_codes`' table refuses the run.
 
 WHAT IT CANNOT DISTINGUISH. A hard max from a smooth transition near the kink.
 What sets the floor c0: issue rate, L2-to-SM delivery, latency and occupancy all
@@ -672,6 +672,11 @@ class Fit:
     def is_identified(self, name: str) -> bool | None:
         return self.identified[self.names.index(name)] if name in self.names else None
 
+    def moves(self, grads: np.ndarray) -> bool:
+        """Whether an invisible direction changes the quantities whose
+        gradients (rows, in parameter units) are `grads`."""
+        return moved_by(grads, self.scale, self.invisible)
+
 
 #: A singular value of the column-normalised Jacobian below this fraction of
 #: the largest counts as zero: forward differences carry about 1e-7 of noise.
@@ -886,28 +891,49 @@ def fit(s: Structure, cells, ctx: Context, *, fixed_rest=None, starts: int = STA
                per_g=per_g)
 
 
+def _scorer(f: Fit, cells, ctx: Context):
+    """The relative residuals of `cells` as a function of `f`'s parameter
+    vector, or None when a G among them has no fitted alpha."""
+    data = Data.of(cells, ctx)
+    s = f.structure
+    names = list(f.names)
+    if s.has_alpha:
+        for g in data.groups:
+            if g == 1 and s.alpha_one == "free" and "alpha(1)" not in names:
+                return None
+            if g != 1 and s.alpha_rest == "per_g" and f"alpha({g})" not in names:
+                return None
+    lay = layout(s, data, ctx)
+    if any(n not in names for n in lay.names):
+        return None
+    pick = [names.index(n) for n in lay.names]
+
+    def fun(p):
+        return (predict(s, lay, np.asarray(p)[pick], data, ctx) - data.ms) / data.ms
+    return fun
+
+
 def score(f: Fit, cells, ctx: Context) -> np.ndarray:
     """Relative residuals of a fitted model on other cells, never refitted.
     A G the fit never saw takes the fitted alpha(G>1) when the structure ties
     it across G; otherwise it has no alpha and every residual is NaN."""
-    data = Data.of(cells, ctx)
-    s = f.structure
-    names = list(f.names)
+    fun = _scorer(f, cells, ctx)
+    if fun is None:
+        return np.full(len(cells), np.nan)
+    return fun(np.array(f.values))
+
+
+def determines(f: Fit, cells, ctx: Context) -> bool:
+    """Whether the fitted cells determine `f`'s prediction of `cells`: False
+    when a direction the parameters can move within their bounds changes no
+    fitted cell and changes these. The fit's number for them is then where
+    the fitter happened to stop. True for cells `score` cannot score."""
+    fun = _scorer(f, cells, ctx)
+    if fun is None or not f.blind:
+        return True
     p = np.array(f.values)
-    if s.has_alpha:
-        extra = []
-        for g in data.groups:
-            if g == 1 and s.alpha_one == "free" and "alpha(1)" not in names:
-                return np.full(data.n.shape, np.nan)
-            if g != 1 and s.alpha_rest == "per_g" and f"alpha({g})" not in names:
-                extra.append(g)
-        if extra:
-            return np.full(data.n.shape, np.nan)
-    lay = layout(s, data, ctx)
-    q = np.array([p[names.index(n)] if n in names else np.nan for n in lay.names])
-    if np.isnan(q).any():
-        return np.full(data.n.shape, np.nan)
-    return (predict(s, lay, q, data, ctx) - data.ms) / data.ms
+    jac = _jacobian(fun, p, fun(p), np.array(f.lower), np.array(f.upper))
+    return not f.moves(jac)
 
 
 # --------------------------------------------------------------------------
@@ -997,9 +1023,17 @@ def fit_all(cells, ctx: Context, structures=STRUCTURES, starts: int = STARTS) ->
     return out
 
 
-def leave_one_g_out(s: Structure, cells, ctx: Context) -> dict[int, tuple | None]:
+#: What leave-one-G-out and --predict give in place of a number when the
+#: fitted cells leave the prediction free (`determines`).
+NOT_IDENTIFIED = "not identified"
+
+
+def leave_one_g_out(s: Structure, cells, ctx: Context) -> dict[int, tuple | str | None]:
     """Fit on every other G, score the held-out G. alpha(G>1) is TIED across G
-    here, so a held-out G has an alpha to be predicted with."""
+    here, so a held-out G has an alpha to be predicted with. Per G: (rms,
+    worst); None when the fit has no alpha for it; NOT_IDENTIFIED when the
+    other Gs leave its prediction free (`determines`), where any single rms
+    would be wherever the fitter stopped."""
     tied = dataclasses.replace(s, alpha_rest="tied")
     groups = sorted({c.group_m for c in cells})
     out = {}
@@ -1011,8 +1045,12 @@ def leave_one_g_out(s: Structure, cells, ctx: Context) -> dict[int, tuple | None
             continue
         f = fit(tied, train, ctx, starts=4)
         r = score(f, test, ctx)
-        out[g] = None if np.isnan(r).any() else (float(np.sqrt(np.mean(r ** 2))),
-                                                 float(np.max(np.abs(r))))
+        if np.isnan(r).any():
+            out[g] = None
+        elif not determines(f, test, ctx):
+            out[g] = NOT_IDENTIFIED
+        else:
+            out[g] = (float(np.sqrt(np.mean(r ** 2))), float(np.max(np.abs(r))))
     return out
 
 
@@ -1164,15 +1202,22 @@ def scan_lines(cols, tol: float, extras: dict) -> list[str]:
     return out
 
 
+def _held_out_text(v) -> str:
+    if v is None:
+        return "n/a"
+    if v == NOT_IDENTIFIED:
+        return NOT_IDENTIFIED
+    return f"{_pct(v[0]).strip()} / {_pct(v[1]).strip()}"
+
+
 def logo_lines(results: dict, groups) -> list[str]:
     out = ["LEAVE ONE G OUT: fit on the other Gs (alpha(G>1) tied), score the held-out G "
            "(rms / worst)",
+           f"  {NOT_IDENTIFIED}: an invisible direction of the fit on the other Gs "
+           "moves the held-out G's prediction, so no one rms is the model's",
            "  " + f"{'model':<17}" + "".join(f"{'G=' + str(g):>20}" for g in groups)]
     for key, per in results.items():
-        row = []
-        for g in groups:
-            v = per.get(g)
-            row.append("n/a" if v is None else f"{_pct(v[0]).strip()} / {_pct(v[1]).strip()}")
+        row = [_held_out_text(per.get(g)) for g in groups]
         out.append("  " + f"{key:<17}" + "".join(f"{x:>20}" for x in row))
     return out
 
@@ -1187,6 +1232,10 @@ def predict_lines(fits, cells, ctx: Context) -> list[str]:
         r = score(f, cells, ctx)
         if np.isnan(r).any():
             out.append(f"  {f.structure.key:<17}  n/a (a G the fit never saw has no alpha)")
+            continue
+        if not determines(f, cells, ctx):
+            out.append(f"  {f.structure.key:<17}  {NOT_IDENTIFIED} (an invisible "
+                       "direction of the fit moves these predictions)")
             continue
         out.append(f"  {f.structure.key:<17}{_pct(float(np.sqrt(np.mean(r ** 2)))):>9}"
                    f"{_pct(float(np.max(np.abs(r)))):>9}"
@@ -1229,10 +1278,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--flat-tol", type=float, default=FLAT_TOL,
                    help=f"SSR tolerance of the scan's flat window (default {FLAT_TOL})")
     p.add_argument("--no-scan", action="store_true", help="skip the scan")
-    p.add_argument("--no-logo", action="store_true", help="skip leave-one-G-out")
+    p.add_argument("--no-logo", action="store_true",
+                   help="skip leave-one-G-out (a held-out G the other Gs leave free "
+                        "prints not identified)")
     p.add_argument("--predict", type=Path, nargs="+", default=None,
                    help="dirs whose R1 pages, admitted by the same rules as the "
-                        "inputs, are scored with the fitted parameters and never fitted")
+                        "inputs, are scored with the fitted parameters and never "
+                        "fitted; a fit whose invisible directions move their "
+                        "predictions prints not identified")
     p.add_argument("--out", type=Path, default=None,
                    help="write the pages, cells, fits, scan, leave-one-G-out and "
                         "predictions as JSON to this file")
@@ -1385,8 +1438,12 @@ def run(args) -> tuple[list[str], dict]:
             rms = {}
             for f in fits:
                 r = score(f, pcells, ctx)
-                rms[f.structure.key] = (None if np.isnan(r).any()
-                                        else float(np.sqrt(np.mean(r ** 2))))
+                if np.isnan(r).any():
+                    rms[f.structure.key] = None
+                elif not determines(f, pcells, ctx):
+                    rms[f.structure.key] = NOT_IDENTIFIED
+                else:
+                    rms[f.structure.key] = float(np.sqrt(np.mean(r ** 2)))
             doc["predict"] = {"pages": [p.run for p in puse], "rms": rms}
     return lines, doc
 
