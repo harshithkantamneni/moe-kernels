@@ -15,8 +15,10 @@ pairing only with reports that formed a ratio, a skip worded by seed 0's V7
 verdict and the follow-up a V7 FAIL prints, tables rebuilt from the reports on
 disk (per run, and per G through R3's own cross-run machinery) with their
 legend, the elasticity band read through the arm's own `band_of` and withheld
-from a page its gates refused, and a laptop dry run that prices every step off
-its own source and writes nothing into the tree.
+from a page its gates refused, what each ratio reads as off that band, the
+bytes-rate bound per G at the ceilings of the ruler the session measured, and
+a laptop dry run that prices every step off its own source and writes nothing
+into the tree.
 
 The measuring path is driven end to end off GPU through two planted
 interpreters: a base one that names a planted card and UUID, prints a planted
@@ -469,8 +471,9 @@ def test_the_order_is_the_owners_and_only_the_pre_arm_checks_are_gated():
     whole suite uncapped, from PY_BASE, gating nothing."""
     marks = ['echo "== preflight', 'echo "== preconditions', 'echo "== tests/test_gpu.py',
              'echo "== the alignment probe under the graph',
-             'echo "== the re-read fraction, off the cap, seed', 'echo "== clock elasticity',
-             'echo "== the re-read fraction, the later seeds', 'echo "== the whole suite']
+             'echo "== the ratio, shared over private, off the cap, seed',
+             'echo "== clock elasticity',
+             'echo "== the ratio, shared over private, the later seeds', 'echo "== the whole suite']
     at = [CODE.index(m) for m in marks]
     assert at == sorted(at), dict(zip(marks, at, strict=True))
     gpu = CODE[at[2]:at[3]]
@@ -670,6 +673,29 @@ def test_the_runbook_chain_section_says_what_the_chain_does():
     rate = re.search(r'^SUITE_S_PER_TEST="\$\{SUITE_S_PER_TEST:-([0-9.]+)\}"$', CODE, re.M)
     assert f"session 5's pod rate of {rate.group(1)} s a test" in flat
     assert "0.66 s a test" not in flat
+
+
+def test_the_help_says_what_each_regime_word_reads_as_and_the_bound():
+    """The header's regime words say what the ratio beside each reads as,
+    which both tables print, and CLOCK-CARRIES is not a time ratio but a
+    blend (session 5's findings, 4.2 and 9); the bytes-rate bound is named
+    with its form."""
+    prose = " ".join(_header_prose().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert label in prose, label
+    assert "the ratio is a time ratio" not in prose, "a blend, not a time ratio (findings 9)"
+    assert "the ratio is NOT alpha" in prose
+    assert "alpha <= (t x C / W - 1) / (n - 1)" in prose
+    assert "each rebuild prints it per G with the ceiling it used" in prose
+
+
+def test_the_runbook_states_the_reads_as_rule_and_the_bound():
+    sec = " ".join(_runbook_chain_section().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert label in sec, label
+    assert "a time ratio, a blend of traffic and clock" not in sec
+    assert "alpha <= (t x C / W - 1) / (n - 1)" in sec and "`ruler=<yaml>`" in sec
+    assert "Both tables carry `reads_as`" in sec
 
 
 # --------------------------------------------------------------------------
@@ -910,8 +936,9 @@ def test_a_filesystem_that_cannot_flock_falls_back_to_mkdir_not_to_refusal(tmp_p
 
 def _report(tmp_path, name, *, G=1, seed=0, ratio=0.9551, lo=0.9544, hi=0.9695,
             synthetic=False, experiment="private_weight_reference", duty=0.25,
-            replicates=None, table=None, v7="PASS", v8="PASS"):
-    payload = {"experiment": experiment, "synthetic": synthetic, "model": "mixtral_8x7b",
+            replicates=None, table=None, v7="PASS", v8="PASS", extra=None):
+    payload = {**(extra or {}),
+               "experiment": experiment, "synthetic": synthetic, "model": "mixtral_8x7b",
                "block_m": 32, "treads": [1, 2, 3, 4, 5, 6], "repeats": 9,
                "pinned": {"BLOCK_SIZE_N": 64, "GROUP_SIZE_M": G}, "seed": seed, "duty": duty,
                "run_id": name, "ratio": ratio,
@@ -1084,9 +1111,10 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
     assert H.pairs_table(session, results, "1 4 16", "0 1 2", settings) == 3
     first = (session / "PAIRS.tsv").read_text()
     rows = [ln.split("\t") for ln in first.splitlines()]
-    assert rows[0] == H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
+    assert rows[0] == H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit",
+                                            "reads_as"]
     assert [(r[0], r[1]) for r in rows[1:]] == [("1", "0"), ("1", "1"), ("16", "0")]
-    assert all(r[-2:] == ["unmeasured", "unscored"] for r in rows[1:])
+    assert all(r[-3:] == ["unmeasured", "unscored", H.READS_AS_UNRESOLVED] for r in rows[1:])
     # the same disk, rebuilt again: byte-identical, no second row per run
     assert H.pairs_table(session, results, "1 4 16", "0 1 2", settings) == 3
     assert (session / "PAIRS.tsv").read_text() == first
@@ -1095,7 +1123,8 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
     (logs / "r1-g1.log").write_text("experiment  clock_elasticity / r1rid\n")
     H.pairs_table(session, results, "1 4 16", "0 1 2", settings)
     rows = [ln.split("\t") for ln in (session / "PAIRS.tsv").read_text().splitlines()]
-    assert [r[-2:] for r in rows[1:]] == [["RAW-STANDS", "DONE"]] * 2 + [["unmeasured", "unscored"]]
+    assert [r[-3:] for r in rows[1:]] == [["RAW-STANDS", "DONE", H.READS_AS["RAW-STANDS"]]] * 2 + [
+        ["unmeasured", "unscored", H.READS_AS_UNRESOLVED]]
     fixed = {ln.split("\t")[0]: ln.split("\t")[1:]
              for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
     assert fixed["r3_duty"] == ["0.25", "report.json of 3 run(s)"]
@@ -1256,6 +1285,205 @@ def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# what a ratio reads as, and the bytes-rate bound (H200 session 5's findings)
+# --------------------------------------------------------------------------
+
+def test_reads_as_is_the_findings_rule_over_r1s_own_band_names():
+    """A ratio is a re-read fraction ONLY beside RAW-STANDS on a page whose
+    gates stood behind it; beside CLOCK-CARRIES it is a blend and not alpha
+    (session 5 at G >= 4: the shared arm on a clock-scaled floor, the
+    bytes-rate bound still proving reuse); beside every other word it is
+    unresolved. The two keys are R1's own band names."""
+    import clock_elasticity as CE
+    names = [b[0] for b in CE.BANDS]
+    assert set(H.READS_AS) <= set(names), (H.READS_AS, names)
+    for word in ("DONE", "CLAIM_FAIL"):
+        assert H.reads_as("RAW-STANDS", word) == "re-read fraction"
+        assert H.reads_as("CLOCK-CARRIES", word) == ("blend (traffic and a clock-scaled on-chip"
+                                                     " floor): not alpha")
+    unlicensed = [n for n in names if n not in H.READS_AS] + [
+        "STRADDLES", "withheld:INVALID", "unmeasured", "unresolved"]
+    for band in unlicensed:
+        assert H.reads_as(band, "CLAIM_FAIL") == H.READS_AS_UNRESOLVED, band
+    for word in ("INVALID", "REFUSED", "ERROR", "unscored"):
+        assert H.reads_as("RAW-STANDS", word) == H.READS_AS_UNRESOLVED, word
+    got = subprocess.run([sys.executable, str(HELPERS), "reads-as", "CLOCK-CARRIES", "DONE"],
+                         capture_output=True, text=True, timeout=120, env=laptop_env())
+    assert got.stdout.strip() == H.READS_AS["CLOCK-CARRIES"]
+
+
+def _r1_page(results: Path, logs: Path, g: int, lo, hi, *verdicts):
+    """An R1 report for G and the chain log that names it."""
+    rid = f"r1rid-g{g}"
+    _r1(results / "clock_elasticity", rid, lo, hi, *verdicts)
+    (logs / f"r1-g{g}.log").write_text(f"experiment  clock_elasticity / {rid}\n")
+
+
+def test_both_tables_say_what_the_ratio_reads_as(tmp_path):
+    """The relabel: PAIRS.tsv and PAIRS-by-G.tsv each gain `reads_as`, off the
+    G's R1 page. Until now CLOCK-CARRIES rows sat in the table as if the ratio
+    were the re-read fraction the header promised for RAW-STANDS."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    ok, fail = ("CLAIM", "C1", "PASS"), ("CLAIM", "C1", "FAIL")
+    for g in (1, 4, 16, 64, 128):
+        _seeded(session, results, g, {0: (0.9, 0.89, 0.91, "PASS")})
+    logs = session / "chain-logs"
+    _r1_page(results, logs, 1, 0.10, 0.20, ok)                                  # RAW-STANDS
+    _r1_page(results, logs, 4, 1.07, 1.20, fail)                                # CLOCK-CARRIES
+    _r1_page(results, logs, 16, 1.09, 1.27, ("VALIDITY", "V7", "FAIL"), fail)   # withheld
+    _r1_page(results, logs, 64, 0.387, 0.407, fail)                             # STRADDLES
+    H.pairs_table(session, results, "1 4 16 64 128", "0", {})
+    want = [H.READS_AS["RAW-STANDS"], H.READS_AS["CLOCK-CARRIES"]] + [H.READS_AS_UNRESOLVED] * 3
+    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit", "reads_as"]
+    per_run = [dict(zip(header, r, strict=True)) for r in _rows(session / "PAIRS.tsv")]
+    assert [r["reads_as"] for r in per_run] == want
+    per_g = [dict(zip(H.BY_G_HEADER, r, strict=True)) for r in _rows(session / "PAIRS-by-G.tsv")]
+    assert [r["reads_as"] for r in per_g] == want
+    assert [r["band"] for r in per_g] == ["RAW-STANDS", "CLOCK-CARRIES", "withheld:INVALID",
+                                          "STRADDLES", "unmeasured"]
+    legend = " ".join((session / "PAIRS-README.txt").read_text().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert f"`{label}`" in legend, label
+    assert "ONLY when the band is RAW-STANDS on a page whose gates stood behind it" in legend
+
+
+def _ruler(path: Path, *, named: float, read: float | None, pin: float | None,
+           read_note: str = "", reduce_gbps: float | None = None) -> Path:
+    """A planted calibrate_hardware.py yaml: the named bandwidth, the read
+    patterns, and the pin rate."""
+    import yaml
+    patterns = []
+    if read is not None:
+        patterns.append({"pattern": "read_stream", "gbps": read, "note": read_note})
+    if reduce_gbps is not None:
+        patterns.append({"pattern": "read_reduce", "gbps": reduce_gbps, "note": ""})
+    patterns.append({"pattern": "triad", "gbps": named, "note": ""})
+    doc = {"name": "planted", "verified": True, "checked_on": "2026-09-23",
+           "measured_commit": "0123456789abcdef", "memory": {"bandwidth_tb_s": named / 1000},
+           "detail": {"achieved_bandwidth_gbps": named, "ceiling_pattern": "triad",
+                      "bandwidth_patterns": patterns},
+           "observed": {"pin_rate_gbps": pin} if pin else {}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(doc))
+    return path
+
+
+def _bound_reports(session: Path, results: Path, g: int, tops: dict[int, float],
+                   *, named: float, w: int, treads: int = 6):
+    """Ratio reports for G whose shared ladder tops out at `tops[seed]` ms."""
+    logs = session / "chain-logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    for seed, top in tops.items():
+        rid = f"rid-g{g}-s{seed}"
+        points = [[n, top * n / treads] for n in range(1, treads + 1)]
+        _report(results / "private_weight_reference", rid, G=g, seed=seed,
+                extra={"card": "nvidia_planted", "bandwidth_gbps": named,
+                       "memory_plan": {"per_copy_bytes": w},
+                       "ladders": {"shared": {"points": points}}})
+        (logs / f"r3-g{g}-s{seed}.log").write_text(
+            f"experiment  private_weight_reference / {rid}\n")
+
+
+def test_the_bytes_rate_bound_is_read_off_the_reports_and_the_ruler_the_session_measured(tmp_path):
+    """Findings 3.6: alpha <= (t x C / W - 1) / (n - 1), the one bound that
+    needs no private arm, per G, at the ruler's read_stream and its pin rate,
+    with t the mean of the G's shared top-tread times, W each report's own
+    expert set and the ruler the yaml calibrate wrote in this session. At the
+    bound the bytes W (1 + alpha (n - 1)) fill exactly t x C. 1 or above
+    excludes nothing and the console says so."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    named, read, pin, w = 4000.0, 4500.0, 4800.0, 2_000_000_000
+    ruler = _ruler(tmp_path / "cal" / "run-1" / "measured_nvidia_planted.yaml",
+                   named=named, read=read, pin=pin, reduce_gbps=4400.0)
+    (session / "logs").mkdir(parents=True)
+    (session / "logs" / "calibrate.log").write_text(
+        f"[calibrate] wrote {tmp_path}/cal/old/measured_nvidia_planted.yaml\n"
+        f"[calibrate] wrote {ruler}\n[calibrate] PUBLISHED to elsewhere.yaml\n")
+    tops = {4: {0: 2.30, 1: 2.36}, 1: {0: 3.10, 1: 3.14}}
+    for g, t in tops.items():
+        _bound_reports(session, results, g, t, named=named, w=w)
+    n, lines = H.pairs_table_lines(session, results, "1 4", "0 1", {})
+    assert n == 4
+    per_g = {r[0]: dict(zip(H.BY_G_HEADER, r, strict=True))
+             for r in _rows(session / "PAIRS-by-G.tsv")}
+    for g, t in tops.items():
+        row, mean = per_g[str(g)], statistics.mean(t.values())
+        assert row["top_tread"] == "6" and float(row["shared_top_ms"]) == pytest.approx(mean,
+                                                                                        abs=5e-5)
+        for col, c in (("bound_read_stream", read), ("bound_pin_rate", pin)):
+            b = float(row[col])
+            # the bound's meaning, not its formula: at it, the bytes fill the time
+            assert w * (1 + b * 5) == pytest.approx(mean * 1e-3 * c * 1e9, rel=1e-4), (g, col)
+        assert float(row["bound_pin_rate"]) > float(row["bound_read_stream"])
+    fixed = {ln.split("\t")[0]: ln.split("\t")[1:]
+             for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
+    assert fixed["ruler"][0] == str(ruler)
+    assert "calibrate wrote in this session" in fixed["ruler"][1]
+    assert fixed["read_ceiling_gbps"][0] == f"{read:.1f}" and "read_stream" in fixed[
+        "read_ceiling_gbps"][1]
+    assert fixed["pin_rate_gbps"][0] == f"{pin:.1f}"
+    assert fixed["expert_set_bytes"][0] == str(w)
+    # the console: the ruler once, then each G with the ceilings it used
+    assert lines[0].startswith(f"bytes-rate bound, at the ceilings of {ruler}")
+    g4 = next(ln for ln in lines if ln.startswith("G=4 "))
+    assert (f"alpha <= {per_g['4']['bound_read_stream']} at read_stream {read:.1f} GB/s, <= "
+            f"{per_g['4']['bound_pin_rate']} at the pin rate {pin:.1f} GB/s") in g4
+    assert "excludes nothing" not in g4
+    g1 = next(ln for ln in lines if ln.startswith("G=1 "))
+    assert float(per_g["1"]["bound_read_stream"]) >= 1, "the planted G=1 fits a full re-read"
+    assert "1 or above: a full re-read per M-tile fits in that time" in g1
+    assert "reads as: unresolved" in g1, "no R1 page yet"
+    got = subprocess.run([sys.executable, str(HELPERS), "pairs-table", str(session), str(results),
+                          "1 4", "0 1"], capture_output=True, text=True, timeout=120,
+                         env=laptop_env())
+    assert got.stdout.splitlines() == ["4 row(s)", *lines], got.stdout + got.stderr
+
+
+def test_a_ruler_the_reports_were_not_scored_against_withholds_the_bound(tmp_path):
+    """calibrate --publish overwrites one tracked file per card: on the laptop
+    the tracked ruler may be a later calibration than the one the reports
+    were scored against. Its named bandwidth must be the reports' own, or no
+    G gets a bound; `ruler=` names the right one."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    other = _ruler(tmp_path / "other.yaml", named=4000.5, read=4500.0, pin=4800.0)
+    n, lines = H.pairs_table_lines(session, results, "4", "0", {"ruler": str(other)})
+    assert lines[0].startswith("bytes-rate bound: NO RULER, so no G has one")
+    assert "is not the ruler these reports were scored against" in lines[0]
+    assert lines[1].startswith("G=4   no bytes-rate bound (no ruler, above)")
+    row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+    assert (row["bound_read_stream"], row["bound_pin_rate"]) == ("none", "none")
+    right = _ruler(tmp_path / "right.yaml", named=4000.0, read=4500.0, pin=4800.0)
+    H.pairs_table(session, results, "4", "0", {"ruler": str(right)})
+    row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+    assert row["bound_pin_rate"] != "none"
+    # no ruler anywhere: said, not guessed
+    bare, bare_results = tmp_path / "bare", tmp_path / "bare-res"
+    _bound_reports(bare, bare_results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    _n, lines = H.pairs_table_lines(bare, bare_results, "4", "0", {})
+    assert "pass ruler=<yaml> to pairs-table" in lines[0]
+
+
+def test_the_read_ceiling_is_read_stream_and_never_read_reduce(tmp_path):
+    """read_reduce is calibrate's LOWER bound on the read rate: a ceiling set
+    too low makes an upper bound on alpha too tight, so a ruler without a
+    usable read_stream gives no read-ceiling bound, and the pin-rate bound
+    still stands."""
+    from moe.bench import calibrate as CAL
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    for name, kw in (("none", {"read": None}),
+                     ("disowned", {"read": 4600.0,
+                                   "read_note": f"came in below triad: {CAL.DISOWNED}"})):
+        ruler = _ruler(tmp_path / f"{name}.yaml", named=4000.0, pin=4800.0, reduce_gbps=4400.0,
+                       **kw)
+        _n, lines = H.pairs_table_lines(session, results, "4", "0", {"ruler": str(ruler)})
+        row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+        assert row["bound_read_stream"] == "none" and row["bound_pin_rate"] != "none", name
+        assert "no bound at read_stream" in lines[1] and "at the pin rate 4800.0 GB/s" in lines[1]
+
+
+# --------------------------------------------------------------------------
 # the measuring path, end to end, through planted interpreters
 # --------------------------------------------------------------------------
 
@@ -1263,6 +1491,10 @@ def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
 #: and R1's wall. The chain prices every cap, the V8 STOP and a follow-up off
 #: these; the tests recompute each figure from them.
 STUB_LADDER_S, STUB_PROBE_S, STUB_R1_S = 150, 10, 900
+#: The named bandwidth every planted R3 report says it was scored against, and
+#: its expert set: planted inputs of the bytes-rate bound, which the tests
+#: recompute from the reports rather than restate.
+STUB_BANDWIDTH_GBPS, STUB_EXPERT_SET_BYTES = 4000.0, 2_000_000_000
 
 STUB_BASE = r"""#!/bin/bash
 # a planted base interpreter: the card and its UUID are the test's, an arm's
@@ -1331,6 +1563,7 @@ def many(name):
 
 
 plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text()) if os.environ.get("STUB_PLAN") else {}
+STUB_BANDWIDTH_GBPS, STUB_EXPERT_SET_BYTES = @BANDWIDTH@, @EXPERT_SET@
 if "--probe-check" in args:
     # the NEW INTERFACE of private_weight_reference.py --probe-check: one RESULT
     # line, exit 0 on PASS and 3 otherwise, REFUSED 2 with no card or no vLLM
@@ -1382,6 +1615,10 @@ if exp == "private_weight_reference":
                               if reps else None),
                "align_probe": {"synthetic": False, "note": cfg.get("probe_note", ""),
                                "cells": [{"graph_calls": 16, "host_bound": False}] * 3},
+               "card": "nvidia_testcard", "bandwidth_gbps": STUB_BANDWIDTH_GBPS,
+               "memory_plan": {"per_copy_bytes": STUB_EXPERT_SET_BYTES},
+               "ladders": {"shared": {"points": [[n, 0.15 + (0.52 + 0.001 * seed) * n]
+                                                 for n in range(1, int(opt("--treads")) + 1)]}},
                "treads_table": table,
                "gates": [{"tag": t, "kind": k, "verdict": v} for k, t, v in gates]}
 else:
@@ -1420,7 +1657,9 @@ class Pod:
                              .replace("@R1@", str(STUB_R1_S)))
         self.arm = root / "py-arm"
         self.arm.write_text(STUB_ARM.replace("@PYTHON@", sys.executable)
-                            .replace("@ROOT@", str(ROOT)))
+                            .replace("@ROOT@", str(ROOT))
+                            .replace("@BANDWIDTH@", repr(STUB_BANDWIDTH_GBPS))
+                            .replace("@EXPERT_SET@", repr(STUB_EXPERT_SET_BYTES)))
         for f in (self.base, self.arm):
             f.chmod(0o755)
         self.set_plan({})
@@ -1559,7 +1798,7 @@ def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_pa
     pod, s, _first, after, second = two_passes
     assert second.returncode == 0, second.stdout[-3000:] + second.stderr[-1500:]
     assert [st for st, _ in pod.traced()][len(after["trace"]):] == ["r1-g1"], "only the owed arm"
-    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
+    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit", "reads_as"]
     keys = [("1", "0"), ("1", "1"), ("1", "2"), ("4", "0"), ("4", "1"), ("4", "2"), ("16", "0")]
     before = [dict(zip(header, r, strict=True)) for r in _rows_text(after["pairs"])]
     assert [(r["G"], r["seed"]) for r in before] == keys
@@ -1569,6 +1808,8 @@ def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_pa
     assert [(r["G"], r["seed"]) for r in now] == keys, "one row per run, however many passes"
     assert [(r["band"], r["eta_exit"]) for r in now] == [("RAW-STANDS", "DONE")] * 3 + [
         ("withheld:INVALID", "INVALID")] * 3 + [("RAW-STANDS", "DONE")]
+    assert [r["reads_as"] for r in now] == [H.READS_AS["RAW-STANDS"]] * 3 + [
+        H.READS_AS_UNRESOLVED] * 3 + [H.READS_AS["RAW-STANDS"]], "R1's word, read as"
     assert [r["rep_n"] for r in now] == ["none", "2", "3"] * 2 + ["none"]
     assert [r["joint"] for r in now] == ["none", "PASS", "PASS"] * 2 + ["none"]
     assert [r["exit_scope"] for r in now] == ["alone", "envelope", "envelope"] * 2 + ["alone"]
@@ -2048,6 +2289,40 @@ def test_a_dry_run_into_an_existing_session_is_refused(tmp_path, args, env):
     assert (s / "chain-logs" / "r3-g1-s0.log").read_text() == \
         "experiment  private_weight_reference / REAL\n"
     assert sorted(p.name for p in (tmp_path / "session").iterdir()) == [s.name]
+
+
+def test_every_rebuild_prints_the_bound_with_its_ceiling_and_what_the_ratio_reads_as(tmp_path):
+    """End to end: the ruler the session's calibrate wrote, each G's bound at
+    read_stream and at the pin rate off the reports on disk, and on each run's
+    console line what its ratio reads as once R1 has spoken."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    read, pin = 4400.0, 4800.0
+    ruler = _ruler(tmp_path / "calibration" / "run-1" / f"measured_{CARD}.yaml",
+                   named=STUB_BANDWIDTH_GBPS, read=read, pin=pin)
+    (s / "logs").mkdir()
+    (s / "logs" / "calibrate.log").write_text(f"[calibrate] wrote {ruler}\n")
+    pod.set_plan({"r1-g1": {"eta": [0.55, 0.70], "C1": "FAIL"}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0 1")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    line = next(ln for ln in got.stdout.splitlines() if ln.strip().startswith("G=1 seed 1"))
+    assert line.endswith(f"reads as: {H.READS_AS['CLOCK-CARRIES']}"), line
+    seed0 = next(ln for ln in got.stdout.splitlines() if ln.strip().startswith("G=1 seed 0"))
+    assert seed0.endswith(f"reads as: {H.READS_AS_UNRESOLVED}"), "R1 had not run yet"
+    tops = []
+    for st in ("r3-g1-s0", "r3-g1-s1"):
+        rep = json.loads((pod.results / "private_weight_reference" / f"stub-{st}-{s.name}"
+                          / "report.json").read_text())
+        tops.append(max(rep["ladders"]["shared"]["points"]))
+    n, t = tops[0][0], statistics.mean(p[1] for p in tops)
+    want = [H.bytes_rate_bound(t, n, STUB_EXPERT_SET_BYTES, c) for c in (read, pin)]
+    flat = " ".join(got.stdout.split())
+    assert f"bytes-rate bound, at the ceilings of {ruler}" in flat
+    assert (f"G=1 alpha <= {want[0]:.4f} at read_stream {read:.1f} GB/s, <= {want[1]:.4f} at the"
+            f" pin rate {pin:.1f} GB/s") in flat
+    row = dict(zip(H.BY_G_HEADER, _rows(s / "PAIRS-by-G.tsv")[0], strict=True))
+    assert (row["reads_as"], row["bound_pin_rate"]) == (H.READS_AS["CLOCK-CARRIES"],
+                                                        f"{want[1]:.4f}")
 
 
 # --------------------------------------------------------------------------

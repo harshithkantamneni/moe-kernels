@@ -586,13 +586,19 @@ It runs, in order:
    into the real session.
 
 **The regime word per G**, read off R1's interval through the arm's own
-`band_of`: RAW-STANDS (wholly below 0.25: the ratio beside it is a re-read
-fraction); UNREGISTERED-GAP (wholly inside [0.25, 0.40]: neither registered
-consequence is licensed, so quote the interval and no word); CLOCK-CARRIES
-(wholly above 0.40: a time ratio, a blend of traffic and clock); STRADDLES
-(the interval crosses an edge: no word); `withheld:<EXIT>` (R1's page exited
-INVALID, REFUSED, ERROR or unscored: no word is read off a page its own gates
-did not stand behind); `unmeasured` (no R1 report for that G yet). Session
+`band_of`, and what the ratio beside it reads as, which both tables print as
+`reads_as` (the rule session 5's findings support): RAW-STANDS (wholly below
+0.25: the ratio beside it is a re-read fraction, the one word that reads
+`re-read fraction`); UNREGISTERED-GAP (wholly inside [0.25, 0.40]: neither
+registered consequence is licensed, so quote the interval and no word;
+`unresolved`); CLOCK-CARRIES (wholly above 0.40: the ratio is not alpha. In
+session 5 at G >= 4 the shared arm sat on a per-tile floor that scales with
+the SM clock, any alpha in [0, 0.60] fit it equally, and the bytes-rate bound
+below still proves real reuse there: `blend (traffic and a clock-scaled
+on-chip floor): not alpha`); STRADDLES (the interval crosses an edge: no word;
+`unresolved`); `withheld:<EXIT>` (R1's page exited INVALID, REFUSED, ERROR or
+unscored: no word is read off a page its own gates did not stand behind;
+`unresolved`); `unmeasured` (no R1 report for that G yet; `unresolved`). Session
 4's G=16 claim over treads 2 and deeper read a half-width of 0.084 over its
 states 1.0, 0.5 and 0.25 (0.092 over all four; the all-tread reading's was
 0.076) against R1's 0.075 target, half the gap band's width. Session 5 ran R1
@@ -630,10 +636,25 @@ that formed a ratio, read together by R3's own cross-run machinery whatever
 order the seeds ran in (n, seeds, mean, sd, envelope, joint verdict, any seed
 inside the envelope whose own page exited INVALID), beside R1's columns. Quote
 PAIRS-by-G.tsv: PAIRS.tsv's joint columns are what each page said when it
-ran, over the seeds before it. `$SESSION/PAIRS-fixed.tsv` holds the
+ran, over the seeds before it. Both tables carry `reads_as`, what the ratio
+can be read as off R1's word (above). PAIRS-by-G.tsv also carries the
+bytes-rate bound, the one bound on alpha that needs no private arm (session
+5's findings, 3.6): alpha <= (t x C / W - 1) / (n - 1), with t the shared
+arm's time at its top tread n off the reports' own ladders (the mean over the
+G's runs), W the expert set off their memory plans, and C the ruler's
+`read_stream` and its pin rate. The shared arm reads W once and alpha x W for
+each later M-tile, and no faster than C; 1 or above excludes nothing. The
+ruler is the yaml calibrate wrote in this session, held to the bandwidth the
+reports were scored against; after exfil it is the tracked yaml, and
+`ruler=<yaml>` on `pairs-table` names another. Every rebuild prints each G's
+bound with the ceilings it used. On session 5's pages, read on the laptop
+with `ruler=` its published calibration yaml, it gives 0.841-0.842 at
+read_stream and 0.886-0.888 at the pin rate at G = 4, 16 and 64, and above 1
+at G=1, where a full re-read fits. `$SESSION/PAIRS-fixed.tsv` holds the
 coordinates every row shares (model, tile, pinned config, treads, repeats,
-duty) and where each was read. Logs are under `$SESSION/chain-logs/`, and a
-V7 FAIL's follow-up under `$SESSION/followup-g<G>.txt`.
+duty) and where each was read, and the bound's inputs (the expert set, the
+ruler, its two ceilings). Logs are under `$SESSION/chain-logs/`, and a V7
+FAIL's follow-up under `$SESSION/followup-g<G>.txt`.
 
 **The price.** The laptop dry run of 2026-09-23 prices about 193 min of arms
 (four R1 runs at 1124 s each at duty 1.0, 0.5, 0.25, which session 5's pod ran

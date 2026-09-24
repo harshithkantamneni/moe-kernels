@@ -1,8 +1,9 @@
 #!/bin/bash
-# The alpha(G) matrix session: the chain that produces the re-read-fraction
-# table the analytical model needs, with both ratio arms held OFF the power
-# cap, every geometry's clock elasticity measured beside it, and every G run
-# as a seed triple scored jointly.
+# The alpha(G) matrix session: the chain that produces the shared-over-private
+# ratio table the analytical model needs, with both ratio arms held OFF the
+# power cap, every geometry's clock elasticity measured beside it (the tables
+# say per G whether a ratio reads as a re-read fraction at all), and every G
+# run as a seed triple scored jointly.
 #
 #   bash scripts/alpha_g_chain.sh --dry-run          # plan and price, nothing measured
 #   bash scripts/alpha_g_chain.sh                    # a new chain session on this card
@@ -164,18 +165,26 @@
 # rescues a stall a signal can reach; a process parked inside the volume's
 # FUSE request cannot be signalled, by this or by anything.
 #
-# THE REGIME WORD, per G, off R1's interval through the arm's own band_of:
+# THE REGIME WORD, per G, off R1's interval through the arm's own band_of, and
+# what the ratio beside it reads as, which both tables print as `reads_as` (the
+# rule H200 session 5's findings support):
 #   RAW-STANDS        wholly below 0.25: the per-tile cost is a traffic
 #                     quantity, and the ratio beside it is a re-read fraction.
+#                     The one word that reads `re-read fraction`.
 #   UNREGISTERED-GAP  wholly inside [0.25, 0.40]: NEITHER registered
 #                     consequence is licensed; the ratio is quoted with the
-#                     interval and no word.
-#   CLOCK-CARRIES     wholly above 0.40: the ratio is a time ratio, a blend of
-#                     traffic and clock, and the table says so.
-#   STRADDLES         the interval crosses an edge: no word.
+#                     interval and no word. Reads `unresolved`.
+#   CLOCK-CARRIES     wholly above 0.40: the ratio is NOT alpha. Session 5 at
+#                     G >= 4: the shared arm sits on a per-tile floor that
+#                     scales with the SM clock, any alpha in [0, 0.60] fits it
+#                     equally, and the bytes-rate bound (below) still proves
+#                     real reuse. Reads `blend (traffic and a clock-scaled
+#                     on-chip floor): not alpha`.
+#   STRADDLES         the interval crosses an edge: no word. Reads `unresolved`.
 #   withheld:<EXIT>   R1's page exited INVALID, REFUSED, ERROR or unscored: no
 #                     word is read off a page its own gates did not stand behind.
-#   unmeasured        no R1 report for that G on disk yet.
+#                     Reads `unresolved`.
+#   unmeasured        no R1 report for that G on disk yet. Reads `unresolved`.
 # R1'S RESOLUTION. Session 4's G=16 claim over treads 2 and deeper read a
 # half-width of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four;
 # the all-tread reading's was 0.076) against R1's 0.075 target, half the gap
@@ -207,19 +216,28 @@
 # seeds), duty, run id; the joint reading on that run's page (n, spread, sd,
 # envelope, verdict), only where the run formed a ratio and is in it; each
 # arm's median clock over the ladder and the count of LEVEL LOW (arm, tread)
-# cells; R1's eta, interval, word and exit. $SESSION/PAIRS-by-G.tsv, one row
-# per G, every seed of it that formed a ratio read together by R3's own
-# cross-run machinery whatever order they ran in (n, mean, sd, envelope,
-# joint verdict, any INVALID run inside the envelope) beside R1's columns: the
-# per-G value. $SESSION/PAIRS-fixed.tsv holds the coordinates every row shares
-# (model, tile, pinned config, treads, repeats, duty) and where each was read.
-# $SESSION/DEVICE and $SESSION/R3_DUTY, logs under $SESSION/chain-logs/, the
-# driver's own ARMS.tsv beside them, and a follow-up's commands, when a V7
-# FAIL named one, in $SESSION/followup-g<G>.txt. --resume skips every step
-# whose newest row is latched (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED,
-# ERROR, UNKNOWN and SKIPPED ones, with three exceptions: a preflight
-# self-test and the probe check run again until they are DONE, and the end
-# suite is not bought again once it ran to its tally.
+# cells; R1's eta, interval, word and exit; and `reads_as`, what the ratio can
+# be read as off that word (THE REGIME WORD, above). $SESSION/PAIRS-by-G.tsv,
+# one row per G, every seed of it that formed a ratio read together by R3's
+# own cross-run machinery whatever order they ran in (n, mean, sd, envelope,
+# joint verdict, any INVALID run inside the envelope) beside R1's columns and
+# `reads_as`: the per-G value. It also carries THE BYTES-RATE BOUND, the one
+# bound on alpha that needs no private arm (session 5's findings, 3.6):
+# alpha <= (t x C / W - 1) / (n - 1), t the shared arm's time at its top tread
+# n off the reports' own ladders (the mean over the G's runs), W the expert
+# set off their memory plans, and C the ruler's read_stream and its pin rate,
+# off the yaml calibrate wrote in this session (the tracked one after exfil),
+# held to the bandwidth the reports were scored against; each rebuild prints
+# it per G with the ceiling it used. $SESSION/PAIRS-fixed.tsv holds the
+# coordinates every row shares (model, tile, pinned config, treads, repeats,
+# duty) and where each was read, and the bound's inputs. $SESSION/DEVICE and
+# $SESSION/R3_DUTY, logs under $SESSION/chain-logs/, the driver's own ARMS.tsv
+# beside them, and a follow-up's commands, when a V7 FAIL named one, in
+# $SESSION/followup-g<G>.txt. --resume skips every step whose newest row is
+# latched (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED, ERROR, UNKNOWN and
+# SKIPPED ones, with three exceptions: a preflight self-test and the probe
+# check run again until they are DONE, and the end suite is not bought again
+# once it ran to its tally.
 #
 # THE THREE HABITS THIS REPOSITORY HAS BEEN BURNED BY, and how this file
 # avoids them: no `set -e` (a failed arm is a ledger row, not the end of a
@@ -809,7 +827,9 @@ seed0_v7() {
 }
 
 #: REWRITE PAIRS.tsv, PAIRS-by-G.tsv, PAIRS-fixed.tsv and PAIRS-README.txt from
-#: the reports on disk. Idempotent.
+#: the reports on disk. Idempotent. The helper's first line is the row count;
+#: the lines after it are the ruler the bytes-rate bound is read at and one
+#: line per G, the bound with the ceiling it used and what the ratio reads as.
 rebuild_pairs() {
   local out rc=0
   out="$("$PY_BASE" "$HELPERS" pairs-table "$SESSION" "$RESULTS" "$G_LADDER" "$SEEDS" \
@@ -818,12 +838,14 @@ rebuild_pairs() {
     "r1_treads=--treads $R1_TREADS" "r1_repeats=--repeats $R1_REPEATS" "r1_duty=--duty $R1_DUTY" \
     2>&1)" || rc=$?
   if (( rc == 0 )); then
-    echo "pairs     $SESSION/PAIRS.tsv ($out, rebuilt from the reports); per G, every seed read"
+    echo "pairs     $SESSION/PAIRS.tsv (${out%%$'\n'*}, rebuilt from the reports); per G, every seed read"
     echo "          together, in PAIRS-by-G.tsv; fixed coordinates in PAIRS-fixed.tsv; the legend"
     echo "          in PAIRS-README.txt"
+    [[ "$out" == *$'\n'* ]] && printf '%s\n' "${out#*$'\n'}" | sed 's/^/          /'
   else
     echo "pairs     NOT rebuilt (exit $rc): $out"
   fi
+  return 0
 }
 
 #: THE DIRECTORY TO RESUME: the newest chain session for this card holding a
@@ -1342,10 +1364,11 @@ r3_step() {   # $1 G, $2 seed
   arm_step "$step" "$LOGS/$step.log" "$STEP_CAP" $(r3_cmd "$g" "$seed" 0 ${paired[@]+"${paired[@]}"}) || true
   rep="$(report_of "$LOGS/$step.log")"
   if [[ -n "$rep" ]]; then
-    local rg rseed ratio lo hi word scope duty rid rest e elo ehi band eexit
+    local rg rseed ratio lo hi word scope duty rid rest e elo ehi band eexit ra
     IFS=$'\t' read -r rg rseed ratio lo hi word scope duty rid rest < <("$PY_BASE" "$HELPERS" reading "$rep")
     IFS=$'\t' read -r e elo ehi band eexit < <("$PY_BASE" "$HELPERS" eta-for "$SESSION" "$RESULTS" "$g")
-    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word (C1 $scope)  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)"
+    ra="$("$PY_BASE" "$HELPERS" reads-as "$band" "$eexit" 2>/dev/null)" || ra="unresolved"
+    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word (C1 $scope)  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)  reads as: ${ra:-unresolved}"
   else
     echo "    no report.json for $step (see $LOGS/$step.log)"
   fi
@@ -1429,7 +1452,7 @@ fi
 # --------------------------------------------------------------------------
 # 5. the ratio at seed 0 at every G; the pilot's V8 read first
 # --------------------------------------------------------------------------
-echo; echo "== the re-read fraction, off the cap, seed $FIRST_SEED at every G (the pilot: $PILOT)"
+echo; echo "== the ratio, shared over private, off the cap, seed $FIRST_SEED at every G (the pilot: $PILOT)"
 for g in $G_LADDER; do
   r3_step "$g" "$FIRST_SEED"
   if [[ "$g" == "$FIRST_G" ]] && ! (( DRY )); then
@@ -1461,7 +1484,7 @@ done
 # --------------------------------------------------------------------------
 # 7. the later seeds, seed-major, each scored with the earlier ones of its G
 # --------------------------------------------------------------------------
-echo; echo "== the re-read fraction, the later seeds, scored with the earlier ones"
+echo; echo "== the ratio, shared over private, the later seeds, scored with the earlier ones"
 for seed in $SEEDS; do
   [[ "$seed" == "$FIRST_SEED" ]] && continue
   for g in $G_LADDER; do
