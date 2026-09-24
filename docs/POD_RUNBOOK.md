@@ -519,11 +519,15 @@ It runs, in order:
    payload, `COUNTERS.json`. When ncu is found off PATH, `COUNTERS` says so:
    the driver's `counter_plan` and `dram_counter_route.py --run` look on PATH
    only. A dry run prices it at the driver's own `arm_minutes` for
-   `counter_plan` and writes a SKIPPED row. RunPod's record: on 2026-09-15 one
-   rented H200 refused the read with `ERR_NVGPUCTRPERM`, on a pod holding
-   neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`; session 4's probe (2026-09-21)
-   read `no ncu on PATH` and looked nowhere else; session 5 attempted none.
-   One refusal on one pod is not a fact about the platform.
+   `counter_plan` and writes a SKIPPED row. RunPod's record, as this repo
+   commits it: two rented H200s attempted a counter read and both were
+   refused with `ERR_NVGPUCTRPERM`, on 2026-08-25 (`ncu` over the harness's
+   own CLI, `profiles/q2_kernel_names.txt`) and on 2026-09-15, on a pod
+   holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`; the 2026-09-09 and
+   2026-09-10 pods were never asked (their probe profiled `/bin/true`);
+   session 4's probe (2026-09-21) read `no ncu on PATH` and looked nowhere
+   else; session 5 attempted none. Two refused pods are a record, not a fact
+   about the platform: the probe answers for the pod it runs on.
 4. `tests/test_gpu.py` on the card, from PY_BASE: the timing and clock
    primitives both arms stand on. It does NOT cover the graph probe R3's V8
    stands on: that one test imports vLLM and skips from PY_BASE, which is why
@@ -783,7 +787,7 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P7 | `entitled_ridge` still refuses 5 of the 14 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. The count was "2 of the 10" until 2026-09-03; the three ladder arms published since carry no `measured.yaml` and are refused by construction, and `tests/test_docs.py` checks the number. The arms are the directories git TRACKS: an untracked one left on the pod's volume by an earlier publish is not counted. Session 5's checkout carried one (`2026-09-15-nvidia_h200-session3`, which that suite's census tests counted as an arm); P7 did not run there, and with it planted on a laptop the old directory listing reads it as a new refusal and FAILs. |
 | P8 | the weights step 7 pulls are reachable | Asks whether the repos in `moe/spec.py` for `mixtral-8x7b` and `deepseek-v2-lite` resolve, using whatever credentials the box has. It used to check for a TOKEN and justify it with "Mixtral is gated" -- Mistral ungated that repo (apache-2.0, `gated=False`, `config.json` downloads anonymously), so the gate demanded a credential nothing needed and gave a reason that had stopped being true. A token still helps: HF rate-limits anonymous transfers and step 0 pulls 93.4 GB, so its absence is reported as an advisory rather than a failure. |
 | P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. When this row was written zero `.png` files were tracked under `results/published/`; the rule is anchored now and 75 `.png` files are tracked (`git ls-files 'results/published/**/*.png'`, checked by `tests/test_docs.py`). **FATAL.** |
-| P10 | which profiler exists | informational: whether `ncu` and `nsys` are on PATH. Whether `ncu` can READ a counter is the pod's to answer, not the platform's: one rented H200 refused with `ERR_NVGPUCTRPERM` (2026-09-15), session 4's probe found no ncu on PATH, and the alpha(G) chain's counter probe asks on every pass (the chain's section above). `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
+| P10 | which profiler exists | informational: whether `ncu` and `nsys` are on PATH. Whether `ncu` can READ a counter is the pod's to answer, not the platform's: two rented H200s refused with `ERR_NVGPUCTRPERM` (2026-08-25, `profiles/q2_kernel_names.txt`, and 2026-09-15), session 4's probe found no ncu on PATH, and the alpha(G) chain's counter probe asks on every pass (the chain's section above). `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
 | P11a | the step scripts exist and parse | several are written concurrently by other people. |
 | P11b | those scripts accept the flags this session passes | a renamed flag should cost a line here, not an argparse error forty minutes in. |
 | P11c | the suite interpreter carries no vLLM | soft: the tests plant every refusal door and hide the card from every child they spawn, so the suite runs from the venv WITHOUT vLLM (P12 does); an interpreter that imports vllm would let an unplanted bare invocation MEASURE, and the pod's own session 4 saw a `--run` go past its door |
@@ -801,10 +805,10 @@ going to run and there is nothing for its answer to multiply.
 ### P-nsys, and why it moved to the front
 
 **Every byte figure in this study is arithmetic.** Nothing here has ever counted a
-DRAM transaction. No `ncu` counter has been read on a rented pod: one H200
-refused with `ERR_NVGPUCTRPERM` (2026-09-15) and session 4's image had no ncu on
-PATH, so compulsory-traffic bytes are computed from the shapes and divided into a
-measured bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
+DRAM transaction. No `ncu` counter has been read on a rented pod: two H200s
+refused with `ERR_NVGPUCTRPERM` (2026-08-25 and 2026-09-15) and session 4's image
+had no ncu on PATH, so compulsory-traffic bytes are computed from the shapes and
+divided into a measured bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
 rather than instrumenting, and whether it works on a given pod is an open
 question this project has never answered.
 
@@ -1517,7 +1521,7 @@ crashed run.
 | "Using ..." config line missing | vLLM logs it once per `(E,N,dtype,device)` via `info_once` | make sure the cell is the first `fused_experts` call in the process, and that info-level logging is on |
 | every efficiency column is empty | no calibration resolved for this device | `python scripts/calibrate_hardware.py`; the file resolves by device NAME |
 | sweep says the calibration is foreign | `measured_<device>.yaml` was overwritten between sweep and publish | restore `$SESSION/calibration/`, then publish |
-| `ncu` says ERR_NVGPUCTRPERM | the host module flag is not set, which a container tenant cannot set for itself. This row said "expected" until 2026-09-10, when the probe read OPEN on a RunPod H200; **that reading is retracted (2026-09-15)** because the probe profiled `/bin/true` and so never attempted a counter read, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` on a pod holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`. That one refusal on one pod is the whole record (session 4's probe found no ncu on PATH, and session 5 attempted none), so read the probe rather than expect either answer; and the host flag is only half of it: ask the provider for `--cap-add=PERFMON` first, `--cap-add=SYS_ADMIN` second | the alpha(G) chain runs this probe as its `counter-probe` step, after the preconditions and on every pass, and looks for ncu off PATH too (its `COUNTERS` file). By hand, run `python scripts/dram_counter_route.py --probe` FIRST: it launches one real CUDA kernel under ncu, distinguishes the four failures that look identical from a log, and costs about fifteen seconds (the probe child's torch import). If it reads BLOCKED, use `nsys`, the measured ceilings and the L2 flush axis (`docs/RUNPOD.md`); if it reads OPEN, the two `counter-*` arms are bookable, `counter-n32-m64` and `counter-n128-m64`, and `counter_contrast` reads them. The arm named `counter` has not existed since 2026-09-10; the identical sentence 200 lines above was updated and this one was not. |
+| `ncu` says ERR_NVGPUCTRPERM | the host module flag is not set, which a container tenant cannot set for itself. This row said "expected" until 2026-09-10, when the probe read OPEN on a RunPod H200; **that reading is retracted (2026-09-15)** because the probe profiled `/bin/true` and so never attempted a counter read, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` on a pod holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`. The committed record is two refusals on two rentals, 2026-08-25 (`profiles/q2_kernel_names.txt`, `ncu` over the harness's own CLI) and that one; the 2026-09-09 and 2026-09-10 pods were never asked, session 4's probe found no ncu on PATH, and session 5 attempted none. Two pods are not the platform, so read the probe rather than expect either answer; and the host flag is only half of it: ask the provider for `--cap-add=PERFMON` first, `--cap-add=SYS_ADMIN` second | the alpha(G) chain runs this probe as its `counter-probe` step, after the preconditions and on every pass, and looks for ncu off PATH too (its `COUNTERS` file). By hand, run `python scripts/dram_counter_route.py --probe` FIRST: it launches one real CUDA kernel under ncu, distinguishes the four failures that look identical from a log, and costs about fifteen seconds (the probe child's torch import). If it reads BLOCKED, use `nsys`, the measured ceilings and the L2 flush axis (`docs/RUNPOD.md`); if it reads OPEN, the two `counter-*` arms are bookable, `counter-n32-m64` and `counter-n128-m64`, and `counter_contrast` reads them. The arm named `counter` has not existed since 2026-09-10; the identical sentence 200 lines above was updated and this one was not. |
 | override_config appears to do nothing | the hook moved between vLLM versions | P4 catches this. `try_get_optimal_moe_config` reads it via `get_config()`, so it exists under some name |
 | a step crashed on `--out` / `--out-dir` | a step script renamed a flag | P11b catches this. Fix the invocation in `scripts/pod_session.sh` |
 | the whole script is a bash syntax error | an apostrophe inside a heredoc that sits inside `$( )` | bash 3.2 tracks quotes through it, and reports the error hundreds of lines away. No apostrophes in those blocks. |

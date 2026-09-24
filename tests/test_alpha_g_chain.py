@@ -32,6 +32,7 @@ when it refuses).
 """
 from __future__ import annotations
 
+import csv
 import json
 import math
 import os
@@ -697,8 +698,8 @@ def test_the_help_says_what_each_regime_word_reads_as_and_the_bound():
 
 def test_the_help_records_the_counter_probe_and_runpods_counter_history():
     """The counter probe's place and rules, where it looks (NCU_SEARCH's own
-    default, not a second copy), and RunPod's record: one ERR_NVGPUCTRPERM
-    refusal on one pod, and session 4's probe finding no ncu on PATH."""
+    default, not a second copy), and RunPod's record: the ERR_NVGPUCTRPERM
+    refusals this repo commits, and session 4's probe finding no ncu on PATH."""
     got = subprocess.run(["bash", str(CHAIN), "--help"], capture_output=True, text=True,
                          timeout=60, env=chain_env(REPO=str(ROOT)))
     assert "counter-probe" in got.stdout and "ERR_NVGPUCTRPERM" in got.stdout, "--help prints it"
@@ -711,17 +712,66 @@ def test_the_help_records_the_counter_probe_and_runpods_counter_history():
     assert "scripts/dram_counter_route.py --probe, the driver's counter_plan probe" in flat
     for word in ("OPEN", "BLOCKED", "ABSENT", "UNTESTED", "ERROR"):
         assert word in runs, word
-    for fact in ("on 2026-09-15 one rented H200 refused the read with ERR_NVGPUCTRPERM",
-                 "neither CAP_SYS_ADMIN nor CAP_PERFMON",
+    for fact in ("two rented H200s attempted a counter read and both were refused with"
+                 " ERR_NVGPUCTRPERM", "and on 2026-09-15, on a pod holding"
+                 " neither CAP_SYS_ADMIN nor CAP_PERFMON",
+                 "the 2026-09-09 and 2026-09-10 pods were never asked",
                  "in session 4 (2026-09-21) ncu was absent from the image as far as the probe"
                  " looked, which was PATH alone",
                  '"no ncu on PATH"', "gaps-nvidia_h200-20260921T235000Z/counter_route.json",
-                 "session 5 attempted none", "One refusal on one pod is not a fact about the"
-                 " platform"):
+                 "session 5 attempted none", "Two refused pods are a record, not a fact about"
+                 " the platform"):
         assert fact in flat, fact
     assert "COUNTERS.json" in flat and "$SESSION/COUNTERS" in flat
     assert "the counter probe runs on every pass (its INFO row is never latched)" in flat
     assert "The counter probe runs under the same rule over its price" in flat
+
+
+def _committed_refusals() -> list[tuple[str, str]]:
+    """Every ERR_NVGPUCTRPERM refusal a file under profiles/ commits, as (the
+    file, the date its run's own rows carry): read off the log and the rows
+    its run wrote, never typed. The 2026-09-15 refusal is committed only as
+    prose (docs/FINDINGS.md's retraction), so it is not in this list."""
+    found = []
+    for log in sorted((ROOT / "profiles").glob("*.txt")):
+        text = log.read_text(errors="replace")
+        if "ERR_NVGPUCTRPERM" not in text:
+            continue
+        rows = re.search(r"wrote \d+ rows -> (\S+\.csv)", text)
+        assert rows, f"{log.name} names no rows file to date it by"
+        with open(ROOT / rows.group(1), newline="") as fh:
+            row = next(csv.DictReader(fh))
+        assert "H200" in row["gpu_name"], (log.name, row["gpu_name"])
+        found.append((str(log.relative_to(ROOT)), row["timestamp"][:10]))
+    return found
+
+
+def test_runpods_counter_record_counts_every_refusal_this_repo_commits():
+    """The chain's header (its --help) and every runbook passage that states
+    RunPod's ncu record name each refusal a profile log commits, by its file
+    and by its run's own date, and none calls the record one refusal on one
+    pod: profiles/q2_kernel_names.txt holds an ERR_NVGPUCTRPERM from ncu over
+    the harness's own CLI on an H200, three weeks before 2026-09-15."""
+    refusals = _committed_refusals()
+    assert refusals, "profiles/ commits the earlier refusal this record counts"
+    header = " ".join(_header_prose().split()).replace("/ ", "/")
+    runbook = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
+    chain = " ".join(_runbook_chain_section().split())
+    p10 = runbook[runbook.index("| P10 |"):runbook.index("| P11a |")]
+    pnsys = runbook[runbook.index("### P-nsys, and why it moved to the front"):]
+    pnsys = pnsys[:pnsys.index("question this project has never answered")]
+    start = runbook.index("| `ncu` says ERR_NVGPUCTRPERM |")
+    playbook = runbook[start:runbook.index("| override_config appears", start)]
+    for name, text in (("header", header), ("chain section", chain), ("P10", p10),
+                       ("P-nsys", pnsys), ("playbook", playbook)):
+        for path, day in refusals:
+            assert day in text, (name, day)
+            if name != "P-nsys":
+                assert path in text, (name, path)
+        assert "2026-09-15" in text, name
+        for stale in ("One refusal on one pod", "one refusal on one pod",
+                      "one H200 refused", "one rented H200 refused"):
+            assert stale not in text, (name, stale)
 
 
 def test_the_runbook_states_the_reads_as_rule_and_the_bound():

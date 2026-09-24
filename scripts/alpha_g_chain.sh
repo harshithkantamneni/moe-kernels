@@ -93,16 +93,21 @@
 #                  every measuring pass (a counter route is a property of the
 #                  pod), priced in minutes at the driver's own arm_minutes for
 #                  counter_plan and capped like an arm; a dry run prices it and
-#                  writes a SKIPPED row, and times nothing. RunPod's record:
-#                  on 2026-09-15 one rented H200 refused the read with
-#                  ERR_NVGPUCTRPERM, on a pod holding neither CAP_SYS_ADMIN nor
-#                  CAP_PERFMON; in session 4 (2026-09-21) ncu was absent from
-#                  the image as far as the probe looked, which was PATH alone
-#                  (REFUSE, "no ncu on PATH": results/published/
+#                  writes a SKIPPED row, and times nothing. RunPod's record,
+#                  as this repo commits it: two rented H200s attempted a
+#                  counter read and both were refused with ERR_NVGPUCTRPERM,
+#                  on 2026-08-25 (ncu over the harness's own CLI:
+#                  profiles/q2_kernel_names.txt) and on 2026-09-15, on a pod
+#                  holding neither CAP_SYS_ADMIN nor CAP_PERFMON; the
+#                  2026-09-09 and 2026-09-10 pods were never asked (their
+#                  probe profiled /bin/true); in session 4 (2026-09-21) ncu was
+#                  absent from the image as far as the probe looked, which was
+#                  PATH alone (REFUSE, "no ncu on PATH": results/published/
 #                  2026-09-21-nvidia_h200-session4/session/
 #                  gaps-nvidia_h200-20260921T235000Z/counter_route.json, on
-#                  pod-h200-session4); session 5 attempted none. One refusal
-#                  on one pod is not a fact about the platform.
+#                  pod-h200-session4); session 5 attempted none. Two refused
+#                  pods are a record, not a fact about the platform: the probe
+#                  answers for the pod it runs on.
 #   gpu-tests      tests/test_gpu.py on this card, from PY_BASE (the venv
 #                  WITHOUT vLLM): the timing and clock primitives both arms
 #                  stand on, on the card that will time them, in minutes. It
