@@ -1,8 +1,9 @@
 #!/bin/bash
-# The alpha(G) matrix session: the chain that produces the re-read-fraction
-# table the analytical model needs, with both ratio arms held OFF the power
-# cap, every geometry's clock elasticity measured beside it, and every G run
-# as a seed triple scored jointly.
+# The alpha(G) matrix session: the chain that produces the shared-over-private
+# ratio table the analytical model needs, with both ratio arms held OFF the
+# power cap, every geometry's clock elasticity measured beside it (the tables
+# say per G whether a ratio reads as a re-read fraction at all), and every G
+# run as a seed triple scored jointly.
 #
 #   bash scripts/alpha_g_chain.sh --dry-run          # plan and price, nothing measured
 #   bash scripts/alpha_g_chain.sh                    # a new chain session on this card
@@ -74,6 +75,39 @@
 #                  asks whether MOE_FORCE_TILE reaches the kernel, and neither
 #                  arm below reads MOE_FORCE_TILE. Both pin through vLLM's
 #                  override_config.
+#   counter-probe  INFORMATIONAL: NEVER GATED AND NEVER LATCHED. Can this pod
+#                  read a DRAM counter: it decides whether the one route to
+#                  alpha at G >= 2 at this tile (ncu bytes, section 7 of
+#                  session 5's findings) can happen on RunPod at all. It
+#                  finds ncu on PATH, then at NCU_SEARCH's globs
+#                  (/usr/local/cuda*/bin/ncu and
+#                  /opt/nvidia/nsight-compute/*/ncu by default), and runs
+#                  scripts/dram_counter_route.py --probe, the driver's
+#                  counter_plan probe, from PY_BASE with the first one's
+#                  directory first on PATH: one real kernel under ncu, and
+#                  dram__bytes_read.sum read back or refused. Its row's state
+#                  is INFO; the verdict (OPEN, BLOCKED, ABSENT, UNTESTED or
+#                  ERROR), ncu's path and version, the exact error and the two
+#                  capabilities go into the note and $SESSION/COUNTERS, beside
+#                  the probe's own payload, $SESSION/COUNTERS.json. It runs on
+#                  every measuring pass (a counter route is a property of the
+#                  pod), priced in minutes at the driver's own arm_minutes for
+#                  counter_plan and capped like an arm; a dry run prices it and
+#                  writes a SKIPPED row, and times nothing. RunPod's record,
+#                  as this repo commits it: two rented H200s attempted a
+#                  counter read and both were refused with ERR_NVGPUCTRPERM,
+#                  on 2026-08-25 (ncu over the harness's own CLI:
+#                  profiles/q2_kernel_names.txt) and on 2026-09-15, on a pod
+#                  holding neither CAP_SYS_ADMIN nor CAP_PERFMON; the
+#                  2026-09-09 and 2026-09-10 pods were never asked (their
+#                  probe profiled /bin/true); in session 4 (2026-09-21) ncu was
+#                  absent from the image as far as the probe looked, which was
+#                  PATH alone (REFUSE, "no ncu on PATH": results/published/
+#                  2026-09-21-nvidia_h200-session4/session/
+#                  gaps-nvidia_h200-20260921T235000Z/counter_route.json, on
+#                  pod-h200-session4); session 5 attempted none. Two refused
+#                  pods are a record, not a fact about the platform: the probe
+#                  answers for the pod it runs on.
 #   gpu-tests      tests/test_gpu.py on this card, from PY_BASE (the venv
 #                  WITHOUT vLLM): the timing and clock primitives both arms
 #                  stand on, on the card that will time them, in minutes. It
@@ -158,24 +192,34 @@
 # --kill-after=60`, the pytest steps' wrapper, at a cap off its own price:
 # max(3 x the arm's own --dry-run figure, 30 min), the plan run again just
 # before the step, and for probe-check, which prints no plan, the same rule
-# over its documented constant. A timed-out arm is ERROR with TIMED OUT in its
-# note, not latched: both arms resume per cell, so --resume re-runs it. A box
-# without timeout runs them uncapped, as it runs the pytest steps. A cap
-# rescues a stall a signal can reach; a process parked inside the volume's
-# FUSE request cannot be signalled, by this or by anything.
+# over its documented constant. The counter probe runs under the same rule
+# over its price, the driver's booking for counter_plan, and a timeout there is
+# an INFO row whose note reads ERROR: TIMED OUT. A timed-out arm is ERROR with
+# TIMED OUT in its note, not latched: both arms resume per cell, so --resume
+# re-runs it. A box without timeout runs them uncapped, as it runs the pytest
+# steps. A cap rescues a stall a signal can reach; a process parked inside the
+# volume's FUSE request cannot be signalled, by this or by anything.
 #
-# THE REGIME WORD, per G, off R1's interval through the arm's own band_of:
+# THE REGIME WORD, per G, off R1's interval through the arm's own band_of, and
+# what the ratio beside it reads as, which both tables print as `reads_as` (the
+# rule H200 session 5's findings support):
 #   RAW-STANDS        wholly below 0.25: the per-tile cost is a traffic
 #                     quantity, and the ratio beside it is a re-read fraction.
+#                     The one word that reads `re-read fraction`.
 #   UNREGISTERED-GAP  wholly inside [0.25, 0.40]: NEITHER registered
 #                     consequence is licensed; the ratio is quoted with the
-#                     interval and no word.
-#   CLOCK-CARRIES     wholly above 0.40: the ratio is a time ratio, a blend of
-#                     traffic and clock, and the table says so.
-#   STRADDLES         the interval crosses an edge: no word.
+#                     interval and no word. Reads `unresolved`.
+#   CLOCK-CARRIES     wholly above 0.40: the ratio is NOT alpha. Session 5 at
+#                     G >= 4: the shared arm sits on a per-tile floor that
+#                     scales with the SM clock, any alpha in [0, 0.60] fits it
+#                     equally, and the bytes-rate bound (below) still proves
+#                     real reuse. Reads `blend (traffic and a clock-scaled
+#                     on-chip floor): not alpha`.
+#   STRADDLES         the interval crosses an edge: no word. Reads `unresolved`.
 #   withheld:<EXIT>   R1's page exited INVALID, REFUSED, ERROR or unscored: no
 #                     word is read off a page its own gates did not stand behind.
-#   unmeasured        no R1 report for that G on disk yet.
+#                     Reads `unresolved`.
+#   unmeasured        no R1 report for that G on disk yet. Reads `unresolved`.
 # R1'S RESOLUTION. Session 4's G=16 claim over treads 2 and deeper read a
 # half-width of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four;
 # the all-tread reading's was 0.076) against R1's 0.075 target, half the gap
@@ -207,19 +251,30 @@
 # seeds), duty, run id; the joint reading on that run's page (n, spread, sd,
 # envelope, verdict), only where the run formed a ratio and is in it; each
 # arm's median clock over the ladder and the count of LEVEL LOW (arm, tread)
-# cells; R1's eta, interval, word and exit. $SESSION/PAIRS-by-G.tsv, one row
-# per G, every seed of it that formed a ratio read together by R3's own
-# cross-run machinery whatever order they ran in (n, mean, sd, envelope,
-# joint verdict, any INVALID run inside the envelope) beside R1's columns: the
-# per-G value. $SESSION/PAIRS-fixed.tsv holds the coordinates every row shares
-# (model, tile, pinned config, treads, repeats, duty) and where each was read.
-# $SESSION/DEVICE and $SESSION/R3_DUTY, logs under $SESSION/chain-logs/, the
-# driver's own ARMS.tsv beside them, and a follow-up's commands, when a V7
-# FAIL named one, in $SESSION/followup-g<G>.txt. --resume skips every step
-# whose newest row is latched (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED,
-# ERROR, UNKNOWN and SKIPPED ones, with three exceptions: a preflight
-# self-test and the probe check run again until they are DONE, and the end
-# suite is not bought again once it ran to its tally.
+# cells; R1's eta, interval, word and exit; and `reads_as`, what the ratio can
+# be read as off that word (THE REGIME WORD, above). $SESSION/PAIRS-by-G.tsv,
+# one row per G, every seed of it that formed a ratio read together by R3's
+# own cross-run machinery whatever order they ran in (n, mean, sd, envelope,
+# joint verdict, any INVALID run inside the envelope) beside R1's columns and
+# `reads_as`: the per-G value. It also carries THE BYTES-RATE BOUND, the one
+# bound on alpha that needs no private arm (session 5's findings, 3.6):
+# alpha <= (t x C / W - 1) / (n - 1), t the shared arm's time at its top tread
+# n off the reports' own ladders (the mean over the G's runs), W the expert
+# set off their memory plans, and C the ruler's read_stream and its pin rate,
+# off the yaml calibrate wrote in this session (the tracked one after exfil),
+# held to the bandwidth the reports were scored against; each rebuild prints
+# it per G with the ceiling it used. $SESSION/PAIRS-fixed.tsv holds the
+# coordinates every row shares (model, tile, pinned config, treads, repeats,
+# duty) and where each was read, and the bound's inputs. $SESSION/COUNTERS and
+# COUNTERS.json, the counter probe's verdict and payload. $SESSION/DEVICE and
+# $SESSION/R3_DUTY, logs under $SESSION/chain-logs/, the driver's own ARMS.tsv
+# beside them, and a follow-up's commands, when a V7 FAIL named one, in
+# $SESSION/followup-g<G>.txt. --resume skips every step whose newest row is
+# latched (DONE, CLAIM_FAIL, INVALID) and re-runs REFUSED, ERROR, UNKNOWN and
+# SKIPPED ones, with four exceptions: a preflight self-test and the probe
+# check run again until they are DONE, the counter probe runs on every pass
+# (its INFO row is never latched), and the end suite is not bought again once
+# it ran to its tally.
 #
 # THE THREE HABITS THIS REPOSITORY HAS BEEN BURNED BY, and how this file
 # avoids them: no `set -e` (a failed arm is a ledger row, not the end of a
@@ -266,6 +321,12 @@ R3_RUN_OVERHEAD_S=60
 #: and under the graph), put at two minutes. The volume once stalled a cold
 #: import for 9 minutes and recovered; the cap covers that, not this price.
 PROBE_CHECK_S=120
+#: WHERE THE COUNTER PROBE LOOKS FOR ncu BEYOND PATH: globs, searched in this
+#: order after PATH, each one's matches newest name first. dram_counter_route.py
+#: --probe asks PATH alone, and session 4's image read "no ncu on PATH" there;
+#: the CUDA toolkit's bin and Nsight Compute's own directory hold an ncu that
+#: no PATH entry names. Set it to add a place an image uses.
+NCU_SEARCH="${NCU_SEARCH:-/usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu}"
 #: The exfil allowance: the tar of the session, the results and the ruler.
 EXFIL_S=300
 #: THE HANG CAP ON AN ARM STEP: max(ARM_CAP_FACTOR x its price, ARM_CAP_FLOOR_S),
@@ -568,7 +629,7 @@ driver_minutes() {
 #: reached those children and steered them into the real session.
 #: MOE_RESULTS_DIR stays (tests/conftest.py sandboxes it), and so do PY_BASE
 #: and PY_VLLM (tests/_hermetic.py replaces them).
-CHAIN_KNOBS="REPO SESSION SESSION_ROOT RESULTS_ROOT WORKSPACE G_LADDER SEEDS R3_DUTY R1_DUTY RATE_USD_H SUITE_S_PER_TEST SUITE_TIMEOUT_S GPU_TESTS_TIMEOUT_S END_SUITE LOCK_TOOL CAPABILITY"
+CHAIN_KNOBS="REPO SESSION SESSION_ROOT RESULTS_ROOT WORKSPACE G_LADDER SEEDS R3_DUTY R1_DUTY NCU_SEARCH RATE_USD_H SUITE_S_PER_TEST SUITE_TIMEOUT_S GPU_TESTS_TIMEOUT_S END_SUITE LOCK_TOOL CAPABILITY"
 without_knobs() {
   local -a unset_args=()
   local k
@@ -809,7 +870,9 @@ seed0_v7() {
 }
 
 #: REWRITE PAIRS.tsv, PAIRS-by-G.tsv, PAIRS-fixed.tsv and PAIRS-README.txt from
-#: the reports on disk. Idempotent.
+#: the reports on disk. Idempotent. The helper's first line is the row count;
+#: the lines after it are the ruler the bytes-rate bound is read at and one
+#: line per G, the bound with the ceiling it used and what the ratio reads as.
 rebuild_pairs() {
   local out rc=0
   out="$("$PY_BASE" "$HELPERS" pairs-table "$SESSION" "$RESULTS" "$G_LADDER" "$SEEDS" \
@@ -818,12 +881,66 @@ rebuild_pairs() {
     "r1_treads=--treads $R1_TREADS" "r1_repeats=--repeats $R1_REPEATS" "r1_duty=--duty $R1_DUTY" \
     2>&1)" || rc=$?
   if (( rc == 0 )); then
-    echo "pairs     $SESSION/PAIRS.tsv ($out, rebuilt from the reports); per G, every seed read"
+    echo "pairs     $SESSION/PAIRS.tsv (${out%%$'\n'*}, rebuilt from the reports); per G, every seed read"
     echo "          together, in PAIRS-by-G.tsv; fixed coordinates in PAIRS-fixed.tsv; the legend"
     echo "          in PAIRS-README.txt"
+    [[ "$out" == *$'\n'* ]] && printf '%s\n' "${out#*$'\n'}" | sed 's/^/          /'
   else
     echo "pairs     NOT rebuilt (exit $rc): $out"
   fi
+  return 0
+}
+
+#: THE COUNTER PROBE'S PRICE in seconds: the driver's own booking for the same
+#: probe, its counter_plan arm (in minutes), or nothing when it books none.
+counter_probe_price() {
+  local m
+  m="$(driver_minutes counter_plan)"
+  [[ -n "$m" ]] && echo $(( m * 60 ))
+  return 0
+}
+
+#: THE COUNTER PROBE, one measuring pass's. INFORMATIONAL: it gates nothing,
+#: and its row's state is INFO, which no pass latches, so every pass asks
+#: again (a counter route is a property of the pod). $1 its price in seconds,
+#: empty when unpriced. It finds ncu (`ncu-locate`: PATH, then NCU_SEARCH),
+#: runs scripts/dram_counter_route.py --probe (the driver's counter_plan
+#: probe, not a second copy of it) from PY_BASE under the arm cap, with the
+#: found ncu's directory first on PATH, and hands the probe's payload
+#: ($SESSION/COUNTERS.json) and page to `counters`, which writes
+#: $SESSION/COUNTERS and the note. Returns 0 whatever the probe read.
+counter_probe_step() {
+  local price="$1" log="$LOGS/counter-probe.log" located bin where cands cap how
+  local rc=0 hrc=0 t0 secs out note
+  local -a pathenv=() tmo=()
+  located="$("$PY_BASE" "$HELPERS" ncu-locate "$NCU_SEARCH" 2>/dev/null)" || located=""
+  [[ -n "$located" ]] || located=$'none\tnone\tnone'
+  IFS=$'\t' read -r bin where cands <<< "$located"
+  if [[ "$bin" != none && "$where" != PATH ]]; then
+    pathenv=("PATH=$(dirname "$bin"):$PATH")
+  fi
+  IFS=$'\t' read -r cap how < <(cap_for "$price")
+  if command -v timeout >/dev/null 2>&1; then
+    tmo=(timeout --signal=INT --kill-after=60 "$cap")
+  else
+    cap=0; how="no timeout(1) on this box: uncapped"
+  fi
+  echo "  counter-probe: capped at $cap s ($how); informational, it gates nothing"
+  rm -f "$SESSION/COUNTERS.json"
+  t0="$(date +%s)"
+  env ${pathenv[@]+"${pathenv[@]}"} ${tmo[@]+"${tmo[@]}"} "$PY_BASE" \
+    "$REPO/scripts/dram_counter_route.py" --probe --out "$SESSION/COUNTERS.json" > "$log" 2>&1 || rc=$?
+  secs="$(( $(date +%s) - t0 ))"
+  out="$("$PY_BASE" "$HELPERS" counters "$SESSION" "$log" "$rc" "$cap" "$secs" \
+         "$bin" "$where" "$cands" "$NCU_SEARCH" 2>&1)" || hrc=$?
+  note="$(printf '%s' "${out##*$'\n'}" | tr '\t' ' ')"
+  if (( hrc != 0 )) || [[ -z "$note" ]]; then
+    note="ERROR: the counters helper exited $hrc (${note:-no output}); read $log"
+  fi
+  printf '%s\tINFO\t%s\t%s\t%s\t%s\t%s\n' counter-probe "$rc" "$secs" "$(dirty_count)" \
+    "$log" "$note" >> "$LEDGER"
+  printf '%-16s %-10s rc=%s %5ss  %s\n' counter-probe INFO "$rc" "$secs" "$note"
+  return 0
 }
 
 #: THE DIRECTORY TO RESUME: the newest chain session for this card holding a
@@ -1342,10 +1459,11 @@ r3_step() {   # $1 G, $2 seed
   arm_step "$step" "$LOGS/$step.log" "$STEP_CAP" $(r3_cmd "$g" "$seed" 0 ${paired[@]+"${paired[@]}"}) || true
   rep="$(report_of "$LOGS/$step.log")"
   if [[ -n "$rep" ]]; then
-    local rg rseed ratio lo hi word scope duty rid rest e elo ehi band eexit
+    local rg rseed ratio lo hi word scope duty rid rest e elo ehi band eexit ra
     IFS=$'\t' read -r rg rseed ratio lo hi word scope duty rid rest < <("$PY_BASE" "$HELPERS" reading "$rep")
     IFS=$'\t' read -r e elo ehi band eexit < <("$PY_BASE" "$HELPERS" eta-for "$SESSION" "$RESULTS" "$g")
-    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word (C1 $scope)  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)"
+    ra="$("$PY_BASE" "$HELPERS" reads-as "$band" "$eexit" 2>/dev/null)" || ra="unresolved"
+    echo "    G=$rg seed $rseed  ratio $ratio [$lo, $hi]  $word (C1 $scope)  duty $duty  eta $e [$elo, $ehi] $band  (R1 page: $eexit)  reads as: ${ra:-unresolved}"
   else
     echo "    no report.json for $step (see $LOGS/$step.log)"
   fi
@@ -1391,7 +1509,21 @@ if (( DRY )); then
 fi
 
 # --------------------------------------------------------------------------
-# 3. tests/test_gpu.py on this card, before any arm is booked on it
+# 3. the counter probe: can this pod read a DRAM counter (informational)
+# --------------------------------------------------------------------------
+echo; echo "== counter-probe: can this pod read a DRAM counter (informational; gates nothing)"
+COUNTER_PROBE_S="$(counter_probe_price)"
+if (( DRY )); then
+  IFS=$'\t' read -r CP_CAP CP_HOW < <(cap_for "$COUNTER_PROBE_S")
+  skip_row counter-probe "a dry run does not run it: it launches one kernel under ncu on the card. Priced ~${COUNTER_PROBE_S:-0} s, the driver's own arm_minutes for counter_plan (the same probe); capped on the pod at $CP_CAP s ($CP_HOW); informational, it gates nothing and runs on every measuring pass"
+  CLOCK_S=$(( CLOCK_S + ${COUNTER_PROBE_S:-0} ))
+else
+  # never gated, never latched: whatever it reads, the chain goes on
+  counter_probe_step "$COUNTER_PROBE_S"
+fi
+
+# --------------------------------------------------------------------------
+# 4. tests/test_gpu.py on this card, before any arm is booked on it
 # --------------------------------------------------------------------------
 echo; echo "== tests/test_gpu.py on this card, from the base venv (gated)"
 if (( DRY )); then
@@ -1409,7 +1541,7 @@ fi
 (( DRY )) || gpu_tests_gate "$PAST_GPU_TESTS" || stop_chain
 
 # --------------------------------------------------------------------------
-# 4. the alignment probe under the graph, on this card, before the pilot
+# 5. the alignment probe under the graph, on this card, before the pilot
 # --------------------------------------------------------------------------
 echo; echo "== the alignment probe under the graph, on this card, from the vllm venv (gated)"
 IFS=$'\t' read -r PROBE_CAP PROBE_CAP_HOW < <(cap_for "$PROBE_CHECK_S")
@@ -1427,9 +1559,9 @@ fi
 (( DRY )) || probe_check_gate "$PAST_V8" || stop_chain
 
 # --------------------------------------------------------------------------
-# 5. the ratio at seed 0 at every G; the pilot's V8 read first
+# 6. the ratio at seed 0 at every G; the pilot's V8 read first
 # --------------------------------------------------------------------------
-echo; echo "== the re-read fraction, off the cap, seed $FIRST_SEED at every G (the pilot: $PILOT)"
+echo; echo "== the ratio, shared over private, off the cap, seed $FIRST_SEED at every G (the pilot: $PILOT)"
 for g in $G_LADDER; do
   r3_step "$g" "$FIRST_SEED"
   if [[ "$g" == "$FIRST_G" ]] && ! (( DRY )); then
@@ -1438,7 +1570,7 @@ for g in $G_LADDER; do
 done
 
 # --------------------------------------------------------------------------
-# 6. the elasticity at every G of the ladder
+# 7. the elasticity at every G of the ladder
 # --------------------------------------------------------------------------
 echo; echo "== clock elasticity per geometry (the regime word)"
 for g in $G_LADDER; do
@@ -1459,9 +1591,9 @@ for g in $G_LADDER; do
 done
 
 # --------------------------------------------------------------------------
-# 7. the later seeds, seed-major, each scored with the earlier ones of its G
+# 8. the later seeds, seed-major, each scored with the earlier ones of its G
 # --------------------------------------------------------------------------
-echo; echo "== the re-read fraction, the later seeds, scored with the earlier ones"
+echo; echo "== the ratio, shared over private, the later seeds, scored with the earlier ones"
 for seed in $SEEDS; do
   [[ "$seed" == "$FIRST_SEED" ]] && continue
   for g in $G_LADDER; do
@@ -1491,7 +1623,7 @@ for seed in $SEEDS; do
 done
 
 # --------------------------------------------------------------------------
-# 8. the whole suite, after every arm, only on END_SUITE=run: a record of
+# 9. the whole suite, after every arm, only on END_SUITE=run: a record of
 #    this box, gating nothing
 # --------------------------------------------------------------------------
 echo; echo "== the whole suite, uncapped, from the base venv (a record; gates nothing; only on END_SUITE=run)"
@@ -1515,7 +1647,7 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# 9. the table, the price, and what to copy off
+# 10. the table, the price, and what to copy off
 # --------------------------------------------------------------------------
 echo
 if (( DRY )); then
@@ -1523,7 +1655,7 @@ if (( DRY )); then
   n_s=0; for s in $SEEDS; do n_s=$(( n_s + 1 )); done
   n_r3=0; for s in $SEEDS; do for g in $G_LADDER; do n_r3=$(( n_r3 + 1 )); done; done
   compile_s=$(( n_r3 * R3_RUN_OVERHEAD_S ))
-  wall=$(( TOTAL_S + GPU_TESTS_S + SUITE_S + PRE_S + PROBE_CHECK_S + compile_s + EXFIL_S ))
+  wall=$(( TOTAL_S + GPU_TESTS_S + SUITE_S + PRE_S + ${COUNTER_PROBE_S:-0} + PROBE_CHECK_S + compile_s + EXFIL_S ))
   echo "PRICE, off the arms' own plans: $n_r1 elasticity runs + $n_r3 ratio runs = $TOTAL_S s of arms"
   echo "  (a ratio run is its plan's wall line at duty $R3_DUTY plus the alignment probe's"
   echo "  seconds at full duty; an elasticity run is its plan's wall figure at duty $R1_DUTY),"
@@ -1535,6 +1667,7 @@ if (( DRY )); then
     echo "  $SUITE_RATE_WHO, and no end suite (END_SUITE=skip, the default; END_SUITE=run prices it),"
   fi
   echo "  plus the preconditions ~$PRE_S s ($PRE_BASIS),"
+  echo "  the counter probe ~${COUNTER_PROBE_S:-0} s (the driver's own arm_minutes for counter_plan, the same probe),"
   echo "  the probe check ~$PROBE_CHECK_S s (an allowance: it prints no plan), per-run compiles and"
   echo "  weight copies ~$compile_s s ($R3_RUN_OVERHEAD_S s a ratio run, an allowance) and exfil ~$EXFIL_S s"
   echo "  (an allowance) = $wall s"

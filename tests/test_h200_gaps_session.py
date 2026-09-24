@@ -108,6 +108,7 @@ TEXT = DRIVER.read_text()
 CODE = "\n".join(ln for ln in TEXT.splitlines() if not ln.lstrip().startswith("#"))
 
 sys.path.insert(0, str(ROOT))
+from _committed import ncu_refusals  # noqa: E402
 from _hermetic import LAPTOP_ENV  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
@@ -2712,6 +2713,29 @@ def test_the_counter_arm_says_its_ledger_word_is_earned_and_blocked_is_an_answer
     assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" not in block
     assert "UNEARNED DONE" not in block
     assert "BLOCKED is the ANSWER" in block
+
+
+def test_the_counter_arm_predicts_no_word_and_gives_the_committed_record():
+    """`rerun_expectation counter_plan` said "Expect BLOCKED unless a provider
+    has granted one of those" and `arm_closes counter_plan` said "IT IS
+    PROBABLY BLOCKED": two pods' refusals printed as the platform's answer,
+    which session 5's findings list under do-not-believe. Both now say no word
+    is predicted, the pod's own is the answer, and give the committed record:
+    each ERR_NVGPUCTRPERM a profile log commits (by its file and its run's own
+    date) and 2026-09-15."""
+    refusals = ncu_refusals()
+    assert refusals
+    for fn in ("rerun_expectation", "arm_closes"):
+        text = " ".join(lift(f"{fn} counter_plan", REPO=str(ROOT)).stdout.split())
+        for stale in ("Expect BLOCKED", "PROBABLY BLOCKED"):
+            assert stale not in text, (fn, stale)
+        for path, day, _card in refusals:
+            assert path in text and day in text, (fn, path, day)
+        assert "2026-09-15" in text and "not the platform" in text, fn
+    closes = " ".join(lift("arm_closes counter_plan", REPO=str(ROOT)).stdout.split())
+    assert "NO WORD IS PREDICTED FOR IT" in closes
+    expectation = " ".join(lift("rerun_expectation counter_plan", REPO=str(ROOT)).stdout.split())
+    assert "ITS WORD IS THE POD'S, DONE on OPEN and CLAIM_FAIL on BLOCKED" in expectation
 
 
 # --------------------------------------------------------------------------

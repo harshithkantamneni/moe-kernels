@@ -1,4 +1,4 @@
-"""Can a SAMPLED GPU-metrics trace stand in for the DRAM counter that ncu refuses?
+"""Can a SAMPLED GPU-metrics trace stand in for the DRAM counter no rented pod let ncu read?
 
 WHY THIS MODULE EXISTS. Every byte figure in this study is compulsory-traffic
 ARITHMETIC. `implied_traffic_ratio` is time x achievable-bandwidth over modelled
@@ -8,16 +8,18 @@ extra M-tile as a fraction of a fresh weight read, refit 2026-08-31 from 0.10 to
 on one regression against a byte model that has never been validated against a
 byte. Nothing in this repository has ever counted one.
 
-`ncu` would count them and cannot: `dram__bytes_read.sum` is a hardware
+`ncu` would count them and has not: `dram__bytes_read.sum` is a hardware
 performance counter, and reading counters needs
 `NVreg_RestrictProfilingToAdminUsers=0`, a host kernel-module flag a container
-tenant cannot set. On RunPod it fails with ERR_NVGPUCTRPERM.
+tenant cannot set. The two rented H200s that tried were refused with
+ERR_NVGPUCTRPERM (2026-08-25, 2026-09-15); whether a pod can read one is
+`scripts/dram_counter_route.py --probe`'s to answer.
 `scripts/profile_open_questions.sh` concluded from that "Q1 traffic -> ncu ONLY.
 dram__bytes_read.sum is a counter; nothing traces it", and docs/RUNPOD.md,
 docs/POD_RUNBOOK.md and docs/FINDINGS.md have all repeated it since.
 
 THAT CONCLUSION SKIPS A MECHANISM. `nsys --gpu-metrics-device` neither traces
-nor goes through the CUPTI profiling API that ncu is blocked on. It SAMPLES the
+nor goes through the CUPTI profiling API ncu's refused reads went through. It SAMPLES the
 GPU's hardware performance monitor at a fixed rate through a separate path, and
 whether that path is gated on the same module flag is an empirical question this
 repository has never asked. `scripts/nsys_dram_probe.py` asks it on a pod. This

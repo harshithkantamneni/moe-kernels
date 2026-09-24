@@ -113,10 +113,11 @@ def plot_imbalance(rows, out_dir: Path, dtype: str = "bf16"):
 def plot_l2_absorption(rows, out_dir: Path, dtype: str = "bf16"):
     """Traffic the cache absorbed, inferred from the flush axis.
 
-    Nsight Compute is unavailable on a rented pod, so there is no cache hit-rate
-    counter to read. But every cell is already timed twice, once with L2 flushed
-    and once warm, and the time difference times achievable bandwidth estimates
-    the bytes L2 served instead of DRAM. Free, from an axis already swept.
+    No Nsight Compute counter read has succeeded on a rented pod in this study,
+    so there is no cache hit-rate counter to read. But every cell is already
+    timed twice, once with L2 flushed and once warm, and the time difference
+    times achievable bandwidth estimates the bytes L2 served instead of DRAM.
+    Free, from an axis already swept.
     """
     from moe.bench.calibrate import l2_absorbed_bytes
 

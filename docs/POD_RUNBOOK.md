@@ -170,7 +170,7 @@ against `--list` by `tests/test_docs.py`.
 | `dtype` | 8 | KERNEL | how much of the 1.15 fp8/bf16 crossing is the config vLLM resolved per dtype | CUT in the verdict until its C3 window is re-derived (at the corrected spread the window has no discriminating power); still booked. RE-SCOPED 2026-09-09: the cross-config arm transplants BLOCK_SIZE_M and GROUP_SIZE_M only, because the full fp8-config-at-bf16-width transplant is infeasible on sm_90 at 22 of 28 cells and, when it was run, vLLM 0.27.1's `override_config` (no try/finally) leaked the fp8 config process-wide and corrupted 41 arms |
 | `span_dense` | 31 | KERNEL | the 0.563 extent-versus-kernel split on the dense grid, run WHOLE: `--max-minutes` was removed because it scored a truncated grid as complete | CUT in the verdict until truncation is a refusal; the driver books the honest time instead |
 | `span` | 0 | FREE | the same on the published grid, `--no-densify`; refuses on `c2_grid_power` before spending a minute | CUT: booked zero, the refusal is the answer |
-| `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is the ANSWER on a rented pod, not a broken instrument | KEEP, and it now GATES the two arms below. TWO THINGS IN THIS ROW WERE STALE UNTIL 2026-09-10. It said the script files BLOCKED as INVALID: since 2026-09-03 `dram_counter_route.py --probe` scores one gate per verdict and exits through `exit_codes.classify`, so OPEN is DONE and BLOCKED is CLAIM_FAIL. And it said do not act on the printed ncu recipe, which was the right instruction while every rented pod refused the counter; on 2026-09-10 the probe read OPEN, so acting on it is what the two `counter-*` arms are. **THAT OPEN IS RETRACTED (2026-09-15)**: the probe profiled `/bin/true`, which launches no CUDA kernel, so it never attempted a counter read and could not fail, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` after two 120-minute arms had been booked on the word. The probe now launches a real kernel and reports OPEN only when a counter value comes back; expect BLOCKED, and read the `counter-*` arms as conditional on the probe rather than as planned work |
+| `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is an answer about this pod, not a broken instrument and not the platform's answer | KEEP, and it now GATES the two arms below. TWO THINGS IN THIS ROW WERE STALE UNTIL 2026-09-10. It said the script files BLOCKED as INVALID: since 2026-09-03 `dram_counter_route.py --probe` scores one gate per verdict and exits through `exit_codes.classify`, so OPEN is DONE and BLOCKED is CLAIM_FAIL. And it said do not act on the printed ncu recipe, which was the right instruction while the one counter read attempted so far (2026-08-25, `profiles/q2_kernel_names.txt`) had been refused; on 2026-09-10 the probe read OPEN, so acting on it is what the two `counter-*` arms are. **THAT OPEN IS RETRACTED (2026-09-15)**: the probe profiled `/bin/true`, which launches no CUDA kernel, so it never attempted a counter read and could not fail, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` after two 120-minute arms had been booked on the word. The probe now launches a real kernel and reports OPEN only when a counter value comes back. Read the probe rather than expect either word: the committed record is two refusals on two rentals (2026-08-25 and 2026-09-15), the 2026-09-09 and 2026-09-10 pods were never asked, session 4's probe found no ncu on PATH and session 5 attempted none, and two pods are not the platform. The alpha(G) chain asks the same probe on every pass as its `counter-probe` step. Read the `counter-*` arms as conditional on the probe rather than as planned work |
 | `counter-n32-m64` | 120 | WALL | THE COUNTER RUN, added 2026-09-10, and it is TWO arms: DRAM traffic at BLOCK_N=32 and at BLOCK_N=128, both at `--block-m 64`. It is the only instrument in the study that reads BYTES, and `alpha_b = (dR/dn - a_per_tile)/W` from either arm has no fitted level, no `delta`, no `D` and no assumed bandwidth: today the same six `bn_g16` cells give 0.6087, 0.5930 or 0.5143 depending only on which rate is assumed. The BLOCK_N CONTRAST, which needs both arms, is what decides whether the term that replaces the refuted activation re-read is TRAFFIC or TIME: 3.85 GB against 2.06 GB of weight-set-equivalent per M-tile at BLOCK_M=64, or the same bytes at both | RUN THEM ONLY WHEN `counter_plan` READ OPEN; a BLOCKED probe retires both for the whole session in about fifteen seconds. 120 WALL min is the plan page's own "two pod-hours end to end" for ONE set of 12 profiled invocations, and the COST block is byte-identical at both BLOCK_N, so the pair is 240. THIS ROW WAS ONE ARM BOOKED 120 UNTIL NOW and it described the contrast anyway: the arm line passed no `--block-n` and no `--block-m`, so it ran the script's defaults of 64 and 32, the single pinned cell the 2026-09-10 analysis named as a defect to fix before running. GROUP_SIZE_M is still pinned at 16 on both arms; a G=1 cell is a third arm and is not booked. The driver checks that `dram_counter_route.py` defines `--run` and `skip_arm`s both rows by name if it does not, rather than spending an argparse exit 2 on the card |
 | `counter-n128-m64` | 120 | WALL | the same at BLOCK_N=128; it is the other half of the contrast above and neither half is readable without it | the same gate, the same booking, one `counter_arm` call site for both so a fix cannot land on one of the two |
 | `counter_contrast` | 0 | FREE | THE READING THE PAIR IS PAID FOR, added 2026-09-10 after a build audit found that `grep -rn -- --contrast` over the driver and these docs returned nothing: the session booked four pod-hours to write two payloads and then left the ratio between them to the operator, by hand, off the printed predictions. `--contrast` scores it: TRAFFIC predicts 1.871, TIME predicts 1.000, 87% apart, each scored at +/-5%, and either word is a result | ADD IT. Zero GPU minutes, over the two files the pair writes. NOT_PLANNED off a GPU box, because `--contrast` is exclusive with `--dry-run` and neither payload exists yet; SKIPPED rather than scored when only one payload is on disk, since a claim gate over one cell would file a missing run as a refutation |
@@ -514,7 +514,8 @@ the console, and runs neither `tests/test_gpu.py` nor the probe check again.
 `timeout --signal=INT --kill-after=60`, as the pytest steps do, at max(3 x the
 arm's own `--dry-run` price, 30 min), the plan run again just before the step
 (the probe check prints no plan: its 120 s allowance puts it at the 30-minute
-floor). A timed-out arm is ERROR with TIMED OUT in its note, not latched: both
+floor, and so does the counter probe's price, the driver's own booking for
+`counter_plan`). A timed-out arm is ERROR with TIMED OUT in its note, not latched: both
 arms resume per cell, so `--resume` re-runs it. A process parked inside the
 volume's FUSE request cannot be signalled, by this or by anything.
 
@@ -532,14 +533,41 @@ It runs, in order:
    pin_probe-n64-g1 runs for the record and is not gated: it asks whether
    `MOE_FORCE_TILE` reaches the kernel, and R1 and R3 both pin through vLLM's
    `override_config` and never read `MOE_FORCE_TILE`.
-3. `tests/test_gpu.py` on the card, from PY_BASE: the timing and clock
+3. The counter probe, INFORMATIONAL: never gated and never latched. It
+   decides whether the one route to alpha at G >= 2 at this tile, `ncu`
+   bytes (item 7 of session 5's findings), can happen on RunPod at all. It
+   finds `ncu` on PATH, then at `NCU_SEARCH`'s globs
+   (`/usr/local/cuda*/bin/ncu` and `/opt/nvidia/nsight-compute/*/ncu` by
+   default, each one's matches newest name first), and runs
+   `scripts/dram_counter_route.py --probe`, the driver's `counter_plan` probe
+   and not a second copy of it, from PY_BASE with the first one's directory
+   first on PATH: one real kernel under ncu, and `dram__bytes_read.sum` read
+   back or refused. Its ledger row's state is `INFO`, which no pass latches,
+   so it runs on every measuring pass (a counter route is a property of the
+   pod). The note starts with the verdict (OPEN, BLOCKED, ABSENT, UNTESTED or
+   ERROR) and carries ncu's path and version, the exact error line and the
+   two capabilities (`CAP_PERFMON`, `CAP_SYS_ADMIN`); `COUNTERS` in the
+   session directory holds the same, with the probe's own notes, beside its
+   payload, `COUNTERS.json`. When ncu is found off PATH, `COUNTERS` says so:
+   the driver's `counter_plan` and `dram_counter_route.py --run` look on PATH
+   only. A dry run prices it at the driver's own `arm_minutes` for
+   `counter_plan` and writes a SKIPPED row. RunPod's record, as this repo
+   commits it: two rented H200s attempted a counter read and both were
+   refused with `ERR_NVGPUCTRPERM`, on 2026-08-25 (`ncu` over the harness's
+   own CLI, `profiles/q2_kernel_names.txt`) and on 2026-09-15, on a pod
+   holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`; the 2026-09-09 and
+   2026-09-10 pods were never asked (their probe profiled `/bin/true`);
+   session 4's probe (2026-09-21) read `no ncu on PATH` and looked nowhere
+   else; session 5 attempted none. Two refused pods are a record, not a fact
+   about the platform: the probe answers for the pod it runs on.
+4. `tests/test_gpu.py` on the card, from PY_BASE: the timing and clock
    primitives both arms stand on. It does NOT cover the graph probe R3's V8
    stands on: that one test imports vLLM and skips from PY_BASE, which is why
-   step 4 exists. Not green stops the chain, and an exit 0 in which no test
+   step 5 exists. Not green stops the chain, and an exit 0 in which no test
    passed is not green (off a card every one of them skips).
    `--resume --past-gpu-tests` goes on after you have read the failures, and
    the ledger records that decision as its own row.
-4. The probe check, `private_weight_reference.py --probe-check --model
+5. The probe check, `private_weight_reference.py --probe-check --model
    mixtral-8x7b --block-m 32` from the vLLM venv: that skipped test's on-card
    check alone (`moe_align_block_size` captured under a CUDA graph,
    `PROBE_CALLS_PER_REPLAY` calls per replay, not host-bound, the graph's
@@ -557,7 +585,7 @@ It runs, in order:
    matches the driver, then `--resume`. It does not offer `--past-v8` there:
    R1 and R3 run from the same interpreter, and the ledger would hold that
    override for every later pass.
-5. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
+6. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
    {1, 4, 16, 64}. On session 4's clock arm duty 0.25 sat flat at 1965 MHz
    with no drift, and duty 0.5 still tracked board power (-1.09 MHz/W over
    1882-1965 MHz). The chain stops after `r3-g1-s0` unless its V8 is PASS,
@@ -570,14 +598,14 @@ It runs, in order:
    be quoted (about 120 min); `SEEDS=0 bash scripts/alpha_g_chain.sh --resume
    --past-v8` limits the ratio pages to seed 0 (three, about 33 min). The
    ledger records `--past-v8`, and later passes hold to it.
-6. `clock_elasticity` at each G with three duty states (1.0, 0.5, 0.25: the
+7. `clock_elasticity` at each G with three duty states (1.0, 0.5, 0.25: the
    card on its power cap at 1.0, off it at 0.5 and 0.25), the per-M-tile
    elasticity gated. These are the owner's states since session 5: its G=1
    run at 1.0, 0.7, 0.5 excluded 22.4% of its rows for in-burst clock drift
    (0.7: 30.8%, 0.5: 36.5%, 1.0: 0%) and failed V4, which holds the excluded
    rows to 20%; at 1.0, 0.5, 0.25 every G passed V4 (G=1 16.3%, G=4 6.7%,
    G=16 5.4% and 5.8% on its re-run, G=64 5.8%). `R1_DUTY=` sets others.
-7. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
+8. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
    through `--replicate-of`. With R1 between seed 0 and seed 1, a G's seed 0
    and seed 1 start about 118 min apart and its seed 1 and seed 2 about 43
    min apart at the dry run's prices of 2026-09-23; the dry run prints the
@@ -600,9 +628,9 @@ It runs, in order:
      (nothing timed, e.g. the sweep was skipped on V8, or a clock was
      unread), so a later seed would read the same; the note names the seed-0
      log.
-8. The whole suite, only on `END_SUITE=run`: it is off by default, the
+9. The whole suite, only on `END_SUITE=run`: it is off by default, the
    owner's decision in session 5. On that pod the base-venv suite exercised
-   nothing the arms depend on beyond `tests/test_gpu.py`, which step 3 runs
+   nothing the arms depend on beyond `tests/test_gpu.py`, which step 4 runs
    either way, and it ran about 1.4 s a test off the network volume (2499
    tests in 3472 s before it was interrupted at 49%). Without it
    (`END_SUITE=skip`, the default) the step writes a SKIPPED row saying the
@@ -618,13 +646,19 @@ It runs, in order:
    into the real session.
 
 **The regime word per G**, read off R1's interval through the arm's own
-`band_of`: RAW-STANDS (wholly below 0.25: the ratio beside it is a re-read
-fraction); UNREGISTERED-GAP (wholly inside [0.25, 0.40]: neither registered
-consequence is licensed, so quote the interval and no word); CLOCK-CARRIES
-(wholly above 0.40: a time ratio, a blend of traffic and clock); STRADDLES
-(the interval crosses an edge: no word); `withheld:<EXIT>` (R1's page exited
-INVALID, REFUSED, ERROR or unscored: no word is read off a page its own gates
-did not stand behind); `unmeasured` (no R1 report for that G yet). Session
+`band_of`, and what the ratio beside it reads as, which both tables print as
+`reads_as` (the rule session 5's findings support): RAW-STANDS (wholly below
+0.25: the ratio beside it is a re-read fraction, the one word that reads
+`re-read fraction`); UNREGISTERED-GAP (wholly inside [0.25, 0.40]: neither
+registered consequence is licensed, so quote the interval and no word;
+`unresolved`); CLOCK-CARRIES (wholly above 0.40: the ratio is not alpha. In
+session 5 at G >= 4 the shared arm sat on a per-tile floor that scales with
+the SM clock, any alpha in [0, 0.60] fit it equally, and the bytes-rate bound
+below still proves real reuse there: `blend (traffic and a clock-scaled
+on-chip floor): not alpha`); STRADDLES (the interval crosses an edge: no word;
+`unresolved`); `withheld:<EXIT>` (R1's page exited INVALID, REFUSED, ERROR or
+unscored: no word is read off a page its own gates did not stand behind;
+`unresolved`); `unmeasured` (no R1 report for that G yet; `unresolved`). Session
 4's G=16 claim over treads 2 and deeper read a half-width of 0.084 over its
 states 1.0, 0.5 and 0.25 (0.092 over all four; the all-tread reading's was
 0.076) against R1's 0.075 target, half the gap band's width. Session 5 ran R1
@@ -662,10 +696,26 @@ that formed a ratio, read together by R3's own cross-run machinery whatever
 order the seeds ran in (n, seeds, mean, sd, envelope, joint verdict, any seed
 inside the envelope whose own page exited INVALID), beside R1's columns. Quote
 PAIRS-by-G.tsv: PAIRS.tsv's joint columns are what each page said when it
-ran, over the seeds before it. `$SESSION/PAIRS-fixed.tsv` holds the
+ran, over the seeds before it. Both tables carry `reads_as`, what the ratio
+can be read as off R1's word (above). PAIRS-by-G.tsv also carries the
+bytes-rate bound, the one bound on alpha that needs no private arm (session
+5's findings, 3.6): alpha <= (t x C / W - 1) / (n - 1), with t the shared
+arm's time at its top tread n off the reports' own ladders (the mean over the
+G's runs), W the expert set off their memory plans, and C the ruler's
+`read_stream` and its pin rate. The shared arm reads W once and alpha x W for
+each later M-tile, and no faster than C; 1 or above excludes nothing. The
+ruler is the yaml calibrate wrote in this session, held to the bandwidth the
+reports were scored against; after exfil it is the tracked yaml, and
+`ruler=<yaml>` on `pairs-table` names another. Every rebuild prints each G's
+bound with the ceilings it used. On session 5's pages, read on the laptop
+with `ruler=` its published calibration yaml, it gives 0.841-0.842 at
+read_stream and 0.886-0.888 at the pin rate at G = 4, 16 and 64, and above 1
+at G=1, where a full re-read fits. `$SESSION/PAIRS-fixed.tsv` holds the
 coordinates every row shares (model, tile, pinned config, treads, repeats,
-duty) and where each was read. Logs are under `$SESSION/chain-logs/`, and a
-V7 FAIL's follow-up under `$SESSION/followup-g<G>.txt`.
+duty) and where each was read, and the bound's inputs (the expert set, the
+ruler, its two ceilings). `COUNTERS` and `COUNTERS.json` are the counter
+probe's. Logs are under `$SESSION/chain-logs/`, and a V7 FAIL's follow-up
+under `$SESSION/followup-g<G>.txt`.
 
 **The price.** The laptop dry run of 2026-09-23 prices about 193 min of arms
 (four R1 runs at 1124 s each at duty 1.0, 0.5, 0.25, which session 5's pod ran
@@ -673,11 +723,12 @@ in 1139-1160 s; twelve R3 runs at 590 s each at duty 0.25, the plan's 581 s
 wall line plus the alignment probe's 9 s it leaves out), about a minute of
 `tests/test_gpu.py` (38 tests at session 5's pod rate of 1.39 s a test), 8 min
 of preconditions (the driver's own `arm_minutes`: thermal 3, calibrate 3,
-pin_probe-n64-g1 2), 2 min for the probe check and 17 min of allowances (60 s
-of compiles and weight build a ratio run, 5 min of exfil): about 221 min,
-about $17 at $4.59/h, and it says book 5 h. No end suite is in that figure:
+pin_probe-n64-g1 2), 1 min for the counter probe (the same table's
+`counter_plan`), 2 min for the probe check and 17 min of allowances (60 s of
+compiles and weight build a ratio run, 5 min of exfil): about 222 min, about
+$17 at $4.59/h, and it says book 5 h. No end suite is in that figure:
 `END_SUITE=run` adds about 116 min (the tree's count, about 5000 tests, at
-1.39 s a test) and the dry run then says about 337 min, about $26, book 7 h.
+1.39 s a test) and the dry run then says about 339 min, about $26, book 7 h.
 A V7 FAIL at seed 0 skips that G's two later seeds (about 22 min) and prints a
 follow-up that costs about 77 min a G after the chain.
 
@@ -768,7 +819,7 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P7 | `entitled_ridge` still refuses 5 of the 14 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. The count was "2 of the 10" until 2026-09-03; the three ladder arms published since carry no `measured.yaml` and are refused by construction, and `tests/test_docs.py` checks the number. The arms are the directories git TRACKS: an untracked one left on the pod's volume by an earlier publish is not counted. Session 5's checkout carried one (`2026-09-15-nvidia_h200-session3`, which that suite's census tests counted as an arm); P7 did not run there, and with it planted on a laptop the old directory listing reads it as a new refusal and FAILs. |
 | P8 | the weights step 7 pulls are reachable | Asks whether the repos in `moe/spec.py` for `mixtral-8x7b` and `deepseek-v2-lite` resolve, using whatever credentials the box has. It used to check for a TOKEN and justify it with "Mixtral is gated" -- Mistral ungated that repo (apache-2.0, `gated=False`, `config.json` downloads anonymously), so the gate demanded a credential nothing needed and gave a reason that had stopped being true. A token still helps: HF rate-limits anonymous transfers and step 0 pulls 93.4 GB, so its absence is reported as an advisory rather than a failure. |
 | P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. When this row was written zero `.png` files were tracked under `results/published/`; the rule is anchored now and 75 `.png` files are tracked (`git ls-files 'results/published/**/*.png'`, checked by `tests/test_docs.py`). **FATAL.** |
-| P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
+| P10 | which profiler exists | informational: whether `ncu` and `nsys` are on PATH. Whether `ncu` can READ a counter is the pod's to answer, not the platform's: two rented H200s refused with `ERR_NVGPUCTRPERM` (2026-08-25, `profiles/q2_kernel_names.txt`, and 2026-09-15), session 4's probe found no ncu on PATH, and the alpha(G) chain's counter probe asks on every pass (the chain's section above). `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
 | P11a | the step scripts exist and parse | several are written concurrently by other people. |
 | P11b | those scripts accept the flags this session passes | a renamed flag should cost a line here, not an argparse error forty minutes in. |
 | P11c | the suite interpreter carries no vLLM | soft: the tests plant every refusal door and hide the card from every child they spawn, so the suite runs from the venv WITHOUT vLLM (P12 does); an interpreter that imports vllm would let an unplanted bare invocation MEASURE, and the pod's own session 4 saw a `--run` go past its door |
@@ -786,9 +837,10 @@ going to run and there is nothing for its answer to multiply.
 ### P-nsys, and why it moved to the front
 
 **Every byte figure in this study is arithmetic.** Nothing here has ever counted a
-DRAM transaction. `ncu` is walled off on a rented pod by `ERR_NVGPUCTRPERM`, so
-compulsory-traffic bytes are computed from the shapes and divided into a measured
-bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
+DRAM transaction. No `ncu` counter has been read on a rented pod: two H200s
+refused with `ERR_NVGPUCTRPERM` (2026-08-25 and 2026-09-15) and session 4's image
+had no ncu on PATH, so compulsory-traffic bytes are computed from the shapes and
+divided into a measured bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
 rather than instrumenting, and whether it works on a given pod is an open
 question this project has never answered.
 
@@ -1501,7 +1553,7 @@ crashed run.
 | "Using ..." config line missing | vLLM logs it once per `(E,N,dtype,device)` via `info_once` | make sure the cell is the first `fused_experts` call in the process, and that info-level logging is on |
 | every efficiency column is empty | no calibration resolved for this device | `python scripts/calibrate_hardware.py`; the file resolves by device NAME |
 | sweep says the calibration is foreign | `measured_<device>.yaml` was overwritten between sweep and publish | restore `$SESSION/calibration/`, then publish |
-| `ncu` says ERR_NVGPUCTRPERM | the host module flag is not set, which a container tenant cannot set for itself. This row said "expected" until 2026-09-10, when the probe read OPEN on a RunPod H200; **that reading is retracted (2026-09-15)** because the probe profiled `/bin/true` and so never attempted a counter read, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` on a pod holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`. "Expected" is the right word again, and the host flag is only half of it: ask the provider for `--cap-add=PERFMON` first, `--cap-add=SYS_ADMIN` second | run `python scripts/dram_counter_route.py --probe` FIRST: it launches one real CUDA kernel under ncu, distinguishes the four failures that look identical from a log, and costs about fifteen seconds (the probe child's torch import). If it reads BLOCKED, use `nsys`, the measured ceilings and the L2 flush axis (`docs/RUNPOD.md`); if it reads OPEN, the two `counter-*` arms are bookable, `counter-n32-m64` and `counter-n128-m64`, and `counter_contrast` reads them. The arm named `counter` has not existed since 2026-09-10; the identical sentence 200 lines above was updated and this one was not. |
+| `ncu` says ERR_NVGPUCTRPERM | the host module flag is not set, which a container tenant cannot set for itself. This row said "expected" until 2026-09-10, when the probe read OPEN on a RunPod H200; **that reading is retracted (2026-09-15)** because the probe profiled `/bin/true` and so never attempted a counter read, and a rented H200 then refused the read with `ERR_NVGPUCTRPERM` on a pod holding neither `CAP_SYS_ADMIN` nor `CAP_PERFMON`. The committed record is two refusals on two rentals, 2026-08-25 (`profiles/q2_kernel_names.txt`, `ncu` over the harness's own CLI) and that one; the 2026-09-09 and 2026-09-10 pods were never asked, session 4's probe found no ncu on PATH, and session 5 attempted none. Two pods are not the platform, so read the probe rather than expect either answer; and the host flag is only half of it: ask the provider for `--cap-add=PERFMON` first, `--cap-add=SYS_ADMIN` second | the alpha(G) chain runs this probe as its `counter-probe` step, after the preconditions and on every pass, and looks for ncu off PATH too (its `COUNTERS` file). By hand, run `python scripts/dram_counter_route.py --probe` FIRST: it launches one real CUDA kernel under ncu, distinguishes the four failures that look identical from a log, and costs about fifteen seconds (the probe child's torch import). If it reads BLOCKED, use `nsys`, the measured ceilings and the L2 flush axis (`docs/RUNPOD.md`); if it reads OPEN, the two `counter-*` arms are bookable, `counter-n32-m64` and `counter-n128-m64`, and `counter_contrast` reads them. The arm named `counter` has not existed since 2026-09-10; the identical sentence 200 lines above was updated and this one was not. |
 | override_config appears to do nothing | the hook moved between vLLM versions | P4 catches this. `try_get_optimal_moe_config` reads it via `get_config()`, so it exists under some name |
 | a step crashed on `--out` / `--out-dir` | a step script renamed a flag | P11b catches this. Fix the invocation in `scripts/pod_session.sh` |
 | the whole script is a bash syntax error | an apostrophe inside a heredoc that sits inside `$( )` | bash 3.2 tracks quotes through it, and reports the error hundreds of lines away. No apostrophes in those blocks. |

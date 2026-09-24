@@ -2,8 +2,11 @@
 """Measure this machine's achievable ceilings. Run once per pod type.
 
 Nsight Compute needs GPU performance counters, which need a host-level module
-flag a container tenant cannot set; on a rented pod `ncu` fails with
-ERR_NVGPUCTRPERM. So DRAM traffic cannot be read directly, and the roofline
+flag a container tenant cannot set, or a capability (CAP_PERFMON, CAP_SYS_ADMIN)
+the provider grants. No counter read has succeeded on a rented pod in this
+study: two were refused with ERR_NVGPUCTRPERM (2026-08-25, 2026-09-15), and
+whether this pod can read one is `scripts/dram_counter_route.py --probe`'s to
+answer, not this script's. So DRAM traffic is not read here, and the roofline
 would otherwise rest entirely on a datasheet peak.
 
 This measures the ceilings with ordinary kernels and a clock instead. Efficiency
@@ -126,6 +129,24 @@ def instrument_name() -> str:
         return str(basis)
     return ("moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed "
             "events, L2 flush between iterations); NOT timing.TIMING_BASIS")
+
+
+def source_note(pattern: str) -> str:
+    """The ruler yaml's `source_note`: what these ceilings are and why they
+    exist, with `pattern` the bandwidth pattern the ruler adopted.
+
+    Until 2026-09-23 it called Nsight Compute unavailable on every rented pod,
+    citing ERR_NVGPUCTRPERM, in every yaml this script wrote, session 5's
+    included: two refused pods written into the data as the platform's
+    answer. This script never asks for a counter, so the note says that, and
+    names the probe that does, rather than stating what any pod can read."""
+    return ("Achievable ceilings, not datasheet peaks, measured with ordinary "
+            "kernels and a clock and no DRAM counter: whether this pod can read "
+            "one is scripts/dram_counter_route.py --probe's to answer, not this "
+            "script's. These ceilings are what make the efficiency columns "
+            f"meaningful without counters. Bandwidth is the '{pattern}' pattern; "
+            "every pattern measured is under `detail` so a different denominator "
+            "can be applied without re-running.")
 
 
 def mde_line(sigma_pct: float | None, trials: int, why: str) -> str:
@@ -1034,14 +1055,7 @@ def main(argv: list[str] | None = None) -> int:
         "name": f"{cal.gpu_name} (measured)",
         "verified": True,
         "source": "measured on this machine by scripts/calibrate_hardware.py",
-        "source_note": (
-            "Achievable ceilings, not datasheet peaks. Nsight Compute is "
-            "unavailable on a rented pod (ERR_NVGPUCTRPERM), so DRAM traffic "
-            "cannot be measured directly; these ceilings are what make the "
-            f"efficiency columns meaningful without counters. Bandwidth is the "
-            f"'{cal.ceiling_pattern}' pattern; every pattern measured is under "
-            "`detail` so a different denominator can be applied without "
-            "re-running."),
+        "source_note": source_note(cal.ceiling_pattern),
         "checked_by": "scripts/calibrate_hardware.py",
         "checked_on": time.strftime("%Y-%m-%d"),
         "measured_commit": sha,

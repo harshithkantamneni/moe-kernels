@@ -1,27 +1,31 @@
 """scripts/alpha_g_chain.sh, checked without a pod.
 
 The chain sequences the alpha(G) matrix session: preflight, the driver's
-preconditions, tests/test_gpu.py on the card, the alignment probe's on-card
-check from the vLLM venv, the ratio at seed 0 at every G (the first run's V8
-read before anything else is bought), the clock elasticity at every G at
-duty states 1.0 0.5 0.25, the later seeds scored with the earlier ones at
---duty 0.25, and, only when END_SUITE=run asks for it, the whole suite at the
-end as a record. What this file pins: the three shell habits this project
-has been burned by, the ledger's second opinion (the driver's rule, lifted),
-every gate asking for DONE and not for "latched", overrides that hold for
-every later pass, every arm under a hang cap off its own price, the session a
-pass lands in, the card and the duty it is measured at and the lock it holds,
-pairing only with reports that formed a ratio, a skip worded by seed 0's V7
-verdict and the follow-up a V7 FAIL prints, tables rebuilt from the reports on
-disk (per run, and per G through R3's own cross-run machinery) with their
-legend, the elasticity band read through the arm's own `band_of` and withheld
-from a page its gates refused, and a laptop dry run that prices every step off
+preconditions, the counter probe (informational), tests/test_gpu.py on the
+card, the alignment probe's on-card check from the vLLM venv, the ratio at
+seed 0 at every G (the first run's V8 read before anything else is bought),
+the clock elasticity at every G at duty states 1.0 0.5 0.25, the later seeds
+scored with the earlier ones at --duty 0.25, and, only when END_SUITE=run asks
+for it, the whole suite at the end as a record. What this file pins: the three
+shell habits this project has been burned by, the ledger's second opinion (the
+driver's rule, lifted), every gate asking for DONE and not for "latched",
+overrides that hold for every later pass, every arm under a hang cap off its
+own price, the session a pass lands in, the card and the duty it is measured
+at and the lock it holds, pairing only with reports that formed a ratio, a
+skip worded by seed 0's V7 verdict and the follow-up a V7 FAIL prints, tables
+rebuilt from the reports on disk (per run, and per G through R3's own
+cross-run machinery) with their legend, the elasticity band read through the
+arm's own `band_of` and withheld from a page its gates refused, what each
+ratio reads as off that band, the bytes-rate bound per G at the ceilings of
+the ruler the session measured, a counter probe that finds ncu off PATH too
+and never gates or latches, and a laptop dry run that prices every step off
 its own source and writes nothing into the tree.
 
 The measuring path is driven end to end off GPU through two planted
 interpreters: a base one that names a planted card and UUID, prints a planted
-plan page for an arm's --dry-run and is the real interpreter for everything
-else, and an arm one that prints the plan line and the RESULT lines and writes
+plan page for an arm's --dry-run, runs dram_counter_route.py's REAL do_probe
+over a planted box for --probe, and is the real interpreter for everything
+else; and an arm one that prints the plan line and the RESULT lines and writes
 report.json, which is all the chain reads, and emulates
 `private_weight_reference.py --probe-check` (one RESULT line; exit 0, 3, or 2
 when it refuses).
@@ -46,6 +50,7 @@ HELPERS = ROOT / "scripts" / "alpha_g_chain_helpers.py"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 import alpha_g_chain_helpers as H  # noqa: E402
+from _committed import ncu_refusals  # noqa: E402
 from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
@@ -463,27 +468,32 @@ def test_a_pytest_step_runs_without_the_chains_knobs(tmp_path, monkeypatch):
 
 
 def test_the_order_is_the_owners_and_only_the_pre_arm_checks_are_gated():
-    """D3: preflight, preconditions, tests/test_gpu.py (gated), the probe
-    check from the vLLM venv (gated), R3 seed 0 at every G with the pilot's
-    V8 read, R1 at every G, R3's later seeds, then, on END_SUITE=run, the
-    whole suite uncapped, from PY_BASE, gating nothing."""
-    marks = ['echo "== preflight', 'echo "== preconditions', 'echo "== tests/test_gpu.py',
-             'echo "== the alignment probe under the graph',
-             'echo "== the re-read fraction, off the cap, seed', 'echo "== clock elasticity',
-             'echo "== the re-read fraction, the later seeds', 'echo "== the whole suite']
+    """D3: preflight, preconditions, the counter probe (informational, never
+    gated), tests/test_gpu.py (gated), the probe check from the vLLM venv
+    (gated), R3 seed 0 at every G with the pilot's V8 read, R1 at every G, R3's
+    later seeds, then, on END_SUITE=run, the whole suite uncapped, from
+    PY_BASE, gating nothing."""
+    marks = ['echo "== preflight', 'echo "== preconditions', 'echo "== counter-probe',
+             'echo "== tests/test_gpu.py', 'echo "== the alignment probe under the graph',
+             'echo "== the ratio, shared over private, off the cap, seed',
+             'echo "== clock elasticity',
+             'echo "== the ratio, shared over private, the later seeds', 'echo "== the whole suite']
     at = [CODE.index(m) for m in marks]
     assert at == sorted(at), dict(zip(marks, at, strict=True))
-    gpu = CODE[at[2]:at[3]]
+    counter = CODE[at[2]:at[3]]
+    assert 'counter_probe_step "$COUNTER_PROBE_S"' in counter
+    assert "stop_chain" not in counter and "exit " not in counter, "the counter probe gates nothing"
+    gpu = CODE[at[3]:at[4]]
     assert "tests/test_gpu.py -q -rfE -p no:cacheprovider" in gpu
     assert 'gpu_tests_gate "$PAST_GPU_TESTS" || stop_chain' in gpu
-    probe = CODE[at[3]:at[4]]
+    probe = CODE[at[4]:at[5]]
     assert "$(probe_check_cmd)" in probe and 'probe_check_gate "$PAST_V8" || stop_chain' in probe
     assert re.search(r'^probe_check_cmd\(\) \{\n  echo "\$PY_VLLM" "\$REPO/scripts/private_weight_'
                      r'reference\.py" --probe-check \\\n\s+--model mixtral-8x7b --block-m 32\n\}',
                      CODE, re.M), "the NEW INTERFACE's command line, from the vLLM venv"
-    pilot = CODE[at[4]:at[5]]
+    pilot = CODE[at[5]:at[6]]
     assert 'v8_gate "$PAST_V8" || stop_chain' in pilot
-    suite = CODE[at[7]:CODE.index("# 9. the table")]
+    suite = CODE[at[8]:CODE.index("# 10. the table")]
     assert ('pytest_step suite "$SUITE_TIMEOUT_S" tests/ -q -rfE --durations=25'
             ' -p no:cacheprovider') in suite
     assert "--maxfail" not in suite and "-x " not in suite, "the suite on the pod is uncapped"
@@ -670,6 +680,132 @@ def test_the_runbook_chain_section_says_what_the_chain_does():
     rate = re.search(r'^SUITE_S_PER_TEST="\$\{SUITE_S_PER_TEST:-([0-9.]+)\}"$', CODE, re.M)
     assert f"session 5's pod rate of {rate.group(1)} s a test" in flat
     assert "0.66 s a test" not in flat
+
+
+def test_the_help_says_what_each_regime_word_reads_as_and_the_bound():
+    """The header's regime words say what the ratio beside each reads as,
+    which both tables print, and CLOCK-CARRIES is not a time ratio but a
+    blend (session 5's findings, 4.2 and 9); the bytes-rate bound is named
+    with its form."""
+    prose = " ".join(_header_prose().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert label in prose, label
+    assert "the ratio is a time ratio" not in prose, "a blend, not a time ratio (findings 9)"
+    assert "the ratio is NOT alpha" in prose
+    assert "alpha <= (t x C / W - 1) / (n - 1)" in prose
+    assert "each rebuild prints it per G with the ceiling it used" in prose
+
+
+def test_the_help_records_the_counter_probe_and_runpods_counter_history():
+    """The counter probe's place and rules, where it looks (NCU_SEARCH's own
+    default, not a second copy), and RunPod's record: the ERR_NVGPUCTRPERM
+    refusals this repo commits, and session 4's probe finding no ncu on PATH."""
+    got = subprocess.run(["bash", str(CHAIN), "--help"], capture_output=True, text=True,
+                         timeout=60, env=chain_env(REPO=str(ROOT)))
+    assert "counter-probe" in got.stdout and "ERR_NVGPUCTRPERM" in got.stdout, "--help prints it"
+    flat = " ".join(_header_prose().split()).replace("/ ", "/")   # a wrapped path, joined
+    runs = flat[flat.index("WHAT IT RUNS"):flat.index("EVERY ARM STEP")]
+    assert runs.index("preconditions") < runs.index("counter-probe") < runs.index("gpu-tests")
+    assert "counter-probe INFORMATIONAL: NEVER GATED AND NEVER LATCHED" in flat
+    globs = _default("NCU_SEARCH")
+    assert f"at NCU_SEARCH's globs ({' and '.join(globs.split())} by default)" in flat
+    assert "scripts/dram_counter_route.py --probe, the driver's counter_plan probe" in flat
+    for word in ("OPEN", "BLOCKED", "ABSENT", "UNTESTED", "ERROR"):
+        assert word in runs, word
+    for fact in ("two rented H200s attempted a counter read and both were refused with"
+                 " ERR_NVGPUCTRPERM", "and on 2026-09-15, on a pod holding"
+                 " neither CAP_SYS_ADMIN nor CAP_PERFMON",
+                 "the 2026-09-09 and 2026-09-10 pods were never asked",
+                 "in session 4 (2026-09-21) ncu was absent from the image as far as the probe"
+                 " looked, which was PATH alone",
+                 '"no ncu on PATH"', "gaps-nvidia_h200-20260921T235000Z/counter_route.json",
+                 "session 5 attempted none", "Two refused pods are a record, not a fact about"
+                 " the platform"):
+        assert fact in flat, fact
+    assert "COUNTERS.json" in flat and "$SESSION/COUNTERS" in flat
+    assert "the counter probe runs on every pass (its INFO row is never latched)" in flat
+    assert "The counter probe runs under the same rule over its price" in flat
+
+
+def test_runpods_counter_record_counts_every_refusal_this_repo_commits():
+    """The chain's header (its --help) and every runbook passage that states
+    RunPod's ncu record name each refusal a profile log commits, by its file
+    and by its run's own date, and none calls the record one refusal on one
+    pod: profiles/q2_kernel_names.txt holds an ERR_NVGPUCTRPERM from ncu over
+    the harness's own CLI on an H200, three weeks before 2026-09-15."""
+    refusals = ncu_refusals()
+    assert refusals, "profiles/ commits the earlier refusal this record counts"
+    assert all("H200" in card for _p, _d, card in refusals), refusals
+    header = " ".join(_header_prose().split()).replace("/ ", "/")
+    runbook = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
+    chain = " ".join(_runbook_chain_section().split())
+    p10 = runbook[runbook.index("| P10 |"):runbook.index("| P11a |")]
+    pnsys = runbook[runbook.index("### P-nsys, and why it moved to the front"):]
+    pnsys = pnsys[:pnsys.index("question this project has never answered")]
+    start = runbook.index("| `ncu` says ERR_NVGPUCTRPERM |")
+    playbook = runbook[start:runbook.index("| override_config appears", start)]
+    for name, text in (("header", header), ("chain section", chain), ("P10", p10),
+                       ("P-nsys", pnsys), ("playbook", playbook)):
+        for path, day, _card in refusals:
+            assert day in text, (name, day)
+            if name != "P-nsys":
+                assert path in text, (name, path)
+        assert "2026-09-15" in text, name
+        for stale in ("One refusal on one pod", "one refusal on one pod",
+                      "one H200 refused", "one rented H200 refused"):
+            assert stale not in text, (name, stale)
+
+
+def test_the_runbook_states_the_reads_as_rule_and_the_bound():
+    sec = " ".join(_runbook_chain_section().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert label in sec, label
+    assert "a time ratio, a blend of traffic and clock" not in sec
+    assert "alpha <= (t x C / W - 1) / (n - 1)" in sec and "`ruler=<yaml>`" in sec
+    assert "Both tables carry `reads_as`" in sec
+
+
+def test_the_runbook_states_the_counter_probe_and_no_platform_fact():
+    """The runbook's chain section and its counter rows say what the chain now
+    does, and none of them states the refused pods' answer as the platform's."""
+    sec = " ".join(_runbook_chain_section().split())
+    assert "The counter probe, INFORMATIONAL: never gated and never latched" in sec
+    assert "`INFO`" in sec
+    for glob_ in _default("NCU_SEARCH").split():
+        assert f"`{glob_}`" in sec, glob_
+    assert "2026-09-15" in sec and "ERR_NVGPUCTRPERM" in sec and "no ncu on PATH" in sec
+    assert "`COUNTERS`" in sec and "`COUNTERS.json`" in sec
+    text = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
+    for stale in ("`ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`",
+                  "`ncu` is walled off on a rented pod by `ERR_NVGPUCTRPERM`",
+                  "BLOCKED is the ANSWER on a rented pod", "expect BLOCKED",
+                  "while every rented pod refused the counter"):
+        assert stale not in text, stale
+    start = text.index("| `ncu` says ERR_NVGPUCTRPERM |")
+    playbook = text[start:text.index("| override_config appears", start)]
+    assert "counter-probe" in playbook, "the playbook row names the chain's step"
+
+
+def test_the_counter_plan_row_sends_the_operator_to_the_probe_not_to_a_platform_fact():
+    """The runbook's `counter_plan` arm row said "BLOCKED is the ANSWER on a
+    rented pod" and closed on "expect BLOCKED" after two other passages of the
+    same file had been rewritten to read the probe instead. The row now says
+    BLOCKED is an answer about the pod, gives the committed record (each
+    profile-logged refusal by its run's own date, and 2026-09-15), and names
+    the chain's counter-probe step that asks on every pass."""
+    text = " ".join((ROOT / "docs" / "POD_RUNBOOK.md").read_text().split())
+    start = text.index("| `counter_plan` | ")
+    row = text[start:text.index("| `counter-n32-m64` | ", start)]
+    for stale in ("BLOCKED is the ANSWER on a rented pod", "expect BLOCKED",
+                  "while every rented pod refused"):
+        assert stale not in row, stale
+    assert "BLOCKED is an answer about this pod" in row
+    assert "not the platform's answer" in row
+    assert "Read the probe rather than expect either word" in row
+    for _path, day, _card in ncu_refusals():
+        assert day in row, day
+    assert "2026-09-15" in row and "session 5 attempted none" in row
+    assert "`counter-probe` step" in row
 
 
 # --------------------------------------------------------------------------
@@ -910,8 +1046,9 @@ def test_a_filesystem_that_cannot_flock_falls_back_to_mkdir_not_to_refusal(tmp_p
 
 def _report(tmp_path, name, *, G=1, seed=0, ratio=0.9551, lo=0.9544, hi=0.9695,
             synthetic=False, experiment="private_weight_reference", duty=0.25,
-            replicates=None, table=None, v7="PASS", v8="PASS"):
-    payload = {"experiment": experiment, "synthetic": synthetic, "model": "mixtral_8x7b",
+            replicates=None, table=None, v7="PASS", v8="PASS", extra=None):
+    payload = {**(extra or {}),
+               "experiment": experiment, "synthetic": synthetic, "model": "mixtral_8x7b",
                "block_m": 32, "treads": [1, 2, 3, 4, 5, 6], "repeats": 9,
                "pinned": {"BLOCK_SIZE_N": 64, "GROUP_SIZE_M": G}, "seed": seed, "duty": duty,
                "run_id": name, "ratio": ratio,
@@ -1084,9 +1221,10 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
     assert H.pairs_table(session, results, "1 4 16", "0 1 2", settings) == 3
     first = (session / "PAIRS.tsv").read_text()
     rows = [ln.split("\t") for ln in first.splitlines()]
-    assert rows[0] == H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
+    assert rows[0] == H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit",
+                                            "reads_as"]
     assert [(r[0], r[1]) for r in rows[1:]] == [("1", "0"), ("1", "1"), ("16", "0")]
-    assert all(r[-2:] == ["unmeasured", "unscored"] for r in rows[1:])
+    assert all(r[-3:] == ["unmeasured", "unscored", H.READS_AS_UNRESOLVED] for r in rows[1:])
     # the same disk, rebuilt again: byte-identical, no second row per run
     assert H.pairs_table(session, results, "1 4 16", "0 1 2", settings) == 3
     assert (session / "PAIRS.tsv").read_text() == first
@@ -1095,7 +1233,8 @@ def test_the_pairs_table_is_rebuilt_whole_and_joins_a_later_r1(tmp_path):
     (logs / "r1-g1.log").write_text("experiment  clock_elasticity / r1rid\n")
     H.pairs_table(session, results, "1 4 16", "0 1 2", settings)
     rows = [ln.split("\t") for ln in (session / "PAIRS.tsv").read_text().splitlines()]
-    assert [r[-2:] for r in rows[1:]] == [["RAW-STANDS", "DONE"]] * 2 + [["unmeasured", "unscored"]]
+    assert [r[-3:] for r in rows[1:]] == [["RAW-STANDS", "DONE", H.READS_AS["RAW-STANDS"]]] * 2 + [
+        ["unmeasured", "unscored", H.READS_AS_UNRESOLVED]]
     fixed = {ln.split("\t")[0]: ln.split("\t")[1:]
              for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
     assert fixed["r3_duty"] == ["0.25", "report.json of 3 run(s)"]
@@ -1260,6 +1399,299 @@ def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# what a ratio reads as, and the bytes-rate bound (H200 session 5's findings)
+# --------------------------------------------------------------------------
+
+def test_reads_as_is_the_findings_rule_over_r1s_own_band_names():
+    """A ratio is a re-read fraction ONLY beside RAW-STANDS on a page whose
+    gates stood behind it; beside CLOCK-CARRIES it is a blend and not alpha
+    (session 5 at G >= 4: the shared arm on a clock-scaled floor, the
+    bytes-rate bound still proving reuse); beside every other word it is
+    unresolved. The two keys are R1's own band names."""
+    import clock_elasticity as CE
+    names = [b[0] for b in CE.BANDS]
+    assert set(H.READS_AS) <= set(names), (H.READS_AS, names)
+    for word in ("DONE", "CLAIM_FAIL"):
+        assert H.reads_as("RAW-STANDS", word) == "re-read fraction"
+        assert H.reads_as("CLOCK-CARRIES", word) == ("blend (traffic and a clock-scaled on-chip"
+                                                     " floor): not alpha")
+    unlicensed = [n for n in names if n not in H.READS_AS] + [
+        "STRADDLES", "withheld:INVALID", "unmeasured", "unresolved"]
+    for band in unlicensed:
+        assert H.reads_as(band, "CLAIM_FAIL") == H.READS_AS_UNRESOLVED, band
+    for word in ("INVALID", "REFUSED", "ERROR", "unscored"):
+        assert H.reads_as("RAW-STANDS", word) == H.READS_AS_UNRESOLVED, word
+    got = subprocess.run([sys.executable, str(HELPERS), "reads-as", "CLOCK-CARRIES", "DONE"],
+                         capture_output=True, text=True, timeout=120, env=laptop_env())
+    assert got.stdout.strip() == H.READS_AS["CLOCK-CARRIES"]
+
+
+def _r1_page(results: Path, logs: Path, g: int, lo, hi, *verdicts):
+    """An R1 report for G and the chain log that names it."""
+    rid = f"r1rid-g{g}"
+    _r1(results / "clock_elasticity", rid, lo, hi, *verdicts)
+    (logs / f"r1-g{g}.log").write_text(f"experiment  clock_elasticity / {rid}\n")
+
+
+def test_both_tables_say_what_the_ratio_reads_as(tmp_path):
+    """The relabel: PAIRS.tsv and PAIRS-by-G.tsv each gain `reads_as`, off the
+    G's R1 page. Until now CLOCK-CARRIES rows sat in the table as if the ratio
+    were the re-read fraction the header promised for RAW-STANDS."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    ok, fail = ("CLAIM", "C1", "PASS"), ("CLAIM", "C1", "FAIL")
+    for g in (1, 4, 16, 64, 128):
+        _seeded(session, results, g, {0: (0.9, 0.89, 0.91, "PASS")})
+    logs = session / "chain-logs"
+    _r1_page(results, logs, 1, 0.10, 0.20, ok)                                  # RAW-STANDS
+    _r1_page(results, logs, 4, 1.07, 1.20, fail)                                # CLOCK-CARRIES
+    _r1_page(results, logs, 16, 1.09, 1.27, ("VALIDITY", "V7", "FAIL"), fail)   # withheld
+    _r1_page(results, logs, 64, 0.387, 0.407, fail)                             # STRADDLES
+    H.pairs_table(session, results, "1 4 16 64 128", "0", {})
+    want = [H.READS_AS["RAW-STANDS"], H.READS_AS["CLOCK-CARRIES"]] + [H.READS_AS_UNRESOLVED] * 3
+    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit", "reads_as"]
+    per_run = [dict(zip(header, r, strict=True)) for r in _rows(session / "PAIRS.tsv")]
+    assert [r["reads_as"] for r in per_run] == want
+    per_g = [dict(zip(H.BY_G_HEADER, r, strict=True)) for r in _rows(session / "PAIRS-by-G.tsv")]
+    assert [r["reads_as"] for r in per_g] == want
+    assert [r["band"] for r in per_g] == ["RAW-STANDS", "CLOCK-CARRIES", "withheld:INVALID",
+                                          "STRADDLES", "unmeasured"]
+    legend = " ".join((session / "PAIRS-README.txt").read_text().split())
+    for label in (*H.READS_AS.values(), H.READS_AS_UNRESOLVED):
+        assert f"`{label}`" in legend, label
+    assert "ONLY when the band is RAW-STANDS on a page whose gates stood behind it" in legend
+
+
+def _ruler(path: Path, *, named: float, read: float | None, pin: float | None,
+           read_note: str = "", reduce_gbps: float | None = None) -> Path:
+    """A planted calibrate_hardware.py yaml: the named bandwidth, the read
+    patterns, and the pin rate."""
+    import yaml
+    patterns = []
+    if read is not None:
+        patterns.append({"pattern": "read_stream", "gbps": read, "note": read_note})
+    if reduce_gbps is not None:
+        patterns.append({"pattern": "read_reduce", "gbps": reduce_gbps, "note": ""})
+    patterns.append({"pattern": "triad", "gbps": named, "note": ""})
+    doc = {"name": "planted", "verified": True, "checked_on": "2026-09-23",
+           "measured_commit": "0123456789abcdef", "memory": {"bandwidth_tb_s": named / 1000},
+           "detail": {"achieved_bandwidth_gbps": named, "ceiling_pattern": "triad",
+                      "bandwidth_patterns": patterns},
+           "observed": {"pin_rate_gbps": pin} if pin else {}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(doc))
+    return path
+
+
+def _bound_reports(session: Path, results: Path, g: int, tops: dict[int, float],
+                   *, named: float, w: int, treads: int = 6):
+    """Ratio reports for G whose shared ladder tops out at `tops[seed]` ms."""
+    logs = session / "chain-logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    for seed, top in tops.items():
+        rid = f"rid-g{g}-s{seed}"
+        points = [[n, top * n / treads] for n in range(1, treads + 1)]
+        _report(results / "private_weight_reference", rid, G=g, seed=seed,
+                extra={"card": "nvidia_planted", "bandwidth_gbps": named,
+                       "memory_plan": {"per_copy_bytes": w},
+                       "ladders": {"shared": {"points": points}}})
+        (logs / f"r3-g{g}-s{seed}.log").write_text(
+            f"experiment  private_weight_reference / {rid}\n")
+
+
+def test_the_bytes_rate_bound_is_read_off_the_reports_and_the_ruler_the_session_measured(tmp_path):
+    """Findings 3.6: alpha <= (t x C / W - 1) / (n - 1), the one bound that
+    needs no private arm, per G, at the ruler's read_stream and its pin rate,
+    with t the mean of the G's shared top-tread times, W each report's own
+    expert set and the ruler the yaml calibrate wrote in this session. At the
+    bound the bytes W (1 + alpha (n - 1)) fill exactly t x C. 1 or above
+    excludes nothing and the console says so."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    named, read, pin, w = 4000.0, 4500.0, 4800.0, 2_000_000_000
+    ruler = _ruler(tmp_path / "cal" / "run-1" / "measured_nvidia_planted.yaml",
+                   named=named, read=read, pin=pin, reduce_gbps=4400.0)
+    (session / "logs").mkdir(parents=True)
+    (session / "logs" / "calibrate.log").write_text(
+        f"[calibrate] wrote {tmp_path}/cal/old/measured_nvidia_planted.yaml\n"
+        f"[calibrate] wrote {ruler}\n[calibrate] PUBLISHED to elsewhere.yaml\n")
+    tops = {4: {0: 2.30, 1: 2.36}, 1: {0: 3.10, 1: 3.14}}
+    for g, t in tops.items():
+        _bound_reports(session, results, g, t, named=named, w=w)
+    n, lines = H.pairs_table_lines(session, results, "1 4", "0 1", {})
+    assert n == 4
+    per_g = {r[0]: dict(zip(H.BY_G_HEADER, r, strict=True))
+             for r in _rows(session / "PAIRS-by-G.tsv")}
+    for g, t in tops.items():
+        row, mean = per_g[str(g)], statistics.mean(t.values())
+        assert row["top_tread"] == "6" and float(row["shared_top_ms"]) == pytest.approx(mean,
+                                                                                        abs=5e-5)
+        for col, c in (("bound_read_stream", read), ("bound_pin_rate", pin)):
+            b = float(row[col])
+            # the bound's meaning, not its formula: at it, the bytes fill the time
+            assert w * (1 + b * 5) == pytest.approx(mean * 1e-3 * c * 1e9, rel=1e-4), (g, col)
+        assert float(row["bound_pin_rate"]) > float(row["bound_read_stream"])
+    fixed = {ln.split("\t")[0]: ln.split("\t")[1:]
+             for ln in (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}
+    assert fixed["ruler"][0] == str(ruler)
+    assert "calibrate wrote in this session" in fixed["ruler"][1]
+    assert fixed["read_ceiling_gbps"][0] == f"{read:.1f}" and "read_stream" in fixed[
+        "read_ceiling_gbps"][1]
+    assert fixed["pin_rate_gbps"][0] == f"{pin:.1f}"
+    assert fixed["expert_set_bytes"][0] == str(w)
+    # the console: the ruler once, then each G with the ceilings it used
+    assert lines[0].startswith(f"bytes-rate bound, at the ceilings of {ruler}")
+    g4 = next(ln for ln in lines if ln.startswith("G=4 "))
+    assert (f"alpha <= {per_g['4']['bound_read_stream']} at read_stream {read:.1f} GB/s, <= "
+            f"{per_g['4']['bound_pin_rate']} at the pin rate {pin:.1f} GB/s") in g4
+    assert "excludes nothing" not in g4
+    g1 = next(ln for ln in lines if ln.startswith("G=1 "))
+    assert float(per_g["1"]["bound_read_stream"]) >= 1, "the planted G=1 fits a full re-read"
+    assert "1 or above: a full re-read per M-tile fits in that time" in g1
+    assert "reads as: unresolved" in g1, "no R1 page yet"
+    got = subprocess.run([sys.executable, str(HELPERS), "pairs-table", str(session), str(results),
+                          "1 4", "0 1"], capture_output=True, text=True, timeout=120,
+                         env=laptop_env())
+    assert got.stdout.splitlines() == ["4 row(s)", *lines], got.stdout + got.stderr
+
+
+def test_a_ruler_the_reports_were_not_scored_against_withholds_the_bound(tmp_path):
+    """calibrate --publish overwrites one tracked file per card: on the laptop
+    the tracked ruler may be a later calibration than the one the reports
+    were scored against. Its named bandwidth must be the reports' own, or no
+    G gets a bound; `ruler=` names the right one."""
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    other = _ruler(tmp_path / "other.yaml", named=4000.5, read=4500.0, pin=4800.0)
+    n, lines = H.pairs_table_lines(session, results, "4", "0", {"ruler": str(other)})
+    assert lines[0].startswith("bytes-rate bound: NO RULER, so no G has one")
+    assert "is not the ruler these reports were scored against" in lines[0]
+    assert lines[1].startswith("G=4   no bytes-rate bound (no ruler, above)")
+    row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+    assert (row["bound_read_stream"], row["bound_pin_rate"]) == ("none", "none")
+    right = _ruler(tmp_path / "right.yaml", named=4000.0, read=4500.0, pin=4800.0)
+    H.pairs_table(session, results, "4", "0", {"ruler": str(right)})
+    row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+    assert row["bound_pin_rate"] != "none"
+    # no ruler anywhere: said, not guessed
+    bare, bare_results = tmp_path / "bare", tmp_path / "bare-res"
+    _bound_reports(bare, bare_results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    _n, lines = H.pairs_table_lines(bare, bare_results, "4", "0", {})
+    assert "pass ruler=<yaml> to pairs-table" in lines[0]
+
+
+def test_the_read_ceiling_is_read_stream_and_never_read_reduce(tmp_path):
+    """read_reduce is calibrate's LOWER bound on the read rate: a ceiling set
+    too low makes an upper bound on alpha too tight, so a ruler without a
+    usable read_stream gives no read-ceiling bound, and the pin-rate bound
+    still stands."""
+    from moe.bench import calibrate as CAL
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    for name, kw in (("none", {"read": None}),
+                     ("disowned", {"read": 4600.0,
+                                   "read_note": f"came in below triad: {CAL.DISOWNED}"})):
+        ruler = _ruler(tmp_path / f"{name}.yaml", named=4000.0, pin=4800.0, reduce_gbps=4400.0,
+                       **kw)
+        _n, lines = H.pairs_table_lines(session, results, "4", "0", {"ruler": str(ruler)})
+        row = dict(zip(H.BY_G_HEADER, _rows(session / "PAIRS-by-G.tsv")[0], strict=True))
+        assert row["bound_read_stream"] == "none" and row["bound_pin_rate"] != "none", name
+        assert "no bound at read_stream" in lines[1] and "at the pin rate 4800.0 GB/s" in lines[1]
+
+
+def test_the_ruler_row_names_its_measurement_or_says_it_has_none(tmp_path):
+    """PAIRS-fixed.tsv's read-ceiling row cites the ruler's own date and
+    commit; a ruler that records no commit says so, rather than a truncated
+    "no comm" standing in for a sha."""
+    import yaml
+    session, results = tmp_path / "s", tmp_path / "res"
+    _bound_reports(session, results, 4, {0: 2.3}, named=4000.0, w=2_000_000_000)
+    ruler = _ruler(tmp_path / "r.yaml", named=4000.0, read=4500.0, pin=4800.0)
+    doc = yaml.safe_load(ruler.read_text())
+
+    def source():
+        H.pairs_table(session, results, "4", "0", {"ruler": str(ruler)})
+        return {ln.split("\t")[0]: ln.split("\t")[2] for ln in
+                (session / "PAIRS-fixed.tsv").read_text().splitlines()[1:]}["read_ceiling_gbps"]
+    assert f"measured {doc['checked_on']} at {doc['measured_commit'][:7]}" in source()
+    doc["measured_commit"] = ""
+    ruler.write_text(yaml.safe_dump(doc))
+    assert source().endswith("at no commit recorded"), source()
+
+
+def _exe(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\nexit 0\n")
+    path.chmod(0o755)
+    return path
+
+
+def test_ncu_is_looked_for_on_path_then_under_each_glob_newest_first(tmp_path):
+    """Session 4's probe looked on PATH alone and read "no ncu on PATH"; an
+    image can carry ncu under the CUDA toolkit or Nsight Compute's own
+    directory with neither on PATH. PATH first (what a bare `ncu` runs), then
+    each glob newest name first, a path once, executables only."""
+    on_path = _exe(tmp_path / "bin" / "ncu")
+    cuda = _exe(tmp_path / "cuda" / "bin" / "ncu")
+    cuda124 = _exe(tmp_path / "cuda-12.4" / "bin" / "ncu")
+    old = _exe(tmp_path / "nsight" / "2024.1" / "ncu")
+    new = _exe(tmp_path / "nsight" / "2025.3" / "ncu")
+    (tmp_path / "nsight" / "2026.1").mkdir()
+    (tmp_path / "nsight" / "2026.1" / "ncu").write_text("not executable\n")
+    globs = [f"{tmp_path}/cuda*/bin/ncu", f"{tmp_path}/nsight/*/ncu"]
+    got = H.ncu_locate(globs, path_env=str(tmp_path / "bin"))
+    assert got == [(str(on_path), "PATH"), (str(cuda), globs[0]), (str(cuda124), globs[0]),
+                   (str(new), globs[1]), (str(old), globs[1])]
+    # the PATH hit is listed once, as PATH
+    got = H.ncu_locate(globs, path_env=str(tmp_path / "cuda" / "bin"))
+    assert [p for p, _ in got].count(str(cuda)) == 1 and got[0] == (str(cuda), "PATH")
+    assert H.ncu_locate([f"{tmp_path}/nowhere/*/ncu"], path_env=str(tmp_path / "empty")) == []
+    env = laptop_env(PATH=str(tmp_path / "empty") + os.pathsep + "/usr/bin:/bin")
+    cli = subprocess.run([sys.executable, str(HELPERS), "ncu-locate", " ".join(globs)],
+                         capture_output=True, text=True, timeout=120, env=env)
+    assert cli.stdout.rstrip("\n").split("\t") == [
+        str(cuda), globs[0], " ".join(str(p) for p in (cuda, cuda124, new, old))]
+    none = subprocess.run([sys.executable, str(HELPERS), "ncu-locate", f"{tmp_path}/x/*/ncu"],
+                          capture_output=True, text=True, timeout=120, env=env)
+    assert none.stdout.rstrip("\n").split("\t") == ["none", "none", "none"]
+
+
+def test_the_counters_note_reads_a_crash_a_timeout_a_defect_and_no_device(tmp_path):
+    """Whatever the probe does, the counter probe's note says it in one word
+    first, and none of it is a latched word: ERROR for a crash, a timeout or
+    an exit code its RESULT lines do not support; UNTESTED when ncu is here
+    and no kernel launched."""
+    s = tmp_path / "s"
+    s.mkdir()
+    log = s / "counter-probe.log"
+
+    def note(rc, secs=5, cap=1800, binary="/x/ncu", where="PATH"):
+        return H.counters(s, log, rc, cap, secs, binary, where, binary, "/g/*/ncu")
+    log.write_text("Traceback (most recent call last): planted\n")
+    assert note(4).startswith("ERROR: the probe wrote no COUNTERS.json (exit 4); its log ends:"
+                              " Traceback")
+    assert note(124, secs=1800).startswith("ERROR: TIMED OUT after 1800 s against a cap of 1800 s")
+    assert note(137, secs=1900).startswith("ERROR: TIMED OUT after 1900 s")
+    opened = {"verdict": "OPEN", "ncu": {"present": True, "counters_read": True,
+                                         "cause": "counters readable: planted"}}
+    (s / "COUNTERS.json").write_text(json.dumps(opened))
+    log.write_text(exit_codes.result_line("CLAIM", "P1", "PASS", "planted") + "\n")
+    assert note(0).startswith("OPEN: counters readable: planted; ncu /x/ncu (on PATH)")
+    assert note(1).startswith("ERROR: DEFECT: the probe exited 1 and its RESULT lines imply 0")
+    (s / "COUNTERS.json").write_text(json.dumps(
+        {"verdict": "REFUSE", "ncu": {"present": True, "cause": "no CUDA device at all: planted"}}))
+    log.write_text("ROUTE PROBE\n  VERDICT   REFUSE\n")
+    assert note(2).startswith("UNTESTED: no CUDA device at all: planted")
+    (s / "COUNTERS.json").write_text(json.dumps(
+        {"verdict": "REFUSE", "ncu": {"present": False, "why": "no ncu on PATH"}}))
+    assert note(2).startswith("ERROR: DEFECT: /x/ncu was found"), "found, yet the probe saw none"
+    assert note(2, binary="none", where="none").startswith(
+        "ABSENT: no ncu where the chain looks; ncu not on PATH and none at /g/*/ncu")
+    text = (s / "COUNTERS").read_text()
+    assert "verdict     ABSENT" in text and "informational" in text
+    for word in ("DONE", "CLAIM_FAIL", "INVALID"):
+        assert f"verdict     {word}" not in text
+
+
+# --------------------------------------------------------------------------
 # the measuring path, end to end, through planted interpreters
 # --------------------------------------------------------------------------
 
@@ -1267,6 +1699,10 @@ def test_the_fixed_table_says_mixed_when_the_runs_disagree(tmp_path):
 #: and R1's wall. The chain prices every cap, the V8 STOP and a follow-up off
 #: these; the tests recompute each figure from them.
 STUB_LADDER_S, STUB_PROBE_S, STUB_R1_S = 150, 10, 900
+#: The named bandwidth every planted R3 report says it was scored against, and
+#: its expert set: planted inputs of the bytes-rate bound, which the tests
+#: recompute from the reports rather than restate.
+STUB_BANDWIDTH_GBPS, STUB_EXPERT_SET_BYTES = 4000.0, 2_000_000_000
 
 STUB_BASE = r"""#!/bin/bash
 # a planted base interpreter: the card and its UUID are the test's, an arm's
@@ -1294,6 +1730,11 @@ if [[ " $* " == *" --dry-run "* ]]; then
       echo "WALL CLOCK at duty $duty: the ladder's @LADDER@ s of kernel time takes about $w s"
       exit 2 ;;
   esac
+fi
+# the counter probe: the REAL do_probe over a planted box (STUB_PROBE below)
+if [[ "${1:-}" == */dram_counter_route.py && " $* " == *" --probe "* ]]; then
+  shift
+  exec @PYTHON@ @COUNTER_PROBE@ "$@"
 fi
 # a planted pytest, when the test asks for one: the names of the environment
 # it was run with, and a tally
@@ -1335,6 +1776,7 @@ def many(name):
 
 
 plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text()) if os.environ.get("STUB_PLAN") else {}
+STUB_BANDWIDTH_GBPS, STUB_EXPERT_SET_BYTES = @BANDWIDTH@, @EXPERT_SET@
 if "--probe-check" in args:
     # the NEW INTERFACE of private_weight_reference.py --probe-check: one RESULT
     # line, exit 0 on PASS and 3 otherwise, REFUSED 2 with no card or no vLLM
@@ -1386,6 +1828,10 @@ if exp == "private_weight_reference":
                               if reps else None),
                "align_probe": {"synthetic": False, "note": cfg.get("probe_note", ""),
                                "cells": [{"graph_calls": 16, "host_bound": False}] * 3},
+               "card": "nvidia_testcard", "bandwidth_gbps": STUB_BANDWIDTH_GBPS,
+               "memory_plan": {"per_copy_bytes": STUB_EXPERT_SET_BYTES},
+               "ladders": {"shared": {"points": [[n, 0.15 + (0.52 + 0.001 * seed) * n]
+                                                 for n in range(1, int(opt("--treads")) + 1)]}},
                "treads_table": table,
                "gates": [{"tag": t, "kind": k, "verdict": v} for k, t, v in gates]}
 else:
@@ -1402,6 +1848,63 @@ if not cfg.get("no_report"):
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.json").write_text(json.dumps(payload))
 sys.exit(exit_codes.classify((k, t, v) for k, t, v in gates))
+'''
+
+#: What the planted ncu prints for --version, and the metric value an OPEN world
+#: reads back: the tests read both off here, not off a second literal.
+STUB_NCU_VERSION = "Version 2026.1.0.0 (planted)"
+STUB_ERR = ("==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access"
+            " NVIDIA GPU Performance Counters on the target device 0.")
+
+STUB_PROBE = r'''#!@PYTHON@
+"""A planted `dram_counter_route.py --probe`: the REAL do_probe, with only the
+box planted -- the two capabilities, the module flag, nsys, the card, and the
+bytes ncu and the probe child print in STUB_PLAN's "counter-probe" world.
+Whether ncu is found at all is the real shutil.which, on the PATH the chain
+handed this process; STUB_COUNTERS, when set, records that PATH."""
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "@ROOT@")
+sys.path.insert(0, "@ROOT@/scripts")
+import dram_counter_route as D
+
+plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text()) if os.environ.get("STUB_PLAN") else {}
+cfg = plan.get("counter-probe", {})
+if os.environ.get("STUB_COUNTERS"):
+    with open(os.environ["STUB_COUNTERS"], "a") as f:
+        f.write("counter-probe\t" + os.environ.get("PATH", "") + "\n")
+if cfg.get("crash"):
+    print("Traceback (most recent call last): a planted crash before any gate")
+    sys.exit(4)
+launched = f"{D.PK.MARKER} {D.PK.LAUNCHED} planted card: one add_"
+header = '"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+worlds = {
+    "open": (0, launched, "", header + f'"0","probe","{D.NCU_PROBE_METRIC}","byte","4194304"\n'),
+    "blocked": (1, launched, "@ERR@", ""),
+    "nodevice": (1, f"{D.PK.MARKER} {D.PK.NO_CUDA_DEVICE} torch.cuda.is_available() is False",
+                 "", ""),
+}
+rc, out, err, log_text = worlds[cfg.get("world", "open")]
+
+
+def planted_run(argv, timeout=60):
+    if "--version" in argv:
+        return 0, "NVIDIA (R) Nsight Compute Command Line Profiler\n@VERSION@\n", ""
+    Path(argv[argv.index("--log-file") + 1]).write_text(log_text)
+    return rc, out, err
+
+
+D._run = planted_run
+D.probe_capabilities = lambda: {"available": True, "cap_eff": "0xa80425fb",
+                                "cap_eff_field": "00000000a80425fb", "cap_eff_bits": 64,
+                                "sys_admin": False, "perfmon": False}
+D.probe_module_flag = lambda: {"available": False, "why": "the parameter is not listed"}
+D.probe_nsys = lambda: {"present": False, "why": "no nsys on PATH"}
+D.live_card = lambda: "nvidia_testcard"
+sys.exit(D.main(sys.argv[1:]))
 '''
 
 CARD = "nvidia_testcard"
@@ -1424,8 +1927,18 @@ class Pod:
                              .replace("@R1@", str(STUB_R1_S)))
         self.arm = root / "py-arm"
         self.arm.write_text(STUB_ARM.replace("@PYTHON@", sys.executable)
-                            .replace("@ROOT@", str(ROOT)))
-        for f in (self.base, self.arm):
+                            .replace("@ROOT@", str(ROOT))
+                            .replace("@BANDWIDTH@", repr(STUB_BANDWIDTH_GBPS))
+                            .replace("@EXPERT_SET@", repr(STUB_EXPERT_SET_BYTES)))
+        self.probe = root / "py-probe"
+        self.probe.write_text(STUB_PROBE.replace("@PYTHON@", sys.executable)
+                              .replace("@ROOT@", str(ROOT)).replace("@ERR@", STUB_ERR)
+                              .replace("@VERSION@", STUB_NCU_VERSION))
+        self.base.write_text(self.base.read_text().replace("@COUNTER_PROBE@", str(self.probe)))
+        #: where the counter probe's globs look: a directory of this world's own,
+        #: so no ncu the test box carries under /usr/local or /opt is found
+        self.ncu_root = root / "ncu-planted"
+        for f in (self.base, self.arm, self.probe):
             f.chmod(0o755)
         self.set_plan({})
 
@@ -1451,6 +1964,7 @@ class Pod:
                           SESSION_ROOT=str(self.sessions), RESULTS_ROOT=str(self.root / "results"),
                           MOE_RESULTS_DIR=str(self.results), WORKSPACE=str(self.root),
                           END_SUITE="skip", G_LADDER="1 16", SEEDS="0 1 2",
+                          NCU_SEARCH=f"{self.ncu_root}/*/ncu",
                           STUB_PLAN=str(self.plan), STUB_TRACE=str(self.trace))
         full.update(env)
         # a knob given as None is unset: the pass takes the chain's own default
@@ -1563,7 +2077,7 @@ def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_pa
     pod, s, _first, after, second = two_passes
     assert second.returncode == 0, second.stdout[-3000:] + second.stderr[-1500:]
     assert [st for st, _ in pod.traced()][len(after["trace"]):] == ["r1-g1"], "only the owed arm"
-    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit"]
+    header = H.reading_header() + ["eta", "eta_lo", "eta_hi", "band", "eta_exit", "reads_as"]
     keys = [("1", "0"), ("1", "1"), ("1", "2"), ("4", "0"), ("4", "1"), ("4", "2"), ("16", "0")]
     before = [dict(zip(header, r, strict=True)) for r in _rows_text(after["pairs"])]
     assert [(r["G"], r["seed"]) for r in before] == keys
@@ -1573,6 +2087,8 @@ def test_the_table_is_rebuilt_every_pass_and_joins_the_r1_a_resume_landed(two_pa
     assert [(r["G"], r["seed"]) for r in now] == keys, "one row per run, however many passes"
     assert [(r["band"], r["eta_exit"]) for r in now] == [("RAW-STANDS", "DONE")] * 3 + [
         ("withheld:INVALID", "INVALID")] * 3 + [("RAW-STANDS", "DONE")]
+    assert [r["reads_as"] for r in now] == [H.READS_AS["RAW-STANDS"]] * 3 + [
+        H.READS_AS_UNRESOLVED] * 3 + [H.READS_AS["RAW-STANDS"]], "R1's word, read as"
     assert [r["rep_n"] for r in now] == ["none", "2", "3"] * 2 + ["none"]
     assert [r["joint"] for r in now] == ["none", "PASS", "PASS"] * 2 + ["none"]
     assert [r["exit_scope"] for r in now] == ["alone", "envelope", "envelope"] * 2 + ["alone"]
@@ -1646,6 +2162,18 @@ def test_the_pilots_v8_stops_the_chain_and_past_v8_goes_on_recorded(tmp_path):
 def _const(name: str) -> int:
     """One of the chain's plain integer constants, off its own line."""
     return int(re.search(rf"^{name}=(\d+)$", CODE, re.M).group(1))
+
+
+def _driver_minutes(arm: str) -> int:
+    """The driver's own booking for one of its arms, lifted from its
+    `arm_minutes` the way the chain lifts it."""
+    driver = ROOT / "scripts" / "h200_gaps_session.sh"
+    got = subprocess.run(
+        ["bash", "-c", f'eval "$(sed -n \'/^arm_minutes()/,/^esac; }}/p\' "{driver}")"; '
+                       f"arm_minutes {arm}"],
+        capture_output=True, text=True, timeout=60).stdout.split()
+    assert got, arm
+    return int(got[0])
 
 
 def _r3_price(duty: float) -> int:
@@ -1727,7 +2255,8 @@ def test_a_refused_probe_check_stops_on_the_interpreter_and_offers_no_override(t
                       "regime words", "SEEDS=0 bash scripts/alpha_g_chain.sh --resume --past-v8"):
         assert fail_word not in stop, fail_word
     assert "--past-v8 buys nothing here" in stop
-    assert sorted(p.name for p in (s / "chain-logs").iterdir()) == ["probe-check.log"], \
+    assert sorted(p.name for p in (s / "chain-logs").iterdir()) == [
+        "counter-probe.log", "probe-check.log"], \
         "the arms' plans were run to price an override that buys nothing"
     assert not [r for r in _rows(s / "CHAIN.tsv") if r[0].endswith("-override")]
     # the interpreter fixed: a plain --resume proves the probe and goes on
@@ -1825,7 +2354,8 @@ def test_every_arm_step_runs_under_a_cap_off_its_own_price(tmp_path):
                   PATH=f"{shim}{os.pathsep}{os.environ['PATH']}")
     assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
     factor, floor = _const("ARM_CAP_FACTOR"), _const("ARM_CAP_FLOOR_S")
-    want = {"probe-check": max(factor * _const("PROBE_CHECK_S"), floor),
+    want = {"counter-probe": max(factor * 60 * _driver_minutes("counter_plan"), floor),
+            "probe-check": max(factor * _const("PROBE_CHECK_S"), floor),
             "r3-g1-s0": max(factor * _r3_price(0.25), floor),
             "r1-g1": max(factor * STUB_R1_S, floor)}
     for step, cap in want.items():
@@ -2054,6 +2584,128 @@ def test_a_dry_run_into_an_existing_session_is_refused(tmp_path, args, env):
     assert sorted(p.name for p in (tmp_path / "session").iterdir()) == [s.name]
 
 
+def _path_without_ncu(*first: Path) -> str:
+    """This box's PATH with every directory that holds an ncu dropped, and
+    `first` put in front: a pod running this file may carry a real ncu."""
+    keep = [d for d in os.environ["PATH"].split(os.pathsep)
+            if d and not (Path(d) / "ncu").exists()]
+    return os.pathsep.join([*(str(f) for f in first), *keep])
+
+
+def _counter_rows(s: Path) -> list[list[str]]:
+    return [r for r in _rows(s / "CHAIN.tsv") if r[0] == "counter-probe"]
+
+
+def test_the_counter_probe_is_informational_and_asks_again_on_every_pass(tmp_path):
+    """Right after the preconditions, on a box with no ncu anywhere the chain
+    looks: an INFO row whose note says ABSENT and where it looked, COUNTERS
+    beside the probe's own payload, and the chain goes on. INFO is not a
+    latched word, so the next pass asks again: a counter route belongs to
+    the pod."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    path = _path_without_ncu()
+    first = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=path)
+    assert first.returncode == 0, first.stdout[-3000:] + first.stderr[-800:]
+    (row,) = _counter_rows(s)
+    assert row[1:3] == ["INFO", "2"], row
+    assert row[6].startswith("ABSENT: no ncu where the chain looks; ncu not on PATH and none at"
+                             f" {pod.ncu_root}/*/ncu"), row[6]
+    assert "informational, gates nothing" in row[6] and str(s / "COUNTERS") in row[6]
+    assert "CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 00000000a80425fb)" in row[6]
+    assert json.loads((s / "COUNTERS.json").read_text())["ncu"]["why"] == "no ncu on PATH", \
+        "the probe's own payload, from the probe's own code"
+    text = (s / "COUNTERS").read_text()
+    assert "verdict     ABSENT" in text and f"searched    PATH, then {pod.ncu_root}/*/ncu" in text
+    assert "probe note  no ncu here" in text, "the probe's own notes ride along"
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1"]
+    assert lift(f"latched counter-probe {s / 'CHAIN.tsv'!s} || echo no").stdout.strip() == "no"
+    # the order: after the preconditions, before tests/test_gpu.py
+    order = first.stdout.index
+    assert order("== preconditions") < order("== counter-probe") < order("== tests/test_gpu.py")
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=path)
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert [r[1] for r in _counter_rows(s)] == ["INFO", "INFO"], "asked again, never latched"
+
+
+def test_an_ncu_off_path_is_probed_with_its_directory_first_on_path(tmp_path):
+    """An ncu under a searched directory, off PATH: the probe runs with its
+    directory first on PATH, so the probe's own code finds it and reads the
+    counter, and COUNTERS says the driver's counter_plan and --run need the
+    same PATH."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    ncu = _exe(pod.ncu_root / "2026.1" / "ncu")
+    seen = tmp_path / "probe-path.txt"
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(),
+                  STUB_COUNTERS=str(seen))
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    (probed,) = seen.read_text().splitlines()
+    assert probed.split("\t", 1)[1].startswith(f"{ncu.parent}{os.pathsep}"), probed
+    payload = json.loads((s / "COUNTERS.json").read_text())
+    assert payload["verdict"] == "OPEN" and payload["ncu"]["binary"] == str(ncu)
+    (row,) = _counter_rows(s)
+    assert row[1:3] == ["INFO", "0"], row
+    assert row[6].startswith(f"OPEN: {payload['ncu']['cause']}; ncu {ncu} (NOT on PATH; found by"
+                             f" {pod.ncu_root}/*/ncu"), row[6]
+    assert f"[{STUB_NCU_VERSION}]" in row[6], "the version the probe read"
+    text = (s / "COUNTERS").read_text()
+    assert f"PATH={ncu.parent}:$PATH" in text and "look on PATH only" in text
+
+
+def test_a_refused_counter_quotes_the_exact_error_and_the_chain_goes_on(tmp_path):
+    """ERR_NVGPUCTRPERM, as one pod gave it on 2026-09-15: the note carries
+    ncu's line verbatim and the two capabilities, the row is INFO and not a
+    CLAIM_FAIL, and every arm after it still runs."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    ncu = _exe(tmp_path / "bin" / "ncu")
+    pod.set_plan({"counter-probe": {"world": "blocked"}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0 1", PATH=_path_without_ncu(ncu.parent))
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    (row,) = _counter_rows(s)
+    assert row[1:3] == ["INFO", str(exit_codes.CLAIM_FAIL)], "the probe's own exit, not the row's"
+    assert row[6].startswith(f"BLOCKED: {STUB_ERR}; ncu {ncu} (on PATH)"), row[6]
+    assert "CAP_PERFMON clear, CAP_SYS_ADMIN clear" in row[6]
+    assert "counter-probe    INFO       rc=1" in got.stdout
+    assert "--cap-add=PERFMON" in (s / "COUNTERS").read_text(), "the probe's own next ask"
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1", "r3-g1-s1"]
+
+
+def test_every_rebuild_prints_the_bound_with_its_ceiling_and_what_the_ratio_reads_as(tmp_path):
+    """End to end: the ruler the session's calibrate wrote, each G's bound at
+    read_stream and at the pin rate off the reports on disk, and on each run's
+    console line what its ratio reads as once R1 has spoken."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    read, pin = 4400.0, 4800.0
+    ruler = _ruler(tmp_path / "calibration" / "run-1" / f"measured_{CARD}.yaml",
+                   named=STUB_BANDWIDTH_GBPS, read=read, pin=pin)
+    (s / "logs").mkdir()
+    (s / "logs" / "calibrate.log").write_text(f"[calibrate] wrote {ruler}\n")
+    pod.set_plan({"r1-g1": {"eta": [0.55, 0.70], "C1": "FAIL"}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0 1")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    line = next(ln for ln in got.stdout.splitlines() if ln.strip().startswith("G=1 seed 1"))
+    assert line.endswith(f"reads as: {H.READS_AS['CLOCK-CARRIES']}"), line
+    seed0 = next(ln for ln in got.stdout.splitlines() if ln.strip().startswith("G=1 seed 0"))
+    assert seed0.endswith(f"reads as: {H.READS_AS_UNRESOLVED}"), "R1 had not run yet"
+    tops = []
+    for st in ("r3-g1-s0", "r3-g1-s1"):
+        rep = json.loads((pod.results / "private_weight_reference" / f"stub-{st}-{s.name}"
+                          / "report.json").read_text())
+        tops.append(max(rep["ladders"]["shared"]["points"]))
+    n, t = tops[0][0], statistics.mean(p[1] for p in tops)
+    want = [H.bytes_rate_bound(t, n, STUB_EXPERT_SET_BYTES, c) for c in (read, pin)]
+    flat = " ".join(got.stdout.split())
+    assert f"bytes-rate bound, at the ceilings of {ruler}" in flat
+    assert (f"G=1 alpha <= {want[0]:.4f} at read_stream {read:.1f} GB/s, <= {want[1]:.4f} at the"
+            f" pin rate {pin:.1f} GB/s") in flat
+    row = dict(zip(H.BY_G_HEADER, _rows(s / "PAIRS-by-G.tsv")[0], strict=True))
+    assert (row["reads_as"], row["bound_pin_rate"]) == (H.READS_AS["CLOCK-CARRIES"],
+                                                        f"{want[1]:.4f}")
+
+
 # --------------------------------------------------------------------------
 # the laptop dry run: priced off the arms' own plans, nothing written into the tree
 # --------------------------------------------------------------------------
@@ -2099,12 +2751,12 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
     session = next((root / "session").glob("alpha_g-nocard-*"))
     ledger = (session / "CHAIN-dryrun.tsv").read_text().splitlines()
     names = [ln.split("\t")[0] for ln in ledger[1:]]
-    assert names[:5] == ["preflight-r1", "preflight-r3", "preconditions", "gpu-tests",
-                         "probe-check"]
-    assert names[5:9] == [f"r3-g{g}-s0" for g in (1, 4, 16, 64)]
-    assert names[9:13] == ["r1-g1", "r1-g4", "r1-g16", "r1-g64"]
-    assert names[13:21] == [f"r3-g{g}-s{s}" for s in (1, 2) for g in (1, 4, 16, 64)]
-    assert names[21:] == ["suite"]
+    assert names[:6] == ["preflight-r1", "preflight-r3", "preconditions", "counter-probe",
+                         "gpu-tests", "probe-check"]
+    assert names[6:10] == [f"r3-g{g}-s0" for g in (1, 4, 16, 64)]
+    assert names[10:14] == ["r1-g1", "r1-g4", "r1-g16", "r1-g64"]
+    assert names[14:22] == [f"r3-g{g}-s{s}" for s in (1, 2) for g in (1, 4, 16, 64)]
+    assert names[22:] == ["suite"]
     rows = {ln.split("\t")[0]: ln.split("\t") for ln in ledger[1:]}
     assert rows["probe-check"][1] == "SKIPPED" and "a dry run does not run it" in rows[
         "probe-check"][6], "the probe check times the card: a dry run prices it, never runs it"
@@ -2115,6 +2767,25 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
     assert not (session / "chain-logs" / "suite.log").exists(), "the suite was collected"
     assert rows["r3-g1-s0"][1] == "REFUSED", "a dry-run plan scores no gate: REFUSED"
     assert not (session / "CHAIN.tsv").exists() and not (session / "DEVICE").exists()
+
+
+def test_the_dry_run_prices_the_counter_probe_and_runs_nothing(dry):
+    """No card, nothing measured: the counter probe is a SKIPPED row priced in
+    minutes off the driver's own booking for the same probe, and the capped
+    ceiling it would run under on the pod. Nothing it would write exists."""
+    got, root, _b, _a = dry
+    session = next((root / "session").glob("alpha_g-nocard-*"))
+    rows = {ln.split("\t")[0]: ln.split("\t")
+            for ln in (session / "CHAIN-dryrun.tsv").read_text().splitlines()[1:]}
+    price = 60 * _driver_minutes("counter_plan")
+    cap = max(_const("ARM_CAP_FACTOR") * price, _const("ARM_CAP_FLOOR_S"))
+    row = rows["counter-probe"]
+    assert row[1] == "SKIPPED" and "a dry run does not run it" in row[6], row
+    assert (f"Priced ~{price} s, the driver's own arm_minutes for counter_plan (the same probe);"
+            f" capped on the pod at {cap} s") in row[6]
+    assert "informational, it gates nothing" in row[6]
+    for made in ("COUNTERS", "COUNTERS.json", "chain-logs/counter-probe.log"):
+        assert not (session / made).exists(), made
 
 
 def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
@@ -2129,12 +2800,10 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     wall = int(re.search(r"takes about (\d+) s", page).group(1))
     probe = int(re.search(r"includes the alignment probe's (\d+) s", page).group(1))
     assert int(H.estimate(logs / "r3-g16-s2.log")) == wall + probe
-    driver = ROOT / "scripts" / "h200_gaps_session.sh"
-    booked = subprocess.run(
-        ["bash", "-c", f'eval "$(sed -n \'/^arm_minutes()/,/^esac; }}/p\' "{driver}")"; '
-                       "for a in thermal calibrate pin_probe-n64-g1; do arm_minutes $a; done"],
-        capture_output=True, text=True, timeout=60).stdout.split()
-    pre = 60 * sum(int(m) for m in booked)
+    pre = 60 * sum(_driver_minutes(a) for a in ("thermal", "calibrate", "pin_probe-n64-g1"))
+    counter = 60 * _driver_minutes("counter_plan")
+    assert (f"the counter probe ~{counter} s (the driver's own arm_minutes for counter_plan"
+            in " ".join(out.split()))
     assert f"plus the preconditions ~{pre} s (the driver's own arm_minutes" in out
     priced = [int(x) for x in re.findall(r"priced (\d+) s off its own plan", out)]
     arms = int(re.search(r"= (\d+) s of arms", out).group(1))
@@ -2142,7 +2811,7 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     gpu = int(re.search(r"tests/test_gpu\.py ~(\d+) s", out).group(1))
     total = int(re.search(r"\(an allowance\) = (\d+) s", out).group(1))
     overhead = _const("R3_RUN_OVERHEAD_S")
-    assert total == (arms + gpu + pre + _const("PROBE_CHECK_S") + 12 * overhead
+    assert total == (arms + gpu + pre + counter + _const("PROBE_CHECK_S") + 12 * overhead
                      + _const("EXFIL_S")), "no end suite in the default price"
     # the unpriced cap is four times the longest arm's price, R1's at its states
     r1 = [int(x) for x in re.findall(r"^r1-g\d+\s.*\n\s+priced (\d+) s off its own plan",
@@ -2151,7 +2820,7 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     assert _const("ARM_CAP_UNPRICED_S") >= 4 * max(r1)
     steps = re.findall(r"^(r[13]-g\d+(?:-s\d)?)\s", out, re.M)
     assert len(steps) == len(priced) == 16
-    clock, start = pre + gpu + _const("PROBE_CHECK_S"), {}
+    clock, start = pre + counter + gpu + _const("PROBE_CHECK_S"), {}
     for step, secs in zip(steps, priced, strict=True):
         start[step] = clock
         clock += secs + (overhead if step.startswith("r3") else 0)
@@ -2195,8 +2864,8 @@ def test_a_dry_run_on_end_suite_run_collects_and_prices_the_suite(dry_with_suite
     arms = int(re.search(r"= (\d+) s of arms", out).group(1))
     pre = int(re.search(r"plus the preconditions ~(\d+) s", out).group(1))
     total = int(re.search(r"\(an allowance\) = (\d+) s", out).group(1))
-    assert total == (arms + gpu + suite + pre + _const("PROBE_CHECK_S")
-                     + _const("R3_RUN_OVERHEAD_S") + _const("EXFIL_S"))
+    assert total == (arms + gpu + suite + pre + 60 * _driver_minutes("counter_plan")
+                     + _const("PROBE_CHECK_S") + _const("R3_RUN_OVERHEAD_S") + _const("EXFIL_S"))
     session = next((root / "session").glob("alpha_g-nocard-*"))
     rows = {ln.split("\t")[0]: ln.split("\t")
             for ln in (session / "CHAIN-dryrun.tsv").read_text().splitlines()[1:]}

@@ -413,7 +413,9 @@ class Row:
     # to compare with a pre-v6 row's.
     pct_of_achieved_tflops: float = 0.0
     # Counter-free stand-in for measured DRAM traffic, which needs Nsight
-    # Compute and a host permission a rented pod does not grant. Only emitted
+    # Compute and a counter permission no rented pod in this study has granted
+    # (two refused with ERR_NVGPUCTRPERM; dram_counter_route.py --probe asks
+    # each pod). Only emitted
     # for memory-bound cells; an UPPER bound on the re-read factor, since it
     # also absorbs occupancy and latency losses. See calibrate.py.
     #
