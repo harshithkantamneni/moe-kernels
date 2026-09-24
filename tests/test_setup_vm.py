@@ -88,6 +88,55 @@ def runpod(env: dict, *args: str, **extra: str) -> subprocess.CompletedProcess:
                           capture_output=True, env={**env, **extra})
 
 
+def test_a_second_run_with_nothing_changed_skips_on_its_stamp(tmp_path):
+    """THE STAMP WAS READ AND NEVER WRITTEN. setup_runpod.sh compares
+    `$VENVS/.stamp-<env>` with the requirements file's hash and skips an
+    unchanged environment, and 75bd12a dropped the one line that wrote it, so
+    every run rebuilt every environment. setup_vm.sh's idempotence rests on
+    this skip, so the second run must print it."""
+    env = _runpod_world(tmp_path)
+    first = runpod(env, "base", "vllm")
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert "base: building" in first.stdout and "vllm: building" in first.stdout
+    second = runpod(env, "base", "vllm")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "base: unchanged, skipping" in second.stdout, second.stdout
+    assert "vllm: unchanged, skipping" in second.stdout, second.stdout
+
+
+def test_the_stamp_keys_on_the_torch_pin_and_the_interpreter_too(tmp_path):
+    """A stamp keyed on the requirements file alone would call a venv built
+    against the cu128 index "unchanged" when the next run asks for cu130, or a
+    framework venv on one interpreter "unchanged" when the next asks for
+    another. Both are rebuilds; the interpreter change recreates the venv."""
+    env = _runpod_world(tmp_path)
+    pin = {"MOE_BASE_TORCH": "torch==2.13.0",
+           "MOE_TORCH_INDEX": "https://download.pytorch.org/whl/cu128"}
+    assert runpod(env, "base", **pin).returncode == 0
+    same = runpod(env, "base", **pin)
+    assert "base: unchanged, skipping" in same.stdout, same.stdout
+    moved = runpod(env, "base", **{**pin, "MOE_TORCH_INDEX":
+                                   "https://download.pytorch.org/whl/cu130"})
+    assert "base: building" in moved.stdout, moved.stdout
+    assert runpod(env, "vllm").returncode == 0
+    other = runpod(env, "vllm", MOE_FRAMEWORK_PYTHON="3.12")
+    assert "vllm: building" in other.stdout, other.stdout
+    assert "recreating it" in other.stdout, other.stdout
+
+
+def test_a_failed_install_leaves_no_stamp_behind(tmp_path):
+    """setup_env runs under `||`, where bash suspends errexit, so a failed
+    `uv pip install` used to fall through to the editable install and the
+    freeze. With a stamp written at the end that would mark a broken venv as
+    built; the next run must build it again."""
+    env = _runpod_world(tmp_path)
+    bad = runpod(env, "base", UV_FAIL_INSTALL="-r ")
+    assert "environment(s) FAILED: base" in bad.stdout, bad.stdout + bad.stderr
+    assert not (Path(env["MOE_VENV_ROOT"]) / ".stamp-base").exists()
+    again = runpod(env, "base")
+    assert "base: building" in again.stdout, again.stdout
+
+
 def test_the_framework_venvs_take_the_interpreter_they_are_asked_for():
     """The resolved sets were frozen under the pod's /usr/bin/python3.12
     (profiles/q2_kernel_names.txt), and the framework venvs took whatever

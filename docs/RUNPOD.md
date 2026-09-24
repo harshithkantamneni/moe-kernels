@@ -118,8 +118,14 @@ line and the `transformers<4.54` cap, and its `torch==2.13.0` carries no
 that with `--fresh`, and only a pod can, because the CUDA wheels are the thing
 being resolved.
 
-Later sessions detect an unchanged requirements file by content hash and finish
-in about a second.
+Later sessions detect an unchanged environment by its stamp,
+`$MOE_VENV_ROOT/.stamp-<env>`, and finish in about a second. The stamp records
+everything that decides what the venv holds: the requirements file's content
+hash, the venv's interpreter flags, and for base the torch pin and its index,
+so a changed index rebuilds and a changed interpreter recreates the venv. It is
+written only after every install step succeeded. From 75bd12a until 2026-09-24
+the stamp was read and never written, so every session rebuilt every
+environment.
 
 ## Every session after that
 
