@@ -1407,6 +1407,69 @@ def test_v8_budget_is_a_bias_on_the_ratio_and_not_a_step_in_microseconds():
                                 weight_stream_ms=0.2).verdict == exit_codes.FAIL
 
 
+def _slope(points) -> float:
+    """The least-squares slope of `(n, ms)` points, computed here and not
+    through the module, so the ratio's move below is an independent number."""
+    xs = [float(n) for n, _ in points]
+    ys = [ms for _, ms in points]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    return (sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
+            / sum((x - mx) ** 2 for x in xs))
+
+
+@pytest.mark.parametrize("split", [3, 4, 5])
+def test_v8_prices_a_step_at_the_leverage_of_the_claims_window(split):
+    """V8 IS AN UPPER BOUND ON WHAT A STEP DOES TO THE RATIO C1 READS, and C1
+    reads lines fitted over treads CLAIM_MIN_TREAD and deeper. V8 turned the
+    probed step into slope with the leverage of EVERY tread (1..6), so at the
+    census switch for mixtral BM=32 (tread 4) it reported 0.257 of the step
+    where the claim's line reads 0.300: 0.00514 against a true move of
+    0.00600, and a step worth up to 1.17 budgets passed.
+
+    A noiseless world: the shared arm 0.5 + 0.6 n with a 0.02 ms alignment
+    step at `split`, the private arm 0.5 + n (so its slope is the weight
+    stream, 1.0 ms). The probe carries the same step in SHARED's series and
+    none in PRIVATE's, where `pair_step_bias` is exact, not merely a bound.
+    V8's bias must equal the move of the ratio over the claim's window."""
+    treads = [1, 2, 3, 4, 5, 6]
+    step = 0.02
+    window = [n for n in treads if n >= PW.CLAIM_MIN_TREAD]
+    flat = _slope([(n, 0.5 + 0.6 * n) for n in window])
+    stepped = _slope([(n, 0.5 + 0.6 * n + (step if n >= split else 0.0))
+                      for n in window])
+    private = _slope([(n, 0.5 + 1.0 * n) for n in window])
+    move = stepped / private - flat / private
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(step, split),
+                         PW.PRIVATE: _series(0.0, split)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=private)
+    bias = float(re.search(r"bias <= ([0-9.]+)", gate.measured).group(1))
+    assert bias == pytest.approx(move, abs=5e-5), (gate.measured, move)
+    lever = move * private / step
+    assert any(f"at leverage {lever:.3f}" in ln for ln in gate.lines), gate.lines
+    assert any("treads 2 and deeper" in ln and "leverage" in ln
+               for ln in gate.lines), gate.lines
+    assert "treads 2 and deeper" in gate.threshold, gate.threshold
+
+
+def test_a_step_at_or_before_the_claims_first_tread_is_worth_nothing_to_it():
+    """A step at the window's first tread is a constant over every tread the
+    claim's lines pass through: an intercept, no slope, no bias. V8 still FITS
+    the step over the whole probed series (tread 1 included) and prints it;
+    it prices it at zero leverage."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, PW.CLAIM_MIN_TREAD),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    assert gate.measured.startswith("bias <= 0.0000"), gate.measured
+    assert any(f"at tread {PW.CLAIM_MIN_TREAD}, at leverage 0.000" in ln
+               for ln in gate.lines), gate.lines
+
+
 def test_the_planted_probe_puts_natives_step_where_the_census_does():
     census = _census()
     probe = PW.planted_probe(PW.WORLDS["refit"], CFG, block_m=32,
@@ -1679,11 +1742,18 @@ def test_a_step_at_the_alignment_budget_is_still_found_by_the_new_rule():
     above are only worth having beside this one. The steps here are named in
     the units V8 actually gates on: `step_bias` of 0.010 and 0.015 of the
     ratio, one and one-and-a-half `ALIGN_STEP_RATIO_BUDGET`, converted to
-    milliseconds through `leverage` at the six-tread ladder's split of 4 and
-    the 0.64 ms weight stream the other V8 tests use. At the same per-cell
-    noise the false-positive simulation runs at, `resolved` finds the smaller
-    in 383 of 400 worlds (0.9575) and the larger in 399 (0.9975), and puts
-    the split at tread 4 every time it fires.
+    milliseconds through `leverage` at the six-tread ladder's split of 4 over
+    the claim's window (treads 2..6, leverage 0.300, where V8 prices a step)
+    and the 0.64 ms weight stream the other V8 tests use: 21.3 and 32.0 us.
+    At the same per-cell noise the false-positive simulation runs at,
+    `resolved` finds the smaller in 374 of 400 worlds (0.935) and the larger
+    in 395 (0.9875), and puts the split at tread 4 every time it fires.
+
+    THE WINDOW COST POWER, stated rather than hidden. Priced over every tread
+    (leverage 0.257) a budget was a 24.9 us step, found in 383 of 400 worlds
+    (0.9575) and 399 at 1.5 budgets (0.9975). Pricing it where the claim is
+    fitted makes a budget a smaller step, and the same rule on the same noise
+    resolves a smaller step less often.
 
     WHAT THE t QUANTILE COST, stated rather than hidden. Before it, a step
     worth a fifth of the budget was found 0.9525 of the time; now 0.2475, and
@@ -1696,16 +1766,18 @@ def test_a_step_at_the_alignment_budget_is_still_found_by_the_new_rule():
     a "safer" edit that raised either -- or an `_ols_se` that overstated
     `step_se` -- would trade this power away silently, and V8 would answer
     UNKNOWN on a design whose step really is over budget, which is the answer
-    that costs a pod session. The 0.90 floor sits 5.7 binomial standard errors
-    (sqrt(0.9575 x 0.0425 / 400) = 0.0101) below the measured 0.9575.
+    that costs a pod session. The 0.90 floor sits 2.8 binomial standard errors
+    (sqrt(0.935 x 0.065 / 400) = 0.0123) below the measured 0.935; the trial
+    is seeded, so the rates are the same on every run.
     """
     treads = [1, 2, 3, 4, 5, 6]
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     weight_stream_ms = 0.64
     worth = {frac: frac * PW.ALIGN_STEP_RATIO_BUDGET * weight_stream_ms
-             / PW.leverage(treads, 4) for frac in (1.0, 1.5)}
-    assert PW.step_bias(worth[1.0], treads, 4, weight_stream_ms) \
+             / PW.leverage(window, 4) for frac in (1.0, 1.5)}
+    assert PW.step_bias(worth[1.0], window, 4, weight_stream_ms) \
         == pytest.approx(0.010)
-    assert PW.step_bias(worth[1.5], treads, 4, weight_stream_ms) \
+    assert PW.step_bias(worth[1.5], window, 4, weight_stream_ms) \
         == pytest.approx(0.015)
     _, small_rate, small_found, _, _ = _step_rule_trial(
         repeats=3, worlds=400, step_ms=worth[1.0])
@@ -1768,9 +1840,10 @@ def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one(
     the resolved one -- it now reads FAIL. The branch therefore carries its
     noise where the new rule looks: in the series itself, through `_series`'s
     own `noise=`. At seed 2 that series fits a step of +0.141 ms at tread 4,
-    worth 0.056 of the ratio -- 5.6 times `ALIGN_STEP_RATIO_BUDGET` -- against
-    a threshold of 0.272 ms, so the step is 0.52 of what it would have to be:
-    over budget, unresolved, and therefore neither shown sound nor unsound.
+    worth 0.066 of the ratio at its leverage over the claim's window (treads
+    2..6) -- 6.6 times `ALIGN_STEP_RATIO_BUDGET` -- against a threshold of
+    0.837 ms, so the step is 0.17 of what it would have to be: over budget,
+    unresolved, and therefore neither shown sound nor unsound.
     """
     treads = [1, 2, 3, 4, 5, 6]
     flat = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)})
@@ -1788,7 +1861,8 @@ def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one(
     noisy = _probe_from({PW.NATIVE: _series(0.02, 4),
                          PW.SHARED: _series(0.1, 4, noise=0.3, seed=2)})
     fit = PW.step_fit(noisy.series(PW.SHARED))
-    assert PW.step_bias(fit.step_ms, treads, fit.split_tread, 0.64) \
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    assert PW.step_bias(fit.step_ms, window, fit.split_tread, 0.64) \
         > PW.ALIGN_STEP_RATIO_BUDGET
     assert abs(fit.step_ms) < fit.threshold_ms()
     doubted = PW.gate_v8_alignment(noisy, treads=treads, census=_census(),
@@ -1927,10 +2001,12 @@ def test_v8_reads_the_host_bound_verdict_before_the_budget_so_an_over_budget_rea
     assert hot.verdict == exit_codes.UNKNOWN, hot.lines
     # Both scored the SAME over-budget real step, so the budget cannot be what
     # separated them: the 0.5 ms step sits at tread 4, whose leverage over
-    # these six treads is 4.5/17.5 = 0.2571, and 0.2571 x 0.5 / 0.64 ms of
-    # weight stream is a bias of 0.2009 -- twenty times ALIGN_STEP_RATIO_BUDGET.
-    assert hot.measured == cool.measured == "bias <= 0.2009, a REAL step"
-    assert PW.step_bias(0.5, treads, 4, 0.64) > 20 * PW.ALIGN_STEP_RATIO_BUDGET
+    # the claim's window (treads 2..6, where V8 prices it) is 3/10 = 0.300,
+    # and 0.300 x 0.5 / 0.64 ms of weight stream is a bias of 0.2344 --
+    # twenty-three times ALIGN_STEP_RATIO_BUDGET.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    assert hot.measured == cool.measured == "bias <= 0.2344, a REAL step"
+    assert PW.step_bias(0.5, window, 4, 0.64) > 20 * PW.ALIGN_STEP_RATIO_BUDGET
     # WHY `cool` IS FAIL AND NOT UNKNOWN, recorded because it is not obvious
     # from the verdict alone: the planted series fits the step term EXACTLY, so
     # the residual is at the rounding floor (RSS 5.1e-31) and `step_se` is
@@ -2256,9 +2332,11 @@ def test_v8_does_not_fail_on_a_step_its_own_rule_called_noise():
     sh = PW.step_fit(probe.series(PW.SHARED))
     pv = PW.step_fit(probe.series(PW.PRIVATE))
     assert sh.resolved() and not pv.resolved(), (sh, pv)
+    # Over the claim's window, where V8 prices both steps.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     wide = PW.pair_step_bias((sh.step_ms, sh.split_tread),
-                             (pv.step_ms, pv.split_tread), treads, 0.64)
-    narrow = PW.pair_step_bias((sh.step_ms, sh.split_tread), None, treads, 0.64)
+                             (pv.step_ms, pv.split_tread), window, 0.64)
+    narrow = PW.pair_step_bias((sh.step_ms, sh.split_tread), None, window, 0.64)
     assert wide > PW.ALIGN_STEP_RATIO_BUDGET >= narrow, (wide, narrow)
     gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
                                 weight_stream_ms=0.64)
@@ -2333,8 +2411,10 @@ def test_a_planted_world_steps_one_ratio_arm_and_not_the_other():
     assert abs(shared.step_ms) < 1e-12, shared
     assert private.split_tread == 4 and private.step_ms > 0
     # And the step is worth the budgets the world registers, through the
-    # bound that needed no common-step premise.
-    bias = PW.pair_step_bias(None, (private.step_ms, 4), treads, stream)
+    # bound that needed no common-step premise, at the leverage V8 prices it
+    # at: over the claim's window.
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
+    bias = PW.pair_step_bias(None, (private.step_ms, 4), window, stream)
     assert bias == pytest.approx(1.5 * PW.ALIGN_STEP_RATIO_BUDGET, rel=1e-9)
     gate = PW.gate_v8_alignment(probe, treads=treads, census=census,
                                 weight_stream_ms=stream)
@@ -2343,7 +2423,7 @@ def test_a_planted_world_steps_one_ratio_arm_and_not_the_other():
     # THE PUNCHLINE: the common-step bound this replaced reads SHARED's series
     # alone, which is flat, so it scores this same probe at ~0 and PASSES it.
     # This world is the one place in the table where the two bounds disagree.
-    old_rule = PW.step_bias(shared.step_ms, treads, shared.split_tread or 4,
+    old_rule = PW.step_bias(shared.step_ms, window, shared.split_tread or 4,
                             stream)
     assert old_rule < PW.ALIGN_STEP_RATIO_BUDGET / 100 < bias
     # ITS TWIN plants the same size in BOTH arms and reads the same bias, so
@@ -4207,28 +4287,30 @@ def test_v8_fails_a_negative_ratio_arm_step_the_positive_only_bias_scored_inside
     `L|s|/(ws - L|s|) > ALIGN_STEP_RATIO_BUDGET`, i.e. when
     `L|s|/ws > 0.01/1.01 = 0.009901`, so every fraction in (0.009901, 0.01] is
     PASS under the old form and, once the step is resolved against its own
-    standard error, FAIL under the new one. At ws = 0.64 ms and L = 4.5/17.5
-    the fraction 0.00995 is a step of 24.76 us, the tens of microseconds an
-    alignment call is, so `gate_v8_alignment` reaching a different verdict here
+    standard error, FAIL under the new one. At ws = 0.64 ms and L = 3/10 (the
+    split at tread 4 over the claim's window, treads 2..6, where V8 prices a
+    step) the fraction 0.00995 is a step of 21.23 us, the tens of
+    microseconds an alignment call is, so `gate_v8_alignment` reaching a different verdict here
     is a reachable design and not an arithmetic curiosity. The same magnitude
     with the sign flipped still PASSES, which is the whole content of the fix:
     the gate now reads a bound that knows which side of the fit the denominator
     shrinks on.
     """
     treads = [1, 2, 3, 4, 5, 6]
+    window = PW.treads_in_window(treads, min_tread=PW.CLAIM_MIN_TREAD)
     stream_ms = 0.64
-    lev = PW.leverage(treads, 4)
+    lev = PW.leverage(window, 4)
     budget = PW.ALIGN_STEP_RATIO_BUDGET
     fraction = 0.00995
     assert budget / (1.0 + budget) < fraction <= budget
     step_ms = fraction * stream_ms / lev
-    assert step_ms * 1e3 == pytest.approx(24.76, abs=0.01)
+    assert step_ms * 1e3 == pytest.approx(21.23, abs=0.01)
 
     down = _signed_step_probe(-step_ms)
     read = PW.read_probe(down, PW.SHARED, _census())
     assert read.fit.split_tread == 4 and read.real
     old_form = lev * abs(read.fit.step_ms) / stream_ms
-    corrected = PW.step_bias(read.fit.step_ms, treads, 4, stream_ms)
+    corrected = PW.step_bias(read.fit.step_ms, window, 4, stream_ms)
     assert old_form <= budget < corrected
     gate = PW.gate_v8_alignment(down, treads=treads, census=_census(),
                                 weight_stream_ms=stream_ms)
@@ -4236,7 +4318,7 @@ def test_v8_fails_a_negative_ratio_arm_step_the_positive_only_bias_scored_inside
 
     up = _signed_step_probe(step_ms)
     assert PW.step_bias(PW.read_probe(up, PW.SHARED, _census()).fit.step_ms,
-                        treads, 4, stream_ms) <= budget
+                        window, 4, stream_ms) <= budget
     assert PW.gate_v8_alignment(up, treads=treads, census=_census(),
                                 weight_stream_ms=stream_ms).verdict == exit_codes.PASS
 
@@ -5876,7 +5958,66 @@ def test_a_rescore_over_the_reports_own_window_reproduces_its_page(tmp_path):
     every = PW.rescore(payload, path, draws=30, min_tread=1)
     assert every.reading.ratio == payload["ratio_all_treads"]
     assert list(every.reading.interval) == payload["ratio_all_treads_interval"]
-    assert set(PW.RESCORED_GATES) == {"V0", "V4", "V5", "C1", "C2"}
+    assert set(PW.RESCORED_GATES) == {"V0", "V4", "V5", "V8", "C1", "C2"}
+    # This report stored no probe (the planted analyse ran none), so V8 is
+    # not rebuilt and the stored one stands.
+    assert "V8" not in got.gates
+
+
+def test_a_rescore_prices_the_stored_probe_over_the_window_it_rescores_at(
+        tmp_path):
+    """V8 PRICES A PROBED STEP AT ITS LEVERAGE OVER THE CLAIM'S WINDOW, so a
+    report re-scored over another window carries a V8 priced over the old
+    one unless V8 is rebuilt too. A report before DESIGN DECISION 16 priced
+    its steps over treads 1..6 (leverage 0.257 at the split of 4); re-scored
+    over treads 2 and deeper its V8 is rebuilt from the probe cells it
+    stored (`align_probe`), at leverage 0.300. At the report's own window the
+    rebuilt V8 is the stored one, word for word."""
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(
+        PW.WORLDS["refit"], CFG, block_m=32, treads=treads, repeats=3,
+        alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=0.004, seed=5, copies_declared=9, native_switch=4)
+    path, payload = _report_with_cells(tmp_path, "run-old", samples, treads,
+                                       seed=5, draws=30, old_window=True)
+    step = 0.02
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(step, 4),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4)
+    census = PW.path_census(CFG, treads, 32, {
+        arm: PW.declared_experts(arm, CFG.num_experts, 9) for arm in PW.ARMS})
+    stream = payload["weight_stream_ms"]
+    stored = PW.gate_v8_alignment(probe, treads=treads, census=census,
+                                  weight_stream_ms=stream, min_tread=1)
+    payload["align_probe"] = probe.as_dict()
+    payload["gates"] = [stored.as_dict() if g["tag"] == "V8" else g
+                        for g in payload["gates"]]
+    path.write_text(json.dumps(payload, indent=2))
+
+    own = PW.rescore(payload, path, draws=30, min_tread=1).gates["V8"]
+    assert (own.verdict, own.measured, own.lines) == \
+        (stored.verdict, stored.measured, stored.lines)
+    got = PW.rescore(payload, path, draws=30).gates["V8"]
+    window = [n for n in treads if n >= PW.CLAIM_MIN_TREAD]
+    bias = float(re.search(r"bias <= ([0-9.]+)", got.measured).group(1))
+    assert bias == pytest.approx(PW.leverage(window, 4) * step / stream,
+                                 abs=5e-5)
+    assert got.measured != stored.measured
+    assert "treads 2 and deeper" in got.threshold
+
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert "V8 from the probe cells the report stored" in page.stdout, \
+        page.stdout[-1500:]
+    v8 = next(ln for ln in exit_codes.parse_result_lines(page.stdout)
+              if ln.name == "V8")
+    assert f"measured {got.measured}" in v8.detail, v8
+
+    # A report that stored no probe keeps the V8 it stored, and says so.
+    payload.pop("align_probe")
+    path.write_text(json.dumps(payload, indent=2))
+    assert "V8" not in PW.rescore(payload, path, draws=30).gates
+    page = run(["--read", str(path), "--rescore", "--draws", "30"])
+    assert "V8 is re-rendered as stored" in page.stdout, page.stdout[-1500:]
 
 
 def test_a_replicate_fitted_over_another_window_is_refused_or_rescored(tmp_path):

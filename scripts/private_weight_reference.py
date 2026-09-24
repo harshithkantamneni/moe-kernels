@@ -153,7 +153,8 @@ exactly, because the pieces are not equally covered:
     time and no host enqueue sits in it; session 4's eager probe on the H200
     was host-bound 36 of 36 and read UNKNOWN), and V8 refuses
     the design if the ratio arms' own series carries a step worth more than
-    `ALIGN_STEP_RATIO_BUDGET` of the ratio; and NATIVE, which keeps the
+    `ALIGN_STEP_RATIO_BUDGET` of the ratio, the step priced at its leverage
+    over the claim's window, where the ratio's lines are fitted; and NATIVE, which keeps the
     study's declaration and so keeps the switch, has its ladder difference
     from SHARED fitted WITH a step term (`declaration_fit`), so V5 scores the
     per-tile cost of the declaration with the step taken out, and the step
@@ -262,9 +263,10 @@ nothing.
 THE CLAIM'S WINDOW (DESIGN DECISION 16). Every slope the claim reads (C1's
 ratio and its clock-corrected print, C2's rate, V5's declaration) is fitted
 over treads `CLAIM_MIN_TREAD` = 2 and deeper, V0 counts and V4 checks
-exactly those treads, and that is the window R1's claim reads
-(`clock_elasticity.CLAIM_MIN_TREAD`), registered by the owner on 2026-09-23
-before the next run. The same fits over EVERY tread, tread 1 included, and
+exactly those treads, V8 prices a probed alignment step at its leverage
+over them (the step itself fitted over every probed tread), and that is the
+window R1's claim reads (`clock_elasticity.CLAIM_MIN_TREAD`), registered by
+the owner on 2026-09-23 before the next run. The same fits over EVERY tread, tread 1 included, and
 tread 1's distance from the claim's line are printed beside the claim and
 stored in report.json (`ladders_all_treads`, `ratio_all_treads`,
 `tread1_off_claim_line_ms`); nothing gates them. The window is recorded
@@ -624,10 +626,12 @@ MIN_TREADS = SWEEP.MIN_MEMORY_TREADS      # 3
 #:
 #: WHAT READS IT: C1's ratio and its bootstrap, the clock-corrected ratio
 #: printed beside it, C2's private slope, V5's slopes and declaration fit,
-#: V4's treads, V0's per-arm tread floor, and the plan's own floor on
-#: `--treads`. WHAT DOES NOT: V6, whose identity tread is 1 by construction;
-#: V7, which scores the clocks at every tread, tread 1 included; V1, V2, V3
-#: and V8. The all-tread fits and tread 1's distance from the claim's line
+#: V4's treads, V0's per-arm tread floor, V8's price on a probed alignment
+#: step (its leverage over the window, which is what the step does to the
+#: ratio's lines; the step itself is fitted over every probed tread), and the
+#: plan's own floor on `--treads`. WHAT DOES NOT: V6, whose identity tread
+#: is 1 by construction; V7, which scores the clocks at every tread, tread 1
+#: included; V1, V2 and V3. The all-tread fits and tread 1's distance from the claim's line
 #: are printed beside the claim and stored in report.json, never gated.
 CLAIM_MIN_TREAD = 2
 
@@ -1830,7 +1834,11 @@ def step_fit(points: list[tuple[int, int, float]]) -> StepFit:
 def leverage(treads: list[int], split_tread: int) -> float:
     """How much of a unit step at `split_tread` a straight-line fit over
     `treads` reads as SLOPE: `Sxy / Sxx` of the indicator on `n`. Arithmetic
-    over the tread set alone; 0.257 for n = 1..6 split at 4."""
+    over the tread set alone: 0.257 for n = 1..6 split at 4, and 0.300 for
+    n = 2..6, the claim's window on the booked ladder (DESIGN DECISION 16),
+    split at 4. A split at or before the first tread is a constant over the
+    fit and reads 0. V8 passes the claim's window (`treads_in_window`), since
+    the ratio it bounds is fitted there."""
     xs = [float(n) for n in treads]
     ind = [1.0 if n >= split_tread else 0.0 for n in treads]
     mx, mi = statistics.fmean(xs), statistics.fmean(ind)
@@ -1848,7 +1856,9 @@ def step_bias(step_ms: float, treads: list[int], split_tread: int,
     what a probe without PRIVATE's series falls back on.
 
     A step `s` at `split_tread` enters a straight-line fit as `L s` of slope in
-    BOTH arms, `L` the leverage. The ratio `(B_s + L s)/(B_p + L s)` moves most
+    BOTH arms, `L` the leverage over `treads`, which are the treads the
+    ratio's lines are fitted through: V8 passes the claim's window, treads
+    `CLAIM_MIN_TREAD` and deeper. The ratio `(B_s + L s)/(B_p + L s)` moves most
     when the denominator is smallest, so the bound is `L|s| / (B_p - L|s|)` for
     a NEGATIVE step and `L|s| / B_p` for a positive one. The earlier form used
     the positive bound for both and was therefore not a bound at all on the
@@ -1877,7 +1887,10 @@ def pair_step_bias(shared: tuple[float, int] | None,
     premise that the step is common to both: each arm's `(step_ms, split)`
     is its own fitted step, `None` for none.
 
-    A step enters a straight-line fit as `a = L s` of slope. With `a` in the
+    A step enters a straight-line fit as `a = L s` of slope, `L` the leverage
+    over `treads`, the treads the ratio's lines are fitted through (V8 passes
+    the claim's window, treads `CLAIM_MIN_TREAD` and deeper; the step itself
+    is fitted over the whole probed series). With `a` in the
     numerator's slope and `c` in the denominator's, the ratio
     `(B_s + a) / (B_p + c)` moves from `R = B_s / B_p` by exactly
     `(a - R c) / (B_p + c)`. That is linear in `R`, so over `R` in `[0, 1]`
@@ -3947,9 +3960,21 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
 
 def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                       census: PathCensus, weight_stream_ms: float,
-                      ratio_label: str = SHARED) -> Gate:
+                      ratio_label: str = SHARED,
+                      min_tread: int = CLAIM_MIN_TREAD) -> Gate:
     """Are the two ratio arms on ONE alignment kernel along the whole ladder,
     as MEASURED, and is what is left worth less than the budget.
+
+    THE STEP IS FITTED OVER THE WHOLE PROBED SERIES AND PRICED OVER THE
+    CLAIM'S WINDOW. `step_fit` reads every probed tread, tread 1 included, so
+    a switch anywhere in the ladder is found; what a step does to the ratio
+    is its leverage over the treads the ratio's lines are fitted through,
+    `min_tread` and deeper (`CLAIM_MIN_TREAD`, DESIGN DECISION 16; `rescore`
+    passes the window it re-scores at). Priced over every tread it was not a
+    bound on the claim: at the booked ladder's split of 4 the leverage is
+    0.257 over 1..6 and 0.300 over 2..6, so a step worth up to 1.17 budgets
+    passed. A step at or before the window's first tread is a constant over
+    the claim's lines and is worth nothing to it.
 
     The probe timed vLLM's alignment op alone at every tread, once per ARM.
     `step_fit` finds the best single step in each series, and
@@ -3985,13 +4010,26 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     exactly as a GPU-bound one would be. If it does not, UNKNOWN, and the
     page says it means "the probe could not see the switch it was shown".
     """
+    window = treads_in_window(treads, min_tread=min_tread)
+    want = (f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}, the step "
+            f"priced at its leverage over the claim's window (treads "
+            f"{min_tread} and deeper)")
     if probe is None:
         return Gate("V8", VALIDITY,
                     "the ratio arms take one alignment kernel along the ladder",
-                    UNKNOWN, "no probe ran",
-                    f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}",
+                    UNKNOWN, "no probe ran", want,
                     "an alignment step of unknown size may sit inside both "
                     "ratio slopes", [])
+    if len(window) < 2:
+        return Gate("V8", VALIDITY,
+                    "the ratio arms take one alignment kernel along the ladder",
+                    UNKNOWN,
+                    f"the claim's window holds {len(window)} tread(s)", want,
+                    "an alignment step of unknown size may sit inside both "
+                    "ratio slopes",
+                    [f"treads {span_text(window)} in the claim's window "
+                     f"(treads {min_tread} and deeper): a line through fewer "
+                     "than two treads has no lever arm to price a step at"])
     detail = []
     readings = {}
     for label in probe.labels():
@@ -4005,8 +4043,7 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     if ratio_label not in readings:
         return Gate("V8", VALIDITY,
                     "the ratio arms take one alignment kernel along the ladder",
-                    UNKNOWN, "the ratio declaration was not probed",
-                    f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}",
+                    UNKNOWN, "the ratio declaration was not probed", want,
                     "an alignment step of unknown size may sit inside both "
                     "ratio slopes", detail)
     r = readings[ratio_label]
@@ -4034,13 +4071,13 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
         return (f.step_ms, f.split_tread)
 
     if rp is not None:
-        bias = pair_step_bias(step_of(r), step_of(rp), treads, weight_stream_ms)
+        bias = pair_step_bias(step_of(r), step_of(rp), window, weight_stream_ms)
         bias_real = pair_step_bias(step_of(r, True), step_of(rp, True),
-                                   treads, weight_stream_ms)
+                                   window, weight_stream_ms)
         real = r.real or rp.real
     else:
         bias = (0.0 if r.fit.split_tread is None else
-                step_bias(r.fit.step_ms, treads, r.fit.split_tread,
+                step_bias(r.fit.step_ms, window, r.fit.split_tread,
                           weight_stream_ms))
         bias_real = bias if r.real else 0.0
         real = r.real
@@ -4056,11 +4093,14 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
         f = reading.fit
         return ("no step resolved a split" if f.split_tread is None else
                 f"{f.step_ms * 1e3:+.2f} us at tread {f.split_tread}, at "
-                f"leverage {leverage(treads, f.split_tread):.3f}")
+                f"leverage {leverage(window, f.split_tread):.3f}")
     detail.append(
         f"{ratio_label}'s step: {step_said(r)}"
         + (f"; {PRIVATE}'s step: {step_said(rp)}" if rp is not None else "")
-        + f"; against a weight stream of {weight_stream_ms:.4f} ms (the "
+        + f"; each step fitted over every probed tread and its leverage taken "
+        f"over the claim's window, treads {min_tread} and deeper "
+        f"({span_text(window)}), where the ratio's lines are fitted; against "
+        f"a weight stream of {weight_stream_ms:.4f} ms (the "
         f"denominator's own scale) they could move the ratio by at most "
         f"{bias:.4f}"
         + (f", and by {bias_real:.4f} over the RESOLVED steps alone, which is "
@@ -4115,7 +4155,7 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     elif graph_calls:
         # GPU TIME BY CONSTRUCTION: the control confirms or bounds NATIVE's
         # switch and never withholds the verdict; the threshold prices noise.
-        detail += gpu_time_control(readings, census, treads=treads,
+        detail += gpu_time_control(readings, census, window=window,
                                    weight_stream_ms=weight_stream_ms)
     if control is False:
         verdict = UNKNOWN
@@ -4143,8 +4183,8 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                 + (f", {bias_real:.4f} over the resolved steps"
                    if bias_real != bias else "")
                 + (", a REAL step" if real else ", no step resolved"),
-                f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}, from "
-                "the probed series at the ratio arms' own declaration",
+                f"{want}, from the probed series at the ratio arms' own "
+                "declaration",
                 "vLLM changes alignment kernel inside the ratio arms' ladder "
                 "on this build, and the step it leaves -- in one of the two "
                 "slopes or in both, which the page names -- is worth more "
@@ -4338,7 +4378,7 @@ def instrument_line(graph_calls: int, probe: AlignProbe) -> str:
                       else ""))
 
 
-def gpu_time_control(readings: dict, census: PathCensus, *, treads: list[int],
+def gpu_time_control(readings: dict, census: PathCensus, *, window: list[int],
                      weight_stream_ms: float) -> list[str]:
     """NATIVE's switch read beside a GRAPH-TIMED ratio series: informational,
     never a verdict.
@@ -4357,6 +4397,10 @@ def gpu_time_control(readings: dict, census: PathCensus, *, treads: list[int],
     --probe-repeats: at six treads the threshold is 16.5 standard errors and
     session 4's eager cells spread 0.04-0.12 us across repeats, so at that
     depth a 2 us switch resolves or not on the noise, which the pod decides.
+
+    What such a step would be worth is priced as V8 prices one: at its
+    leverage over `window`, the claim's treads, where the ratio's lines are
+    fitted.
     """
     want = census.switch_tread(NATIVE)
     r = readings.get(NATIVE)
@@ -4382,7 +4426,7 @@ def gpu_time_control(readings: dict, census: PathCensus, *, treads: list[int],
         return [f"NATIVE's switch resolved at tread {f.split_tread} in GPU "
                 f"time, not the census tread {want} ({step}): a finding about "
                 "the build; V5 is fitted at the probe's tread"]
-    worth = step_bias(f.threshold_ms(), treads, want, weight_stream_ms)
+    worth = step_bias(f.threshold_ms(), window, want, weight_stream_ms)
     return [f"NATIVE's switch NOT RESOLVED IN GPU TIME: best split at tread "
             f"{f.split_tread if f.split_tread else '-'}, step {step}, "
             f"threshold {thr_us:.2f} us at {f.dof} dof over {f.splits_tried} "
@@ -4390,7 +4434,8 @@ def gpu_time_control(readings: dict, census: PathCensus, *, treads: list[int],
             f"under {thr_us:.2f} us per call -- a bound on the KERNEL, not a "
             "blind spot: no host cost sits in a graph replay. A step that size "
             f"in a ratio arm at that tread would be worth {worth:.5f} of the "
-            "ratio; a denser probe ladder is what tightens it, not more "
+            f"ratio fitted over treads {span_text(window)}, the claim's "
+            "window; a denser probe ladder is what tightens it, not more "
             "--probe-repeats"]
 
 
@@ -5011,7 +5056,9 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "raw one, scored by nothing")
     out.append(f"    V8 the probed alignment steps in SHARED's and PRIVATE's id "
                f"sets are worth <= {ALIGN_STEP_RATIO_BUDGET} of the ratio "
-               "together; FAIL needs it over budget AND resolved, and a FAIL "
+               "together, each fitted over every probed tread and priced at "
+               f"its leverage over treads {CLAIM_MIN_TREAD} and deeper, the "
+               "claim's window; FAIL needs it over budget AND resolved, and a FAIL "
                "alone skips the sweep; the probe is timed under a CUDA graph "
                f"({PROBE_CALLS_PER_REPLAY} calls per replay) so its cells are "
                "GPU time and NATIVE's switch beside them confirms or bounds, "
@@ -5484,9 +5531,10 @@ def window_gates(samples, cfg, *, claim: WindowFit, decl: DeclarationReading,
                  bandwidth_gbps: float, bandwidth_source: str,
                  stream_ms: float, switch_source: str) -> dict[str, Gate]:
     """{tag: Gate} for the gates that read the claim's window, V0, V4, V5
-    and C2, built from `claim` (C1 needs the replicates as well, and its
-    caller builds it). ONE CONSTRUCTION for `analyse` and for `rescore`, so a
-    stored report re-scored over its own window reproduces its own gates."""
+    and C2, built from `claim` (C1 needs the replicates as well and V8 the
+    probe, and their callers build them over the same window). ONE
+    CONSTRUCTION for `analyse` and for `rescore`, so a stored report
+    re-scored over its own window reproduces its own gates."""
     m = claim.min_tread
     ladders = claim.ladders
     gates = {
@@ -5717,7 +5765,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         gate_v6_identity(samples, identity_tread=treads[0]),
         gate_v7_clock_parity(samples, treads=treads),
         gate_v8_alignment(probe, treads=treads, census=census,
-                          weight_stream_ms=stream_ms),
+                          weight_stream_ms=stream_ms,
+                          min_tread=CLAIM_MIN_TREAD),
     ]
     # THIS RUN IS THE FIRST READING when replicates were named. A run whose
     # interval was not formed contributes no reading; the replicates are still
@@ -5871,9 +5920,26 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
 
 
 #: The gates `rescore` rebuilds from a stored run's cells: every one that
-#: reads the claim's window (`window_gates`) and C1. Every other gate is
-#: re-rendered as the report stored it; none of them reads a slope.
-RESCORED_GATES: tuple[str, ...] = ("V0", "V4", "V5", "C1", "C2")
+#: reads the claim's window (`window_gates`), C1, and V8, which prices the
+#: probed alignment step at its leverage over that window and is rebuilt from
+#: the probe cells report.json stores (`align_probe`) when it stores them.
+#: Every other gate is re-rendered as the report stored it; none of them
+#: reads the window: V1, V2 and V3 read no slope, and V6 and V7 score tread 1
+#: and every tread by design.
+RESCORED_GATES: tuple[str, ...] = ("V0", "V4", "V5", "V8", "C1", "C2")
+
+
+def stored_probe(payload: dict) -> AlignProbe | None:
+    """The alignment probe a report stored under `align_probe`, rebuilt cell
+    for cell, or None when it stored none (a probe that never ran, or a
+    report written before the key)."""
+    block = payload.get("align_probe") or {}
+    cells = block.get("cells") or []
+    if not cells:
+        return None
+    return AlignProbe(tuple(ProbeCell(**c) for c in cells),
+                      synthetic=bool(block.get("synthetic")),
+                      note=block.get("note") or "")
 
 
 @dataclass(frozen=True)
@@ -5894,9 +5960,11 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
             min_tread: int = CLAIM_MIN_TREAD) -> Rescore:
     """Re-score a stored report from the cells.csv beside it, over the treads
     `min_tread` and deeper: `window_fit` for the claim and for every tread,
-    `declaration_reading` at the switch the report fitted V5 at, and
-    `window_gates` for V0, V4, V5 and C2, with C1 alone off the new reading.
-    The bootstrap is drawn at the report's own seed with `draws` draws, so a
+    `declaration_reading` at the switch the report fitted V5 at,
+    `window_gates` for V0, V4, V5 and C2, with C1 alone off the new reading,
+    and V8 from the probe cells the report stored, its steps priced over the
+    same window (left as stored when the report stored no probe). The
+    bootstrap is drawn at the report's own seed with `draws` draws, so a
     report re-scored over the window it was written with reproduces its own
     ratio, interval and gates (the tests hold that).
 
@@ -5940,16 +6008,16 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
             "cells form no ratio or no interval ("
             + (claim.unmeasurable or claim.interval_refusal or "no ratio")
             + ")")
+    census = path_census(cfg, treads, block_m, {
+        arm: declared_experts(arm, cfg.num_experts,
+                              payload.get("copies_declared") or treads[-1])
+        for arm in ARMS})
     stored_fit = payload.get("declaration_fit") or {}
     if stored_fit:
         switch = stored_fit.get("switch_tread")
         switch_source = (f"{stored_fit.get('switch_source') or 'unrecorded'} "
                          "(as the stored report fitted it)")
     else:
-        census = path_census(cfg, treads, block_m, {
-            arm: declared_experts(arm, cfg.num_experts,
-                                  payload.get("copies_declared") or treads[-1])
-            for arm in ARMS})
         switch = census.switch_tread(NATIVE)
         switch_source = (f"the cited hypothesis (tread {switch})" if switch
                          else "the cited hypothesis (no switch)")
@@ -5972,6 +6040,11 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
         claim.ratio, claim.interval, claim.draws_got, corrected=claim.corrected,
         min_tread=min_tread, treads=ratio_treads(claim),
         all_treads=(every.ratio, every.interval))
+    probe = stored_probe(payload)
+    if probe is not None:
+        gates["V8"] = gate_v8_alignment(probe, treads=treads, census=census,
+                                        weight_stream_ms=float(stream_ms),
+                                        min_tread=min_tread)
     stored = [Gate.from_dict(d) for d in payload.get("gates") or []]
     merged = [gates.get(g.tag, g) for g in stored]
     code = (exit_codes.classify(g.scored() for g in merged) if merged else None)
@@ -6051,8 +6124,9 @@ class World:
     ratio_probe_step_ms: float = 0.0
     #: The ratio arms' common probe step sized IN BUDGETS rather than in ms:
     #: a multiple of ALIGN_STEP_RATIO_BUDGET, converted at the run's own
-    #: weight-stream time and leverage by `planted_probe`, so no calibrated
-    #: quantity is a literal here. Overrides `ratio_probe_step_ms`.
+    #: weight-stream time and at the leverage over the claim's window, where
+    #: V8 prices it, by `planted_probe`, so no calibrated quantity is a
+    #: literal here. Overrides `ratio_probe_step_ms`.
     ratio_probe_budgets: float | None = None
     #: The same, planted in PRIVATE's series ALONE. `pair_step_bias` exists
     #: because the two ratio arms' steps need not be one step, and every
@@ -6244,7 +6318,7 @@ WORLDS: dict[str, World] = {
         "the probe finds a step at the ratio arms' own declaration worth 1.5 "
         "budgets on the ratio, the nearest a world sits to V8's FAIL edge: "
         "resolved and over, so V8 fails. Sized in budgets at the run's own "
-        "weight stream, not in microseconds",
+        "weight stream and the claim window's leverage, not in microseconds",
         dict(ALL_PASS, V8=FAIL), ratio_probe_budgets=1.5),
     "ratio-step-under-budget": World(
         "ratio-step-under-budget",
@@ -6358,12 +6432,14 @@ DEFAULT_PLANTED_PROBE_STEP_MS = 0.02
 
 
 def planted_step_in_budgets(budgets: float | None, world_name: str,
-                            treads: list[int], split: int,
+                            window: list[int], split: int,
                             weight_stream_ms: float | None) -> float:
     """A planted probe step, in ms, sized so `pair_step_bias` reads exactly
-    `budgets` ALIGN_STEP_RATIO_BUDGETs.
+    `budgets` ALIGN_STEP_RATIO_BUDGETs over `window`, the claim's treads,
+    which is where V8 prices it.
 
-    `|a| / (B + a) = f` gives `a = f B / (1 - f)`, and `s = a / L`. The same
+    `|a| / (B + a) = f` gives `a = f B / (1 - f)`, and `s = a / L`, `L` the
+    leverage over `window`. The same
     inversion serves a step common to both ratio arms and a step in one of
     them alone: with `a = c` the bound is `|a| / (B + a)`, and with the
     numerator flat it is `|c| / (B + c)` -- the same number, which is why
@@ -6376,16 +6452,25 @@ def planted_step_in_budgets(budgets: float | None, world_name: str,
         raise Unmeasurable(f"the {world_name!r} world sizes its step in "
                            "budgets and needs the run's weight stream")
     f = budgets * ALIGN_STEP_RATIO_BUDGET
-    return f * weight_stream_ms / (1.0 - f) / leverage(treads, split)
+    lever = leverage(window, split)
+    if lever <= 0:
+        raise Unmeasurable(
+            f"the {world_name!r} world sizes its step in budgets, and a step "
+            f"at tread {split} is a constant over the claim's window "
+            f"({span_text(window)}): no step there is worth a budget")
+    return f * weight_stream_ms / (1.0 - f) / lever
 
 
 def planted_ratio_step_ms(world: World, treads: list[int], split: int,
                           weight_stream_ms: float | None) -> float:
-    """The step planted in BOTH ratio series, in ms."""
+    """The step planted in BOTH ratio series, in ms; a step sized in budgets
+    is sized over the claim's window of `treads`, where V8 prices it."""
     if world.ratio_probe_budgets is None:
         return world.ratio_probe_step_ms
-    return planted_step_in_budgets(world.ratio_probe_budgets, world.name,
-                                   treads, split, weight_stream_ms)
+    return planted_step_in_budgets(
+        world.ratio_probe_budgets, world.name,
+        treads_in_window(treads, min_tread=CLAIM_MIN_TREAD), split,
+        weight_stream_ms)
 
 
 def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
@@ -6400,9 +6485,10 @@ def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
     ratio_split = census.switch_tread(NATIVE) or treads[len(treads) // 2]
     ratio_step = planted_ratio_step_ms(world, treads, ratio_split,
                                        weight_stream_ms)
-    private_step = planted_step_in_budgets(world.private_probe_budgets,
-                                           world.name, treads, ratio_split,
-                                           weight_stream_ms)
+    private_step = planted_step_in_budgets(
+        world.private_probe_budgets, world.name,
+        treads_in_window(treads, min_tread=CLAIM_MIN_TREAD), ratio_split,
+        weight_stream_ms)
     cells = []
     for rep_ in range(PROBE_REPEATS):
         for n in treads:
@@ -6775,7 +6861,8 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                             reference_clock=reference_clock,
                             repeats=args.probe_repeats)
     early = gate_v8_alignment(probe, treads=treads, census=census,
-                              weight_stream_ms=stream_ms)
+                              weight_stream_ms=stream_ms,
+                              min_tread=CLAIM_MIN_TREAD)
     print("\n".join(["", "ALIGNMENT PROBE, before any weight is allocated:",
                      *[f"  {ln}" for ln in early.lines]]))
     if early.verdict == FAIL:
@@ -7248,8 +7335,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "cells.csv beside it over this build's claim window, "
                          f"treads {CLAIM_MIN_TREAD} and deeper (DESIGN "
                          "DECISION 16), at the report's own seed and --draws; "
-                         "V0, V4, V5, C1 and C2 are rebuilt from the cells, "
-                         "every other gate is re-rendered as stored, and the "
+                         "V0, V4, V5, C1 and C2 are rebuilt from the cells and "
+                         "V8 from the probe cells the report stored, every "
+                         "other gate is re-rendered as stored, and the "
                          "stored ratio is printed beside. --replicate-of is "
                          "then optional. A report with no cells.csv beside it "
                          "is refused")
@@ -7765,8 +7853,9 @@ def _read_mode(args) -> int:
     windows are refused, not pooled. With --rescore every report is
     RE-SCORED from the cells.csv beside it over this build's
     `CLAIM_MIN_TREAD` (`rescore`), the gates that read that window
-    (`RESCORED_GATES`) are rebuilt from the cells and the rest re-rendered as
-    stored, and --replicate-of is optional."""
+    (`RESCORED_GATES`: V8 from the stored probe cells, when there are any)
+    are rebuilt from the cells and the rest re-rendered as stored, and
+    --replicate-of is optional."""
     path = Path(args.read)
     if path.is_dir():
         path = path / "report.json"
@@ -7843,9 +7932,14 @@ def _read_mode(args) -> int:
               + (f" [{this.stored_interval[0]:.4f}, {this.stored_interval[1]:.4f}]"
                  if this.stored_interval else "")
               + f" over treads {this.stored_min_tread} and deeper. "
-              + ", ".join(RESCORED_GATES)
-              + " are rebuilt from the cells; every other gate is re-rendered "
-              "as it was scored")
+              + ", ".join(tag for tag in RESCORED_GATES if tag in page.gates)
+              + " are rebuilt from the cells"
+              + (", V8 from the probe cells the report stored"
+                 if "V8" in page.gates else
+                 "; V8 is re-rendered as stored, its steps priced over the "
+                 "report's own window, since the report stored no probe "
+                 "cells")
+              + "; every other gate is re-rendered as it was scored")
         print(f"slopes      over treads {span_text(window)}: "
               + ", ".join(f"{arm} {lad.slope_ms:.4f}"
                           for arm, lad in page.claim.ladders.items())

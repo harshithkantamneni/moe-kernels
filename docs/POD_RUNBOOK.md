@@ -313,7 +313,11 @@ below/at/above the refit band, or NO-REUSE. C1 UNKNOWN means the point and the
 interval disagree on a world and the claim is unresolved at this precision,
 not that the arm broke. Since 2026-09-23 every slope C1, C2 and V5 read, and
 every tread V0 counts and V4 checks, is over treads 2 and deeper (the arm's
-DESIGN DECISION 16, the window R1's claim reads): on session 5's pages the
+DESIGN DECISION 16, the window R1's claim reads), and V8 prices a probed
+alignment step at its leverage over those treads, where the ratio's lines are
+fitted (the step itself is still fitted over every probed tread; at the
+booked split of 4 that leverage is 0.300, against 0.257 over treads 1-6): on
+session 5's pages the
 one-tile call sat 0.157-0.164 ms above the line through treads 2-6 at G >= 4,
 and fitting it moved the ratio by 5-28x the seed-to-seed sd. The same fits
 over every tread, and tread 1's distance from the claim's line, are printed
@@ -421,8 +425,9 @@ A report written before 2026-09-23 fitted every tread and records no
 `claim_min_tread`, which then reads as 1; the window is a design key, so
 pairing such a report with a later one is refused rather than pooled.
 `--rescore` re-scores every report it names from the `cells.csv` beside it
-over treads 2 and deeper, prints each stored reading beside its new one, and
-needs no replicate:
+over treads 2 and deeper, rebuilding V0, V4, V5, C1 and C2 from the cells and
+V8 from the probe cells `report.json` stored, prints each stored reading
+beside its new one, and needs no replicate:
 
 ```
 .venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --rescore --replicate-of RUN0/report.json
