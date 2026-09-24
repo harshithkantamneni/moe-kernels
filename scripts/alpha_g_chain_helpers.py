@@ -23,6 +23,11 @@ stays a sequencer and the reading is testable off GPU.
                                                        line per G: the bytes-rate bound and
                                                        the ceiling it used
     alpha_g_chain_helpers.py calibration-dir LOG    -> the run directory calibrate wrote
+    alpha_g_chain_helpers.py ncu-locate GLOBS       -> the ncu the counter probe runs, where it
+                                                       was found, and every candidate
+    alpha_g_chain_helpers.py counters SESSION LOG RC CAP SECS BINARY WHERE CANDIDATES GLOBS
+                                                    -> writes $SESSION/COUNTERS off the probe's
+                                                       COUNTERS.json; prints the ledger note
 
 Every command prints tab-separated fields on ONE line (or one path per line for
 `pairs`, and `pairs-table`'s count line then its per-G lines) and exits 0; a
@@ -31,6 +36,7 @@ crashing the chain.
 """
 from __future__ import annotations
 
+import glob
 import json
 import math
 import os
@@ -39,6 +45,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +99,13 @@ READS_AS = {
 }
 READS_AS_UNRESOLVED = "unresolved"
 
+#: The ncu the counter probe finds on PATH is named by this where-word; one
+#: found by a glob is named by the glob.
+ON_PATH = "PATH"
+#: The file the counter probe's payload is written to (dram_counter_route.py
+#: --probe --out) and the text beside it, both in the session directory.
+COUNTERS_JSON = "COUNTERS.json"
+COUNTERS_TEXT = "COUNTERS"
 
 
 def _load(path: str | Path) -> dict | None:
@@ -930,6 +944,153 @@ def calibration_dir(log: str | Path) -> str:
     return str(Path(found[-1]).parent) if found else ""
 
 
+# --------------------------------------------------------------------------
+# THE COUNTER PROBE: can this pod read a DRAM counter (informational)
+# --------------------------------------------------------------------------
+
+def ncu_locate(globs: list[str], path_env: str | None = None) -> list[tuple[str, str]]:
+    """Every ncu the chain's counter probe would consider, in the order it
+    would run one: the one a bare `ncu` runs (PATH), then each glob's matches,
+    newest name first (reverse lexical: /usr/local/cuda/bin/ncu, the image's
+    default symlink, before /usr/local/cuda-13.0/bin/ncu, and 2025.3 before
+    2024.1 under /opt/nvidia/nsight-compute). Each is (path, where): `PATH`
+    or the glob that found it; a path found twice is listed once.
+
+    dram_counter_route.py's probe asks PATH alone, and session 4's image read
+    "no ncu on PATH" there: an ncu under the CUDA toolkit's bin or Nsight
+    Compute's own directory, off PATH, was never looked for. The chain runs
+    that same probe with the first match's directory put first on PATH, so
+    the probe's own code decides what it can read, and nothing is restated."""
+    found: list[tuple[str, str]] = []
+    on_path = shutil.which("ncu", path=path_env)
+    if on_path:
+        found.append((on_path, ON_PATH))
+    for pattern in globs:
+        for cand in sorted(glob.glob(pattern), reverse=True):
+            if (os.path.isfile(cand) and os.access(cand, os.X_OK)
+                    and cand not in {p for p, _ in found}):
+                found.append((cand, pattern))
+    return found
+
+
+def _counter_error_line(payload: dict, log_text: str) -> str:
+    """The refusal ncu printed, verbatim: the first line carrying
+    ERR_NVGPUCTRPERM in the probe's own captured output, then in its console;
+    the probe's cause when neither carries one."""
+    ncu = payload.get("ncu") or {}
+    for text in (str(ncu.get("output_head") or ""), log_text):
+        for line in text.splitlines():
+            if "ERR_NVGPUCTRPERM" in line:
+                return line.strip()
+    return str(ncu.get("cause") or ncu.get("why") or "no error recorded")
+
+
+def _caps_text(payload: dict) -> str:
+    """The two capabilities either of which opens the counter gate, and the
+    host's module flag, as the probe read them."""
+    caps, flag = payload.get("capabilities") or {}, payload.get("module_flag") or {}
+    if caps.get("available"):
+        c = (f"CAP_PERFMON {'set' if caps.get('perfmon') else 'clear'}, CAP_SYS_ADMIN "
+             f"{'set' if caps.get('sys_admin') else 'clear'} (CapEff "
+             f"{caps.get('cap_eff_field', caps.get('cap_eff'))})")
+    else:
+        c = f"capabilities unread ({caps.get('why', 'no record')})"
+    if flag.get("available"):
+        m = f"RestrictProfilingToAdminUsers={flag.get('restrict')}"
+    else:
+        m = f"module flag unread ({flag.get('why', 'no record')})"
+    return f"{c}; {m}"
+
+
+def counters(session: str | Path, log: str | Path, rc: str | int, cap: str | int,
+             secs: str | int, binary: str, where: str, candidates: str, globs: str) -> str:
+    """THE COUNTER PROBE'S VERDICT, off dram_counter_route.py --probe's own
+    payload ($SESSION/COUNTERS.json) and log, written to $SESSION/COUNTERS and
+    returned as the ledger's one-line note. INFORMATIONAL: nothing gates on
+    it, and the chain never latches it. The first word is the verdict:
+
+      OPEN      a kernel launched under ncu and dram__bytes_read.sum came back
+                (the probe's OPEN, P1 PASS): findings section 7's counter run
+                can happen on this pod.
+      BLOCKED   ncu ran, a kernel launched, and the counter read was refused
+                (the probe's BLOCKED, ERR_NVGPUCTRPERM); the exact line is
+                quoted, with the two capabilities and the module flag.
+      ABSENT    no ncu on PATH and none at the searched globs.
+      UNTESTED  ncu is here but the probe launched no kernel to count (no
+                torch, no CUDA device, a failed launch): nothing is known.
+      ERROR     the probe crashed, timed out, wrote no payload, or its exit
+                code and its RESULT lines disagree (the chain's second
+                opinion, `verdict`).
+    `binary`, `where` and `candidates` are `ncu-locate`'s three fields
+    (`none` when it found nothing); `globs` is what it searched."""
+    session, rc, cap, secs = Path(session), int(rc), int(cap), int(secs)
+    try:
+        log_text = Path(log).read_text(errors="replace")
+    except OSError:
+        log_text = ""
+    payload = _load(session / COUNTERS_JSON)
+    implied = verdict(str(log))
+    ncu = (payload or {}).get("ncu") or {}
+    found = binary not in ("", "none")
+    if not found:
+        located = f"not on PATH and none at {globs}"
+    elif where == ON_PATH:
+        located = f"{binary} (on PATH)"
+    else:
+        located = (f"{binary} (NOT on PATH; found by {where}, and the probe ran with "
+                   f"{os.path.dirname(binary)} first on PATH)")
+    version = str(ncu.get("version") or "")
+    last = next((ln.strip() for ln in reversed(log_text.splitlines()) if ln.strip()),
+                "an empty log")
+    if cap > 0 and (rc == 124 or (rc == 137 and secs >= cap)):
+        word, detail = "ERROR", (f"TIMED OUT after {secs} s against a cap of {cap} s (exit "
+                                 f"{rc}); the next pass asks again")
+    elif payload is None:
+        word, detail = "ERROR", (f"the probe wrote no {COUNTERS_JSON} (exit {rc}); its log "
+                                 f"ends: {last}")
+    elif not (implied == str(rc) or (implied == "NONE" and rc == exit_codes.REFUSED)):
+        word, detail = "ERROR", (f"DEFECT: the probe exited {rc} and its RESULT lines imply "
+                                 f"{implied}; its page reads {payload.get('verdict')}")
+    elif payload.get("verdict") == "OPEN":
+        word, detail = "OPEN", str(ncu.get("cause") or "a counter came back")
+    elif payload.get("verdict") == "BLOCKED":
+        word, detail = "BLOCKED", _counter_error_line(payload, log_text)
+    elif payload.get("verdict") == "REFUSE" and not ncu.get("present") and found:
+        word, detail = "ERROR", (f"DEFECT: {binary} was found and its directory put first on "
+                                 f"PATH, and the probe still read {ncu.get('why', 'no ncu')}")
+    elif payload.get("verdict") == "REFUSE" and not ncu.get("present"):
+        word, detail = "ABSENT", "no ncu where the chain looks"
+    elif payload.get("verdict") == "REFUSE":
+        word, detail = "UNTESTED", str(ncu.get("cause") or "the probe launched no kernel")
+    else:
+        word, detail = "ERROR", f"the probe's page reads verdict {payload.get('verdict')!r}"
+    caps = _caps_text(payload or {})
+    off_path = found and where != ON_PATH
+    lines = [
+        f"THE COUNTER PROBE, {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        " (informational: it gates nothing, and the chain asks again on every pass)",
+        f"verdict     {word}",
+        f"detail      {detail}",
+        f"ncu         {located}" + (f"  [{version}]" if version else ""),
+        f"searched    PATH, then {globs}",
+        f"candidates  {candidates if found else 'none'}",
+        f"access      {caps}",
+        f"probe       scripts/dram_counter_route.py --probe, exit {rc} in {secs} s; its page"
+        f" {log}, its payload {session / COUNTERS_JSON}",
+    ]
+    if off_path:
+        lines.append(f"PATH        ncu is not on PATH here: the driver's counter_plan and "
+                     f"dram_counter_route.py --run look on PATH only, so run them with "
+                     f"PATH={os.path.dirname(binary)}:$PATH")
+    for note in (payload or {}).get("notes") or []:
+        lines.append(f"probe note  {_one_line(note)}")
+    lines.append("history     RunPod's record is in bash scripts/alpha_g_chain.sh --help")
+    tmp = session / (COUNTERS_TEXT + ".tmp")
+    tmp.write_text("\n".join(lines) + "\n")
+    os.replace(tmp, session / COUNTERS_TEXT)
+    return _one_line(f"{word}: {detail}; ncu {located}" + (f" [{version}]" if version else "")
+                     + f"; {caps}; informational, gates nothing; {session / COUNTERS_TEXT}")
+
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -971,6 +1132,12 @@ def main(argv: list[str] | None = None) -> int:
         print(reads_as(rest[0], rest[1]))
     elif cmd == "calibration-dir" and len(rest) == 1:
         print(calibration_dir(rest[0]))
+    elif cmd == "ncu-locate" and len(rest) == 1:
+        found = ncu_locate(rest[0].split())
+        print("\t".join([found[0][0], found[0][1], " ".join(p for p, _ in found)] if found
+                        else ["none", "none", "none"]))
+    elif cmd == "counters" and len(rest) == 9:
+        print(counters(*rest))
     else:
         print(f"unknown command {argv!r}", file=sys.stderr)
         return 2
