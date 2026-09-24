@@ -506,15 +506,34 @@ def test_an_apt_transaction_that_would_move_the_driver_is_refused(tmp_path, tiny
     assert "install -y" not in apt, "the transaction ran after the simulation refused it"
 
 
+def _pf5_reason() -> str:
+    """The reason PF5 gives on the stubbed box, as a pattern, decided by THIS
+    checkout's dram_counter_route.py the way vm_preflight decides it
+    (`family_supported` of its --help). Without --family (before the
+    ncu-route merge) the r3-arms probe cannot be asked, and PF5 says so. With
+    it, the probe runs against the stub ncu, reads nothing, and PF5 quotes the
+    probe's verdict and exit code."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    import vm_preflight as VP
+    help_text = subprocess.run([PY, str(REPO / "scripts" / "dram_counter_route.py"), "--help"],
+                               cwd=REPO, capture_output=True, text=True, timeout=120).stdout
+    assert "usage" in help_text.lower(), "dram_counter_route.py --help printed no usage"
+    if VP.family_supported(help_text):
+        return r"verdict \w+, exit \d+: "
+    return r"has no --family"
+
+
 def test_a_real_run_installs_ncu_and_its_preflight_refuses_success_without_a_counter(tmp_path,
                                                                                      tiny):
     """The whole stage 1 -> stage 2 path on a stubbed box: clone from the
     bundle, venvs through setup_runpod.sh, ncu installed after a clean
     simulation, the sudo door, env.sh, and the preflight. The stub venvs have
-    no torch and this checkout's dram_counter_route.py has no r3-arms family,
-    so no counter can be read: the run must NOT say READY, and must exit 1
-    with PREFLIGHT.txt naming PF5. The second run is idempotent: every stage
-    that acted the first time says it is skipping."""
+    no torch and the stub ncu profiles nothing, so no counter can be read: the
+    run must NOT say READY, and must exit 1 with PREFLIGHT.txt failing PF5.
+    WHY PF5 fails is this checkout's dram_counter_route.py's to decide (see
+    `_pf5_reason`), so the test holds on both sides of the ncu-route merge.
+    The second run is idempotent: every stage that acted the first time says
+    it is skipping."""
     bundle, tip, _ = tiny
     env = _real_world(tmp_path, APT_NCU_ONLY)
     home = tmp_path / "home" / "moe"
@@ -531,7 +550,9 @@ def test_a_real_run_installs_ncu_and_its_preflight_refuses_success_without_a_cou
     assert f"{tmp_path}/nsight/2025.3.1:" in envsh, "ncu's directory goes first on PATH"
     assert 'MOE_COUNTER_DOOR="sudo"' in envsh
     text = (home / "session" / "PREFLIGHT.txt").read_text()
-    assert re.search(r"^PF5 FAIL .*has no --family", text, re.M), text
+    pf5 = re.search(r"^PF5 FAIL .*$", text, re.M)
+    assert pf5, text
+    assert re.search(_pf5_reason(), pf5.group(0)), pf5.group(0)
     assert re.search(r"^PF6 SKIP ", text, re.M), text
     assert "NOT READY" in text
     payload = json.loads((home / "session" / "PREFLIGHT.json").read_text())
