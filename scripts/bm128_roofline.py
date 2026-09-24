@@ -2,7 +2,7 @@
 """At BLOCK_M=128, does achieved throughput PLATEAU below the card's own roof?
 
     python scripts/bm128_roofline.py --dry-run       # plan, predictions, cost. No GPU
-    python scripts/bm128_roofline.py --self-test     # three planted worlds, off GPU
+    python scripts/bm128_roofline.py --self-test     # seven planted worlds; measures nothing
     python scripts/bm128_roofline.py                 # the pod run, ~2 min of H200
 
 THE ONE MEASUREMENT IN THIS STUDY THAT GOES THROUGH NO FIT. Everything the study
@@ -4008,7 +4008,8 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *,
 
 
 # --------------------------------------------------------------------------
-# Self test: plant three worlds, check the gates tell them apart.
+# Self test: plant seven worlds (the five of SELF_TEST_WORLDS, the two of
+# UNCONTROLLED_WORLDS) and the clock states, check the gates tell them apart.
 # --------------------------------------------------------------------------
 
 def planted_timings(cfg, roof: Roof, b: int, rows_by_tile: dict[int, list[int]],
@@ -4109,6 +4110,16 @@ SELF_TEST_WORLDS = (
     # GROUP_SIZE_M=1.
     ("unlocated   cap 0.80 ridge, GEMMs get 0.55", ("cap/ridge", 0.80), 0.05, 0.55, "C4", False,
      GAP_UNLOCATED),
+)
+
+#: The uncontrolled gate set's two worlds, `(label, planted alpha, verdict)`,
+#: planted in every `--self-test` after the five above (see `self_test` for
+#: why two). Registered here rather than inline so the seven-world count that
+#: the usage line, the refusal text and the driver's gate line print is derived
+#: by tests/test_bm128_roofline.py from the two tables instead of re-typed.
+UNCONTROLLED_WORLDS = (
+    ("capped", 1.00, UNCONTROLLED),
+    ("uncapped", 0.10, NOT_BINDING),
 )
 
 #: The verdict strings, by the name the source spells them. Printed beside the
@@ -4379,9 +4390,7 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
     # no control anywhere in the run. Each also asserts that C3 and C4 are
     # ABSENT rather than UNKNOWN: a gate that examined nothing and reported no
     # failure is the shape this repository keeps relearning.
-    for label, planted_alpha, want in (
-            ("capped", 1.00, UNCONTROLLED),
-            ("uncapped", 0.10, NOT_BINDING)):
+    for label, planted_alpha, want in UNCONTROLLED_WORLDS:
         solo = planted_timings(cfg, roof, b, {SUBJECT_BLOCK_M: subject_rows},
                                alpha=planted_alpha, overhead_ms=0.05,
                                reps=reps, noise=noise, seed=seed)
@@ -4844,8 +4853,8 @@ def _main(argv=None) -> int:
         print("\n".join(lines))
         print(f"\n{missing.split('.')[0]}.\n"
               "Off GPU, this script's whole argument is still available:\n"
-              "  --self-test  three planted worlds, checking the gates "
-              "discriminate\n"
+              "  --self-test  seven planted worlds, checking the gates "
+              "discriminate; measures nothing\n"
               "  --dry-run    the pod plan, the grid, the predictions and the "
               "cost")
         return exit_codes.REFUSED

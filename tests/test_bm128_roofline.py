@@ -84,6 +84,7 @@ from __future__ import annotations
 import csv
 import importlib.util
 import json
+import re
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -2155,6 +2156,49 @@ def test_a_self_test_on_a_calibrated_card_exits_done(rf, capsys, an_h200):
     assert code == exit_codes.DONE, out[-3000:]
     assert "MEASURED on the attached card" in out
     assert "RESULT: VALIDITY S_hypothesis_roof_refused PASS" in out
+
+
+_COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+                11: "eleven", 12: "twelve"}
+
+
+def test_every_description_of_the_self_test_counts_the_worlds_it_plants(rf):
+    """THE RECURRING DEFECT, left by the commit that rewrote `--self-test`'s
+    help because it said "three worlds" and "off GPU": the same count stood at
+    the usage line, the section comment above `planted_timings`, the refusal a
+    box without the GPU stack prints, and the driver's gate line for the three
+    roofline arms. `self_test` plants the five `SELF_TEST_WORLDS` and the two
+    `UNCONTROLLED_WORLDS`, so the count is derived from those two tables, the
+    tables are checked against what `self_test` scores, and every site that
+    states a world count states that one."""
+    _, gates = rf.self_test(MODEL_CONFIGS["mixtral-8x7b"],
+                            rf._hypothesis_roof("test"), 2, r_min=32,
+                            r_max=4096, control_block_m=None, doublings=2)
+    uncontrolled = [g for g in gates if g.name.startswith("S uncontrolled ")]
+    assert uncontrolled
+    n = len(rf.SELF_TEST_WORLDS) + len(uncontrolled)
+    word = _COUNT_WORDS[n]
+
+    usage = next(ln for ln in rf.__doc__.splitlines()
+                 if "bm128_roofline.py --self-test" in ln)
+    assert f"{word} planted worlds" in usage, usage
+    assert "off GPU" not in usage, usage
+    source = (ROOT / "scripts" / "bm128_roofline.py").read_text()
+    assert f"# Self test: plant {word} worlds" in source
+    assert f"--self-test  {word} planted worlds" in source
+    driver = next(
+        ln for ln in (ROOT / "scripts" / "h200_gaps_session.sh")
+        .read_text().splitlines() if "scripts/bm128_roofline.py --self-test" in ln)
+    assert f"({word} planted worlds" in driver, driver
+
+    # And no OTHER count survives anywhere in the script or on that line.
+    words = "|".join(_COUNT_WORDS.values())
+    stated = re.findall(rf"\b(?:({words}) planted worlds|plant ({words}) worlds)",
+                        source + "\n" + driver)
+    assert stated and {a or b for a, b in stated} == {word}, stated
+    # The table the self test loops over is the one the comment names.
+    assert len(rf.UNCONTROLLED_WORLDS) == len(uncontrolled)
 
 
 def test_an_uncontrolled_arm_cannot_resume_into_a_controlled_ones_directory(rf):
