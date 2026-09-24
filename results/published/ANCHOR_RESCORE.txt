@@ -144,10 +144,11 @@ SUMMARY
 
   READ THE WIDTH AS THE ANSWER, not as a failure of the method. It is the
   gap between what the kernel achieved at n=1 and what the card can do,
-  and only a DRAM counter closes it. ncu returns ERR_NVGPUCTRPERM on a
-  rented pod and the image's nsys cannot convert its own capture, so no
-  counter-free method identifies the branch's bandwidth and this file does
-  not pretend one does.
+  and only a DRAM counter closes it. No ncu counter read has succeeded on
+  a rented pod in this study (dram_counter_route.py --probe asks each pod)
+  and the image's nsys cannot convert its own capture, so no counter-free
+  method identifies the branch's bandwidth and this file does not pretend
+  one does.
 
   B IS IDENTIFIED AND L IS NOT, which is the whole finding in one line:
     dropping the anchor tread moves the slope by at most 0.79%,

@@ -5743,7 +5743,7 @@
   }
  ],
  "generated_by": "scripts/memory_branch_anchor.py --rescore",
- "git_sha": "b0983b0b73f49cfe3f39ed5985f3d52dedf62095",
+ "git_sha": "4175c9ecd1350bcaa6a31167f0d9e0891b5c3514",
  "gpu_name": null,
  "instrument": "imported: the committed reports' own timings; --rescore times nothing",
  "mde_alpha": 0.017013667977858273,
@@ -5756,7 +5756,7 @@
   "driver_version": null,
   "git_dirty": false,
   "git_dirty_files": 0,
-  "git_sha": "b0983b0b73f49cfe3f39ed5985f3d52dedf62095",
+  "git_sha": "4175c9ecd1350bcaa6a31167f0d9e0891b5c3514",
   "gpu_name": null,
   "hostname": "Harshiths-MacBook-Pro.local",
   "instrument": "imported: the committed reports' own timings; --rescore times nothing",
@@ -5782,7 +5782,7 @@
   "target_ms": null,
   "torch": "2.13.0",
   "triton": null,
-  "utc": "2026-09-22T05:03:50+00:00",
+  "utc": "2026-09-24T02:18:58+00:00",
   "vllm": null,
   "warmup_ms": null
  },
