@@ -9,6 +9,9 @@ cells can see, so the three things that can make its page wrong are:
     the WORLDS     -- an overlap world must come back overlap with its planted
                       parameters, an additive world additive, and the scan must
                       be flat exactly where the traffic branch is hidden
+    the NUMBERS    -- a parameter or a bandwidth that the fitted cells leave
+                      free (an invisible direction) must print as not
+                      identified, never as where the fitter stopped
     the INPUTS     -- the arm's own kept rows, INVALID pages out by default, a
                       gate spelled outside exit_codes' table refused, and the
                       pin rate read from the session's ruler, never typed
@@ -21,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -230,7 +234,8 @@ def test_an_overlap_world_is_recovered_and_preferred():
     for name, planted in OVERLAP_WORLD.items():
         assert got.value(name) == pytest.approx(planted, rel=0.02), name
     assert got.rms < 2 * NOISE
-    assert got.rank == got.interior == 4
+    assert got.rank == got.movable == 4
+    assert not got.blind and got.bandwidth_identified and all(got.identified)
     assert _best(fits.values(), M.OVERLAP) < _best(fits.values(), M.ADDITIVE) / 5
 
 
@@ -250,7 +255,65 @@ def test_the_rank_flags_a_parameter_combination_the_cells_cannot_see():
     """On one G the paper form sees only alpha(G) tau, never tau alone."""
     one_g = [c for c in overlap_cells() if c.group_m == 16]
     f = M.fit(BY_KEY["add.paper"], one_g, CTX)
-    assert f.rank < f.interior
+    assert f.rank < f.movable and f.blind
+    assert not f.bandwidth_identified and not f.is_identified("alpha(16)")
+
+
+#: A world on the T0-tau valley of the compulsory-first-read form: T0 + d,
+#: tau - d and every alpha(G) x tau / (tau - d) give the same cells, for as
+#: long as the largest alpha stays <= 1. T0 = 0 is the valley's lower end.
+VALLEY_WORLD = {"T0": 0.0, "tau": 0.5, "c0": 0.4, "e": 0.8, "alpha(1)": 0.6,
+                "alpha(4)": 0.3, "alpha(16)": 0.2, "alpha(64)": 0.1}
+
+
+def _fit_at(monkeypatch, s, cells, world):
+    """`fit` started at `world` alone: on an exact valley the fitter stops
+    wherever its start meets the valley, so a test that needs the end of one
+    has to start there."""
+    data = M.Data.of(cells, CTX)
+    lay = M.layout(s, data, CTX)
+    start = np.array([world[n] for n in lay.names])
+    monkeypatch.setattr(M, "_start", lambda *_a, **_k: start.copy())
+    return M.fit(s, cells, CTX, starts=1)
+
+
+def test_a_valley_that_ends_on_a_bound_is_flagged_and_its_bandwidth_is_not_printed(
+        monkeypatch):
+    """Session 5 with --include-invalid: add.first stopped at T0 = 0 on its
+    lower bound and printed rank 6/6, no !, and BW 14058 GB/s, while T0 += d,
+    tau -= d, alpha(G) x tau / (tau - d) left the SSR unchanged out to 18728.
+    The rank counted only the parameters off their bounds, and the valley
+    leaves through T0's."""
+    s = BY_KEY["add.first"]
+    cells = M.planted_cells(s, VALLEY_WORLD, CTX, groups=GROUPS, treads=TREADS,
+                            states=STATES)
+    f = _fit_at(monkeypatch, s, cells, VALLEY_WORLD)
+    assert f.value("T0") == 0.0 and f.at_lower[0], "the premise: the fit ends on T0's bound"
+    assert f.ssr < 1e-20
+    text = "\n".join(M.fit_lines([f], CTX, M.Ruler("planted", PIN_GBPS, {}, "triad"),
+                                 list(GROUPS), cells))
+    row = next(line for line in text.splitlines() if line.strip().startswith("ADDITIVE"))
+    assert "!" in row.split()[5]                       # the rank column
+    assert "not identified" in row
+    assert "GB/s" not in row and "x pin" not in row
+    params = next(line for line in text.splitlines() if line.strip().startswith("add.first "))
+    for name in ("T0", "tau", "alpha(1)"):
+        assert re.search(rf"{re.escape(name)} [0-9.]+ \[[^]]*not identified\]", params), name
+    assert "c0 0.4000," in params and "e 0.8000," in params    # off the valley
+    assert M._fit_json(f)["bandwidth_gbps"] is None
+
+
+def test_a_valley_blocked_at_both_ends_is_not_flagged(monkeypatch):
+    """The same valley with alpha(1) = 1 at T0 = 0: moving along it takes T0
+    below 0 one way and alpha(1) above 1 the other, so nothing moves and the
+    fit is determined although the Jacobian's rank is short."""
+    s = BY_KEY["add.first"]
+    world = dict(VALLEY_WORLD, **{"alpha(1)": 1.0})
+    cells = M.planted_cells(s, world, CTX, groups=GROUPS, treads=TREADS, states=STATES)
+    f = _fit_at(monkeypatch, s, cells, world)
+    assert f.at_lower[0] and f.at_upper[f.names.index("alpha(1)")]
+    assert f.rank < f.movable
+    assert not f.blind and f.bandwidth_identified and all(f.identified)
 
 
 # --------------------------------------------------------------------------
@@ -291,6 +354,25 @@ def test_the_scan_is_not_flat_where_alpha_is_identified():
     assert hi - lo < 0.25
     assert lo >= TIED_ALPHA - 0.1
     assert cols["ovl a1=1"].window[0] > 0.0
+
+
+def test_the_scan_marks_an_alpha_1_the_cells_cannot_see():
+    """The scan prints the fitted alpha(1) beside each held alpha(G>1), a
+    parameter value like any other: where the floor n c0 Phi covers G=1's
+    traffic n tau at every cell, alpha(1) is flat and the printed value is
+    where the fitter stopped."""
+    world = dict(OVERLAP_WORLD, c0=1.0)
+    assert world["c0"] * min(CTX.f_ref / f for f in (STATES[0](8), *STATES[1:])) > world["tau"]
+    cells = M.planted_cells(BY_KEY["ovl.group.pin"], world, CTX, groups=GROUPS,
+                            treads=TREADS, states=STATES, noise=NOISE, seed=4)
+    cols = M.scan_all(cells, CTX, M.scan_grid(0.25), [], M.FLAT_TOL)
+    lines = M.scan_lines(cols, M.FLAT_TOL, {})
+    rows = [line for line in lines if re.match(r"\s+\d\.\d{3}\s", line)]
+    assert len(rows) == len(M.scan_grid(0.25))
+    for line in rows:
+        # ovl a1 free's alpha(1) is marked; add a1 free's is seen, and is not.
+        assert len(re.findall(r"a1 \d\.\d{3}\?", line)) == 1, line
+        assert len(re.findall(r"a1 \d\.\d{3}", line)) == 2, line
 
 
 def test_leave_one_g_out_predicts_a_held_out_g_on_an_overlap_world():

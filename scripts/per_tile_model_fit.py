@@ -23,12 +23,16 @@ where Phi multiplies tau too it stays there, so tau >= W / pin holds the rate
 under the pin rate at every cell. It prints the parameters, rms and worst relative error, the
 rms per G, the rms in both families at a FIXED alpha(G>1) over a grid (alpha(1)
 = 1 and free), a leave-one-G-out check and, with --predict, other pages scored
-with the fitted parameters. The pin rate and the read ceilings are the ruler the
-session published (`calibration/measured_*.yaml` above the page) or --ruler; W
-is `moe.bench.weights.routed_expert_weight_bytes` of the rows' model and dtype.
-A page whose own report.json fails a VALIDITY gate is listed and not fitted
-unless --include-invalid; a page with no report.json unless --include-unscored;
-a gate spelled outside `moe.bench.exit_codes`' table refuses the run.
+with the fitted parameters. An INVISIBLE DIRECTION is one the parameters can
+move along, within their bounds, that changes no fitted cell (first order, from
+the Jacobian at the fit); a parameter or a bandwidth W / tau that one moves
+prints "not identified", not a number. The pin rate and the read ceilings are
+the ruler the session published (`calibration/measured_*.yaml` above the page)
+or --ruler; W is `moe.bench.weights.routed_expert_weight_bytes` of the rows'
+model and dtype. A page whose own report.json fails a VALIDITY gate is listed
+and not fitted unless --include-invalid; a page with no report.json unless
+--include-unscored; a gate spelled outside `moe.bench.exit_codes`' table
+refuses the run.
 
 WHAT IT CANNOT DISTINGUISH. A hard max from a smooth transition near the kink.
 What sets the floor c0: issue rate, L2-to-SM delivery, latency and occupancy all
@@ -36,12 +40,15 @@ scale with the SM clock. alpha(G) wherever the traffic branch sits under the
 floor at every fitted cell (the scan prints that window). tau from alpha(1),
 which trade against each other. Bytes from rate, since no counter is read. The
 parameters are fitted, not measured, and the traffic counts D are assumptions.
+The identification check is local: a direction flat only past first order, or a
+second minimum elsewhere, is not an invisible direction.
 It writes nothing unless --out is given.
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import itertools
 import json
 import math
 import re
@@ -627,38 +634,149 @@ class Fit:
     at_lower: tuple
     at_upper: tuple
     flat: tuple
-    #: Numerical rank of the Jacobian over the parameters off their bounds,
-    #: against how many there are. Below it, some COMBINATION of parameters
-    #: moves nothing the cells can see (tau against alpha when only
-    #: alpha tau enters), and those parameters are not identified.
+    #: Numerical rank of the column-normalised Jacobian over every parameter
+    #: that can move within its bounds (a parameter on a bound counts: it can
+    #: leave it), against how many there are.
     rank: int
-    interior: int
+    movable: int
+    #: `invisible_directions` of the fit: rows are unit directions, in
+    #: parameters divided by `scale`, that the parameters can move within
+    #: their bounds and that change no fitted cell to first order.
+    scale: np.ndarray
+    invisible: np.ndarray
+    #: Per parameter: False when some invisible direction moves it.
+    identified: tuple
     rel: np.ndarray
     cells: int
     rms: float
     worst: float
     ssr: float
+    #: W / tau at the fitted point. Not a measurement of anything when
+    #: `bandwidth_identified` is False: tau then slides along a direction the
+    #: cells cannot see, and this is where the fitter stopped on it.
     bandwidth_gbps: float
     per_g: dict
 
     def value(self, name: str) -> float | None:
         return self.values[self.names.index(name)] if name in self.names else None
 
+    @property
+    def blind(self) -> bool:
+        """Some direction inside the bounds moves the parameters and no cell."""
+        return self.invisible.shape[0] > 0
+
+    @property
+    def bandwidth_identified(self) -> bool:
+        return self.identified[self.names.index("tau")]
+
+    def is_identified(self, name: str) -> bool | None:
+        return self.identified[self.names.index(name)] if name in self.names else None
+
 
 #: A singular value of the column-normalised Jacobian below this fraction of
 #: the largest counts as zero: forward differences carry about 1e-7 of noise.
 RANK_TOL = 1e-6
 
+#: A component of a unit invisible direction below this is SVD residue: it
+#: counts as zero when deciding whether the direction leaves the bounds.
+SIGN_TOL = 1e-6
 
-def jacobian_rank(jac: np.ndarray) -> int:
-    if jac.size == 0:
-        return 0
+#: An invisible direction changes a quantity when the quantity's first-order
+#: change along it, per unit step in column-normalised parameters, exceeds
+#: this fraction of the quantity's largest change along any unit step. On
+#: session 5's cells (the findings' four pages, the default and
+#: --include-invalid sets, --r3) and session 4's G=16 page, every parameter
+#: and every held-out G fell below 1.3e-7 of it or above 2.4e-3: forward-
+#: difference residue on one side, an alpha near 0 scaled along the T0-tau
+#: valley on the other. This sits about 80 times above the first and 250 times
+#: below the second.
+IDENT_TOL = 1e-5
+
+
+def _null(a: np.ndarray, dim: int, tol: float = SIGN_TOL) -> np.ndarray:
+    """An orthonormal basis (columns) of {x in R^dim : a x = 0}."""
+    if a.shape[0] == 0 or dim == 0:
+        return np.eye(dim)
+    _u, sv, vt = np.linalg.svd(a)
+    rank = int(np.sum(sv > tol))
+    return vt[rank:].T
+
+
+def invisible_directions(jac: np.ndarray, at_lower, at_upper, movable
+                         ) -> tuple[np.ndarray, np.ndarray, int]:
+    """The directions the parameters can move, within their bounds, that
+    change no fitted cell to first order.
+
+    `jac` is the Jacobian of the fitted residuals; `at_lower`, `at_upper` and
+    `movable` (lower < upper) are per parameter. Returns (scale, generators,
+    rank). `scale` is each parameter's Jacobian column norm (1 for a column
+    that is exactly zero), the unit the generators are in. A parameter on a
+    bound may move off it and not past it, so the directions form a cone:
+    the generators (rows, unit length) are a basis of the directions usable
+    with either sign, then the cone's extreme rays; an empty array means the
+    fit is determined. `rank` is the rank of the column-normalised Jacobian
+    over the movable parameters.
+    """
+    at_lower, at_upper, movable = (np.asarray(x, dtype=bool)
+                                   for x in (at_lower, at_upper, movable))
+    k = jac.shape[1]
     norms = np.linalg.norm(jac, axis=0)
-    live = norms > 0
-    if not live.any():
-        return 0
-    sv = np.linalg.svd(jac[:, live] / norms[live], compute_uv=False)
-    return int(np.sum(sv > RANK_TOL * sv[0]))
+    top = float(norms[movable].max()) if movable.any() else 0.0
+    live = movable & (norms > 1e-9 * max(top, 1e-300))
+    scale = np.where(live, norms, 1.0)
+    basis, rank = [], 0
+    idx = np.flatnonzero(live)
+    if idx.size:
+        # Every right-singular vector, also with fewer cells than parameters.
+        _u, sv, vt = np.linalg.svd(jac[:, idx] / norms[idx],
+                                   full_matrices=jac.shape[0] < idx.size)
+        rank = int(np.sum(sv > RANK_TOL * sv[0]))
+        for row in vt[rank:]:
+            v = np.zeros(k)
+            v[idx] = row
+            basis.append(v)
+    for i in np.flatnonzero(movable & ~live):
+        v = np.zeros(k)
+        v[i] = 1.0
+        basis.append(v)
+    if not basis:
+        return scale, np.zeros((0, k)), rank
+    null = np.array(basis).T
+    dim = null.shape[1]
+    bounded = np.flatnonzero(movable & (at_lower | at_upper))
+    # A generator c of the null space is feasible when every bounded
+    # parameter moves off its bound or not at all: sign_i (null c)_i >= 0.
+    cons = np.where(at_lower[bounded], 1.0, -1.0)[:, None] * null[bounded]
+    cons[np.abs(cons) < SIGN_TOL] = 0.0
+    both = _null(cons, dim)
+    gens = [null @ both[:, j] for j in range(both.shape[1])]
+    rest = _null(both.T, dim) if both.shape[1] else np.eye(dim)
+    reduced = cons @ rest
+    free = rest.shape[1]
+    if free:
+        # A pointed cone's extreme rays each lie on free - 1 independent
+        # active constraints.
+        for rows in itertools.combinations(range(len(bounded)), free - 1):
+            w = _null(reduced[list(rows)], free)
+            if w.shape[1] != 1:
+                continue
+            for sgn in (1.0, -1.0):
+                if np.all(reduced @ (sgn * w[:, 0]) >= -SIGN_TOL):
+                    gens.append(null @ (rest @ (sgn * w[:, 0])))
+    return scale, (np.array(gens) if gens else np.zeros((0, k))), rank
+
+
+def moved_by(grads: np.ndarray, scale: np.ndarray, gens: np.ndarray) -> bool:
+    """Whether any generator changes the quantities whose gradients (rows, in
+    parameter units) are `grads`, by more than IDENT_TOL of their largest
+    change along any unit step."""
+    if gens.shape[0] == 0:
+        return False
+    g = np.atleast_2d(np.asarray(grads, dtype=float)) / scale
+    ref = float(np.linalg.norm(g, 2))
+    if ref == 0.0:
+        return False
+    return bool(np.max(np.linalg.norm(g @ gens.T, axis=0)) > IDENT_TOL * ref)
 
 
 def _start(lay: Layout, data: Data, ctx: Context, rng) -> np.ndarray:
@@ -727,7 +845,8 @@ def fit(s: Structure, cells, ctx: Context, *, fixed_rest=None, starts: int = STA
         warm=()) -> Fit:
     """Bounded least squares of `s` on `cells`, relative residuals, from the
     data-scaled start, every `warm` point (a Fit or a vector in this layout)
-    and `starts - 1` seeded draws; the lowest cost wins."""
+    and `starts - 1` seeded draws; the lowest cost wins, and its Jacobian
+    gives the rank and the invisible directions (`invisible_directions`)."""
     data = Data.of(cells, ctx)
     lay = layout(s, data, ctx, fixed_rest)
 
@@ -752,14 +871,16 @@ def fit(s: Structure, cells, ctx: Context, *, fixed_rest=None, starts: int = STA
     span = np.maximum(lay.ub - lay.lb, 1e-12)
     at_lower = p <= lay.lb + 1e-7 * span
     at_upper = p >= lay.ub - 1e-7 * span
-    interior = ~(at_lower | at_upper)
+    movable = lay.lb < lay.ub
+    scale, gens, rank = invisible_directions(jac, at_lower, at_upper, movable)
+    identified = tuple(not moved_by(np.eye(len(p))[i], scale, gens) for i in range(len(p)))
     per_g = {int(g): float(np.sqrt(np.mean(r[data.g == g] ** 2))) for g in data.groups}
     return Fit(structure=s, names=lay.names, values=tuple(float(x) for x in p),
                lower=tuple(lay.lb), upper=tuple(lay.ub),
                at_lower=tuple(bool(x) for x in at_lower),
                at_upper=tuple(bool(x) for x in at_upper),
-               flat=flat, rank=jacobian_rank(jac[:, interior]),
-               interior=int(interior.sum()), rel=r, cells=int(r.size),
+               flat=flat, rank=rank, movable=int(movable.sum()), scale=scale,
+               invisible=gens, identified=identified, rel=r, cells=int(r.size),
                rms=float(np.sqrt(np.mean(r ** 2))), worst=float(np.max(np.abs(r))),
                ssr=float(cost), bandwidth_gbps=ctx.bandwidth_gbps(float(p[1])),
                per_g=per_g)
@@ -808,7 +929,10 @@ def registered_alphas() -> dict[str, float]:
 @dataclass
 class ScanColumn:
     structure: Structure
-    points: list  # (alpha, rms, ssr, alpha(1) or None, registered: bool)
+    #: (alpha, rms, ssr, alpha(1) or None, registered: bool, alpha(1)
+    #: identified: bool or None). An unidentified alpha(1) is where the fitter
+    #: stopped on a direction the cells cannot see.
+    points: list
     window: tuple | None
     contiguous: bool
     ssr_min: float
@@ -836,8 +960,8 @@ def scan(s: Structure, cells, ctx: Context, grid, extras, tol: float,
         again = fit(s, cells, ctx, fixed_rest=lower, starts=0, warm=[fits[upper]])
         if again.ssr < fits[lower].ssr:
             fits[lower] = again
-    pts = [(a, fits[a].rms, fits[a].ssr, fits[a].value("alpha(1)"), a not in grid)
-           for a in alphas]
+    pts = [(a, fits[a].rms, fits[a].ssr, fits[a].value("alpha(1)"), a not in grid,
+            fits[a].is_identified("alpha(1)")) for a in alphas]
     on_grid = [p for p in pts if not p[4]]
     ssr_min = min(p[2] for p in on_grid)
     inside = [p[0] for p in on_grid if p[2] <= ssr_min * (1.0 + tol)]
@@ -937,13 +1061,16 @@ def _pct(x: float) -> str:
 def _param_text(f: Fit) -> str:
     parts = []
     for i, name in enumerate(f.names):
-        tag = ""
-        if f.flat[i]:
-            tag = " [flat]"
-        elif f.at_lower[i]:
-            tag = " [at lower bound]"
+        tags = []
+        if f.at_lower[i]:
+            tags.append("at lower bound")
         elif f.at_upper[i]:
-            tag = " [at upper bound]"
+            tags.append("at upper bound")
+        if f.flat[i]:
+            tags.append("flat")
+        elif not f.identified[i]:
+            tags.append("not identified")
+        tag = f" [{', '.join(tags)}]" if tags else ""
         parts.append(f"{name} {f.values[i]:.4f}{tag}")
     return ", ".join(parts)
 
@@ -960,19 +1087,26 @@ def fit_lines(fits, ctx: Context, ruler: Ruler, groups, cells) -> list[str]:
            f"{'rank':>5}   {'BW = W/tau GB/s':<30}"]
     for f in fits:
         bw = f.bandwidth_gbps
-        if math.isfinite(bw):
+        if not f.bandwidth_identified:
+            rel = "     n/a  not identified: tau is on an invisible direction"
+        elif math.isfinite(bw):
             rel = f"{bw:8.0f} = {bw / ruler.pin_gbps:.3f}x pin"
             if read:
                 rel += f", {bw / read:.3f}x read_stream"
         else:
             rel = "     inf (tau = 0)"
-        rank = f"{f.rank}/{f.interior}" + ("!" if f.rank < f.interior else " ")
+        rank = f"{f.rank}/{f.movable}" + ("!" if f.blind else " ")
         out.append(f"  {f.structure.family:<9}{f.structure.key:<17}{f.cells:>5}  "
                    f"{_pct(f.rms):>8} {_pct(f.worst):>8}  {rank:>6}  {rel}")
-    out += ["  rank: of the Jacobian over the parameters off their bounds, of how many "
-            "there are; ! marks a combination the cells cannot see",
+    out += ["  rank: of the column-normalised Jacobian over every parameter that can "
+            "move within its bounds (one on a bound can leave it), of how many there are",
+            "  ! marks an INVISIBLE DIRECTION: the parameters can move along it, within "
+            "their bounds, and no fitted cell changes. A rank short of the count with "
+            "no ! is a direction that would leave the bounds",
             "", "PARAMETERS (tau, c0, T0 in ms; c0 is per M-tile at F_REF, and in "
-            "add.paper tau and c0 are at F_TOP; [flat]: zero gradient at the optimum)"]
+            "add.paper tau and c0 are at F_TOP; [not identified]: moves along an "
+            "invisible direction, so the value is where the fitter stopped; [flat]: "
+            "zero gradient at the optimum, a direction of its own)"]
     for f in fits:
         out.append(f"  {f.structure.key:<17}{_param_text(f)}")
     out += ["", "RMS BY G",
@@ -1003,11 +1137,11 @@ def legend_lines() -> list[str]:
 def scan_lines(cols, tol: float, extras: dict) -> list[str]:
     if not cols or not cols[0].points:
         return ["SCAN: no G other than 1 among the fitted cells; nothing to scan"]
-    width = 26
+    width = 27
     out = ["SCAN: alpha(G>1) HELD at each value, every other parameter refitted; "
            "traffic (1 + alpha(n-1)) tau, tau >= W/pin",
            "  each column: rms, SSR over the column's minimum SSR, and the fitted "
-           "alpha(1) where it is free",
+           "alpha(1) where it is free (? where it is not identified)",
            "  " + f"{'alpha(G>1)':<16}" + "".join(f"{c.structure.key:>{width}}" for c in cols)]
     names = {v: k for k, v in extras.items()}
     for i, pt in enumerate(cols[0].points):
@@ -1017,7 +1151,7 @@ def scan_lines(cols, tol: float, extras: dict) -> list[str]:
         for c in cols:
             q = c.points[i]
             ratio = q[2] / c.ssr_min if c.ssr_min > 0 else math.nan
-            a1 = "" if q[3] is None else f"  a1 {q[3]:.3f}"
+            a1 = "" if q[3] is None else f"  a1 {q[3]:.3f}" + ("" if q[5] else "?")
             row.append(f"{_pct(q[1]).strip():>7} x{ratio:<7.2f}{a1}")
         out.append("  " + f"{label:<16}" + "".join(f"{x:>{width}}" for x in row))
     out.append(f"  FLAT WINDOW: the grid values whose SSR is within {100 * tol:g}% "
@@ -1139,15 +1273,20 @@ def _resolve_ruler(pages, explicit: Path | None) -> Ruler:
 
 
 def _fit_json(f: Fit) -> dict:
+    """One fit. `bandwidth_gbps` is null when tau is not identified; the
+    value the fitter stopped at is then `parameters.tau.value`."""
     return {"model": f.structure.key, "family": f.structure.family,
             "formula": f.structure.formula(), "cells": f.cells, "rms": f.rms,
-            "worst": f.worst, "ssr": f.ssr, "bandwidth_gbps": f.bandwidth_gbps,
-            "rank": f.rank, "parameters_off_bounds": f.interior,
+            "worst": f.worst, "ssr": f.ssr,
+            "bandwidth_gbps": f.bandwidth_gbps if f.bandwidth_identified else None,
+            "bandwidth_identified": f.bandwidth_identified,
+            "rank": f.rank, "movable_parameters": f.movable,
+            "invisible_directions": int(f.invisible.shape[0]),
             "parameters": {n: {"value": v, "lower": lo, "upper": hi, "at_lower": al,
-                               "at_upper": au, "flat": fl}
-                           for n, v, lo, hi, al, au, fl in zip(
+                               "at_upper": au, "flat": fl, "identified": ok}
+                           for n, v, lo, hi, al, au, fl, ok in zip(
                                f.names, f.values, f.lower, f.upper, f.at_lower,
-                               f.at_upper, f.flat, strict=True)},
+                               f.at_upper, f.flat, f.identified, strict=True)},
             "rms_by_g": {str(g): v for g, v in f.per_g.items()}}
 
 
@@ -1219,7 +1358,8 @@ def run(args) -> tuple[list[str], dict]:
         doc["scan"] = [{"model": c.structure.key, "formula": c.structure.formula(),
                         "window": c.window, "contiguous": c.contiguous,
                         "points": [{"alpha": a, "rms": r, "ssr": s, "alpha1": a1,
-                                    "registered": reg} for a, r, s, a1, reg in c.points]}
+                                    "alpha1_identified": ok, "registered": reg}
+                                   for a, r, s, a1, reg, ok in c.points]}
                        for c in cols]
     if not args.no_logo:
         if len(groups) < 2:
