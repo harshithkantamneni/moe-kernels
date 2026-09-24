@@ -464,15 +464,39 @@ APT_NCU_ONLY = ("NOTE: This is only a simulation!\n"
 APT_MOVES_DRIVER = APT_NCU_ONLY + ("Inst nvidia-driver-580 [575.57.08-0ubuntu1] "
                                    "(580.95.05-0ubuntu1 cuda)\n"
                                    "Inst libnvidia-compute-580 (580.95.05-0ubuntu1 cuda)\n")
+#: The driver's userspace moving without the driver package: an unattended
+#: upgrade of these under a loaded module is a Driver/library version mismatch.
+APT_MOVES_USERSPACE = APT_NCU_ONLY + ("Inst nvidia-utils-580 [575.57.08-0ubuntu1] "
+                                      "(580.95.05-0ubuntu1 cuda)\n")
+APT_MOVES_THE_REST = APT_NCU_ONLY + (
+    "Inst libnvidia-cfg1-580 (580.95.05-0ubuntu1 cuda)\n"
+    "Inst nvidia-open-580 (580.95.05-0ubuntu1 cuda)\n"
+    "Inst nvidia-fabricmanager-580 (580.95.05-1 cuda)\n"
+    "Inst libnvidia-gl-580 (580.95.05-0ubuntu1 cuda)\n"
+    "Remv cuda-compat-12-9 [575.57.08-1]\n")
 
 
-def test_an_apt_transaction_that_would_move_the_driver_is_refused(tmp_path, tiny):
+@pytest.mark.parametrize("apt_sim,named", [
+    (APT_MOVES_DRIVER, ["nvidia-driver-580", "libnvidia-compute-580"]),
+    (APT_MOVES_USERSPACE, ["nvidia-utils-580"]),
+    (APT_MOVES_THE_REST, ["libnvidia-cfg1-580", "nvidia-open-580", "nvidia-fabricmanager-580",
+                          "libnvidia-gl-580", "cuda-compat-12-9"]),
+], ids=["driver", "nvidia-utils-only", "userspace-and-compat"])
+def test_an_apt_transaction_that_would_move_the_driver_is_refused(tmp_path, tiny, apt_sim,
+                                                                  named):
+    """The guard listed six known driver package names, so a simulated
+    transaction that upgraded only nvidia-utils-580 (or libnvidia-cfg1,
+    nvidia-open, nvidia-fabricmanager, libnvidia-gl) passed as "touches no
+    driver package". The rule is by family now; only ncu's own packages are
+    exempt, which the clean transcript (APT_NCU_ONLY) holds elsewhere."""
     bundle, tip, _ = tiny
-    env = _real_world(tmp_path, APT_MOVES_DRIVER)
+    env = _real_world(tmp_path, apt_sim)
     r = vm(env, "--commit", tip, "--bundle", str(bundle))
     assert r.returncode == 2, r.stdout + r.stderr
     assert "would touch the driver" in r.stderr
-    assert "nvidia-driver-580" in r.stderr and "libnvidia-compute-580" in r.stderr
+    for pkg in named:
+        assert pkg in r.stderr, pkg
+    assert "nsight-compute" not in r.stderr.split("would touch the driver", 1)[1].split(")")[0]
     apt = Path(env["APT_LOG"]).read_text()
     assert "-s install --no-install-recommends cuda-nsight-compute-13-0" in apt
     assert "install -y" not in apt, "the transaction ran after the simulation refused it"

@@ -106,9 +106,15 @@ DEFAULT_PYTHON=3.12
 #: default (scripts/alpha_g_chain.sh; a test holds this to a superset of it),
 #: plus the runfile layout that keeps ncu under the toolkit's own directory.
 NCU_SEARCH_DEFAULT="/usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu /usr/local/cuda*/nsight-compute*/ncu"
-#: An apt transaction that names one of these packages would move the driver,
-#: which is the one thing installing ncu must never do.
-DRIVER_PACKAGES_RE='^(nvidia-driver|cuda-drivers|nvidia-kernel|linux-modules-nvidia|libnvidia-compute|nvidia-dkms)'
+#: An apt transaction that installs, removes or purges any package named here
+#: moves the driver or the userspace that must match it, which is the one thing
+#: installing ncu must never do. The rule is by family, not a list of known
+#: names: nvidia-utils-580, libnvidia-cfg1-580, nvidia-open-580 or
+#: nvidia-fabricmanager-580 moving under a loaded module is exactly how a VM
+#: ends at "Driver/library version mismatch". Only the ncu packages themselves
+#: (NCU_PACKAGES_RE) are exempt, and they match none of these prefixes today.
+DRIVER_PACKAGES_RE='^(nvidia-|libnvidia-|libcuda|cuda-drivers|cuda-compat|linux-modules-nvidia|linux-objects-nvidia|linux-signatures-nvidia|xserver-xorg-video-nvidia)'
+NCU_PACKAGES_RE='^(nsight-compute|cuda-nsight-compute)'
 CUDA_REPO_ROOT="https://developer.download.nvidia.com/compute/cuda/repos"
 CUDA_KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
 MODPROBE_CONF="/etc/modprobe.d/moe-ncu-profiling.conf"
@@ -616,7 +622,8 @@ cuda_repo_dir() {
 #: The driver packages an `apt-get -s` transcript would install, remove or
 #: purge, one per line; empty when the transaction leaves the driver alone.
 driver_packages_touched() {
-  awk '$1=="Inst" || $1=="Remv" || $1=="Purg" {print $2}' | grep -E "$DRIVER_PACKAGES_RE" || true
+  awk '$1=="Inst" || $1=="Remv" || $1=="Purg" {print $2}' \
+    | grep -E "$DRIVER_PACKAGES_RE" | grep -Ev "$NCU_PACKAGES_RE" || true
 }
 
 ncu_stage() {

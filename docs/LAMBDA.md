@@ -99,8 +99,13 @@ always re-runs the preflight. `--check` verifies without installing, and
 Three things it will refuse rather than do:
 
 - **Move the driver.** ncu is installed from the CUDA apt repo only after
-  `apt-get -s` shows the transaction touches no `nvidia-driver`,
-  `cuda-drivers`, `libnvidia-compute` or kernel-module package. A driver below
+  `apt-get -s` shows the transaction installs, removes or purges no package
+  of the driver's families: any `nvidia-*`, `libnvidia-*` or `libcuda*`,
+  `cuda-drivers`, `cuda-compat`, the `linux-{modules,objects,signatures}-nvidia`
+  kernel packages or `xserver-xorg-video-nvidia` (only the Nsight Compute
+  packages themselves are exempt). A userspace package such as
+  `nvidia-utils-580` moving under the loaded module is how a VM ends at
+  `Driver/library version mismatch`. A driver below
   r580 cannot run the vLLM venv's cu13 torch, and the fix is a driver upgrade
   this script never performs, so such a box is refused at S2 before anything
   is built: rent another instance. `--torch-index cu128` on r570-r579 builds
