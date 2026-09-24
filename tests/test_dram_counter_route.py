@@ -2586,6 +2586,85 @@ def test_the_family_probe_asks_strict_alone_once_when_the_whole_list_reads_nothi
     assert counter_route_is_open(info) and "first_attempt" in info
     assert info["metrics_proven"] == list(DCR.R3_STRICT_METRICS)
     assert info["metrics_query"].startswith("ncu --query-metrics exited 1")
+    assert [a["counters_read"] for a in info["attempts"]] == [False, True]
+
+
+def _plant_probe_asks(monkeypatch, *, names: str, refuse) -> list[list[str]]:
+    """An ncu whose metric query lists `names` and whose probe invocation reads
+    every metric it is asked for, unless `refuse(metrics)` returns the error
+    line that refuses the whole invocation. Returns each probe ask's metrics."""
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    asked: list[list[str]] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        if "--version" in argv:
+            return 0, "ncu 2026.1.0.0\n", ""
+        if "--query-metrics" in argv:
+            return 0, names, ""
+        metrics = argv[argv.index("--metrics") + 1].split(",")
+        asked.append(metrics)
+        error = refuse(metrics)
+        Path(argv[argv.index("--log-file") + 1]).write_text(
+            error or _family_probe_log(metrics))
+        return 0, f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", ""
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return asked
+
+
+#: The metric list of a chip that offers every hardware counter the family
+#: asks. The `launch__*` attributes are not held to the list, so it omits them.
+_HARDWARE_LIST = "\n".join(f"{DCR.metric_base(m)}  planted" for m in DCR.R3_ALL_METRICS
+                           if not m.startswith("launch__"))
+
+
+def test_a_readable_list_and_one_unknown_launch_name_still_reads_open(monkeypatch):
+    """The `launch__*` names pass the list check unverified, so one this ncu
+    does not know refuses the whole first ask on a box whose counters work.
+    Until 2026-09-24 the retry ran only when the list could not be read, so
+    this box read REFUSE and `--run` refused with it. The probe now asks
+    again whatever the list said: STRICT plus the list-verified metrics, and
+    every ask is recorded."""
+    bad = "launch__occupancy_limit_registers"
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: f"==ERROR== Failed to find metric {bad}\n" if bad in ms else "")
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    verified = [m for m in DCR.R3_ALL_METRICS
+                if m not in DCR.R3_STRICT_METRICS and not m.startswith("launch__")]
+    assert asked == [list(DCR.R3_ALL_METRICS), list(DCR.R3_STRICT_METRICS) + verified]
+    assert info["counters_read"] and counter_route_is_open(info)
+    assert info["metrics_proven"] == asked[-1]
+    assert [a["metrics"] for a in info["attempts"]] == asked
+    assert [a["counters_read"] for a in info["attempts"]] == [False, True]
+    assert bad in info["attempts"][0]["ncu_error"] and bad in info["first_attempt"]
+    left_out = [m for m in DCR.R3_ALL_METRICS
+                if m.startswith("launch__") and m not in DCR.R3_STRICT_METRICS]
+    assert left_out and all(m in info["metrics_unproven"] for m in left_out)
+    verdict, notes = route_verdict({}, {}, info, {"present": False})
+    assert verdict == "OPEN" and "attempt 1 (" in notes[1], notes
+
+
+def test_the_retries_end_at_strict_alone_or_at_a_permission_refusal(monkeypatch):
+    """When STRICT plus the verified metrics also reads nothing, STRICT alone
+    is asked last; ERR_NVGPUCTRPERM on any ask is the box's answer and ends
+    the retries there."""
+    extra = set(DCR.R3_ALL_METRICS) - set(DCR.R3_STRICT_METRICS)
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: ("==ERROR== Failed to find metric planted\n"
+                           if extra & set(ms) else ""))
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert len(asked) == 3 and asked[-1] == list(DCR.R3_STRICT_METRICS)
+    assert counter_route_is_open(info) and len(info["attempts"]) == 3
+    assert info["metrics_proven"] == list(DCR.R3_STRICT_METRICS)
+    asked = _plant_probe_asks(
+        monkeypatch, names=_HARDWARE_LIST,
+        refuse=lambda ms: "==ERROR== ERR_NVGPUCTRPERM - The user does not have "
+                          "permission to access NVIDIA GPU Performance Counters\n")
+    info = DCR.probe_ncu(DCR.R3_FAMILY)
+    assert len(asked) == 1 and info["permission_refused"]
+    assert len(info["attempts"]) == 1 and "first_attempt" not in info
 
 
 def test_the_ladder_probe_and_argv_are_unchanged():

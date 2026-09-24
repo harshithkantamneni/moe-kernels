@@ -1820,10 +1820,21 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
     kernel for every metric left. OPEN then means every STRICT metric came
     back as a number; which cross-check and recorded metrics came back is
     recorded (`metrics_proven`), and those are the only ones a page gates on.
-    When the chip's list could not be read, the whole list is asked, and if
-    that read no counter for a reason other than ERR_NVGPUCTRPERM the STRICT
-    list alone is asked once more: one misspelt recorded name must not cost
-    the verdict.
+
+    ONE UNKNOWN NAME MUST NOT COST THE VERDICT. A name this ncu does not know
+    refuses the whole invocation, and a readable metric list does not rule
+    that out: the `launch__*` names pass the list check unverified
+    (`r3_probe_metrics`). So whenever the whole ask read no counter for a
+    reason other than ERR_NVGPUCTRPERM, whatever the list said, the probe asks
+    again: first STRICT plus the cross-check and recorded metrics the list
+    verified (no `launch__*` optional), then STRICT alone, skipping an ask it
+    has already made and stopping at the first ask that reads a counter or is
+    refused permission. `attempts` records every ask and `first_attempt`
+    says why the earlier ones read nothing; an optional metric the last ask
+    left out is listed in `metrics_unproven`, so no page gates on it. Until
+    2026-09-24 the retry ran only when the list could not be read, so one
+    `launch__` name this ncu does not know read REFUSE on a box whose
+    counters work, and `--run --family r3-arms` refused with it.
     """
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
@@ -1841,13 +1852,37 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
                 "counters_read": False, "permission_refused": False,
                 "metric_value": None, "metrics_query": query,
                 "metrics_dropped": dropped, "cause": refused, "output_head": ""}
-    info = _probe_once(binary, version, strict, optional, family=R3_FAMILY)
-    if (names is None and optional and not info["counters_read"]
-            and not info["permission_refused"]):
-        first = info["cause"]
-        info = _probe_once(binary, version, strict, (), family=R3_FAMILY)
-        info["first_attempt"] = (f"the whole list ({len(strict) + len(optional)} "
-                                 f"metrics) read no counter: {first}")
+    verified = () if names is None else tuple(m for m in optional
+                                              if not m.startswith("launch__"))
+    asks: list[tuple[str, ...]] = []
+    for ask in (optional, verified, ()):
+        if ask not in asks:
+            asks.append(ask)
+    attempts: list[dict] = []
+    info: dict = {}
+    for ask in asks:
+        info = _probe_once(binary, version, strict, ask, family=R3_FAMILY)
+        error = next((ln.strip() for ln in str(info.get("output_head") or "").splitlines()
+                      if "==ERROR==" in ln), "")
+        attempts.append({"metrics": list(strict + ask),
+                         "counters_read": bool(info["counters_read"]),
+                         "permission_refused": bool(info["permission_refused"]),
+                         "ncu_error": error, "cause": info.get("cause")})
+        if info["counters_read"] or info["permission_refused"]:
+            break
+    if len(attempts) > 1:
+        info["first_attempt"] = "; ".join(
+            f"attempt {i + 1} ({len(a['metrics'])} metrics) read no counter: "
+            + (f"ncu said {a['ncu_error']!r}; " if a["ncu_error"] else "") + str(a["cause"])
+            for i, a in enumerate(attempts[:-1]))
+        last = set(attempts[-1]["metrics"])
+        unproven = info.setdefault("metrics_unproven", {})
+        for m in optional:
+            if m not in last:
+                unproven[m] = (f"asked by attempt 1, which read no counter, and left "
+                               f"out of attempt {len(attempts)}, the one this verdict "
+                               "is read off")
+    info["attempts"] = attempts
     info["metrics_query"] = query
     info["metrics_dropped"] = dropped
     return info
@@ -4474,7 +4509,8 @@ def r3_probe_metrics(names) -> tuple[tuple[str, ...], tuple[str, ...], list[str]
     statistics ncu records itself rather than hardware counters, and whether
     `--query-metrics` lists them is not verified here; holding them to it
     would let a list that omits them refuse a box whose counters work. The
-    probe's own launch proves them or does not.
+    probe's own launch proves them or does not, and one this ncu does not
+    know costs `probe_ncu` a retry without them, never the verdict.
     """
     rest = R3_CROSSCHECK_METRICS + R3_RECORDED_METRICS
     if names is None:

@@ -745,7 +745,12 @@ dry run prints the predicted peak and the free memory it needs.
 `--probe --family r3-arms` asks `ncu --query-metrics` which of these the chip
 offers, refuses when a STRICT one is absent, drops the others it lacks, and
 asks the probe kernel for everything left. OPEN means every STRICT metric came
-back as a number. The unit tables gained a sector table and a separate table
+back as a number. The `launch__*` names are not held to the list, so one this
+ncu does not know refuses the whole ask on a box whose counters work; when the
+whole ask reads no counter for any reason other than `ERR_NVGPUCTRPERM`, the
+probe asks again, first STRICT plus the metrics the list verified, then STRICT
+alone, and records every ask (`attempts`). A metric the last ask left out is
+unproven, so no page gates on it. The unit tables gained a sector table and a separate table
 for the `launch__*` metrics, the only place an empty unit is accepted.
 
 The parser now reads both CSV layouts ncu may print for `--csv --page raw`:
