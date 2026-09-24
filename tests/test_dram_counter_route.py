@@ -2057,3 +2057,105 @@ def test_a_ratio_across_two_cards_is_not_a_contrast(tmp_path, capsys):
     assert "values of device" in out
     line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
     assert line.verdict == "FAIL"
+
+
+# ==========================================================================
+# BOTH OF ncu's CSV LAYOUTS (2026-09-24). No live ncu CSV has ever been
+# captured in this repository, and `--csv --page raw` may print one row per
+# launch and metric (LONG, what the parser was written against) or one row
+# per launch with a units row under the header (WIDE). Both are read.
+# ==========================================================================
+
+def _wide_csv(rows: list[dict], units: dict[str, str]) -> str:
+    """A planted `--csv --page raw` WIDE page: a header, a units row, one row
+    per launch."""
+    metrics = list(units)
+    fixed = ["ID", "Process ID", "Process Name", "Kernel Name"]
+    out = ["==PROF== Connected to process 1 (python)",
+           ",".join(f'"{c}"' for c in fixed + metrics),
+           ",".join(['""'] * len(fixed) + [f'"{units[m]}"' for m in metrics])]
+    for i, row in enumerate(rows):
+        out.append(",".join(f'"{c}"' for c in (str(i), "1", "python", row["kernel"]))
+                   + "," + ",".join(f'"{row[m]}"' for m in metrics))
+    return "\n".join(out) + "\n"
+
+
+def test_the_parser_reads_a_wide_raw_page_and_converts_its_units_row():
+    """ncu's raw CSV may be WIDE (one row per launch, a units row under the
+    header), and nothing in this repository has ever captured one. The parser
+    reads it launch by launch, converting each column by the unit its units
+    row names: Mbyte is a million bytes, not one."""
+    text = _wide_csv([{"kernel": "fused_moe_kernel", "dram__bytes_read.sum": "2.5",
+                       "gpu__time_duration.sum": "1.5"},
+                      {"kernel": "fused_moe_kernel", "dram__bytes_read.sum": "3.0",
+                       "gpu__time_duration.sum": "2.0"}],
+                     {"dram__bytes_read.sum": "Mbyte", "gpu__time_duration.sum": "usecond"})
+    launches = parse_ncu_csv(text)
+    assert [ln.launch_id for ln in launches] == ["0", "1"]
+    assert launches[0].metrics["dram__bytes_read.sum"] == pytest.approx(2.5e6)
+    assert launches[1].metrics["gpu__time_duration.sum"] == pytest.approx(2.0e3)
+    assert DCR.ncu_csv_layout(text)[0] == DCR.CSV_WIDE
+    assert DCR.ncu_csv_layout(canned_ncu_csv(**PLANTED))[0] == DCR.CSV_LONG
+
+
+def test_the_probe_reads_open_off_a_wide_raw_page():
+    """THE FALSE NEGATIVE THIS CLOSES. On a box whose counters work, a probe
+    that parsed only the long layout read a wide page as "no ncu CSV header"
+    and said REFUSE: the gate that decides a booking, wrong the other way."""
+    wide = _wide_csv([{"kernel": "probe", "dram__bytes_read.sum": "4194304"}],
+                     {"dram__bytes_read.sum": "byte"})
+    info = DCR.probe_reading("/planted/ncu", "planted", 0,
+                             f"{PK.MARKER} {PK.LAUNCHED} planted: one add_", "", wide)
+    assert info["counters_read"] is True and info["metric_value"] == 4194304.0
+    verdict, _notes = route_verdict({}, {}, info, {"present": False})
+    assert verdict == "OPEN"
+
+
+def test_a_wide_page_without_its_units_row_refuses():
+    """The units row is the wide layout's `Metric Unit` column: without it a
+    value ncu rescaled cannot be reduced, so the page refuses."""
+    text = ('"ID","Kernel Name","dram__bytes_read.sum"\n'
+            '"0","fused_moe_kernel","2.5"\n')
+    with pytest.raises(CounterRunRefused, match="no units row"):
+        parse_ncu_csv(text)
+    with pytest.raises(CounterRunRefused, match="no 'ID' column"):
+        parse_ncu_csv('"Kernel Name","dram__bytes_read.sum"\n"","byte"\n"k","1"\n')
+
+
+def test_sector_units_and_the_explicit_unitless_launch_entry():
+    """Sectors convert by their prefix; a launch attribute is read with no
+    unit, because it is registered unitless; an empty unit on a byte or a
+    sector metric still refuses; and only `launch__*` metrics are registered
+    unitless."""
+    text = _wide_csv([{"kernel": "fused_moe_kernel",
+                       "lts__t_sectors_srcunit_tex_op_read.sum": "2",
+                       "launch__grid_size": "7168"}],
+                     {"lts__t_sectors_srcunit_tex_op_read.sum": "Msector",
+                      "launch__grid_size": ""})
+    (launch,) = parse_ncu_csv(text)
+    assert launch.metrics["lts__t_sectors_srcunit_tex_op_read.sum"] == pytest.approx(2e6)
+    assert launch.metrics["launch__grid_size"] == 7168.0
+    for metric in ("dram__bytes_read.sum", "lts__d_sectors_fill_device.sum"):
+        with pytest.raises(CounterRunRefused, match="never been shown"):
+            parse_ncu_csv(_wide_csv([{"kernel": "k", metric: "1"}], {metric: ""}))
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv(_wide_csv([{"kernel": "k", "launch__grid_size": "1"}],
+                                {"launch__grid_size": "kilogram"}))
+    unitless = [m for m, (_c, units) in DCR.NCU_LAUNCH_UNITS.items() if "" in units]
+    assert unitless and all(m.startswith("launch__") for m in unitless)
+    assert all(m.startswith("launch__") for m in DCR.NCU_LAUNCH_UNITS)
+    assert all("" not in units for _c, units in DCR.NCU_METRIC_UNITS.values())
+
+
+def test_a_soft_metric_that_cannot_be_read_is_recorded_and_a_hard_one_refuses():
+    """RECORDED metrics are parsed soft: an unreadable cell lands in
+    `Launch.unreadable` and never refuses the page. Every other metric still
+    refuses the whole parse on an unreadable cell."""
+    units = {"dram__bytes_read.sum": "byte", "launch__registers_per_thread": "furlong"}
+    text = _wide_csv([{"kernel": "k", "dram__bytes_read.sum": "10",
+                       "launch__registers_per_thread": "128"}], units)
+    (launch,) = parse_ncu_csv(text, soft=frozenset({"launch__registers_per_thread"}))
+    assert "launch__registers_per_thread" in launch.unreadable
+    assert launch.metrics == {"dram__bytes_read.sum": 10.0}
+    with pytest.raises(CounterRunRefused, match="furlong"):
+        parse_ncu_csv(text)

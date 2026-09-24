@@ -269,7 +269,55 @@ NCU_METRIC_UNITS: dict[str, tuple[str, dict[str, float]]] = {
     "gpu__time_duration.sum": ("nsecond", {
         "nsecond": 1.0, "usecond": 1e3, "msecond": 1e6, "second": 1e9}),
     "lts__t_sector_op_read_hit_rate.pct": ("%", {"%": 1.0, "percent": 1.0}),
+    # THE SECTOR METRICS, the r3-arms family's (`--family r3-arms`). An L2
+    # sector is 32 bytes; ncu prints the count in sectors and rescales it with
+    # the same decimal prefixes as bytes. `--print-units base` asks for the
+    # bare "sector", and the prefixed spellings are here because the CSV of a
+    # capture made without that flag rescales per launch like every other
+    # metric does.
+    **{m: ("sector", {"sector": 1.0, "Ksector": 1e3, "Msector": 1e6,
+                      "Gsector": 1e9})
+       for m in ("lts__t_sectors_srcunit_tex_op_read.sum",
+                 "lts__d_sectors_fill_device.sum",
+                 "lts__t_sectors_op_read_lookup_miss.sum",
+                 "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+                 "lts__t_sectors_srcunit_ltcfabric.sum")},
 }
+
+#: THE ONE PLACE AN EMPTY UNIT IS ACCEPTED, and it is a separate table so the
+#: rule above ("no byte, time, rate or sector table carries the empty unit")
+#: stays true of `NCU_METRIC_UNITS` and is still tested there. Every metric
+#: here is a `launch__*` launch attribute that ncu prints either with no unit
+#: at all (a count or a ratio) or with the one unit listed: a grid size, a
+#: wave count, an occupancy limit in blocks, registers per thread. None of
+#: them is rescaled, so an empty unit means "unitless" here and cannot mean
+#: "ncu dropped the prefix". A unit not listed still REFUSES, loudly, at the
+#: probe; `tests/test_dram_counter_route.py` holds that every metric with an
+#: empty entry is a `launch__*` metric.
+UNITLESS = ""
+NCU_LAUNCH_UNITS: dict[str, tuple[str, dict[str, float]]] = {
+    "launch__grid_size": (UNITLESS, {UNITLESS: 1.0}),
+    "launch__waves_per_multiprocessor": (UNITLESS, {UNITLESS: 1.0}),
+    "launch__registers_per_thread": ("register/thread", {
+        "register/thread": 1.0, UNITLESS: 1.0}),
+    **{m: ("block", {"block": 1.0, UNITLESS: 1.0})
+       for m in ("launch__occupancy_limit_blocks",
+                 "launch__occupancy_limit_registers",
+                 "launch__occupancy_limit_shared_mem",
+                 "launch__occupancy_limit_warps")},
+}
+
+
+def unit_table(metric: str) -> tuple[str, dict[str, float]]:
+    """`(canonical unit, accepted units)` for a registered metric. One lookup
+    over both tables, so the parser never scales a metric it has no table for."""
+    if metric in NCU_METRIC_UNITS:
+        return NCU_METRIC_UNITS[metric]
+    return NCU_LAUNCH_UNITS[metric]
+
+
+def registered_metric(metric: str) -> bool:
+    return metric in NCU_METRIC_UNITS or metric in NCU_LAUNCH_UNITS
 
 #: The byte metrics, the ones divided by the call count. A rate and a duration
 #: are not; the rate is a weighted mean and the duration is per call because it
@@ -2064,6 +2112,10 @@ class Launch:
     launch_id: str
     kernel: str
     metrics: dict[str, float]
+    #: A SOFT metric (asked, never gated) whose cell could not be read, and
+    #: why. Empty unless the caller named soft metrics: every other metric
+    #: still refuses the whole parse on an unreadable cell.
+    unreadable: dict[str, str] = field(default_factory=dict)
 
 
 def _metric_value(metric: str, unit: str, raw: str) -> float:
@@ -2086,7 +2138,7 @@ def _metric_value(metric: str, unit: str, raw: str) -> float:
         value = float(text)
     except ValueError as exc:
         raise CounterRunRefused(f"{metric}: cannot read {raw!r} as a number") from exc
-    canonical, table = NCU_METRIC_UNITS[metric]
+    canonical, table = unit_table(metric)
     key = (unit or "").strip()
     if key not in table:
         raise CounterRunRefused(
@@ -2098,43 +2150,107 @@ def _metric_value(metric: str, unit: str, raw: str) -> float:
     return value * table[key]
 
 
-def parse_ncu_csv(text: str) -> list[Launch]:
-    """`ncu --csv --page raw` output to one `Launch` per profiled launch.
+#: The two shapes ncu's CSV is parsed in. LONG is one row per (launch,
+#: metric) under `ID`, `Kernel Name`, `Metric Name`, `Metric Unit`, `Metric
+#: Value`, which is the shape this parser was written against. WIDE is one row
+#: per launch with one column per metric and a units row under the header.
+#: NO LIVE ncu CSV HAS EVER BEEN CAPTURED IN THIS REPOSITORY (the only raw ncu
+#: output committed is an ERR_NVGPUCTRPERM, `profiles/q2_kernel_names.txt`),
+#: NVIDIA's CLI documentation does not state which shape `--csv --page raw`
+#: prints, and the recollection this file's r3-arms family was designed on is
+#: that it is WIDE. A parser that read one shape would turn a box whose
+#: counters work into a probe that reads REFUSE ("no ncu CSV header"), which
+#: is the gate that decides a booking. So both are read, the probe records
+#: which one it parsed (`ncu_csv_layout`), and the r3-arms family keeps the
+#: `.ncu-rep` so the CSV can be regenerated off the box.
+CSV_LONG = "long"
+CSV_WIDE = "wide"
 
-    The raw page is one row per (launch, metric), so the launches are recovered
-    by grouping on the launch ID column. The ID is REQUIRED: without it the only
-    other way to tell two launches of the same kernel apart is the kernel time
-    string, which repeats, and merging two launches into one halves the traffic
-    the reduction then divides by the call count.
 
-    Everything before the header is skipped rather than parsed. ncu prefixes its
-    own progress with `==PROF==` and the profiled process writes its own stdout
-    into the same stream when no `--log-file` is given; `--run` always passes
-    one, and this still skips, because a parser that trusts line 1 is a parser
-    that breaks the first time ncu prints a warning.
+def _ncu_csv_header(text: str) -> tuple[str, list[str], list[list[str]]]:
+    """`(layout, header, rows after the header)`, or the no-header refusal.
+
+    Everything before the header is skipped rather than parsed. ncu prefixes
+    its own progress with `==PROF==` and the profiled process writes its own
+    stdout into the same stream when no `--log-file` is given; `--run` always
+    passes one, and this still skips, because a parser that trusts line 1 is
+    a parser that breaks the first time ncu prints a warning.
     """
     import csv as _csv
     rows = list(_csv.reader(text.splitlines()))
-    header = None
     for i, row in enumerate(rows):
-        if {"Kernel Name", "Metric Name", "Metric Value"} <= set(row):
-            header, rows = row, rows[i + 1:]
-            break
-    if header is None:
-        raise CounterRunRefused(
-            "no ncu CSV header in this output: expected a row carrying "
-            "'Kernel Name', 'Metric Name' and 'Metric Value'. THIS IS NOT A FLAG "
-            "PROBLEM -- `ncu_argv` already passes --csv --page raw --log-file, and "
-            "telling the operator to pass them is where this message used to send "
-            "them. A header-less log means ncu collected nothing: either no kernel "
-            "was launched inside the profiled process, or the counter read was "
-            "refused (grep the log for ERR_NVGPUCTRPERM). `--probe` separates those "
-            "two and a re-run with the same flags will not")
+        cols = set(row)
+        if {"Kernel Name", "Metric Name", "Metric Value"} <= cols:
+            return CSV_LONG, row, rows[i + 1:]
+        if "Kernel Name" in cols and any(registered_metric(c) for c in cols):
+            return CSV_WIDE, row, rows[i + 1:]
+    raise CounterRunRefused(
+        "no ncu CSV header in this output: expected a row carrying 'Kernel "
+        "Name', 'Metric Name' and 'Metric Value' (one row per launch and "
+        "metric) or 'Kernel Name' beside a registered metric's own column (one "
+        "row per launch). THIS IS NOT A FLAG "
+        "PROBLEM -- `ncu_argv` already passes --csv --page raw --log-file, and "
+        "telling the operator to pass them is where this message used to send "
+        "them. A header-less log means ncu collected nothing: either no kernel "
+        "was launched inside the profiled process, or the counter read was "
+        "refused (grep the log for ERR_NVGPUCTRPERM). `--probe` separates those "
+        "two and a re-run with the same flags will not")
+
+
+def ncu_csv_layout(text: str) -> tuple[str, str]:
+    """`(layout, the header row as ncu printed it)`, for the probe's record:
+    the first box whose counters work closes the question of which shape
+    `--csv --page raw` prints, and this is where the answer is written down."""
+    layout, header, _rows = _ncu_csv_header(text)
+    return layout, ",".join(f'"{c}"' for c in header)
+
+
+def _no_id_refusal(header: list[str]) -> CounterRunRefused:
+    return CounterRunRefused(
+        f"the ncu CSV has no 'ID' column (columns: {header}). Without a launch "
+        "id two launches of one kernel cannot be told apart and the per-call "
+        "division would be wrong by their count")
+
+
+def _read_value(launch_id: str, metric: str, unit: str, raw: str, soft,
+                metrics: dict, unreadable: dict) -> None:
+    """One cell into `metrics`, or, for a SOFT metric only, its refusal into
+    `unreadable`. A hard metric's refusal propagates and refuses the file."""
+    try:
+        metrics[metric] = _metric_value(metric, unit, raw)
+    except CounterRunRefused as exc:
+        if metric not in soft:
+            raise
+        unreadable[metric] = f"launch {launch_id}: {exc}"
+
+
+def parse_ncu_csv(text: str, *, soft=frozenset()) -> list[Launch]:
+    """`ncu --csv --page raw` output to one `Launch` per profiled launch.
+
+    BOTH LAYOUTS (`CSV_LONG`, `CSV_WIDE`; see there for why). In the long one
+    the launches are recovered by grouping on the launch ID column; in the
+    wide one each row is a launch and the row under the header carries the
+    units. The ID is REQUIRED in both: without it the only other way to tell
+    two launches of the same kernel apart is the kernel time string, which
+    repeats, and merging two launches into one halves the traffic the
+    reduction then divides by the call count. The units are REQUIRED in both,
+    as the `Metric Unit` column or as the units row: ncu rescales per launch.
+
+    `soft` names metrics that are asked and never gated (the r3-arms family's
+    RECORDED class, and at the probe every metric outside the STRICT class):
+    an unreadable cell of one of those lands in `Launch.unreadable` instead of
+    refusing the file. Every other metric refuses on an unreadable cell, as
+    it always has.
+    """
+    layout, header, rows = _ncu_csv_header(text)
     if "ID" not in header:
-        raise CounterRunRefused(
-            f"the ncu CSV has no 'ID' column (columns: {header}). Without a launch "
-            "id two launches of one kernel cannot be told apart and the per-call "
-            "division would be wrong by their count")
+        raise _no_id_refusal(header)
+    if layout == CSV_WIDE:
+        return _parse_wide(header, rows, frozenset(soft))
+    return _parse_long(header, rows, frozenset(soft))
+
+
+def _parse_long(header: list[str], rows: list[list[str]], soft) -> list[Launch]:
     if "Metric Unit" not in header:
         # REQUIRED, and it was optional until 2026-09-10: the column was picked
         # up `if name in header` and its absence left `unit` empty, which the
@@ -2154,33 +2270,70 @@ def parse_ncu_csv(text: str) -> list[Launch]:
     idx = {name: header.index(name) for name in
            ("ID", "Kernel Name", "Metric Name", "Metric Unit", "Metric Value")}
     order: list[str] = []
-    seen: dict[str, tuple[str, dict[str, float]]] = {}
+    seen: dict[str, tuple[str, dict[str, float], dict[str, str]]] = {}
     for row in rows:
         if len(row) != len(header) or row == header:
             continue
         metric = row[idx["Metric Name"]].strip()
-        if metric not in NCU_METRIC_UNITS:
+        if not registered_metric(metric):
             continue
         launch_id = row[idx["ID"]].strip()
         kernel = row[idx["Kernel Name"]].strip()
-        value = _metric_value(metric, row[idx["Metric Unit"]], row[idx["Metric Value"]])
         if launch_id not in seen:
             order.append(launch_id)
-            seen[launch_id] = (kernel, {})
-        known_kernel, metrics = seen[launch_id]
-        if metric in metrics:
+            seen[launch_id] = (kernel, {}, {})
+        known_kernel, metrics, unreadable = seen[launch_id]
+        if metric in metrics or metric in unreadable:
             raise CounterRunRefused(
                 f"launch {launch_id} reports {metric} twice; the ID column is not "
                 "unique in this file and the launches cannot be separated")
         if kernel != known_kernel:
             raise CounterRunRefused(
                 f"launch {launch_id} is named both {known_kernel!r} and {kernel!r}")
-        metrics[metric] = value
+        _read_value(launch_id, metric, row[idx["Metric Unit"]],
+                    row[idx["Metric Value"]], soft, metrics, unreadable)
     if not order:
         raise CounterRunRefused(
             "the ncu CSV carries no row for any registered metric. A profile that "
             "measured nothing also reports no failures")
-    return [Launch(i, seen[i][0], seen[i][1]) for i in order]
+    return [Launch(i, seen[i][0], seen[i][1], seen[i][2]) for i in order]
+
+
+def _parse_wide(header: list[str], rows: list[list[str]], soft) -> list[Launch]:
+    id_at, kernel_at = header.index("ID"), header.index("Kernel Name")
+    columns = [(i, name) for i, name in enumerate(header) if registered_metric(name)]
+    body = [r for r in rows if len(r) == len(header) and r != header]
+    if not body or body[0][id_at].strip():
+        # THE UNITS ROW IS THE WIDE LAYOUT'S `Metric Unit` COLUMN, and it is
+        # required for the same reason: ncu rescales per launch.
+        raise CounterRunRefused(
+            f"the wide ncu CSV has no units row under its header (columns: "
+            f"{header}); the first row under it carries launch id "
+            f"{body[0][id_at]!r}" if body else
+            f"the wide ncu CSV has a header and no rows under it (columns: "
+            f"{header})")
+    units, launches = body[0], body[1:]
+    order: list[str] = []
+    seen: dict[str, Launch] = {}
+    for row in launches:
+        launch_id = row[id_at].strip()
+        if not launch_id:
+            continue
+        if launch_id in seen:
+            raise CounterRunRefused(
+                f"launch {launch_id} appears twice; the ID column is not unique in "
+                "this file and the launches cannot be separated")
+        metrics: dict[str, float] = {}
+        unreadable: dict[str, str] = {}
+        for i, name in columns:
+            _read_value(launch_id, name, units[i], row[i], soft, metrics, unreadable)
+        seen[launch_id] = Launch(launch_id, row[kernel_at].strip(), metrics, unreadable)
+        order.append(launch_id)
+    if not order:
+        raise CounterRunRefused(
+            "the wide ncu CSV carries a header and a units row and no launch. A "
+            "profile that measured nothing also reports no failures")
+    return [seen[i] for i in order]
 
 
 def normalise_per_call(launches: list[Launch], *, calls_floor: int,
