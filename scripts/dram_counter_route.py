@@ -6032,7 +6032,10 @@ def do_dry_run_r3(args) -> int:
         print(f"    {arm:<8} " + "  ".join(grids))
     print()
     print("THE COMMANDS, on a box where --probe --family r3-arms says OPEN, from the vLLM")
-    print("  venv so the child is sys.executable ($S the session directory, $R results):")
+    print("  venv so the child is sys.executable ($S the session directory, $R results).")
+    print("  Every census and page is matched by commit and refuses a tree git cannot name;")
+    print("  under a sudo counter door (root running git in the login user's checkout) run")
+    print("  once, as the login user: git config --global --add safe.directory <checkout>")
     print(f"  python scripts/dram_counter_route.py --probe --family {R3_FAMILY} "
           "--out $S/probe.json")
     print(f"  $PY_VLLM scripts/dram_counter_route.py --run --family {R3_FAMILY} "

@@ -2584,6 +2584,8 @@ def test_the_r3_dry_run_prints_the_ncu_argv_the_run_builds_and_prices_it(capsys)
     assert f"= {per_g / 60:.1f} min" in out
     assert f"{len(DCR.R3_GROUPS)} G: {len(DCR.R3_GROUPS) * per_g / 60:.0f} min" in out
     assert "CARD: DECIDED ON THE BOX" in out and "--card is not read" in out
+    assert "git config --global --add safe.directory <checkout>" in out, \
+        "the plan names the step the commit refusal needs under a sudo counter door"
 
 
 def test_the_r3_dry_run_refuses_a_tread_outside_r3s_ladder(capsys):
