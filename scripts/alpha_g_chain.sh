@@ -895,8 +895,14 @@ rebuild_pairs() {
   return 0
 }
 
-#: THE COUNTER PROBE'S PRICE in seconds: the driver's own booking for the same
-#: probe, its counter_plan arm (in minutes), or nothing when it books none.
+#: THE COUNTER PROBE'S PRICE in seconds: the driver's own booking for its
+#: counter_plan arm (in minutes), or nothing when it books none. That booking
+#: prices the ladder family's probe (one metric, one profiled launch), and the
+#: chain's is NOT that probe: it is the r3-arms family's, a metric query and
+#: then one to three profiled launches of the probe kernel (the whole ask,
+#: then STRICT plus the list-verified metrics, then STRICT alone, stopping at
+#: the first that reads a counter). It is priced at the same booking and
+#: capped at the arm floor (`cap_for`), which holds either.
 counter_probe_price() {
   local m
   m="$(driver_minutes counter_plan)"
@@ -1521,7 +1527,7 @@ echo; echo "== counter-probe: can this pod read a DRAM counter (informational; g
 COUNTER_PROBE_S="$(counter_probe_price)"
 if (( DRY )); then
   IFS=$'\t' read -r CP_CAP CP_HOW < <(cap_for "$COUNTER_PROBE_S")
-  skip_row counter-probe "a dry run does not run it: it launches one kernel under ncu on the card. Priced ~${COUNTER_PROBE_S:-0} s, the driver's own arm_minutes for counter_plan (the same probe); capped on the pod at $CP_CAP s ($CP_HOW); informational, it gates nothing and runs on every measuring pass"
+  skip_row counter-probe "a dry run does not run it: it is the r3-arms family's probe, which asks ncu for the chip's metric list and then launches the probe kernel under ncu on the card one to three times. Priced ~${COUNTER_PROBE_S:-0} s at the driver's own arm_minutes for counter_plan, whose probe is the ladder family's one-metric one, not this; capped on the pod at $CP_CAP s ($CP_HOW); informational, it gates nothing and runs on every measuring pass"
   CLOCK_S=$(( CLOCK_S + ${COUNTER_PROBE_S:-0} ))
 else
   # never gated, never latched: whatever it reads, the chain goes on
@@ -1673,7 +1679,7 @@ if (( DRY )); then
     echo "  $SUITE_RATE_WHO, and no end suite (END_SUITE=skip, the default; END_SUITE=run prices it),"
   fi
   echo "  plus the preconditions ~$PRE_S s ($PRE_BASIS),"
-  echo "  the counter probe ~${COUNTER_PROBE_S:-0} s (the driver's own arm_minutes for counter_plan, the same probe),"
+  echo "  the counter probe ~${COUNTER_PROBE_S:-0} s (the r3-arms family's probe, priced at the driver's own arm_minutes for counter_plan),"
   echo "  the probe check ~$PROBE_CHECK_S s (an allowance: it prints no plan), per-run compiles and"
   echo "  weight copies ~$compile_s s ($R3_RUN_OVERHEAD_S s a ratio run, an allowance) and exfil ~$EXFIL_S s"
   echo "  (an allowance) = $wall s"

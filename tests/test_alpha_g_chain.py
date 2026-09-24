@@ -2802,8 +2802,11 @@ def test_the_dry_run_prices_every_step_off_the_arms_own_plans(dry):
 
 def test_the_dry_run_prices_the_counter_probe_and_runs_nothing(dry):
     """No card, nothing measured: the counter probe is a SKIPPED row priced in
-    minutes off the driver's own booking for the same probe, and the capped
-    ceiling it would run under on the pod. Nothing it would write exists."""
+    minutes off the driver's own booking for counter_plan, and the capped
+    ceiling it would run under on the pod. Nothing it would write exists. The
+    row says the chain's probe is the r3-arms family's (a metric query, then
+    one to three profiled launches), not counter_plan's one-metric probe: it
+    said "(the same probe)" and "it launches one kernel" until 2026-09-24."""
     got, root, _b, _a = dry
     session = next((root / "session").glob("alpha_g-nocard-*"))
     rows = {ln.split("\t")[0]: ln.split("\t")
@@ -2812,8 +2815,13 @@ def test_the_dry_run_prices_the_counter_probe_and_runs_nothing(dry):
     cap = max(_const("ARM_CAP_FACTOR") * price, _const("ARM_CAP_FLOOR_S"))
     row = rows["counter-probe"]
     assert row[1] == "SKIPPED" and "a dry run does not run it" in row[6], row
-    assert (f"Priced ~{price} s, the driver's own arm_minutes for counter_plan (the same probe);"
-            f" capped on the pod at {cap} s") in row[6]
+    assert (f"Priced ~{price} s at the driver's own arm_minutes for counter_plan, whose probe "
+            f"is the ladder family's one-metric one, not this; capped on the pod at {cap} s"
+            ) in row[6]
+    assert "the r3-arms family's probe" in row[6] and "one to three times" in row[6]
+    assert "the same probe" not in row[6] and "launches one kernel" not in row[6]
+    assert ("the counter probe ~" + str(price) + " s (the r3-arms family's probe, priced "
+            "at the driver's own arm_minutes for counter_plan),") in got.stdout
     assert "informational, it gates nothing" in row[6]
     for made in ("COUNTERS", "COUNTERS.json", "chain-logs/counter-probe.log"):
         assert not (session / made).exists(), made
@@ -2833,8 +2841,8 @@ def test_the_dry_runs_price_names_every_term_and_draws_the_seed_spacing(dry):
     assert int(H.estimate(logs / "r3-g16-s2.log")) == wall + probe
     pre = 60 * sum(_driver_minutes(a) for a in ("thermal", "calibrate", "pin_probe-n64-g1"))
     counter = 60 * _driver_minutes("counter_plan")
-    assert (f"the counter probe ~{counter} s (the driver's own arm_minutes for counter_plan"
-            in " ".join(out.split()))
+    assert (f"the counter probe ~{counter} s (the r3-arms family's probe, priced at the "
+            "driver's own arm_minutes for counter_plan)" in " ".join(out.split()))
     assert f"plus the preconditions ~{pre} s (the driver's own arm_minutes" in out
     priced = [int(x) for x in re.findall(r"priced (\d+) s off its own plan", out)]
     arms = int(re.search(r"= (\d+) s of arms", out).group(1))
