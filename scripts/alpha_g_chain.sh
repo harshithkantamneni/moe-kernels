@@ -11,7 +11,7 @@
 #   SESSION=<dir> bash scripts/alpha_g_chain.sh      # continue a named one
 #   bash scripts/alpha_g_chain.sh --resume --past-gpu-tests   # go on past a red test_gpu.py, recorded
 #   bash scripts/alpha_g_chain.sh --resume --past-v8          # go on past the probe check or the pilot's V8, recorded
-#   END_SUITE=skip bash scripts/alpha_g_chain.sh --resume     # the end suite as a SKIPPED row
+#   END_SUITE=run bash scripts/alpha_g_chain.sh --resume      # buy the end suite too (off by default)
 # AN OVERRIDE HOLDS. Its decision is written to the ledger as its own
 # OVERRIDDEN row, and every later pass of the session reads that row back: a
 # plain --resume after it goes on past the same gate without the flag, and
@@ -112,9 +112,10 @@
 #                  words and ratio pages that cannot be quoted (the STOP prices
 #                  both off the arms' own plans), and SEEDS=0 limits those
 #                  pages to seed 0.
-#   r1-g<G>        scripts/clock_elasticity.py at each G, three cap-binding
-#                  duty states (1.0 0.7 0.5), the per-M-tile elasticity gated:
-#                  the REGIME word for that G, below.
+#   r1-g<G>        scripts/clock_elasticity.py at each G, three duty states
+#                  (1.0 0.5 0.25: the card on its power cap at 1.0, off it at
+#                  0.5 and 0.25; R1_DUTY says why these), the per-M-tile
+#                  elasticity gated: the REGIME word for that G, below.
 #   r3-g<G>-s1,s2  seeds 1 then 2 at every G, each later seed scored WITH the
 #                  earlier ones of its G through --replicate-of (DESIGN
 #                  DECISION 14). The R1 block sits between seed 0 and seed 1:
@@ -137,9 +138,15 @@
 #                  scored (nothing timed, e.g. the sweep was skipped on V8, or
 #                  a clock was unread), so a later seed would read the same;
 #                  the seed-0 log says which.
-#   suite          the whole suite, uncapped, from PY_BASE, AFTER every arm:
-#                  a record of this box that gates nothing, its row in the
-#                  ledger. END_SUITE=skip writes a SKIPPED row instead. A
+#   suite          OFF BY DEFAULT. END_SUITE=run buys the whole suite,
+#                  uncapped, from PY_BASE, AFTER every arm: a record of this
+#                  box that gates nothing, its row in the ledger. Without it
+#                  (END_SUITE=skip, the default) the step writes a SKIPPED
+#                  row saying the suite was not requested. Why off: on
+#                  session 5's pod the base-venv suite exercised nothing the
+#                  arms depend on beyond tests/test_gpu.py, which runs above,
+#                  and it ran ~1.4 s a test off the network volume (2499 tests
+#                  in 3472 s before it was interrupted at 49%). A
 #                  suite that already ran to its tally, green or red (pytest
 #                  exit 1), is not bought again and gets no row over it; a
 #                  timeout, an interrupted run or a log with no tally re-runs.
@@ -172,17 +179,23 @@
 # R1'S RESOLUTION. Session 4's G=16 claim over treads 2 and deeper read a
 # half-width of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four;
 # the all-tread reading's was 0.076) against R1's 0.075 target, half the gap
-# band's width. Three states here are not expected to resolve better, so an
-# interval within about its half-width of 0.25 or 0.40 reads STRADDLES, and
-# UNREGISTERED-GAP is hard to reach at three states.
-# THE WORD IS A SECANT, between the capped clock at duty 1.0 and the clock at
-# 0.7 and 0.5; R3 runs at 0.25, at the ceiling. To first order, for a per-tile
-# cost A + B/f with A and B not negative, the local elasticity B/(Af + B) lies
-# in [0, 1] and falls as f rises, so RAW-STANDS carries over to R3's operating
-# point and CLOCK-CARRIES is only an upper bound there. That form cannot
-# produce an elasticity above 1, which session 4's G=16 claim read at every
-# subset of its states: where R1's point is above 1 the A + B/f reading does
-# not apply, and the interval is quoted without it.
+# band's width. Session 5 ran R1 at those three states, the chain's, at every
+# G and read half-widths of 0.0096 at G=1 (STRADDLES at 0.40), 0.0660 at G=4
+# (CLOCK-CARRIES), 0.0837 then 0.0909 at G=16 (withheld:INVALID both times,
+# on V5 and then on V7) and 0.0875 at G=64 (CLOCK-CARRIES): its pages
+# 0d8858eb, e1c429b7, a5a8fde2.first-v5-invalid then a5a8fde2, and a3d5cd3a
+# under results/published/2026-09-23-nvidia_h200-session5/results/
+# gaps-nvidia_h200/clock_elasticity/. An interval within its half-width of
+# 0.25 or 0.40 reads STRADDLES.
+# THE WORD IS A SECANT, between the capped clock at duty 1.0 and the clocks at
+# 0.5 and 0.25; R3 runs at 0.25, at the ceiling, the top of that secant's
+# range. To first order, for a per-tile cost A + B/f with A and B not
+# negative, the local elasticity B/(Af + B) lies in [0, 1] and falls as f
+# rises, so RAW-STANDS carries over to R3's operating point and
+# CLOCK-CARRIES is only an upper bound there. That form cannot produce an
+# elasticity above 1, which session 4's G=16 claim read at every subset of
+# its states: where R1's point is above 1 the A + B/f reading does not
+# apply, and the interval is quoted without it.
 #
 # WHAT IT LEAVES: $SESSION/CHAIN.tsv (one row per step: state, rc, seconds,
 # log, note, with the driver's second opinion taken off the RESULT lines);
@@ -256,34 +269,58 @@ PROBE_CHECK_S=120
 #: The exfil allowance: the tar of the session, the results and the ruler.
 EXFIL_S=300
 #: THE HANG CAP ON AN ARM STEP: max(ARM_CAP_FACTOR x its price, ARM_CAP_FLOOR_S),
-#: and ARM_CAP_UNPRICED_S when its plan priced nothing: four times R1's ~15
-#: minutes, the longest arm's price. 3x is past any honest overrun of a plan
-#: that already charges its idle gaps; the 30-minute floor is past the 9-minute
-#: cold-import stall the volume has shown and then recovered from.
+#: and ARM_CAP_UNPRICED_S when its plan priced nothing: four times R1's ~19
+#: minutes, the longest arm's price at its states 1.0 0.5 0.25 (1124 s on
+#: 2026-09-23's dry run; it was ~15 minutes at 1.0 0.7 0.5). 3x is past any
+#: honest overrun of a plan that already charges its idle gaps; the 30-minute
+#: floor is past the 9-minute cold-import stall the volume has shown and then
+#: recovered from.
 ARM_CAP_FACTOR=3
 ARM_CAP_FLOOR_S=1800
-ARM_CAP_UNPRICED_S=3600
-#: The elasticity arm's states: cap-binding ones. Session 4 showed duty 0.5,
-#: 0.25 and 0.10 were one clock cluster, so two of its four states bought
-#: nothing and cost 14/17 of the wall; three states is MIN_STATES.
-R1_DUTY="${R1_DUTY:-1.0 0.7 0.5}"
+ARM_CAP_UNPRICED_S=4500
+#: The elasticity arm's states, 1.0 0.5 0.25 (the owner's decision in session
+#: 5, 2026-09-23); three states is MIN_STATES. Session 4 had read 0.5, 0.25
+#: and 0.10 as one clock cluster, so the chain took 1.0 0.7 0.5. On session
+#: 5's pod (H200, 700 W cap) G=1's R1 at 1.0 0.7 0.5 excluded 22.4% of its
+#: rows for in-burst clock drift (0.7: 30.8%, 0.5: 36.5%, 1.0: 0%) and failed
+#: V4, which holds the excluded rows to 20%. At 1.0 0.5 0.25 every G passed
+#: V4, excluding 16.3% (G=1), 6.7% (G=4), 5.4% and 5.8% (G=16, first page
+#: and re-run) and 5.8% (G=64), and every page passed V1: the states
+#: separated in clock at every tread. Median board power per state there:
+#: 694-695 W at 1.0 (on the cap), 485-506 W at 0.5, 300-318 W at 0.25.
+R1_DUTY="${R1_DUTY:-1.0 0.5 0.25}"
 R1_TREADS=8
 R1_REPEATS=13
 RATE_USD_H="${RATE_USD_H:-4.59}"
-#: The price per collected test ON A POD, not on a laptop: session 4's capped
-#: run (results/published/2026-09-21-nvidia_h200-session4/session/
-#: chain-logs/session4-pytest.log) did 2242 tests in 1465 s, 2.5x the laptop's
-#: rate, off the network volume. A dry run multiplies it by each step's count.
-SUITE_S_PER_TEST="${SUITE_S_PER_TEST:-0.66}"
+#: The price per collected test ON A POD, not on a laptop: session 5's end
+#: suite (pod w226zpjmj8p1d3, 1x H200, 2026-09-23;
+#: results/published/2026-09-23-nvidia_h200-session5/session/
+#: alpha_g-nvidia_h200-20260923T163248Z/chain-logs/suite.log) ran 2499 tests
+#: in 3472 s from the base venv off the network volume (10 failed, 2470
+#: passed, 19 skipped in 3471.97 s) before it was interrupted at 49%: 1.39 s
+#: a test. The old 0.66 was session 4's capped run, 2242 tests in 1465 s. A
+#: dry run multiplies the rate by each pytest step's collected count;
+#: tests/test_gpu.py is priced at it too.
+SUITE_RATE_WHO="session 5's pod rate"
+[[ -n "${SUITE_S_PER_TEST:-}" ]] && SUITE_RATE_WHO="the rate SUITE_S_PER_TEST sets"
+SUITE_S_PER_TEST="${SUITE_S_PER_TEST:-1.39}"
 #: A hung suite (the volume's MooseFS has hung before) must not eat the
-#: booking: about 1.7x the priced run, then pytest is interrupted and its
-#: tally of what ran is still printed. test_gpu.py gets its own, smaller cap.
-SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-5400}"
+#: booking: about 1.7x the priced run at the rate above (a dry run with
+#: END_SUITE=run prints it: 6946 s for the 4997 tests of 2026-09-23's tree),
+#: then pytest is interrupted and its tally of what ran is still printed.
+#: test_gpu.py gets its own, smaller cap.
+SUITE_TIMEOUT_S="${SUITE_TIMEOUT_S:-12000}"
 GPU_TESTS_TIMEOUT_S="${GPU_TESTS_TIMEOUT_S:-900}"
-#: `skip` records the end suite as a SKIPPED row and does not run it: a
-#: resume that owes one arm need not buy the whole suite again. A suite that
+#: THE END SUITE IS OFF BY DEFAULT (the owner's decision in session 5,
+#: 2026-09-23): `skip` records it as a SKIPPED row saying it was not
+#: requested, and `run` buys it after every arm. On session 5's pod the
+#: base-venv suite exercised nothing the arms depend on beyond
+#: tests/test_gpu.py, which the chain runs before them either way, and it
+#: ran 2499 tests in 3472 s before it was interrupted at 49%. Any other value
+#: is REFUSED before a session is opened: with `skip` the default, a
+#: mistyped `run` would otherwise skip the suite it asked for. A suite that
 #: already ran to its tally gets no row at all (end_suite_recorded).
-END_SUITE="${END_SUITE:-run}"
+END_SUITE="${END_SUITE:-skip}"
 #: The seed a G starts at, and the step after which V8 is read.
 FIRST_SEED="${SEEDS%% *}"
 FIRST_G="${G_LADDER%% *}"
@@ -1123,6 +1160,13 @@ done
 
 [[ -x "$PY_BASE" ]] || { echo "REFUSED: no usable base interpreter (set PY_BASE=)"; exit 2; }
 [[ -f "$HELPERS" ]] || { echo "REFUSED: $HELPERS is missing"; exit 2; }
+case "$END_SUITE" in
+  run|skip) ;;
+  *) echo "REFUSED: END_SUITE=$END_SUITE: it takes run (buy the end suite after the arms) or"
+     echo "  skip (the default: not requested, a SKIPPED row). Nothing was run and no session"
+     echo "  directory was opened."
+     exit 2 ;;
+esac
 
 smi_line() {
   local out
@@ -1355,7 +1399,7 @@ if (( DRY )); then
   run_step_as collect gpu-tests "$LOGS/gpu-tests.log" in_repo without_knobs "$PY_BASE" -m pytest \
     tests/test_gpu.py --collect-only -q -p no:cacheprovider || true
   read -r GPU_TESTS_N GPU_TESTS_S < <(price_tests "$LOGS/gpu-tests.log")
-  echo "    priced ${GPU_TESTS_S} s: $GPU_TESTS_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"
+  echo "    priced ${GPU_TESTS_S} s: $GPU_TESTS_N tests at $SUITE_S_PER_TEST s each, $SUITE_RATE_WHO"
   CLOCK_S=$(( CLOCK_S + GPU_TESTS_S ))
 elif ! latched gpu-tests "$LEDGER" && ! (( PAST_GPU_TESTS )) && ! overridden gpu-tests-override; then
   # --past-gpu-tests is a decision taken AFTER reading a red page: it does not
@@ -1447,24 +1491,25 @@ for seed in $SEEDS; do
 done
 
 # --------------------------------------------------------------------------
-# 8. the whole suite, after every arm: a record of this box, gating nothing
+# 8. the whole suite, after every arm, only on END_SUITE=run: a record of
+#    this box, gating nothing
 # --------------------------------------------------------------------------
-echo; echo "== the whole suite, uncapped, from the base venv (a record; gates nothing)"
+echo; echo "== the whole suite, uncapped, from the base venv (a record; gates nothing; only on END_SUITE=run)"
 if (( DRY )) && [[ "$END_SUITE" == skip ]]; then
-  echo "    END_SUITE=skip: not collected, not priced"
+  skip_row suite "END_SUITE=skip (the default): the end suite was not requested; a dry run neither collects nor prices it, and END_SUITE=run does both"
 elif (( DRY )); then
   # a dry run COLLECTS and prices; running it here would take the laptop 20
   # minutes and run this chain's own dry-run tests inside itself
   run_step_as collect suite "$LOGS/suite.log" in_repo without_knobs "$PY_BASE" -m pytest tests/ \
     --collect-only -q -p no:cacheprovider || true
   read -r SUITE_N SUITE_S < <(price_tests "$LOGS/suite.log")
-  echo "    priced ${SUITE_S} s: $SUITE_N tests at $SUITE_S_PER_TEST s each, session 4's pod rate"
+  echo "    priced ${SUITE_S} s: $SUITE_N tests at $SUITE_S_PER_TEST s each, $SUITE_RATE_WHO"
 elif SUITE_RECORD="$(end_suite_recorded)"; then
   # asked BEFORE END_SUITE=skip: a SKIPPED row over a DONE one made the next
   # plain --resume buy the whole suite again
   echo "  suite recorded, not bought again: $SUITE_RECORD"
 elif [[ "$END_SUITE" == skip ]]; then
-  skip_row suite "END_SUITE=skip: the operator did not run the end suite this pass"
+  skip_row suite "END_SUITE=skip (the default): the end suite was not requested this pass; END_SUITE=run buys it after the arms"
 else
   pytest_step suite "$SUITE_TIMEOUT_S" tests/ -q -rfE --durations=25 -p no:cacheprovider
 fi
@@ -1481,9 +1526,14 @@ if (( DRY )); then
   wall=$(( TOTAL_S + GPU_TESTS_S + SUITE_S + PRE_S + PROBE_CHECK_S + compile_s + EXFIL_S ))
   echo "PRICE, off the arms' own plans: $n_r1 elasticity runs + $n_r3 ratio runs = $TOTAL_S s of arms"
   echo "  (a ratio run is its plan's wall line at duty $R3_DUTY plus the alignment probe's"
-  echo "  seconds at full duty; an elasticity run is its plan's wall figure),"
-  echo "  tests/test_gpu.py ~$GPU_TESTS_S s (${GPU_TESTS_N:-?} tests) before them and the end suite ~$SUITE_S s"
-  echo "  (${SUITE_N:-0} tests) after them, at $SUITE_S_PER_TEST s a test, session 4's pod rate,"
+  echo "  seconds at full duty; an elasticity run is its plan's wall figure at duty $R1_DUTY),"
+  if [[ "$END_SUITE" == run ]]; then
+    echo "  tests/test_gpu.py ~$GPU_TESTS_S s (${GPU_TESTS_N:-?} tests) before them and the end suite ~$SUITE_S s"
+    echo "  (${SUITE_N:-0} tests) after them (END_SUITE=run), at $SUITE_S_PER_TEST s a test, $SUITE_RATE_WHO,"
+  else
+    echo "  tests/test_gpu.py ~$GPU_TESTS_S s (${GPU_TESTS_N:-?} tests) before them at $SUITE_S_PER_TEST s a test,"
+    echo "  $SUITE_RATE_WHO, and no end suite (END_SUITE=skip, the default; END_SUITE=run prices it),"
+  fi
   echo "  plus the preconditions ~$PRE_S s ($PRE_BASIS),"
   echo "  the probe check ~$PROBE_CHECK_S s (an allowance: it prints no plan), per-run compiles and"
   echo "  weight copies ~$compile_s s ($R3_RUN_OVERHEAD_S s a ratio run, an allowance) and exfil ~$EXFIL_S s"
