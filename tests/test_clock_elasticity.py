@@ -480,6 +480,24 @@ def test_v5_fails_one_row_that_is_half_of_what_its_cell_kept():
     assert "duty 0.25 tread 6: 1 of its 2 kept repeats" in "\n".join(gate.lines)
 
 
+def test_v5_fails_one_row_that_carries_a_thin_cells_bootstrap_median():
+    """Review of the one-row budget: the fit's interval is a bootstrap over
+    repeats, so one crossing row in a cell DRIFT thinned to 5 of 13 carries the
+    median of that cell in 11% of the draws and can set an interval edge while
+    the point estimate stands. On that page every other gate passes and the old
+    zero-row V5 failed it; the share clause must too. A full cell of 13 does
+    not: one row carries it in 0.002% of the draws."""
+    thin = CE._thin_cell_sag_rows()
+    gate = _score(thin)["V5"]
+    assert gate.verdict == CE.FAIL
+    assert gate.measured.startswith("1 of ")
+    assert "duty 1 tread 8: 1 of its 5 kept repeats" in "\n".join(gate.lines)
+    assert CE._v5_carry_share(1, 5, 13) == pytest.approx(0.1106, abs=5e-4)
+    assert CE._v5_carry_share(1, 9, 13) < CE.V5_CARRY_CEILING < CE._v5_carry_share(1, 7, 13)
+    full = CE.plant_rows(eps=0.05, jitter=0.004, burst_moves_at={(0, 8, 0)})
+    assert _score(full)["V5"].verdict == CE.PASS
+
+
 def test_v6_catches_a_memory_clock_that_moved_with_the_duty_cycle():
     every = {(i, t, r) for i in range(4) for t in range(1, 9) for r in range(13)}
     moved = _score(CE.plant_rows(

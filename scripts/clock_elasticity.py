@@ -1316,15 +1316,39 @@ def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
 #: full pages V5 passed, the largest first-to-last-quarter move was 0.022 and
 #: none reached 0.025. What did cross was rarer and of another kind: on two
 #: pages (session 5 G=16, session 6 G=2) one duty-0.25 cell ran slow at the END
-#: of its bursts in about half of its repeats, and one repeat crossed 0.05. On
+#: of its bursts in a third to a half of its repeats, and one repeat crossed 0.05. On
 #: the ten rows of those two cells that moved more than 0.03, the median call,
 #: the time the fit reads, was within 0.06% of the cell's median over all its
-#: repeats. Two crossing rows in 1942 kept rows is about 0.3 per page, so a
+#: repeats. Two crossing rows in the 1942 kept rows of the seven full session-5
+#: and session-6 pages is about 0.3 per page, so a
 #: budget of zero voids a sound page about one time in four, one about one time
 #: in thirty and two about one time in three hundred. One is the cautious
 #: choice: those two events are the whole estimate of the rate, and it is the
 #: most a page has shown. The planted `sagging-burst` world plants three.
 V5_ROW_BUDGET = 1
+
+#: The share of `fit`'s repeat-bootstrap draws in which a cell's crossing rows
+#: may be half or more of what the cell drew. The interval's edges sit on 2.5%
+#: tails, so rows that carry a draw's median more often than a fifth of that can
+#: set an edge. Over 13 repeats one crossing row stays under it in a cell that
+#: kept 9 or more (0.44%) and not in one that kept 7 (2.5%) or 5 (11%). The two
+#: pages that motivated `V5_ROW_BUDGET` crossed in cells that kept 12 and 13.
+V5_CARRY_CEILING = 0.005
+
+
+def _v5_carry_share(moved: int, n: int, repeats: int) -> float:
+    """P, over `fit`'s resample (`repeats` draws with replacement from the run's
+    repeats), that `moved` crossing rows are half or more of the rows a cell
+    drew, the cell holding `n` kept rows at distinct repeats. Exact: km draws
+    land on the moved rows, kc on the cell's other rows, the rest elsewhere."""
+    if not moved or repeats <= 0:
+        return 0.0
+    p_m, p_c = moved / repeats, (n - moved) / repeats
+    p_o = max(0.0, 1.0 - p_m - p_c)
+    return sum(math.comb(repeats, km) * math.comb(repeats - km, kc)
+               * p_m ** km * p_c ** kc * p_o ** (repeats - km - kc)
+               for km in range(1, repeats + 1)
+               for kc in range(0, min(km, repeats - km) + 1))
 
 
 def gate_v5_within_burst(keep) -> Gate:
@@ -1339,10 +1363,14 @@ def gate_v5_within_burst(keep) -> Gate:
     -- the repository's own rule, applied to the one pair this instrument adds.
 
     WHAT FAILS IT is a count and a share, never one row on its own. The fit
-    reads each (duty, tread) cell as the MEDIAN of its repeats, so moved rows
-    can shift a cell only when they are half or more of its kept repeats, and
-    such a cell fails V5 however few rows it holds. Anywhere else, up to
-    `V5_ROW_BUDGET` rows may cross; the constant's note says why.
+    reads each (duty, tread) cell as the MEDIAN of its repeats, and its interval
+    as the same median over repeats drawn with replacement. Moved rows carry the
+    point estimate when they are half or more of the cell's kept repeats, and
+    an interval edge when they are half or more of what the cell drew in more
+    than `V5_CARRY_CEILING` of the draws (`_v5_carry_share`), which one row does
+    in a cell that DRIFT thinned to a few repeats. Either way the cell fails V5
+    however few rows it holds. Anywhere else, up to `V5_ROW_BUDGET` rows may
+    cross; the constants' notes say why.
     """
     scored = [r for r in keep if r.within_burst_ok is not None]
     bad = [r for r in scored if r.within_burst_ok is False]
@@ -1357,8 +1385,11 @@ def gate_v5_within_burst(keep) -> Gate:
         seen = cells.setdefault((_duty_key(r.duty_requested), r.tiles), [0, 0])
         seen[0] += 1
         seen[1] += int(r.within_burst_ok is False)
-    carried = sorted((d, t, moved, n) for (d, t), (n, moved) in cells.items()
-                     if moved and 2 * moved >= n)
+    repeats = len({r.repeat for r in keep})
+    carried = sorted((d, t, moved, n, _v5_carry_share(moved, n, repeats))
+                     for (d, t), (n, moved) in cells.items()
+                     if moved and (2 * moved >= n or _v5_carry_share(
+                         moved, n, repeats) > V5_CARRY_CEILING))
     ok = len(bad) <= V5_ROW_BUDGET and not carried
     worst = ""
     if bad:
@@ -1367,18 +1398,20 @@ def gate_v5_within_burst(keep) -> Gate:
                  f"{pick.head_ms:.4f} -> {pick.tail_ms:.4f} ms")
     lines = [worst] if worst else []
     lines += [f"duty {float(d):g} tread {t}: {moved} of its {n} kept repeats "
-              "moved, enough to carry the cell's median"
-              for d, t, moved, n in carried]
+              f"moved, and they carry the cell's median in {share:.2%} of the "
+              f"interval's draws (at most {V5_CARRY_CEILING:.1%})"
+              for d, t, moved, n, share in carried]
     return Gate(
         VALIDITY, "5", "the clock held inside each burst",
         PASS if ok else FAIL,
         f"{len(bad)} of {len(scored)} kept rows moved more than "
         f"{T.DRIFT_FRACTION:.2f} from first quarter to last"
-        + (f"; {len(carried)} cell(s) where they are half or more of the kept "
-           "repeats" if carried else ""),
-        f"at most {V5_ROW_BUDGET} rows at {T.DRIFT_FRACTION:.2f}, the "
-        "repository's DRIFT fraction, and in no duty-and-tread cell half or "
-        "more of its kept repeats",
+        + (f"; {len(carried)} cell(s) where they can carry the median"
+           if carried else ""),
+        f"at most {V5_ROW_BUDGET} row{'s' if V5_ROW_BUDGET != 1 else ''} at "
+        f"{T.DRIFT_FRACTION:.2f}, the repository's DRIFT fraction, and in no "
+        "duty-and-tread cell enough of them to carry its median, at the point "
+        f"estimate or in more than {V5_CARRY_CEILING:.1%} of the interval's draws",
         "the per-call time: inside one burst it would be an average over two "
         "operating points, and the average moves with the duty cycle",
         lines)
@@ -2647,8 +2680,20 @@ class PlantedWorld:
     tolerance: float = 0.05
 
 
+def _thin_cell_sag_rows() -> list[Row]:
+    """The `thin-cell-sag` world's rows: DRIFT keeps 5 of duty 1.0 tread 8's 13
+    repeats, and one of the five sagged 20% inside its bursts and reads 5% slow."""
+    rows = plant_rows(eps=0.05, jitter=0.004,
+                      drift_at={(0, 8, r) for r in range(5, DEFAULT_REPEATS)},
+                      burst_moves_at={(0, 8, 0)})
+    for r in rows:
+        if (r.state_index, r.tiles, r.repeat) == (0, 8, 0):
+            r.ms_p50 *= 1.05
+    return rows
+
+
 def self_test_worlds(args) -> list[PlantedWorld]:
-    """Every planted world. SEVEN of the twelve are REFUSALS: a scorer that has
+    """Every planted world. EIGHT of the thirteen are REFUSALS: a scorer that has
     only ever seen a clean design has never been shown to refuse one.
 
     The count is not carried in prose anywhere else IN THIS FILE, and that
@@ -2738,6 +2783,17 @@ def self_test_worlds(args) -> list[PlantedWorld]:
             "that can see it.",
             plant_rows(eps=0.05, jitter=0.004,
                        burst_moves_at={(0, 1, 0), (1, 2, 1), (2, 3, 2)}),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": FAIL, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
+        PlantedWorld(
+            "thin-cell-sag", "A REFUSAL: one row sagged inside its bursts in a "
+            "cell DRIFT thinned to 5 of 13 repeats. One crossing row is inside "
+            "V5_ROW_BUDGET and is not half the cell, but it is half or more of "
+            "what the cell draws in 11% of the interval's bootstrap draws, so it "
+            "can set an interval edge while the point estimate stands. THE WORLD "
+            "THAT MAKES V5's bootstrap share clause reachable: every other V5 "
+            "refusal fails on the row count or the point-estimate share.",
+            _thin_cell_sag_rows(),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
              "V5": FAIL, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
         PlantedWorld(
