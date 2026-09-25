@@ -409,6 +409,7 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-09-21-nvidia_h200-session4": SESSION,
         "2026-09-23-nvidia_h200-session5": SESSION,
         "2026-09-24-nvidia_h200-session6": SESSION,
+        "2026-09-25-nvidia_a100_sxm4_40gb-r3-counters": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}
