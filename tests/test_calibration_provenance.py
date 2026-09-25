@@ -406,6 +406,10 @@ def test_every_published_arm_has_a_declared_verdict():
         # somebody discovers three days later.
         "2026-09-09-nvidia_h200-gaps-session": SESSION,
         "2026-09-10-nvidia_h200-gaps-session": SESSION,
+        # Four more raw sessions, each with a KIND file saying `session`:
+        # H200 sessions 4, 5 and 6, and the Lambda A100-SXM4-40GB counter
+        # run, which is not the study's card. None holds rows of its own, so
+        # there is no ruler here to check.
         "2026-09-21-nvidia_h200-session4": SESSION,
         "2026-09-23-nvidia_h200-session5": SESSION,
         "2026-09-24-nvidia_h200-session6": SESSION,

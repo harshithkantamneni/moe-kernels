@@ -48,7 +48,8 @@ ridge has since moved again, to 155.9 on the 2026-09-10 calibration, because
 that session sampled the dense GEMM's clock while it ran rather than after it,
 and to 151.4 on the 2026-09-21 one. Four calibrations of one card on this
 branch now read 162.8, 152.8, 155.9 and 151.4 (a fifth, 152.9 on 2026-09-14,
-sits unadopted on `pod-h200-session3`), which is the
+sits unadopted on `pod-h200-session3`, and sessions 5 and 6 read 152.9 and
+148.5 and are published without being adopted), which is the
 same non-reproducing compute term the paragraph above describes and is why the
 band was withdrawn rather than widened. The number to quote is the ridge of the
 calibration a row was measured against, and

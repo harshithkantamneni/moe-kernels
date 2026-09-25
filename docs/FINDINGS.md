@@ -658,6 +658,21 @@ fractions of whatever ruler the tree ships. Nothing was re-timed. Bandwidth
 reproduced to 0.09% across seven calibrations; the compute term is what moves,
 which is this file's standing result about the ruler.
 
+**Sessions 5 and 6 did not move the ruler.** The card was calibrated three
+more times: 152.9 on 2026-09-23 (session 5), and on 2026-09-24 (session 6)
+150.2 from a first calibrate that failed its clock check, then 148.5 from
+the rerun that passed. The committed `moe/bench/hardware/measured_nvidia_h200.yaml`
+stays at 151.4, the session-4 file, by the owner's decision. The four readings
+span 148.5 to 152.9, 2.9% of 151.4, and that spread is the compute term that
+does not reproduce between calibrations of this one card, not a change in the
+card; adopting each new reading would rescore every H200 ladder report by an
+amount no larger than the ruler's own session-to-session wobble. Each session
+instead carries its own file in its published `calibration/` directory, and
+its R3 reports cite that file, not 151.4; 150.2 survives only in its calibrate
+log. Changing the committed ruler later is a separate commit that rescores the
+19 H200 ladder reports, which `tests/test_rescore_published.py` holds to the
+committed file.
+
 ---
 
 ## The evidence base
@@ -667,14 +682,19 @@ superseded and are kept for provenance, not for analysis. Three further arms
 carry ladder reports (26 `*.report.json`) and no CSV. Every count in this
 section is asserted against the tree by `tests/test_docs.py`.
 
-TWO published directories are in neither shape and are not in the table below:
-`2026-09-09-nvidia_h200-gaps-session` and
-`2026-09-10-nvidia_h200-gaps-session`. Each is a SESSION rather than an arm, holding a ledger, one log per arm
-(sixteen and twenty) and each arm's own run directory, and their numbers are
-read in the two dated sections above. Neither contributes a row to the pools
-any crossing here is computed from. This paragraph named ONE such directory as
-"a fifteenth" until 2026-09-10, when the second session was committed and the
-tree went to sixteen published directories.
+SIX published directories are in neither shape and are not in the table
+below. Each is a SESSION rather than an arm, marked by a `KIND` file. Two are
+the gaps sessions `2026-09-09-nvidia_h200-gaps-session` and
+`2026-09-10-nvidia_h200-gaps-session`, each holding a ledger, one log per arm
+(sixteen and twenty) and each arm's own run directory, read in the two dated
+sections above. Three are H200 sessions 4, 5 and 6
+(`2026-09-21-nvidia_h200-session4`, `2026-09-23-nvidia_h200-session5`,
+`2026-09-24-nvidia_h200-session6`), and one is the Lambda A100-SXM4-40GB
+counter run `2026-09-25-nvidia_a100_sxm4_40gb-r3-counters`, which is not the
+study's card. Those four have no dated section here yet; each directory's
+README records what it ran and found. None of the six contributes a row to the
+pools any crossing here is computed from. The tree holds twenty published
+directories.
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|
