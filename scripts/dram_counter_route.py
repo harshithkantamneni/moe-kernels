@@ -6333,6 +6333,10 @@ def do_reduce_r3(args) -> int:
         print(f"REFUSE: no capture to reduce: {absent} do not exist")
         return exit_codes.REFUSED
     plan = json.loads(need["plan.json"].read_text())
+    # The plan names the manifest where the capture wrote it, an absolute path
+    # on the capture's machine. Off that machine the copy is the one checked
+    # above, beside the plan, which is the whole point of reducing off the box.
+    plan["manifest"] = str(need["manifest.json"])
     capture = json.loads(need["capture.json"].read_text())
     if not capture.get("commit"):
         print(f"REFUSE: the capture {need['capture.json']} names no commit, so the page "

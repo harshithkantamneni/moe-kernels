@@ -3051,6 +3051,32 @@ def test_a_page_is_rebuilt_from_its_profiles_with_no_card_and_no_child(
     assert "no capture to reduce" in capsys.readouterr().out
 
 
+def test_a_page_is_rebuilt_after_its_profiles_are_copied_off_the_box(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-25, the Lambda A100 pages: the plan names its manifest by the
+    capture machine's absolute path (/home/ubuntu/...), so a rebuild on the
+    laptop found no manifest and crashed, the one case --reduce-only exists
+    for. The capture is moved here to a directory the plan never named."""
+    _plant_the_box(monkeypatch)
+    box = tmp_path / "box"
+    census = box / "census.json"
+    page_path = box / "r3c-g4.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(page_path)]) == exit_codes.DONE
+    first = json.loads(page_path.read_text())
+    laptop = tmp_path / "laptop"
+    box.rename(laptop)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    moved = laptop / "r3c-g4.json"
+    moved.unlink()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(laptop / "census.json"), "--out",
+                 str(moved)]) == exit_codes.DONE
+    assert json.loads(moved.read_text())["cells"] == first["cells"]
+
+
 def test_the_r3_run_refuses_without_ncu_and_without_a_card(tmp_path, monkeypatch, capsys):
     shut = {"present": False, "counters_read": False, "why": "no ncu on PATH"}
     census = tmp_path / "census.json"
