@@ -1,0 +1,13 @@
+CARD NVIDIA H100 80GB HBM3 (nvidia_h100_80gb_hbm3, UUID 4e782590-2a78-3dae-2f1b-a3ce1000a28f, sm_90, 132 SMs, 50 MiB L2): every number here is THIS card's; the study's timing pages are nvidia_h200.
+R3 COUNTER CENSUS  2 cells, 4 calls, no skip and no cap
+RESULT: VALIDITY CEN1 PASS one fused_experts call makes exactly 2 fused_moe_kernel launches: 8 launches over 4 calls = 2 per call
+GATE CEN1 VALIDITY PASS   one fused_experts call makes exactly 2 fused_moe_kernel launches
+              measured 8 launches over 4 calls = 2 per call   gate 2 x 4 = 8
+RESULT: VALIDITY CEN2 PASS every launch's grid is the grid the child derived from vLLM's own sorted-id buffer: seen [7168, 1024, 25088, 3584, 7168, 1024, 25088, 3584]
+GATE CEN2 VALIDITY PASS   every launch's grid is the grid the child derived from vLLM's own sorted-id buffer
+              measured seen [7168, 1024, 25088, 3584, 7168, 1024, 25088, 3584]   gate want [7168, 1024, 25088, 3584, 7168, 1024, 25088, 3584]
+RESULT: VALIDITY CEN3 PASS the child ran on this card: 4e782590-2a78-3dae-2f1b-a3ce1000a28f
+GATE CEN3 VALIDITY PASS   the child ran on this card
+              measured 4e782590-2a78-3dae-2f1b-a3ce1000a28f   gate 4e782590-2a78-3dae-2f1b-a3ce1000a28f
+wrote /home/ubuntu/moe/session/census.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/session/census.json: '/home/ubuntu/moe/session/census.json' is outside repository at '/home/ubuntu/moe/repo')

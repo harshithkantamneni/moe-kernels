@@ -1,0 +1,36 @@
+alpha(G) chain  alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z   (NEW)
+  card        nvidia_h100_80gb_hbm3
+  nvidia-smi  NVIDIA H100 80GB HBM3, 580.105.08, 700.00 W
+  device      4e782590-2a78-3dae-2f1b-a3ce1000a28f   (recorded in /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/DEVICE)
+  session     /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z
+  results     /home/ubuntu/moe/results/gaps-nvidia_h100_80gb_hbm3   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/CHAIN.tsv
+  ladder      G in {1}, seeds {0}, ratio arms at duty 0.25, elasticity states 1.0 0.5 0.25
+  r3 duty     0.25   (recorded in /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/R3_DUTY; a resume at another is refused)
+  interpreters base /home/ubuntu/moe/venvs/base/bin/python / vllm /home/ubuntu/moe/venvs/vllm/bin/python
+
+== preflight
+preflight-r1     DONE       rc=0     2s  log agrees: RESULT lines imply 0
+preflight-r3     DONE       rc=0     5s  log agrees: RESULT lines imply 0
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+preconditions    DONE       rc=0   196s  the driver's own ARMS.tsv carries each arm's second opinion
+
+== counter-probe: can this pod read a DRAM counter (informational; gates nothing)
+  counter-probe: capped at 1800 s (3 x 60 s is under the 1800 s floor); informational, it gates nothing
+counter-probe    INFO       rc=1     5s  BLOCKED: ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM; ncu /usr/local/cuda-13.0/bin/ncu (on PATH) [Version 2025.3.1.0 (build 36398880) (public-release)]; CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 0000000000000000); module flag unread (the parameter is not listed by this driver); informational, gates nothing; /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/COUNTERS
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+gpu-tests        DONE       rc=0    49s  pytest exit 0: 37 passed, 1 skipped, 2 warnings in 45.83s
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+  probe-check: capped at 1800 s (3 x 120 s is under the 1800 s floor, over its documented allowance)
+probe-check      DONE       rc=0     8s  log agrees: RESULT lines imply 0
+
+== the ratio, shared over private, off the cap, seed 0 at every G (the pilot: r3-g1-s0)
+  r3-g1-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g1-s0         CLAIM_FAIL rc=1   634s  log agrees: RESULT lines imply 1
+    G=1 seed 0  ratio 0.9516 [0.9507, 0.9529]  CLAIM_FAIL (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)  reads as: unresolved
+
+== clock elasticity per geometry (the regime word)
+  r1-g1: capped at 3372 s (3 x its plan's 1124 s)

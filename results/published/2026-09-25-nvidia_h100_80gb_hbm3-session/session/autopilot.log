@@ -1,0 +1,21 @@
+2026-09-25T13:38:25Z autopilot start at stage driver
+2026-09-25T13:38:25Z driver 570: installing nvidia-driver-580-server-open from Lambda's repo
+2026-09-25T13:40:01Z stage -> setup
+2026-09-25T13:40:01Z rebooting for the new driver
+2026-09-25T13:41:19Z autopilot start at stage setup
+2026-09-25T13:43:49Z stage -> bytes
+2026-09-25T13:47:36Z stage -> pre
+2026-09-25T14:02:47Z pre: r3-g1-s0 row written in /home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/; stopping the chain before R1
+2026-09-25T14:03:07Z pre: chain session 9394 stopped
+step	state	rc	seconds	dirty
+preflight-r1	DONE	0	2	0
+preflight-r3	DONE	0	5	0
+preconditions	DONE	0	196	1
+counter-probe	INFO	1	5	1
+gpu-tests	DONE	0	49	1
+probe-check	DONE	0	8	1
+r3-g1-s0	CLAIM_FAIL	1	634	1
+2026-09-25T14:03:07Z stage -> locked
+2026-09-25T15:08:56Z locked_r3.py rc=0
+2026-09-25T15:08:56Z stage -> done
+2026-09-25T15:08:56Z ALL DONE: results wait on disk for the laptop to copy off

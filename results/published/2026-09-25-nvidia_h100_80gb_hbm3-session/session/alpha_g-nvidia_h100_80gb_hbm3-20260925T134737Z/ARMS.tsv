@@ -1,0 +1,4 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	DONE	0	153	0	/home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/logs/thermal.log	log agrees: RESULT lines imply 0
+calibrate	DONE	0	30	1	/home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+pin_probe-n64-g1	DONE	0	9	1	/home/ubuntu/moe/session/alpha_g-nvidia_h100_80gb_hbm3-20260925T134737Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0
