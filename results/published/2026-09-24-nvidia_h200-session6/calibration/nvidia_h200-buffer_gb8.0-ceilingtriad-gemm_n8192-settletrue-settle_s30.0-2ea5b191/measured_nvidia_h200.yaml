@@ -1,0 +1,218 @@
+name: NVIDIA H200 (measured)
+verified: true
+source: measured on this machine by scripts/calibrate_hardware.py
+source_note: 'Achievable ceilings, not datasheet peaks, measured with ordinary kernels
+  and a clock and no DRAM counter: whether this pod can read one is scripts/dram_counter_route.py
+  --probe''s to answer, not this script''s. These ceilings are what make the efficiency
+  columns meaningful without counters. Bandwidth is the ''triad'' pattern; every pattern
+  measured is under `detail` so a different denominator can be applied without re-running.'
+checked_by: scripts/calibrate_hardware.py
+checked_on: '2026-09-24'
+measured_commit: c09b35357c7d0a7bd921c4ff1a11c5229f795407
+measured_dirty: true
+memory:
+  bandwidth_tb_s: 4.376986183297403
+compute_dense_tflops:
+  bf16: 649.921753356207
+  fp16: 649.921753356207
+  fp8_e4m3: 1446.0561009437163
+  fp8_e5m2: 1446.0561009437163
+detail:
+  gpu_name: NVIDIA H200
+  achieved_bandwidth_gbps: 4376.986183297403
+  ceiling_pattern: triad
+  achieved_bf16_tflops: 649.921753356207
+  bandwidth_patterns:
+  - pattern: read_stream
+    bytes_moved: 8589934592
+    ms_p50: 1.862015962600708
+    ms_min: 1.8600640296936035
+    gbps: 4613.244335457951
+    gbps_peak_min: 4618.085428712347
+    note: Triton, one store per program, no cross-CTA combine; stores are 0.012% of
+      traffic and are not counted
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: read_reduce
+    bytes_moved: 8589934592
+    ms_p50: 1.9227039813995361
+    ms_min: 1.9171199798583984
+    gbps: 4467.632394325926
+    gbps_peak_min: 4480.645281592895
+    note: ATen reduction along the contiguous axis; a LOWER BOUND on the DRAM read
+      rate, not the read rate
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: copy
+    bytes_moved: 17179869184
+    ms_p50: 3.9951999187469482
+    ms_min: 3.992095947265625
+    gbps: 4300.127536393294
+    gbps_peak_min: 4303.471011453846
+    note: ''
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: triad
+    bytes_moved: 25769803776
+    ms_p50: 5.88756799697876
+    ms_min: 5.879807949066162
+    gbps: 4376.986183297403
+    gbps_peak_min: 4382.762838383656
+    note: canonical STREAM metric; the default ceiling
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: write
+    bytes_moved: 8589934592
+    ms_p50: 1.8350720405578613
+    ms_min: 1.831712007522583
+    gbps: 4680.979494074065
+    gbps_peak_min: 4689.566130877752
+    note: 1N proven (2N would exceed the pin rate by 94%); unflushed so the timed
+      window cannot shed writeback
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  gemm_shape:
+  - 8192
+  - 8192
+  - 8192
+  gemm_clock_mhz: 1455
+  achieved_fp8_tflops: 1446.0561009437163
+  fp8_gemm_clock_mhz: 1365
+  buffer_bytes: 8589934592
+  clocks:
+    sm_start_mhz: 1470
+    sm_end_mhz: 1980
+    temp_start_c: 69
+    temp_end_c: 58
+    drift_pct: -34.69
+    throttled: false
+  settle:
+    settled: true
+    clock_history_mhz:
+    - 1485
+    - 1440
+    - 1470
+    - 1470
+    - 1470
+    final_mhz: 1470
+    max_seconds: 30.0
+    load: compute
+    clock_source: nvml
+    bandwidth_settle:
+      settled: true
+      clock_history_mhz:
+      - 1980
+      - 1980
+      - 1980
+      final_mhz: 1980
+      max_seconds: 30.0
+      load: memory
+      clock_source: nvml
+  warmup_pass:
+    read_stream: 4613.7
+    read_reduce: 4467.3
+    copy: 4300.3
+    triad: 4377.2
+    write: 4680.6
+  gemm_clock:
+    label: bf16 GEMM
+    samples:
+    - 1440
+    - 1455
+    - 1440
+    - 1470
+    - 1455
+    median_mhz: 1455
+    spread_pct: 2.04
+    after_idle_mhz: 1455
+    temp_c: 69
+    power_w: 691.0
+    source: nvml
+    sm_clock_load_mhz: 1455
+    sm_clock_start_mhz: 1440
+    sm_clock_end_mhz: 1455
+    clock_level_ok: null
+    clock_drift_ok: true
+  fp8_gemm_clock:
+    label: fp8 GEMM
+    samples:
+    - 1380
+    - 1350
+    - 1380
+    - 1365
+    - 1350
+    median_mhz: 1365
+    spread_pct: 2.17
+    after_idle_mhz: 1350
+    temp_c: 69
+    power_w: 689.7
+    source: nvml
+    sm_clock_load_mhz: 1365
+    sm_clock_start_mhz: 1380
+    sm_clock_end_mhz: 1350
+    clock_level_ok: null
+    clock_drift_ok: true
+  refusals: []
+  sustained_peak_tflops: 786.7
+  gemm_efficiency_pct: 82.6
+  sustained_peak_fp8_tflops: 1476.0
+  fp8_over_bf16_achieved: 2.225
+  ridge_by_pattern:
+    read_stream: 140.9
+    read_reduce: 145.5
+    copy: 151.1
+    triad: 148.5
+    write: 138.8
+  ridge_band:
+  - 140.9
+  - 148.5
+  matched_ceiling_pattern: read_stream
+  matched_ceiling_gbps: 4613.2
+  clock_established: true
+  clock_ramped: false
+observed:
+  l2_bytes: 62914560
+  sm_count: 132
+  clocks_max_memory_mhz: 3201.0
+  clocks_current_memory_mhz: 3201.0
+  throttle_reasons: '0x0000000000000000'
+  clocks_max_sm_mhz: 1980.0
+  clocks_max_sm_source: nvml
+  memory_bus_bits: 6016
+  memory_bus_bits_source: nvml
+  pin_rate_gbps: 4814.3
+  power_limit_w: 700.0
+spec_comparison:
+  profile: h200_sxm
+  bandwidth_gbps: 4800.0
+  bf16_tflops: 989.5
+provenance:
+  provenance_version: 1
+  git_sha: c09b35357c7d0a7bd921c4ff1a11c5229f795407
+  git_dirty: true
+  git_dirty_files: 1
+  utc: '2026-09-24T04:29:01+00:00'
+  hostname: 1cdbd6a71870
+  gpu_name: NVIDIA H200
+  driver_version: 580.159.04
+  cuda_version: '13.0'
+  python: 3.12.3
+  torch: 2.13.0
+  triton: 3.7.1
+  vllm: null
+  sglang: null
+  instrument: moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events,
+    L2 flush between iterations); NOT timing.TIMING_BASIS
+  ridge: 148.5
+  ridge_source: derived from this run's own ceilings
+  bandwidth: 4376.986183297403
+  bandwidth_source: measured here, 'triad' pattern
+  warmup_ms: null
+  iters: null
+  target_ms: null
+  missing:
+    iters: not supplied by caller
+    sglang: package not installed
+    target_ms: supplied as None
+    vllm: package not installed
+    warmup_ms: not supplied by caller

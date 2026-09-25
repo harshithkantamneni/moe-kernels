@@ -1,0 +1,150 @@
+
+==== PREFLIGHT ====
+  repo      /workspace/moe-kernels
+  base py   /workspace/venvs/base/bin/python
+  vllm py   /workspace/venvs/vllm/bin/python
+  scripts   all 17 present and parse, the fourteen sweep scripts plus
+            check_mma_path.sh, moe/bench/cli.py (both pin probes) and
+            scripts/block_m_crossing_sweep.py (twelve noise-floor replicates)
+  card      nvidia_h200  compute capability 9.0
+  clocks    nvidia-smi -q -d CLOCK reports a Graphics clock on this container
+            the arms' own reader answers: 345 MHz from torch.cuda.clock_rate()
+  session   /workspace/session/alpha_g-nvidia_h200-20260924T042015Z
+            UNVERIFIED: git check-ignore exited 128. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'.
+  results   /workspace/results/gaps-nvidia_h200   (exported as MOE_RESULTS_DIR to every arm; the card is in the name)
+            UNVERIFIED: git check-ignore exited 128. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'.
+  ledger    /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/ARMS.tsv
+  tree      0 dirty file(s) before anything ran, by git status
+            --porcelain --untracked-files=all. Re-asked after every arm: two
+            arms used to write into the tracked tree while the session ran.
+  calib     /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml
+            git WILL KEEP this path -- anything written here is committable   <- THIS ONE is meant to be committed
+
+==== WHAT THIS COMMITS YOU TO ====
+  The min column mixes two clocks and now says which on every row. WALL is a
+  figure whose own plan charges compiles and allocation. KERNEL is one whose
+  plan says, in those words, that it does not. ALLOW is this file's own
+  allowance for an arm whose plan prints no time estimate at all. FREE is an
+  arm booked zero, whose plan refuses or times nothing, and which therefore
+  has no clock to be on.
+  
+  thermal             ~  3 min WALL    starts at ~0 min          WHETHER THIS RENTED CARD CAN HOLD A CLOCK AT
+                        from: thermal_acceptance.py --dry-run -> 'estimated wall time 160 s (2.7 min: 30 s ramp + 120 s window + 10 s allocation and first matmul)'. A WALL figure, and the only arm whose cost IS its window: it compiles nothing, times nothing and allocates two 8192^2 bf16 buffers once. Booked 3, above the figure and never at it. THE THREE TERMS ARE THE FLAGS ON THE ARM LINE, so a re-derivation runs the same command: --settle-seconds 30 is calibrate.settle_clocks' own budget for the governor's ramp (840 -> 1980 MHz on this card), --seconds 120 is four times the 2026-09-11 card's observed ~30 s to collapse AFTER that ramp, and --poll-seconds 2 puts 60 samples in the window against a floor of 9. The 10 s allocation term is an ALLOWANCE and the plan page says so: _load_compute's 256 MiB and cuBLAS's first-call kernel choice have not been timed here.
+  calibrate           ~  3 min ALLOW   starts at ~3 min          This pod's own ridge and both dtype peaks. F
+                        from: calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan.
+                        NOT IN THAT FIGURE: everything: this row is an allowance, not a figure off a plan
+  pin_probe-n64-g1    ~  2 min ALLOW   starts at ~6 min          The S6a gate ('observed tile_block_m = none'
+                        from: moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin.
+                        NOT IN THAT FIGURE: everything: this row is an allowance, not a figure off a plan
+  
+  TOTAL ~8 minutes (~0h 8m) of what the arms' own plans PRICE,
+  of which ~0 are KERNEL minutes: arms whose plans exclude compiles and
+  allocation in their own words, on rows marked NOT IN THAT FIGURE.
+  
+  BOOK ABOVE THAT AND NEVER AT IT, AND THIS IS THE NUMBER TO BOOK ABOVE:
+  ~8 minutes (~0h 8m), the same table with those 0 KERNEL minutes
+  multiplied by 235/100. That factor is the ONE wall-over-model ratio this
+  repo has measured -- 127 s logged against 54 s modelled for mixtral_g1 on
+  the s4 arm -- and it is the factor replicate_noise_floor.py already applies
+  to the 120 minutes it books above. IT IS AN ILLUSTRATION OF THE SIZE OF
+  THE GAP AND NOT AN ESTIMATE OF ANY ARM: one datum, from a small sweep, and a
+  large sweep amortises its compiles over more timings than a small one does.
+  No figure in the column above was multiplied by it, and 2 of the rows above
+  print a NOT IN THAT FIGURE line naming what their own figure leaves out.
+  
+  The 'starts at' range is priced start to bounded start, and both are an
+  EARLIEST start: a rental shorter than an arm's start does not buy that arm,
+  or anything under it. Nothing in this file has a deadline or a timeout -- an
+  arm that overruns is not cut short, it pushes everything below it down the
+  column -- which is why the column is printed at all instead of one number
+  for the whole session.
+  
+  WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES:
+  
+    2 HOURS  ~81 priced / ~158 bounded min. BOTH PAYLOAD ARMS -- the alias
+             ablation and bn_g16 -- with their preconditions, plus the 10-minute
+             private-weight reference that says what their alpha MEANS, and
+             nothing else. The 40-minute clock elasticity is in NEITHER set:
+             it reads on the same question and costs a third of this booking.
+               --only thermal,calibrate,pin_probe-n64-g1,pin_probe-n256-g16,private-mixtral-bm32,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16
+    3 HOURS  ~114 priced / ~216 bounded min. The same plus the depth sweep, the
+             anchor pair and the whole cheap tail.
+               --only thermal,calibrate,pin_probe-n64-g1,pin_probe-n256-g16,private-mixtral-bm32,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16,bm128_depth,anchor_measure,anchor_rescore,mma_switch,ruler,cap_test,dtype,counter_plan
+  
+  THE 2-HOUR SET NOW BOUNDS ABOVE TWO HOURS, and the honest reading is that
+  its NAME is the rental and its second figure is not a promise. bn_g16 went
+  from 36 to 46 priced minutes on 2026-09-10 when a third subject tile was
+  added to its swept set, and 46 KERNEL minutes bound to 109. The set is
+  unchanged because what it selects is unchanged: both payload arms and
+  their preconditions, nothing else. The bound is the ILLUSTRATION
+  described above and not an estimate of any arm. Read the priced figure as
+  what the plans charge and the bounded one as the size of what they leave
+  out; if the card is booked for exactly two hours, expect bn_g16 to be the
+  arm that is still running when it ends.
+  
+  NEITHER SET CONTAINS THE NOISE FLOOR, and that is the decision this block
+  exists to record rather than to hide. It is 120 WALL minutes on its own,
+  it sits above both payload arms in the read order, and a rental that ENTERS
+  it without finishing it is killed inside it -- which fails that script's own
+  V2, the planned replicates ran, so even the partial floor is unquotable and
+  the minutes buy nothing at all. The floor wants a booking of its own, and
+  until it has one the sigma in the line below stays ASSUMED and every effect
+  in this study is read against a prior rather than against a measurement.
+  
+  AND THE ALIAS ARM IS NOT WHAT PUT THEM OUT OF REACH. It is 14 WALL minutes
+  and it runs ABOVE the floor, so it moved every arm below the floor down by
+  exactly those minutes and moved nothing above it at all. bn_g16 was already
+  past a two-hour booking before this arm existed, and the thing that put it
+  there was the floor. The fix is the --only line, not a shorter arm.
+  
+  MDE 0.0906 in fitted alpha at the design this study runs (one run per condition, known-variance z test, level 0.05, power 0.8: 3.96*sigma)
+      sigma 0.0229, ASSUMED: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [NoiseFloorUnmeasured]
+  
+    Read every effect this session reports against that limit. The three
+    effects already registered in NOISE_FLOOR.json are the swizzle swing
+    0.3855 and the footprint spread 0.411, both far above it, and the
+    cross-card 0.0117, which is BELOW it and therefore unresolved.
+  
+  The three arms after the pin probes -- roofline-n64-g1 and the two
+  BLOCK_N=256 arms that refuse before spending anything -- plus bm128_depth
+  are ~6 min and contain the claim. Arms already finished in /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/ARMS.tsv
+  are skipped, so a re-run costs only what is left; a REFUSED arm is
+  re-attempted, because refusing costs nothing.
+
+==== SESSION  card=nvidia_h200  (MEASURING) ====
+
+==== 0. can THIS card hold a clock under sustained load ====
+  -> thermal   log /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/thermal.log
+     DONE (exit 0) in 155s; work tree 0 dirty file(s)
+     log agrees: RESULT lines imply 0
+     card      held its clock above its own thermal floor for the whole
+               window, and was still holding it at the end of it. Read
+               the C1 line in /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/thermal.log for the median, the floor and
+               the maximum it is a third of, and the C1 prose for the
+               board power beside it: a low clock AT the power cap is a
+               hungry kernel, a low clock well under it is a sick card.
+               THE SLOWDOWN REASON MASK IS RECORDED THERE, NOT SCORED.
+
+==== 0. calibrate THIS card ====
+  -> calibrate   log /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/calibrate.log
+     INVALID (exit 3) in 29s; work tree 1 dirty file(s)
+     Do NOT re-run and do NOT quote it: a VALIDITY gate failed after measuring.
+     log agrees: RESULT lines imply 3
+     WARNING: this arm dirtied the work tree (0 -> 1 files).
+     Every row it published carries git_dirty=True. Find what it wrote.
+
+REFUSED: arm 0 did not stand behind a ruler for nvidia_h200.
+  calibrate is 'INVALID' in /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/ARMS.tsv; /workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml is PUBLISHED.
+  It MEASURED and then failed a VALIDITY gate, and it published the
+  yaml before scoring one. A clock that could not be established
+  makes every number normalised by it unquotable, including the
+  ridge every arm below would divide by.
+  Every arm below resolves its ridge through roofline.load_measured(),
+  labels it 'measured on this machine', and would score this card's
+  roof fractions, LEVEL flags and alphas against another machine's
+  ceilings. The H200's dense bf16 moved 7.1% between two sessions.
+  Read /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/calibrate.log where there is one, fix what it names, and
+  re-run arm 0:
+      /workspace/venvs/base/bin/python /workspace/moe-kernels/scripts/calibrate_hardware.py --publish
+  A CLAIM_FAIL or INVALID row is LATCHED and will not be re-attempted:
+  delete its row from /workspace/session/alpha_g-nvidia_h200-20260924T042015Z/ARMS.tsv to force one.

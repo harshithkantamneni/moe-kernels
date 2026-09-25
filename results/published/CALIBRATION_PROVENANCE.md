@@ -35,8 +35,9 @@ and did not catch the one real defect, which happened inside a single day.
 | `2026-09-10-nvidia_h200-gaps-session` | session | n/a | n/a | n/a | **refused** |
 | `2026-09-21-nvidia_h200-session4` | session | n/a | n/a | n/a | **refused** |
 | `2026-09-23-nvidia_h200-session5` | session | n/a | n/a | n/a | **refused** |
+| `2026-09-24-nvidia_h200-session6` | session | n/a | n/a | n/a | **refused** |
 
-**14 of 18 arms pass**: their calibration is either their own or declared derived. 4 does not.
+**15 of 19 arms pass**: their calibration is either their own or declared derived. 4 does not.
 
 - `2026-08-28-nvidia_h200-h200-whole-layer`: the calibration shipped with this arm is not the one its rows were quoted against: rows carry achieved_bw_gbps 4377.212185, measured.yaml reports 4374.489664; rows carry achieved_peak_tflops 701.612906 for dtype 'bf16', measured.yaml reports 770.916292
 
@@ -65,6 +66,8 @@ and did not catch the one real defect, which happened inside a single day.
 - 2026-09-21-nvidia_h200-session4: rows carry 0 dtypes [], so there is no single ridge; pass one
 
 - 2026-09-23-nvidia_h200-session5: rows carry 0 dtypes [], so there is no single ridge; pass one
+
+- 2026-09-24-nvidia_h200-session6: rows carry 0 dtypes [], so there is no single ridge; pass one
 
 A `ceilings_disagree` refusal above is what costs claim C5 a
 target: a cross-card `2R/b` prediction scales with the ridge,

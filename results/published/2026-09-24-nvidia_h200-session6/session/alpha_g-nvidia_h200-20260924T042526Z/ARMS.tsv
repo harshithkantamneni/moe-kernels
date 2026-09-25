@@ -1,0 +1,4 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	DONE	0	155	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/logs/thermal.log	log agrees: RESULT lines imply 0
+calibrate	DONE	0	28	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+pin_probe-n64-g1	DONE	0	30	1	/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0

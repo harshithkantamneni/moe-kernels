@@ -1,0 +1,16 @@
+key	value	source
+model	--model mixtral-8x7b	the chain's command line; no report carries it
+block_m	--block-m 32	the chain's command line; no report carries it
+r3_pinned	none	no report carries it yet
+group_m	varies: 2	the G column; the swizzle each run pinned
+r3_treads	--treads 6	the chain's command line; no report carries it
+r3_repeats	--repeats 9	the chain's command line; no report carries it
+r3_duty	--duty 0.25	the chain's command line; no report carries it
+r1_pinned	none	no report carries it yet
+r1_duty	--duty 1.0 0.5 0.25	the chain's command line; no report carries it
+r1_treads	--treads 8	the chain's command line
+r1_repeats	--repeats 13	the chain's command line
+expert_set_bytes	none	no report carries it yet
+ruler	/workspace/moe-kernels/results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191/measured_nvidia_h200.yaml	the yaml calibrate wrote in this session (/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/calibrate.log); unchecked: no report records the bandwidth it was scored against
+read_ceiling_gbps	4612.8	the ruler's read_stream pattern, measured 2026-09-24 at c09b353
+pin_rate_gbps	4814.3	the ruler's observed.pin_rate_gbps (memory clock x 2 x bus width)
