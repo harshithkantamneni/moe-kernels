@@ -632,7 +632,8 @@ dominant, and the two model-free results above (95.4% of the wall clock, and
 
 ## The 2026-09-21 H200 calibration: the ruler moved a fourth time
 
-Session 4 (pod 74osfqvrxtewaw, tree 81f80b7, published on `pod-h200-session4`)
+Session 4 (pod 74osfqvrxtewaw, tree 81f80b7, published at
+`results/published/2026-09-21-nvidia_h200-session4`)
 recalibrated the card before its arms ran. Dense bf16 8192^3 delivered
 **663.0 TFLOP/s at 1455 MHz** under the 700 W cap (bf16 GEMM clock 1455 -> 1470
 across the run, DRIFT PASS); triad **4378.0 GB/s**, read_stream 4612.9; ridge
@@ -645,7 +646,7 @@ DRIFT rule: that verdict is printed on the calibrate page and scored by no gate
 published as measured, and whether a drifted fp8 ceiling should be withheld
 at the writer is an open decision, not a rule.
 
-Committed readings of this one card's ridge now number five: 162.8
+Committed readings of this one card's ridge numbered five on 2026-09-21: 162.8
 (2026-09-02), 152.8 (2026-09-09), 155.9 (2026-09-10), 152.9 (2026-09-14, on
 `pod-h200-session3`, never adopted on this branch and superseded by this
 file), and 151.4. The 2026-09-21 file was adopted as the committed ruler on
@@ -655,7 +656,8 @@ reports were rescored to it by `scripts/rescore_published_reports.py --write`
 the planted worlds that had baked the old ridge into their expected verdicts
 (`group_m_alpha_sweep`'s top rung, `bm128_roofline`'s capped worlds) now plant
 fractions of whatever ruler the tree ships. Nothing was re-timed. Bandwidth
-reproduced to 0.09% across seven calibrations; the compute term is what moves,
+reproduced to 0.09% across the seven calibrations to that day, and to 0.1% with
+sessions 5 and 6 (4373.9 to 4378.2 GB/s); the compute term is what moves,
 which is this file's standing result about the ruler.
 
 **Sessions 5 and 6 did not move the ruler.** The card was calibrated three
@@ -668,8 +670,9 @@ does not reproduce between calibrations of this one card, not a change in the
 card; adopting each new reading would rescore every H200 ladder report by an
 amount no larger than the ruler's own session-to-session wobble. Each session
 instead carries its own file in its published `calibration/` directory, and
-its R3 reports cite that file, not 151.4; 150.2 survives only in its calibrate
-log. Changing the committed ruler later is a separate commit that rescores the
+its R3 reports cite that file, not 151.4; no calibration file carries 150.2,
+which survives in the first calibrate's log and is quoted in that session's
+calibration README. Changing the committed ruler later is a separate commit that rescores the
 19 H200 ladder reports, which `tests/test_rescore_published.py` holds to the
 committed file.
 
@@ -691,8 +694,9 @@ sections above. Three are H200 sessions 4, 5 and 6
 (`2026-09-21-nvidia_h200-session4`, `2026-09-23-nvidia_h200-session5`,
 `2026-09-24-nvidia_h200-session6`), and one is the Lambda A100-SXM4-40GB
 counter run `2026-09-25-nvidia_a100_sxm4_40gb-r3-counters`, which is not the
-study's card. Those four have no dated section here yet; each directory's
-README records what it ran and found. None of the six contributes a row to the
+study's card. Session 4 has a dated section here for its calibration (the
+2026-09-21 section above); sessions 5 and 6 and the counter run have none
+yet, and each directory's README records what it ran and found. None of the six contributes a row to the
 pools any crossing here is computed from. The tree holds twenty published
 directories.
 

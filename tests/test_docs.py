@@ -44,8 +44,8 @@ def _readme_int(pattern: str) -> int:
 def _arms() -> list[Path]:
     """The published arms, which is not every directory under that root.
 
-    Two of the directories there are whole H200 sessions committed for
-    provenance, and each says so in a `KIND` file. Counting them as arms is
+    Six of the directories there are whole sessions (five on the H200, one the
+    Lambda A100 counter run) committed for provenance, and each says so in a `KIND` file. Counting them as arms is
     how this test came to demand "16 published arms" of a README that
     correctly says 14. `published.is_session` is the same question the
     provenance census and the rescorer ask, so ask it here too.
