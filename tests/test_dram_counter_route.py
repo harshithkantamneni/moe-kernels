@@ -2262,6 +2262,11 @@ def test_per_call_bytes_are_recovered_from_the_launch_list(calls):
         assert cell["per_call_values"] == pytest.approx(planted, rel=1e-12)
         assert cell["per_call"]["dram_bytes_read"] == pytest.approx(
             statistics.fmean(planted), rel=1e-12)
+        for g in ("w1", "w2"):
+            assert cell["per_gemm_values"][g] == pytest.approx([DCR.r3_world_launch(
+                "group", MIXTRAL, block_m=32, group_m=4, arm=cell["arm"], n=cell["n"],
+                gemm=g, call=i, calls=calls, grid=cell["grid"][g])["dram__bytes_read.sum"]
+                for i in range(calls)], rel=1e-12)
 
 
 def _gates(page) -> dict:
@@ -2385,6 +2390,70 @@ def test_the_weight_bracket_takes_privates_excess_off_shared(monkeypatch):
                 (q["shared"][part][n] - e[part][n], q["shared"][part][n]))
     q["private"]["w2"][2] = 2.0 - 1e-6
     assert DCR.r3_weight_bracket(q, DCR.R3_TREADS)[0]["w2"][2] == 0.0
+
+
+def _spread_calls(cell: dict, gemm: str, rel: float) -> None:
+    """One GEMM's K=3 calls at mean x (1 - rel, 1, 1 + rel): the mean kept."""
+    m = cell["per_gemm"][gemm]["dram_bytes_read"]
+    cell["per_gemm_values"][gemm] = [m * (1 - rel), m, m * (1 + rel)]
+
+
+def test_v3_gates_n1_and_the_bracket_carries_a_deeper_spread():
+    """2026-09-25, the first A100 pages: at n >= 2 SHARED's and NATIVE's w2
+    moved up to 6.8% between identical calls (L2 reuse that follows the order
+    tiles run in) while every n=1 cell repeated within 0.51%, and V3 voided
+    three of five pages. A deeper spread now widens SHARED's bracket to its
+    farthest call; a spread at n=1, where no weight slab is read twice, still
+    voids the page."""
+    page = DCR.planted_r3_page("group", 1)
+    _gates0, before = DCR.score_r3_page(page)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _spread_calls(cells[("shared", 3)], "w2", 0.03)
+    gates, after = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["V3"] == PASS
+    step = 0.03 * cells[("shared", 3)]["per_gemm"]["w2"]["dram_bytes_read"] / \
+        DCR.r3_byte_model(MIXTRAL, "bf16", 32)["W_w2"]
+    (lo0, hi0), (lo1, hi1) = (x["estimates"]["q_S_bracket"]["w2"]["3"] for x in (before, after))
+    assert hi1 == pytest.approx(hi0 + step, abs=1e-4)
+    assert lo1 == pytest.approx(lo0 - step, abs=1e-4)
+    a0, a1 = before["estimates"]["alpha_bracket"]["w2"], after["estimates"]["alpha_bracket"]["w2"]
+    assert a1[0] < a0[0] and a1[1] > a0[1]
+    _spread_calls(cells[("shared", 1)], "w2", 0.0075)
+    assert {g.number: g.verdict for g in DCR.score_r3_page(page)[0]}["V3"] == FAIL
+
+
+def test_v7_holds_each_gemm_to_its_own_repeat_spread():
+    """2026-09-25, the A100 G=1 page: NATIVE's w2 read +1.52% against SHARED's at
+    n=2, where w2's own calls spread 1.33%, and V7 failed against 1.09%, a
+    tolerance sized from the per-call TOTAL, which w1's steady bytes dilute.
+    V7 now reads the GEMM's own spread and NATIVE's calls sit inside the
+    bracket; the planted 5% declaration on quiet calls still fails it."""
+    page = DCR.planted_r3_page("group", 4)
+    native = next(c for c in page["cells"] if (c["arm"], c["n"]) == ("native", 2))
+    gemm = native["per_gemm"]["w2"]
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        gemm[field] *= 1.015
+    _spread_calls(native, "w2", 0.01)
+    gates, summary = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["V7"] == PASS
+    byte = DCR.r3_byte_model(MIXTRAL, "bf16", 32)
+    top = (max(native["per_gemm_values"]["w2"]) - 2 * byte["operand_per_tile_w2"]) / byte["W_w2"]
+    assert summary["estimates"]["q_S_bracket"]["w2"]["2"][1] == pytest.approx(top, rel=1e-9)
+    assert _gates(DCR.planted_r3_page("declaration", 4))["V7"] == FAIL
+
+
+def test_a_page_reduced_before_per_gemm_values_scores_on_the_means():
+    """Pages written before 2026-09-25 carry no `per_gemm_values`: their GEMM
+    edges are the means, V3 reads the per-call total at n=1 and V7 the
+    total's spread, and a sound page still passes every gate."""
+    page = DCR.planted_r3_page("group", 4)
+    for cell in page["cells"]:
+        del cell["per_gemm_values"]
+    edges = DCR.r3_call_edges(page)
+    assert all(edges[a][g][n] == (0.0, 0.0) for a in edges for g in ("w1", "w2")
+               for n in edges[a][g])
+    gates, _summary = DCR.score_r3_page(page)
+    assert all(g.verdict == PASS for g in gates), {g.number: g.verdict for g in gates}
 
 
 def test_ols_slope_bounds_hold_every_series_inside_the_brackets():

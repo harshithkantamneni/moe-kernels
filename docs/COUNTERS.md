@@ -862,7 +862,18 @@ belongs to one M-tile), so its excess e = q_P - n is its activation
 re-read, and SHARED, which makes the same loads over fewer distinct slabs,
 evicts A no more often. SHARED's weight-only q therefore lies in
 [q_S - e, q_S] per GEMM and tread, and alpha(G) is printed as the least and
-greatest OLS slope over that bracket, beside the upper edge's own slope.
+greatest OLS slope over that bracket, beside the slope of q_S's K-call means.
+
+THE K CALLS, NOT THEIR MEAN (2026-09-25). The bracket's upper edge is the
+highest single call SHARED or NATIVE made and its lower edge the lowest, less
+e at PRIVATE's highest call. On the first A100 pages the same call read up to
+6.8% more w2 bytes on one run than another at n >= 2, while every n=1 cell
+repeated within 0.51%: how much of a re-read L2 catches moves with the order
+the hardware runs tiles in, so the spread belongs to the call and widens alpha
+rather than voiding the page. NATIVE is pooled because at G <= 16 it runs
+SHARED's live tiles in SHARED's order at SHARED's addresses (its narrower
+declaration only drops dead tiles from the tail) and at G = 64 it is the
+study's own call; V7 holds the two within their own spread.
 
 ### 6.7 The registered prediction
 
@@ -892,13 +903,17 @@ alpha(1) sits inside it).
 
 VALIDITY, any failure exits INVALID and no alpha may be quoted: V0 a live card
 block; V1 exact count, every grid, a census that measured GEMMS_PER_CALL; V2
-every STRICT metric a number; V3 each cell's K calls within 1% of each other;
+every STRICT metric a number; V3 at n=1 each cell's K calls within 1% of each
+other, per call and per GEMM (one M-tile per expert, so the order tiles run in
+cannot move the bytes; deeper treads are not gated and the bracket of 6.6
+carries their spread);
 V4 at n=1 SHARED and PRIVATE agree and every arm's q(1) is in [0.97, 1.03];
 V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM (above the
 full-thrash 1.4989 n, so V5 cannot tell an activation thrash from a sound
 page, and C6 reads it); V6 the three
 arms request the same L2 sectors within 0.5%; V7 NATIVE reads what SHARED reads
-within 1%; V8 DRAM bytes agree with 32 x the L2 fill sectors within 2% (asked
+within max(1%, 3 x that GEMM's own repeat spread); V8 DRAM bytes agree with 32 x
+the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof.
 
 The ladder family's monotone and affine gates are NOT applied to SHARED: the

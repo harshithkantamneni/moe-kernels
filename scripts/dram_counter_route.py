@@ -4384,7 +4384,7 @@ R3_TOP_KEYS: tuple[str, ...] = (
     "byte_model", "census", "proof", "cells", "group_model", "estimates", "gates")
 R3_CELL_KEYS: tuple[str, ...] = (
     "arm", "n", "tokens", "declared", "calls", "launches", "grid", "per_call",
-    "per_gemm", "per_call_values", "spread_rel", "recorded")
+    "per_gemm", "per_call_values", "per_gemm_values", "spread_rel", "recorded")
 
 R3_SCHEMA_TEXT = """\
 {
@@ -4413,6 +4413,7 @@ R3_SCHEMA_TEXT = """\
                            "l2_tex_read_sectors", "gpu_time_ns", ...},
               "per_gemm": {"w1": {..., "grid_size"}, "w2": {...}},
               "per_call_values": [K reads], "spread_rel": 0.001,
+              "per_gemm_values": {"w1": [K reads], "w2": [K reads]},
               "recorded": {"w1": {occupancy ...}, "w2": {...}} }, ... ],
   "group_model": {"model", "q": {"n": group_reads(E, n, G)}},
   "estimates": {"alpha_bracket": {"total", "w1", "w2"}: [lo, hi],
@@ -4423,18 +4424,24 @@ R3_SCHEMA_TEXT = """\
 
   PER CALL means one fused_experts call: its w1 launch plus its w2 launch,
   the mean over the cell's K measured calls. `per_call_values` are the K
-  individual per-call DRAM reads the repeat gate reads. The byte fields sum
+  individual per-call DRAM reads and `per_gemm_values[g]` the same per GEMM:
+  V3 reads their spread at n=1, V7 per GEMM, and the bracket their extremes
+  (`r3_call_edges`). The byte fields sum
   the two GEMMs; `l2_read_hit_pct` is the two GEMMs' rates weighted by their
   requested L2 read sectors. Cross-check fields are present only when the
   probe proved their metric; recorded ones never gate. `grid` is the grid the
   child derived from vLLM's own sorted-id buffer, and `per_gemm[g].grid_size`
   is the one ncu read off every launch.
 
-  THE WEIGHT-ONLY BRACKET. e_P[g][n] = max(q_P,g(n) - n, 0) is PRIVATE's
-  excess over n: its weights are read exactly n times, so e is its activation
-  re-read, which bounds SHARED's. q_S_bracket[g][n] = [q_S - e, q_S] holds
-  SHARED's weight-only q; alpha_bracket is the least and greatest OLS slope
-  over it, and alpha_slope the upper edge's slope. C1, C2, C3 and C5 at G=1
+  THE WEIGHT-ONLY BRACKET. e_P[g][n] = max(q_P,g(n) - n, 0) at PRIVATE's
+  highest call is PRIVATE's excess over n: its weights are read exactly n
+  times, so e is its activation re-read, which bounds SHARED's.
+  q_S_bracket[g][n] runs from the LOWEST single call of SHARED or NATIVE,
+  less e, to the HIGHEST (`r3_call_edges`): the K calls, not their mean,
+  and NATIVE pooled, since it runs SHARED's live tiles in SHARED's order at
+  G <= 16 and is the study's call at G = 64. It holds SHARED's weight-only
+  q; alpha_bracket is the least and greatest OLS slope over it, and
+  alpha_slope the slope of q_S's K-call means. C1, C2, C3 and C5 at G=1
   are scored on both edges and read UNKNOWN where they disagree.
 """
 
@@ -4633,9 +4640,43 @@ def exposure_word(working_set: float, l2_bytes) -> str:
     return "held"
 
 
-def r3_weight_bracket(q: dict, treads) -> tuple[dict, dict, dict]:
-    """`(e, lo, hi)`, each `{part: {n: value}}`: SHARED's WEIGHT-ONLY q lies in
-    [lo, hi] = [q_S - e, q_S], e being PRIVATE's excess over n.
+def r3_call_values(cell: dict, part: str) -> list[float]:
+    """A cell's K per-call DRAM reads for one part: `per_call_values` for the
+    total, `per_gemm_values[g]` for a GEMM; empty where the page carries none
+    (a page reduced before 2026-09-25 has no per-GEMM list)."""
+    vals = (cell.get("per_call_values") if part == "total"
+            else (cell.get("per_gemm_values") or {}).get(part)) or []
+    return [] if any(v is None for v in vals) else [float(v) for v in vals]
+
+
+def r3_call_edges(payload: dict, byte_model: dict | None = None) -> dict:
+    """`{arm: {part: {n: (below, above)}}}`: how far a cell's lowest and highest
+    single call sit from the mean of its calls, in units of the part's weight
+    set; (0, 0) where the page carries no per-call list for the part.
+
+    WHY, 2026-09-25. On the first A100 pages the same call read up to 6.8%
+    more w2 bytes on one run than another at n >= 2, while every n=1 cell and
+    every w1 launch repeated within 0.51%: how much of a re-read L2 catches
+    moves with the order the hardware runs tiles in. That spread is the
+    call's own, so `r3_weight_bracket` carries it instead of V3 voiding it."""
+    design = payload["design"]
+    bm = byte_model or r3_byte_model(MODEL_CONFIGS[design["model"]], design["dtype"],
+                                     int(design["block_m"]))
+    weight = {"total": bm["W"], "w1": bm["W_w1"], "w2": bm["W_w2"]}
+    out: dict = {}
+    for (arm, n), c in _cell_map(payload).items():
+        for part, w in weight.items():
+            vals = r3_call_values(c, part)
+            mean = statistics.fmean(vals) if vals else 0.0
+            out.setdefault(arm, {}).setdefault(part, {})[n] = (
+                ((mean - min(vals)) / w, (max(vals) - mean) / w) if vals else (0.0, 0.0))
+    return out
+
+
+def r3_weight_bracket(q: dict, treads, edges: dict | None = None) -> tuple[dict, dict, dict]:
+    """`(e, lo, hi)`, each `{part: {n: value}}`: the WEIGHT-ONLY q of the call
+    the study fits lies in [lo, hi]; without `edges`, [min(q_S, q_N) - e,
+    max(q_S, q_N)], e being PRIVATE's excess over n.
 
     PRIVATE reads its weights exactly n times by construction (every slab
     belongs to one M-tile, so no slab is read twice), so its excess over n is
@@ -4643,11 +4684,28 @@ def r3_weight_bracket(q: dict, treads) -> tuple[dict, dict, dict]:
     the same loads in the same order over fewer distinct slabs, so on an LRU
     it evicts A no more often: its own activation re-read lies in [0, e]. e
     is clamped at 0, since a PRIVATE reading under n is noise and V5 floors it.
+
+    THE K CALLS, NOT THEIR MEAN (2026-09-25). With `edges` (`r3_call_edges`)
+    hi is the highest single call and lo the lowest, less e at PRIVATE's
+    highest call. NATIVE's calls are pooled with SHARED's: at G <= 16 NATIVE
+    runs SHARED's live tiles in SHARED's order at SHARED's addresses (its
+    narrower declaration only drops dead tiles from the tail), so its calls
+    are more readings of one call, and at G = 64, where the dead tiles sit
+    inside each column pass, it is the study's own call. V7 holds the two
+    within their own repeat spread.
     """
-    e = {p: {n: max(q["private"][p][n] - n, 0.0) for n in treads}
-         for p in ("total", "w1", "w2")}
-    hi = {p: {n: q["shared"][p][n] for n in treads} for p in e}
-    lo = {p: {n: hi[p][n] - e[p][n] for n in treads} for p in e}
+    edges = edges or {}
+
+    def edge(arm: str, part: str, n: int) -> tuple[float, float]:
+        return ((edges.get(arm) or {}).get(part) or {}).get(n) or (0.0, 0.0)
+
+    pooled = [a for a in ("shared", "native") if a in q]
+    e = {p: {n: max(q["private"][p][n] + edge("private", p, n)[1] - n, 0.0)
+             for n in treads} for p in ("total", "w1", "w2")}
+    hi = {p: {n: max(q[a][p][n] + edge(a, p, n)[1] for a in pooled) for n in treads}
+          for p in e}
+    lo = {p: {n: min(q[a][p][n] - edge(a, p, n)[0] for a in pooled) - e[p][n]
+              for n in treads} for p in e}
     return e, lo, hi
 
 
@@ -5043,6 +5101,8 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
         for i in range(k):
             xs = [calls[i][g].metrics.get("dram__bytes_read.sum") for g in gemms]
             per_call_values.append(None if any(x is None for x in xs) else sum(xs))
+        per_gemm_values = {g: [calls[i][g].metrics.get("dram__bytes_read.sum")
+                               for i in range(k)] for g in gemms}
         per_call: dict = {}
         for name in per_gemm[gemms[0]]:
             if name == "grid_size":
@@ -5063,7 +5123,7 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
             "calls": k, "launches": k * len(gemms),
             "grid": {g: int(manifest["grids"][key][g]) for g in gemms},
             "per_call": per_call, "per_gemm": per_gemm,
-            "per_call_values": per_call_values,
+            "per_call_values": per_call_values, "per_gemm_values": per_gemm_values,
             "spread_rel": r3_spread(per_call_values), "recorded": recorded})
     return cells
 
@@ -5109,10 +5169,11 @@ def r3_estimates(payload: dict) -> dict:
 
     ACTIVATION RE-READS ARE IN q_S, and the counter cannot split them from
     weight re-reads inside one GEMM. So SHARED's WEIGHT-ONLY q is a bracket,
-    `q_S_bracket` = [q_S - e, q_S], e = `e_P` being PRIVATE's excess over n
-    (`r3_weight_bracket`), and `alpha_bracket` is the least and greatest OLS
+    `q_S_bracket`, from the lowest single call of SHARED or NATIVE less e to
+    the highest, e = `e_P` being PRIVATE's excess over n (`r3_weight_bracket`,
+    `r3_call_edges`), and `alpha_bracket` is the least and greatest OLS
     slope over it (`ols_slope_bounds`): alpha(G) as a bracket. `alpha_slope`
-    is the OLS slope of q_S, the upper edge's, which counts every activation
+    is the OLS slope of q_S's K-call means, which counts every activation
     re-read as a weight re-read; it is printed with its max relative residual
     and labelled a scalar summary, meaningful where the ladder is affine.
     `alpha_ratio` is slope(R_S) / slope(R_P), the byte analogue of R3's timed
@@ -5139,7 +5200,7 @@ def r3_estimates(payload: dict) -> dict:
                                for n in treads])
     raw_p = ols_slope(treads, [cells[(private, n)]["per_call"]["dram_bytes_read"]
                                for n in treads])
-    excess, lo, hi = r3_weight_bracket(q, treads)
+    excess, lo, hi = r3_weight_bracket(q, treads, r3_call_edges(payload, bm))
     return {
         "alpha_bracket": {p: list(ols_slope_bounds(treads, [lo[p][n] for n in treads],
                                                    [hi[p][n] for n in treads]))
@@ -5362,19 +5423,40 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
         summary["reason"] = "V2 failed; no estimate is formed over a missing metric"
         return gates, summary
 
-    # V3 REPEAT.
+    # V3 REPEAT, GATED AT n = 1. Until 2026-09-25 every cell was held to 1%, and
+    # the first A100 pages failed it on w2 at n >= 2 alone (up to 6.8% per GEMM)
+    # while every n=1 cell repeated within 0.51%: at n >= 2 how much of a re-read
+    # L2 catches moves with the order the hardware runs tiles in, which is the
+    # call's own spread, and SHARED's bracket carries it (`r3_call_edges`). At
+    # n = 1 each expert has one M-tile, so no weight slab is read twice.
     spreads = {key: r3_spread(c["per_call_values"]) for key, c in cells.items()}
+    gemm_spreads = {key: {g: r3_spread(r3_call_values(c, g)) for g in gemms}
+                    for key, c in cells.items()}
+
+    def repeat(key) -> float | None:
+        """A cell's worst spread, per call or per GEMM; None when unformed."""
+        if spreads[key] is None:
+            return None
+        return max([spreads[key]] + [s for s in gemm_spreads[key].values() if s is not None])
+
+    ident = {key: repeat(key) for key in cells if key[1] == 1}
     over = [f"{a}/{n} " + ("unformed" if s is None else f"{s:.4f}")
-            for (a, n), s in sorted(spreads.items()) if s is None or s > R3_REPEAT_TOL]
-    worst_spread = max((s for s in spreads.values() if s is not None), default=math.nan)
+            for (a, n), s in sorted(ident.items()) if s is None or s > R3_REPEAT_TOL]
+    worst_spread = max((s for s in ident.values() if s is not None), default=math.nan)
+    deep = sorted(((repeat(k) or 0.0, f"{k[0]}/{k[1]}") for k in cells if k[1] != 1),
+                  reverse=True)
     gates.append(Gate(
-        "V3", "VALIDITY", "each cell's K calls read the same bytes",
-        PASS if not over else FAIL,
-        f"worst (max - min) / median {worst_spread:.4%}" + (f"; over: {_worst(over)}"
-                                                            if over else ""),
-        f"<= {R3_REPEAT_TOL:.0%} in every cell",
-        "the L2 state or the attribution: with a cold cache per launch the same "
-        "call reads the same bytes, and a spread says it did not"))
+        "V3", "VALIDITY", "at n=1 each cell's K calls read the same bytes",
+        PASS if ident and not over else FAIL,
+        (f"worst n=1 (max - min) / median {worst_spread:.4%}" if ident else
+         "no n=1 tread on the page") + (f"; over: {_worst(over)}" if over else ""),
+        f"<= {R3_REPEAT_TOL:.0%} per call and per GEMM in every n=1 cell",
+        "the instrument (the counter, the cache flush, the attribution): at n=1 no "
+        "weight slab is read by two tiles, so the order tiles run in cannot move the "
+        "bytes, and a spread there says something else did",
+        [f"deeper treads, not gated, spread up to {deep[0][0]:.4%} ({deep[0][1]}): "
+         "re-reads L2 catches or misses with the order tiles run in, carried into "
+         "SHARED's bracket as its farthest calls"] if deep else []))
 
     bm = r3_byte_model(cfg, design["dtype"], int(design["block_m"]))
     q = r3_q(payload, bm)
@@ -5386,7 +5468,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
     exposure = {n: r3_exposure(cfg, design["dtype"], int(design["block_m"]),
                                int(design["block_n"]), g_m, n) for n in treads}
     summary["exposure"], summary["l2_bytes"] = exposure, l2
-    e_q, lo_q, hi_q = r3_weight_bracket(q, treads)
+    e_q, lo_q, hi_q = r3_weight_bracket(q, treads, r3_call_edges(payload, bm))
 
     def exposed(gemm: str, arm: str, ns=None) -> list[int]:
         """The treads whose column pass is not held by THIS card's L2."""
@@ -5405,7 +5487,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
         if not open_at:
             return [exposure_line(gemm)]
         return [f"INCONCLUSIVE at n={open_at}: the two edges of SHARED's weight-only "
-                f"bracket [q_S - e, q_S] disagree there; e (PRIVATE's excess over n, "
+                f"bracket (farthest calls, less e) disagree there; e (PRIVATE's excess over n, "
                 + ", ".join(f"n={n} {e_q[gemm][n]:.4f}" for n in open_at)
                 + ") is the activation re-read PRIVATE measured, which bounds SHARED's, "
                 "and the counter cannot split weight from activation bytes inside one "
@@ -5485,12 +5567,20 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
         "72-slot declaration adds each load one expert id and exit), so a "
         "difference in requests is a different call"))
 
-    # V7 DECLARATION.
+    # V7 DECLARATION, each GEMM against its OWN repeat spread. Until 2026-09-25 the
+    # tolerance was the per-call TOTAL's spread, which w1's steady bytes dilute:
+    # the A100 G=1 page failed at n=2 w2 +1.52% against 1.09% while w2's own
+    # calls spread 1.33%. Inside the tolerance NATIVE is pooled into SHARED's
+    # bracket (`r3_weight_bracket`), so what the spread hides is in alpha.
+    def gemm_spread(key, g: str) -> float:
+        s = gemm_spreads[key][g]
+        return s if s is not None else (spreads.get(key) or 0.0)
+
     decl = []
     for n in treads:
-        tol = max(R3_DECLARATION_FLOOR,
-                  R3_SPREAD_FACTOR * spread_of(("native", n), ("shared", n)))
         for g in gemms:
+            tol = max(R3_DECLARATION_FLOOR, R3_SPREAD_FACTOR * max(
+                gemm_spread(("native", n), g), gemm_spread(("shared", n), g)))
             rn = cells[("native", n)]["per_gemm"][g]["dram_bytes_read"]
             rs = cells[("shared", n)]["per_gemm"][g]["dram_bytes_read"]
             if abs(rn / rs - 1.0) > tol:
@@ -5499,8 +5589,8 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
         "V7", "VALIDITY", "NATIVE and SHARED read the same DRAM bytes",
         PASS if not decl else FAIL,
         _worst(decl) if decl else "every (n, GEMM) within tolerance",
-        f"|R_N/R_S - 1| <= max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x the "
-        "repeat spread)",
+        f"|R_N/R_S - 1| <= max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x that "
+        "GEMM's own repeat spread in either cell)",
         "SHARED as the study's call: if the declaration moved the bytes, SHARED "
         "measures a call vLLM does not make"))
 
@@ -5550,7 +5640,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
                       g9.consequence, list(g9.lines)))
 
     # C1 GROUP ARITHMETIC ON w1, C2 AND C3: SCORED ON BOTH EDGES of SHARED's
-    # weight-only bracket [q_S - e, q_S] (`r3_weight_bracket`). A verdict only
+    # weight-only bracket (`r3_weight_bracket`, the K calls' extremes). A verdict only
     # where the two edges agree; where they disagree the claim reads UNKNOWN,
     # which is not established and not refuted. Until 2026-09-24 they read
     # q_S itself, so an activation re-read L2 did not absorb was scored as a
@@ -5560,7 +5650,8 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
         return ", ".join(f"n={n} [{lo_q[gemm][n]:.4f}, {hi_q[gemm][n]:.4f}]"
                          + (f"/{model[n]:.4f}" if model else "") for n in treads)
 
-    edge_note = ("scored on both edges of [q_S - e, q_S], e PRIVATE's excess over n; "
+    edge_note = ("scored on both edges of SHARED's weight-only bracket, its lowest call "
+                 "(NATIVE pooled) less e to its highest, e PRIVATE's excess over n; "
                  "UNKNOWN where the edges disagree")
     if g_m >= 2:
         v1 = {n: bracket_verdict(lo_q["w1"][n], hi_q["w1"][n],
@@ -5986,12 +6077,13 @@ def do_dry_run_r3(args) -> int:
     print("GATES, registered. VALIDITY fails exit INVALID and no alpha may be quoted:")
     print("  V0 live card block; V1 exact launch count, every grid, census "
           f"GEMMS_PER_CALL = {r3.GEMMS_PER_CALL}; V2 every STRICT metric a number;")
-    print(f"  V3 K calls within {R3_REPEAT_TOL:.0%}; V4 at n=1 |R_S/R_P - 1| <= "
+    print(f"  V3 K calls at n=1 within {R3_REPEAT_TOL:.0%} per GEMM; V4 at n=1 |R_S/R_P - 1| <= "
           f"max({R3_IDENTITY_FLOOR:.1%}, {R3_SPREAD_FACTOR:g} x spread) and q(1) in "
           f"{list(R3_Q1_BAND)};")
     print(f"  V5 {R3_PRIVATE_BAND[0]} n <= q_P(n) <= {R3_PRIVATE_BAND[1]} n per GEMM; V6 "
           f"requested L2 sectors equal across arms within {R3_REQUEST_TOL:.1%}; V7 NATIVE "
-          f"= SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x spread);")
+          f"= SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x the "
+          "GEMM's own spread);")
     print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
           "if proven; V9 R3's five-part buffer proof.")
     print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
