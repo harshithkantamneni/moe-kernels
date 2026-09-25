@@ -3201,3 +3201,39 @@ def test_counters_doc_section_6_quotes_the_numbers_the_family_computes():
         l2) != "held") for card, l2 in DCR.R3_TARGET_L2.items()}
     assert f"w2 is not held from n={first['H100 SXM5']}" in one
     assert first["A100 40GB SXM4"] == 1 and "not even at n=1" in one
+
+
+# --------------------------------------------------------------------------
+# the first REAL ncu output this repo has (Lambda A100, ncu 2025.3.1)
+# --------------------------------------------------------------------------
+
+_REAL_WIDE = Path(__file__).resolve().parent / "fixtures" / "ncu" / "raw_wide_a100_ncu2025.3.1.csv"
+
+
+def test_the_real_ncu_2025_3_1_csv_parses_with_every_r3_arms_metric():
+    """Nsight Compute 2025.3.1 prints the raw page WIDE and spells the
+    duration's unit "ns". Until 2026-09-25 the time table knew only "nsecond",
+    so the probe on the first box whose counters were readable read REFUSE
+    ("unit 'ns' ... never been shown") and the preflight called a working box
+    NOT READY."""
+    text = _REAL_WIDE.read_text()
+    assert DCR._ncu_csv_header(text)[0] == DCR.CSV_WIDE
+    launches = DCR.parse_ncu_csv(text)
+    assert len(launches) == 2
+    fill, double = launches
+    # the doubling kernel reads its 2^26-float input once, plus a few KB
+    read = double.metrics["dram__bytes_read.sum"]
+    assert 2**26 * 4 <= read <= 2**26 * 4 * 1.001
+    assert double.metrics["gpu__time_duration.sum"] > 0
+    for m in DCR.R3_ALL_METRICS:
+        assert m in double.metrics or m in double.unreadable, m
+    for m in DCR.R3_STRICT_METRICS:
+        assert m in double.metrics, m
+
+
+def test_the_duration_accepts_both_spellings_and_scales_them_alike():
+    canon, table = DCR.unit_table("gpu__time_duration.sum")
+    assert canon == "nsecond"
+    for long, short in (("nsecond", "ns"), ("usecond", "us"), ("msecond", "ms"), ("second", "s")):
+        assert table[long] == table[short]
+    assert "" not in table, "an empty unit on a duration still refuses"

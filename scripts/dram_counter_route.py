@@ -287,8 +287,13 @@ NCU_METRIC_UNITS: dict[str, tuple[str, dict[str, float]]] = {
         "byte": 1.0, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9, "Tbyte": 1e12}),
     "dram__bytes_write.sum": ("byte", {
         "byte": 1.0, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9, "Tbyte": 1e12}),
+    # Both spellings: older ncu prints "nsecond", and Nsight Compute 2025.3.1
+    # (the first box whose counters this repo read, tests/fixtures/ncu/)
+    # prints "ns". Each is a deliberate entry, never a scale of 1 for a name
+    # the parser has not been shown.
     "gpu__time_duration.sum": ("nsecond", {
-        "nsecond": 1.0, "usecond": 1e3, "msecond": 1e6, "second": 1e9}),
+        "nsecond": 1.0, "usecond": 1e3, "msecond": 1e6, "second": 1e9,
+        "ns": 1.0, "us": 1e3, "ms": 1e6, "s": 1e9}),
     "lts__t_sector_op_read_hit_rate.pct": ("%", {"%": 1.0, "percent": 1.0}),
     # THE SECTOR METRICS, the r3-arms family's (`--family r3-arms`). An L2
     # sector is 32 bytes; ncu prints the count in sectors and rescales it with
