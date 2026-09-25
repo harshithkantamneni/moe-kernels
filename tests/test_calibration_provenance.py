@@ -406,6 +406,7 @@ def test_every_published_arm_has_a_declared_verdict():
         # somebody discovers three days later.
         "2026-09-09-nvidia_h200-gaps-session": SESSION,
         "2026-09-10-nvidia_h200-gaps-session": SESSION,
+        "2026-09-21-nvidia_h200-session4": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

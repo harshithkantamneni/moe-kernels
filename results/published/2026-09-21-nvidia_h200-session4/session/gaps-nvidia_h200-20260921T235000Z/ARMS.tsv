@@ -1,0 +1,8 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	DONE	0	156	0	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/thermal.log	log agrees: RESULT lines imply 0
+calibrate	DONE	0	36	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+pin_probe-n64-g1	DONE	0	29	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0
+private-mixtral-bm32	INVALID	3	206	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/private-mixtral-bm32.log	log agrees: RESULT lines imply 3
+elasticity-m32-n64-g16	CLAIM_FAIL	1	2296	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/elasticity-m32-n64-g16.log	log agrees: RESULT lines imply 1
+blockk-w4	REFUSED	2	44	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/blockk-w4.log	
+counter_plan	REFUSED	2	7	1	/workspace/session/gaps-nvidia_h200-20260921T235000Z/logs/counter_plan.log	
