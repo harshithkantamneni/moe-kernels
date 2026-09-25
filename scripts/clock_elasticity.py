@@ -113,7 +113,9 @@ when `ClockLock` caught a kill and reset the clock before exiting, which it says
 on stderr first ("SIGTERM caught: ..."), because a shell reports 143 for an
 uncaught SIGTERM as well. A Ctrl-C still ends in KeyboardInterrupt, 130 to a
 shell, as in duty mode, after the same line and the same reset. No driver runs
-lock mode, so no ledger reads them yet.
+lock mode, so no ledger reads them yet. A run whose own reset FAILED after
+measuring exits ERROR (4) whatever its verdict, so a chain stops before it
+measures anything else on a card left locked; the page keeps the verdict.
 """
 from __future__ import annotations
 
@@ -298,8 +300,16 @@ DEFAULT_DRAWS = 2000
 MIN_TREADS_PER_STATE = 4
 MIN_REPEATS_PER_STATE = 3
 #: States the fit needs. Two states give a slope with zero degrees of freedom and
-#: no way to see curvature; the brief's own floor is three.
+#: no way to see curvature; the brief's own floor is three. IN LOCK MODE V3 NEEDS
+#: EVERY PLANNED LOCK (owner, 2026-09-25): a ladder the card cut short is not the
+#: design that was planned, even where three locks are left.
 MIN_STATES = 3
+
+#: One step of the SM clock grid a lock sits on (15 MHz on the H100, H200 and
+#: GH200). A lock whose KEPT rows read back more than this off it at a tread is
+#: named on the page as held only loosely (owner, 2026-09-25): the rule the hold
+#: test in the run plan and the H100's locked R3 driver both use for a slip.
+LOCK_STEP_MHZ = 15
 
 #: Share of rows that may be dropped for DRIFT or for being host-bound before the
 #: kept set stops describing the run that was paid for. One in five: above that,
@@ -1745,7 +1755,8 @@ def gates_for(rows, args, threshold: float, source: str,
         gate_v1_separation(cells, threshold, source, locked=locked),
         gate_v2_one_kernel(keep),
         gate_v3_depth(keep, states_of(args), MIN_TREADS_PER_STATE,
-                      MIN_REPEATS_PER_STATE, MIN_STATES),
+                      MIN_REPEATS_PER_STATE,
+                      len(states_of(args)) if locked else MIN_STATES),
         gate_v4_exclusions(rows, keep, EXCLUSION_CEILING),
         gate_v5_within_burst(keep, locked=locked),
         gate_v6_memory_clock(keep),
@@ -3508,8 +3519,8 @@ def off_lock_lines(rows, args) -> list[str]:
     """LOCK MODE: every lock the card did not hold, BY NAME, and how many of
     the planned locks the fit read. None in duty mode or when every lock held.
 
-    V0 and V4 COUNT the off-lock rows and V3 fails a ladder left under
-    `MIN_STATES` locks wide, but a count is not a name. On a power-capped card
+    V0 and V4 COUNT the off-lock rows and V3 fails a lock ladder that lost
+    any planned lock, but a count is not a name. On a power-capped card
     the top lock is the one at risk (the GH200's 1965 read ~1815 during R3's
     bursts, 2026-09-25), and it can fail two ways that both need saying: at
     every tread, which leaves the fit a ladder one lock short, or only at the
@@ -3563,6 +3574,46 @@ def off_lock_lines(rows, args) -> list[str]:
             "  per lock on this card at this duty."]
 
 
+def loose_lock_lines(rows, args) -> list[str]:
+    """LOCK MODE: every lock whose KEPT rows read back more than one
+    `LOCK_STEP_MHZ` step off it at some tread, by name, with those treads.
+    None in duty mode or when every lock held within a step.
+
+    Such rows are inside `timing.DRIFT_FRACTION`, so they are kept and fitted at
+    the clock read back, which does not bias the fit. But the page would call
+    the lock held, and on the Lambda H100 (2026-09-25) an 1800 MHz lock read
+    1770 at R3's G=2: 1.7% off, under the 5% rule, and not what "held" means to
+    the hold test that picks the locks. Each (lock, tread) cell is judged on its
+    median read-back over its kept rows, so one noisy NVML read names nothing.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    if not locks:
+        return []
+    keep = [r for r in kept_rows(rows) if r.clock_lock_mhz and r.sm_clock_load_mhz]
+    every = sorted({r.tiles for r in rows})
+    named = []
+    for lock in locks:
+        cells: dict[int, list[float]] = {}
+        for r in keep:
+            if int(r.clock_lock_mhz) == lock:
+                cells.setdefault(r.tiles, []).append(float(r.sm_clock_load_mhz))
+        loose = sorted(t for t, mhz in cells.items()
+                       if abs(statistics.median(mhz) - lock) > LOCK_STEP_MHZ)
+        if not loose:
+            continue
+        mhz = statistics.median(m for t in loose for m in cells[t])
+        where = ("at every tread" if loose == every else
+                 f"at treads {', '.join(str(t) for t in loose)}")
+        named.append(f"    lock {lock} MHz: median {mhz:.0f} MHz "
+                     f"({100 * abs(mhz - lock) / lock:.1f}% "
+                     f"{'below' if mhz < lock else 'above'}), {where}")
+    if not named:
+        return []
+    return ["", f"  LOCKS HELD ONLY LOOSELY, those rows KEPT and fitted at the clock "
+            f"read back (more than one {LOCK_STEP_MHZ} MHz step off the lock, "
+            f"within {T.DRIFT_FRACTION:.0%}):", *named]
+
+
 def left_locked_lines(locker) -> list[str]:
     """The FIRST lines of report.txt, above the plan, when the run's OWN reset
     failed, else none. The first lines of the file and not of the tail (second
@@ -3577,6 +3628,8 @@ def left_locked_lines(locker) -> list[str]:
             "  The cells on this page were measured under their locks and stand. "
             "Anything run on this card",
             "  next runs at that clock until it is reset by hand: sudo nvidia-smi -rgc",
+            f"  This run exits ERROR ({exit_codes.ERROR}), not its verdict's code, so "
+            "a chain stops here.",
             ""]
 
 
@@ -3612,6 +3665,7 @@ def report_lines(rows, est: Elasticity, args) -> list[str]:
         out.append("  clock span per tread: "
                    + ", ".join(f"n{t}={v:.4f}x" for t, v in sorted(ratios.items())))
     out += off_lock_lines(rows, args)
+    out += loose_lock_lines(rows, args)
     out += [
         "",
         f"  LEVEL among kept rows: {sides[T.LEVEL_HIGH]} HIGH, "
@@ -4041,6 +4095,14 @@ def _main(argv=None) -> int:
     print(f"json     {paths['report.json']}")
 
     rc = exit_codes.classify(g.scored() for g in gates)
+    if left_locked is not None:
+        # A CARD LEFT LOCKED STOPS A CHAIN (owner, 2026-09-25). The verdict on
+        # the page stands; the exit code is what a driver reads, and anything
+        # it ran next on this card would measure under a lock nobody set.
+        print(f"verdict  {exit_codes.describe(rc)}")
+        print(f"exit     {exit_codes.describe(exit_codes.ERROR)}: the SM clock "
+              f"was left locked at {left_locked} MHz")
+        return exit_codes.ERROR
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 

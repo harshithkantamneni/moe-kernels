@@ -1987,7 +1987,9 @@ def test_a_run_whose_last_reset_failed_says_so_on_its_page_and_in_its_json(
         return _lock_rows((1965.0, 1755.0, 1530.0))
     smi = _Smi(rgc=[(0, "All done."), (1, "denied")])
     rc, _ = _lock_main(monkeypatch, tmp_path, smi, arm=measured)
-    assert rc == exit_codes.DONE, capsys.readouterr().out[-1500:]
+    # ERROR since the owner's decision (2026-09-25): a card left locked stops a
+    # chain; the page keeps its verdict (section 18).
+    assert rc == exit_codes.ERROR, capsys.readouterr().out[-1500:]
     run_dir = tmp_path / "clock_elasticity" / "r"
     page = (run_dir / "report.txt").read_text()
     # THE FILE'S FIRST LINE, above the ~80-line plan, where a reader starts.
@@ -2246,3 +2248,69 @@ def test_a_ctrl_c_mid_run_is_caught_resets_and_still_ends_as_a_keyboard_interrup
     assert "SIGINT caught: resetting the SM clock, then exiting 130" in err
     assert smi.verbs() == ["-lgc", "-rgc"] and lock.held is None
     assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+# --------------------------------------------------------------------------
+# 18. LOCK MODE, the owner's decisions (2026-09-25): a lock ladder needs every
+#     planned lock, a clock left locked stops a chain, and a lock held only
+#     loosely is named
+# --------------------------------------------------------------------------
+
+LOCKS5 = (1980, 1890, 1755, 1620, 1530)
+
+
+def test_a_lock_ladder_missing_any_planned_lock_fails_v3():
+    """Owner decision 1: in lock mode V3 needs EVERY planned lock deep enough.
+    Five locks, the top one pulled to 1800 in every row: one lock in five is
+    exactly V4's 20% ceiling, so V4 passes, and under the duty rule (three
+    states needed) V3 would pass on four. The ladder the fit reads is not the
+    one planned, so V3 FAILS. A duty design keeps its three."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.004, duties=(0.25,) * len(LOCKS5),
+                         mhz=(1800.0, 1890.0, 1755.0, 1620.0, 1530.0), locks=LOCKS5)
+    gates = _score(rows, lock_clocks=list(LOCKS5), lock_duty=0.25)
+    assert gates["V4"].verdict == CE.PASS, gates["V4"].measured
+    assert gates["V3"].verdict == CE.FAIL, gates["V3"].measured
+    assert "4 of 5 planned states are deep enough" in gates["V3"].measured
+    assert gates["V3"].threshold.startswith(">= 5 states"), gates["V3"].threshold
+    assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V3"].threshold.startswith(">= 3 states")
+
+
+def test_a_clock_left_locked_after_the_run_exits_error_so_a_chain_stops(
+        tmp_path, monkeypatch, capsys):
+    """Owner decision 2: the cells stand and the page keeps its verdict, but a
+    card left locked makes whatever runs next on it wrong, so the run EXITS
+    ERROR (4) and the page's first lines say why its exit is not its verdict."""
+    def measured(locker):
+        for f in LOCKS:
+            locker.lock(f)
+        return _lock_rows((1965.0, 1755.0, 1530.0))
+    smi = _Smi(rgc=[(0, "All done."), (1, "denied")])
+    rc, _ = _lock_main(monkeypatch, tmp_path, smi, arm=measured)
+    out = capsys.readouterr().out
+    assert rc == exit_codes.ERROR, out[-1500:]
+    page = (tmp_path / "clock_elasticity" / "r" / "report.txt").read_text()
+    head = "\n".join(page.splitlines()[:5])
+    assert "This run exits ERROR (4), not its verdict's code" in head, head
+    assert "READING IT. Validity holds." in page, "the verdict itself stands"
+
+
+def test_a_lock_held_only_loosely_is_kept_fitted_at_its_read_back_and_named():
+    """Owner decision 3: on the Lambda H100 (2026-09-25) an 1800 MHz lock read
+    1770 at R3's G=2, 1.7% off: inside 5%, so KEPT and fitted at the clock read
+    back, which does not bias the fit, but "held" would overstate it. A lock
+    whose kept rows read back more than one 15 MHz step off it, at any tread,
+    is NAMED with its treads. One step off (1965 at a 1980 lock) is held."""
+    rows = _lock_rows((1965.0, 1755.0, 1530.0))
+    for r in rows:
+        if r.clock_lock_mhz == 1755 and r.tiles >= 6:
+            r.sm_clock_load_mhz = 1725.0
+    assert all(CE.exclusion(r) == "" for r in rows)
+    gates = _lock_score(rows)
+    assert all(g.verdict == CE.PASS for g in gates.values())
+    page = "\n".join(CE.report_lines(rows, CE.fit(rows, draws=100), _lock_args()))
+    assert "LOCKS HELD ONLY LOOSELY" in page, page
+    assert "lock 1755 MHz: median 1725 MHz (1.7% below), at treads 6, 7, 8" in page
+    assert "lock 1980" not in page.split("LOCKS HELD ONLY LOOSELY")[1]
+    held = _lock_rows((1965.0, 1755.0, 1530.0))
+    assert "LOCKS HELD ONLY LOOSELY" not in "\n".join(
+        CE.report_lines(held, CE.fit(held, draws=100), _lock_args()))
