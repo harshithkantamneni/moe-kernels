@@ -1,0 +1,13 @@
+THE COUNTER PROBE, 2026-09-24T04:29:46Z (informational: it gates nothing, and the chain asks again on every pass)
+verdict     BLOCKED
+detail      ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+ncu         /usr/local/cuda/bin/ncu (NOT on PATH; found by /usr/local/cuda*/bin/ncu, and the probe ran with /usr/local/cuda/bin first on PATH)  [Version 2025.1.1.0 (build 35528883) (public-release)]
+searched    PATH, then /usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu
+candidates  /usr/local/cuda/bin/ncu /usr/local/cuda-12/bin/ncu /usr/local/cuda-12.8/bin/ncu /opt/nvidia/nsight-compute/2025.1.1/ncu
+access      CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 00000000a80425fb); module flag unread (the parameter is not listed by this driver)
+probe       scripts/dram_counter_route.py --probe, exit 1 in 10 s; its page /workspace/session/alpha_g-nvidia_h200-20260924T042526Z/chain-logs/counter-probe.log, its payload /workspace/session/alpha_g-nvidia_h200-20260924T042526Z/COUNTERS.json
+PATH        ncu is not on PATH here: the driver's counter_plan and dram_counter_route.py --run look on PATH only, so run them with PATH=/usr/local/cuda/bin:$PATH
+probe note  this process holds NEITHER CAP_SYS_ADMIN NOR CAP_PERFMON. Either opens the gate on a driver from R450 on and PERFMON is the narrower ask, so ask the provider for --cap-add=PERFMON first, --cap-add=SYS_ADMIN second, and a host reboot last.
+probe note  the effective capability mask read 00000000a80425fb (64 bits as the kernel printed it), so CAP_PERFMON (bit 38) is clear and CAP_SYS_ADMIN (bit 21) is clear by measurement.
+probe note  the host module parameter could not be read (the parameter is not listed by this driver), so 'the host forbids it' and 'this container lacks the capability' cannot be separated from inside; the capability line above is the side a tenant can act on.
+history     RunPod's record is in bash scripts/alpha_g_chain.sh --help

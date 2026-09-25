@@ -1,0 +1,16 @@
+key	value	source
+model	mixtral-8x7b	report.json of 1 run(s)
+block_m	32	report.json of 1 run(s)
+r3_pinned	BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 num_warps=8 num_stages=4	report.json of 1 run(s)
+group_m	varies: 2	the G column; the swizzle each run pinned
+r3_treads	1 2 3 4 5 6	report.json of 1 run(s)
+r3_repeats	9	report.json of 1 run(s)
+r3_duty	0.25	report.json of 1 run(s)
+r1_pinned	BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 num_warps=8 num_stages=4 BLOCK_SIZE_M=32	report.json of 1 run(s)
+r1_duty	1.0 0.5 0.25	report.json of 1 run(s)
+r1_treads	--treads 8	the chain's command line
+r1_repeats	--repeats 13	the chain's command line
+expert_set_bytes	2818572288	report.json of 1 run(s)
+ruler	/workspace/moe-kernels/results/calibration/nvidia_h200-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-2ea5b191/measured_nvidia_h200.yaml	the yaml calibrate wrote in this session (/workspace/session/alpha_g-nvidia_h200-20260924T042526Z/logs/calibrate.log); its triad 4377.0 GB/s is the bandwidth every report here was scored against
+read_ceiling_gbps	4613.2	the ruler's read_stream pattern, measured 2026-09-24 at c09b353
+pin_rate_gbps	4814.3	the ruler's observed.pin_rate_gbps (memory clock x 2 x bus width)

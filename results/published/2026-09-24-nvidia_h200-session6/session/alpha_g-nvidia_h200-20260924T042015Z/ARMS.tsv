@@ -1,0 +1,3 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	DONE	0	155	0	/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/thermal.log	log agrees: RESULT lines imply 0
+calibrate	INVALID	3	29	1	/workspace/session/alpha_g-nvidia_h200-20260924T042015Z/logs/calibrate.log	log agrees: RESULT lines imply 3
