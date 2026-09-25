@@ -923,7 +923,9 @@ V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM (above the
 full-thrash 1.4989 n, so V5 cannot tell an activation thrash from a sound
 page, and C6 reads it); V6 the three
 arms request the same L2 sectors within 0.5%; V7 NATIVE reads what SHARED reads
-within max(1%, 3 x that GEMM's own repeat spread); V8 DRAM bytes agree with 32 x
+within max(1%, 3 x that GEMM's own repeat spread), and their calls no more
+than 1% apart (NATIVE's lowest above SHARED's highest, or the reverse), so a
+noisy GEMM cannot hide a declaration effect; V8 DRAM bytes agree with 32 x
 the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof.
 

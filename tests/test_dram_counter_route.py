@@ -2534,6 +2534,23 @@ def test_c5_at_g4_and_c6_read_the_k_calls_not_their_mean():
     assert got["V3"] == PASS and got["V5"] == PASS and got["C6"] == REFUSE
 
 
+def test_v7_fails_arms_whose_calls_do_not_overlap_however_noisy_the_gemm():
+    """The spread-scaled V7 tolerance has no ceiling once V3 stops capping the
+    spread at n >= 2: on the A100 G=1 page it reached 20%. A NATIVE whose every
+    w2 call reads 10% above SHARED's, against SHARED calls spread +-2.5%, sits
+    inside 3 x 5% = 15% and passed; the calls do not overlap, which is a
+    different call whatever the spread. Calls that do overlap still pass."""
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _set_calls(cells[("shared", 3)], "w2", (-0.025, 0.0, 0.025))
+    _set_calls(cells[("native", 3)], "w2", (-0.02, 0.0, 0.02))
+    assert _scored(page)["V7"] == PASS
+    _set_calls(cells[("native", 3)], "w2", (0.10, 0.10, 0.10))
+    gates = {g.number: g for g in DCR.score_r3_page(page)[0]}
+    assert gates["V7"].verdict == FAIL
+    assert "n=3 w2 calls apart by" in gates["V7"].measured
+
+
 def test_ols_slope_bounds_hold_every_series_inside_the_brackets():
     """The slope bracket is exact: every series inside the per-tread brackets
     has its OLS slope inside it, and its two ends are reached."""

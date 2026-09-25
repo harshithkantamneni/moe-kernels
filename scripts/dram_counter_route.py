@@ -5615,6 +5615,13 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
     # the A100 G=1 page failed at n=2 w2 +1.52% against 1.09% while w2's own
     # calls spread 1.33%. Inside the tolerance NATIVE is pooled into SHARED's
     # bracket (`r3_weight_bracket`), so what the spread hides is in alpha.
+    # AND THE TWO ARMS' CALLS MUST OVERLAP. A tolerance that grows with the spread
+    # has no ceiling once V3 stops capping it at n >= 2 (it reached 20% on the A100
+    # G=1 page), so a real declaration effect would hide under a noisy GEMM. The
+    # calls are the direct test: where NATIVE's lowest call sits above SHARED's
+    # highest, or the other way round, by more than the floor, the two arms read
+    # different bytes whatever the spread. On the A100 G=64 page NATIVE's w2 calls
+    # at n=2 sat 1.24% above SHARED's, and at G=64 NATIVE is a different call.
     def gemm_spread(key, g: str) -> float:
         s = gemm_spreads[key][g]
         return s if s is not None else (spreads.get(key) or 0.0)
@@ -5628,12 +5635,19 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
             rs = cells[("shared", n)]["per_gemm"][g]["dram_bytes_read"]
             if abs(rn / rs - 1.0) > tol:
                 decl.append(f"n={n} {g} {rn / rs - 1.0:+.4%} against {tol:.4%}")
+            vn = r3_call_values(cells[("native", n)], g)
+            vs = r3_call_values(cells[("shared", n)], g)
+            if vn and vs:
+                gap = max(min(vn) - max(vs), min(vs) - max(vn)) / statistics.fmean(vs)
+                if gap > R3_DECLARATION_FLOOR:
+                    decl.append(f"n={n} {g} calls apart by {gap:.4%} of SHARED's mean")
     gates.append(Gate(
         "V7", "VALIDITY", "NATIVE and SHARED read the same DRAM bytes",
         PASS if not decl else FAIL,
         _worst(decl) if decl else "every (n, GEMM) within tolerance",
         f"|R_N/R_S - 1| <= max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x that "
-        "GEMM's own repeat spread in either cell)",
+        "GEMM's own repeat spread in either cell), and the two arms' calls no more "
+        f"than {R3_DECLARATION_FLOOR:.0%} apart where the page lists them",
         "SHARED as the study's call: if the declaration moved the bytes, SHARED "
         "measures a call vLLM does not make"))
 
@@ -6146,7 +6160,8 @@ def do_dry_run_r3(args) -> int:
     print(f"  V5 {R3_PRIVATE_BAND[0]} n <= q_P(n) <= {R3_PRIVATE_BAND[1]} n per GEMM; V6 "
           f"requested L2 sectors equal across arms within {R3_REQUEST_TOL:.1%}; V7 NATIVE "
           f"= SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x the "
-          "GEMM's own spread);")
+          f"GEMM's own spread) and their calls no more than {R3_DECLARATION_FLOOR:.0%} "
+          "apart;")
     print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
           "if proven; V9 R3's five-part buffer proof.")
     print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
