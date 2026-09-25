@@ -1,0 +1,248 @@
+{
+  "run_id": "nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-e1c429b7",
+  "card": "NVIDIA H200",
+  "device": "0ffa33b8-eeac-8768-2331-dc7e2f8d6490",
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 4,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "duty": [
+    1.0,
+    0.5,
+    0.25
+  ],
+  "predictions": [
+    {
+      "number": 1,
+      "claim": "the duty cycle moves the clock at a byte-identical kernel",
+      "numbers": "every tread's under-load SM clock spans at least the ratio the design arithmetic below requires, across the duty states, with the same tensors, the same pinned tile and the same tread count in every state",
+      "fail": "V1 FAILS and the arm is INVALID. Three states at one clock measure nothing, and the honest reading is that this container's governor does not respond to duty at this kernel -- not that the elasticity is zero."
+    },
+    {
+      "number": 2,
+      "claim": "the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of what one more tile adds at this cell is traffic, not issue rate",
+      "numbers": "the 95% interval on -d log b / d log f, b the ladder slope, read over treads 2 and deeper, lies wholly below 0.25, which is the band in which the study's raw readings stand and pooled EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone",
+      "fail": "a FAIL is a RESULT and not a retry. Above 0.4 the BLOCK_M ladder is non-monotone, pooled alpha_b falls to about 0.93 and C3's DIRECTION is retracted; between the two the analysis registered no reading at all and the page says so instead of inventing one."
+    },
+    {
+      "number": 3,
+      "claim": "and the design resolves which of the three registered worlds it is in",
+      "numbers": "the 95% interval lies wholly inside ONE of the three bands, which needs a half-width under 0.075",
+      "fail": "C1 FAILS. The apparatus worked and the answer is 'not resolved': the states separated too little or the repeats were too few, and NO registered consequence may be quoted off this page."
+    }
+  ],
+  "bands": [
+    {
+      "name": "RAW-STANDS",
+      "lo": null,
+      "hi": 0.25,
+      "consequence": "the raw readings stand: pooled EXA alpha_b is near 0.974 and the 26.7-sigma monotone rise of alpha_b with BLOCK_M survives. The clock is not what is wrong with alpha; FORM and PHYSICS still are."
+    },
+    {
+      "name": "UNREGISTERED-GAP",
+      "lo": 0.25,
+      "hi": 0.4,
+      "consequence": "NEITHER registered consequence is licensed. The analysis that produced the two readings below and above swept the elasticity past this band without stopping in it, so there is no pooled alpha_b to quote here and the honest report is the interval and the refusal to read it further."
+    },
+    {
+      "name": "CLOCK-CARRIES",
+      "lo": 0.4,
+      "hi": null,
+      "consequence": "the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. Every alpha in the study is then a blend of traffic and clock and none of them may be quoted as traffic."
+    }
+  ],
+  "v1_threshold": 1.06,
+  "v1_threshold_source": "the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread",
+  "elasticity": {
+    "value": 1.1290599970920472,
+    "slope": -1.1290599970920472,
+    "lo": 1.0683157356966266,
+    "hi": 1.2003839026835805,
+    "per_tread": {
+      "1": 0.1569634721725449,
+      "2": 1.0976075839715407,
+      "3": 1.0541910034414599,
+      "4": 1.0569980251582791,
+      "5": 1.1213610788298536,
+      "6": 1.1213584352005936,
+      "7": 1.100325156571823,
+      "8": 1.1077435898841614
+    },
+    "sxx": 0.16534841344148363,
+    "cells": 24,
+    "states": 3,
+    "treads": 8,
+    "repeats": 13,
+    "draws": 2000,
+    "resampled": 2000,
+    "ladder_slope": 0.9962513747540495,
+    "ladder_states": 3,
+    "fixed_tread": 0.8226785861425915,
+    "fixed_tread_lo": 0.8045238427792555,
+    "fixed_tread_hi": 0.8404365242182352,
+    "per_tile_treads": 7,
+    "claim_min_tread": 2,
+    "per_tile_all_treads": 1.230329153387796,
+    "per_tile_all_treads_lo": 1.1825065738048706,
+    "per_tile_all_treads_hi": 1.2886014934332295,
+    "tread1_sensitivity_ms": 0.11804545667665202,
+    "tread1_sensitivity_on_line_ms": 0.6412616745524788,
+    "tread1_level_ms": 0.7520568642039751,
+    "tread1_level_on_line_ms": 0.6416923552421525
+  },
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "number": "0",
+      "claim": "the run produced rows the fit can read",
+      "verdict": "PASS",
+      "measured": "291 kept of 312 rows (dropped: drift 21)",
+      "threshold": ">= 1 kept row",
+      "invalidates": "every gate below, which would otherwise report a clean run from a directory nobody wrote to",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "1",
+      "claim": "the duty states separated in clock at every tread",
+      "verdict": "PASS",
+      "measured": "narrowest tread 4 spans 1.1441x (widest 1.3232x over 8 of 8 kept treads)",
+      "threshold": ">= 1.060x at every one of the 8 kept treads, from the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread",
+      "invalidates": "the elasticity and both claims: a slope fitted across states that sat at one clock is a slope over nothing, and a tread that lost its states is a tread the pooled slope never saw",
+      "lines": [
+        "per tread: n1=1.3232x, n2=1.1972x, n3=1.2243x, n4=1.1441x, n5=1.1963x, n6=1.1696x, n7=1.1802x, n8=1.1491x"
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "2",
+      "claim": "one tile, one model, one dtype and one burst shape per tread",
+      "verdict": "PASS",
+      "measured": "1 distinct tile tuples over 291 kept rows; one burst shape per tread",
+      "threshold": "exactly 1 tile tuple and 1 burst shape per tread",
+      "invalidates": "the whole arm: a slope across states that ran different kernels is a comparison of kernels, not of clocks",
+      "lines": [
+        "tile: ('mixtral-8x7b', 'bf16', 32, 64, 64, 4, 8, 4)"
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "3",
+      "claim": "every state the fit reads is deep enough to be a state",
+      "verdict": "PASS",
+      "measured": "3 of 3 planned states are deep enough (duty 0.2500: 8 treads x 13 repeats; duty 0.5000: 8 treads x 13 repeats; duty 1.0000: 8 treads x 13 repeats)",
+      "threshold": ">= 3 states with >= 4 treads and >= 3 repeats each",
+      "invalidates": "the interval: a bootstrap over two repeats has three distinct draws, {a,a} {a,b} {b,b}, and an interval read off three is a decoration",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "4",
+      "claim": "the excluded rows are a trim and not the measurement",
+      "verdict": "PASS",
+      "measured": "21 of 312 rows excluded (6.7%): drift 21, host-bound 0, other 0",
+      "threshold": "<= 20% of all rows",
+      "invalidates": "the fit: past this the kept set is a sample the card selected",
+      "lines": [
+        "LEVEL among the KEPT rows, recorded and never a reason to exclude: 278 HIGH, 0 LOW, 13 level, 0 undetermined"
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "5",
+      "claim": "the clock held inside each burst",
+      "verdict": "PASS",
+      "measured": "0 of 291 kept rows moved more than 0.05 from first quarter to last",
+      "threshold": "0 rows, at 0.05, the repository's DRIFT fraction",
+      "invalidates": "the per-call time: inside one burst it would be an average over two operating points, and the average moves with the duty cycle",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "6",
+      "claim": "the memory clock did not move with the SM clock",
+      "verdict": "PASS",
+      "measured": "1 distinct values, 3201-3201 MHz (span 0 MHz)",
+      "threshold": "span <= 15 MHz, one NVML grid step",
+      "invalidates": "the reading: the slope would be a blend of issue rate and bandwidth",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "7",
+      "claim": "the elasticity is physically admissible",
+      "verdict": "PASS",
+      "measured": "[1.0683, 1.2004] against [-0.075, 1.075]",
+      "threshold": "the interval intersects [-0.075, 1.075], which is [0, 1] widened by the design's own half-width 0.075",
+      "invalidates": "both claims and the whole page: eta below 0 is a per-M-tile cost that ROSE as the clock rose at a byte-identical kernel, and eta above 1 is one that fell faster than the clock rose. Neither is a reading, and RAW-STANDS is open below 0 so the first of them would otherwise score as the pre-registered PASS",
+      "lines": []
+    },
+    {
+      "kind": "CLAIM",
+      "number": "1",
+      "claim": "the interval falls wholly inside ONE registered band",
+      "verdict": "PASS",
+      "measured": "[1.0683, 1.2004], half-width 0.0660, in CLOCK-CARRIES",
+      "threshold": "wholly inside one of ['RAW-STANDS', 'UNREGISTERED-GAP', 'CLOCK-CARRIES'] (edges 0.25, 0.4); half-width under 0.075 is the design's own target",
+      "invalidates": "both registered consequences: an interval across a boundary is consistent with two worlds whose readings contradict each other",
+      "lines": [
+        "the band it fell in says: the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. Every alpha in the study is then a blend of traffic and clock and none of them may be quoted as traffic."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "2",
+      "claim": "eta of the per-M-tile cost, -d log b / d log f over treads 2 and deeper, is below 0.25 at this cell",
+      "verdict": "FAIL",
+      "measured": "1.1291 [1.0683, 1.2004]",
+      "threshold": "the whole 95% interval below 0.25",
+      "invalidates": "nothing: a FAIL here is the arm's result and the study's reading of every alpha changes with it",
+      "lines": [
+        "the registered consequence of CLOCK-CARRIES: the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. Every alpha in the study is then a blend of traffic and clock and none of them may be quoted as traffic."
+      ]
+    }
+  ],
+  "rows": 312,
+  "kept": 291,
+  "git_sha": "33d28339d8e211bd7fb8caf92bd340b82ae40abb",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "33d28339d8e211bd7fb8caf92bd340b82ae40abb",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-23T18:03:27+00:00",
+    "hostname": "421a523e82cb",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": 200.0,
+    "iters": null,
+    "target_ms": 200.0,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed"
+    }
+  }
+}

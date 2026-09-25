@@ -1,0 +1,585 @@
+experiment  clock_elasticity / nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5
+card        NVIDIA H200
+model       mixtral-8x7b bf16: E=8 k=2 H=4096 F=14336, rows per expert must be a multiple of 1
+pinned      BLOCK_SIZE_K=64, BLOCK_SIZE_M=32, BLOCK_SIZE_N=64, GROUP_SIZE_M=1, num_stages=4, num_warps=8
+session     alpha_g-nvidia_h200-20260923T163248Z
+ladder      8 exactly-full tile stacks, rows per expert 32..256, tokens 128..1024
+states      duty 1, 0.7, 0.5, 10 s of the state's own cadence before its first cell
+repeats     13, state order reversed on alternate repeats so a thermal trend does not line up with the state axis
+burst       target 40 ms of GPU per burst, at least 8 calls, the FIRST call of every burst discarded
+instrument  scripts/clock_elasticity.py: bursts of N back-to-back fused_experts calls under one pinned tile, each call L2-flushed and bracketed by its own pre-primed event pair, the FIRST call of every burst discarded as a drained-queue launch, a host-side idle gap after each burst setting the sustained duty cycle, and the SM clock, board power and memory clock read through NVML with the burst still in flight; NOT timing.TIMING_BASIS
+WRITES TO   /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5
+  cells.csv   /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/cells.csv   git could not be asked (rc 128 is a path outside the work tree)
+  report.txt  /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/report.txt   git could not be asked (rc 128 is a path outside the work tree)
+  report.json /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/report.json   git could not be asked (rc 128 is a path outside the work tree)
+
+NO RULER IS RESOLVED. An elasticity is a ratio of logs: no ridge, no bandwidth, no
+compute peak, no fitted level. The reference clock is resolved on the pod for the
+LEVEL RECORD only, and LEVEL excludes nothing here on either side; DRIFT and
+host-bound are the two exclusions and V4 holds them to 20% of all rows.
+
+THE BURST TABLE, computed by the same `burst_shape` the pod calls:
+  tread   modelled ms   calls/burst   bursts/trial   kept calls/trial
+      1        0.7738            52              6                306
+      2        1.3252            30              6                174
+      3        1.8911            21              6                120
+      4        2.4154            17              6                 96
+      5        3.0127            13              6                 72
+      6        3.5662            11              6                 60
+      7        4.1618            10              6                 54
+      8        4.6153             9              6                 48
+  the modelled ms PRICE this run and score nothing; they are the 2026-09-10
+  bn_decomposition medians at this exact tile, named in the source.
+
+V1 THRESHOLD 1.060x, from the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread
+
+==============================================================================
+PREDICTIONS, registered before the run and printed before any measurement
+
+  P1  the duty cycle moves the clock at a byte-identical kernel
+        predicts  every tread's under-load SM clock spans at least the ratio the design arithmetic below requires, across the duty states, with the same tensors, the same pinned tile and the same tread count in every state
+        a FAIL    V1 FAILS and the arm is INVALID. Three states at one clock measure nothing, and the honest reading is that this container's governor does not respond to duty at this kernel -- not that the elasticity is zero.
+
+  P2  the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of what one more tile adds at this cell is traffic, not issue rate
+        predicts  the 95% interval on -d log b / d log f, b the ladder slope, read over treads 2 and deeper, lies wholly below 0.25, which is the band in which the study's raw readings stand and pooled EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone
+        a FAIL    a FAIL is a RESULT and not a retry. Above 0.4 the BLOCK_M ladder is non-monotone, pooled alpha_b falls to about 0.93 and C3's DIRECTION is retracted; between the two the analysis registered no reading at all and the page says so instead of inventing one.
+
+  P3  and the design resolves which of the three registered worlds it is in
+        predicts  the 95% interval lies wholly inside ONE of the three bands, which needs a half-width under 0.075
+        a FAIL    C1 FAILS. The apparatus worked and the answer is 'not resolved': the states separated too little or the repeats were too few, and NO registered consequence may be quoted off this page.
+
+THE THREE REGISTERED BANDS, and the reading each licenses:
+  RAW-STANDS         < 0.25         the raw readings stand: pooled EXA alpha_b is near 0.974 and the 26.7-sigma monotone rise of alpha_b with BLOCK_M survives. The clock is not what is wrong with alpha; FORM and PHYSICS still are.
+  UNREGISTERED-GAP   0.25 to 0.40   NEITHER registered consequence is licensed. The analysis that produced the two readings below and above swept the elasticity past this band without stopping in it, so there is no pooled alpha_b to quote here and the honest report is the interval and the refusal to read it further.
+  CLOCK-CARRIES      > 0.40         the BLOCK_M ladder is NON-MONOTONE, pooled EXA alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while C3's inequality survives. Every alpha in the study is then a blend of traffic and clock and none of them may be quoted as traffic.
+
+  NOT A READOUT. Nothing above was measured. The arm decides which band it is in by
+  where its 95% interval falls, and it may decide none of them (C1 FAIL), which is
+  a result about the design and not a licence to read the nearer edge.
+
+RESOLUTION, computed from the design and not from the result.
+  across-repeat spread of one cell   0.01071 of log ms, the median over the 8 treads of the 2026-09-10 bn_decomposition ladder at this exact tile, 17 repeats each
+  x median penalty sqrt(pi/2)        1.2533
+  / sqrt(13 repeats)                    -> sigma per cell 0.00372
+  design                             8 treads x 3 states = 24 cells, slope Sxx = sum of (log f - tread mean)^2
+  target half-width                  0.0750, half the width of the unregistered gap [0.25, 0.4]
+  so the states must span            1.0600x in clock at every tread (the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread)
+  at exactly that span the interval  half-width ~0.0639, of the POOLED PER-CALL estimator
+  V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE. The claim, over treads 2..8,
+  fits one slope per tread and its interval is 3.20x wider at this design (13 repeats x 8 treads x 3 states):
+  the claim at exactly V1's span     half-width ~0.2043
+  the claim reaches the target at    a span of 1.1720x at every tread
+  A run that passes V1 below that span can still straddle a registered edge (C1 FAIL); S4 scores the estimator itself over the planted design.
+  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. The same arithmetic gates an A100 without being told which part is attached, and a shallower run is held to a WIDER separation rather than to the same number.
+
+==============================================================================
+override hook: vllm.model_executor.layers.fused_moe.override_config, verified through get_config() at every entry
+triton cache:  /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/triton-cache (fresh for this run)
+reference clock: 1470 MHz, NVIDIA H200: median of the samples taken while the calibration's dense GEMM ran
+
+sizing the burst at full duty, once, for every tread:
+  tread  1  T=  128    0.7518 ms/call ->  53 calls x 6 bursts = 312 kept calls/trial
+  tread  2  T=  256    1.4185 ms/call ->  28 calls x 6 bursts = 162 kept calls/trial
+  tread  3  T=  384    2.1316 ms/call ->  19 calls x 6 bursts = 108 kept calls/trial
+  tread  4  T=  512    2.9941 ms/call ->  13 calls x 6 bursts = 72 kept calls/trial
+  tread  5  T=  640    3.5515 ms/call ->  11 calls x 6 bursts = 60 kept calls/trial
+  tread  6  T=  768    4.2381 ms/call ->   9 calls x 6 bursts = 48 kept calls/trial
+  tread  7  T=  896    5.3789 ms/call ->   8 calls x 6 bursts = 42 kept calls/trial
+  tread  8  T= 1024    5.7732 ms/call ->   8 calls x 5 bursts = 35 kept calls/trial
+
+repeat 0 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7644 ms  clock  1492.5 MHz  power  694.7 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4715 ms  clock  1485.0 MHz  power  696.7 W  duty_seen 0.953
+  duty 1.00 tread  3    2.1851 ms  clock  1477.5 MHz  power  697.8 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9223 ms  clock  1455.0 MHz  power  696.5 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6385 ms  clock  1462.5 MHz  power  694.1 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3546 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0703 ms  clock  1455.0 MHz  power  694.6 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7903 ms  clock  1455.0 MHz  power  694.4 W  duty_seen 0.987
+
+repeat 0 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7422 ms  clock  1822.5 MHz  power  650.8 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3507 ms  clock  1830.0 MHz  power  634.2 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0148 ms  clock  1830.0 MHz  power  642.4 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6423 ms  clock  1830.0 MHz  power  643.2 W  duty_seen 0.662
+  duty 0.70 tread  5    3.2982 ms  clock  1845.0 MHz  power  644.4 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9610 ms  clock  1830.0 MHz  power  646.3 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6185 ms  clock  1830.0 MHz  power  639.4 W  duty_seen 0.661
+  duty 0.70 tread  8    5.2904 ms  clock  1815.0 MHz  power  633.1 W  duty_seen 0.675  [drift]
+
+repeat 0 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7385 ms  clock  1920.0 MHz  power  502.9 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3382 ms  clock  1905.0 MHz  power  515.0 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9980 ms  clock  1935.0 MHz  power  516.7 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6148 ms  clock  1935.0 MHz  power  510.5 W  duty_seen 0.462
+  duty 0.50 tread  5    3.2623 ms  clock  1867.5 MHz  power  513.0 W  duty_seen 0.476
+  duty 0.50 tread  6    3.9097 ms  clock  1920.0 MHz  power  516.9 W  duty_seen 0.477
+  duty 0.50 tread  7    4.5524 ms  clock  1927.5 MHz  power  495.5 W  duty_seen 0.457
+  duty 0.50 tread  8    5.2045 ms  clock  1890.0 MHz  power  504.4 W  duty_seen 0.472
+
+repeat 1 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7395 ms  clock  1927.5 MHz  power  504.4 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3373 ms  clock  1920.0 MHz  power  506.7 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  3    2.0000 ms  clock  1905.0 MHz  power  513.7 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6136 ms  clock  1920.0 MHz  power  505.1 W  duty_seen 0.461
+  duty 0.50 tread  5    3.2646 ms  clock  1867.5 MHz  power  511.2 W  duty_seen 0.475
+  duty 0.50 tread  6    3.9091 ms  clock  1875.0 MHz  power  518.6 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  7    4.5539 ms  clock  1860.0 MHz  power  508.8 W  duty_seen 0.456  [drift]
+  duty 0.50 tread  8    5.2038 ms  clock  1860.0 MHz  power  502.7 W  duty_seen 0.472  [drift]
+
+repeat 1 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7424 ms  clock  1890.0 MHz  power  653.6 W  duty_seen 0.654  [drift]
+  duty 0.70 tread  2    1.3564 ms  clock  1845.0 MHz  power  637.3 W  duty_seen 0.667
+  duty 0.70 tread  3    2.0196 ms  clock  1845.0 MHz  power  643.5 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6439 ms  clock  1830.0 MHz  power  641.8 W  duty_seen 0.661
+  duty 0.70 tread  5    3.3093 ms  clock  1845.0 MHz  power  647.8 W  duty_seen 0.675  [drift]
+  duty 0.70 tread  6    3.9725 ms  clock  1800.0 MHz  power  647.0 W  duty_seen 0.678  [drift]
+  duty 0.70 tread  7    4.6124 ms  clock  1830.0 MHz  power  638.9 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2945 ms  clock  1815.0 MHz  power  644.6 W  duty_seen 0.675  [drift]
+
+repeat 1 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7701 ms  clock  1485.0 MHz  power  696.2 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4780 ms  clock  1477.5 MHz  power  695.7 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2139 ms  clock  1455.0 MHz  power  696.6 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9233 ms  clock  1455.0 MHz  power  695.9 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6406 ms  clock  1455.0 MHz  power  696.5 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3587 ms  clock  1447.5 MHz  power  694.3 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0717 ms  clock  1455.0 MHz  power  695.0 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7908 ms  clock  1455.0 MHz  power  696.6 W  duty_seen 0.987
+
+repeat 2 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7700 ms  clock  1500.0 MHz  power  698.2 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4759 ms  clock  1485.0 MHz  power  700.7 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2160 ms  clock  1455.0 MHz  power  695.0 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9249 ms  clock  1455.0 MHz  power  694.5 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6409 ms  clock  1455.0 MHz  power  692.9 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3855 ms  clock  1455.0 MHz  power  693.9 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0878 ms  clock  1455.0 MHz  power  695.8 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8284 ms  clock  1440.0 MHz  power  695.7 W  duty_seen 0.987
+
+repeat 2 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7409 ms  clock  1875.0 MHz  power  629.1 W  duty_seen 0.653
+  duty 0.70 tread  2    1.3532 ms  clock  1800.0 MHz  power  644.4 W  duty_seen 0.666  [drift]
+  duty 0.70 tread  3    2.0176 ms  clock  1815.0 MHz  power  644.1 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6496 ms  clock  1830.0 MHz  power  643.5 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3064 ms  clock  1845.0 MHz  power  650.3 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9654 ms  clock  1830.0 MHz  power  648.3 W  duty_seen 0.678
+  duty 0.70 tread  7    4.6145 ms  clock  1845.0 MHz  power  639.0 W  duty_seen 0.660
+  duty 0.70 tread  8    5.3014 ms  clock  1785.0 MHz  power  638.5 W  duty_seen 0.675
+
+repeat 2 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7394 ms  clock  1920.0 MHz  power  502.6 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3373 ms  clock  1920.0 MHz  power  512.2 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9978 ms  clock  1935.0 MHz  power  508.0 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6127 ms  clock  1912.5 MHz  power  506.9 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2596 ms  clock  1920.0 MHz  power  507.9 W  duty_seen 0.475
+  duty 0.50 tread  6    3.9063 ms  clock  1860.0 MHz  power  513.1 W  duty_seen 0.476
+  duty 0.50 tread  7    4.5466 ms  clock  1867.5 MHz  power  500.4 W  duty_seen 0.456  [drift]
+  duty 0.50 tread  8    5.1985 ms  clock  1890.0 MHz  power  499.7 W  duty_seen 0.472
+
+repeat 3 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7391 ms  clock  1935.0 MHz  power  493.5 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3377 ms  clock  1905.0 MHz  power  507.5 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  3    1.9981 ms  clock  1935.0 MHz  power  512.0 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6120 ms  clock  1935.0 MHz  power  506.2 W  duty_seen 0.461
+  duty 0.50 tread  5    3.2605 ms  clock  1867.5 MHz  power  511.5 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9052 ms  clock  1890.0 MHz  power  509.6 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  7    4.5469 ms  clock  1860.0 MHz  power  501.1 W  duty_seen 0.456  [drift]
+  duty 0.50 tread  8    5.1979 ms  clock  1875.0 MHz  power  501.4 W  duty_seen 0.472
+
+repeat 3 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7414 ms  clock  1875.0 MHz  power  638.3 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3522 ms  clock  1875.0 MHz  power  626.1 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0120 ms  clock  1830.0 MHz  power  638.7 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6421 ms  clock  1860.0 MHz  power  636.5 W  duty_seen 0.661
+  duty 0.70 tread  5    3.3041 ms  clock  1815.0 MHz  power  641.7 W  duty_seen 0.675  [drift]
+  duty 0.70 tread  6    3.9659 ms  clock  1845.0 MHz  power  639.3 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6176 ms  clock  1852.5 MHz  power  636.5 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2945 ms  clock  1815.0 MHz  power  640.1 W  duty_seen 0.675  [drift]
+
+repeat 3 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7692 ms  clock  1477.5 MHz  power  695.2 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4784 ms  clock  1470.0 MHz  power  695.0 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2142 ms  clock  1455.0 MHz  power  692.5 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9218 ms  clock  1455.0 MHz  power  693.9 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6387 ms  clock  1455.0 MHz  power  693.2 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3556 ms  clock  1455.0 MHz  power  693.8 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0721 ms  clock  1455.0 MHz  power  696.0 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7907 ms  clock  1455.0 MHz  power  696.0 W  duty_seen 0.987
+
+repeat 4 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7694 ms  clock  1485.0 MHz  power  694.3 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4778 ms  clock  1470.0 MHz  power  695.4 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2162 ms  clock  1455.0 MHz  power  696.9 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9278 ms  clock  1455.0 MHz  power  696.3 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6406 ms  clock  1455.0 MHz  power  696.4 W  duty_seen 0.979
+  duty 1.00 tread  6    4.3573 ms  clock  1455.0 MHz  power  695.0 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0725 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7921 ms  clock  1455.0 MHz  power  693.7 W  duty_seen 0.987
+
+repeat 4 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7401 ms  clock  1905.0 MHz  power  639.7 W  duty_seen 0.653  [drift]
+  duty 0.70 tread  2    1.3540 ms  clock  1845.0 MHz  power  647.3 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0144 ms  clock  1837.5 MHz  power  646.3 W  duty_seen 0.672  [drift]
+  duty 0.70 tread  4    2.6444 ms  clock  1845.0 MHz  power  643.0 W  duty_seen 0.662
+  duty 0.70 tread  5    3.3034 ms  clock  1830.0 MHz  power  646.9 W  duty_seen 0.675  [drift]
+  duty 0.70 tread  6    3.9594 ms  clock  1830.0 MHz  power  646.0 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6251 ms  clock  1830.0 MHz  power  638.3 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2868 ms  clock  1785.0 MHz  power  638.5 W  duty_seen 0.675
+
+repeat 4 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7396 ms  clock  1837.5 MHz  power  510.3 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3376 ms  clock  1875.0 MHz  power  510.6 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9989 ms  clock  1860.0 MHz  power  510.2 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  4    2.6118 ms  clock  1875.0 MHz  power  507.0 W  duty_seen 0.461
+  duty 0.50 tread  5    3.2608 ms  clock  1905.0 MHz  power  512.4 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9075 ms  clock  1927.5 MHz  power  514.6 W  duty_seen 0.476
+  duty 0.50 tread  7    4.5430 ms  clock  1950.0 MHz  power  491.9 W  duty_seen 0.455
+  duty 0.50 tread  8    5.2022 ms  clock  1860.0 MHz  power  510.6 W  duty_seen 0.472  [drift]
+
+repeat 5 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7401 ms  clock  1845.0 MHz  power  498.2 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  2    1.3383 ms  clock  1852.5 MHz  power  512.4 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9987 ms  clock  1845.0 MHz  power  514.9 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  4    2.6113 ms  clock  1905.0 MHz  power  509.0 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2588 ms  clock  1912.5 MHz  power  515.1 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9082 ms  clock  1897.5 MHz  power  510.6 W  duty_seen 0.476
+  duty 0.50 tread  7    4.5490 ms  clock  1905.0 MHz  power  511.2 W  duty_seen 0.455  [drift]
+  duty 0.50 tread  8    5.2000 ms  clock  1800.0 MHz  power  506.5 W  duty_seen 0.472  [drift]
+
+repeat 5 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7434 ms  clock  1837.5 MHz  power  652.5 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3550 ms  clock  1830.0 MHz  power  632.5 W  duty_seen 0.666  [drift]
+  duty 0.70 tread  3    2.0183 ms  clock  1830.0 MHz  power  642.2 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6478 ms  clock  1830.0 MHz  power  641.1 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3065 ms  clock  1815.0 MHz  power  647.9 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9610 ms  clock  1837.5 MHz  power  648.2 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6277 ms  clock  1830.0 MHz  power  639.5 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2910 ms  clock  1830.0 MHz  power  635.2 W  duty_seen 0.675  [drift]
+
+repeat 5 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7699 ms  clock  1485.0 MHz  power  696.4 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4796 ms  clock  1470.0 MHz  power  696.4 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2162 ms  clock  1455.0 MHz  power  695.6 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9260 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6392 ms  clock  1455.0 MHz  power  696.3 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3836 ms  clock  1440.0 MHz  power  693.5 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0784 ms  clock  1440.0 MHz  power  696.0 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7902 ms  clock  1455.0 MHz  power  694.1 W  duty_seen 0.987
+
+repeat 6 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7711 ms  clock  1485.0 MHz  power  697.7 W  duty_seen 0.916
+  duty 1.00 tread  2    1.4772 ms  clock  1470.0 MHz  power  696.4 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2172 ms  clock  1455.0 MHz  power  693.9 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9240 ms  clock  1455.0 MHz  power  694.0 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6409 ms  clock  1455.0 MHz  power  693.9 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3581 ms  clock  1455.0 MHz  power  694.1 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0734 ms  clock  1455.0 MHz  power  698.0 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7894 ms  clock  1440.0 MHz  power  695.9 W  duty_seen 0.987
+
+repeat 6 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7426 ms  clock  1860.0 MHz  power  646.8 W  duty_seen 0.654  [drift]
+  duty 0.70 tread  2    1.3546 ms  clock  1845.0 MHz  power  635.2 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0201 ms  clock  1830.0 MHz  power  643.0 W  duty_seen 0.672  [drift]
+  duty 0.70 tread  4    2.6437 ms  clock  1830.0 MHz  power  642.7 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3159 ms  clock  1815.0 MHz  power  643.6 W  duty_seen 0.675  [drift]
+  duty 0.70 tread  6    3.9698 ms  clock  1830.0 MHz  power  647.7 W  duty_seen 0.678
+  duty 0.70 tread  7    4.6108 ms  clock  1860.0 MHz  power  643.9 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2967 ms  clock  1800.0 MHz  power  643.8 W  duty_seen 0.675
+
+repeat 6 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7396 ms  clock  1935.0 MHz  power  508.4 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  2    1.3400 ms  clock  1875.0 MHz  power  512.1 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  3    2.0008 ms  clock  1890.0 MHz  power  509.1 W  duty_seen 0.477  [drift]
+  duty 0.50 tread  4    2.6138 ms  clock  1890.0 MHz  power  505.1 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2588 ms  clock  1912.5 MHz  power  508.3 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9088 ms  clock  1920.0 MHz  power  513.6 W  duty_seen 0.477
+  duty 0.50 tread  7    4.5457 ms  clock  1920.0 MHz  power  494.1 W  duty_seen 0.456
+  duty 0.50 tread  8    5.2013 ms  clock  1905.0 MHz  power  514.6 W  duty_seen 0.472  [drift]
+
+repeat 7 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7397 ms  clock  1927.5 MHz  power  504.2 W  duty_seen 0.474  [drift]
+  duty 0.50 tread  2    1.3386 ms  clock  1912.5 MHz  power  510.6 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9983 ms  clock  1920.0 MHz  power  516.4 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6131 ms  clock  1920.0 MHz  power  507.4 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2588 ms  clock  1927.5 MHz  power  510.8 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9071 ms  clock  1875.0 MHz  power  517.8 W  duty_seen 0.476
+  duty 0.50 tread  7    4.5504 ms  clock  1890.0 MHz  power  508.1 W  duty_seen 0.456
+  duty 0.50 tread  8    5.1953 ms  clock  1830.0 MHz  power  504.9 W  duty_seen 0.472
+
+repeat 7 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7431 ms  clock  1897.5 MHz  power  654.8 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3551 ms  clock  1860.0 MHz  power  626.0 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0168 ms  clock  1822.5 MHz  power  639.0 W  duty_seen 0.672  [drift]
+  duty 0.70 tread  4    2.6520 ms  clock  1830.0 MHz  power  637.5 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3038 ms  clock  1807.5 MHz  power  639.3 W  duty_seen 0.675  [drift]
+  duty 0.70 tread  6    3.9644 ms  clock  1830.0 MHz  power  645.2 W  duty_seen 0.678
+  duty 0.70 tread  7    4.6144 ms  clock  1815.0 MHz  power  641.5 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2852 ms  clock  1800.0 MHz  power  635.4 W  duty_seen 0.675  [drift]
+
+repeat 7 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7700 ms  clock  1492.5 MHz  power  695.9 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4768 ms  clock  1470.0 MHz  power  695.5 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2172 ms  clock  1455.0 MHz  power  697.5 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9238 ms  clock  1455.0 MHz  power  696.0 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6402 ms  clock  1455.0 MHz  power  693.4 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3847 ms  clock  1455.0 MHz  power  696.1 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0776 ms  clock  1455.0 MHz  power  695.6 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8273 ms  clock  1455.0 MHz  power  694.3 W  duty_seen 0.987
+
+repeat 8 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7706 ms  clock  1500.0 MHz  power  695.5 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4770 ms  clock  1470.0 MHz  power  698.8 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2152 ms  clock  1455.0 MHz  power  693.4 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9242 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6400 ms  clock  1455.0 MHz  power  694.3 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3644 ms  clock  1447.5 MHz  power  695.6 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0726 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8267 ms  clock  1440.0 MHz  power  695.8 W  duty_seen 0.987
+
+repeat 8 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7428 ms  clock  1882.5 MHz  power  644.8 W  duty_seen 0.654  [drift]
+  duty 0.70 tread  2    1.3568 ms  clock  1800.0 MHz  power  645.8 W  duty_seen 0.667
+  duty 0.70 tread  3    2.0207 ms  clock  1815.0 MHz  power  644.2 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6512 ms  clock  1830.0 MHz  power  641.1 W  duty_seen 0.662
+  duty 0.70 tread  5    3.3054 ms  clock  1815.0 MHz  power  646.5 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9697 ms  clock  1830.0 MHz  power  648.4 W  duty_seen 0.678  [drift]
+  duty 0.70 tread  7    4.6258 ms  clock  1830.0 MHz  power  638.1 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2879 ms  clock  1830.0 MHz  power  633.2 W  duty_seen 0.675  [drift]
+
+repeat 8 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7399 ms  clock  1890.0 MHz  power  506.3 W  duty_seen 0.474
+  duty 0.50 tread  2    1.3392 ms  clock  1912.5 MHz  power  511.1 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9993 ms  clock  1905.0 MHz  power  516.5 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6130 ms  clock  1927.5 MHz  power  506.0 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2621 ms  clock  1860.0 MHz  power  508.9 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9079 ms  clock  1837.5 MHz  power  507.8 W  duty_seen 0.477
+  duty 0.50 tread  7    4.5510 ms  clock  1875.0 MHz  power  511.9 W  duty_seen 0.456
+  duty 0.50 tread  8    5.1956 ms  clock  1890.0 MHz  power  506.5 W  duty_seen 0.472
+
+repeat 9 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7382 ms  clock  1905.0 MHz  power  499.9 W  duty_seen 0.473
+  duty 0.50 tread  2    1.3363 ms  clock  1927.5 MHz  power  508.2 W  duty_seen 0.474
+  duty 0.50 tread  3    1.9976 ms  clock  1920.0 MHz  power  511.9 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6126 ms  clock  1905.0 MHz  power  501.5 W  duty_seen 0.460
+  duty 0.50 tread  5    3.2600 ms  clock  1912.5 MHz  power  510.3 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9067 ms  clock  1837.5 MHz  power  519.4 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  7    4.5468 ms  clock  1935.0 MHz  power  494.1 W  duty_seen 0.456
+  duty 0.50 tread  8    5.1990 ms  clock  1860.0 MHz  power  503.9 W  duty_seen 0.472  [drift]
+
+repeat 9 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7419 ms  clock  1882.5 MHz  power  625.7 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3545 ms  clock  1860.0 MHz  power  638.2 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0179 ms  clock  1845.0 MHz  power  647.1 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6445 ms  clock  1845.0 MHz  power  644.2 W  duty_seen 0.661
+  duty 0.70 tread  5    3.3144 ms  clock  1800.0 MHz  power  642.2 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9621 ms  clock  1815.0 MHz  power  648.4 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6244 ms  clock  1845.0 MHz  power  638.3 W  duty_seen 0.660
+  duty 0.70 tread  8    5.3079 ms  clock  1845.0 MHz  power  636.2 W  duty_seen 0.675
+
+repeat 9 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7707 ms  clock  1485.0 MHz  power  696.9 W  duty_seen 0.916
+  duty 1.00 tread  2    1.4784 ms  clock  1470.0 MHz  power  694.9 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2168 ms  clock  1455.0 MHz  power  694.8 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9241 ms  clock  1455.0 MHz  power  696.0 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6401 ms  clock  1455.0 MHz  power  694.5 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3592 ms  clock  1440.0 MHz  power  693.9 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0746 ms  clock  1440.0 MHz  power  694.0 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8285 ms  clock  1440.0 MHz  power  694.9 W  duty_seen 0.987
+
+repeat 10 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7695 ms  clock  1485.0 MHz  power  695.0 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4770 ms  clock  1470.0 MHz  power  699.9 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2160 ms  clock  1462.5 MHz  power  695.1 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9232 ms  clock  1455.0 MHz  power  696.0 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6388 ms  clock  1455.0 MHz  power  696.9 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3596 ms  clock  1455.0 MHz  power  695.0 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0711 ms  clock  1455.0 MHz  power  694.6 W  duty_seen 0.985
+  duty 1.00 tread  8    5.7900 ms  clock  1440.0 MHz  power  695.9 W  duty_seen 0.987
+
+repeat 10 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7407 ms  clock  1897.5 MHz  power  638.2 W  duty_seen 0.653  [drift]
+  duty 0.70 tread  2    1.3524 ms  clock  1860.0 MHz  power  645.9 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0161 ms  clock  1815.0 MHz  power  643.0 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6480 ms  clock  1822.5 MHz  power  643.6 W  duty_seen 0.662
+  duty 0.70 tread  5    3.3074 ms  clock  1822.5 MHz  power  645.8 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9645 ms  clock  1807.5 MHz  power  645.0 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6237 ms  clock  1815.0 MHz  power  640.0 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2902 ms  clock  1740.0 MHz  power  639.0 W  duty_seen 0.675
+
+repeat 10 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7379 ms  clock  1912.5 MHz  power  504.5 W  duty_seen 0.473
+  duty 0.50 tread  2    1.3363 ms  clock  1905.0 MHz  power  513.2 W  duty_seen 0.473  [drift]
+  duty 0.50 tread  3    1.9973 ms  clock  1860.0 MHz  power  510.8 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  4    2.6130 ms  clock  1852.5 MHz  power  507.5 W  duty_seen 0.461
+  duty 0.50 tread  5    3.2615 ms  clock  1897.5 MHz  power  510.5 W  duty_seen 0.475
+  duty 0.50 tread  6    3.9091 ms  clock  1920.0 MHz  power  515.7 W  duty_seen 0.476
+  duty 0.50 tread  7    4.5448 ms  clock  1942.5 MHz  power  485.9 W  duty_seen 0.455
+  duty 0.50 tread  8    5.2034 ms  clock  1860.0 MHz  power  510.0 W  duty_seen 0.472  [drift]
+
+repeat 11 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7378 ms  clock  1942.5 MHz  power  499.9 W  duty_seen 0.473  [drift]
+  duty 0.50 tread  2    1.3366 ms  clock  1920.0 MHz  power  513.5 W  duty_seen 0.473  [drift]
+  duty 0.50 tread  3    1.9978 ms  clock  1890.0 MHz  power  506.9 W  duty_seen 0.476
+  duty 0.50 tread  4    2.6127 ms  clock  1927.5 MHz  power  503.3 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2613 ms  clock  1912.5 MHz  power  507.2 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9083 ms  clock  1845.0 MHz  power  507.4 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  7    4.5509 ms  clock  1860.0 MHz  power  502.7 W  duty_seen 0.456  [drift]
+  duty 0.50 tread  8    5.1998 ms  clock  1905.0 MHz  power  501.2 W  duty_seen 0.472
+
+repeat 11 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7429 ms  clock  1792.5 MHz  power  621.9 W  duty_seen 0.654
+  duty 0.70 tread  2    1.3542 ms  clock  1830.0 MHz  power  631.2 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0153 ms  clock  1830.0 MHz  power  637.5 W  duty_seen 0.672
+  duty 0.70 tread  4    2.6472 ms  clock  1830.0 MHz  power  642.1 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3064 ms  clock  1815.0 MHz  power  644.3 W  duty_seen 0.675
+  duty 0.70 tread  6    3.9605 ms  clock  1830.0 MHz  power  647.9 W  duty_seen 0.677
+  duty 0.70 tread  7    4.6161 ms  clock  1815.0 MHz  power  640.9 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2840 ms  clock  1800.0 MHz  power  636.1 W  duty_seen 0.675
+
+repeat 11 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7694 ms  clock  1485.0 MHz  power  699.0 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4770 ms  clock  1462.5 MHz  power  699.5 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2156 ms  clock  1455.0 MHz  power  694.7 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9227 ms  clock  1455.0 MHz  power  696.8 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6420 ms  clock  1455.0 MHz  power  697.2 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3582 ms  clock  1455.0 MHz  power  693.9 W  duty_seen 0.983
+  duty 1.00 tread  7    5.0725 ms  clock  1455.0 MHz  power  693.3 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8238 ms  clock  1440.0 MHz  power  693.6 W  duty_seen 0.987
+
+repeat 12 state duty=1: settling 10 s at this cadence
+  duty 1.00 tread  1    0.7696 ms  clock  1485.0 MHz  power  696.0 W  duty_seen 0.915
+  duty 1.00 tread  2    1.4803 ms  clock  1470.0 MHz  power  700.6 W  duty_seen 0.953
+  duty 1.00 tread  3    2.2148 ms  clock  1455.0 MHz  power  694.0 W  duty_seen 0.968
+  duty 1.00 tread  4    2.9251 ms  clock  1455.0 MHz  power  695.4 W  duty_seen 0.975
+  duty 1.00 tread  5    3.6435 ms  clock  1455.0 MHz  power  694.8 W  duty_seen 0.980
+  duty 1.00 tread  6    4.3694 ms  clock  1447.5 MHz  power  694.1 W  duty_seen 0.983
+  duty 1.00 tread  7    5.1050 ms  clock  1455.0 MHz  power  693.2 W  duty_seen 0.985
+  duty 1.00 tread  8    5.8274 ms  clock  1440.0 MHz  power  693.2 W  duty_seen 0.987
+
+repeat 12 state duty=0.7: settling 10 s at this cadence
+  duty 0.70 tread  1    0.7419 ms  clock  1860.0 MHz  power  636.5 W  duty_seen 0.654  [drift]
+  duty 0.70 tread  2    1.3517 ms  clock  1860.0 MHz  power  639.5 W  duty_seen 0.666
+  duty 0.70 tread  3    2.0150 ms  clock  1815.0 MHz  power  643.9 W  duty_seen 0.672  [drift]
+  duty 0.70 tread  4    2.6495 ms  clock  1845.0 MHz  power  646.0 W  duty_seen 0.662  [drift]
+  duty 0.70 tread  5    3.3122 ms  clock  1800.0 MHz  power  646.6 W  duty_seen 0.676
+  duty 0.70 tread  6    3.9592 ms  clock  1830.0 MHz  power  647.8 W  duty_seen 0.678
+  duty 0.70 tread  7    4.6124 ms  clock  1815.0 MHz  power  639.2 W  duty_seen 0.660
+  duty 0.70 tread  8    5.2838 ms  clock  1845.0 MHz  power  633.9 W  duty_seen 0.675  [drift]
+
+repeat 12 state duty=0.5: settling 10 s at this cadence
+  duty 0.50 tread  1    0.7381 ms  clock  1950.0 MHz  power  503.5 W  duty_seen 0.475
+  duty 0.50 tread  2    1.3410 ms  clock  1882.5 MHz  power  507.1 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  3    1.9994 ms  clock  1875.0 MHz  power  509.0 W  duty_seen 0.476  [drift]
+  duty 0.50 tread  4    2.6147 ms  clock  1890.0 MHz  power  506.3 W  duty_seen 0.461  [drift]
+  duty 0.50 tread  5    3.2617 ms  clock  1920.0 MHz  power  507.0 W  duty_seen 0.474
+  duty 0.50 tread  6    3.9105 ms  clock  1845.0 MHz  power  505.6 W  duty_seen 0.477  [drift]
+  duty 0.50 tread  7    4.5488 ms  clock  1935.0 MHz  power  508.9 W  duty_seen 0.456
+  duty 0.50 tread  8    5.2032 ms  clock  1875.0 MHz  power  503.6 W  duty_seen 0.472
+
+THE STATES, as measured
+  duty   rows   median clock   median power   median duty seen
+  1.00    104      1455.0 MHz       695.2 W           0.977
+  0.70     72      1830.0 MHz       642.2 W           0.666
+  0.50     66      1912.5 MHz       508.3 W           0.474
+  clock span per tread: n1=1.2929x, n2=1.3010x, n3=1.3196x, n4=1.3144x, n5=1.3144x, n6=1.3119x, n7=1.3273x, n8=1.3125x
+
+  LEVEL among kept rows: 138 HIGH, 0 LOW, 104 level, 0 undetermined. NEITHER SIDE EXCLUDES ANYTHING HERE.
+
+THE FIT: eta of the per-M-tile cost, -d log b / d log f, over treads 2 and deeper, from the fixed-tread slopes
+  eta, THE CLAIM                      0.4047 over 7 treads from tread 2
+  95% interval over 13 repeats     [0.3964, 0.4578]  half-width 0.0307
+  bootstrap draws                     2000 of 2000
+  cells under the per-tread slopes    24 (8 treads x 3 states)
+
+  PRINTED BESIDE IT, never gated: the same estimator over EVERY tread, tread 1 included
+  eta, per-M-tile, every tread        0.4264  [0.4201, 0.4692]
+  tread 1 against the claim's lines through treads 2 and deeper, at n = 1:
+    -d ms / d log f                   0.1186 ms against 0.2809 ms on the line
+    level                             0.7502 ms against 0.7200 ms on the line
+  Tread 1 off those lines is tread 1 off the additive law a(f) + b(f) n that the claim's
+  line assumes. The claim leaves it out by registration and not by fit, so it moves the
+  every-tread reading above and never the claim. WHAT MAKES THE ONE-TILE CALL DIFFERENT IS
+  NOT ESTABLISHED, and it is not the swizzle: on the 2026-09-21 cells at G=16 tread 1 read
+  0.17 per call and every deeper tread 1.04-1.11, while the launch arithmetic of that ladder
+  (mixtral, E=8, BLOCK_M=32), num_pid_m = cdiv(numel + E(BM-1), BM) = 8n+8, puts the real
+  M-tiles in ONE group of 16 at both n=1 and n=2.
+
+  PRINTED BESIDE IT, not the claim: eta of the per-CALL time at fixed tread, intercept included (what this arm gated until 2026-09-22)
+  eta, fixed tread, pooled            0.3709  [0.3691, 0.3820]
+  per tread                           n1=+0.1581, n2=+0.3780, n3=+0.3845, n4=+0.4204, n5=+0.4121, n6=+0.4071, n7=+0.3928, n8=+0.4016
+  The pooled figure blends every tread's per-call reading, tread 1's included, by its clock
+  spread.
+
+  COMPANION: the elasticity of the ladder SLOPE with a clock assigned to each state
+  eta of the per-M-tile cost           0.4298 over 3 states
+  The clock is not constant across the treads of one state, so the 'clock of a slope'
+  is a summary and this number is read as one. The claim above needs no such clock.
+  Fitted over EVERY tread, tread 1 included, which the claim leaves out as off the law.
+
+==============================================================================
+GATES
+RESULT: VALIDITY V0 PASS the run produced rows the fit can read | measured 242 kept of 312 rows (dropped: drift 70) | gate >= 1 kept row
+VALIDITY 0  PASS     the run produced rows the fit can read
+           measured 242 kept of 312 rows (dropped: drift 70)
+           gate     >= 1 kept row
+
+RESULT: VALIDITY V1 PASS the duty states separated in clock at every tread | measured narrowest tread 1 spans 1.2929x (widest 1.3273x over 8 of 8 kept treads) | gate >= 1.060x at every one of the 8 kept treads, from the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread
+VALIDITY 1  PASS     the duty states separated in clock at every tread
+           measured narrowest tread 1 spans 1.2929x (widest 1.3273x over 8 of 8 kept treads)
+           gate     >= 1.060x at every one of the 8 kept treads, from the design's own requirement 1.0509, rounded up to the next hundredth, from 13 repeats x 8 treads x 3 states against a 0.01071 across-repeat spread
+           per tread: n1=1.2929x, n2=1.3010x, n3=1.3196x, n4=1.3144x, n5=1.3144x, n6=1.3119x, n7=1.3273x, n8=1.3125x
+
+RESULT: VALIDITY V2 PASS one tile, one model, one dtype and one burst shape per tread | measured 1 distinct tile tuples over 242 kept rows; one burst shape per tread | gate exactly 1 tile tuple and 1 burst shape per tread
+VALIDITY 2  PASS     one tile, one model, one dtype and one burst shape per tread
+           measured 1 distinct tile tuples over 242 kept rows; one burst shape per tread
+           gate     exactly 1 tile tuple and 1 burst shape per tread
+           tile: ('mixtral-8x7b', 'bf16', 32, 64, 64, 1, 8, 4)
+
+RESULT: VALIDITY V3 PASS every state the fit reads is deep enough to be a state | measured 3 of 3 planned states are deep enough (duty 0.5000: 8 treads x 13 repeats; duty 0.7000: 8 treads x 13 repeats; duty 1.0000: 8 treads x 13 repeats) | gate >= 3 states with >= 4 treads and >= 3 repeats each
+VALIDITY 3  PASS     every state the fit reads is deep enough to be a state
+           measured 3 of 3 planned states are deep enough (duty 0.5000: 8 treads x 13 repeats; duty 0.7000: 8 treads x 13 repeats; duty 1.0000: 8 treads x 13 repeats)
+           gate     >= 3 states with >= 4 treads and >= 3 repeats each
+
+RESULT: VALIDITY V4 FAIL the excluded rows are a trim and not the measurement | measured 70 of 312 rows excluded (22.4%): drift 70, host-bound 0, other 0 | gate <= 20% of all rows
+VALIDITY 4  FAIL     the excluded rows are a trim and not the measurement
+           measured 70 of 312 rows excluded (22.4%): drift 70, host-bound 0, other 0
+           gate     <= 20% of all rows
+           a non-PASS here voids the fit: past this the kept set is a sample the card selected
+           LEVEL among the KEPT rows, recorded and never a reason to exclude: 138 HIGH, 0 LOW, 104 level, 0 undetermined
+
+RESULT: VALIDITY V5 PASS the clock held inside each burst | measured 0 of 242 kept rows moved more than 0.05 from first quarter to last | gate 0 rows, at 0.05, the repository's DRIFT fraction
+VALIDITY 5  PASS     the clock held inside each burst
+           measured 0 of 242 kept rows moved more than 0.05 from first quarter to last
+           gate     0 rows, at 0.05, the repository's DRIFT fraction
+
+RESULT: VALIDITY V6 PASS the memory clock did not move with the SM clock | measured 1 distinct values, 3201-3201 MHz (span 0 MHz) | gate span <= 15 MHz, one NVML grid step
+VALIDITY 6  PASS     the memory clock did not move with the SM clock
+           measured 1 distinct values, 3201-3201 MHz (span 0 MHz)
+           gate     span <= 15 MHz, one NVML grid step
+
+RESULT: VALIDITY V7 PASS the elasticity is physically admissible | measured [0.3964, 0.4578] against [-0.075, 1.075] | gate the interval intersects [-0.075, 1.075], which is [0, 1] widened by the design's own half-width 0.075
+VALIDITY 7  PASS     the elasticity is physically admissible
+           measured [0.3964, 0.4578] against [-0.075, 1.075]
+           gate     the interval intersects [-0.075, 1.075], which is [0, 1] widened by the design's own half-width 0.075
+
+RESULT: CLAIM C1 FAIL the interval falls wholly inside ONE registered band | measured [0.3964, 0.4578], half-width 0.0307, straddling a registered boundary | gate wholly inside one of ['RAW-STANDS', 'UNREGISTERED-GAP', 'CLOCK-CARRIES'] (edges 0.25, 0.4); half-width under 0.075 is the design's own target
+CLAIM 1  FAIL     the interval falls wholly inside ONE registered band
+           measured [0.3964, 0.4578], half-width 0.0307, straddling a registered boundary
+           gate     wholly inside one of ['RAW-STANDS', 'UNREGISTERED-GAP', 'CLOCK-CARRIES'] (edges 0.25, 0.4); half-width under 0.075 is the design's own target
+           a non-PASS here voids both registered consequences: an interval across a boundary is consistent with two worlds whose readings contradict each other
+           NO registered consequence may be read off this page. Widen the duty range or add repeats; do not pick the nearer edge.
+
+RESULT: CLAIM C2 FAIL eta of the per-M-tile cost, -d log b / d log f over treads 2 and deeper, is below 0.25 at this cell | measured 0.4047 [0.3964, 0.4578] | gate the whole 95% interval below 0.25
+CLAIM 2  FAIL     eta of the per-M-tile cost, -d log b / d log f over treads 2 and deeper, is below 0.25 at this cell
+           measured 0.4047 [0.3964, 0.4578]
+           gate     the whole 95% interval below 0.25
+           a non-PASS here voids nothing: a FAIL here is the arm's result and the study's reading of every alpha changes with it
+           the interval straddles a boundary (C1), so this FAIL is 'not shown' and not 'shown false'.
+
+READING IT. A VALIDITY gate did not pass. No number on this page may be quoted and no band is licensed; fix the apparatus and re-run.
+
+cells    /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/cells.csv   git could not be asked (rc 128 is a path outside the work tree)
+report   /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/report.txt
+json     /workspace/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.7_0.5-l2flushtrue-modelmixtral_8x7b-repeats13-seed0-fa4367d5/report.json
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable
