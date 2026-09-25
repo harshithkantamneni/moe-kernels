@@ -1,4 +1,4 @@
-# NOT the study's card: R3 arms under DRAM counters on one NVIDIA A100-SXM4-40GB (Lambda Cloud); the study's timing pages are nvidia_h200
+# One of the study's four cards, the non-Hopper control: R3 arms under DRAM counters on one NVIDIA A100-SXM4-40GB (Lambda Cloud); every measurement here is this card's, never averaged with another card's
 
 Every number in this directory is the A100-SXM4-40GB's. None of it is an H200
 number, and no H200 number is set beside it here.
