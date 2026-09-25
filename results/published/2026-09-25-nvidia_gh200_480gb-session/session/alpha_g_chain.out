@@ -1,0 +1,40 @@
+alpha(G) chain  alpha_g-nvidia_gh200_480gb-20260925T071107Z   (NEW)
+  card        nvidia_gh200_480gb
+  nvidia-smi  NVIDIA GH200 480GB, 580.105.08, 900.00 W
+  device      33948cb3-46ff-1834-07b0-6d05730ad309   (recorded in /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/DEVICE)
+  session     /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z
+  results     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb   (exported as MOE_RESULTS_DIR to every arm)
+  ledger      /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/CHAIN.tsv
+  ladder      G in {1 2 4 16 64}, seeds {0}, ratio arms at duty 0.25, elasticity states 1.0 0.5 0.25
+  r3 duty     0.25   (recorded in /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/R3_DUTY; a resume at another is refused)
+  interpreters base /home/ubuntu/moe/venvs/base/bin/python / vllm /home/ubuntu/moe/venvs/vllm/bin/python
+
+== preflight
+preflight-r1     DONE       rc=0     1s  log agrees: RESULT lines imply 0
+preflight-r3     DONE       rc=0     3s  log agrees: RESULT lines imply 0
+
+== preconditions (the driver's thermal, calibrate; pin_probe-n64-g1 for the record)
+preconditions    DONE       rc=0   189s  the driver's own ARMS.tsv carries each arm's second opinion
+
+== counter-probe: can this pod read a DRAM counter (informational; gates nothing)
+  counter-probe: capped at 1800 s (3 x 60 s is under the 1800 s floor); informational, it gates nothing
+counter-probe    INFO       rc=1     4s  BLOCKED: ==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM; ncu /usr/local/cuda-13.0/bin/ncu (on PATH) [Version 2025.3.1.0 (build 36398880) (public-release)]; CAP_PERFMON clear, CAP_SYS_ADMIN clear (CapEff 0000000000000000); module flag unread (the parameter is not listed by this driver); informational, gates nothing; /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/COUNTERS
+
+== tests/test_gpu.py on this card, from the base venv (gated)
+gpu-tests        DONE       rc=0    36s  pytest exit 0: 37 passed, 1 skipped, 2 warnings in 35.01s
+
+== the alignment probe under the graph, on this card, from the vllm venv (gated)
+  probe-check: capped at 1800 s (3 x 120 s is under the 1800 s floor, over its documented allowance)
+probe-check      DONE       rc=0     7s  log agrees: RESULT lines imply 0
+
+== the ratio, shared over private, off the cap, seed 0 at every G (the pilot: r3-g1-s0)
+  r3-g1-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g1-s0         INVALID    rc=3   688s  log agrees: RESULT lines imply 3
+    G=1 seed 0  ratio 0.8929 [0.8917, 0.8946]  INVALID (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)  reads as: unresolved
+  r3-g2-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g2-s0         INVALID    rc=3   685s  log agrees: RESULT lines imply 3
+    G=2 seed 0  ratio 0.6588 [0.6584, 0.6598]  INVALID (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)  reads as: unresolved
+  r3-g4-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)
+r3-g4-s0         INVALID    rc=3   697s  log agrees: RESULT lines imply 3
+    G=4 seed 0  ratio 0.6474 [0.6459, 0.6482]  INVALID (C1 alone)  duty 0.25  eta none [none, none] unmeasured  (R1 page: unscored)  reads as: unresolved
+  r3-g16-s0: capped at 1800 s (3 x 590 s is under the 1800 s floor)

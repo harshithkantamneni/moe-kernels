@@ -1,0 +1,234 @@
+DRAM COUNTER RUN -- PLAN  id=nvidia_h200-mixtral-8x7b-bf16-g16-n64-m64-s4-t1.2.3.4.6.8-ccall-4metrics
+
+THE CELL, which is not a new one. It is the cell the alpha surface already
+measured, so the counter answers the ladder rather than a different question.
+  card            nvidia_h200   ridge 151.43 FLOP/byte  (662.951 TFLOP/s / 4.37803 TB/s from measured_nvidia_h200.yaml)
+  model           mixtral-8x7b bf16  E=8 k=2 H=4096 F=14336
+  pinned          GROUP_SIZE_M=16 BLOCK_SIZE_N=64 BLOCK_SIZE_M=64
+  tiles per expert [1, 2, 3, 4, 6, 8]   rows per expert [64, 128, 192, 256, 384, 512]
+  W  compulsory   2.81857 GB   (8 experts x 3FH x 2 B)
+  a  per tile     52.429 MB   (E x BM x (2H+3F) x 2 B)
+
+THE METRIC: dram__bytes_read.sum, plus 3 companions.
+  dram__bytes_read.sum
+  dram__bytes_write.sum
+  lts__t_sector_op_read_hit_rate.pct
+  gpu__time_duration.sum
+
+ANCHORS, read from mixtral-8x7b-bf16-r1024-g16-n64-69f35a.report.json
+  memory branch   t(1) = 0.94054 ms   A = 0.30121 ms   B = 0.583333 ms/tile
+  counter-free bracket  [0.6202, 0.9753]  (width 0.3551)
+
+C1, REGISTERED: what this cell can be asked about the anchors, decided
+  from the anchors themselves and printed before anything runs.
+  anchors        t1 0.6202, n3 0.6583, published 0.6595
+  closest pair   0.0011 against C1's own window 0.05
+  registered as  NOT DISCRIMINATING: the counter lands inside the anchor cluster this cell cannot separate
+    NOT DISCRIMINATING: closest pair 0.0011 apart against a tolerance of 0.05, so a measurement that agrees with one anchor agrees with its neighbour too
+    registered as such BEFORE the run, not diagnosed after it: this gate asks the question the cell can answer (is the counter inside the cluster) and never the one it cannot (which anchor is right)
+    the claim this cell DOES carry is the BLOCK_N contrast, whose two rivals are 87% apart; see --dry-run's CONTRAST block and --contrast
+
+C3, REGISTERED: what each anchor implies for this tile's AI cap, and how
+  the counter will score it. A ladder anchor is a B/(A+B) fit, so the
+  study's 2 BM/(alpha b) reading is HIGH by (1 + phi + delta) (retraction
+  (a), moe/bench/ai_model.py); alpha_a is unmeasured, so the corrected cap
+  is a BRACKET over alpha_a in [0, 1] at delta = 0, the generous end.
+  The counter's own alpha is a traffic slope with no level in it and is
+  scored on 2 BM W / (b dR/dn) instead; see the C3 gate.
+  n3         alpha 0.658: 2BM/(alpha b) = 97.2 (upper bound); corrected [48.2 at alpha_a=1, 95.5 at alpha_a=0] at delta=0  both ends below the ridge
+  published  alpha 0.659: 2BM/(alpha b) = 97.0 (upper bound); corrected [48.1 at alpha_a=1, 95.3 at alpha_a=0] at delta=0  both ends below the ridge
+  t1         alpha 0.620: 2BM/(alpha b) = 103.2 (upper bound); corrected [51.2 at alpha_a=1, 101.4 at alpha_a=0] at delta=0  both ends below the ridge
+  the counter's cap crosses ridge 151.43 at alpha = BM/ridge - a/W = 0.4040; 2 BM/(alpha b) alone would say 0.4226
+
+PREDICTIONS, registered here and not adjusted afterwards.
+The three anchors predict the SAME traffic at n=1 and diverge in the slope,
+so n=1 is a validity check and the slope is the claim.
+
+    n  rows/exp        t1 0.620        n3 0.658 published 0.659   spread
+    1        64         2.8710G         2.8710G         2.8710G     0.0%
+    2       128         4.6715G         4.7790G         4.7822G     2.4%
+    3       192         6.4721G         6.6870G         6.6934G     3.4%
+    4       256         8.2726G         8.5950G         8.6046G     4.0%
+    6       384        11.8737G        12.4110G        12.4270G     4.7%
+    8       512        15.4747G        16.2270G        16.2495G     5.0%
+
+  READ THE SPREAD COLUMN AS THE ACCURACY THE EXPERIMENT NEEDS. A counter good
+  to a few percent separates these with an order of magnitude to spare.
+  AND READ IT AS THE REASON THE PLAN NO LONGER RESTS ON IT. On the A100 cell
+  this plan used to register, the three anchors were 0.452 / 0.647 / 0.705 and
+  the anchor contrast was the argument for renting a box. On the H200, the
+  card whose route is actually open, they agree to 0.04 and the spread above
+  is single-digit percent. The contrast below is 87% and is now the claim.
+
+THE CONTRAST, registered. Two rivals for the term the ladder cannot name.
+  TRAFFIC  the BLOCK_N dependence is bytes: a smaller N-tile re-reads more, so
+           dR/dn scales with the measured per-M-tile time and the two BLOCK_N
+           cells read different amounts. alpha_b is then itself a function of
+           BLOCK_N and the three-term model can be repaired inside a byte count.
+  TIME     the BLOCK_N dependence is schedule: the same bytes, moved less well.
+           dR/dn is then IDENTICAL at both BLOCK_N and the three-term traffic
+           model cannot contain the term at all, because alpha is measuring a
+           schedule and not a byte ratio.
+
+  denominator, read not typed: 4378.0 GB/s, 'triad' pattern, from measured_nvidia_h200.yaml
+  one full weight stream = 2.8186 GB = 0.6438 ms at this card's own measured rate
+  once-read activation share a/W = 0.0186 per M-tile. It is ADDITIVE in dR/dn, so it
+  cancels in a DIFFERENCE and not in a ratio, and the line that stood here said it cancelled in
+  the ratio: a right number with the wrong reason under it. It does not enter the discriminator
+  either way. The TRAFFIC ratio is the two cells' measured times divided, which neither adds nor
+  subtracts it, and under TIME it is the same term on both sides of a ratio of 1.000.
+
+  cell              BM   BN   G   ms/tile       w   TRAFFIC dR/dn   TIME dR/dn  ladder
+  bn32-g16-m64      64   32  16   0.88123  1.3688         3.8581G same for all  bn_decomposition 8 treads / 136 reps
+  bn64-g16-m64      64   64  16   0.57804  0.8979         2.5307G same for all  bn_decomposition 8 treads / 136 reps
+  bn128-g16-m64     64  128  16   0.47112  0.7318         2.0626G same for all  bn_decomposition 8 treads / 136 reps
+  s3w8g1-m64        64   64   1   0.77551  1.2046         3.3952G same for all  occupancy_vs_swizzle 16 treads / 80 reps
+  s3w8g16-m64       64   64  16   0.59157  0.9189         2.5899G same for all  occupancy_vs_swizzle 16 treads / 80 reps
+
+  CONTRAST A, the one section 2 turns on. BLOCK_M=64 fixed, GROUP_SIZE_M fixed, BLOCK_N 32 against 128.
+    TRAFFIC predicts dR/dn(bn32-g16-m64) / dR/dn(bn128-g16-m64) = 1.871, that is 3.86 GB against 2.06 GB per M-tile
+    TIME    predicts the ratio 1.000, the two reads equal to the counter's own accuracy
+    the two rivals are 87% apart on a quantity a counter reads to a few percent
+    a ratio near the TRAFFIC value means the missing 1/BLOCK_N term is bytes and belongs in the byte model; a ratio near 1.000 means it is time and the three-term traffic model cannot hold it. Anything in between refutes both as stated and is reported as the split it is.
+    scored by --contrast at +/-5% of each rival: SEPARATING
+
+  CONTRAST B, the schedule. BLOCK_M=64 and BLOCK_SIZE_N=64 fixed by the occupancy arm, num_stages=3, num_warps=8, GROUP_SIZE_M 1 against 16.
+    TRAFFIC predicts dR/dn(s3w8g1-m64) / dR/dn(s3w8g16-m64) = 1.311, that is 3.40 GB against 2.59 GB per M-tile
+    TIME    predicts the ratio 1.000, the two reads equal to the counter's own accuracy
+    the two rivals are 31% apart on a quantity a counter reads to a few percent
+    a ratio near the TRAFFIC value means the swizzle changes what the kernel reads and alpha_b is a function of the schedule, which is what statement (3) asserts and no counter has ever tested; a ratio near 1.000 means the swizzle changes only WHEN the same bytes move, and the 24% it moves the per-M-tile cost is latency, not traffic.
+    scored by --contrast at +/-5% of each rival: SEPARATING
+
+  THE TWO ROWS AT BM=64 BN=64 G=16 ARE NOT ONE CELL and the table does not
+  pretend they are: bn64-g16-m64 ran at num_stages=4 in the bn_decomposition arm and
+  s3w8g16-m64 at num_stages=3 in the occupancy arm, which is why their slopes are
+  0.57804 and 0.59157 ms per tile. Each contrast is read WITHIN one arm, so the
+  pipeline depth is fixed inside A and inside B and the two ratios are not compared with each other.
+
+  WHAT NEITHER CONTRAST CAN DO. A DRAM counter sees the weight re-read and the
+  activation re-read in one number, so it cannot split dR/dn into alpha_b and
+  alpha_a. It settles whether the term is traffic; it does not name the operand.
+
+THE COMMAND, on a box where --probe says OPEN.
+
+  # 1. the timed ladder, unprofiled, so time and traffic come from the same
+  #    cell. It KEEPS the software L2 flush, because this one is the timed
+  #    apparatus and the flush is part of it; only the profiled runs in step 2
+  #    turn it off, where ncu's --cache-control sets the cache state instead
+  #    and the flush would otherwise put its own 240 MB into the counter.
+  #    Only the primary cell needs this: the contrast cells' timed ladders are
+  #    already in results/published/2026-09-10-nvidia_h200-gaps-session and are
+  #    what the predictions above were fitted from.
+  python scripts/block_m_crossing_sweep.py --model mixtral-8x7b --dtype bf16 \
+      --tiles 64 --group-m 16 --block-n 64 \
+      --num-stages 4 \
+      --r-max 512 --row-step 64 --step-probes 0
+
+  # 2. the counter itself. --run drives ncu, counts the calls out of the
+  #    profile's own launch list and writes the schema below. It is a MODE
+  #    and not a shell loop because of that count: the instrument
+  #    (moe/bench/timing.time_kernel) warms up for a DURATION, --warmup in
+  #    MILLISECONDS, and sizes its own iteration count from that load, so the
+  #    profiled launch count is warmup + iters x trials fused_experts calls of
+  #    several kernels each and every byte field must be divided by it.
+  #    Dividing by an assumed 1 still fits an affine line and still passes the
+  #    residual and monotonicity gates, so nothing downstream would catch it.
+  python scripts/dram_counter_route.py --run --card nvidia_h200 \
+      --model mixtral-8x7b --dtype bf16 --block-m 64 --block-n 32 \
+      --group-m 16 --num-stages 4 --tiles 1,2,3,4,6,8 \
+      --cache-control all --out counters-bn32-g16-m64-ccall.json   # BN-low
+  python scripts/dram_counter_route.py --run --card nvidia_h200 \
+      --model mixtral-8x7b --dtype bf16 --block-m 64 --block-n 64 \
+      --group-m 16 --num-stages 4 --tiles 1,2,3,4,6,8 \
+      --cache-control all --out counters-bn64-g16-m64-ccall.json   # BN-hinge, the plan's primary cell
+  python scripts/dram_counter_route.py --run --card nvidia_h200 \
+      --model mixtral-8x7b --dtype bf16 --block-m 64 --block-n 128 \
+      --group-m 16 --num-stages 4 --tiles 1,2,3,4,6,8 \
+      --cache-control all --out counters-bn128-g16-m64-ccall.json   # BN-high
+  python scripts/dram_counter_route.py --run --card nvidia_h200 \
+      --model mixtral-8x7b --dtype bf16 --block-m 64 --block-n 64 \
+      --group-m 1 --num-stages 3 --tiles 1,2,3,4,6,8 \
+      --cache-control all --out counters-s3w8g1-m64-ccall.json   # schedule: no swizzle
+  python scripts/dram_counter_route.py --run --card nvidia_h200 \
+      --model mixtral-8x7b --dtype bf16 --block-m 64 --block-n 64 \
+      --group-m 16 --num-stages 3 --tiles 1,2,3,4,6,8 \
+      --cache-control all --out counters-s3w8g16-m64-ccall.json   # schedule: the shipped swizzle
+
+  # 3. score ONE cell. --run scores its own file as it writes it; --analyse
+  #    rescores one anybody wrote, and refuses a payload with a key missing
+  #    rather than defaulting it to a zero that was never measured.
+  python scripts/dram_counter_route.py --analyse counters-<cell>.json
+
+  # 4. score the CONTRAST, which is the reading this plan exists to take and
+  #    which no single payload contains: the discriminator is a RATIO of
+  #    dR/dn across two cells and step 3 scores one cell at a time. Pairs are
+  #    matched inside one cache mode, the measured ratio is compared with the
+  #    registered rivals above, and a pair nobody ran is not scored.
+  python scripts/dram_counter_route.py --contrast counters-bn32-g16-m64-ccall.json counters-bn64-g16-m64-ccall.json counters-bn128-g16-m64-ccall.json counters-s3w8g1-m64-ccall.json counters-s3w8g16-m64-ccall.json
+
+CACHE CONTROL, and why it is a swept parameter rather than a default.
+  ncu's default is Flush All: all GPU caches are flushed before each replay
+  iteration. That is a DIFFERENT cache state from the timed sweep, which never
+  flushes. The LEVEL it can move is bounded by L2, and L2 is 40-60 MB against a
+  2.82 GB weight read -- at most 2.1% of R(1). The SLOPE,
+  which is the claim, differences that term away entirely. Run both modes
+  anyway: two agreeing numbers close the question, and two disagreeing ones
+  are themselves the result.
+
+COST, of the plan as extended.
+  5 cells x 6 tile counts x 2 cache modes = 60 profiled invocations
+  of at least 11 fused_experts calls each, about 3300 profiled kernel launches.
+  The largest cell is n=8 (512 rows per expert), which the timed
+  sweep measures in single-digit milliseconds; ncu replay and its save/restore
+  of the 2.8 GB weight buffers dominate, at seconds per launch.
+  At 5 minutes per profiled invocation that is 5.0 GPU-hours for the whole
+  extended plan, against 1.0 for the single cell the plan used to hold, and
+  about half again in pod time. Not the fifteen minutes the one-launch recipe
+  used to promise. At H200 spot rates that is tens of dollars. The cost of
+  this experiment has never been the money.
+  DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone: the
+  three BLOCK_N cells settle section 2. Contrast B is the schedule question and
+  is worth its own two cells only once A has an answer.
+
+WHICH KERNELS TO KEEP, and why the profile is NOT name-filtered.
+  All of W moves inside the two `fused_moe_kernel` launches; the auxiliary
+  launches (align, reduction) move activation-sized traffic only. Filtering to
+  the GEMM would still be defensible -- but then the measured level would no
+  longer be comparable to the byte model, which charges the whole layer. So
+  profile everything, record bytes PER KERNEL NAME, and let the analysis
+  report both totals. A filter applied at capture cannot be undone afterwards.
+
+SCHEMA the run must write, so --analyse can score it:
+{
+  "device": "nvidia_h200",       # the card slug, matching the calibration file
+  "model": "mixtral-8x7b", "dtype": "bf16",
+  "group_m": 16, "block_n": 64, "block_k": 64,
+  "num_warps": 8, "num_stages": 4, "block_m": 64,
+  "cache_control": "all",           # ncu --cache-control; "all" or "none"
+  "ridge": 151.43,                # THIS card's own calibration, never 152.8
+  "anchors":  {"published": 0.6595, "t1": 0.6202, "n3": 0.6583},
+  "bracket":  [0.6202, 0.9753],
+  "rows": [ {"n": 1, "calls": 11, "calls_floor": 10, "launches": 55,
+             "dram_bytes_read": 2.84e9,
+             "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+             "gpu_time_ns": 1.95e6,
+             "by_kernel": {"fused_moe_kernel": 2.81e9, "moe_sum": 3.0e7} }, ... ]
+}
+
+  Every key is required. `--analyse` raises on a missing one rather than
+  defaulting it: a zero that was never measured is the failure mode this whole
+  file exists to avoid, and `--run` refuses a metric ncu did not return rather
+  than writing a zero into the row. `calls` is the number of fused_experts
+  calls the instrument made (warmup + iters x trials), COUNTED from the
+  profile's own launch list as the launches of `moe_align_block_size`, which vLLM runs
+  exactly once per call; `calls_floor` is that cell's own iters x trials, read
+  back from the row the sweep wrote, and `calls` must EXCEED it because warmup
+  adds calls on top. `launches` is every profiled kernel launch. The byte
+  fields are PER CALL, the sums over all launches divided by `calls`, never by
+  an assumed one.
+
+  `block_k` and `num_warps` are the sweep's own FIXED values, imported rather
+  than typed: this block said num_stages 3 while `block_m_crossing_sweep.FIXED`
+  said 4 and the recipe passed no --num-stages, so the schema described a cell
+  the recipe would not have run.
+

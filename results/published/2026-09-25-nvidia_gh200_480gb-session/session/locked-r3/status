@@ -1,0 +1,5 @@
+2026-09-25T07:43:39Z waiting for r3-g4-s0 in /home/ubuntu/moe/session/alpha_g-nvidia_gh200_480gb-20260925T071107Z/
+2026-09-25T07:50:00Z r3-g4-s0 done; stopping the chain session 10102
+2026-09-25T07:50:35Z locked at 1965 MHz
+2026-09-25T07:50:35Z G=1 start
+2026-09-25T07:52:17Z stopped the 1965 run (clock capped at ~1815 by the power cap)
