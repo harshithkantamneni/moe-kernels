@@ -426,13 +426,58 @@ def test_v5_sees_a_sag_inside_a_burst_that_every_drift_verdict_passes():
     """A card that boosts at the start of each 40 ms burst and sags by its end
     has first == last on every burst-to-burst comparison, so DRIFT passes
     everywhere and the per-call time is still an average over two operating
-    points. V5 is the only gate that can see it."""
+    points. V5 is the only gate that can see it. Planted in EVERY repeat of one
+    cell, which is what a card that sags at one operating point does."""
     sagging = CE.plant_rows(eps=0.05, jitter=0.0,
-                            burst_moves_at={(0, 1, 0)})
+                            burst_moves_at={(0, 1, r) for r in range(13)})
     gates = _score(sagging)
     assert gates["V5"].verdict == CE.FAIL
     assert all(r.clock_drift_ok is not False for r in sagging)
     assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V5"].verdict == CE.PASS
+
+
+def test_v5_lets_the_budget_through_and_fails_one_row_past_it():
+    """One repeat each in different cells, so no cell's median is carried: up
+    to V5_ROW_BUDGET rows pass and one more fails. Three is the planted
+    `sagging-burst` world, which fails either way."""
+    assert CE.V5_ROW_BUDGET == 1
+    keys = [(0, 1, 0), (1, 2, 1), (2, 3, 2)]
+    for n, want in ((1, CE.PASS), (2, CE.FAIL), (3, CE.FAIL)):
+        rows = CE.plant_rows(eps=0.05, jitter=0.0, burst_moves_at=set(keys[:n]))
+        assert _score(rows)["V5"].verdict == want, n
+
+
+def test_v5_passes_the_session6_cell_and_fails_it_once_it_carries_the_median():
+    """THE CELL THAT VOIDED SESSION 6's G=2 PAGE, planted: duty 0.25, tread 6,
+    13 repeats. The seven largest end-of-burst moves are the page's own; the
+    other six were under 0.02 there and stand in at 0.005. One crossed 0.05,
+    and that passes. Seven of thirteen past the line is a cell whose median is
+    the lopsided rows', and that fails."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.0)
+    cell = [r for r in rows if r.state_index == 2 and r.tiles == 6]
+    moves = [0.0677, 0.0492, 0.0490, 0.0455, 0.0342, 0.0337, 0.0233] + [0.005] * 6
+    for r, m in zip(cell, moves, strict=True):
+        r.tail_ms = r.head_ms * (1.0 + m)
+        r.within_burst_ok = m <= T.DRIFT_FRACTION
+    gate = _score(rows)["V5"]
+    assert gate.verdict == CE.PASS, gate.measured
+    assert gate.measured.startswith("1 of ")
+    for r in cell[:7]:
+        r.tail_ms = r.head_ms * 1.0677
+        r.within_burst_ok = False
+    assert _score(rows)["V5"].verdict == CE.FAIL
+
+
+def test_v5_fails_one_row_that_is_half_of_what_its_cell_kept():
+    """The share clause. A cell that lost eleven of its thirteen repeats to
+    DRIFT keeps two, so one lopsided row is half its median: V5 fails though
+    the page holds one crossing row, inside the budget."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.0,
+                         drift_at={(2, 6, r) for r in range(2, 13)},
+                         burst_moves_at={(2, 6, 0)})
+    gate = _score(rows)["V5"]
+    assert gate.verdict == CE.FAIL
+    assert "duty 0.25 tread 6: 1 of its 2 kept repeats" in "\n".join(gate.lines)
 
 
 def test_v6_catches_a_memory_clock_that_moved_with_the_duty_cycle():

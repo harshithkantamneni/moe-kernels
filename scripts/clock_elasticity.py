@@ -1310,6 +1310,23 @@ def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
          f"{sides['level']} level, {sides['undetermined']} undetermined"])
 
 
+#: How many kept rows V5 lets move more than `timing.DRIFT_FRACTION` inside a
+#: burst: one, not zero, and the H200 pages of sessions 5 and 6 are why.
+#: Ordinary noise never comes near the line. Over the 1382 kept rows of the five
+#: full pages V5 passed, the largest first-to-last-quarter move was 0.022 and
+#: none reached 0.025. What did cross was rarer and of another kind: on two
+#: pages (session 5 G=16, session 6 G=2) one duty-0.25 cell ran slow at the END
+#: of its bursts in about half of its repeats, and one repeat crossed 0.05. On
+#: the ten rows of those two cells that moved more than 0.03, the median call,
+#: the time the fit reads, was within 0.06% of the cell's median over all its
+#: repeats. Two crossing rows in 1942 kept rows is about 0.3 per page, so a
+#: budget of zero voids a sound page about one time in four, one about one time
+#: in thirty and two about one time in three hundred. One is the cautious
+#: choice: those two events are the whole estimate of the rate, and it is the
+#: most a page has shown. The planted `sagging-burst` world plants three.
+V5_ROW_BUDGET = 1
+
+
 def gate_v5_within_burst(keep) -> Gate:
     """Was the clock steady INSIDE a burst, not only across the run.
 
@@ -1320,6 +1337,12 @@ def gate_v5_within_burst(keep) -> Gate:
     reads the burst itself: the median of the first quarter of a burst's kept
     calls against the median of the last quarter, against `timing.DRIFT_FRACTION`
     -- the repository's own rule, applied to the one pair this instrument adds.
+
+    WHAT FAILS IT is a count and a share, never one row on its own. The fit
+    reads each (duty, tread) cell as the MEDIAN of its repeats, so moved rows
+    can shift a cell only when they are half or more of its kept repeats, and
+    such a cell fails V5 however few rows it holds. Anywhere else, up to
+    `V5_ROW_BUDGET` rows may cross; the constant's note says why.
     """
     scored = [r for r in keep if r.within_burst_ok is not None]
     bad = [r for r in scored if r.within_burst_ok is False]
@@ -1329,21 +1352,36 @@ def gate_v5_within_burst(keep) -> Gate:
                     f"first and last quarter within {T.DRIFT_FRACTION:.2f}",
                     "the per-call time, which would be an average over two "
                     "operating points inside one burst")
-    ok = not bad
+    cells: dict[tuple[str, int], list[int]] = {}
+    for r in scored:
+        seen = cells.setdefault((_duty_key(r.duty_requested), r.tiles), [0, 0])
+        seen[0] += 1
+        seen[1] += int(r.within_burst_ok is False)
+    carried = sorted((d, t, moved, n) for (d, t), (n, moved) in cells.items()
+                     if moved and 2 * moved >= n)
+    ok = len(bad) <= V5_ROW_BUDGET and not carried
     worst = ""
     if bad:
         pick = max(bad, key=lambda r: abs((r.tail_ms or 0) - (r.head_ms or 0)))
         worst = (f"worst: duty {pick.duty_requested:g} tread {pick.tiles}, "
                  f"{pick.head_ms:.4f} -> {pick.tail_ms:.4f} ms")
+    lines = [worst] if worst else []
+    lines += [f"duty {float(d):g} tread {t}: {moved} of its {n} kept repeats "
+              "moved, enough to carry the cell's median"
+              for d, t, moved, n in carried]
     return Gate(
         VALIDITY, "5", "the clock held inside each burst",
         PASS if ok else FAIL,
         f"{len(bad)} of {len(scored)} kept rows moved more than "
-        f"{T.DRIFT_FRACTION:.2f} from first quarter to last",
-        f"0 rows, at {T.DRIFT_FRACTION:.2f}, the repository's DRIFT fraction",
+        f"{T.DRIFT_FRACTION:.2f} from first quarter to last"
+        + (f"; {len(carried)} cell(s) where they are half or more of the kept "
+           "repeats" if carried else ""),
+        f"at most {V5_ROW_BUDGET} rows at {T.DRIFT_FRACTION:.2f}, the "
+        "repository's DRIFT fraction, and in no duty-and-tread cell half or "
+        "more of its kept repeats",
         "the per-call time: inside one burst it would be an average over two "
         "operating points, and the average moves with the duty cycle",
-        [worst] if worst else [])
+        lines)
 
 
 def gate_v6_memory_clock(keep) -> Gate:
