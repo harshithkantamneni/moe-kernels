@@ -2456,6 +2456,84 @@ def test_a_page_reduced_before_per_gemm_values_scores_on_the_means():
     assert all(g.verdict == PASS for g in gates), {g.number: g.verdict for g in gates}
 
 
+def _scored(page) -> dict:
+    """The page's verdicts rescored from its cells (`_gates` reads the stored ones)."""
+    return {g.number: g.verdict for g in DCR.score_r3_page(page)[0]}
+
+
+def _set_calls(cell: dict, gemm: str, rels) -> None:
+    """One GEMM's K calls at its planted mean x (1 + rel_i), and every field
+    the reduction derives from them (the GEMM's means, the per-call totals,
+    their mean) rewritten to agree, as `r3_reduce_cells` would have."""
+    gem = cell["per_gemm"][gemm]
+    base = gem["dram_bytes_read"]
+    cell["per_gemm_values"][gemm] = [base * (1 + r) for r in rels]
+    scale = statistics.fmean(cell["per_gemm_values"][gemm]) / base
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        gem[field] *= scale
+    cell["per_call_values"] = [sum(cell["per_gemm_values"][g][i] for g in ("w1", "w2"))
+                               for i in range(len(rels))]
+    cell["per_call"]["dram_bytes_read"] = sum(cell["per_gemm"][g]["dram_bytes_read"]
+                                              for g in ("w1", "w2"))
+
+
+def test_a_page_without_per_gemm_values_is_held_at_every_tread():
+    """Review of 74f8d97: a page reduced before 2026-09-25 lists no per-GEMM
+    calls, so its GEMM brackets are the means. With V3 gated at n=1 only, the
+    published A100 G=16 page went INVALID to scored with alpha_w2 [-0.1007,
+    0.1920], inside the [-0.1089, 0.1954] its own profiles give. Such a page
+    is held at every tread again; with the lists the same calls widen the
+    bracket and C2 reads UNKNOWN instead of a PASS on the means."""
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    _set_calls(cells[("shared", 3)], "w2", (-0.08, 0.0, 0.08))
+    listed = _scored(page)
+    assert listed["V3"] == PASS and listed["C2"] == REFUSE
+    for cell in page["cells"]:
+        del cell["per_gemm_values"]
+    gates = {g.number: g for g in DCR.score_r3_page(page)[0]}
+    assert gates["V3"].verdict == FAIL
+    assert "shared/3" in gates["V3"].measured
+    assert any("--reduce-only" in line for line in gates["V3"].lines)
+
+
+def test_c5_at_g4_and_c6_read_the_k_calls_not_their_mean():
+    """Review of 74f8d97: V3 no longer voids a spread at n >= 2, and C5 at
+    G >= 4 (the byte ratio) and C6 (PRIVATE's excess) read the K-call means,
+    so one faulty call passed a page whose other calls fail: a SHARED call
+    20% low at n=6 turned C5 FAIL to PASS, and a PRIVATE call 15% low turned
+    C6 FAIL to PASS, every VALIDITY gate passing. Both now read the K calls'
+    extremes and say UNKNOWN where the calls straddle the threshold."""
+    page = DCR.planted_r3_page("group", 4)
+    d = page["design"]
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    design = {"model": d["model"], "dtype": d["dtype"], "block_m": d["block_m"],
+              "pinned.BLOCK_SIZE_N": d["block_n"], "pinned.BLOCK_SIZE_K": d["block_k"],
+              "pinned.num_warps": d["num_warps"], "pinned.num_stages": d["num_stages"]}
+    timed = {4: {"G": 4, "mean": ratio - 0.005, "sd": 0.0, "runs": [], "cards": ["x"],
+                 "design": design, "duty": 0.25, "windows": [1]}}
+
+    def verdicts(p) -> dict:
+        return {g.number: g.verdict for g in DCR.score_r3_page(p, timed=timed)[0]}
+
+    assert verdicts(page)["C5"] == FAIL
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for g in ("w1", "w2"):
+        _set_calls(cells[("shared", 6)], g, (0.0, 0.0, -0.20))
+    got = verdicts(page)
+    assert got["V3"] == PASS and got["V7"] == PASS and got["V8"] == PASS
+    assert got["C5"] == REFUSE
+    page = DCR.planted_r3_page("group", 4)
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for g in ("w1", "w2"):
+        _set_calls(cells[("private", 6)], g, (0.05, 0.05, 0.05))
+    assert _scored(page)["C6"] == FAIL
+    for g in ("w1", "w2"):
+        _set_calls(cells[("private", 6)], g, (0.0, 0.0, -0.15))
+    got = _scored(page)
+    assert got["V3"] == PASS and got["V5"] == PASS and got["C6"] == REFUSE
+
+
 def test_ols_slope_bounds_hold_every_series_inside_the_brackets():
     """The slope bracket is exact: every series inside the per-tread brackets
     has its OLS slope inside it, and its two ends are reached."""

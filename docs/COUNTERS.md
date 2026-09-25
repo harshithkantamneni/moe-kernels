@@ -847,11 +847,12 @@ q(n) = (R(n) - n x operand) / W, per GEMM and in total, R being
 `dram__bytes_read.sum` per `fused_experts` call. The primary product is
 q_SHARED(n) at each tread beside the group model. The OLS slope of q_SHARED
 over n is printed with its residual as a scalar summary that means something
-only where the ladder is affine; it is the upper edge of alpha(G), which is a
-bracket (below). Also printed: the byte ratio
-slope(R_S) / slope(R_P), the analogue of R3's timed ratio; 1 - (slope_P -
-slope_S) / W, the slope of the bracket's unclamped lower edge below, which
-cancels an activation term only where it is identical in both arms; and
+only where the ladder is affine; it reads the K calls' means, and alpha(G)
+is a bracket (below). Also printed: the byte ratio
+slope(R_S) / slope(R_P), the analogue of R3's timed ratio, with the range
+its K calls allow; 1 - (slope_P - slope_S) / W, the slope of q_S - (q_P - n)
+on the means, which cancels an activation term only where it is identical
+in both arms; and
 per-GEMM alphas. None uses a bandwidth, a ridge, an intercept or a
 calibration.
 
@@ -861,8 +862,9 @@ PRIVATE reads its weights exactly n times by construction (every slab
 belongs to one M-tile), so its excess e = q_P - n is its activation
 re-read, and SHARED, which makes the same loads over fewer distinct slabs,
 evicts A no more often. SHARED's weight-only q therefore lies in
-[q_S - e, q_S] per GEMM and tread, and alpha(G) is printed as the least and
-greatest OLS slope over that bracket, beside the slope of q_S's K-call means.
+[q_S - e, q_S] per GEMM and tread (on single calls, below), and alpha(G) is
+printed as the least and greatest OLS slope over that bracket, beside the
+slope of q_S's K-call means.
 
 THE K CALLS, NOT THEIR MEAN (2026-09-25). The bracket's upper edge is the
 highest single call SHARED or NATIVE made and its lower edge the lowest, less
@@ -872,8 +874,16 @@ repeated within 0.51%: how much of a re-read L2 catches moves with the order
 the hardware runs tiles in, so the spread belongs to the call and widens alpha
 rather than voiding the page. NATIVE is pooled because at G <= 16 it runs
 SHARED's live tiles in SHARED's order at SHARED's addresses (its narrower
-declaration only drops dead tiles from the tail) and at G = 64 it is the
-study's own call; V7 holds the two within their own spread.
+declaration only drops dead tiles from the tail). At G = 64 it is a
+different call, the dead tiles sitting inside each column pass, and its w2
+calls on the A100 did not overlap SHARED's at n=1 and n=2; there the pool is
+a union that contains SHARED's own bracket, so it can only turn a verdict
+about SHARED into UNKNOWN. V7 holds the two within their own spread. A page reduced
+before 2026-09-25 lists no per-GEMM calls, so its GEMM brackets are the
+means and V3 holds its every tread to 1%, as it did; `--reduce-only`
+rebuilds it with the lists. C5 at G >= 4 and C6 read the K calls too: the
+byte ratio over each tread's lowest and highest call, and PRIVATE's lowest
+and highest call, UNKNOWN where they straddle the threshold.
 
 ### 6.7 The registered prediction
 
@@ -906,7 +916,8 @@ block; V1 exact count, every grid, a census that measured GEMMS_PER_CALL; V2
 every STRICT metric a number; V3 at n=1 each cell's K calls within 1% of each
 other, per call and per GEMM (one M-tile per expert, so the order tiles run in
 cannot move the bytes; deeper treads are not gated and the bracket of 6.6
-carries their spread);
+carries their spread, except on a page that lists no per-GEMM calls, held
+at every tread);
 V4 at n=1 SHARED and PRIVATE agree and every arm's q(1) is in [0.97, 1.03];
 V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM (above the
 full-thrash 1.4989 n, so V5 cannot tell an activation thrash from a sound
