@@ -308,10 +308,22 @@ V7 (the two arms' clocks agree at every tread; below), V2 (each copy read by
 exactly its own tiles, one copy zeroed at a time), V5 (the declaration's
 per-tile cost with native's step out; the step itself is printed with an
 interval), V6 (shared and private agree at n=1, where they are the same
-call), then C1, which names the world the ratio landed in: ISSUE-AND-LATENCY,
-below/at/above the refit band, or NO-REUSE. C1 UNKNOWN means the point and the
-interval disagree on a world and the claim is unresolved at this precision,
-not that the arm broke. Since 2026-09-23 every slope C1, C2 and V5 read, and
+call), then C1. The page names the band the ratio landed in: ISSUE-AND-LATENCY,
+below/in/above the H200-era refit band, or NO-REUSE, and every name is a
+position, not a traffic fraction (owner, 2026-09-26). C1 says what
+the ratio measures: it PASSES when the timed ratio is THIS card's own DRAM
+byte ratio at its G (`--byte-reference`, the card's `r3c-g<G>.json` from
+`dram_counter_route.py`'s r3-arms run mode at the same design and G; another
+card, another design, or a page whose gates, re-scored from its cells, are not
+all PASS, such as the Lambda G=64 pages (V7), is refused before anything is
+measured), FAILS naming the side when the two are disjoint (ABOVE the bytes
+an on-chip floor, BELOW them a rate difference), and with no byte page it
+REFUSES, which reads UNKNOWN and classifies
+CLAIM_FAIL; the band test C1 scored until then is printed beside it and gates
+nothing. `--read RUN/report.json --byte-reference PAGE` scores a stored page
+off GPU. C1 UNKNOWN with a byte page means the timed interval overlaps the
+byte bracket without sitting inside it, not that the arm broke. Since
+2026-09-23 every slope C1, C2 and V5 read, and
 every tread V0 counts and V4 checks, is over treads 2 and deeper (the arm's
 DESIGN DECISION 16, the window R1's claim reads), and V8 prices a probed
 alignment step at its leverage over those treads, where the ratio's lines are
@@ -711,9 +723,13 @@ and seed 1 of one G can differ in exit by scope, not by result), duty, run
 id; the joint reading on that run's page (`rep_n`, spread, sd, envelope,
 `joint`), filled only where the run formed a ratio and is in the reading;
 each arm's median clock over the ladder and the count of LEVEL LOW (arm,
-tread) cells; and R1's eta, 95% interval, word and exit. `joint` is C1's
-verdict against the refit band, not a quotability flag: NO-REUSE, expected at
-G=1, reads FAIL. `$SESSION/PAIRS-by-G.tsv` has one row per G: every seed of it
+tread) cells; and R1's eta, 95% interval, word and exit. `joint` is the
+H200-era refit band's verdict on the envelope (C1's rule until 2026-09-26,
+now the line R3 prints beside C1 and gates nothing), not a quotability flag:
+NO-REUSE, expected at G=1, reads FAIL. A chain page carries no byte page, so
+its C1 REFUSES and its `exit` reads CLAIM_FAIL where every other gate passed:
+a result the ledger latches, read against the card's bytes later with
+`--read --byte-reference`. `$SESSION/PAIRS-by-G.tsv` has one row per G: every seed of it
 that formed a ratio, read together by R3's own cross-run machinery whatever
 order the seeds ran in (n, seeds, mean, sd, envelope, joint verdict, any seed
 inside the envelope whose own page exited INVALID), beside R1's columns. Quote

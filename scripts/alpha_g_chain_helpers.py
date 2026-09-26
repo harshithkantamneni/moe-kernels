@@ -596,7 +596,9 @@ def by_g(g: str, reports: list[str]) -> tuple[list[str], str]:
     the joint verdict are R3's and are written nowhere else.
 
     `n seeds mean sd env_lo env_hi joint invalid_in_envelope`: `sd` is the
-    points' (R3 forms one from three); `joint` is C1's rule on the envelope;
+    points' (R3 forms one from three); `joint` is the H200-era refit band's
+    verdict on the envelope (`CrossRun.verdict`: C1's rule until 2026-09-26,
+    now printed beside C1 and gating nothing);
     `invalid_in_envelope` names the seeds inside it whose own page exited
     INVALID, which `load_replicates` admits by design (their spread is
     information, their ratio is not quotable alone). A refusal by
@@ -656,6 +658,12 @@ PAIRS.tsv, one row per ratio run (private_weight_reference), G then seed:
                        since 2026-09-23, every tread on a report before it.
                        Reports of two windows are refused, not pooled.
   exit                 the run's own exit word: classify over its page's gates.
+                       Since 2026-09-26 a page timed with no --byte-reference, as
+                       every chain page is, reads CLAIM_FAIL where every gate
+                       else passed: C1 REFUSES with no same-card byte page, which
+                       is a result the ledger latches and not a retry. Read C1
+                       against the card's r3c-g<G>.json later with R3's --read
+                       --byte-reference.
   exit_scope           how C1 inside that word was scored: `alone` on this run's
                        interval; `envelope` on the envelope of this run's interval
                        and those of the earlier seeds it was given through
@@ -664,8 +672,12 @@ PAIRS.tsv, one row per ratio run (private_weight_reference), G then seed:
   rep_n rep_spread rep_sd env_lo env_hi joint
                        the joint reading on that run's page, over itself and those
                        earlier seeds: n, the spread and sd of the points (an sd
-                       needs three), the envelope, and `joint`, C1's verdict on the
-                       envelope against R3's refit band ALPHA_BAND {band}. `joint`
+                       needs three), the envelope, and `joint`, the H200-era band's
+                       verdict on the envelope against R3's refit band
+                       ALPHA_BAND {band}: C1's rule until 2026-09-26, and since then the line
+                       R3's page prints beside C1 and gates nothing (C1 holds the
+                       timed ratio to the same card's byte page and refuses
+                       without one; the replicates block's c1_verdict). `joint`
                        is NOT a quotability flag: NO-REUSE, expected at G=1, reads
                        FAIL. `none` on a run scored alone, and on a run whose page
                        formed no ratio of its own (its page's replicates block is
@@ -702,8 +714,8 @@ formed a ratio, whatever order the seeds ran in, read together by R3's own
 cross-run machinery (what `--read RUN --replicate-of ...` prints):
   n seeds              how many runs, and their seeds.
   mean sd              the points' mean, and their sd (three points or more).
-  env_lo env_hi joint  the envelope of the runs' {pct} intervals and C1's verdict on
-                       it, the same rule and band as `joint` above.
+  env_lo env_hi joint  the envelope of the runs' {pct} intervals and the H200-era
+                       band's verdict on it, the same rule and band as `joint` above.
   invalid_in_envelope  the seeds inside the envelope whose own page exited INVALID:
                        R3 admits them by design, their spread is information and
                        their ratio is not quotable alone.
