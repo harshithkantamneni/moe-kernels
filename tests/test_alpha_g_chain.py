@@ -40,6 +40,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -1969,7 +1970,12 @@ class Pod:
         return s
 
     def run(self, *args, **env) -> subprocess.CompletedProcess:
+        # PATH without any directory holding an ncu, unless the test gives one:
+        # after a probe that found an ncu the chain runs `ncu --clock-control
+        # reset`, and a pod or VM running this file must not have its real
+        # card's clocks reset by a planted pass (2026-09-25)
         full = chain_env(REPO=str(ROOT), PY_BASE=str(self.base), PY_VLLM=str(self.arm),
+                          PATH=_path_without_ncu(),
                           SESSION_ROOT=str(self.sessions), RESULTS_ROOT=str(self.root / "results"),
                           MOE_RESULTS_DIR=str(self.results), WORKSPACE=str(self.root),
                           END_SUITE="skip", G_LADDER="1 16", SEEDS="0 1 2",
@@ -2627,6 +2633,8 @@ def test_the_counter_probe_is_informational_and_asks_again_on_every_pass(tmp_pat
     text = (s / "COUNTERS").read_text()
     assert "verdict     ABSENT" in text and f"searched    PATH, then {pod.ncu_root}/*/ncu" in text
     assert "probe note  no ncu here" in text, "the probe's own notes ride along"
+    assert "CLOCKS" not in row[6] and "clocks reset" not in row[6], "no ncu ran, so no reset"
+    assert not (s / "chain-logs" / "clock-reset.log").exists()
     assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1"]
     assert lift(f"latched counter-probe {s / 'CHAIN.tsv'!s} || echo no").stdout.strip() == "no"
     # the order: after the preconditions, before tests/test_gpu.py
@@ -2701,6 +2709,231 @@ def test_a_refused_counter_quotes_the_exact_error_and_the_chain_goes_on(tmp_path
     assert "counter-probe    INFO       rc=1" in got.stdout
     assert "--cap-add=PERFMON" in (s / "COUNTERS").read_text(), "the probe's own next ask"
     assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1", "r3-g1-s1"]
+
+
+def test_on_a_vm_the_counter_probe_runs_through_the_counter_doors_launcher(tmp_path):
+    """A Lambda VM keeps counters for admins, and setup_vm.sh's sudo door puts
+    its launcher in ~/moe/env.sh. The chain's probe ran as the login user
+    there: it read BLOCKED on a box whose counters are open through the door,
+    and an ncu run as that user first leaves a /tmp lock that refuses root's
+    ncu. Through the launcher, with the cap inside it, then every path the
+    probe could have written handed back; with no launcher (a pod), no sudo."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    bindir = tmp_path / "bin"
+    _exe(bindir / "ncu")
+    calls, sudo_calls = tmp_path / "launch.txt", tmp_path / "sudo.txt"
+    launch = bindir / "as-root"
+    launch.write_text(f'#!/bin/bash\nprintf "%s\\n" "$*" >> "{calls}"\nshift 2\nexec "$@"\n')
+    launch.chmod(0o755)
+    sudo = bindir / "sudo"
+    sudo.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{sudo_calls}"\nexit 0\n')
+    sudo.chmod(0o755)
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir),
+                  MOE_COUNTER_LAUNCHER=f"{launch} --door sudo")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    call, reset = calls.read_text().splitlines()
+    assert call.startswith("--door sudo env timeout --signal=INT --kill-after=60 "), \
+        "the launcher's own words, then the cap INSIDE it, where it can signal the probe"
+    assert reset.endswith(f"{bindir / 'ncu'} --clock-control reset"), "the clock reset after it"
+    assert f"{pod.base} {ROOT}/scripts/dram_counter_route.py --probe --family r3-arms" in call
+    assert f"counter-probe: through the counter door's launcher: {launch} --door sudo" in got.stdout
+    (row,) = _counter_rows(s)
+    assert row[1:3] == ["INFO", "0"] and row[6].startswith("OPEN: "), row
+    chowns = sudo_calls.read_text().splitlines()
+    uid_gid = f"{os.getuid()}:{os.getgid()}"
+    assert f"-n chown -R {uid_gid} {s}" in chowns, chowns
+    assert all(c.startswith(f"-n chown -R {uid_gid} ") for c in chowns), chowns
+    # a pod: no launcher, the probe as this user, and sudo is never asked
+    sudo_calls.unlink()
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir))
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert not sudo_calls.exists(), sudo_calls.read_text()
+    assert calls.read_text().count("\n") == 2, "the launcher ran on the first pass only"
+    assert "through the counter door's launcher" not in again.stdout
+
+
+def _clock_world(bindir: Path, calls: Path, ncu_rc: int = 0) -> None:
+    """The three binaries a clock reset meets, each writing one line to
+    `calls` in the order they ran: a launcher (its words, then what it runs),
+    a sudo (hand_back's chowns), an ncu that answers `--clock-control reset`
+    with `ncu_rc`, and an nvidia-smi whose clocks query reads planted clocks."""
+    for name, body in (
+            ("as-root", f'#!/bin/bash\nprintf "launch %s\\n" "$*" >> "{calls}"\nshift 2\n'
+                        f'exec "$@"\n'),
+            ("sudo", f'#!/bin/sh\nprintf "sudo %s\\n" "$*" >> "{calls}"\nexit 0\n'),
+            ("ncu", f'#!/bin/sh\nprintf "ncu %s\\n" "$*" >> "{calls}"\n'
+                    f'[ {ncu_rc} -eq 0 ] || echo "==ERROR== the clocks could not be reset'
+                    f' (planted)"\nexit {ncu_rc}\n'),
+            ("nvidia-smi", '#!/bin/sh\ncase "$*" in\n'
+                           '  *clocks.sm*) echo "1755 MHz, 2619 MHz, 1980 MHz, 2619 MHz" ;;\n'
+                           '  *) echo "NVIDIA planted, 580.95.05, 700.00 W" ;;\nesac\n')):
+        path = bindir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        path.chmod(0o755)
+
+
+def test_after_a_probe_that_found_ncu_the_clocks_are_reset_and_recorded(tmp_path):
+    """ncu locks the GPC and memory clocks while it profiles (the probe passes
+    no --clock-control; the default was base and is boost in the current
+    docs), and a probe its cap killed can leave them locked. Under a VM's sudo
+    door the probe runs as root and CAN profile, and it runs right before
+    tests/test_gpu.py, the probe check, R3 and R1, none of which would notice:
+    V7 passes when both ratio arms share one locked clock. So the found ncu's
+    `--clock-control reset` runs through the same launcher, capped, BEFORE the
+    files are handed back, and the note and chain-logs/clock-reset.log say
+    what it did and the clocks nvidia-smi read after it. A reset that fails is
+    said loudly and gates nothing; a box with no ncu gets no reset."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    bindir, calls = tmp_path / "bin", tmp_path / "calls.txt"
+    _clock_world(bindir, calls)
+    ncu, log = bindir / "ncu", s / "chain-logs" / "clock-reset.log"
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir),
+                  MOE_COUNTER_LAUNCHER=f"{bindir / 'as-root'} --door sudo")
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    seen = calls.read_text().splitlines()
+    cap = _const("CLOCK_RESET_S")
+    reset = (f"launch --door sudo timeout --signal=INT --kill-after=10 {cap} {ncu}"
+             " --clock-control reset")
+    assert seen[0].startswith("launch --door sudo env timeout ") and "--probe" in seen[0], seen
+    assert seen[1:3] == [reset, "ncu --clock-control reset"], seen
+    assert seen[3:] and all(c.startswith("sudo -n chown -R ") for c in seen[3:]), \
+        "the files are handed back AFTER the reset, so what it wrote is handed back too"
+    (row,) = _counter_rows(s)
+    clocks = ("clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem after it: 1755 MHz, 2619 MHz,"
+              " 1980 MHz, 2619 MHz")
+    assert row[1:3] == ["INFO", "0"] and row[6].startswith("OPEN: "), row
+    assert row[6].endswith(f"; clocks reset after it ({ncu} --clock-control reset, exit 0);"
+                           f" {clocks}; {log}"), row[6]
+    assert f"counter-probe: clocks reset after it ({ncu} --clock-control reset" in got.stdout
+    text = log.read_text()
+    assert f"--door sudo timeout --signal=INT --kill-after=10 {cap} {ncu} --clock-control reset" \
+        in text and "# exit 0" in text and f"# {clocks}" in text, text
+    # the next pass asks again (INFO is never latched) and its reset is kept beside this one
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir),
+                    MOE_COUNTER_LAUNCHER=f"{bindir / 'as-root'} --door sudo")
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert log.read_text().startswith(text) and log.read_text().count("# exit 0") == 2
+
+
+def test_a_clock_reset_that_fails_is_said_loudly_and_the_arms_still_run(tmp_path):
+    """No launcher (a pod, or a VM's open door): the reset runs as this user
+    and sudo is never asked. Where it fails, the note and the console say the
+    clocks were NOT reset and what that would do to every arm after it, with
+    ncu's own last line; the step stays INFO and the chain goes on."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    bindir, calls = tmp_path / "bin", tmp_path / "calls.txt"
+    _clock_world(bindir, calls, ncu_rc=3)
+    ncu, log = bindir / "ncu", s / "chain-logs" / "clock-reset.log"
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir))
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    assert calls.read_text().splitlines() == ["ncu --clock-control reset"], calls.read_text()
+    failed = (f"CLOCKS NOT RESET: {ncu} --clock-control reset exited 3 (==ERROR== the clocks"
+              " could not be reset (planted)); a lock the probe left, if it left one, stands"
+              " under every arm after it")
+    (row,) = _counter_rows(s)
+    assert row[1] == "INFO" and row[6].endswith(
+        f"; {failed}; clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem after it: 1755 MHz,"
+        f" 2619 MHz, 1980 MHz, 2619 MHz; {log}"), row[6]
+    assert f"counter-probe: {failed}" in got.stdout
+    assert "# exit 3" in log.read_text()
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1"]
+
+
+def test_a_blocked_probe_gets_no_clock_reset_and_a_crashed_one_does(tmp_path):
+    """A probe that read BLOCKED was refused the counters: it could not profile,
+    so it locked no clock, and a second ncu as the same refused user would
+    likely be refused too and print CLOCKS NOT RESET for a lock never made.
+    That is every RunPod pass on record, so there the chain asks for no reset
+    and says why. A probe that crashed (ERROR) may have been killed mid-profile
+    with the clocks locked, so it gets the reset. No launcher: a pod."""
+    pod = Pod(tmp_path)
+    s = pod.session()
+    bindir, calls = tmp_path / "bin", tmp_path / "calls.txt"
+    _clock_world(bindir, calls)
+    log = s / "chain-logs" / "clock-reset.log"
+    pod.set_plan({"counter-probe": {"world": "blocked"}})
+    got = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir))
+    assert got.returncode == 0, got.stdout[-3000:] + got.stderr[-800:]
+    assert not calls.exists(), calls.read_text()
+    skipped = ("no clock reset: the probe read BLOCKED, so ncu was refused the counters, could"
+               " not profile, and locked no clock")
+    (row,) = _counter_rows(s)
+    assert row[1] == "INFO" and row[6].startswith(f"BLOCKED: {STUB_ERR}"), row[6]
+    assert row[6].endswith(f"; {skipped}") and "CLOCKS NOT RESET" not in row[6], row[6]
+    assert f"counter-probe: {skipped}" in got.stdout
+    assert log.read_text().rstrip().endswith(f"after the counter probe: {skipped}")
+    assert [st for st, _ in pod.traced()] == ["probe-check", "r3-g1-s0", "r1-g1"]
+    # the next pass's probe crashes: no payload, ERROR, and the reset runs
+    pod.set_plan({"counter-probe": {"crash": True}})
+    again = pod.run("--resume", G_LADDER="1", SEEDS="0", PATH=_path_without_ncu(bindir))
+    assert again.returncode == 0, again.stdout[-3000:]
+    assert calls.read_text().splitlines() == ["ncu --clock-control reset"], calls.read_text()
+    last = _counter_rows(s)[-1]
+    assert last[6].startswith("ERROR: ") and \
+        f"; clocks reset after it ({bindir / 'ncu'} --clock-control reset, exit 0);" in last[6]
+    assert log.read_text().count("# exit 0 in ") == 1
+
+
+def _stub(path: Path, body: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+    return path
+
+
+@pytest.mark.parametrize("stub,cap,want", [
+    ("sleep 1; exit 124", 1, r"TIMED OUT after [12] s against a cap of 1 s \(exit 124\)"),
+    ("sleep 1; exit 137", 1, r"TIMED OUT after [12] s against a cap of 1 s \(exit 137\)"),
+    ("exit 137", 120, r"exited 137 \(no output\)"),
+])
+def test_a_clock_reset_past_its_cap_reads_timed_out_by_the_probes_own_rule(
+        tmp_path, stub, cap, want):
+    """The cap's INT exits 124; a reset that ignored it is KILLed 10 s later and
+    exits 137. Both are the cap's, and read TIMED OUT, by the rule `counters`
+    reads a timed-out probe with: 124, or 137 once the whole cap ran. Until
+    2026-09-25 only 124 did, so a reset that hung read as an ordinary exit. A
+    137 well before the cap is some other kill and reads as an exit. The
+    `timeout` here is planted, so each exit is exact."""
+    bindir = tmp_path / "bin"
+    _clock_world(bindir, tmp_path / "calls.txt")
+    _stub(bindir / "timeout", stub)
+    log = tmp_path / "clock-reset.log"
+    got = lift(f'clock_reset "{bindir / "ncu"}" "{log}"', PATH=f"{bindir}:/usr/bin:/bin",
+               CLOCK_RESET_S=str(cap))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.startswith(f"CLOCKS NOT RESET: {bindir / 'ncu'} --clock-control reset "), \
+        got.stdout
+    assert re.search(want, got.stdout), got.stdout
+    assert got.stdout.endswith("; a lock the probe left, if it left one, stands under every arm"
+                               " after it; clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem"
+                               f" after it: 1755 MHz, 2619 MHz, 1980 MHz, 2619 MHz; {log}"), \
+        got.stdout
+    assert re.search(r"^# exit (124|137) in [0-9]+ s$", log.read_text(), re.M), log.read_text()
+
+
+def test_a_clock_reset_that_hangs_is_stopped_at_its_cap(tmp_path):
+    """The real timeout(1), a 1 s cap and an ncu that never returns: the reset
+    is stopped by the cap's INT, the chain goes on, and the note says TIMED
+    OUT, not an exit."""
+    real = shutil.which("timeout")
+    if not real or "GNU" not in subprocess.run([real, "--version"], capture_output=True,
+                                               text=True).stdout:
+        pytest.skip("no GNU timeout(1) on this box")
+    bindir = tmp_path / "bin"
+    _clock_world(bindir, tmp_path / "calls.txt")
+    _stub(bindir / "ncu", "exec sleep 30")
+    log = tmp_path / "clock-reset.log"
+    t0 = time.monotonic()
+    got = lift(f'clock_reset "{bindir / "ncu"}" "{log}"',
+               PATH=f"{bindir}:{Path(real).parent}:/usr/bin:/bin", CLOCK_RESET_S="1")
+    assert time.monotonic() - t0 < 20, "the cap did not stop the reset"
+    assert got.returncode == 0, got.stderr
+    assert re.search(r"TIMED OUT after [12] s against a cap of 1 s \(exit 124\)", got.stdout), \
+        got.stdout
 
 
 def test_every_rebuild_prints_the_bound_with_its_ceiling_and_what_the_ratio_reads_as(tmp_path):
@@ -2820,6 +3053,10 @@ def test_the_dry_run_prices_the_counter_probe_and_runs_nothing(dry):
             ) in row[6]
     assert "the r3-arms family's probe" in row[6] and "one to three times" in row[6]
     assert "the same probe" not in row[6] and "launches one kernel" not in row[6]
+    assert (f"Then, unless it read BLOCKED, the ncu it found runs --clock-control reset through"
+            f" MOE_COUNTER_LAUNCHER (unset here, so as this user), capped at"
+            f" {_const('CLOCK_RESET_S')} s") in row[6], \
+        "the reset after the probe is priced and described too (2026-09-25)"
     assert ("the counter probe ~" + str(price) + " s (the r3-arms family's probe, priced "
             "at the driver's own arm_minutes for counter_plan),") in got.stdout
     assert "informational, it gates nothing" in row[6]

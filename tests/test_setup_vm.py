@@ -348,9 +348,56 @@ def test_the_plan_names_env_sh_and_the_vllm_interpreter_in_it(tmp_path):
     r = vm(env, "--commit", HEAD, "--repo", "https://example.invalid/moe.git", "--dry-run")
     home = tmp_path / "home"
     assert f'export PY_VLLM="{home}/moe/venvs/vllm/bin/python"' in r.stdout, r.stdout
-    assert f'export MOE_RESULTS_DIR="{home}/moe/results"' in r.stdout
+    assert f'export RESULTS_ROOT="{home}/moe/results"' in r.stdout
+    assert f'export SESSION_ROOT="{home}/moe/session"' in r.stdout
+    assert f'export WORKSPACE="{home}/moe"' in r.stdout
     assert 'export MOE_CARD="nvidia_h100_80gb_hbm3"' in r.stdout
     assert "rsync -avz ubuntu@<instance ip>:" in r.stdout
+
+
+def test_a_sourced_env_sh_lets_the_timing_chain_past_its_results_dir_check(tmp_path):
+    """scripts/alpha_g_chain.sh (and the driver, scripts/h200_gaps_session.sh)
+    refuse a MOE_RESULTS_DIR that does not name the card, before any step.
+    env.sh exported MOE_RESULTS_DIR=$HOME/moe/results, which names none, so
+    `. ~/moe/env.sh` and then the chain stopped at that check on every VM; the
+    Lambda GH200's chain (2026-09-25) ran only after an `unset
+    MOE_RESULTS_DIR` typed by hand. The env.sh this plan writes is sourced
+    here in a shell that still holds that old export, as a shell that sourced
+    an older env.sh does, and then the chain's own dry run must go past the
+    check and plan under $RESULTS_ROOT/gaps-<card> and $SESSION_ROOT. The
+    fake home holds no checkout and no venvs, so REPO and the two
+    interpreters are pointed at this tree after sourcing; every other line
+    env.sh set stands."""
+    env = _vm_world(tmp_path)
+    r = vm(env, "--commit", HEAD, "--repo", "https://example.invalid/moe.git", "--dry-run")
+    assert r.returncode == 0, r.stdout + r.stderr
+    plan = r.stdout.split("would write ", 1)[1].splitlines()[1:]
+    body = []
+    for line in plan:
+        if not line.startswith("    "):
+            break
+        body.append(line[4:])
+    envsh = tmp_path / "env.sh"
+    envsh.write_text("\n".join(body) + "\n")
+    assert "export MOE_RESULTS_DIR" not in envsh.read_text()
+    home = tmp_path / "home"
+    (home / "moe").mkdir(parents=True)
+    before = tree_state()
+    got = subprocess.run(
+        ["bash", "-c", f'export MOE_RESULTS_DIR="{home}/moe/results"; . "{envsh}" &&'
+                       f' REPO="{REPO}" PY_BASE="{PY}" PY_VLLM="{PY}" G_LADDER=1 SEEDS=0'
+                       f' bash "{REPO}/scripts/alpha_g_chain.sh" --dry-run'],
+        capture_output=True, text=True, timeout=600,
+        env={"PATH": os.environ["PATH"], "HOME": str(home), "CUDA_VISIBLE_DEVICES": ""})
+    out = got.stdout + got.stderr
+    assert "REFUSED: MOE_RESULTS_DIR" not in out, out[-3000:]
+    assert got.returncode == 0, out[-3000:]
+    results = re.search(r"^  results     (\S+)   \(exported as MOE_RESULTS_DIR to every arm\)$",
+                        got.stdout, re.M)
+    assert results and results.group(1).startswith(f"{home}/moe/results/gaps-"), got.stdout[:3000]
+    assert re.search(rf"^  session     {re.escape(str(home))}/moe/session/alpha_g-", got.stdout,
+                     re.M), got.stdout[:3000]
+    assert tree_state() == before, "the dry run wrote into the tree"
 
 
 @pytest.mark.parametrize("restrict,door", [(0, "door open"), (1, "door sudo")])
