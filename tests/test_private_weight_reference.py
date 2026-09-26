@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import private_weight_reference as PW  # noqa: E402
 from _hermetic import laptop_env  # noqa: E402
+from _shared_run import shared  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import timing as TIMING  # noqa: E402
@@ -94,16 +95,31 @@ def run(args):
                           cwd=str(ROOT), env=laptop_env())
 
 
+@pytest.fixture(scope="session")
+def self_test(request, tmp_path_factory):
+    """`self_test(world)`: the page of `--self-test <world>`, exactly
+    `run(["--self-test", world])`, run ONCE per pytest run for each world and
+    shared across xdist workers (tests/_shared_run.py). A self-test writes
+    nothing and prints the same page every time; until 2026-09-26 this file
+    ran about 127 of them a suite for 23 distinct pages. Any other argv
+    (`--draws`, `--treads`, ...) still goes through `run`."""
+    def page(world: str) -> subprocess.CompletedProcess:
+        return shared(request, tmp_path_factory, f"r3-self-test-{world}",
+                      lambda _where: run(["--self-test", world]))[1]
+    return page
+
+
 # --------------------------------------------------------------------------
 # 1. the exit-code contract
 # --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("args,scoring", OFF_GPU_MODES)
-def test_the_log_recomputes_the_code_the_process_returned(args, scoring):
+def test_the_log_recomputes_the_code_the_process_returned(args, scoring, self_test):
     """The property, over EVERY off-GPU mode. A script that prints one thing
     and exits another is the defect `moe/bench/exit_codes.py` exists to
     prevent, and it is the only thing the session driver can see."""
-    got = run(args)
+    got = (self_test(args[1]) if args[0] == "--self-test" and len(args) == 2
+           else run(args))
     lines = exit_codes.parse_result_lines(got.stdout)
     if scoring:
         assert lines, (args, got.stdout[-2000:])
@@ -120,8 +136,8 @@ def test_the_log_recomputes_the_code_the_process_returned(args, scoring):
         assert got.returncode == exit_codes.REFUSED
 
 
-def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does():
-    got = run(["--self-test", "refit"])
+def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does(self_test):
+    got = self_test("refit")
     parsed = exit_codes.parse_result_lines(got.stdout)
     raw = [ln for ln in got.stdout.splitlines() if ln.startswith("RESULT: ")]
     assert len(raw) == len(parsed), "a RESULT line the parser cannot read back"
@@ -161,20 +177,20 @@ def test_an_unplanned_crash_is_error_and_not_claim_fail(monkeypatch):
 # 2. the planted worlds, and that every gate can fail
 # --------------------------------------------------------------------------
 
-def test_every_planted_world_returns_its_registration():
+def test_every_planted_world_returns_its_registration(self_test):
     """A self-test that asserts nothing is a smoke test. Each world registers
     the verdict every named gate must return, and a mismatch is ERROR."""
     for name in sorted(PW.WORLDS):
-        got = run(["--self-test", name])
+        got = self_test(name)
         assert "SELF-TEST MISMATCH" not in got.stdout, (name, got.stdout[-3000:])
         assert "SELF-TEST OK" in got.stdout, (name, got.stdout[-3000:])
         assert got.returncode != exit_codes.ERROR, name
 
 
-def test_the_worlds_separate_into_three_exit_codes():
+def test_the_worlds_separate_into_three_exit_codes(self_test):
     """A set of planted worlds that all return the same code has not shown that
     the scorer discriminates anything."""
-    codes = {name: run(["--self-test", name]).returncode
+    codes = {name: self_test(name).returncode
              for name in sorted(PW.WORLDS)}
     assert codes["refit"] == exit_codes.DONE
     # SINCE 2026-09-26 C1 IS "timing is this card's bytes", and in the two
@@ -190,26 +206,26 @@ def test_the_worlds_separate_into_three_exit_codes():
     assert len(set(codes.values())) == 3, codes
 
 
-def test_every_gate_has_a_world_that_fails_it():
+def test_every_gate_has_a_world_that_fails_it(self_test):
     """A gate that cannot fail is as useless as one that cannot pass. The set
     of tags that FAIL somewhere is COUNTED from the worlds rather than listed
     here, so a gate added without a world to fail it turns this red."""
     failing: set[str] = set()
     for name in sorted(PW.WORLDS):
-        for line in exit_codes.parse_result_lines(run(["--self-test", name]).stdout):
+        for line in exit_codes.parse_result_lines(self_test(name).stdout):
             if line.verdict == exit_codes.FAIL:
                 failing.add(line.name)
     every = {line.name for line in
-             exit_codes.parse_result_lines(run(["--self-test", "refit"]).stdout)}
+             exit_codes.parse_result_lines(self_test("refit").stdout)}
     assert failing == every, (
         f"no planted world reaches the FAIL branch of {sorted(every - failing)}")
 
 
-def test_the_registrations_name_gates_the_report_actually_has():
+def test_the_registrations_name_gates_the_report_actually_has(self_test):
     """A registration that silently matches nothing is the
     check-that-examined-nothing shape one level up."""
     tags = {line.name for line in
-            exit_codes.parse_result_lines(run(["--self-test", "refit"]).stdout)}
+            exit_codes.parse_result_lines(self_test("refit").stdout)}
     for name, world in sorted(PW.WORLDS.items()):
         assert set(world.expect) <= tags, (name, set(world.expect) - tags)
         assert world.expect, name
@@ -2583,7 +2599,7 @@ def test_the_probe_repeat_count_is_out_of_the_run_id_and_the_page_says_why():
     assert {c["repeat"] for c in probe.as_dict()["cells"]} == {0, 1, 2}
 
 
-def test_a_refused_bootstrap_on_b_is_not_reported_as_a_refused_fit():
+def test_a_refused_bootstrap_on_b_is_not_reported_as_a_refused_fit(self_test):
     """`declaration_fit` and `declaration_interval` shared one try, so a
     failed BOOTSTRAP printed the FIT's sentence -- "declaration difference
     NOT FITTED" two lines above the page's own "DECLARATION, native - shared
@@ -2608,7 +2624,7 @@ def test_a_refused_bootstrap_on_b_is_not_reported_as_a_refused_fit():
                 if r.name == "V5").verdict == exit_codes.UNKNOWN
     # And with the draws the default gives, the band forms and V5 scores it.
     assert next(r for r in exit_codes.parse_result_lines(
-        run(["--self-test", "refit"]).stdout)
+        self_test("refit").stdout)
         if r.name == "V5").verdict == exit_codes.PASS
 
 
@@ -2810,11 +2826,11 @@ def test_the_clock_correction_is_out_of_the_run_id():
     assert "--clock-elasticity" in " ".join(PW.default_run_id.__doc__.split())
 
 
-def test_the_elastic_world_prints_recovers_and_stays_invalid_end_to_end():
+def test_the_elastic_world_prints_recovers_and_stays_invalid_end_to_end(self_test):
     """The whole page, through the CLI: --self-test supplies the planted eta
     itself, the payload carries the block with its provenance, World.check
     holds the exact identity, and the exit is 3 INVALID because V7 FAILs."""
-    got = run(["--self-test", "clock-split-elastic"])
+    got = self_test("clock-split-elastic")
     assert got.returncode == exit_codes.INVALID, got.stdout[-2000:]
     assert "SELF-TEST OK" in got.stdout
     assert "clock-corrected ratio" in got.stdout and "PLANTED by --self-test" in got.stdout
@@ -3068,13 +3084,14 @@ def test_the_planted_probe_is_graph_timed_like_the_real_one_except_in_the_eager_
     assert "graph_calls" in first and "replay_ms" in first
 
 
-def test_the_graph_probe_world_differs_from_the_host_bound_world_in_instrument_and_verdict():
+def test_the_graph_probe_world_differs_from_the_host_bound_world_in_instrument_and_verdict(
+        self_test):
     a, b = PW.WORLDS["host-bound-probe"], PW.WORLDS["graph-probe-unresolved"]
     assert a.native_probe_step_ms == b.native_probe_step_ms == 0.0
     assert a.probe_graph_calls == 0 and b.probe_graph_calls == PW.PROBE_CALLS_PER_REPLAY
     assert a.probe_host_bound is True and b.probe_host_bound is False
     assert a.expect["V8"] == exit_codes.UNKNOWN and b.expect["V8"] == exit_codes.PASS
-    got = run(["--self-test", "graph-probe-unresolved"])
+    got = self_test("graph-probe-unresolved")
     assert got.returncode == exit_codes.DONE, got.stdout[-1500:]
     assert "RESULT: VALIDITY V8 PASS" in got.stdout
     assert "NOT RESOLVED IN GPU TIME" in got.stdout
@@ -3167,11 +3184,11 @@ def test_c1_over_two_runs_is_scored_on_the_envelope_and_names_the_spread():
     assert d["n"] == 3 and d["verdict"] == exit_codes.PASS and len(d["runs"]) == 3
 
 
-def test_a_lone_run_says_it_was_scored_alone():
+def test_a_lone_run_says_it_was_scored_alone(self_test):
     """OPT-IN, said out loud: a run with no replicate is scored on its own
     interval, and the page says that is a within-run statement. The sentence
     is absent on the parent."""
-    got = run(["--self-test", "refit"])
+    got = self_test("refit")
     assert "scored on this run's within-run interval alone" in got.stdout
     assert "no replicate was named (--replicate-of)" in got.stdout
     assert "replicates  (none: this run is scored ALONE" in got.stdout
@@ -4558,7 +4575,7 @@ def test_at_one_probe_repeat_no_spread_is_formed_and_the_step_verdict_is_the_fit
     assert old_real is False and fit.resolved() is True
 
 
-def test_the_probe_repeat_refusal_reads_back_through_the_exit_code_contract():
+def test_the_probe_repeat_refusal_reads_back_through_the_exit_code_contract(self_test):
     """THE REFUSAL SHORT-CIRCUITS A MODE THAT WOULD OTHERWISE SCORE GATES, so
     it has to leave a log the contract at the top of this file accepts. A
     scoring mode's log must recompute its own exit code; `--self-test refit`
@@ -4569,7 +4586,7 @@ def test_the_probe_repeat_refusal_reads_back_through_the_exit_code_contract():
     `moe/bench/exit_codes.py` exists to prevent. The DONE leg is also what
     shows the floor does not fire at the default `--probe-repeats`.
     """
-    scored = run(["--self-test", "refit"])
+    scored = self_test("refit")
     assert scored.returncode == exit_codes.DONE, scored.stdout[-2000:]
     assert exit_codes.parse_result_lines(scored.stdout)
 
@@ -5260,12 +5277,12 @@ def test_a_step_in_private_ids_alone_is_bounded_and_fails_v8():
 @pytest.mark.parametrize("name,budgets,v8", [
     ("ratio-step-over-budget", 1.5, exit_codes.FAIL),
     ("ratio-step-under-budget", 0.7, exit_codes.PASS)])
-def test_planted_worlds_sit_either_side_of_the_v8_budget(name, budgets, v8):
+def test_planted_worlds_sit_either_side_of_the_v8_budget(name, budgets, v8, self_test):
     """No world sat within 2x of V8's budget. These two plant a real common
     ratio step sized IN BUDGETS at the run's own weight stream."""
     world = PW.WORLDS[name]
     assert world.ratio_probe_budgets == budgets and world.expect["V8"] == v8
-    got = run(["--self-test", name])
+    got = self_test(name)
     line = [r for r in exit_codes.parse_result_lines(got.stdout)
             if r.name == "V8"]
     assert [r.verdict for r in line] == [v8], got.stdout[-2000:]
@@ -7071,15 +7088,15 @@ def test_no_byte_reference_refuses_c1_and_prints_the_old_band_ungated():
     assert pay["outcome"] == "IN-THE-H200-REFIT-BAND"
 
 
-def test_the_no_byte_page_world_prints_the_refusal_and_the_band_line_end_to_end():
-    got = run(["--self-test", "no-byte-page"])
+def test_the_no_byte_page_world_prints_the_refusal_and_the_band_line_end_to_end(self_test):
+    got = self_test("no-byte-page")
     assert got.returncode == exit_codes.CLAIM_FAIL, got.stdout[-2000:]
     assert "SELF-TEST OK" in got.stdout
     c1 = next(ln for ln in exit_codes.parse_result_lines(got.stdout) if ln.name == "C1")
     assert c1.verdict == exit_codes.UNKNOWN and "measured REFUSE: no same-card" in c1.detail
     assert "would read PASS on this run alone" in got.stdout
     assert "bytes       (none: C1 will REFUSE" in got.stdout
-    floor = run(["--self-test", "on-chip-floor"])
+    floor = self_test("on-chip-floor")
     assert floor.returncode == exit_codes.CLAIM_FAIL
     c1 = next(ln for ln in exit_codes.parse_result_lines(floor.stdout) if ln.name == "C1")
     assert c1.verdict == exit_codes.FAIL and "timed ABOVE bytes" in c1.detail
