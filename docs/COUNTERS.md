@@ -929,6 +929,20 @@ registered: co-residency (w1 re-read whole, w2 shared, so alpha(1) can sit
 well below the timed bracket) and the timed edge (both arms at one rate, so
 alpha(1) sits inside it).
 
+THE TIMING MODEL (2026-09-26). `scripts/r3_timing_model.py` puts this
+schedule in launch order and fits R3's timed call times with it, per card and
+never pooled. vLLM's pid walk marks the CTA that first pulls each weight slab
+inside its group, each GEMM's counted DRAM reads are spread over its CTAs in
+that order, and a CTA costs the larger of an SM floor (c per CTA k-step) and
+the mean new bytes of the CTAs around it over bw. The window is half the SMs
+x CTAs per SM the counter page records (k_w = 1/2, FITTED; the k_w = 1 fit is
+printed beside it). On the GH200 at the 1710 MHz lock it fits 75 cells at
+0.43% rms with c = 353.8 cycles per CTA k-step and bw 1.38% above PRIVATE's
+own per-byte rate. The H100 reads 353.9 cycles and fails at G=1: its SHARED
+slope comes out about 10% low and gate T3 trips. It is NOT FINAL. It prints
+P1 to P8, the predictions that would falsify it, from each card's own fit,
+and P6 is the `--floor` capture of 6.12.
+
 ### 6.8 The gates
 
 VALIDITY, any failure exits INVALID and no alpha may be quoted: V0 a live card
