@@ -1039,7 +1039,10 @@ coalesced accounts for each arm's loads less its requested count, and a zero
 each `lrc__` count sits on is read from ncu's one-line descriptions, not yet
 verified. Asking for any of them is a capture change
 (`R3_CROSSCHECK_METRICS`, `R3_FIELDS` and V6) that needs a new commit and
-bundle, not made here.
+bundle, not made here. The floor capture of 6.12 already asks one of them,
+`smsp__inst_executed_op_ldgsts`, but on NATIVE only, so it cannot compare
+arms; a page that asks it would also take it out of `R3_FLOOR_METRICS`, or
+narrow the test that keeps every floor metric off a page.
 
 The ladder family's monotone and affine gates are NOT applied to SHARED: the
 group model predicts non-monotone, non-affine shared ladders at G = 2, 4 and

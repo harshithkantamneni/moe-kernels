@@ -308,7 +308,14 @@ inside `power.min_limit` to `power.max_limit`) changes the card calibrate
 measured, so it starts a new session: `--new`, which calibrates again. On a
 GH200 the limit has two scopes, the GPU's (`-pl <W> -sc 0`) and the whole
 module's, shared with the Grace CPU (`-pl <W> -sc 1`), and the lower of the
-two binds: read both in `nvidia-smi -q -d POWER` before setting either.
+two binds: read both in `nvidia-smi -q -d POWER` before setting either. On a
+VM there is also R1's lock mode, built for this case: `scripts/clock_elasticity.py
+--lock-clocks F1 F2 F3` (root only), run by hand outside the chain, makes each
+state a locked SM clock, so R1 no longer needs duty 1.0 to reach the power
+limit. Choose locks the card holds at every G (1710 MHz held on both Lambda
+Hoppers; lower locks were not tried): V3 needs every planned lock, and a lock
+whose kept rows read more than one 15 MHz step off it is named on the page.
+The chain itself stays in duty mode.
 
 Then the plan, and the run, detached and appending, with the counter run's five
 G so every timed G has its bytes. The session records neither `G_LADDER` nor
