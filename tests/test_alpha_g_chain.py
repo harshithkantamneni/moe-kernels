@@ -184,6 +184,27 @@ def test_run_step_writes_the_row_with_the_second_opinion_taken(tmp_path):
     assert last[1] == "UNKNOWN" and "UNEARNED DONE" in last[6]
 
 
+def test_a_ratio_page_whose_c1_refuses_is_latched_as_a_result(tmp_path):
+    """SINCE 2026-09-26 R3's C1 is the owner's per-card claim: the timed
+    ratio held to the same card's byte page, which the chain never names, so
+    every chain page's C1 REFUSES (spelled UNKNOWN) and a page whose other
+    gates all passed exits 1 CLAIM_FAIL. That is a RESULT: the row is
+    CLAIM_FAIL with the second opinion agreeing, and the step is latched, so
+    a --resume does not buy the ladder again. Driven through `run_step` with
+    R3's own planted world for exactly that page, not a stub."""
+    ledger = _ledger(tmp_path / "CHAIN.tsv")
+    script = ROOT / "scripts" / "private_weight_reference.py"
+    got = lift(f"run_step r3-g4-s0 {tmp_path / 'r3.log'!s} {sys.executable} "
+               f"{script!s} --self-test no-byte-page; echo rc=$?", LEDGER=str(ledger))
+    assert "rc=1" in got.stdout, got.stdout + got.stderr
+    log = (tmp_path / "r3.log").read_text()
+    assert "RESULT: CLAIM C1 UNKNOWN" in log and "measured REFUSE: no same-card" in log
+    name, state, rc, _secs, _dirty, _log, note = _rows(ledger)[-1]
+    assert (name, state, rc) == ("r3-g4-s0", "CLAIM_FAIL", "1")
+    assert "log agrees" in note
+    assert lift(f"latched r3-g4-s0 {ledger!s} && echo yes").stdout.strip() == "yes"
+
+
 @pytest.mark.skipif(shutil.which("timeout") is None,
                     reason="no timeout(1) here: the chain runs its arms uncapped on such a box")
 def test_an_arm_that_outlives_its_cap_is_an_unlatched_timed_out_error(tmp_path):

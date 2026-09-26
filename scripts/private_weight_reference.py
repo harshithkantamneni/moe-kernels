@@ -6,11 +6,18 @@
     python scripts/private_weight_reference.py --self-test issue-bound
     python scripts/private_weight_reference.py                # the pod run
     python scripts/private_weight_reference.py --duty 0.25    # the pod setting (V7 checks it)
+    python scripts/private_weight_reference.py --duty 0.25 --group-m 4 \
+                                               --byte-reference r3c-g4.json
+                                       # C1 against THIS card's own byte page at G=4
     python scripts/private_weight_reference.py --seed 1 --replicate-of RUN0/report.json
                                        # a second run; C1 scored WITH the first
     python scripts/private_weight_reference.py --read RUN1/report.json \
                                                --replicate-of RUN0/report.json
                                        # off GPU: a stored pair re-read, nothing measured
+    python scripts/private_weight_reference.py --read RUN/report.json \
+                                               --byte-reference r3c-g4.json
+                                       # off GPU: a stored page's C1 against the
+                                       # same card's byte page, nothing measured
     python scripts/private_weight_reference.py --read RUN1/report.json --rescore \
                                                --replicate-of RUN0/report.json
                                        # off GPU: the pair re-scored from its cells.csv
@@ -169,7 +176,7 @@ exactly, because the pieces are not equally covered:
     locality cost is exactly that shape -- is invisible to NATIVE, which does
     not read them, and to n = 1, where there is only one. A tenth of an
     inflation on the deepest private cell moves the headline from
-    REFIT-CONFIRMED to BELOW-THE-REFIT-BAND with V5 reporting 0.00% and every
+    IN-THE-H200-REFIT-BAND to BELOW-THE-REFIT-BAND with V5 reporting 0.00% and every
     validity gate PASS. The one trace such a cost leaves on this page is the
     PRIVATE ladder's own `mean_rel_err`: a footprint cost that grows with the
     resident copies is the one thing that makes that ladder non-affine, and it
@@ -188,23 +195,74 @@ worst 2335 GB/s against the A100's 2039 -- is the case where it does not. This
 arm removes the assumed rate and keeps the assumption that the two arms SHARE
 one. That is weaker than assuming a number and it is not nothing.
 
-WHAT A RATIO MEANS, PARTITIONED BEFORE THE RUN. `OUTCOMES` below is one
+WHERE A RATIO LANDS, PARTITIONED BEFORE THE RUN. `OUTCOMES` below is one
 ordered table covering [0, inf) with no gap and no overlap, read by the
-prediction page and by the report, so the world the measurement lands in is
+prediction page and by the report, so the band the measurement lands in is
 NAMED by this script and not left to a reader:
 
-    ratio < 0.35              ISSUE-AND-LATENCY. Most of the per-M-tile cost
-                              is not weight traffic at all. The traffic model
-                              is the wrong KIND of model and the study's
-                              negative result becomes a positive one.
+    ratio < 0.35              ISSUE-AND-LATENCY. Where the registered
+                              issue-and-latency world (most of the per-M-tile
+                              cost not weight traffic) would put the ratio.
     0.35 .. ALPHA_BAND[0]     BELOW THE REFIT BAND.
-    ALPHA_BAND                REFIT CONFIRMED: the fitted 0.558 is a traffic
-                              fraction after all, measured without a rate.
+    ALPHA_BAND                IN THE H200 REFIT BAND.
     ALPHA_BAND[1] .. 0.85     ABOVE THE REFIT BAND.
-    ratio >= 0.85             NO REUSE. Essentially the whole weight set is
-                              re-read per M-tile; the re-read is real and the
-                              model's SHAPE was right even where its
-                              coefficient was not identifiable from timing.
+    ratio >= 0.85             NO REUSE. Where the registered no-reuse world
+                              (the whole weight set re-read per M-tile)
+                              would put the ratio.
+
+EVERY BAND IS A POSITION, NOT A READING (owner, 2026-09-26).
+`ALPHA_BAND` is the study's refit band, 0.529-0.588, fitted from H200 and
+A100-80GB rows pooled. The middle band was named REFIT-CONFIRMED, "the
+refit 0.558 is a traffic fraction after all", and that sentence is what the
+Lambda cards refuted (2026-09-25, locked 1710 MHz): the H100's timed
+ratios landed in the band at G = 2, 4 and 16 (0.577, 0.566, 0.541; the
+GH200's sat above it, 0.65-0.68) while each card's own DRAM byte ratio over
+the same treads read about 0.44, 0.21 and 0.07, so at G >= 4 the timed
+ratio is set by an on-chip floor and not by traffic. A timed ratio on its
+own is not a traffic fraction on any card. The three middle bands name where
+the ratio sits against the H200-era band and nothing more. The two outer
+bands name the registered world that would put a ratio there and nothing
+more: until 2026-09-26 ISSUE-AND-LATENCY read "most of the per-M-tile cost
+is NOT weight traffic" and NO-REUSE "the re-read is real", both statements
+about traffic off a timed ratio alone, and every Lambda byte ratio at
+G >= 4 (0.07 to 0.22) sits under 0.35, where a timed ratio that PASSES C1
+against those bytes would have printed "not weight traffic" beside "timing
+measures weight traffic here". C1 against the same card's own bytes (below),
+or `dram_counter_route.py`'s C5 over the same pair, is what says what a
+timed ratio measures, in every band.
+
+WHAT C1 CLAIMS, AND AGAINST WHAT (owner, 2026-09-26). C1 is "the timed
+ratio is THIS card's own byte ratio at this G": that timing measures weight
+traffic here. Its reference is a DRAM counter page (`r3c-g<G>.json`,
+written by `scripts/dram_counter_route.py`'s r3-arms run mode) of the
+SAME card slug and the same kernel design at the same GROUP_SIZE_M, named
+with `--byte-reference` and refused before anything is measured when it is
+another card, another design, unreadable, or not VALID: its VALIDITY gates
+are re-scored from its cells by this build's `dram_counter_route.
+score_r3_page`, never read off the page, and a page that fails one is
+refused as C5 refuses an INVALID timed page (2026-09-26). The byte ratio is
+slope(R_S) / slope(R_P) on DRAM bytes read, and its bracket is the least and
+greatest ratio each tread's lowest and highest single call allows, both
+recomputed from the page's cells by `dram_counter_route.r3_estimates`
+(`alpha_ratio`, `alpha_ratio_bracket`); nothing stored on the page is
+trusted. BOTH INSTRUMENTS OVER ONE WINDOW: the estimates C1 reads are taken
+over the page's treads `CLAIM_MIN_TREAD` and deeper, the window the timed
+ratio is fitted over (DESIGN DECISION 16), and the same estimates over every
+tread of the page are printed beside them and gate nothing. It is not a
+rounding: on the GH200's G=4 page the byte ratio is 0.215 over treads 2-6
+and 0.186 over treads 1-6. PASS: the timed point and its whole interval inside the byte
+bracket. FAIL: the two disjoint, and the page says which side: timed ABOVE
+bytes is an on-chip floor or another cost the bytes do not carry; timed
+BELOW bytes is a rate difference between the two arms. UNKNOWN: they
+overlap without containment. With replicates the same rule reads every
+run's point and the envelope of their intervals. WITHOUT A BYTE PAGE C1
+REFUSES, scored UNKNOWN in the shared table's spelling, because the
+H200-era band is not a per-card claim; the page then prints, on a line no
+gate reads, what the band test C1 used to score (`c1_verdict`, and
+`CrossRun.verdict` over replicates) would have said, so continuity with every
+page before 2026-09-26 stays visible. Four cards keep their own numbers and
+are never averaged: GH200 480GB (primary), H100 80GB HBM3, A100-SXM4-40GB
+(bytes only) and H200 (timing only), so a C1 PASS is always one card's.
 
 THE BY-PRODUCT, and it is not small. `slope(PRIVATE)` divided by the card's
 calibrated weight-stream time is `w(PRIVATE)`, which SHOULD be 1.0 exactly if
@@ -313,7 +371,9 @@ from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import csv
+import hashlib
 import importlib.util
 import json
 import math
@@ -382,7 +442,11 @@ ARM_MEANING = {
 # --------------------------------------------------------------------------
 
 ALPHA = SWEEP.ALPHA                       # 0.558, refit 2026-08-31
-ALPHA_BAND = SWEEP.ALPHA_BAND             # (0.529, 0.588), the 90% band
+#: (0.529, 0.588), the 90% band, fitted from H200 and A100-80GB rows pooled:
+#: the H200-era refit band. Since 2026-09-26 (owner) it names a POSITION in
+#: `OUTCOMES` and the ungated continuity line beside C1 (`c1_verdict`), and is
+#: not C1's claim, which reads the same card's bytes (`ByteReference`).
+ALPHA_BAND = SWEEP.ALPHA_BAND
 RETRACTED_ALPHA = SWEEP.RETRACTED_ALPHA   # 0.10, the world the study retracted
 
 #: DESIGN DECISION 1. The default model is mixtral-8x7b and not
@@ -466,8 +530,12 @@ DEFAULT_TREADS = 6
 DEFAULT_REPEATS = 9
 
 #: DESIGN DECISION 5. The interval is a percentile bootstrap over repeats at
-#: 90%, matching `ALPHA_BAND`'s own convention, so C1 compares two intervals
-#: of the same kind (it is no longer an overlap test: see `c1_verdict`).
+#: 90%, matching `ALPHA_BAND`'s own convention, so the band line compares two
+#: intervals of the same kind (it is no longer an overlap test: see
+#: `c1_verdict`). Since 2026-09-26 C1 holds the same interval inside the same
+#: card's byte bracket instead (`byte_verdict`); the bracket is the spread of
+#: the counter page's own calls, not a bootstrap, and C1 asks containment of
+#: the timed interval, so the timed spread is the one that has to fit.
 DEFAULT_DRAWS = 2000
 INTERVAL_PCT = 90.0
 
@@ -481,9 +549,11 @@ INTERVAL_PCT = 90.0
 #: flagging itself as skewed. So `--replicate-of` reads one or more earlier
 #: report.json files of the SAME design (`DESIGN_KEYS`), prints the cross-run
 #: spread and the ENVELOPE of the intervals beside this run's own, and C1 is
-#: then scored on the envelope (`CrossRun.verdict`, built on `c1_verdict`):
-#: PASS needs every run's point in ALPHA_BAND and the whole envelope inside
-#: it. OPT-IN: a run with no replicate named is scored alone, as before, and
+#: then scored on the envelope (`CrossRun.byte_verdict`, built on
+#: `byte_verdict`): PASS needs every run's point and the whole envelope inside
+#: the same card's byte bracket (2026-09-26; until then ALPHA_BAND, which
+#: `CrossRun.verdict` still reads for the ungated band line). OPT-IN: a run
+#: with no replicate named is scored alone, as before, and
 #: the page says so. `--read` re-scores a stored report the same way with
 #: nothing measured and nothing written, so a pair's spread has a committed,
 #: recomputable source. The spread itself is NOT typed here: `--read` over the
@@ -753,7 +823,9 @@ class Unmeasurable(PrivateWeightRefusal):
 # report come to name two different worlds for one number.
 # --------------------------------------------------------------------------
 
-#: The boundary below which the per-M-tile cost is not weight traffic. 0.35 is
+#: The lowest band's upper edge: the registered issue-and-latency world, where
+#: the per-M-tile cost is not weight traffic, puts a timed ratio below it (a
+#: position, not a reading: `BAND_IS_A_POSITION`). 0.35 is
 #: the "near 0.3" world this arm was commissioned to be able to find, with room
 #: for the activation term the ratio does not subtract. That term is NOT a
 #: number in this comment because it moves with the tile: it is
@@ -768,27 +840,61 @@ ISSUE_BOUND_MAX = 0.35
 #: limit.
 NO_REUSE_MIN = 0.85
 
+#: What every band adds to its position, written once (2026-09-26; the two
+#: outer bands since the same day's review, see `OUTCOMES`).
+BAND_IS_A_POSITION = (
+    "A POSITION, NOT A READING: on its own a timed ratio is not a traffic "
+    "fraction on any card, and C1 against this card's own byte page (or "
+    "dram_counter_route.py's C5 over the same pair) is what says what it "
+    "measures.")
+
 #: `(name, lo, hi, meaning)`, half-open `[lo, hi)`, in order. The last row is
 #: closed at infinity.
+#:
+#: THE THREE MIDDLE ROWS ARE NEUTRAL (owner, 2026-09-26). The middle one was
+#: REFIT-CONFIRMED, "the refit 0.558 is a traffic fraction after all", and
+#: the Lambda H100 printed it at G = 2, 4 and 16 while that card's DRAM byte
+#: ratio over the same treads read 0.45, 0.22 and 0.07 (the GH200's timed
+#: ratios sat above the band there, over bytes of 0.44, 0.22 and 0.07:
+#: `r3_estimates` over treads 2 and deeper of each card's r3c-g<G>.json,
+#: 2026-09-25). It is renamed to say
+#: where the ratio sits and no more, and the two beside it say the same about
+#: their side. The numeric partition is unchanged: the edges are
+#: `ISSUE_BOUND_MAX`, `ALPHA_BAND` and `NO_REUSE_MIN` as before.
+#:
+#: SO ARE THE TWO OUTER ROWS (2026-09-26, the review of the change above).
+#: ISSUE-AND-LATENCY read "most of the per-M-tile cost is NOT weight traffic
+#: ... the traffic model is the wrong KIND of model" and NO-REUSE "the
+#: re-read is real", each a statement about traffic off a timed ratio alone.
+#: With C1 reading the same card's bytes they contradicted it on one gate in
+#: the range C1 exists for: every Lambda byte ratio at G >= 4 is 0.07 to 0.22,
+#: under `ISSUE_BOUND_MAX`, so a timed ratio that IS its card's bytes there
+#: printed C1 PASS, "timing measures weight traffic here", above "most of the
+#: per-M-tile cost is NOT weight traffic". Each outer row now names the
+#: registered world that would put a ratio there, and says, as the middle
+#: three do, that the position is not the reading. Names and edges unchanged.
 OUTCOMES: tuple[tuple[str, float, float, str], ...] = (
     ("ISSUE-AND-LATENCY", 0.0, ISSUE_BOUND_MAX,
-     "most of the per-M-tile cost is NOT weight traffic: giving every M-tile "
-     "its own copy barely moved the time. The traffic model is the wrong KIND "
-     "of model, and the study's negative result about alpha becomes a positive "
-     "result about the mechanism."),
+     f"the timed ratio sits below {ISSUE_BOUND_MAX}, where the registered "
+     "issue-and-latency world (most of the per-M-tile cost not weight "
+     "traffic, so a private copy per M-tile barely moves the time) would put "
+     "it. " + BAND_IS_A_POSITION),
     ("BELOW-THE-REFIT-BAND", ISSUE_BOUND_MAX, ALPHA_BAND[0],
-     "the re-read is real but smaller than the refit says: between the two "
-     "registered worlds, and the page says so rather than rounding to one."),
-    ("REFIT-CONFIRMED", ALPHA_BAND[0], ALPHA_BAND[1],
-     "the refit 0.558 is a traffic fraction after all, measured here without "
-     "an assumed rate and without a fitted intercept."),
+     f"the timed ratio sits between {ISSUE_BOUND_MAX} and the H200-era refit "
+     f"band's lower edge {ALPHA_BAND[0]} (the band fitted from H200 and "
+     "A100-80GB rows pooled). " + BAND_IS_A_POSITION),
+    ("IN-THE-H200-REFIT-BAND", ALPHA_BAND[0], ALPHA_BAND[1],
+     f"the timed ratio sits inside the H200-era refit band {ALPHA_BAND[0]}-"
+     f"{ALPHA_BAND[1]} (fitted from H200 and A100-80GB rows pooled), where "
+     "the Lambda H100's timed ratios also sat at G = 2, 4 and 16 while its "
+     "own bytes read 0.45, 0.22 and 0.07. " + BAND_IS_A_POSITION),
     ("ABOVE-THE-REFIT-BAND", ALPHA_BAND[1], NO_REUSE_MIN,
-     "the re-read is larger than the refit says: between the two registered "
-     "worlds, and the page says so rather than rounding to one."),
+     f"the timed ratio sits between the H200-era refit band's upper edge "
+     f"{ALPHA_BAND[1]} and {NO_REUSE_MIN}. " + BAND_IS_A_POSITION),
     ("NO-REUSE", NO_REUSE_MIN, math.inf,
-     "essentially the whole weight set is re-read per extra M-tile. The "
-     "re-read is real and the traffic model's SHAPE was right even though its "
-     "coefficient was not identifiable from timing."),
+     f"the timed ratio sits at or above {NO_REUSE_MIN}, where the registered "
+     "no-reuse world (essentially the whole weight set re-read per extra "
+     "M-tile) would put it. " + BAND_IS_A_POSITION),
 )
 
 
@@ -4514,8 +4620,374 @@ def gpu_time_control(readings: dict, census: PathCensus, *, window: list[int],
             "--probe-repeats"]
 
 
+# --------------------------------------------------------------------------
+# C1's reference: THIS card's own DRAM bytes (owner, 2026-09-26). A timed
+# ratio is a traffic fraction on a card only where it equals that card's
+# byte ratio at the same G; the H200-era band is printed beside it, ungated.
+# --------------------------------------------------------------------------
+
+#: What C1 says, and why, when no byte page was named. Written once: the
+#: gate's `measured`, the page and report.json all carry it.
+C1_NO_BYTE_PAGE = ("no same-card byte page; the H200-era refit band is not a "
+                   "per-card claim, owner 2026-09-26")
+
+#: C1's claim, written once for the two places a C1 gate is built.
+C1_CLAIM = ("the timed ratio is this card's own DRAM byte ratio at this G: "
+            "timing measures weight traffic here")
+
+#: What a C1 that did not pass costs, written once for the same two places.
+C1_CONSEQUENCE = ("the timed ratio is not this card's byte ratio at this G, so "
+                  "on this card it is not a traffic fraction: ABOVE the bytes, "
+                  "the shared arm's time per M-tile is set by an on-chip floor "
+                  "or a cost its bytes do not carry; BELOW them, the two arms "
+                  "did not deliver their bytes at one rate")
+
+#: What each side of the comparison means, the words the page prints beside
+#: the verdict (`byte_verdict`'s second value).
+BYTE_SIDES: dict[str, str] = {
+    "inside": ("the timed ratio IS this card's byte ratio at this G, within "
+               "both instruments' spreads: timing measures weight traffic "
+               "here, and on this card the ratio reads as a traffic fraction"),
+    "above": ("timed ABOVE bytes: the shared arm pays more time per M-tile "
+              "than its DRAM bytes account for, an on-chip floor or another "
+              "cost the bytes do not carry, so the timed ratio is not a "
+              "traffic fraction here"),
+    "below": ("timed BELOW bytes: the shared arm pays less time per byte than "
+              "the private arm, a rate difference between the two arms (the "
+              "equal-rate assumption the ratio keeps fails), so the timed "
+              "ratio is not a traffic fraction here"),
+    "straddles": ("the timed interval overlaps the byte bracket without "
+                  "sitting inside it: unresolved at this precision, not a "
+                  "result"),
+    "not formed": ("the timed interval or the byte bracket is not finite: "
+                   "nothing was compared"),
+    "refused": "REFUSE: " + C1_NO_BYTE_PAGE,
+}
+
+#: The short form of each side, for the gate's one-line `measured`.
+BYTE_SIDE_WORDS: dict[str, str] = {
+    "inside": "timed inside bytes", "above": "timed ABOVE bytes",
+    "below": "timed BELOW bytes", "straddles": "timed straddles bytes",
+    "not formed": "nothing compared", "refused": "REFUSE"}
+
+
+@dataclass(frozen=True)
+class ByteReference:
+    """The same card's DRAM byte ratio at the same design and G, the reference
+    C1 scores the timed ratio against (owner, 2026-09-26). Read from an
+    r3-arms counter page by `load_byte_reference`, or PLANTED for a
+    `--self-test` world by `planted_byte_reference` (`planted`, no file).
+
+    `ratio` and `bracket` are `dram_counter_route.r3_estimates`'s
+    `alpha_ratio` and `alpha_ratio_bracket` over the page's treads in the
+    claim's window (`treads`, `min_tread` and deeper: `CLAIM_MIN_TREAD`,
+    DESIGN DECISION 16, or the window a stored report recorded when `--read`
+    re-renders it, so both instruments read one window), the ones C1 reads;
+    `ratio_all_treads` and `bracket_all_treads` are
+    the same over every tread of the page, printed beside and gating
+    nothing. `design` is the kernel both were measured in, as the page's
+    `design` block names it.
+
+    A MEASURED PAGE IS A VALID ONE (2026-09-26, the review of the change
+    above). `load_byte_reference` re-scores the page's VALIDITY gates from
+    its cells with this build's `dram_counter_route.score_r3_page` and
+    refuses a page that does not pass them all, as C5 refuses an INVALID
+    timed page. `stored_not_valid` lists the VALIDITY gates the page STORED
+    as not passing, scored before this build's rules: printed beside the
+    re-score, read by nothing. The GH200 and H100 pages of 2026-09-25 stored
+    V6 FAIL, which V6's re-derivation for cards that coalesce L2 reads (the
+    same day, `dram_counter_route.R3_COALESCING_MAJOR`) no longer finds at
+    G = 1, 2, 4 and 16; their G=64 pages re-score V7 FAIL and are refused."""
+    path: str
+    sha256: str | None
+    card: str
+    group_m: int
+    design: dict
+    ratio: float | None
+    bracket: tuple[float, float]
+    treads: tuple[int, ...]
+    ratio_all_treads: float | None = None
+    bracket_all_treads: tuple[float, float] | None = None
+    treads_all: tuple[int, ...] = ()
+    run_id: str | None = None
+    stored_not_valid: tuple[str, ...] = ()
+    planted: bool = False
+    note: str = ""
+    min_tread: int = CLAIM_MIN_TREAD
+
+    def lines(self) -> list[str]:
+        lo, hi = self.bracket
+        out = ["BYTE REFERENCE, this card's own DRAM counter page "
+               + ("(PLANTED by --self-test; nothing here was measured):"
+                  if self.planted else "(--byte-reference):")]
+        if self.planted:
+            out.append(f"  {self.note}")
+        else:
+            out.append(f"  {self.path}, sha256 {self.sha256}, run "
+                       f"{self.run_id or 'unrecorded'}")
+        out.append(f"  card {self.card}, G={self.group_m}, "
+                   + ", ".join(f"{k} {v}" for k, v in self.design.items()
+                               if k != "group_m")
+                   + ": the timed run's own card and kernel")
+        out.append(
+            "  byte ratio slope(R_S) / slope(R_P) = "
+            + (f"{self.ratio:.4f}" if self.ratio is not None else "not formed")
+            + f", its calls allowing [{lo:.4f}, {hi:.4f}], over the page's "
+            f"treads {span_text(self.treads)} (treads {self.min_tread} and "
+            "deeper, the timed ratio's own window: "
+            + ("the study's traffic model, planted)" if self.planted else
+               "dram_counter_route.r3_estimates, recomputed from the page's "
+               "cells)"))
+        if self.bracket_all_treads is not None:
+            a_lo, a_hi = self.bracket_all_treads
+            out.append(
+                "  PRINTED BESIDE IT, never gated: the same over every tread of "
+                f"the page, {span_text(self.treads_all)}, "
+                + (f"{self.ratio_all_treads:.4f}"
+                   if self.ratio_all_treads is not None else "not formed")
+                + f" [{a_lo:.4f}, {a_hi:.4f}]")
+        if not self.planted:
+            out.append(
+                "  the page's VALIDITY gates, re-scored from its cells by this "
+                "build's dram_counter_route.score_r3_page: every one PASSED "
+                "(an INVALID page is refused, as C5 refuses an INVALID timed "
+                "page)")
+            if self.stored_not_valid:
+                out.append(
+                    "  PRINTED BESIDE IT, never read: the page STORED "
+                    + ", ".join(self.stored_not_valid) + ", scored before "
+                    "this build's rules; the re-score above is what admits it")
+        return out
+
+    def as_dict(self) -> dict:
+        return {"path": self.path, "sha256": self.sha256, "card": self.card,
+                "G": self.group_m, "bracket": list(self.bracket),
+                "ratio": self.ratio, "treads": list(self.treads),
+                "min_tread": self.min_tread,
+                "ratio_all_treads": self.ratio_all_treads,
+                "bracket_all_treads": (list(self.bracket_all_treads)
+                                       if self.bracket_all_treads else None),
+                "treads_all": list(self.treads_all),
+                "design": dict(self.design), "run_id": self.run_id,
+                "page_validity": (None if self.planted else
+                                  "every VALIDITY gate PASSED, re-scored from "
+                                  "its cells by dram_counter_route."
+                                  "score_r3_page"),
+                "stored_not_valid": list(self.stored_not_valid),
+                "planted": self.planted, "note": self.note or None,
+                "source": ("PLANTED by --self-test: the study's traffic model"
+                           if self.planted else
+                           "dram_counter_route.r3_estimates: alpha_ratio and "
+                           "alpha_ratio_bracket, recomputed from the page's "
+                           "cells")}
+
+
+def _counter_route():
+    """`dram_counter_route`, imported on first use. NEVER at module level:
+    that module imports this one (its `_r3`, which is how the r3-arms family
+    builds R3's three arms), so a top-level import here would be circular,
+    and every mode that names no byte page keeps the import graph it had."""
+    import dram_counter_route as D  # scripts/ is on sys.path, as SWEEP is
+    return D
+
+
+#: The timed run's design keys C1 holds a byte page to, beyond
+#: `dram_counter_route.R3_TIMED_DESIGN` (the kernel C5 holds a timed page to:
+#: model, dtype, BLOCK_M and the pinned tile constants). GROUP_SIZE_M is the
+#: G the two pages must share; C5 matches G on its own, and here it is one
+#: more key of the same rule.
+BYTE_GROUP_KEY: tuple[str, str] = ("pinned.GROUP_SIZE_M", "group_m")
+
+
+def byte_design_mismatch(page_design: dict, *, model: str, dtype: str,
+                         block_m: int, pinned: dict) -> tuple[dict, list[str]]:
+    """`(the page's design as C1 reads it, how it differs from the timed
+    run's)`: `[]` when they are the same kernel at the same G. The keys are
+    `dram_counter_route.R3_TIMED_DESIGN` and `BYTE_GROUP_KEY`, so C1 and C5
+    hold the pair to one rule."""
+    D = _counter_route()
+    timed = {"model": model, "dtype": dtype, "block_m": block_m}
+    seen: dict = {}
+    differ: list[str] = []
+    for key, page_key in (*D.R3_TIMED_DESIGN, BYTE_GROUP_KEY):
+        mine = ((pinned or {}).get(key.split(".", 1)[1])
+                if key.startswith("pinned.") else timed.get(key))
+        theirs = page_design.get(page_key)
+        seen[page_key] = theirs
+        if mine != theirs:
+            differ.append(f"{page_key} {theirs!r} against this run's {mine!r}")
+    return seen, differ
+
+
+def load_byte_reference(path, *, card: str, card_known: bool, model: str,
+                        dtype: str, block_m: int, pinned: dict,
+                        min_tread: int = CLAIM_MIN_TREAD) -> ByteReference:
+    """The byte page `--byte-reference` names, or a refusal that names the
+    path and what is wrong, raised BEFORE anything is measured: a file that is
+    missing, not JSON or not a dict; a page that is not the r3-arms family's;
+    another card (when this run has one: `card_known`, as `load_replicates`
+    reads it); another design or another G (`byte_design_mismatch`); a page
+    whose cells form no byte ratio over the claim's window, or hold fewer
+    than `MIN_TREADS` treads there; and a page that is not VALID, its
+    VALIDITY gates re-scored from its cells by this build's
+    `dram_counter_route.score_r3_page` (2026-09-26, the review of the change
+    above: until then a page's stored failures were printed and C1 still
+    scored PASS or FAIL against it, while C5 refuses an INVALID timed page
+    in the same position, "its ratio is not quotable"). What the page STORED
+    is kept beside the re-score and read by nothing
+    (`ByteReference.stored_not_valid`). `min_tread` is the timed ratio's
+    window, so the byte estimates C1 reads are fitted over the same treads
+    of the page."""
+    p = Path(path)
+    where = f"--byte-reference {p}"
+    try:
+        raw = p.read_bytes()
+        page = json.loads(raw)
+    except (OSError, ValueError) as exc:
+        raise PrivateWeightRefusal(f"{where}: unreadable ({exc})") from None
+    if not isinstance(page, dict):
+        raise PrivateWeightRefusal(f"{where}: unreadable (not a JSON object)")
+    D = _counter_route()
+    if page.get("family") != D.R3_FAMILY:
+        raise PrivateWeightRefusal(
+            f"{where}: not a DRAM counter page of the {D.R3_FAMILY} family "
+            f"(family {page.get('family')!r}); C1 reads the r3c-g<G>.json "
+            "pages scripts/dram_counter_route.py writes in its r3-arms run "
+            "mode")
+    slug = (page.get("card") or {}).get("slug")
+    if not slug:
+        raise PrivateWeightRefusal(
+            f"{where}: unreadable (the page names no card slug, so it cannot "
+            "be held to this run's card)")
+    if card_known and slug != card:
+        raise PrivateWeightRefusal(
+            f"{where}: another card; the page was counted on {slug} and this "
+            f"run is {card}. C1 compares a timed ratio with the SAME card's "
+            "bytes: each card keeps its own numbers and none is averaged")
+    design = page.get("design")
+    if not isinstance(design, dict) or not isinstance(page.get("cells"), list):
+        raise PrivateWeightRefusal(f"{where}: unreadable (no design or no "
+                                   "cells)")
+    seen, differ = byte_design_mismatch(design, model=model, dtype=dtype,
+                                        block_m=block_m, pinned=pinned)
+    if differ:
+        raise PrivateWeightRefusal(
+            f"{where}: another design; it differs in " + "; ".join(differ)
+            + ". C1 compares a timed ratio with the bytes of the SAME kernel "
+            "at the same G")
+    # THE PAGE'S VALIDITY, RE-SCORED AND NOT READ OFF IT: the stored gates
+    # were scored by the build that wrote the page, and the 2026-09-25
+    # Hoppers' pages stored a V6 FAIL that V6's re-derivation the same day
+    # no longer finds. Re-scored, a page that fails is refused.
+    try:
+        page_gates, _summary = D.score_r3_page(page)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError,
+            IndexError, AttributeError) as exc:
+        raise PrivateWeightRefusal(
+            f"{where}: unreadable (its cells could not be scored: "
+            f"{type(exc).__name__}: {exc})") from None
+    broken = [f"{g.number} {g.verdict}" for g in page_gates
+              if g.kind == VALIDITY and g.verdict != PASS]
+    if broken:
+        raise PrivateWeightRefusal(
+            f"{where}: not a VALID counter page; re-scored from its cells by "
+            "this build's dram_counter_route.score_r3_page it reads "
+            + ", ".join(broken) + ". Its byte ratio is not quotable, so C1 "
+            "does not compare a timed ratio with it, as C5 does not compare "
+            "a byte page with an INVALID timed page")
+
+    def estimates(min_tread: int):
+        # The page restricted to one window, cells and design together, so
+        # `r3_estimates` fits exactly the treads C1 reads.
+        window = copy.deepcopy(page)
+        window["cells"] = [c for c in page["cells"]
+                           if int(c.get("n", 0)) >= min_tread]
+        window["design"]["treads"] = [int(n) for n in design.get("treads") or []
+                                      if int(n) >= min_tread]
+        treads = sorted({int(c["n"]) for c in window["cells"]
+                         if c.get("arm") == SHARED})
+        est = D.r3_estimates(window)
+        return treads, est.get("alpha_ratio"), est.get("alpha_ratio_bracket")
+
+    try:
+        treads, ratio, bracket = estimates(min_tread)
+        treads_all, ratio_all, bracket_all = estimates(1)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError,
+            IndexError) as exc:
+        raise PrivateWeightRefusal(
+            f"{where}: unreadable (its cells form no byte ratio: "
+            f"{type(exc).__name__}: {exc})") from None
+    if len(treads) < MIN_TREADS:
+        raise PrivateWeightRefusal(
+            f"{where}: its cells hold {len(treads)} tread(s) in the timed "
+            f"ratio's window (treads {min_tread} and deeper), and a slope may "
+            f"not be quoted below {MIN_TREADS}")
+    if (not bracket or len(bracket) != 2
+            or not all(isinstance(v, (int, float)) and math.isfinite(v)
+                       for v in bracket)):
+        raise PrivateWeightRefusal(
+            f"{where}: unreadable (its cells form no byte ratio bracket over "
+            f"treads {span_text(treads)}: the private arm's byte slope is not "
+            "positive)")
+    stored_not_valid = tuple(
+        f"{g.get('number') or g.get('tag')} {g.get('verdict')}"
+        for g in page.get("gates") or []
+        if isinstance(g, dict) and g.get("kind") == VALIDITY
+        and g.get("verdict") != PASS)
+    return ByteReference(
+        path=str(p), sha256=hashlib.sha256(raw).hexdigest(), card=slug,
+        group_m=int(design["group_m"]), design=seen,
+        ratio=(float(ratio) if ratio is not None else None),
+        bracket=(float(bracket[0]), float(bracket[1])), treads=tuple(treads),
+        ratio_all_treads=(float(ratio_all) if ratio_all is not None else None),
+        bracket_all_treads=((float(bracket_all[0]), float(bracket_all[1]))
+                            if bracket_all else None),
+        treads_all=tuple(treads_all), run_id=page.get("run_id"),
+        stored_not_valid=stored_not_valid, min_tread=min_tread)
+
+
+def byte_verdict(points, interval: tuple[float, float],
+                 bracket: tuple[float, float]) -> tuple[str, str]:
+    """`(verdict, side)` for C1 (owner, 2026-09-26): the timed reading
+    against the same card's byte bracket, both closed.
+
+    The timed reading is its interval widened, if need be, to reach its own
+    point(s): one run's point and interval, or with replicates every run's
+    point and the envelope of their intervals (`CrossRun.byte_verdict`). A
+    percentile bootstrap need not hold its own point, and the band test
+    this replaces asked for both, so the widening keeps that.
+
+        inside     the whole reading inside the bracket          PASS
+        above      the whole reading above it: timed > bytes     FAIL
+        below      the whole reading below it: timed < bytes     FAIL
+        straddles  they overlap without containment              UNKNOWN
+        not formed a bound that is not finite                    UNKNOWN
+    """
+    lo, hi = interval
+    b_lo, b_hi = bracket
+    pts = list(points)
+    if not pts or not all(v is not None and math.isfinite(v)
+                          for v in (lo, hi, b_lo, b_hi, *pts)):
+        return UNKNOWN, "not formed"
+    span_lo, span_hi = min(lo, *pts), max(hi, *pts)
+    if b_lo <= span_lo and span_hi <= b_hi:
+        return PASS, "inside"
+    if span_lo > b_hi:
+        return FAIL, "above"
+    if span_hi < b_lo:
+        return FAIL, "below"
+    return UNKNOWN, "straddles"
+
+
 def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
-    """PASS, FAIL or UNKNOWN for C1, from the point AND the interval together.
+    """PASS, FAIL or UNKNOWN for the H200-era REFIT-BAND test, from the point
+    AND the interval together. It was C1 until 2026-09-26; since then it is
+    the ungated line C1 prints beside its own verdict (`gate_c1_ratio`), so a
+    page shows what the band test would have said, and `CrossRun.verdict`
+    applies it over replicates. It scores nothing. The owner's reason: the
+    band is pooled from H200 and A100-80GB rows and is not a per-card claim,
+    and on the Lambda H100 it PASSED at G = 2, 4 and 16 while that card's own
+    bytes read 0.45, 0.22 and 0.07 (`OUTCOMES`).
 
     PASS only when the point lands in ALPHA_BAND and the WHOLE interval sits
     inside it. FAIL only when the interval misses ALPHA_BAND entirely, with the
@@ -4591,11 +5063,17 @@ class RunReading:
 
 @dataclass(frozen=True)
 class CrossRun:
-    """Several runs of one design read together. Built on `c1_verdict` so the
-    band rule is written once: PASS iff every run's point PASSes against the
-    ENVELOPE of all intervals; FAIL iff the envelope misses the band (which
-    every point then agrees on); otherwise UNKNOWN. With one reading it is
-    exactly `c1_verdict(ratio, interval)`.
+    """Several runs of one design read together.
+
+    TWO READINGS OF ONE ENVELOPE (2026-09-26). `byte_verdict` is C1's: every
+    run's point and the ENVELOPE of all intervals against the same card's
+    byte bracket, through `byte_verdict` so the rule is written once.
+    `verdict` is the H200-era refit band's, built on `c1_verdict`: PASS iff
+    every run's point PASSes against the envelope; FAIL iff the envelope
+    misses the band (which every point then agrees on); otherwise UNKNOWN,
+    and with one reading exactly `c1_verdict(ratio, interval)`. It was C1's
+    until 2026-09-26 and is now the ungated band line beside it, and the
+    `joint` column the alpha(G) chain's PAIRS tables print.
 
     ONE WINDOW OR NONE: readings fitted over two claim windows are refused
     at construction, the last line of defence behind `load_replicates`'
@@ -4650,6 +5128,8 @@ class CrossRun:
 
     @property
     def verdict(self) -> str:
+        """The H200-era refit band over the envelope: printed, never gated,
+        since 2026-09-26 (the class docstring)."""
         got = {c1_verdict(p, self.envelope) for p in self.points}
         if got == {PASS}:
             return PASS
@@ -4657,7 +5137,14 @@ class CrossRun:
             return FAIL
         return UNKNOWN
 
-    def lines(self) -> list[str]:
+    def byte_verdict(self, ref: ByteReference | None) -> tuple[str, str]:
+        """C1 over the runs: `byte_verdict` on every point and the envelope
+        against `ref`'s bracket, `(UNKNOWN, "refused")` with no byte page."""
+        if ref is None:
+            return UNKNOWN, "refused"
+        return byte_verdict(self.points, self.envelope, ref.bracket)
+
+    def lines(self, ref: ByteReference | None = None) -> list[str]:
         n = len(self.readings)
         lo, hi = self.envelope
         out = [f"REPLICATES: {n} run(s) of this design read together; C1 is "
@@ -4710,17 +5197,36 @@ class CrossRun:
         out.append("  the within-run interval is a bootstrap over repeats and "
                    "does not cover the run-to-run spread; a point at an edge of "
                    "its own interval is that bootstrap flagging itself as skewed")
-        out.append(f"  joint C1 over the envelope: {self.verdict} (PASS needs "
-                   "every point in ALPHA_BAND and the whole envelope inside it; "
-                   "FAIL needs the envelope to miss the band)")
+        joint, side = self.byte_verdict(ref)
+        if ref is None:
+            out.append(f"  joint C1 over the envelope: {joint}, {BYTE_SIDES[side]}")
+        else:
+            out.append(f"  joint C1 over the envelope: {joint} against this "
+                       f"card's byte bracket [{ref.bracket[0]:.4f}, "
+                       f"{ref.bracket[1]:.4f}]: {BYTE_SIDES[side]} (PASS needs "
+                       "every point and the whole envelope inside the bracket; "
+                       "FAIL needs them disjoint)")
+        out.append(f"  PRINTED, NOT GATED: the H200-era refit band over the "
+                   f"envelope reads {self.verdict} (every point in ALPHA_BAND "
+                   f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}) and the whole envelope "
+                   "inside it for PASS; the envelope missing it for FAIL)")
         return out
 
-    def as_dict(self) -> dict:
+    def as_dict(self, ref: ByteReference | None = None) -> dict:
+        """`verdict` is the H200-era band's over the envelope, as it always
+        was, and the alpha(G) chain reads it as its `joint` column;
+        `c1_verdict` is C1's joint verdict against `ref` (2026-09-26)."""
+        joint, side = self.byte_verdict(ref)
         return {"n": len(self.readings), "points": self.points,
                 "spread": self.spread, "relative_spread": self.relative_spread,
                 "sd": self.sd, "envelope": list(self.envelope),
                 "disjoint_pairs": [list(p) for p in self.disjoint_pairs()],
-                "verdict": self.verdict, "claim_min_tread": self.min_tread,
+                "verdict": self.verdict,
+                "verdict_is": ("the H200-era refit band ALPHA_BAND over the "
+                               "envelope, printed and not gated since "
+                               "2026-09-26; C1's joint verdict is c1_verdict"),
+                "c1_verdict": joint, "c1_side": side,
+                "claim_min_tread": self.min_tread,
                 "runs": [asdict(r) for r in self.readings]}
 
 
@@ -4765,7 +5271,8 @@ def design_value(payload: dict, key: str):
 
 def load_replicates(paths, *, design: dict, card_known: bool,
                     this: RunReading | None = None, this_run_id: str = "",
-                    rescore_draws: int | None = None) -> list[RunReading]:
+                    rescore_draws: int | None = None,
+                    byte_ref: ByteReference | None = None) -> list[RunReading]:
     """The replicates named on the command line, or a refusal that names the
     path and what differs. Refused BEFORE the card is touched: a file that is
     missing or not JSON, another experiment's report, a planted (--self-test)
@@ -4781,7 +5288,9 @@ def load_replicates(paths, *, design: dict, card_known: bool,
     --rescore`) every replicate is instead RE-SCORED from the cells.csv beside
     its report over this build's `CLAIM_MIN_TREAD` (`rescore`, at that many
     bootstrap draws), and its stored window is not compared: the reading's
-    is, and `design` must carry this build's."""
+    is, and `design` must carry this build's. A re-scored replicate's own C1,
+    and so the own exit word printed beside it, is scored against `byte_ref`
+    (the same card and design by the design keys, so the same byte page)."""
     seen_paths = {Path(this.path).resolve()} if this and this.path else set()
     seen_ids = {x for x in (this.run_id if this else None, this_run_id) if x}
     seen_stamps = {this.stamp} if this and this.stamp else set()
@@ -4819,7 +5328,7 @@ def load_replicates(paths, *, design: dict, card_known: bool,
                 + ("; a report fitted over another claim window is re-read "
                    "over this one from its cells.csv with --read --rescore"
                    if "claim_min_tread" in differ else ""))
-        r = (rescore(payload, p, draws=rescore_draws).reading
+        r = (rescore(payload, p, draws=rescore_draws, byte_ref=byte_ref).reading
              if rescore_draws is not None else run_reading(payload, p))
         resolved = p.resolve()
         if resolved in seen_paths:
@@ -4867,24 +5376,30 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                   cross: CrossRun | None = None, min_tread: int,
                   treads: list[int] | None = None,
                   all_treads: tuple[float | None, tuple[float, float]] | None
-                  = None) -> Gate:
-    """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit,
+                  = None, byte_ref: ByteReference | None = None) -> Gate:
+    """The measurement, `slope(SHARED) / slope(PRIVATE)`, against THIS
+    card's own DRAM byte ratio at the same design and G (owner, 2026-09-26),
     both slopes over the treads `min_tread` and deeper: THE CLAIM'S WINDOW
     at `CLAIM_MIN_TREAD` (DESIGN DECISION 16), or the window a stored report
     recorded when `--read` re-renders it as scored. `treads` names the ones
     the fit had, for the page; `all_treads` is the same ratio over every
     tread, `(ratio, interval)`, PRINTED BESIDE IT and scored by nothing.
 
-    THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
-    (0.529-0.588, 90%). `c1_verdict` scores it from the point and the interval
-    together; with replicates (`cross`) the same rule is applied to every
-    run's point against the ENVELOPE of the runs' intervals, and the page
-    keeps what this run alone said beside it (DESIGN DECISION 14). Both
-    registered alternatives -- a ratio near 1.0, meaning the
-    whole set is re-read, and a ratio near 0.3, meaning the per-M-tile cost is
-    not traffic -- FAIL it, and that is the point: a CLAIM that does not pass
-    is a result, and this is the arm where either of those results is worth
-    more than a pass.
+    THE CLAIM is that the timed ratio IS this card's byte ratio: that
+    timing measures weight traffic here. `byte_verdict` scores it from the
+    point and the interval together against `byte_ref`'s bracket; with
+    replicates (`cross`) the same rule reads every run's point and the
+    ENVELOPE of the runs' intervals, and the page keeps what this run alone
+    said beside it (DESIGN DECISION 14). A FAIL names its side: timed ABOVE
+    bytes is an on-chip floor or another cost the bytes do not carry, timed
+    BELOW bytes a rate difference between the arms. Either is a result.
+
+    WITHOUT A BYTE PAGE C1 REFUSES, spelled UNKNOWN in the shared table,
+    which classifies to CLAIM_FAIL: a measured page with no claim decided.
+    THE H200-ERA BAND IS NOT GONE FROM THE PAGE: what its test (`c1_verdict`,
+    and `CrossRun.verdict` over replicates) would have said is printed on a
+    line no gate reads, with a byte page or without one, so every page since
+    2026-09-26 can be read against every page before it.
 
     SCORED RAW. Both slopes carry the same activation and compute terms and
     dividing them subtracts nothing, so the raw ratio owes nothing to a model.
@@ -4895,8 +5410,15 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
     """
     lo, hi = interval
     name, meaning = outcome_for(ratio)
-    alone = c1_verdict(ratio, interval)
-    verdict = cross.verdict if cross is not None else alone
+    band_alone = c1_verdict(ratio, interval)
+    band = cross.verdict if cross is not None else band_alone
+    if byte_ref is not None:
+        alone, _alone_side = byte_verdict([ratio], interval, byte_ref.bracket)
+    else:
+        alone = UNKNOWN
+    verdict, side = (cross.byte_verdict(byte_ref) if cross is not None else
+                     byte_verdict([ratio], interval, byte_ref.bracket)
+                     if byte_ref is not None else (UNKNOWN, "refused"))
     window = (f"treads {span_text(treads)}" if treads
               else f"treads {min_tread} and deeper")
     detail = [
@@ -4909,7 +5431,7 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
            "it from its cells.csv)"),
         f"{INTERVAL_PCT:.0f}% percentile bootstrap interval "
         f"[{lo:.4f}, {hi:.4f}] over {draws} draws that produced a ratio",
-        f"THE WORLD THIS LANDS IN: {name}",
+        f"WHERE THIS LANDS: {name}",
         f"  {meaning}",
         "the registered partition, in full: "
         + "; ".join(f"{n} [{a:.3f}, {b:.3f})" for n, a, b, _ in OUTCOMES),
@@ -4937,40 +5459,64 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
         "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured "
         "slope over another, taken minutes apart on one card at one tile in "
         "one kernel.")
+    if byte_ref is not None:
+        detail += byte_ref.lines()
+        detail.append(f"C1: {BYTE_SIDES[side]}"
+                      + (" (over the ENVELOPE of every run's interval)"
+                         if cross is not None else ""))
+    else:
+        detail.append(
+            f"C1 REFUSES: {C1_NO_BYTE_PAGE}. A timed ratio is a traffic "
+            "fraction on a card only where it equals that card's own byte "
+            "ratio at this G; name the card's r3c-g<G>.json with "
+            "--byte-reference, on the run or later with --read")
+    detail.append(
+        "PRINTED, NOT GATED (continuity, owner 2026-09-26): the H200-era "
+        "refit-band test C1 scored until then, point and whole interval "
+        f"inside ALPHA_BAND [{ALPHA_BAND[0]}, {ALPHA_BAND[1]}) pooled from "
+        f"H200 and A100-80GB rows, would read {band_alone} on this run alone"
+        + (f" and {band} over the ENVELOPE of the {len(cross.readings)} runs"
+           if cross is not None else ""))
     if cross is not None:
         detail.append(f"this run alone would read {alone}; the verdict above "
                       "is the JOINT one over the runs below")
-        detail += cross.lines()
+        detail += cross.lines(byte_ref)
     else:
         detail.append(
             "scored on this run's within-run interval alone: no replicate was "
             "named (--replicate-of), and a bootstrap over repeats is not the "
             "run-to-run spread (DESIGN DECISION 14)")
-    if verdict == UNKNOWN:
+    if verdict == UNKNOWN and byte_ref is not None:
         detail.append(
-            "UNKNOWN, NOT A RESULT: the interval touches ALPHA_BAND but does "
-            "not sit inside it, or the point is outside it, so the claim is "
-            "unresolved at this precision"
+            "UNKNOWN, NOT A RESULT: the timed reading overlaps this card's "
+            "byte bracket without sitting inside it, or is not formed, so "
+            "whether timing measures traffic here is unresolved at this "
+            "precision"
             + (" (over the ENVELOPE of every run's interval)"
                if cross is not None else ""))
-    return Gate("C1", CLAIM,
-                "the re-read fraction, measured against a no-reuse reference, "
-                "is the study's refit alpha",
-                verdict,
-                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}, over {window}"
-                + (f"; over {len(cross.readings)} runs: spread "
-                   f"{cross.spread:.4f}, envelope [{cross.envelope[0]:.4f}, "
-                   f"{cross.envelope[1]:.4f}]" if cross is not None else ""),
-                f"PASS: point and whole interval inside ALPHA_BAND "
-                f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}); FAIL: interval misses "
-                "ALPHA_BAND; otherwise UNKNOWN"
-                + ("; with replicates: every run's point in the band and the "
-                   "ENVELOPE of their intervals inside it"
+    timed = f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}, over {window}"
+    runs = (f"; over {len(cross.readings)} runs: spread {cross.spread:.4f}, "
+            f"envelope [{cross.envelope[0]:.4f}, {cross.envelope[1]:.4f}]"
+            if cross is not None else "")
+    if byte_ref is not None:
+        b_lo, b_hi = byte_ref.bracket
+        measured = (f"{timed}; bytes "
+                    + (f"{byte_ref.ratio:.4f} " if byte_ref.ratio is not None
+                       else "")
+                    + f"[{b_lo:.4f}, {b_hi:.4f}] on {byte_ref.card} at "
+                    f"G={byte_ref.group_m}: {BYTE_SIDE_WORDS[side]}{runs}")
+    else:
+        measured = f"REFUSE: {C1_NO_BYTE_PAGE}; timed {timed}{runs}"
+    return Gate("C1", CLAIM, C1_CLAIM, verdict, measured,
+                "PASS: the timed point and its whole interval inside the same "
+                "card's byte bracket (a dram_counter_route r3-arms page of "
+                "this design at this G, over the claim's window); FAIL: the "
+                "two disjoint, the side named; otherwise UNKNOWN; no byte "
+                "page: REFUSE, scored UNKNOWN"
+                + ("; with replicates: every run's point and the ENVELOPE of "
+                   "their intervals against the bracket"
                    if cross is not None else ""),
-                "the refit alpha is not the traffic fraction it is quoted as, "
-                "and the page names which of the registered worlds it is "
-                "instead",
-                detail)
+                C1_CONSEQUENCE, detail)
 
 
 def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
@@ -5066,7 +5612,9 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
            "ratio over every tread is printed beside it and gates nothing",
            f"  the study's refit alpha {alpha:.3f}, band "
            f"{ALPHA_BAND[0]}-{ALPHA_BAND[1]} (90%), against the retracted "
-           f"{RETRACTED_ALPHA}",
+           f"{RETRACTED_ALPHA}: the H200-era band, fitted from H200 and "
+           "A100-80GB rows pooled, a POSITION on this page and not C1's claim "
+           "(owner, 2026-09-26)",
            f"  ridge       {ridge:.2f} Op/B, {ridge_source or 'source not stated'}",
            f"  bandwidth   {bandwidth_gbps:.1f} GB/s, "
            f"{bw_source or 'source not stated'}",
@@ -5074,7 +5622,9 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
            f"{weight / 1e9:.4f} GB in {stream_ms:.4f} ms at that rate",
            "",
            "  THE REGISTERED PARTITION OF THE RATIO, covering [0, inf) with no "
-           "gap and no overlap:"]
+           "gap and no overlap; every row names a position and nothing more, "
+           "the three middle ones against the H200-era band and the two outer "
+           "ones where a registered world would put the ratio:"]
     for name, lo, hi, meaning in OUTCOMES:
         top = "inf" if hi == math.inf else f"{hi:.3f}"
         out.append(f"    [{lo:.3f}, {top:>5s})  {name}")
@@ -5144,9 +5694,15 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "never withholds; an EAGER fallback that comes back host-bound "
                "is scored only if it resolves NATIVE's switch at the census "
                "tread")
-    out.append("    C1 PASS: point and whole interval inside ALPHA_BAND; "
-               "FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN; the ratio "
-               f"over treads {CLAIM_MIN_TREAD} and deeper")
+    out.append("    C1 the timed ratio is this card's own DRAM byte ratio at "
+               "this G (--byte-reference, a dram_counter_route r3-arms page of "
+               "the same card, design and G, its byte ratio over treads "
+               f"{CLAIM_MIN_TREAD} and deeper like the timed one). PASS: the "
+               "timed point and whole interval inside the byte bracket; FAIL: "
+               "disjoint, ABOVE the bytes an on-chip floor or another cost, "
+               "BELOW them a rate difference; otherwise UNKNOWN; no byte page: "
+               "REFUSE, scored UNKNOWN. What the H200-era band test would have "
+               "said is printed beside it and gates nothing")
     out.append(f"    C2 the delivered weight-read rate, off the private slope over "
                f"treads {CLAIM_MIN_TREAD} and deeper, is at or under the "
                f"card's own, +{ACHIEVED_RATE_TOLERANCE:.0%}")
@@ -5251,12 +5807,41 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
     return out
 
 
+def byte_plan_lines(byte_ref: ByteReference | None, *, card: str) -> list[str]:
+    """The plan page's byte-page rows: what C1 will be scored against, or
+    that it will refuse (owner, 2026-09-26)."""
+    if byte_ref is None:
+        return ["bytes       (none: C1 will REFUSE, " + C1_NO_BYTE_PAGE + "; "
+                "the page prints what the H200-era band test would have said, "
+                "ungated. --byte-reference names this card's r3c-g<G>.json, "
+                "here or later with --read)"]
+    lo, hi = byte_ref.bracket
+    out = [f"bytes       {byte_ref.path}: card {byte_ref.card}, "
+           f"G={byte_ref.group_m}, byte ratio "
+           + (f"{byte_ref.ratio:.4f} " if byte_ref.ratio is not None else "")
+           + f"[{lo:.4f}, {hi:.4f}] over its treads {span_text(byte_ref.treads)}; "
+           "C1 holds the timed ratio inside it"]
+    if card == NO_CARD_SLUG and not byte_ref.planted:
+        out.append("            the design is checked; the CARD is checked on "
+                   "the card: this box has none, and a run on any card but "
+                   f"{byte_ref.card} refuses the page before measuring")
+    if not byte_ref.planted:
+        out.append("            VALID: every VALIDITY gate re-scored from its "
+                   "cells by this build's dram_counter_route.score_r3_page "
+                   "PASSED"
+                   + (" (the page STORED " + ", ".join(byte_ref.stored_not_valid)
+                      + ", scored before this build's rules and read by "
+                      "nothing here)" if byte_ref.stored_not_valid else ""))
+    return out
+
+
 def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
                bandwidth_gbps: float, bw_source: str, out_dir: Path,
                pinned: dict, run_id: str, resources, card: str, git_note: str,
                mem: MemoryPlan, tokens: dict[int, int], ridge: float,
                alpha: float, copies_declared: int, declared_reason: str,
-               census: PathCensus, replicates: tuple = ()) -> list[str]:
+               census: PathCensus, replicates: tuple = (),
+               byte_ref: ByteReference | None = None) -> list[str]:
     deepest = treads[-1]
     return [
         f"experiment  private_weight_reference / {run_id}",
@@ -5311,6 +5896,7 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         "session     " + (args.session_tag or "(none: a bare run, keyed on its "
                                               "arguments and card alone)"),
         *replicate_plan_lines(replicates),
+        *byte_plan_lines(byte_ref, card=card),
         f"bandwidth   {bandwidth_gbps:.1f} GB/s, {bw_source}",
         f"card        {card}"
         + ("   (no CUDA device: this is a plan or a replay, not a measurement)"
@@ -5914,7 +6500,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             copies_declared: int | None = None,
             clock_elasticity: ClockElasticity | None = None,
             run_id: str = "", session_tag: str = "",
-            replicates: tuple = (), duty: float) -> Report:
+            replicates: tuple = (), duty: float,
+            byte_reference: ByteReference | None = None) -> Report:
     """The page and report.json from the cells. `duty` is the REQUESTED duty
     (`--duty`), recorded as the payload's `duty` whatever was timed: a page
     whose sweep was skipped (V8 FAIL) or whose every cell failed has no
@@ -5926,7 +6513,13 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     THE CLAIM IS READ OVER `CLAIM_MIN_TREAD` AND DEEPER (DESIGN DECISION 16),
     and the same fits over every tread are printed beside it and stored under
     their own keys; `window_fit` and `window_gates` are the construction,
-    which `rescore` shares."""
+    which `rescore` shares.
+
+    C1 READS `byte_reference`, this card's own byte page (owner, 2026-09-26),
+    and REFUSES without one (`gate_c1_ratio`); report.json records the page
+    (`byte_reference`: path, sha256, card slug, G, bracket), what C1 said on
+    this run alone (`c1_verdict_alone`), and what the H200-era band test
+    would have said on it (`refit_band_verdict_alone`, ungated)."""
     if census is None:
         census = path_census(cfg, treads, block_m, {
             arm: declared_experts(arm, cfg.num_experts,
@@ -6038,28 +6631,28 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
              if replicates else None)
     claim_treads = treads_in_window(treads, min_tread=CLAIM_MIN_TREAD)
     if ratio is None or this_reading is None:
-        gates.append(Gate("C1", CLAIM,
-                          "the re-read fraction, measured against a no-reuse "
-                          "reference, is the study's refit alpha",
-                          UNKNOWN,
+        gates.append(Gate("C1", CLAIM, C1_CLAIM, UNKNOWN,
                           "no ratio was formed" if ratio is None
                           else f"{ratio:.4f}, no interval was formed",
-                          "point and whole interval inside ALPHA_BAND "
-                          f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}), the ratio over "
-                          f"treads {CLAIM_MIN_TREAD} and deeper",
-                          "the refit alpha is not the traffic fraction it is "
-                          "quoted as",
+                          "the timed point and whole interval inside this "
+                          "card's byte bracket, the ratio over treads "
+                          f"{CLAIM_MIN_TREAD} and deeper",
+                          C1_CONSEQUENCE,
                           ([claim.unmeasurable] if claim.unmeasurable else [])
+                          + (byte_reference.lines() if byte_reference is not None
+                             else [f"and no byte page: {C1_NO_BYTE_PAGE}"])
                           + (["this run enters no reading; the replicates "
                               "named are read together below and C1 stays "
-                              "UNKNOWN for this run"] + cross.lines()
+                              "UNKNOWN for this run"]
+                             + cross.lines(byte_reference)
                              if cross is not None else [])))
     else:
         gates.append(gate_c1_ratio(ratio, interval, claim.draws_got,
                                    corrected=corrected, clock=clock_correction,
                                    cross=cross, min_tread=CLAIM_MIN_TREAD,
                                    treads=ratio_treads(claim),
-                                   all_treads=(every.ratio, every.interval)))
+                                   all_treads=(every.ratio, every.interval),
+                                   byte_ref=byte_reference))
     gates.append(windowed["C2"])
 
     lines += ["", "=" * 72, "GATES", "=" * 72]
@@ -6164,9 +6757,23 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "ratio_corrected": corrected,
         # WHAT THIS RUN ALONE SAID, beside the joint verdict in gates[C1]: a
         # reader of the document can tell which rule produced the verdict.
-        "c1_verdict_alone": (c1_verdict(ratio, tuple(interval))
+        # C1's rule since 2026-09-26: this run's point and interval against
+        # the byte page, UNKNOWN (C1 refused) with none.
+        "c1_verdict_alone": ((byte_verdict([ratio], tuple(interval),
+                                           byte_reference.bracket)[0]
+                              if byte_reference is not None else UNKNOWN)
                              if ratio is not None else None),
-        "replicates": (cross.as_dict() if cross is not None else None),
+        # THE BYTE PAGE C1 READ (owner, 2026-09-26): path, sha256, card slug,
+        # G and the bracket, with the estimates over every tread beside;
+        # null when none was named, and C1 then refused.
+        "byte_reference": (byte_reference.as_dict()
+                           if byte_reference is not None else None),
+        # PRINTED, NEVER GATED: what the H200-era band test, C1 until
+        # 2026-09-26, says of this run alone (`c1_verdict`).
+        "refit_band_verdict_alone": (c1_verdict(ratio, tuple(interval))
+                                     if ratio is not None else None),
+        "replicates": (cross.as_dict(byte_reference)
+                       if cross is not None else None),
         "clock_correction": (clock_correction.as_dict()
                              if clock_correction is not None else None),
         "outcome": (outcome_for(ratio)[0] if ratio is not None else None),
@@ -6220,7 +6827,8 @@ class Rescore:
 
 
 def rescore(payload: dict, path: Path | str | None, *, draws: int,
-            min_tread: int = CLAIM_MIN_TREAD) -> Rescore:
+            min_tread: int = CLAIM_MIN_TREAD,
+            byte_ref: ByteReference | None = None) -> Rescore:
     """Re-score a stored report from the cells.csv beside it, over the treads
     `min_tread` and deeper: `window_fit` for the claim and for every tread,
     `declaration_reading` at the switch the report fitted V5 at,
@@ -6229,7 +6837,9 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
     same window (left as stored when the report stored no probe). The
     bootstrap is drawn at the report's own seed with `draws` draws, so a
     report re-scored over the window it was written with reproduces its own
-    ratio, interval and gates (the tests hold that).
+    ratio, interval and gates (the tests hold that). C1 is scored against
+    `byte_ref`, the same card's byte page, and refuses without one, as
+    `analyse` does (owner, 2026-09-26).
 
     REFUSED, never guessed: no cells.csv beside the report, a model this
     build does not know, a planted report, or cells that form no ratio or no
@@ -6302,7 +6912,7 @@ def rescore(payload: dict, path: Path | str | None, *, draws: int,
     gates["C1"] = gate_c1_ratio(
         claim.ratio, claim.interval, claim.draws_got, corrected=claim.corrected,
         min_tread=min_tread, treads=ratio_treads(claim),
-        all_treads=(every.ratio, every.interval))
+        all_treads=(every.ratio, every.interval), byte_ref=byte_ref)
     probe = stored_probe(payload)
     if probe is not None:
         gates["V8"] = gate_v8_alignment(probe, treads=treads, census=census,
@@ -6431,6 +7041,17 @@ class World:
     #: every arm registered V1 FAIL once and got PASS, correctly: the gates
     #: measure different failures and a world has to produce the one it names.
     drop_treads_from: tuple[str, tuple[int, ...]] | None = None
+    #: THE PLANTED BYTE PAGE C1 reads (owner, 2026-09-26): the alpha whose
+    #: traffic the planted DRAM counter page counts (`planted_byte_reference`).
+    #: None counts the world's own `alpha`, the page this world's kernel would
+    #: write: its cells are time over one rate by construction, so the planted
+    #: bytes and the planted timing agree. A world that sets it apart from
+    #: `alpha` plants timing that is NOT its bytes, which is what C1 exists
+    #: to catch.
+    byte_alpha: float | None = None
+    #: False plants no byte page at all, as a pod run with no --byte-reference
+    #: has none: C1 then refuses.
+    byte_page: bool = True
 
     def check(self, report: Report) -> list[str]:
         got = {g.tag: g.verdict for g in report.gates}
@@ -6460,6 +7081,62 @@ class World:
         return bad
 
 
+#: What the "on-chip-floor" world's byte page counts: 0.215 is what
+#: `r3_estimates` reads over treads 2 and deeper of the GH200's G=4 page
+#: (results/published/2026-09-25-nvidia_gh200_480gb-session, r3c-g4.json),
+#: and 0.22 plants that shape. A PLANTED value, not that page's number: the
+#: tests read the page itself.
+PLANTED_FLOOR_BYTE_ALPHA = 0.22
+
+#: THE PLANTED BYTE PAGE'S HALF WIDTH, a planted value and CHOSEN
+#: (2026-09-26). The planted timed intervals at the default --plant-noise
+#: (0.4%) reach about 0.01 from the planted traffic ratio (0.0104 in the
+#: no-reuse world, 0.0097 in clock-split-elastic, whose private clock
+#: deflates it by 1.5%), so a bracket of +/- 0.02 holds every traffic world
+#: by containment and not by luck. The GH200's own brackets are narrower
+#: (0.0014 wide at G=4 over treads 2-6), and the tests hold C1 against a
+#: real one.
+PLANTED_BYTE_HALF_WIDTH = 0.02
+
+
+def planted_byte_reference(world: World, cfg, *, block_m: int, dtype: str,
+                           card: str, model: str, pinned: dict,
+                           treads: list[int]) -> ByteReference | None:
+    """The byte page a planted world plants for C1, or None for a world that
+    plants none (`World.byte_page`). The byte ratio is what the study's own
+    traffic model counts at `World.byte_alpha` (the world's `alpha` when it
+    is None): slope(R_S) / slope(R_P) = (a W + A) / (W + A), W one routed
+    weight set and A the activation bytes one M-tile adds, the arithmetic
+    `prediction_lines` prints, held in a bracket of `PLANTED_BYTE_HALF_WIDTH`
+    either side. Its card and design are the run's own, since a planted page
+    is planted for this run; nothing here was measured and it says so."""
+    if not world.byte_page:
+        return None
+    a = world.alpha if world.byte_alpha is None else world.byte_alpha
+    weight = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
+    act = cfg.num_experts * block_m * SWEEP.activation_bytes_per_row(cfg)
+    point = (a * weight + act) / (weight + act)
+    # The page's design block as `byte_design_mismatch` names it, filled
+    # from this run: a planted page is planted for this run's kernel.
+    design = {"model": model, "dtype": dtype, "block_m": block_m,
+              "block_n": pinned.get("BLOCK_SIZE_N"),
+              "block_k": pinned.get("BLOCK_SIZE_K"),
+              "num_warps": pinned.get("num_warps"),
+              "num_stages": pinned.get("num_stages"),
+              "group_m": pinned.get("GROUP_SIZE_M")}
+    window = treads_in_window(treads, min_tread=CLAIM_MIN_TREAD)
+    return ByteReference(
+        path="PLANTED by --self-test", sha256=None, card=card,
+        group_m=int(pinned.get("GROUP_SIZE_M") or 0), design=design,
+        ratio=point,
+        bracket=(point - PLANTED_BYTE_HALF_WIDTH, point + PLANTED_BYTE_HALF_WIDTH),
+        treads=tuple(window), treads_all=tuple(treads), planted=True,
+        note=(f"planted for the {world.name!r} world: bytes counted at alpha "
+              f"{a} by the study's traffic model, (a W + A) / (W + A) = "
+              f"{point:.4f}, held +/- {PLANTED_BYTE_HALF_WIDTH} (a planted "
+              "width)"))
+
+
 ALL_PASS = {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
             "V5": PASS, "V6": PASS, "V7": PASS, "V8": PASS, "C1": PASS,
             "C2": PASS}
@@ -6472,20 +7149,47 @@ WORLDS: dict[str, World] = {
         "refit",
         "the world the study says it is in: the shared ladder re-reads "
         f"alpha={ALPHA} of the weight set per M-tile, the private ladder "
-        "re-reads all of it, and the ratio lands in ALPHA_BAND",
+        "re-reads all of it, the ratio lands in the H200-era band, and the "
+        "planted byte page counts the same traffic, so C1 PASSES: here "
+        "timing measures bytes",
         dict(ALL_PASS)),
     "no-reuse": World(
         "no-reuse",
         "the first registered alternative: the shared ladder re-reads the "
-        "WHOLE set per M-tile, so the ratio is 1.0 and the refit band is "
-        "refuted from above",
-        dict(ALL_PASS, C1=FAIL), alpha=1.0),
+        "WHOLE set per M-tile, so the ratio is 1.0 and the page names "
+        "NO-REUSE. The planted bytes count the same whole re-read, so C1 "
+        "PASSES since 2026-09-26 (timing measures traffic in this world); "
+        "the H200-era band line printed beside it reads FAIL, which was C1 "
+        "until then",
+        dict(ALL_PASS), alpha=1.0),
     "issue-bound": World(
         "issue-bound",
         "the second registered alternative: the shared ladder re-reads almost "
-        f"nothing (alpha={RETRACTED_ALPHA}), so the per-M-tile cost is issue "
-        "and latency and the traffic model is the wrong kind of model",
-        dict(ALL_PASS, C1=FAIL), alpha=RETRACTED_ALPHA),
+        f"nothing (alpha={RETRACTED_ALPHA}), so the ratio lands in "
+        "ISSUE-AND-LATENCY. The planted bytes count the same small re-read, "
+        "so C1 PASSES since 2026-09-26; the H200-era band line printed beside "
+        "it reads FAIL, which was C1 until then",
+        dict(ALL_PASS), alpha=RETRACTED_ALPHA),
+    "on-chip-floor": World(
+        "on-chip-floor",
+        "the Lambda cards' shape (2026-09-25): the timed ratio lands in the "
+        f"H200-era band (planted at alpha={ALPHA}) while this card's own byte "
+        f"page counts alpha={PLANTED_FLOOR_BYTE_ALPHA} of re-read, so the "
+        "shared arm's time per M-tile is set by an on-chip floor and not by "
+        "its bytes. C1 FAILS with the timed ratio ABOVE the bytes, while the "
+        "H200-era band line printed beside it reads PASS: the test that "
+        "stopped gating on 2026-09-26 would have called this a traffic "
+        "fraction",
+        dict(ALL_PASS, C1=FAIL), byte_alpha=PLANTED_FLOOR_BYTE_ALPHA),
+    "no-byte-page": World(
+        "no-byte-page",
+        "the refit world with NO byte page, as a pod run with no "
+        "--byte-reference is: C1 REFUSES, spelled UNKNOWN, which classifies "
+        "to CLAIM_FAIL, and the page prints what the H200-era band test "
+        "would have said (PASS here) on a line no gate reads. Every alpha(G) "
+        "chain page is this world until its card's r3c-g<G>.json is read "
+        "beside it with --read --byte-reference",
+        dict(ALL_PASS, C1=UNKNOWN), byte_page=False),
     "aliased": World(
         "aliased",
         "the relabelling silently sent every M-tile back to copy 0: the "
@@ -7934,10 +8638,11 @@ def default_run_id(args, card: str) -> str:
     and a resume on a DIFFERENT pod with the same card slug mixed two cards'
     timings in one ladder (see `device_guard`).
 
-    OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`, `--replicate-of`
-    (and `--read`, which forms no id). They re-analyse one set of cells, and
-    two analyses of one sweep belong in one directory; a replicate read beside
-    this run moves C1's verdict and not one measured millisecond.
+    OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`, `--replicate-of`,
+    `--byte-reference` (and `--read`, which forms no id). They re-analyse one
+    set of cells, and two analyses of one sweep belong in one directory; a
+    replicate or a byte page read beside this run moves C1's verdict and not
+    one measured millisecond.
     `--device-memory-gb` is out for the same reason: it gates a plan, it does
     not move a millisecond. AND `--clock-elasticity`, which is admissible out
     of the key ONLY because it changes no verdict: it prints a corrected ratio
@@ -8085,6 +8790,22 @@ def build_parser() -> argparse.ArgumentParser:
                          "of every run's interval and the page prints the "
                          "cross-run spread. Out of the run id. Refused under "
                          "--self-test")
+    ap.add_argument("--byte-reference", type=Path, default=None,
+                    metavar="PAGE",
+                    help="C1's reference (owner, 2026-09-26): THIS card's own "
+                         "DRAM counter page at this design and G, the "
+                         "r3c-g<G>.json scripts/dram_counter_route.py writes "
+                         "in its r3-arms run mode. C1 PASSES when the timed "
+                         "ratio's point and interval sit inside its byte "
+                         "bracket over the claim's window, FAILS when they "
+                         "are disjoint (the side named), and REFUSES without "
+                         "one. Another card, another design or G, an "
+                         "unreadable page, or one whose VALIDITY gates "
+                         "(re-scored from its cells) do not all PASS is "
+                         "REFUSED before anything is measured. Out of the "
+                         "run id; with --read, re-scores "
+                         "a stored page's C1 off GPU. Refused under "
+                         "--self-test, whose worlds plant their own")
     ap.add_argument("--read", type=Path, default=None, metavar="REPORT",
                     help="score THIS stored report.json together with "
                          "--replicate-of, off GPU: nothing is measured, "
@@ -8368,6 +9089,33 @@ def _main(argv=None) -> int:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
 
+    # THE BYTE PAGE C1 READS, refused before the card is touched (owner,
+    # 2026-09-26): another card, another design or G, or a page that cannot
+    # be read costs nothing here and the whole ladder later. A planted world
+    # plants its own, so a measured one beside it is refused like a measured
+    # replicate. On a box with no card the design is checked and the card is
+    # checked on the card.
+    if args.byte_reference is not None and synthetic:
+        print("REFUSED: --byte-reference names a measured counter page and "
+              "--self-test plants one; a planted world plants its own byte "
+              "page (World.byte_alpha)")
+        return exit_codes.REFUSED
+    if synthetic:
+        byte_ref = planted_byte_reference(
+            WORLDS[args.self_test], cfg, block_m=block_m, dtype=args.dtype,
+            card=card, model=args.model, pinned=pinned, treads=treads)
+    elif args.byte_reference is not None:
+        try:
+            byte_ref = load_byte_reference(
+                args.byte_reference, card=card,
+                card_known=(card != NO_CARD_SLUG), model=args.model,
+                dtype=args.dtype, block_m=block_m, pinned=pinned)
+        except PrivateWeightRefusal as exc:
+            print(f"REFUSED: {exc}")
+            return exit_codes.REFUSED
+    else:
+        byte_ref = None
+
     capability = SWEEP.resolve_capability(args, synthetic=synthetic or args.dry_run)
     resources, refused = SWEEP.tile_resource_plan(pinned, (block_m,), b,
                                                  capability)
@@ -8381,7 +9129,7 @@ def _main(argv=None) -> int:
                         tokens=tokens, ridge=ridge, alpha=args.alpha,
                         copies_declared=copies_declared,
                         declared_reason=declared_reason, census=census,
-                        replicates=tuple(replicates))
+                        replicates=tuple(replicates), byte_ref=byte_ref)
     header += prediction_lines(cfg, block_m=block_m, treads=treads,
                                alpha=args.alpha, bandwidth_gbps=bandwidth,
                                bw_source=bw_source, dtype=args.dtype,
@@ -8578,7 +9326,7 @@ def _main(argv=None) -> int:
         prov=_observed_iters(prov, samples), probe=probe, census=census,
         copies_declared=copies_declared, clock_elasticity=clock_elasticity,
         run_id=run_id, session_tag=args.session_tag,
-        replicates=tuple(replicates), duty=args.duty)
+        replicates=tuple(replicates), duty=args.duty, byte_reference=byte_ref)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -8632,14 +9380,23 @@ def _read_mode(args) -> int:
     `CLAIM_MIN_TREAD` (`rescore`), the gates that read that window
     (`RESCORED_GATES`: V8 from the stored probe cells, when there are any)
     are rebuilt from the cells and the rest re-rendered as stored, and
-    --replicate-of is optional."""
+    --replicate-of is optional.
+
+    AGAINST THE SAME CARD'S BYTES (owner, 2026-09-26). C1 is rebuilt against
+    the byte page --byte-reference names, held to the STORED report's card
+    and design (`load_byte_reference`), and refuses without one, so a page
+    written before 2026-09-26 re-reads with C1 REFUSE and its band verdict
+    on the ungated line. --byte-reference alone is reason enough to read:
+    it is how a published page is scored against its card's counter page
+    off GPU."""
     path = Path(args.read)
     if path.is_dir():
         path = path / "report.json"
-    if not args.replicate_of and not args.rescore:
+    if not args.replicate_of and not args.rescore and args.byte_reference is None:
         print(f"REFUSED: --read {path} names one stored report and nothing to "
-              "read it against; give --replicate-of, or --rescore to re-score "
-              "it over this build's claim window")
+              "read it against; give --replicate-of, --rescore to re-score "
+              "it over this build's claim window, or --byte-reference to "
+              "score its C1 against the same card's byte page")
         return exit_codes.REFUSED
     try:
         payload = json.loads(path.read_text())
@@ -8654,16 +9411,28 @@ def _read_mode(args) -> int:
         return exit_codes.REFUSED
     design = {k: design_value(payload, k) for k in DESIGN_KEYS}
     page = None
+    byte_ref = None
     try:
+        if args.byte_reference is not None:
+            # Over the window the timed reading C1 scores is fitted over:
+            # this build's under --rescore, the report's own otherwise.
+            byte_ref = load_byte_reference(
+                args.byte_reference, card=str(payload.get("card")),
+                card_known=True, model=payload.get("model"),
+                dtype=payload.get("dtype"), block_m=payload.get("block_m"),
+                pinned=payload.get("pinned") or {},
+                min_tread=(CLAIM_MIN_TREAD if args.rescore else
+                           int(design_value(payload, "claim_min_tread"))))
         if args.rescore:
-            page = rescore(payload, path, draws=args.draws)
+            page = rescore(payload, path, draws=args.draws, byte_ref=byte_ref)
             this = page.reading
             design["claim_min_tread"] = CLAIM_MIN_TREAD
         else:
             this = run_reading(payload, path)
         replicates = load_replicates(
             args.replicate_of, card_known=True, this=this, design=design,
-            rescore_draws=args.draws if args.rescore else None)
+            rescore_draws=args.draws if args.rescore else None,
+            byte_ref=byte_ref)
         cross = cross_run([this, *replicates])
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
@@ -8726,7 +9495,8 @@ def _read_mode(args) -> int:
               + " (ms per M-tile)")
         if page.floor is not None:
             print("\n".join(page.floor.lines()))
-    print("\n".join(cross.lines()))
+    print("\n".join(byte_plan_lines(byte_ref, card=str(payload.get("card")))))
+    print("\n".join(cross.lines(byte_ref)))
     print()
     gates = []
     for d in payload.get("gates") or []:
@@ -8741,7 +9511,8 @@ def _read_mode(args) -> int:
                                   cross=cross, min_tread=this.claim_min_tread,
                                   treads=window,
                                   all_treads=(page.every.ratio,
-                                              page.every.interval))
+                                              page.every.interval),
+                                  byte_ref=byte_ref)
             else:
                 every = payload.get("ratio_all_treads")
                 g = gate_c1_ratio(this.ratio, this.interval,
@@ -8753,7 +9524,8 @@ def _read_mode(args) -> int:
                                       (every, tuple(payload.get(
                                           "ratio_all_treads_interval")
                                           or (None, None)))
-                                      if every is not None else None))
+                                      if every is not None else None),
+                                  byte_ref=byte_ref)
         gates.append(g)
         print("\n".join(g.render()))
         print()
@@ -8776,6 +9548,7 @@ def _probe_check_mode(args) -> int:
         ("--read", args.read is not None),
         ("--rescore", args.rescore),
         ("--replicate-of", bool(args.replicate_of)),
+        ("--byte-reference", args.byte_reference is not None),
         ("--self-test", args.self_test is not None),
         ("--dry-run", args.dry_run)) if given]
     if other:

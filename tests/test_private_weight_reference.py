@@ -70,6 +70,10 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     # checked against its own exit code. The test under it now asserts this
     # list covers WORLDS, so a twelfth world cannot be added and left out.
     (("--self-test", "faster-than-its-ruler"), True),
+    # C1's two new worlds (2026-09-26): the timed ratio above its own card's
+    # bytes, and a page with no byte page at all.
+    (("--self-test", "on-chip-floor"), True),
+    (("--self-test", "no-byte-page"), True),
 )
 
 
@@ -173,8 +177,15 @@ def test_the_worlds_separate_into_three_exit_codes():
     codes = {name: run(["--self-test", name]).returncode
              for name in sorted(PW.WORLDS)}
     assert codes["refit"] == exit_codes.DONE
-    assert codes["no-reuse"] == exit_codes.CLAIM_FAIL
-    assert codes["issue-bound"] == exit_codes.CLAIM_FAIL
+    # SINCE 2026-09-26 C1 IS "timing is this card's bytes", and in the two
+    # registered alternatives the planted bytes count the same traffic the
+    # planted timing does: they land NO-REUSE and ISSUE-AND-LATENCY on the
+    # page and PASS C1. The CLAIM_FAILs on C1 are the timing that is not its
+    # bytes, and the page with no bytes to hold it to.
+    assert codes["no-reuse"] == exit_codes.DONE
+    assert codes["issue-bound"] == exit_codes.DONE
+    assert codes["on-chip-floor"] == exit_codes.CLAIM_FAIL
+    assert codes["no-byte-page"] == exit_codes.CLAIM_FAIL
     assert codes["aliased"] == exit_codes.INVALID
     assert len(set(codes.values())) == 3, codes
 
@@ -227,7 +238,7 @@ def test_the_partition_check_can_fail(monkeypatch):
 def test_outcome_for_names_every_registered_world():
     assert PW.outcome_for(0.0)[0] == "ISSUE-AND-LATENCY"
     assert PW.outcome_for(PW.RETRACTED_ALPHA)[0] == "ISSUE-AND-LATENCY"
-    assert PW.outcome_for(PW.ALPHA)[0] == "REFIT-CONFIRMED"
+    assert PW.outcome_for(PW.ALPHA)[0] == "IN-THE-H200-REFIT-BAND"
     assert PW.outcome_for(1.0)[0] == "NO-REUSE"
     assert PW.outcome_for(1e9)[0] == "NO-REUSE"
     # The states that are not bands: a negative ratio is a ladder that got
@@ -255,7 +266,7 @@ def test_the_band_edges_are_the_studys_own_and_not_a_second_copy():
     assert PW.ALPHA_BAND is PW.SWEEP.ALPHA_BAND
     assert PW.ALPHA_BAND == SWEEP.ALPHA_BAND
     names = [n for n, _lo, _hi, _m in PW.OUTCOMES]
-    band = PW.OUTCOMES[names.index("REFIT-CONFIRMED")]
+    band = PW.OUTCOMES[names.index("IN-THE-H200-REFIT-BAND")]
     assert (band[1], band[2]) == SWEEP.ALPHA_BAND
 
 
@@ -2754,9 +2765,13 @@ def test_c1_prints_the_clock_corrected_ratio_and_scores_the_raw_one():
     clock = PW.ClockCorrection(eta, 1455.0, "the calibration's reference clock",
                                0.9743, (0.9700, 0.9790), (0.9679, 0.9829),
                                0.9809, 0.9551)
+    # Against a byte bracket of the H100 G=1 shape (0.84-0.85 over treads 2
+    # and deeper): the raw 0.9551 and the corrected 0.9743 are both above it,
+    # and the verdict is the raw one's.
     gate = PW.gate_c1_ratio(0.9551, (0.9544, 0.9695), 2000, corrected=None,
-                            clock=clock, min_tread=PW.CLAIM_MIN_TREAD)
-    assert gate.verdict == exit_codes.FAIL          # NO-REUSE, scored RAW
+                            clock=clock, min_tread=PW.CLAIM_MIN_TREAD,
+                            byte_ref=_byte_ref(0.8445, 0.8483))
+    assert gate.verdict == exit_codes.FAIL          # timed ABOVE bytes, RAW
     assert gate.measured.startswith("0.9551 [0.9544, 0.9695]")
     joined = "\n".join(gate.lines)
     assert ("clock-corrected ratio 0.9743 at eta = 0.7436 [0.7277, 0.7559] "
@@ -3179,17 +3194,27 @@ def test_the_page_names_the_cross_run_spread_and_the_verdict_it_implies(tmp_path
               bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
               copies_declared=9, native_switch=4)
     samples = PW.planted_samples(PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)
+    # A byte bracket that holds run-a's reading and not run-b's: this run
+    # alone PASSES C1 and the envelope over both straddles the bracket's top.
+    ref = _byte_ref(payload_a["ratio_interval"][0] - 0.005,
+                    payload_a["ratio_interval"][1] + 0.005)
+    assert payload_b["ratio_interval"][0] > ref.bracket[1]
     report = _analyse(samples, treads, draws=50, replicates=tuple(readings),
-                      run_id="run-a")
+                      run_id="run-a", byte_reference=ref)
     text = report.text()
     this = PW.run_reading(report.payload, None)
     cross = PW.cross_run([this, *readings])
     assert f"spread of the points {cross.spread:.4f}" in text
     assert "within-run intervals that do not overlap: runs 0 and 1" in text
     c1 = next(g for g in report.gates if g.tag == "C1")
-    assert c1.verdict == cross.verdict == exit_codes.UNKNOWN
+    assert c1.verdict == cross.byte_verdict(ref)[0] == exit_codes.UNKNOWN
     assert report.payload["c1_verdict_alone"] == exit_codes.PASS
     assert "this run alone would read PASS" in text
+    # The band reading over the same envelope rides beside it, ungated.
+    assert cross.verdict == exit_codes.UNKNOWN
+    assert report.payload["refit_band_verdict_alone"] == exit_codes.PASS
+    assert report.payload["replicates"]["verdict"] == cross.verdict
+    assert report.payload["replicates"]["c1_verdict"] == c1.verdict
     assert "over 2 runs: spread" in c1.measured
     assert "ENVELOPE" in c1.threshold
     assert report.payload["replicates"]["spread"] == pytest.approx(cross.spread)
@@ -3266,7 +3291,11 @@ def test_read_mode_rescores_a_stored_pair_without_measuring_or_writing(tmp_path)
     b = PW.run_reading(payload_b, pb)
     cross = PW.cross_run([a, b])
     c1 = next(ln for ln in lines if ln.name == "C1")
-    assert c1.verdict == cross.verdict == exit_codes.UNKNOWN
+    # No byte page named: C1 REFUSES (UNKNOWN), and the band's joint reading
+    # is printed on the ungated line beside it.
+    assert c1.verdict == exit_codes.UNKNOWN and "REFUSE" in c1.detail
+    assert (f"PRINTED, NOT GATED: the H200-era refit band over the envelope "
+            f"reads {cross.verdict}") in got.stdout
     assert f"spread of the points {cross.spread:.4f}" in got.stdout
     assert exit_codes.classify_text(got.stdout) == got.returncode
     assert sorted(str(p) for p in tmp_path.rglob("*")) == before
@@ -4642,7 +4671,8 @@ def _payload_for(argv: list[str]) -> tuple[int, dict, str]:
 
 def _analyse(samples, treads: list[int], *, block_m: int = 32,
              draws: int = 10, copies: int = 9, replicates=(), run_id="",
-             pinned=None, seed: int = 0, duty: float = 1.0):
+             pinned=None, seed: int = 0, duty: float = 1.0,
+             byte_reference=None, card: str = "no card"):
     """`PW.analyse` over planted cells, with what a planted run hands it.
 
     The memory plan and the buffer proof `_main` builds for a synthetic world,
@@ -4661,9 +4691,10 @@ def _analyse(samples, treads: list[int], *, block_m: int = 32,
         reference_grade="", reference_source="this test", mem=mem,
         proof=PW.planted_proof(True), weight_delta_bytes=mem.weight_bytes,
         high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=seed,
-        header=[], card="no card", synthetic=True,
+        header=[], card=card, synthetic=True,
         model_name=PW.DEFAULT_MODEL, pinned=(pinned or {}), copies_declared=copies,
-        run_id=run_id, replicates=tuple(replicates), duty=duty)
+        run_id=run_id, replicates=tuple(replicates), duty=duty,
+        byte_reference=byte_reference)
 
 
 def test_an_interval_that_was_not_formed_is_null_in_the_payload_and_not_nan():
@@ -5794,7 +5825,7 @@ def test_the_claim_reads_treads_2_and_deeper_and_prints_every_tread_beside_it():
     assert pay["tread1_off_claim_line_ms"][PW.SHARED] == pytest.approx(0.16)
     assert pay["tread1_off_claim_line_ms"][PW.NATIVE] == pytest.approx(0.16)
     c1 = next(g for g in report.gates if g.tag == "C1")
-    assert c1.measured.startswith(f"{pay['ratio']:.4f}") and "over treads 2..6" in c1.measured
+    assert f"timed {pay['ratio']:.4f} [" in c1.measured and "over treads 2..6" in c1.measured
     joined = "\n".join(c1.lines)
     assert "both slopes over treads 2..6, THE CLAIM'S WINDOW" in joined
     assert (f"PRINTED BESIDE IT, never gated: the same ratio over EVERY tread, "
@@ -5941,16 +5972,18 @@ def _write_cells(dirpath: Path, samples) -> Path:
 
 
 def _report_with_cells(tmp_path, name, samples, treads, *, seed=0, draws=30,
-                       old_window=False, duty=1.0):
+                       old_window=False, duty=1.0, card="no card", group_m=None):
     """A measured-shaped report.json WITH the cells.csv it was scored from.
     `old_window` writes what a report before DESIGN DECISION 16 stored: the
     every-tread ratio and interval in `ratio` and `ratio_interval`, and no
-    `claim_min_tread`."""
+    `claim_min_tread`. `card` and `group_m` default to a card-less run at
+    the parser's GROUP_SIZE_M; a byte page is held to both."""
     defaults = PW.build_parser().parse_args([])
     pinned = dict(PW.SWEEP.FIXED, num_stages=defaults.num_stages,
-                  GROUP_SIZE_M=defaults.group_m, BLOCK_SIZE_N=defaults.block_n)
+                  GROUP_SIZE_M=(defaults.group_m if group_m is None else group_m),
+                  BLOCK_SIZE_N=defaults.block_n)
     report = _analyse(samples, treads, draws=draws, run_id=name, pinned=pinned,
-                      seed=seed, duty=duty)
+                      seed=seed, duty=duty, card=card)
     payload = dict(report.payload)
     payload["synthetic"] = False
     payload["provenance"] = {"utc": f"2026-09-23T1{seed}:00:00Z",
@@ -6099,7 +6132,11 @@ def test_a_replicate_fitted_over_another_window_is_refused_or_rescored(tmp_path)
     assert "RE-SCORED   from" in alone.stdout, alone.stdout[-800:]
     c1 = next(ln for ln in exit_codes.parse_result_lines(alone.stdout)
               if ln.name == "C1")
-    assert c1.verdict == PW.c1_verdict(rescored_old.ratio, rescored_old.interval)
+    # No byte page: C1 refuses, and the band verdict it scored until
+    # 2026-09-26 is on the ungated line, off the RE-SCORED reading.
+    assert c1.verdict == exit_codes.UNKNOWN and "REFUSE" in c1.detail
+    band = PW.c1_verdict(rescored_old.ratio, rescored_old.interval)
+    assert f"would read {band} on this run alone" in alone.stdout
 
 
 def test_a_rescore_refuses_what_it_cannot_re_read(tmp_path):
@@ -6711,3 +6748,481 @@ def test_the_grid_is_vllms_grid_lambda():
     assert PW.fused_moe_grid(504, 8, 2, 32, 64, 4096) == (8 * 2 * 32 // 32) * 64
     grids = PW.expected_grids(CFG, em=504, tokens=128, block_m=32, block_n=64)
     assert grids == {"w1": 16 * 448, "w2": 16 * 64}
+
+
+# --------------------------------------------------------------------------
+# 29. C1 against the SAME card's bytes (owner, 2026-09-26): the timed ratio
+#     is held to that card's own DRAM byte ratio at the same design and G,
+#     not to the H200-era refit band, which is printed beside it ungated
+# --------------------------------------------------------------------------
+
+#: The published GH200 session and the one byte page these tests read. The
+#: numbers asserted below are recomputed from the page, never typed.
+GH200 = "nvidia_gh200_480gb"
+H100 = "nvidia_h100_80gb_hbm3"
+_PUBLISHED = ROOT / "results" / "published"
+GH200_SESSION = _PUBLISHED / "2026-09-25-nvidia_gh200_480gb-session"
+GH200_G4_BYTES = (GH200_SESSION / "results" / "2026-09-25-nvidia_gh200_480gb-r3-counters"
+                  / "r3c-g4.json")
+H100_G4_BYTES = (_PUBLISHED / "2026-09-25-nvidia_h100_80gb_hbm3-session" / "results"
+                 / "2026-09-25-nvidia_h100_80gb_hbm3-r3-counters" / "r3c-g4.json")
+#: The GH200's valid G=4 timed page (every VALIDITY gate PASSED), published
+#: with the page above.
+GH200_G4_TIMED = next(
+    p for p in (GH200_SESSION / "results" / "gaps-nvidia_gh200_480gb"
+                / "private_weight_reference").glob("*-g4-*/report.json")
+    if not [g for g in json.loads(p.read_text())["gates"]
+            if g["kind"] == exit_codes.VALIDITY and g["verdict"] != exit_codes.PASS])
+
+
+def _pinned(group_m: int = 4) -> dict:
+    """The pinned dict a run at `--group-m group_m` writes, off the parser's
+    own defaults: the GH200's pages were run at them."""
+    d = PW.build_parser().parse_args([])
+    return PW.pinned_config(d.block_n, group_m, d.num_stages)
+
+
+def _gh200_g4(**kw) -> PW.ByteReference:
+    args = dict(card=GH200, card_known=True, model=PW.DEFAULT_MODEL, dtype="bf16",
+                block_m=32, pinned=_pinned(4))
+    args.update(kw)
+    return PW.load_byte_reference(GH200_G4_BYTES, **args)
+
+
+def _byte_ref(lo: float, hi: float, *, ratio=None, card=GH200, g=4) -> PW.ByteReference:
+    """A byte reference with a stated bracket, for the rule alone."""
+    return PW.ByteReference(path="this test", sha256=None, card=card, group_m=g,
+                            design={}, ratio=(lo + hi) / 2 if ratio is None else ratio,
+                            bracket=(lo, hi), treads=(2, 3, 4, 6))
+
+
+def _timed_at(ratio: float, treads=(1, 2, 3, 4, 5, 6)) -> list:
+    """Planted cells, no noise, whose timed ratio over the claim's window is
+    `ratio`: the shared arm planted at the alpha the study's traffic model
+    turns into that ratio, (a W + A) / (W + A) = ratio."""
+    weight = WEIGHTS.routed_expert_weight_bytes(CFG, "bf16")
+    act = CFG.num_experts * 32 * PW.SWEEP.activation_bytes_per_row(CFG)
+    alpha = (ratio * (weight + act) - act) / weight
+    return PW.planted_samples(PW.WORLDS["refit"], CFG, block_m=32, treads=list(treads),
+                              repeats=3, alpha_shared=alpha, ridge=160.0,
+                              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
+                              copies_declared=9, native_switch=4)
+
+
+def _gh200_page(samples, ref):
+    """The planted cells scored as a GH200 page at G=4 against `ref`."""
+    treads = sorted({s.tiles for s in samples})
+    report = _analyse(samples, treads, draws=20, pinned=_pinned(4), card=GH200,
+                      byte_reference=ref)
+    return report, next(g for g in report.gates if g.tag == "C1")
+
+
+def test_the_byte_reference_is_the_gh200_g4_page_over_the_claims_window():
+    """`load_byte_reference` reads the page's byte ratio through
+    `dram_counter_route.r3_estimates` over treads CLAIM_MIN_TREAD and
+    deeper, the window the timed ratio is fitted over, and keeps the
+    every-tread reading beside it; the two differ on this page, which is why
+    the window is one for both instruments. The page STORED V6 FAIL; its
+    VALIDITY gates re-scored by this build's `dram_counter_route.
+    score_r3_page` all PASS (V6 was re-derived for coalescing cards the day
+    the page was written), and the re-score is what admits it, with the
+    stored verdict printed beside and read by nothing."""
+    import copy
+    import hashlib
+
+    import dram_counter_route as D
+    ref = _gh200_g4()
+    page = json.loads(GH200_G4_BYTES.read_text())
+    window = copy.deepcopy(page)
+    window["cells"] = [c for c in page["cells"] if c["n"] >= PW.CLAIM_MIN_TREAD]
+    window["design"]["treads"] = [n for n in page["design"]["treads"]
+                                  if n >= PW.CLAIM_MIN_TREAD]
+    est, every = D.r3_estimates(window), D.r3_estimates(page)
+    assert ref.bracket == tuple(est["alpha_ratio_bracket"])
+    assert ref.ratio == est["alpha_ratio"]
+    assert ref.bracket_all_treads == tuple(every["alpha_ratio_bracket"])
+    assert ref.ratio_all_treads == every["alpha_ratio"]
+    assert ref.treads == (2, 3, 4, 6) and ref.treads_all == (1, 2, 3, 4, 6)
+    assert ref.bracket[0] > ref.bracket_all_treads[1], "the window moves the bracket"
+    assert (ref.card, ref.group_m) == (GH200, 4)
+    assert ref.sha256 == hashlib.sha256(GH200_G4_BYTES.read_bytes()).hexdigest()
+    assert ref.stored_not_valid == ("V6 FAIL",)
+    stored = [g for g in page["gates"] if g["kind"] == exit_codes.VALIDITY
+              and g["verdict"] != exit_codes.PASS]
+    assert [g["number"] for g in stored] == ["V6"], "the page as published"
+    rescored, _summary = D.score_r3_page(page)
+    assert all(g.verdict == exit_codes.PASS for g in rescored
+               if g.kind == exit_codes.VALIDITY)
+    assert ref.design["group_m"] == 4 and ref.design["block_n"] == 64
+    joined = "\n".join(ref.lines())
+    assert ("re-scored from its cells by this build's "
+            "dram_counter_route.score_r3_page: every one PASSED") in joined
+    assert "the page STORED V6 FAIL, scored before this build's rules" in joined
+    assert "PRINTED BESIDE IT, never gated: the same over every tread" in joined
+
+
+def test_c1_passes_a_timed_run_inside_the_same_cards_bytes():
+    """PASS: a planted timed run whose ratio IS the GH200's G=4 byte ratio,
+    scored against the real page. report.json records the page (path,
+    sha256, card slug, G, bracket) and what this run alone said."""
+    ref = _gh200_g4()
+    report, c1 = _gh200_page(_timed_at(ref.ratio), ref)
+    assert c1.verdict == exit_codes.PASS, c1.measured
+    assert "timed inside bytes" in c1.measured
+    assert f"bytes {ref.ratio:.4f} [{ref.bracket[0]:.4f}, {ref.bracket[1]:.4f}]" in c1.measured
+    assert f"on {GH200} at G=4" in c1.measured
+    pay = report.payload
+    block = pay["byte_reference"]
+    assert block["path"] == str(GH200_G4_BYTES) and block["sha256"] == ref.sha256
+    assert (block["card"], block["G"]) == (GH200, 4)
+    assert block["bracket"] == list(ref.bracket)
+    assert block["stored_not_valid"] == ["V6 FAIL"]
+    assert "re-scored from its cells" in block["page_validity"]
+    assert pay["c1_verdict_alone"] == exit_codes.PASS
+    # 0.215 is ISSUE-AND-LATENCY on the partition, so the band test that
+    # stopped gating would have FAILED this page: printed, not scored.
+    assert pay["outcome"] == "ISSUE-AND-LATENCY"
+    assert pay["refit_band_verdict_alone"] == exit_codes.FAIL
+    assert any("would read FAIL on this run alone" in ln for ln in c1.lines)
+    # ONE GATE, ONE READING (2026-09-26 review): the band this PASS lands in
+    # is a position, so the gate that says "timing measures weight traffic
+    # here" does not also print "most of the per-M-tile cost is NOT weight
+    # traffic", as it did when only the middle rows were neutral.
+    where = c1.lines.index("WHERE THIS LANDS: ISSUE-AND-LATENCY")
+    assert PW.BAND_IS_A_POSITION in c1.lines[where + 1]
+    text = report.text()
+    assert "NOT weight traffic" not in text and "wrong KIND of model" not in text
+    json.loads(json.dumps(pay), parse_constant=_no_json_constants)
+
+
+def test_c1_fails_a_timed_ratio_above_the_bytes_and_names_the_floor():
+    """FAIL, timed ABOVE bytes: the Lambda cards' shape. A timed ratio in
+    the H200-era band against the GH200's own G=4 bytes: the band test
+    printed beside it reads PASS, which is exactly the reading that stopped
+    gating on 2026-09-26."""
+    ref = _gh200_g4()
+    report, c1 = _gh200_page(_timed_at(PW.ALPHA), ref)
+    assert report.payload["outcome"] == "IN-THE-H200-REFIT-BAND"
+    assert c1.verdict == exit_codes.FAIL
+    assert "timed ABOVE bytes" in c1.measured
+    joined = "\n".join(c1.lines)
+    assert PW.BYTE_SIDES["above"] in joined and "on-chip floor" in joined
+    assert "would read PASS on this run alone" in joined
+    assert report.payload["refit_band_verdict_alone"] == exit_codes.PASS
+    # A result, not a retry (the planted page has no probe, so V8 alone keeps
+    # the whole page from classifying; C1's own tuple is what is asked).
+    assert exit_codes.classify([c1.scored()]) == exit_codes.CLAIM_FAIL
+
+
+def test_c1_fails_a_timed_ratio_below_the_bytes_as_a_rate_difference():
+    """FAIL, timed BELOW bytes: the shared arm paid less time per byte than
+    the private arm, the equal-rate assumption the ratio keeps."""
+    ref = _gh200_g4()
+    _report, c1 = _gh200_page(_timed_at(ref.bracket[0] - 0.05), ref)
+    assert c1.verdict == exit_codes.FAIL
+    assert "timed BELOW bytes" in c1.measured
+    assert "rate difference" in "\n".join(c1.lines)
+
+
+def test_c1_is_unknown_where_the_timed_interval_straddles_the_bytes():
+    """UNKNOWN: an interval reaching over the bracket's top edge overlaps
+    it without sitting inside, which resolves nothing."""
+    ref = _gh200_g4()
+    top = ref.bracket[1]
+    gate = PW.gate_c1_ratio(top, (top - 0.001, top + 0.001), 2000, corrected=None,
+                            min_tread=PW.CLAIM_MIN_TREAD, byte_ref=ref)
+    assert gate.verdict == exit_codes.UNKNOWN
+    assert "timed straddles bytes" in gate.measured
+    assert any(ln.startswith("UNKNOWN, NOT A RESULT") for ln in gate.lines)
+
+
+def test_the_byte_rule_reads_the_point_and_the_interval_and_both_sides():
+    """`byte_verdict` over one run and over an envelope, edges closed; a
+    point outside its own interval widens the reading."""
+    br = (0.40, 0.50)
+    assert PW.byte_verdict([0.45], (0.44, 0.46), br) == (exit_codes.PASS, "inside")
+    assert PW.byte_verdict([0.45], (0.40, 0.50), br) == (exit_codes.PASS, "inside")
+    assert PW.byte_verdict([0.60], (0.55, 0.65), br) == (exit_codes.FAIL, "above")
+    assert PW.byte_verdict([0.30], (0.25, 0.35), br) == (exit_codes.FAIL, "below")
+    assert PW.byte_verdict([0.49], (0.48, 0.52), br) == (exit_codes.UNKNOWN, "straddles")
+    assert PW.byte_verdict([0.52], (0.44, 0.46), br) == (exit_codes.UNKNOWN, "straddles")
+    assert PW.byte_verdict([0.45], (math.nan, 0.46), br) == (exit_codes.UNKNOWN, "not formed")
+    assert PW.byte_verdict([0.45], (None, None), br) == (exit_codes.UNKNOWN, "not formed")
+    # Over replicates: every point and the envelope.
+    ref = _byte_ref(*br)
+    inside = PW.cross_run([_reading(0.44), _reading(0.46)])
+    assert inside.byte_verdict(ref) == (exit_codes.PASS, "inside")
+    split = PW.cross_run([_reading(0.46), _reading(0.52)])
+    assert split.byte_verdict(ref) == (exit_codes.UNKNOWN, "straddles")
+    assert PW.cross_run([_reading(0.60), _reading(0.62)]).byte_verdict(ref)[0] \
+        == exit_codes.FAIL
+    assert inside.byte_verdict(None) == (exit_codes.UNKNOWN, "refused")
+
+
+def test_another_cards_byte_page_is_refused_before_anything_is_measured(monkeypatch):
+    """The H100's G=4 page against a GH200 run: refused by the loader, by the
+    measuring path before the plan page is printed, and by --read over the
+    published GH200 page, which then exits REFUSED with no RESULT line."""
+    with pytest.raises(PW.PrivateWeightRefusal, match="another card") as exc:
+        PW.load_byte_reference(H100_G4_BYTES, card=GH200, card_known=True,
+                               model=PW.DEFAULT_MODEL, dtype="bf16", block_m=32,
+                               pinned=_pinned(4))
+    assert f"counted on {H100} and this run is {GH200}" in str(exc.value)
+    monkeypatch.setattr(PW, "detect_card_slug", lambda: GH200)
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW._main(["--dry-run", "--device-memory-gb", "140", "--group-m", "4",
+                       "--byte-reference", str(H100_G4_BYTES)])
+    assert rc == exit_codes.REFUSED
+    assert "REFUSED: --byte-reference" in log.getvalue() and "another card" in log.getvalue()
+    assert "PREDICTIONS" not in log.getvalue(), "refused before the plan page"
+    got = run(["--read", str(GH200_G4_TIMED), "--byte-reference", str(H100_G4_BYTES)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "another card" in got.stdout and exit_codes.parse_result_lines(got.stdout) == []
+
+
+def test_another_design_or_an_unreadable_page_is_refused(tmp_path):
+    """Another G, another dtype or tile, a page of another family, a page with
+    no card, and a file that is not JSON: each refused with its reason, the
+    dry run's included (it checks the design on a box with no card)."""
+    with pytest.raises(PW.PrivateWeightRefusal, match="another design") as exc:
+        _gh200_g4(pinned=_pinned(16))
+    assert "group_m 4 against this run's 16" in str(exc.value)
+    with pytest.raises(PW.PrivateWeightRefusal, match="another design") as exc:
+        _gh200_g4(dtype="fp16", block_m=16)
+    assert "dtype 'bf16' against this run's 'fp16'" in str(exc.value)
+    assert "block_m 32 against this run's 16" in str(exc.value)
+    got = run(["--dry-run", "--device-memory-gb", "140",
+               "--byte-reference", str(GH200_G4_BYTES)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "REFUSED: --byte-reference" in got.stdout and "another design" in got.stdout
+    page = json.loads(GH200_G4_BYTES.read_text())
+    for name, bad, why in (
+            ("ladder.json", dict(page, family="ladder"), "not a DRAM counter page"),
+            ("uncarded.json", {k: v for k, v in page.items() if k != "card"},
+             "names no card slug"),
+            ("nocells.json", {k: v for k, v in page.items() if k != "cells"},
+             "no design or no cells")):
+        p = tmp_path / name
+        p.write_text(json.dumps(bad))
+        with pytest.raises(PW.PrivateWeightRefusal, match=why):
+            PW.load_byte_reference(p, card=GH200, card_known=True,
+                                   model=PW.DEFAULT_MODEL, dtype="bf16",
+                                   block_m=32, pinned=_pinned(4))
+    junk = tmp_path / "junk.json"
+    junk.write_text("not json")
+    with pytest.raises(PW.PrivateWeightRefusal, match="unreadable"):
+        PW.load_byte_reference(junk, card=GH200, card_known=True,
+                               model=PW.DEFAULT_MODEL, dtype="bf16",
+                               block_m=32, pinned=_pinned(4))
+    with pytest.raises(PW.PrivateWeightRefusal, match="unreadable"):
+        PW.load_byte_reference(tmp_path / "absent.json", card=GH200,
+                               card_known=True, model=PW.DEFAULT_MODEL,
+                               dtype="bf16", block_m=32, pinned=_pinned(4))
+    # A planted world plants its own byte page; a measured one beside it is
+    # refused like a measured replicate.
+    got = run(["--self-test", "refit", "--byte-reference", str(GH200_G4_BYTES)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "a planted world plants its own byte page" in got.stdout
+
+
+def test_no_byte_reference_refuses_c1_and_prints_the_old_band_ungated():
+    """REFUSE, spelled UNKNOWN, with the reason in `measured`; the band test
+    C1 scored until 2026-09-26 printed on a line that is NOT a RESULT line;
+    the page classifies CLAIM_FAIL; report.json records no byte page."""
+    samples = _timed_at(0.5621)
+    report = _analyse(samples, [1, 2, 3, 4, 5, 6], draws=20)
+    c1 = next(g for g in report.gates if g.tag == "C1")
+    assert c1.verdict == exit_codes.UNKNOWN
+    assert c1.measured.startswith(
+        "REFUSE: no same-card byte page; the H200-era refit band is not a "
+        "per-card claim, owner 2026-09-26")
+    band = [ln for ln in c1.lines if ln.startswith("PRINTED, NOT GATED")]
+    assert len(band) == 1 and "would read PASS on this run alone" in band[0]
+    rendered = c1.render()
+    assert [ln for ln in rendered if ln.startswith("RESULT: ")] == [c1.result_line()]
+    assert "RESULT: CLAIM C1 UNKNOWN" in c1.result_line()
+    assert exit_codes.classify([c1.scored()]) == exit_codes.CLAIM_FAIL
+    pay = report.payload
+    assert pay["byte_reference"] is None
+    assert pay["c1_verdict_alone"] == exit_codes.UNKNOWN
+    assert pay["refit_band_verdict_alone"] == exit_codes.PASS
+    assert pay["outcome"] == "IN-THE-H200-REFIT-BAND"
+
+
+def test_the_no_byte_page_world_prints_the_refusal_and_the_band_line_end_to_end():
+    got = run(["--self-test", "no-byte-page"])
+    assert got.returncode == exit_codes.CLAIM_FAIL, got.stdout[-2000:]
+    assert "SELF-TEST OK" in got.stdout
+    c1 = next(ln for ln in exit_codes.parse_result_lines(got.stdout) if ln.name == "C1")
+    assert c1.verdict == exit_codes.UNKNOWN and "measured REFUSE: no same-card" in c1.detail
+    assert "would read PASS on this run alone" in got.stdout
+    assert "bytes       (none: C1 will REFUSE" in got.stdout
+    floor = run(["--self-test", "on-chip-floor"])
+    assert floor.returncode == exit_codes.CLAIM_FAIL
+    c1 = next(ln for ln in exit_codes.parse_result_lines(floor.stdout) if ln.name == "C1")
+    assert c1.verdict == exit_codes.FAIL and "timed ABOVE bytes" in c1.detail
+    assert "would read PASS on this run alone" in floor.stdout
+
+
+def test_read_mode_scores_a_published_gh200_page_against_its_own_bytes():
+    """Off GPU, nothing written: the published GH200 G=4 page, which printed
+    ABOVE-THE-REFIT-BAND, read against the GH200's own G=4 bytes."""
+    before = sorted(str(p) for p in GH200_SESSION.rglob("*"))
+    got = run(["--read", str(GH200_G4_TIMED), "--byte-reference", str(GH200_G4_BYTES)])
+    assert "READ MODE: nothing measured, nothing written" in got.stdout, got.stdout[-1500:]
+    assert got.returncode == exit_codes.CLAIM_FAIL
+    assert exit_codes.classify_text(got.stdout) == got.returncode
+    c1 = next(ln for ln in exit_codes.parse_result_lines(got.stdout) if ln.name == "C1")
+    ref = _gh200_g4()
+    assert c1.verdict == exit_codes.FAIL and "timed ABOVE bytes" in c1.detail
+    assert f"[{ref.bracket[0]:.4f}, {ref.bracket[1]:.4f}]" in c1.detail
+    assert f"bytes       {GH200_G4_BYTES}: card {GH200}, G=4" in got.stdout
+    assert sorted(str(p) for p in GH200_SESSION.rglob("*")) == before
+
+
+GH200_G64_BYTES = GH200_G4_BYTES.parent / "r3c-g64.json"
+
+
+def test_an_invalid_byte_page_is_refused_on_its_re_scored_gates(tmp_path, monkeypatch):
+    """A byte page that is not VALID is refused before anything is measured,
+    as C5 refuses an INVALID timed page (2026-09-26 review). Validity is
+    RE-SCORED from the page's cells by this build's dram_counter_route, not
+    read off the page: the GH200's G=64 page stored V6 FAIL and V7 FAIL,
+    re-scores V7 FAIL alone, and is refused naming V7; a copy of it whose
+    stored gates all read PASS is refused the same, and a --read of the
+    published G=64 timed page against it exits REFUSED with no RESULT line."""
+    import dram_counter_route as D
+    page = json.loads(GH200_G64_BYTES.read_text())
+    rescored, _summary = D.score_r3_page(page)
+    broken = [f"{g.number} {g.verdict}" for g in rescored
+              if g.kind == exit_codes.VALIDITY and g.verdict != exit_codes.PASS]
+    assert broken == ["V7 FAIL"], broken
+    with pytest.raises(PW.PrivateWeightRefusal, match="not a VALID counter page") as exc:
+        PW.load_byte_reference(GH200_G64_BYTES, card=GH200, card_known=True,
+                               model=PW.DEFAULT_MODEL, dtype="bf16", block_m=32,
+                               pinned=_pinned(64))
+    assert "it reads V7 FAIL" in str(exc.value) and "V6" not in str(exc.value)
+    assert "as C5 does not compare a byte page with an INVALID timed page" in str(exc.value)
+    clean = dict(page, gates=[dict(g, verdict=exit_codes.PASS) for g in page["gates"]])
+    forged = tmp_path / "r3c-g64.json"
+    forged.write_text(json.dumps(clean))
+    with pytest.raises(PW.PrivateWeightRefusal, match="it reads V7 FAIL"):
+        PW.load_byte_reference(forged, card=GH200, card_known=True,
+                               model=PW.DEFAULT_MODEL, dtype="bf16", block_m=32,
+                               pinned=_pinned(64))
+    monkeypatch.setattr(PW, "detect_card_slug", lambda: GH200)
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        rc = PW._main(["--dry-run", "--device-memory-gb", "140", "--group-m", "64",
+                       "--byte-reference", str(GH200_G64_BYTES)])
+    assert rc == exit_codes.REFUSED
+    assert "not a VALID counter page" in log.getvalue()
+    assert "PREDICTIONS" not in log.getvalue(), "refused before the plan page"
+    timed = next((GH200_SESSION / "results" / "gaps-nvidia_gh200_480gb"
+                  / "private_weight_reference").glob("*-g64-*/report.json"))
+    got = run(["--read", str(timed), "--byte-reference", str(GH200_G64_BYTES)])
+    assert got.returncode == exit_codes.REFUSED, got.stdout[-1500:]
+    assert "not a VALID counter page" in got.stdout
+    assert exit_codes.parse_result_lines(got.stdout) == []
+
+
+def _gh200_g4_report(tmp_path, name, *, seed=0, old_window=False):
+    """A measured-shaped GH200 G=4 report WITH its cells.csv, timed at the
+    GH200's own G=4 byte ratio over treads 2 and deeper (session 5's shape:
+    affine from tread 2, off that line at tread 1), its stored V8 set to
+    PASS: a planted report stores no probe, so `rescore` re-renders V8 as
+    stored, and with every other gate passing its exit word turns on C1."""
+    ref = _gh200_g4()
+    path, payload = _report_with_cells(
+        tmp_path, name, _one_tile_call_world(ref.ratio), [1, 2, 3, 4, 5, 6],
+        seed=seed, old_window=old_window, card=GH200, group_m=4)
+    payload["gates"] = [dict(g, verdict=exit_codes.PASS) if g["tag"] == "V8" else g
+                        for g in payload["gates"]]
+    path.write_text(json.dumps(payload, indent=2))
+    return path, payload
+
+
+def test_read_rescore_scores_c1_against_the_bytes_over_this_builds_window(tmp_path):
+    """--read --rescore re-fits a report stored over treads 1 and deeper
+    over this build's window, and C1 then reads the byte page over the SAME
+    window: the window-2 bracket, where the timed ratio sits (PASS). --read
+    alone keeps the report's stored window, and the bracket follows it: the
+    every-tread one, which the same timing sits above."""
+    ref = _gh200_g4()
+    path, _payload = _gh200_g4_report(tmp_path, "run-old", old_window=True)
+    window2 = f"[{ref.bracket[0]:.4f}, {ref.bracket[1]:.4f}]"
+    every = f"[{ref.bracket_all_treads[0]:.4f}, {ref.bracket_all_treads[1]:.4f}]"
+    got = run(["--read", str(path), "--rescore", "--draws", "30",
+               "--byte-reference", str(GH200_G4_BYTES)])
+    assert "RE-SCORED   from" in got.stdout, got.stdout[-1500:] + got.stderr[-800:]
+    c1 = next(ln for ln in exit_codes.parse_result_lines(got.stdout) if ln.name == "C1")
+    assert c1.verdict == exit_codes.PASS, c1.detail
+    assert f"bytes {ref.ratio:.4f} {window2}" in c1.detail and every not in c1.detail
+    assert "timed inside bytes" in c1.detail
+    stored = run(["--read", str(path), "--byte-reference", str(GH200_G4_BYTES)])
+    c1 = next(ln for ln in exit_codes.parse_result_lines(stored.stdout) if ln.name == "C1")
+    assert f"bytes {ref.ratio_all_treads:.4f} {every}" in c1.detail, c1.detail
+    assert window2 not in c1.detail
+
+
+def test_read_rescore_scores_every_replicates_own_c1_against_the_byte_page(tmp_path):
+    """--read --rescore --replicate-of re-scores EVERY named report, and
+    each one's own C1, so the own exit word printed beside it, is scored
+    against the byte page named: DONE for both runs here, whose timing sits
+    inside the GH200's G=4 bytes. With no byte page both read CLAIM_FAIL,
+    C1 refusing, so the word is C1's and not the other gates'."""
+    a, _ = _gh200_g4_report(tmp_path, "run-a", seed=0)
+    b, _ = _gh200_g4_report(tmp_path, "run-b", seed=1)
+
+    def own_exits(extra):
+        got = run(["--read", str(a), "--rescore", "--draws", "30",
+                   "--replicate-of", str(b), *extra])
+        assert "READ MODE: nothing measured, nothing written" in got.stdout, (
+            got.stdout[-1500:] + got.stderr[-800:])
+        return dict(re.findall(r"^  run \d+: (run-[ab]);.*own exit (\w+)$",
+                               got.stdout, re.M)), got
+    words, got = own_exits(["--byte-reference", str(GH200_G4_BYTES)])
+    assert words == {"run-a": "DONE", "run-b": "DONE"}, got.stdout[-2500:]
+    c1 = next(ln for ln in exit_codes.parse_result_lines(got.stdout) if ln.name == "C1")
+    assert c1.verdict == exit_codes.PASS and "over 2 runs" in c1.detail
+    words, _got = own_exits([])
+    assert words == {"run-a": "CLAIM_FAIL", "run-b": "CLAIM_FAIL"}
+
+
+def test_the_byte_reference_is_out_of_the_run_id():
+    """It moves C1's verdict and not one measured millisecond, like
+    --replicate-of; the docstring's OUT list names it."""
+    base = ["--device-memory-gb", "140", "--group-m", "4"]
+    a = PW.build_parser().parse_args(base)
+    b = PW.build_parser().parse_args(base + ["--byte-reference", str(GH200_G4_BYTES)])
+    assert PW.default_run_id(a, GH200) == PW.default_run_id(b, GH200)
+    assert "--byte-reference" in " ".join(PW.default_run_id.__doc__.split())
+
+
+def test_every_band_is_a_position_and_the_partition_did_not_move():
+    """REFIT-CONFIRMED is IN-THE-H200-REFIT-BAND, and none of the five
+    meanings calls a timed ratio a traffic fraction or a statement about
+    traffic: each says it is a position and names C1 or C5 as what says what
+    it measures. The three middle ones place it against the H200-era band;
+    the two outer ones (since the same day's review) name the registered
+    world that would put it there and no longer say "NOT weight traffic" or
+    "the re-read is real". The edges are the ones the partition always had."""
+    names = [n for n, _lo, _hi, _m in PW.OUTCOMES]
+    assert names == ["ISSUE-AND-LATENCY", "BELOW-THE-REFIT-BAND",
+                     "IN-THE-H200-REFIT-BAND", "ABOVE-THE-REFIT-BAND", "NO-REUSE"]
+    edges = [(lo, hi) for _n, lo, hi, _m in PW.OUTCOMES]
+    assert edges == [(0.0, PW.ISSUE_BOUND_MAX), (PW.ISSUE_BOUND_MAX, PW.ALPHA_BAND[0]),
+                     PW.ALPHA_BAND, (PW.ALPHA_BAND[1], PW.NO_REUSE_MIN),
+                     (PW.NO_REUSE_MIN, math.inf)]
+    for _n, _lo, _hi, meaning in PW.OUTCOMES[1:4]:
+        assert "H200-era" in meaning
+    for _n, _lo, _hi, meaning in PW.OUTCOMES:
+        assert PW.BAND_IS_A_POSITION in meaning and "C5" in meaning
+        assert "traffic fraction after all" not in meaning
+        assert "NOT weight traffic" not in meaning
+        assert "re-read is real" not in meaning and "wrong KIND" not in meaning
+    assert "registered issue-and-latency world" in PW.OUTCOMES[0][3]
+    assert "registered no-reuse world" in PW.OUTCOMES[-1][3]
+    source = SCRIPT.read_text()
+    assert "REFIT-CONFIRMED\"" not in source and "\"REFIT-CONFIRMED" not in source
