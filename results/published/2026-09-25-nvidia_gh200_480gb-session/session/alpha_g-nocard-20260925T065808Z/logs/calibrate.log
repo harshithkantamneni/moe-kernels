@@ -1,0 +1,9 @@
+[calibrate] dry run: nothing is measured and nothing is written
+  patterns          bandwidth ladder, ceiling = triad
+  buffers           8 GiB, L2 flushed between iterations
+  gemm              8192^3 dense, bf16 and fp8 where the silicon has it
+  settle            up to 30s under load
+  instrument        moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events, L2 flush between iterations); NOT timing.TIMING_BASIS
+  card              NOT VISIBLE from here, so the run id cannot be formed (provenance.NoCard); pass --card to plan for a named part
+  publish           no; --publish copies it into the tree
+  MDE: 1.99% of the measured value, at alpha 0.05 and 80% power, from sigma 1.23% over 3 trial(s) (median within-cell ms_std/ms_p50 over 76918 published rows; a LOWER bound, since between-run spread is not in that column). A difference smaller than this is not resolvable here.

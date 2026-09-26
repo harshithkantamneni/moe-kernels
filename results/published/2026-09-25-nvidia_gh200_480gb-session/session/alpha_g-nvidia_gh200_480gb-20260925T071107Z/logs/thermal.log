@@ -1,0 +1,56 @@
+experiment  thermal_acceptance / nvidia_gh200_480gb-1settle30.0-2window120.0-3poll2.0-d8c22533
+card        NVIDIA GH200 480GB
+window      30 s of ramp discarded, then 120 s scored, polled every 2 s
+load        scripts/thermal_acceptance.py: sustained dense bf16 GEMM (moe.bench.calibrate._load_compute, 8192^3, 32 per step) with SM clock, board power and temperature polled through NVML while the queue is busy; NOT timing.TIMING_BASIS, nothing is timed
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/thermal_acceptance/nvidia_gh200_480gb-1settle30.0-2window120.0-3poll2.0-d8c22533
+
+REGISTERED PREDICTIONS. Printed before anything is measured, and not rewritten afterwards.
+
+  P1  a healthy card holds a clock well clear of its own floor
+        predicts  the median SM clock over the scored window is at least 0.3333 of this card's maximum. The lowest per-cell median anywhere in this repository's published corpus, 1275 MHz on a 1980 MHz part, sits 1.93x above that part's own floor; the 2026-09-11 fault sat 1.91x below its part's
+        a FAIL    THE SESSION IS REFUSED AND THE POD IS RETURNED. A card that cannot hold a clock produces a ruler whose compute peak has collapsed while its memory side has not, and every roof fraction, ridge and alpha measured against that ruler is wrong rather than merely low.
+
+  P2  and it is still holding it at the end of the window, not on the way down
+        predicts  the last third of the window agrees with the first third within 0.05 of it, the same fraction `timing.clock_flags` applies to a cell, after the first 30 s have been discarded as the governor's ramp
+        a FAIL    the card was still collapsing when the probe stopped. The median may be above the floor and the ceilings still unmeasurable, because the calibration that follows takes minutes and this window took two.
+
+==============================================================================
+
+[thermal] loading this card for 150 s and watching the clock
+[thermal] maximum 1980 MHz from nvml; floor 660 MHz
+[thermal] held the load for 150 s
+
+THE WINDOW
+  maximum SM clock  1980 MHz from nvml
+  thermal floor     660 MHz = 0.3333 of it
+  clock             min 1440  median 1440  max 1440 MHz over 55 samples
+  first third       1440.0   last third 1440.0 MHz
+  temperature       58 -> 62 C (median 62)
+  board power       median 652 W of a 900 W limit
+  slowdown reasons  0x4 SwPowerCap   [RECORDED, NOT SCORED]
+
+RESOLUTION: 15 MHz, the NVML grid, which is 0.76% of NVIDIA GH200 480GB's 1980 MHz maximum. The gate sits 88 grid steps below that maximum (660 MHz). For scale, on the 1980 MHz part results/published was measured on, its lowest healthy reading (1275 MHz) sits 1.93x above that part's floor. This probe cannot miss a difference of the size it is looking for.
+
+==============================================================================
+GATES
+RESULT: VALIDITY V1 PASS the probe watched a loaded card for the booked window: measured 55 scored samples over 119 s (of 68 polled, 30 s of ramp discarded)
+VALIDITY 1  PASS      the probe watched a loaded card for the booked window
+           measured 55 scored samples over 119 s (of 68 polled, 30 s of ramp discarded)   gate >= 9 samples and >= 108 s
+RESULT: VALIDITY V2 PASS every scored sample came through NVML: measured sources nvml
+VALIDITY 2  PASS      every scored sample came through NVML
+           measured sources nvml   gate exactly 'nvml'
+RESULT: CLAIM C1 PASS the card holds a clock above its own thermal floor: measured 1440 MHz median over the window
+CLAIM 1  PASS      the card holds a clock above its own thermal floor
+           measured 1440 MHz median over the window   gate >= 660 MHz = 0.3333 x this card's 1980 MHz maximum, from nvml
+           board power 72.4% of the 900 W limit over the same window. A low clock AT the cap is a hungry kernel; a low clock well under it is a card in trouble.
+           NVML slowdown reasons seen: 0x4 SwPowerCap. RECORDED, NOT SCORED: the clock is what makes a ceiling wrong, this says why.
+RESULT: CLAIM C2 PASS the clock is steady from the start of the window to its end: measured first third 1440 MHz, last third 1440 MHz, 0.0% apart
+CLAIM 2  PASS      the clock is steady from the start of the window to its end
+           measured first third 1440 MHz, last third 1440 MHz, 0.0% apart   gate within 0.05 of the first third, either direction
+
+READING IT. Validity holds. Claim gates not passed: none.
+This card held a clock above its own thermal floor for the whole window and was still holding it at the end of it. The ceilings measured next are this card's.
+
+report   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/thermal_acceptance/nvidia_gh200_480gb-1settle30.0-2window120.0-3poll2.0-d8c22533/report.txt   git could not be asked (rc 128 is a path outside the work tree)
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/thermal_acceptance/nvidia_gh200_480gb-1settle30.0-2window120.0-3poll2.0-d8c22533/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED
