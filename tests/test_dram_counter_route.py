@@ -2323,14 +2323,17 @@ def _page_exit(page) -> int:
 #: tree without the family; the test holds the two lists equal.
 WORLD_CASES = (("group", 1), ("group", 4), ("no-reuse", 4),
                ("private-reads-copy-0", 4), ("declaration", 4), ("noisy", 4),
-               ("request-mismatch", 4), ("uncarded", 4), ("activation-thrash", 64))
+               ("request-mismatch", 4), ("request-coalesced", 4), ("uncarded", 4),
+               ("activation-thrash", 64))
 
 
 @pytest.mark.parametrize(("world", "group_m"), WORLD_CASES)
 def test_each_planted_world_scores_its_registered_exit(world, group_m):
     """GROUP: every validity gate and C1/C2/C3/C6 PASS, exit 0 (C3 is asked at
     G=1 only). NO-REUSE: C1 FAIL, exit 1. PRIVATE-READS-COPY-0: V5 FAIL, exit
-    3. DECLARATION +5%: V7. NOISY 2%: V3. REQUEST-MISMATCH: V6. UNCARDED: V0."""
+    3. DECLARATION +5%: V7. NOISY 2%: V3. REQUEST-MISMATCH: V6. REQUEST-
+    COALESCED, the GH200's shape on the planted sm_90 card (SHARED and NATIVE
+    counting 5% under their loads at n >= 2): exit 0. UNCARDED: V0."""
     assert {w for w, _g in WORLD_CASES} == set(DCR.R3_WORLDS)
     _why, want, gate = DCR.R3_WORLDS[world]
     page = DCR.planted_r3_page(world, group_m)
@@ -2588,6 +2591,212 @@ def test_v7_fails_arms_whose_calls_do_not_overlap_however_noisy_the_gemm():
     gates = {g.number: g for g in DCR.score_r3_page(page)[0]}
     assert gates["V7"].verdict == FAIL
     assert "n=3 w2 calls apart by" in gates["V7"].measured
+
+
+def _requests(page, arm: str, ns, factor: float, gemms=("w1", "w2")) -> None:
+    """One arm's requested L2 read sectors at treads `ns`, scaled by `factor`."""
+    cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+    for n in ns:
+        for g in gemms:
+            cells[(arm, n)]["per_gemm"][g]["l2_tex_read_sectors"] *= factor
+
+
+def _v6(page) -> DCR.Gate:
+    """V6 rescored from the page's cells."""
+    return next(g for g in DCR.score_r3_page(page)[0] if g.number == "V6")
+
+
+_DEEP = tuple(n for n in DCR.R3_TREADS if n > 1)
+
+
+def test_v6_holds_only_the_arms_that_are_one_call_on_a_card_that_coalesces_l2_reads():
+    """2026-09-25, the five GH200 pages (sm_90). Their requested count sat
+    0.21% to 10.15% below the loads, most likely Hopper's L2 Request
+    Coalescer merging reads before the L2 counts them, and at n >= 2 PRIVATE,
+    whose tiles read their own copies, counted 4.0% to 6.2% above SHARED at
+    G = 2, 4 and 16: V6 voided all five pages on it. On the planted sm_90
+    card that shape (5%, SHARED and NATIVE alike) now passes, V6 holding
+    SHARED against PRIVATE at n=1 and NATIVE against SHARED at every tread, and
+    the GATE prints the three-arm gap it did not gate; 0.7% more from PRIVATE
+    at n=1, where it is one call with SHARED, still fails at 0.5% (inside
+    NATIVE's wider tolerance, so the pair keeps its own); and on a card that
+    counts every load (sm_80: the five A100 pages agree within 0.0012%) the
+    same 5% is a different call and fails."""
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert gate.measured.startswith("12 comparisons held"), gate.measured
+    assert any("most likely" in line and "one call (both route every tile to copy 0)"
+               in line for line in gate.lines), gate.lines
+    assert any(line.startswith("not gated") and "widest gap is 5.2632%" in line
+               for line in gate.lines), gate.lines
+    _requests(page, "private", (1,), 1.007, ("w2",))
+    gate = _v6(page)
+    assert gate.verdict == FAIL
+    assert "n=1 w2 SHARED against PRIVATE 0.7000% over 0.5%" in gate.measured
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    page["card"]["capability"] = "8.0"
+    gate = _v6(page)
+    assert gate.verdict == FAIL and "n=2 w1 three arms 5.2632%" in gate.measured
+    assert gate.lines == []
+
+
+def test_v6_holds_native_against_shared_where_their_live_pids_agree():
+    """At G <= 16 NATIVE's narrower declaration only drops dead tiles from the
+    tail, so every live tile keeps SHARED's pid: the same tiles in the same
+    launch order under another declaration, within 0.36% in 40 GH200 cells and
+    0.96% in 40 H100 cells, with a small lean the two cards share, so not one
+    call. V6 holds them there on a coalescing card at 1.3% at every tread
+    (`R3_REQUEST_NATIVE_TOL`, 3.9 sd of the two 3-call means' difference on
+    the H100), so an arm issuing other loads still fails: NATIVE 1.4% high at
+    n=1, SHARED 3% short at n >= 2 (the fault that would inflate the study's
+    reuse), NATIVE 2% high at n >= 2. NATIVE 1.2% high at n=1 and 1.15% high
+    at n >= 2 pass, which pins the one tolerance at every tread and at 1.3%,
+    not the 0.5% of a one-call pair or the first draft's 1%."""
+    for change, want in ((("native", (1,), 1.014), FAIL),
+                         (("native", (1,), 1.012), PASS),
+                         (("shared", _DEEP, 0.97), FAIL),
+                         (("native", _DEEP, 1.02), FAIL),
+                         (("native", _DEEP, 1.0115), PASS),
+                         (("native", _DEEP, 1.008), PASS)):
+        page = DCR.planted_r3_page("group", 4)
+        _requests(page, *change)
+        gate = _v6(page)
+        assert gate.verdict == want, (change, gate.measured)
+        assert not any("NATIVE at" in line for line in gate.lines), gate.lines
+    page = DCR.planted_r3_page("group", 4)
+    _requests(page, "native", _DEEP, 1.02)
+    assert "n=2 w1 NATIVE against SHARED 2.0000% over 1.3%" in _v6(page).measured
+    # A cell whose grid is gone (V1 fails such a page) is not shown to keep
+    # SHARED's pids: V6 does not hold NATIVE there, and says so, not a KeyError.
+    page = DCR.planted_r3_page("group", 4)
+    for cell in page["cells"]:
+        if cell["arm"] == "native":
+            cell.pop("grid", None)
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert any("and NATIVE at n=1 w1, n=1 w2" in line and "(no grid on the page; V1 fails "
+               "it)" in line for line in gate.lines), gate.lines
+    assert not any("its live tiles run at other pids" in line for line in gate.lines)
+
+
+def test_v6_leaves_native_to_v7_where_its_live_pids_differ():
+    """GH200 G=64: NATIVE's group is its whole 8n + 8 rows against SHARED's
+    64, the dead tiles sit inside each column pass, and its count sat 0.58% to
+    3.30% from SHARED's with the calls apart in all 10 cells (w1 1.2% below at
+    n=1). The live tiles run at other pids, so on a coalescing card V6 does not
+    hold NATIVE there and says so; V7 holds it on DRAM bytes. On a card that
+    counts every load it is held, and 1.2% fails."""
+    page = DCR.planted_r3_page("group", 64)
+    _requests(page, "native", DCR.R3_TREADS, 0.988, ("w1",))
+    gate = _v6(page)
+    assert gate.verdict == PASS, gate.measured
+    assert gate.measured.startswith("2 comparisons held"), gate.measured
+    assert any("NATIVE at every tread (its live tiles run at other pids" in line
+               for line in gate.lines), gate.lines
+    page["card"]["capability"] = "8.0"
+    assert _v6(page).verdict == FAIL
+
+
+def test_v6_cannot_see_a_deeper_private_difference_through_the_coalescer():
+    """What reading the count through a coalescer costs, pinned so that it
+    changes on purpose: at n >= 2 PRIVATE's tiles read their own copies, so no
+    arm is one call with it, and PRIVATE issuing 1% more loads there passes V6
+    on an sm_90 card, which says what PRIVATE rests on instead; on an sm_80
+    card, which counts every load, it fails. A page that carries a load count
+    taken before the coalescer would let V6 hold it (docs/COUNTERS.md 6.8)."""
+    page = DCR.planted_r3_page("group", 4)
+    _requests(page, "private", _DEEP, 1.01)
+    gate = _v6(page)
+    assert gate.verdict == PASS
+    assert any(line.startswith("not held: PRIVATE at n >= 2") and "V5, V7 and V9" in line
+               for line in gate.lines), gate.lines
+    page["card"]["capability"] = "8.0"
+    assert _v6(page).verdict == FAIL
+
+
+def test_the_v6_rule_is_read_off_the_cards_compute_capability():
+    """`r3_coalesces`: True from compute capability 9.0 (Hopper; a later
+    architecture takes the rule unmeasured), False below it, None where the
+    card block carries no capability in the major.minor form the capture
+    writes. Such a page is held at every tread, as on a card that counts every
+    load, and the GATE says why without claiming V0 fails it unless the
+    capability is missing; a coalescing page with no n=1 tread, the one tread
+    PRIVATE is held at there, fails V6."""
+    for cap, want in (("9.0", True), ("10.0", True), ("12.0", True), (" 9.0 ", True),
+                      ("8.0", False), ("8.9", False), ("7.5", False)):
+        assert DCR.r3_coalesces({"capability": cap}) is want, cap
+    for card in (None, {}, {"capability": None}, {"capability": ""},
+                 {"capability": "sm_90"}, {"capability": "9"}, {"capability": "90"},
+                 {"capability": "GH100"}, {"capability": "9.0.1"}):
+        assert DCR.r3_coalesces(card) is None, card
+    page = DCR.planted_r3_page("request-coalesced", 4)
+    page["card"]["capability"] = None
+    got = _scored(page)
+    assert got["V0"] == FAIL and got["V6"] == FAIL
+    assert any("names no compute capability (V0 fails such a page)" in line
+               for line in _v6(page).lines)
+    page["card"]["capability"] = "sm_90"
+    got = _scored(page)
+    assert got["V0"] == PASS and got["V6"] == FAIL
+    assert any("'sm_90' is not the major.minor form" in line
+               and "V0" not in line for line in _v6(page).lines)
+    page = DCR.planted_r3_page("group", 4)
+    page["design"]["treads"] = [n for n in page["design"]["treads"] if n != 1]
+    page["cells"] = [c for c in page["cells"] if c["n"] != 1]
+    gate = _v6(page)
+    assert gate.verdict == FAIL and "no n=1 tread" in gate.measured
+
+
+def _live_pids(rows: int, npn: int, group_m: int, live: int) -> dict:
+    """{(pid_m, pid_n): pid} for the live M-tiles, walking vLLM v0.27.1's pid
+    mapping over a `rows` x `npn` grid pid by pid."""
+    out, in_group = {}, group_m * npn
+    for pid in range(rows * npn):
+        first = pid // in_group * group_m
+        size = min(rows - first, group_m)
+        pid_m = first + (pid % in_group) % size
+        if pid_m < live:
+            out[(pid_m, (pid % in_group) // size)] = pid
+    return out
+
+
+def test_r3_same_live_pids_matches_a_walk_of_vllms_pid_mapping():
+    """`r3_same_live_pids` is exact: against a pid-by-pid walk of the
+    mapping, at every G and tread, for NATIVE's 8n + 8 rows against SHARED's
+    8n + 70 and for row counts that leave the last live group partial in one
+    grid and whole in the other. On the planted pages NATIVE and SHARED agree
+    at G <= 16 at every tread and GEMM, and at G=64 at none."""
+    design = dict(DCR.planted_r3_page("group", 4)["design"])
+    npn = DCR.pid_n_count(MODEL_CONFIGS[design["model"]].hidden_size, int(design["block_n"]))
+    for g_m in (1, 2, 3, 4, 16, 32, 64):
+        design["group_m"] = g_m
+        for n in (1, 2, 3, 4, 6):
+            live = MODEL_CONFIGS[design["model"]].num_experts * n
+            for rows_a, rows_b in ((live + 8, live + 70), (live, live + 64),
+                                   (live + 1, live + 5), (live + 3, live + 3)):
+                want = (_live_pids(rows_a, npn, g_m, live)
+                        == _live_pids(rows_b, npn, g_m, live))
+                got = DCR.r3_same_live_pids(design, rows_a * npn, rows_b * npn, "w2", n)
+                assert got is want, (g_m, n, rows_a, rows_b)
+    for g_m, want in ((1, True), (2, True), (4, True), (16, True), (64, False)):
+        page = DCR.planted_r3_page("group", g_m)
+        cells = {(c["arm"], c["n"]): c for c in page["cells"]}
+        for n in DCR.R3_TREADS:
+            for g in ("w1", "w2"):
+                assert DCR.r3_same_live_pids(page["design"], cells[("native", n)]["grid"][g],
+                                             cells[("shared", n)]["grid"][g], g, n) is want
+
+
+def test_the_r3_dry_run_says_where_v6_holds_the_arms(capsys):
+    """The dry run's registered gates are the second place V6's rule is
+    written down; it names both rules and where each applies."""
+    assert main(["--dry-run", "--family", "r3-arms"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "V6 requested L2 sectors equal within 0.5%: all three arms at every tread" in out
+    assert "on a card that counts every load; on one that coalesces L2 reads" in out
+    assert "SHARED against PRIVATE at n=1, which are one call, within 0.5%, and NATIVE" in out
+    assert "against SHARED where their live pids agree, within 1.3% at every tread" in out
 
 
 def test_ols_slope_bounds_hold_every_series_inside_the_brackets():

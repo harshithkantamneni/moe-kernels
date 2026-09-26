@@ -754,6 +754,15 @@ alone, and records every ask (`attempts`). A metric the last ask left out is
 unproven, so no page gates on it. The unit tables gained a sector table and a separate table
 for the `launch__*` metrics, the only place an empty unit is accepted.
 
+`lts__t_sectors_srcunit_tex_op_read.sum` counts what reaches the L2 from the
+SMs, which is not the same thing on every card (2026-09-25). On the A100
+(sm_80) it is every load the kernel issues; on the GH200 and the H100 (both
+sm_90) it sat 0.21% to 10.15% and 0.27% to 12.66% below the loads in every
+cell, most likely because Hopper's L2
+Request Coalescer merges reads of one sector before the L2 counts them (no
+counter on those pages sits before it). V6 reads it differently on the two
+(6.8).
+
 The parser now reads both CSV layouts ncu may print for `--csv --page raw`:
 LONG (one row per launch and metric, which the parser was written against)
 and WIDE (one row per launch, a units row under the header). No live ncu CSV
@@ -922,13 +931,115 @@ at every tread);
 V4 at n=1 SHARED and PRIVATE agree and every arm's q(1) is in [0.97, 1.03];
 V5 PRIVATE reads between 0.97 n and 1.5 n at every tread and GEMM (above the
 full-thrash 1.4989 n, so V5 cannot tell an activation thrash from a sound
-page, and C6 reads it); V6 the three
-arms request the same L2 sectors within 0.5%; V7 NATIVE reads what SHARED reads
+page, and C6 reads it); V6 the arms request the same L2 sectors: all three
+within 0.5% at every tread on a card that counts every load (sm_80), and on a
+card with an L2 Request Coalescer (compute capability 9.0 and up; next
+paragraph) two pairs: SHARED against PRIVATE at n=1, which are one call,
+within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live
+tile SHARED's pid, within 1.3% at every tread; V7 NATIVE reads what
+SHARED reads
 within max(1%, 3 x that GEMM's own repeat spread), and their calls no more
 than 1% apart (NATIVE's lowest above SHARED's highest, or the reverse), so a
 noisy GEMM cannot hide a declaration effect; V8 DRAM bytes agree with 32 x
 the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof.
+
+V6 AND THE L2 REQUEST COALESCER (2026-09-25). The arms issue identical loads
+(one kernel binary per GEMM: registers and occupancy limits are equal across
+arms on all ten pages; the dead CTAs of the 72-slot declaration load one
+expert id and exit), and V6 exists to catch an arm that does not. On the five
+A100 pages the requested count is every load: all 150 (arm, n, GEMM) cells
+count +0.005% to +0.026% above the A and B tile sectors the kernel's
+`cp.async` loads issue (the excess is its few `ld.global` index loads, the
+only other global loads in its PTX), the three arms agree within 0.0012% and
+each arm's own K calls within 0.0007%, so 0.5% there is some 400 times the
+noise. On the five GH200 pages every cell counts 0.21% to 10.15% BELOW those
+loads, and the arms part: at n >= 2 PRIVATE, whose tiles read their own
+copies, counted 4.0% to 6.2% above SHARED in 23 of the 24 (n, GEMM) cells at
+G = 2, 4 and 16 (the 24th 0.5%), calls 3.3% to 6.0% apart, where each arm's
+own calls spread at most 1.49%; at G=1 on w1 it counted 0.34% to 0.64% BELOW
+SHARED, which nothing here explains. The five H100 pages (sm_90, 2026-09-25)
+show the same shape: every cell 0.27% to 12.66% below the loads, and PRIVATE
+up to 11.2% above SHARED at n >= 2. The most likely cause, not proven, is
+Hopper's L2 Request Coalescer (Nsight Compute's `lrc` unit, which "tries to
+coalesce read requests before forwarding them to the L2 cache"; ncu 2025.3.1
+lists 39 `lrc__` metrics on GH100 and none on GA100; measured on an H100 in
+arXiv 2608.22602, "Architecting the Next Generation of Asynchronous,
+Distributed GPUs for the AI Era", as a per-GPC unit that merges up to four
+reads of one sector from SMs of one GPC inside a short window, so that
+identical runs differ). No counter on these pages sits before it, so the
+merges are inferred, not read. L1 is likely not involved: both cards' Triton
+caches load every A and B tile with `cp.async.cg` in the PTX, which skips L1
+(the machine code was not disassembled). The count follows the launch order:
+at n=1, where the arms run the same tiles in the same order, they lose one
+share, and it falls as the
+swizzle spaces the CTAs that share an A tile further apart (w1: 9.3% to 9.7%
+at spacings 1 and 2, 6.2% to 6.3% at 4, 3.4% at 16, 2.4% at 64), and NATIVE
+at G=64, whose n=1 launch walks the tiles exactly as the G=16 page's does,
+loses about what that page's arms lose on w1 (3.5% against 3.4%), which any
+count that follows the launch order would do. The PRIVATE-SHARED gap is a
+side effect of the sharing the study measures (a few percent of requests, not
+alpha); no tolerance scaled from the spread tells it from a different call,
+and V6 at 0.5% voided all five GH200 pages on it.
+
+From compute capability 9.0 (`R3_COALESCING_MAJOR`, `r3_coalesces`) V6
+therefore holds two pairs. SHARED against PRIVATE at n=1 is ONE CALL: both
+route every tile to copy 0 (0.21% apart at worst on the GH200 and 0.06% on
+the H100, calls overlapping). NATIVE against SHARED is held wherever
+NATIVE's grid gives every live tile the pid it has in SHARED's
+(`r3_same_live_pids`: at G <= 16 NATIVE's narrower declaration only drops
+dead tiles from the tail). There the two issue the same tiles in the same
+launch order under another declaration, but they are not one call: the 40
+such cells agree within 0.36% on the GH200 and 0.96% on the H100, and the
+same cells lean the same way on both cards (their 32 held n >= 2 gaps
+correlate +0.44 across the two; G=1 n=1 w1 reads +0.27% on the GH200 and
++0.41% on the H100, G=1 n=3 w1 -0.29% and -0.51%), so part of the gap is a
+small difference the two cards share, not all noise (each card's gaps, taken
+together, sit at its noise level). That is a statement about this count,
+whose merges follow timing: V7 holds the pair's DRAM bytes, which the alpha
+bracket pools. At G=64 NATIVE's dead tiles sit inside each column pass, its
+count sat 0.58% to 3.30% from SHARED's with the calls apart in all 10 GH200
+cells (-3.7% to +0.6% on the H100), and V7 holds it on DRAM bytes.
+
+The tolerances come from both Hoppers' own calls. SHARED against PRIVATE at
+n=1: the sd of the difference of two 3-call means is 0.12% on the GH200 and
+0.10% on the H100, so 0.5% is 4.2 and 4.8 sd. NATIVE against SHARED at n >= 2:
+that sd is 0.25% on the GH200 and 0.33% on the H100, whose calls scatter
+more, so the first tolerance, 1%, was 3.9 sd on the GH200 but 3.0 on the
+H100, where noise alone would void about 2% of sound pages and 7.6% of
+five-page runs (one cell, G=4 n=6 w1, used 96% of it on a NATIVE call 2.9%
+low). 1.3% (`R3_REQUEST_NATIVE_TOL`) is 3.9 sd on the H100 and 5.1 on the
+GH200, and still catches a call 2% different about 98% of the time. The pair
+is held at 1.3% at n=1 too: it is not one call, and its lean there, 0.41% at
+worst, would use 82% of 0.5% and void a repeat G=1 page often; V7 holds it on
+DRAM bytes at every tread as well. WHAT V6 NO LONGER SEES on such a card:
+PRIVATE at n >= 2, in either direction and at any size; NATIVE wherever its
+pids differ (all of G=64, n=1 included); SHARED at n >= 2 at G=64; and
+elsewhere a NATIVE-SHARED difference under 1.3% (half of those at 1.3% pass).
+There V7, on DRAM bytes, is the only
+check left on SHARED's and NATIVE's loads, and V5 and V9 on PRIVATE's; a test
+pins that a PRIVATE issuing 1% more loads at n >= 2 passes V6 on sm_90 and
+fails it on sm_80.
+
+A load count the coalescer does not touch would let V6 hold every arm at
+every tread on Hopper again, and the GH200's own `ncu --query-metrics`
+(ncu 2025.3.1, 2026-09-25) LISTS the candidates on GH100, none of them yet
+read by the probe: `smsp__inst_executed_op_ldgsts` (the LDGSTS warp
+instructions the SMs execute), `sm__sass_l1tex_t_sectors_pipe_lsu_mem_global_op_ldgsts_cache_bypass`
+and `..._cache_access` (the sectors those instructions ask for past L1 and
+through it, by instrumented replay), `l1tex__m_xbar2l1tex_read_sectors`
+(sectors read into each SM's L1TEX), and the coalescer's own counts, among
+them `lrc__xbar2lrc_requests_op_read`, `lrc__lrc2xbar_sectors_op_read`,
+`lrc__lts2lrc_sectors_op_read`, `lrc__xbar2gpc_sectors_op_read` and
+`lrc__request_sectors_op_read_coalescing_achieved_type_hardware`. Read beside
+the requested count they settle the mechanism: if the coalescer is the
+cause, what it received matches the loads in every arm and what it reports
+coalesced accounts for each arm's loads less its requested count, and a zero
+`..._cache_access` rules L1 out for the tile loads. Which side of the merge
+each `lrc__` count sits on is read from ncu's one-line descriptions, not yet
+verified. Asking for any of them is a capture change
+(`R3_CROSSCHECK_METRICS`, `R3_FIELDS` and V6) that needs a new commit and
+bundle, not made here.
 
 The ladder family's monotone and affine gates are NOT applied to SHARED: the
 group model predicts non-monotone, non-affine shared ladders at G = 2, 4 and
@@ -963,9 +1074,13 @@ Every page's first line reads `CARD <name> (<slug>, UUID <uuid>, sm_<cc>, <SMs>
 SMs, <L2> MiB L2): every number here is THIS card's; the study's timing pages
 are nvidia_h200.` The run id carries the live slug, `--analyse` refuses to join
 pages from two UUIDs, two commits, two vLLM versions or two designs, or pages
-that name no commit, and a page without a card block fails V0. The target is 1x H100 SXM5 (132 SMs, 50 MB L2);
-an A100 40 GB shake-out is possible first. Neither is the study's H200 and no
-alpha either prints is the H200's.
+that name no commit, and a page without a card block fails V0. The counter
+cards are Lambda's GH200 480GB (the primary card, 60 MiB L2), H100 SXM5 (the
+second Hopper, 50 MiB L2) and A100 40 GB (the non-Hopper control); each
+card's alpha is its own and none is the H200's, which RunPod times without
+counters. The card block's compute capability also
+picks V6's rule (6.8): the H100 and the GH200 are Hopper (sm_90), which has an
+L2 Request Coalescer, and the A100 (sm_80) counts every load.
 
 ### 6.10 The commands and the cost
 
@@ -998,6 +1113,15 @@ at a locked clock with a cold L2 per GEMM, not the timed apparatus's per-call
 flush, which leaves weights unaffected and moves activations slightly. The
 group model is derived from vLLM's pid mapping, not measured: a C1 failure is
 a result, and the brute-force test guards the arithmetic, not the hardware.
+On a card with an L2 Request Coalescer (Hopper) the requested L2 count shows
+identical loads only between SHARED and PRIVATE at n=1, which are one call,
+and, within a wider 1.3%, between NATIVE and SHARED where their live pids
+agree (6.8). It
+cannot show whether PRIVATE, whose tiles read their own copies, issues
+SHARED's loads at n >= 2, nor NATIVE where its launch order differs, and it
+resolves NATIVE against SHARED only above its 1.3%: about 1.5% at n=1 and 2%
+at n >= 2 with three calls per cell, not 1%. A load count taken before the
+coalescer settles all of them.
 
 ### 6.12 The floor counters (`--floor`)
 

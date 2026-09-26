@@ -4272,7 +4272,10 @@ def do_analyse(args) -> int:
 #: any launch. `dram__bytes_read.sum` is the traffic; `dram__bytes_write.sum`
 #: says whether a write share is hiding in the read model; the L2 read sectors
 #: the SMs request (`lts__t_sectors_srcunit_tex_op_read.sum`) are what V6 holds
-#: equal across the three arms, which issue identical loads; `launch__grid_size`
+#: equal across the three arms, which issue identical loads, on a card that
+#: counts every load, and only across arms whose tiles and launch order match
+#: on a card whose L2 Request Coalescer can merge reads before the L2 counts them
+#: (`R3_COALESCING_MAJOR`); `launch__grid_size`
 #: attributes every launch to its cell (`attribute_launches`); the duration is
 #: replay time at the base clock and is never compared with a ladder.
 R3_STRICT_METRICS: tuple[str, ...] = (
@@ -4502,9 +4505,48 @@ R3_IDENTITY_FLOOR = 0.005         # V4: |R_S(1) / R_P(1) - 1| at least this wide
 R3_SPREAD_FACTOR = 3.0            # V4, V7: the floor widens to 3x the repeat spread
 R3_Q1_BAND: tuple[float, float] = (0.97, 1.03)     # V4: every arm's q(1)
 R3_PRIVATE_BAND: tuple[float, float] = (0.97, 1.5)  # V5: q_P(n) / n and its slope
-R3_REQUEST_TOL = 0.005            # V6: requested L2 sectors across arms
+R3_REQUEST_TOL = 0.005            # V6: requested L2 sectors (R3_REQUEST_NATIVE_TOL)
 R3_DECLARATION_FLOOR = 0.01       # V7: native against shared DRAM reads
 R3_COUNTER_TOL = 0.02             # V8: DRAM bytes against 32 x L2 fill sectors
+#: V6 AND THE L2 REQUEST COALESCER, re-derived 2026-09-25 from the ten pages'
+#: own counts. `lts__t_sectors_srcunit_tex_op_read.sum` is what reaches the L2
+#: from the SMs. On the A100 (sm_80) that is every load: its 150 (arm, n, GEMM)
+#: cells each count +0.005% to +0.026% above the A and B tile sectors the
+#: kernel's cp.async loads issue (the excess is its few ld.global index loads,
+#: the only other global loads in its PTX), the three arms agree within 0.0012%
+#: and each arm's K calls within 0.0007%, so 0.5% there is some 400 times the
+#: noise. On the GH200 (sm_90) every one of its 150 cells counts 0.21% to 10.15%
+#: BELOW those loads, and the arms part: at n >= 2 PRIVATE, whose tiles read
+#: their own copies, counted 4.0% to 6.2% above SHARED in 23 of the 24 (n, GEMM)
+#: cells at G = 2, 4 and 16, calls 3.3% to 6.0% apart. The H100 (sm_90) shows the
+#: same shape: 0.27% to 12.66% below the loads, PRIVATE up to 11.2% above
+#: SHARED at n >= 2. Hopper has an L2 Request
+#: Coalescer (ncu 2025.3.1 lists its `lrc` unit on GH100 and none on GA100) that
+#: merges reads of one sector from SMs of one GPC inside a short window (measured
+#: on an H100 in arXiv 2608.22602). That it is what lowers the count is most
+#: likely, not proven: no counter on these pages sits before it, and every A and
+#: B tile load in both cards' Triton caches is `cp.async.cg` in the PTX, which
+#: skips L1. From this compute capability major on, V6 holds only arms whose
+#: tiles and launch order match (`r3_same_live_pids`); below it, every tread.
+R3_COALESCING_MAJOR = 9
+#: V6's TWO TOLERANCES on a coalescing card, from both Hoppers' own calls
+#: (2026-09-25). R3_REQUEST_TOL holds SHARED against PRIVATE at n=1, which are
+#: one call: the sd of the difference of two 3-call means is 0.12% on the
+#: GH200 and 0.10% on the H100, so 0.5% is 4.2 and 4.8 of those sd. THIS ONE
+#: holds NATIVE against SHARED, at every tread. They issue the same tiles at the
+#: same launch positions under a different declaration, and are not one call
+#: for this count (V7 holds their DRAM bytes, which the alpha bracket pools):
+#: the same cells lean the same way on both cards (their 32 held n >= 2 gaps
+#: correlate +0.44 across the two; G=1 n=1 w1 reads +0.27% on the GH200 and
+#: +0.41% on the H100). At n >= 2 that sd is 0.25% on the GH200 and 0.33% on
+#: the H100, whose calls scatter more: the first tolerance, 1%, was 3.9 sd on
+#: the GH200 but 3.0 on the H100, where noise alone would void about 2% of
+#: sound pages (one cell, G=4 n=6 w1, used 96% of it on a NATIVE call 2.9% low).
+#: 1.3% is 3.9 sd on the H100 and 5.1 on the GH200, and still catches a call 2%
+#: different about 98% of the time. At n=1 the pair's lean, 0.41% at worst,
+#: would use 82% of 0.5% and void a repeat G=1 page often; V7 holds the pair on
+#: DRAM bytes at every tread as well.
+R3_REQUEST_NATIVE_TOL = 0.013
 #: CLAIM thresholds.
 R3_GROUP_TOL = 0.05               # C1: w1 within 5% of group_reads, G >= 2
 R3_FULL_REREAD_MIN = 0.95         # C1 at G=1: q_S,w1(n) >= 0.95 n
@@ -5021,6 +5063,48 @@ def card_line(card) -> str:
     return (f"CARD {card['name']} ({card.get('slug')}, UUID {card.get('uuid')}, "
             f"sm_{cc}, {card.get('sm_count')} SMs, {l2_text} MiB L2): every number "
             f"here is THIS card's; the study's timing pages are {STUDY_CARD}.")
+
+
+def r3_coalesces(card) -> bool | None:
+    """Whether the card has an L2 Request Coalescer that can merge L2 read
+    requests before the L2 counts them: True from compute capability
+    `R3_COALESCING_MAJOR`.0 (Hopper), False below it, None when the card block
+    carries no capability in the major.minor form the capture writes (none at
+    all fails V0). On 2026-09-25 the requested count was every load on sm_80 and
+    below the loads on sm_90, 0.21% to 10.15% on the GH200 and 0.27% to 12.66%
+    on the H100, most likely the coalescer's merges. A later architecture takes
+    the sm_90 rule unmeasured, which can only pass a page the every-load rule
+    would fail, never the reverse, except a page with no n=1 tread, which V3
+    and V4 fail anyway."""
+    cap = card.get("capability") if isinstance(card, dict) else None
+    m = re.fullmatch(r"(\d+)\.(\d+)", str(cap).strip()) if cap not in (None, "") else None
+    return None if m is None else int(m.group(1)) >= R3_COALESCING_MAJOR
+
+
+def r3_same_live_pids(design: dict, grid_a: int, grid_b: int, gemm: str, n: int) -> bool:
+    """Whether two launches of one GEMM at tread `n` give every LIVE tile the
+    same pid: the same tiles in the same order at the same launch positions,
+    the two grids differing only in dead tiles past the last live one.
+
+    vLLM's pid mapping (`pid_mapping_reads`) walks GROUP_SIZE_M rows at a time
+    and the E x n live M-tiles lead every arm's grid, so the pids agree exactly
+    when every group that holds a live M-tile has one size in both grids.
+    NATIVE against SHARED (2026-09-25): at G <= 16 NATIVE's narrower declaration
+    only drops dead tiles from the tail and they agree at every tread; at G=64
+    NATIVE's group is its whole 8n + 8 rows against SHARED's 64, the dead tiles
+    sit inside each column pass, and they do not. V6 reads this on a card that
+    coalesces L2 reads, whose requested count follows the launch order: where
+    the pids agreed the GH200's NATIVE and SHARED counts agreed within 0.36%,
+    and where they did not they sat 0.58% to 3.30% apart."""
+    cfg = MODEL_CONFIGS[design["model"]]
+    npn = pid_n_count(2 * cfg.intermediate_size if gemm == "w1" else cfg.hidden_size,
+                      int(design["block_n"]))
+    if int(grid_a) % npn or int(grid_b) % npn:
+        return False
+    rows_a, rows_b = int(grid_a) // npn, int(grid_b) // npn
+    g_m = int(design["group_m"])
+    return all(min(rows_a - first, g_m) == min(rows_b - first, g_m)
+               for first in range(0, cfg.num_experts * int(n), g_m))
 
 
 def r3_stack_versions() -> dict:
@@ -5796,22 +5880,115 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
          + " per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell "
          "a thrash from a sound page, and C6 reads it"]))
 
-    # V6 REQUESTED IDENTITY.
-    mism = []
+    # V6 REQUESTED IDENTITY, re-derived 2026-09-25 (`R3_COALESCING_MAJOR`,
+    # `r3_same_live_pids`, `R3_REQUEST_NATIVE_TOL`). The arms issue identical
+    # loads: one kernel binary per GEMM (registers and occupancy limits equal
+    # across arms on all ten pages), and the dead CTAs the wider 72-slot
+    # declaration adds each load one expert id and exit. On a card that counts
+    # every load (the A100) V6 holds the three arms at every (n, GEMM), as
+    # before. On the GH200 the count sat 0.21% to 10.15% below the loads in every
+    # cell, most likely because Hopper's L2 Request Coalescer merged reads of one
+    # sector before the L2 counted them (no counter on the pages sits before
+    # it), and V6 voided all five GH200 pages: at n >= 2 PRIVATE counted 4.0% to
+    # 6.2% above SHARED in 23 of the 24 (n, GEMM) cells at G = 2, 4 and 16, calls
+    # 3.3% to 6.0% apart where each arm's own calls spread at most 1.49%. That
+    # gap is systematic, a side effect of the sharing the study measures (a few
+    # percent of requests, not alpha), and no tolerance scaled from the spread
+    # tells it from a different call. So on such a card V6 holds two pairs:
+    # SHARED against PRIVATE at n=1, ONE CALL, where both route every tile to
+    # copy 0 (0.21% apart at worst on the GH200, 0.06% on the H100, calls
+    # overlapping), and NATIVE against SHARED wherever NATIVE's grid gives every
+    # live tile SHARED's pid (G <= 16 on these pages: the same tiles in the same
+    # launch order under another declaration, within 0.36% in 40 GH200 cells and
+    # 0.96% in 40 H100 cells, with a small lean the two cards share), at the
+    # wider R3_REQUEST_NATIVE_TOL at every tread. At G=64 NATIVE's
+    # dead tiles sit inside each column pass and its count sat 0.58% to 3.30%
+    # from SHARED's on the GH200, calls apart in all 10 cells (-3.7% to +0.6%
+    # on the H100): V7 holds it on DRAM bytes. A cell with no grid holds no
+    # NATIVE pair and is named as such.
+    # PRIVATE at n >= 2 and NATIVE where its pids differ rest on V5, V7 and V9.
+    def request_gap(n: int, g: str, among) -> float:
+        vals = [cells[(a, n)]["per_gemm"][g]["l2_tex_read_sectors"] for a in among]
+        return max(vals) / min(vals) - 1.0 if min(vals) > 0 else math.inf
+
+    coalesces = r3_coalesces(card)
+    mism, held, loose, native_apart, no_grid = [], [], [], [], []
+    if coalesces and 1 not in treads:
+        mism.append("no n=1 tread, the one tread V6 holds PRIVATE at on a card that "
+                    "coalesces L2 reads")
     for n in treads:
         for g in gemms:
-            vals = [cells[(a, n)]["per_gemm"][g]["l2_tex_read_sectors"] for a in arms]
-            rel = max(vals) / min(vals) - 1.0 if min(vals) > 0 else math.inf
-            if rel > R3_REQUEST_TOL:
-                mism.append(f"n={n} {g} {rel:.4%}")
+            if not coalesces:
+                pairs = [("three arms", arms, R3_REQUEST_TOL)]
+            else:
+                loose.append((request_gap(n, g, arms), f"n={n} {g}"))
+                pairs = ([("SHARED against PRIVATE", ("shared", "private"), R3_REQUEST_TOL)]
+                         if n == 1 else [])
+                # A cell with no grid (V1 fails such a page) is not shown to
+                # keep SHARED's pids, so NATIVE is not held there.
+                ng = (cells[("native", n)].get("grid") or {}).get(g)
+                sg = (cells[("shared", n)].get("grid") or {}).get(g)
+                if ng is None or sg is None:
+                    no_grid.append(f"n={n} {g}")
+                elif r3_same_live_pids(design, ng, sg, g, n):
+                    pairs.append(("NATIVE against SHARED", ("native", "shared"),
+                                  R3_REQUEST_NATIVE_TOL))
+                else:
+                    native_apart.append(f"n={n} {g}")
+            for label, among, tol in pairs:
+                rel = request_gap(n, g, among)
+                held.append((rel / tol, rel, tol, f"n={n} {g} ({label})"))
+                if rel > tol:
+                    mism.append(f"n={n} {g} {label} {rel:.4%} over {tol:.1%}")
+    if mism:
+        measured6 = _worst(mism)
+    else:
+        top = max(held)
+        measured6 = (f"{len(held)} comparisons held; nearest its tolerance {top[1]:.4%} "
+                     f"of {top[2]:.1%} at {top[3]}")
+    lines6 = []
+    if coalesces:
+        far = max(loose)
+        where_native = ("every tread" if len(native_apart) == len(treads) * len(gemms)
+                        else ", ".join(native_apart))
+        lines6 += [f"compute capability {card.get('capability')}, at or above Hopper's "
+                   f"{R3_COALESCING_MAJOR}.0: an L2 Request Coalescer can merge "
+                   "reads of one sector before the L2 counts them, most likely what put "
+                   "this count below the loads on the GH200 and the H100 (no counter on "
+                   "this page sits "
+                   "before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, "
+                   f"one call (both route every tile to copy 0), within {R3_REQUEST_TOL:.1%}, "
+                   "and NATIVE against SHARED where NATIVE's grid gives every live tile "
+                   "SHARED's pid, the same tiles under another declaration, within "
+                   f"{R3_REQUEST_NATIVE_TOL:.1%} at every tread",
+                   "not held: PRIVATE at n >= 2 (its tiles read their own copies)"
+                   + (f", and NATIVE at {where_native} (its live tiles run at other pids; "
+                      "V7 holds it on DRAM bytes)" if native_apart else "")
+                   + (f", and NATIVE at {', '.join(no_grid)} (no grid on the page; V1 "
+                      "fails it)" if no_grid else "")
+                   + "; their loads there rest on V5, V7 and V9 until a page carries a "
+                   "load count taken before the coalescer (docs/COUNTERS.md 6.8)",
+                   f"not gated: over the three arms at every tread the widest gap is "
+                   f"{far[0]:.4%} at {far[1]}"]
+    elif coalesces is None:
+        cap = card.get("capability") if isinstance(card, dict) else None
+        lines6.append(("the card block names no compute capability (V0 fails such a page)"
+                       if cap in (None, "") else
+                       f"the card block's compute capability {cap!r} is not the "
+                       "major.minor form the capture writes")
+                      + ", so V6 holds every tread, as on a card that counts every load")
     gates.append(Gate(
-        "V6", "VALIDITY", "the three arms request the same L2 read sectors",
-        PASS if not mism else FAIL,
-        _worst(mism) if mism else "every (n, GEMM) within tolerance",
-        f"max/min - 1 <= {R3_REQUEST_TOL:.1%} across arms",
-        "the arms' identity: they issue identical loads (the dead CTAs the wider "
-        "72-slot declaration adds each load one expert id and exit), so a "
-        "difference in requests is a different call"))
+        "V6", "VALIDITY", "the arms request the same L2 read sectors",
+        PASS if held and not mism else FAIL, measured6,
+        f"max/min - 1 <= {R3_REQUEST_TOL:.1%} over the three arms at every (n, GEMM) on a "
+        "card that counts every load; on one that coalesces L2 reads (compute capability "
+        f"{R3_COALESCING_MAJOR}.0 and up) SHARED against PRIVATE at n=1 within "
+        f"{R3_REQUEST_TOL:.1%}, and NATIVE against SHARED where their live pids agree "
+        f"within {R3_REQUEST_NATIVE_TOL:.1%} at every tread",
+        "the arms' identity: they issue identical loads (one kernel binary per GEMM; "
+        "the dead CTAs the wider 72-slot declaration adds each load one expert id "
+        "and exit), so where the count sees every load, or two arms issue the same "
+        "tiles in the same order, a difference in requests is a different call", lines6))
 
     # V7 DECLARATION, each GEMM against its OWN repeat spread. Until 2026-09-25 the
     # tolerance was the per-call TOTAL's spread, which w1's steady bytes dilute:
@@ -6361,10 +6538,17 @@ def do_dry_run_r3(args) -> int:
           f"max({R3_IDENTITY_FLOOR:.1%}, {R3_SPREAD_FACTOR:g} x spread) and q(1) in "
           f"{list(R3_Q1_BAND)};")
     print(f"  V5 {R3_PRIVATE_BAND[0]} n <= q_P(n) <= {R3_PRIVATE_BAND[1]} n per GEMM; V6 "
-          f"requested L2 sectors equal across arms within {R3_REQUEST_TOL:.1%}; V7 NATIVE "
-          f"= SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} x the "
-          f"GEMM's own spread) and their calls no more than {R3_DECLARATION_FLOOR:.0%} "
-          "apart;")
+          f"requested L2 sectors equal within {R3_REQUEST_TOL:.1%}: all three arms at "
+          "every tread")
+    print("  on a card that counts every load; on one that coalesces L2 reads (compute "
+          f"capability {R3_COALESCING_MAJOR}.0 and up, read")
+    print("  off each page's card) SHARED against PRIVATE at n=1, which are one call, "
+          f"within {R3_REQUEST_TOL:.1%}, and NATIVE")
+    print(f"  against SHARED where their live pids agree, within {R3_REQUEST_NATIVE_TOL:.1%} "
+          "at every tread;")
+    print(f"  V7 NATIVE = SHARED within max({R3_DECLARATION_FLOOR:.0%}, {R3_SPREAD_FACTOR:g} "
+          f"x the GEMM's own spread) and their calls no more than "
+          f"{R3_DECLARATION_FLOOR:.0%} apart;")
     print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
           "if proven; V9 R3's five-part buffer proof.")
     print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
@@ -7265,12 +7449,21 @@ def do_analyse_any(args) -> int:
 
 #: A card no nvidia-smi can print, for planted pages only. Its SM count and
 #: occupancy make the co-residency window 132 x 1 = 132, below w1's 448
-#: N-tiles, so C1 is asked at G=1.
+#: N-tiles, so C1 is asked at G=1. Its compute capability 9.0 makes it a card
+#: that coalesces L2 reads (`r3_coalesces`), as the GH200 and the H100 are, so
+#: V6 holds only SHARED against PRIVATE at n=1 and NATIVE against SHARED where
+#: their live pids agree on its pages; a test that sets
+#: it to 8.0 scores the rule of a card that counts every load.
 R3_PLANTED_CARD: dict = {
     "name": "PLANTED-CARD-not-a-device", "slug": "planted_card_not_a_device",
     "uuid": "planted-0000", "sm_count": 132, "l2_bytes": 50 * 2 ** 20,
     "capability": "9.0", "memory_bytes": 80 * 10 ** 9, "driver": "planted",
     "study_card": STUDY_CARD, "same_card_as_study": False}
+
+#: The share of SHARED's and NATIVE's requested L2 sectors the "request-coalesced"
+#: world takes off the count at n >= 2, inside the 4.0% to 6.2% PRIVATE counted
+#: above SHARED on the GH200 pages at G = 2, 4 and 16 (2026-09-25).
+R3_PLANTED_MERGE = 0.05
 
 #: The planted worlds: why each exists and the exit it must score.
 R3_WORLDS: dict[str, tuple[str, int, str | None]] = {
@@ -7284,6 +7477,13 @@ R3_WORLDS: dict[str, tuple[str, int, str | None]] = {
     "declaration": ("NATIVE reads 5% more than SHARED", exit_codes.INVALID, "V7"),
     "noisy": ("the K calls of every cell spread by 2%", exit_codes.INVALID, "V3"),
     "request-mismatch": ("PRIVATE requests 1% more L2 sectors", exit_codes.INVALID, "V6"),
+    "request-coalesced": ("the GH200's shape on the planted sm_90 card: every load "
+                          "identical, and at n >= 2 SHARED and NATIVE, whose tiles of one "
+                          f"expert read one slab, count {R3_PLANTED_MERGE:.0%} fewer L2 "
+                          "sectors than their loads while PRIVATE's are counted in full: "
+                          "V6 holds SHARED against PRIVATE at n=1 and NATIVE against "
+                          "SHARED at every tread, and the page is VALID",
+                          exit_codes.DONE, None),
     "uncarded": ("the page carries no card block", exit_codes.INVALID, "V0"),
     "activation-thrash": ("SHARED reads the group model's weights and PRIVATE reads n, "
                           "and both re-read activations wherever a column pass of the "
@@ -7370,6 +7570,8 @@ def r3_world_launch(world: str, cfg, *, block_m: int, group_m: int, arm: str, n:
     requested = (n * weight + n * op) / L2_SECTOR_BYTES
     if world == "request-mismatch" and arm == "private":
         requested *= 1.01
+    if world == "request-coalesced" and arm != "private" and n > 1:
+        requested *= 1.0 - R3_PLANTED_MERGE
     fill = read / L2_SECTOR_BYTES
     return {"dram__bytes_read.sum": read, "dram__bytes_write.sum": 4096.0 * n,
             "lts__t_sectors_srcunit_tex_op_read.sum": requested,
