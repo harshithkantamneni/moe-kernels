@@ -3,6 +3,8 @@
 
     python scripts/per_tile_model_fit.py <session dir or run dir> [...]
     python scripts/per_tile_model_fit.py DIR --include-invalid --r3 --out fit.json
+    python scripts/per_tile_model_fit.py RUN_DIRS --r3 --r3-arms native,shared,private \
+        --gemm-bytes CARD.wsc-params.json [OTHER.wsc-params.json]
 
 WHAT IT COMPUTES. A cell is one per-state, per-tread median: ms per call, the
 under-load SM clock f, GROUP_SIZE_M G and the tread n (M-tiles per expert). R1
@@ -15,8 +17,21 @@ Two families are fitted by bounded least squares on relative residuals:
               first read, the group-distinct traffic count D(G, n)
     OVERLAP   T = T0 + max(D(G, n) tau, n c0 Phi(f))
 
-with Phi(f) = (f_ref / f)^e and tau = W / BW, the time to stream the routed
-weight set W once; every structure is fitted with tau free and with tau at or
+and, with --gemm-bytes (2026-09-26), the per-GEMM overlap map of the w2 judge,
+
+    ovl.gemm.bytes  T = T0 + max(q_w1 W_w1/BW, n c_w1 Phi) + max(q_w2 W_w2/BW, n c_w2 Phi)
+
+with q_g per cell and per GEMM from the card's counter page where it measured
+the cell, otherwise from `scripts/wave_split_bytes.py`'s model with that card's
+parameters (NOT FINAL); one column per params file, never averaged (the H200
+has no counter page and gets GH200's and H100's), fitted with tau free on the
+measured cells and scoring the rest. The section prints the byte model's
+status and what would falsify it; every fitted page must name its DEVICE and
+must have run the kernel and declaration the byte model was fitted on (tile,
+copies_declared, each arm's experts_declared), or the run is REFUSED; a fit
+that leaned on OUT-OF-DOMAIN q says so. Throughout, Phi(f) = (f_ref / f)^e and
+tau = W / BW, the time to stream the routed weight set W once; every structure
+of the two families is fitted with tau free and with tau at or
 above W / pin rate. f_ref is the fastest fitted cell's clock (--f-ref moves it
 where Phi multiplies only the non-traffic term, which rescales c0 and no rms);
 where Phi multiplies tau too it stays there, so tau >= W / pin holds the rate
@@ -68,7 +83,10 @@ import private_weight_reference as PWR  # noqa: E402
 import ruler_rebaseline as RB  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
-from moe.bench.weights import routed_expert_weight_bytes  # noqa: E402
+from moe.bench.weights import (  # noqa: E402
+    routed_expert_weight_bytes,
+    routed_expert_weight_bytes_by_gemm,
+)
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -178,6 +196,16 @@ class Context:
     #: fitted cell, so Phi >= 1 at every cell and tau >= W / pin bounds the
     #: rate at each of them. None means f_ref.
     f_top: float | None = None
+    #: (("w1", W_w1), ("w2", W_w2)), bytes: the split `ovl.gemm.bytes` needs.
+    weight_bytes_by_gemm: tuple = ()
+
+    def gemm_fraction(self, gemm: str) -> float:
+        """W_g / W: the share of tau one weight set of GEMM g takes."""
+        by = dict(self.weight_bytes_by_gemm)
+        if gemm not in by:
+            raise Refused("the context carries no per-GEMM weight bytes; ovl.gemm.bytes "
+                          "cannot split tau")
+        return by[gemm] / self.weight_bytes
 
     @property
     def f_traffic(self) -> float:
@@ -209,6 +237,13 @@ class Cell:
     #: Every M-tile reads its own weight copy (the R3 private arm), so the
     #: traffic is n full sets whatever G is.
     private: bool = False
+    #: Per-GEMM weight reads, in units of each GEMM's weight set, for the
+    #: `ovl.gemm.bytes` structure only (`with_gemm_bytes`); None elsewhere.
+    q_w1: float | None = None
+    q_w2: float | None = None
+    #: Where they came from: "measured" (the card's counter page) or the
+    #: wave-split model's column label.
+    q_origin: str = ""
 
 
 @dataclass
@@ -224,6 +259,13 @@ class Page:
     card: str = ""
     cells: list = field(default_factory=list)
     note: str = ""
+    #: R3 only (2026-09-26, for `ovl.gemm.bytes`): each loaded arm's declared
+    #: expert slots as its rows record them (cells.csv experts_declared, the
+    #: distinct values), and report.json's copies_declared. A byte model fitted
+    #: on another declaration walks another grid, so `with_gemm_bytes` checks
+    #: both against the q source.
+    declared_by_arm: dict = field(default_factory=dict)
+    copies_declared: int | None = None
 
     def describe(self) -> str:
         why = self.label if not self.failed else f"{self.label} ({', '.join(self.failed)} not PASS)"
@@ -344,6 +386,11 @@ def load_r3(path: Path, arms) -> Page:
                  int(pinned.get("num_warps")), int(pinned.get("num_stages")))
     duty = report.get("duty")
     page.states = f"{'/'.join(arms)} @{duty}"
+    copies = report.get("copies_declared")
+    page.copies_declared = None if copies is None else int(copies)
+    page.declared_by_arm = {arm: tuple(sorted({s.experts_declared for s in samples
+                                               if s.arm == arm}))
+                            for arm in arms}
     for arm in arms:
         points, _spread, _dropped = PWR.collapse(samples, arm)
         for tread, ms in points:
@@ -407,7 +454,7 @@ class Structure:
     key: str
     combine: str             # "sum" | "max"
     phi: str                 # "all" | "non_traffic"
-    traffic: str             # "per_tile" | "first_read" | "group"
+    traffic: str             # "per_tile" | "first_read" | "group" | "gemm_bytes"
     alpha_one: str = "one"   # "one" (alpha(1) = 1) | "free"
     alpha_rest: str = "per_g"  # "per_g" | "tied"
     tau: str = "free"        # "free" | "pin"
@@ -421,6 +468,11 @@ class Structure:
         return self.traffic in ("per_tile", "first_read")
 
     def formula(self) -> str:
+        if self.traffic == GEMM_BYTES_TRAFFIC:
+            floor = "tau >= W/pin" if self.tau == "pin" else "tau free"
+            return ("T0 + max(q_w1 (W_w1/W) tau, n c_w1 Phi) + max(q_w2 (W_w2/W) tau, "
+                    f"n c_w2 Phi); q per GEMM from a counter page or the wave-split model; "
+                    f"{floor}")
         d = {"per_tile": "n alpha(G)", "first_read": "(1 + alpha(G)(n-1))",
              "group": "D(G,n)"}[self.traffic]
         if self.combine == "max":
@@ -470,6 +522,27 @@ SCAN_STRUCTURES = (
               alpha_one="free", alpha_rest="tied", tau="pin"),
 )
 
+#: THE PER-GEMM OVERLAP MAP, `ovl.gemm.bytes` (2026-09-26, the w2 judge's
+#: consumer of the wave-split byte model, `scripts/wave_split_bytes.py`):
+#:
+#:     T = T0 + max(q_w1 W_w1 / BW, n c_w1 Phi) + max(q_w2 W_w2 / BW, n c_w2 Phi)
+#:
+#: Each GEMM is its own kernel launch, so each gets the OVERLAP shape, with one
+#: DRAM rate per card (tau = W / BW, W = W_w1 + W_w2) and its own floor. q_g is
+#: per cell and per GEMM: the card's counter page where one measured the cell,
+#: otherwise the wave-split model with that card's parameters. WHY: the single
+#: linear map t = a + b n + c Q fits the counted cells at only 5.2% (GH200) and
+#: 8.1% (H100) rms, so its n=5 errors measure the map; this one fits 75 counted
+#: cells at 1.19% and 0.72% rms (the judge's j03b, 1710 MHz lock pages) and
+#: predicts the unmeasured n=5 times from the model's q to 1.69% and 0.39%.
+#: INTERPRETATION grade: the timed pages ran at a 1710 MHz lock with one L2
+#: flush per call, the counter pages under ncu with a flush per GEMM. Not in
+#: STRUCTURES: it needs per-GEMM q, which only `with_gemm_bytes` attaches, and
+#: only to R3 cells (an R1 ladder runs another declaration).
+GEMM_BYTES_TRAFFIC = "gemm_bytes"
+GEMM_BYTES = Structure("ovl.gemm.bytes", combine="max", phi="non_traffic",
+                       traffic=GEMM_BYTES_TRAFFIC)
+
 
 @dataclass(frozen=True)
 class Data:
@@ -480,18 +553,26 @@ class Data:
     private: np.ndarray
     dgroup: np.ndarray
     groups: tuple
+    #: Per-GEMM q per cell (NaN where a cell carries none); `ovl.gemm.bytes` only.
+    q_w1: np.ndarray | None = None
+    q_w2: np.ndarray | None = None
 
     @classmethod
     def of(cls, cells, ctx: Context) -> Data:
         n = np.array([c.tread for c in cells], dtype=float)
         g = np.array([c.group_m for c in cells], dtype=int)
+
+        def q(name):
+            return np.array([math.nan if getattr(c, name) is None else getattr(c, name)
+                             for c in cells], dtype=float)
         return cls(n=n, g=g,
                    f=np.array([c.mhz for c in cells], dtype=float),
                    ms=np.array([c.ms for c in cells], dtype=float),
                    private=np.array([c.private for c in cells], dtype=bool),
                    dgroup=np.array([group_traffic(int(gg), int(nn), ctx.experts)
                                     for gg, nn in zip(g, n, strict=True)]),
-                   groups=tuple(sorted({int(x) for x in g})))
+                   groups=tuple(sorted({int(x) for x in g})),
+                   q_w1=q("q_w1"), q_w2=q("q_w2"))
 
 
 @dataclass(frozen=True)
@@ -507,10 +588,16 @@ class Layout:
 
 def layout(s: Structure, data: Data, ctx: Context, fixed_rest=None) -> Layout:
     lo_ms, hi_ms = float(data.ms.min()), float(data.ms.max())
-    names = ["T0", "tau", "c0", "e"]
+    names = ["T0", "tau", "c_w1" if s.traffic == GEMM_BYTES_TRAFFIC else "c0", "e"]
     lb = [0.0, ctx.tau_pin_ms if s.tau == "pin" else 0.0, 0.0, 0.0]
     ub = [lo_ms, max(hi_ms, ctx.tau_pin_ms * 1.5), hi_ms, E_MAX]
     slots = [None, None, None, None]
+    if s.traffic == GEMM_BYTES_TRAFFIC:
+        # The second GEMM's floor, per M-tile at F_REF, in the slot c0 would take.
+        names.append("c_w2")
+        lb.append(0.0)
+        ub.append(hi_ms)
+        slots.append(None)
     if s.has_alpha:
         rest = [g for g in data.groups if g != 1]
         if s.alpha_one == "free" and 1 in data.groups:
@@ -547,6 +634,11 @@ def alpha_per_cell(lay: Layout, p: np.ndarray, data: Data) -> np.ndarray:
 
 def predict(s: Structure, lay: Layout, p: np.ndarray, data: Data, ctx: Context) -> np.ndarray:
     t0, tau, c0, e = p[0], p[1], p[2], p[3]
+    if s.traffic == GEMM_BYTES_TRAFFIC:
+        # c0 is c_w1 here and p[4] is c_w2; q_g W_g / BW = q_g (W_g / W) tau.
+        phi = (ctx.f_ref / data.f) ** e
+        return (t0 + np.maximum(data.q_w1 * ctx.gemm_fraction("w1") * tau, data.n * c0 * phi)
+                + np.maximum(data.q_w2 * ctx.gemm_fraction("w2") * tau, data.n * p[4] * phi))
     if s.traffic == "group":
         d = data.dgroup
     else:
@@ -795,13 +887,21 @@ def _start(lay: Layout, data: Data, ctx: Context, rng) -> np.ndarray:
     b = statistics.median(slopes) if slopes else float(data.ms.mean())
     b = max(b, 1e-6)
     lo_ms = float(data.ms.min())
+    # A further floor (ovl.gemm.bytes' c_w2) starts where c0 does; an alpha
+    # starts in its unit interval.
+    rest = lay.names[4:]
     if rng is None:
-        p = [0.1 * lo_ms, max(b, lay.lb[1]), 0.8 * b, 1.0] + [0.5] * (len(lay.names) - 4)
+        p = [0.1 * lo_ms, max(b, lay.lb[1]), 0.8 * b, 1.0]
+        p += [0.8 * b if name.startswith("c_") else 0.5 for name in rest]
     else:
         p = [rng.uniform(0, 0.3 * lo_ms), rng.uniform(max(0.3 * b, lay.lb[1]),
                                                       max(1.5 * b, lay.lb[1] * 1.01)),
              rng.uniform(0, 1.5 * b), rng.uniform(0, 2.0)]
-        p += list(rng.uniform(0, 1, len(lay.names) - 4))
+        if any(name.startswith("c_") for name in rest):
+            p += [rng.uniform(0, 1.5 * b) if name.startswith("c_") else rng.uniform(0, 1)
+                  for name in rest]
+        else:
+            p += list(rng.uniform(0, 1, len(rest)))
     return np.clip(np.array(p, dtype=float), lay.lb, lay.ub)
 
 
@@ -1245,6 +1345,178 @@ def predict_lines(fits, cells, ctx: Context) -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# The per-GEMM bytes consumer: `ovl.gemm.bytes` with q from a counter page or
+# from the wave-split model (`scripts/wave_split_bytes.py`).
+# --------------------------------------------------------------------------
+
+def with_gemm_bytes(cells, source, pages: dict) -> tuple[list[Cell], list[Cell]]:
+    """Each R3 cell with its per-GEMM q from `source(arm, G, n, device_uuid)`,
+    which returns (q_w1, q_w2, origin) or None. `pages` maps a cell's page run
+    to its Page: the device UUID (DEVICE), the tile and the declaration come
+    from it. Returns (cells with q, cells without): an R1 cell (another
+    declaration, no byte model) and a cell whose q is ILL-POSED in the model
+    carry none and are never timed.
+
+    REFUSED when an R3 cell's page ran another kernel or declaration than the
+    one the source's byte model was fitted on (`source.refuses`), or when the
+    source cannot say which kernel it models: q from one kernel attached to
+    another's timings is a wrong number that still fits (review F3,
+    2026-09-26: a timed page edited to BLOCK_M 64 was fitted with the BLOCK_M
+    32 counter q and exit 0)."""
+    check = getattr(source, "refuses", None)
+    if check is None:
+        raise Refused(f"{getattr(source, 'label', 'q source')} cannot say which kernel its q "
+                      "belongs to; ovl.gemm.bytes will not attach it to a timed page")
+    have, lack, judged = [], [], {}
+    for c in cells:
+        if not c.arm.startswith("R3 "):
+            lack.append(c)
+            continue
+        page = pages.get(c.page)
+        if page is None:
+            raise Refused(f"cell {c.arm} G={c.group_m} n={c.tread} names page {c.page}, which "
+                          "is not among the fitted pages; its kernel cannot be checked")
+        if page.run not in judged:
+            judged[page.run] = check(page.tile, page.declared_by_arm, page.copies_declared)
+        if judged[page.run]:
+            raise Refused(f"page {page.run}: {judged[page.run]}; its cells may not take "
+                          f"{getattr(source, 'label', 'this source')}'s q")
+        got = source(c.arm.split(" ", 1)[1], c.group_m, c.tread, page.card)
+        if got is None:
+            lack.append(c)
+            continue
+        q1, q2, origin = got
+        have.append(dataclasses.replace(c, q_w1=float(q1), q_w2=float(q2), q_origin=origin))
+    return have, lack
+
+
+#: The tag a q source puts in a cell's origin when the model's q there is
+#: OUT-OF-DOMAIN (w2 SHARED/NATIVE at G >= 32): printed, never scored.
+OUT_OF_DOMAIN_TAG = "OUT-OF-DOMAIN"
+
+
+@dataclass
+class GemmBytesColumn:
+    """One q source's `ovl.gemm.bytes`: fitted on the cells whose q a counter
+    page measured (on every cell with q when the card has no counter page),
+    and the rest scored with those parameters, never refitted."""
+
+    label: str
+    fit: Fit
+    fitted: list
+    scored: list
+    scored_rel: np.ndarray
+    untimed: list
+    #: True when no fitted cell's q was measured: the fit is on the model's own
+    #: q and nothing is held out.
+    model_only: bool
+    #: The q source's status ("NOT FINAL" for the wave-split model) and the
+    #: lines that say what would falsify it, printed with the column.
+    status: str = ""
+    status_lines: tuple = ()
+
+    def fitted_out_of_domain(self) -> np.ndarray:
+        """Which fitted cells took an OUT-OF-DOMAIN q (only a model-only
+        column can have any: a measured q has no domain)."""
+        return np.array([OUT_OF_DOMAIN_TAG in c.q_origin for c in self.fitted], dtype=bool)
+
+
+def fit_gemm_bytes(cells, ctx: Context, source, pages: dict, *,
+                   starts: int = STARTS) -> GemmBytesColumn:
+    """`ovl.gemm.bytes` for one q source (one column, never averaged with
+    another). `pages` maps page run to Page (`with_gemm_bytes`)."""
+    have, lack = with_gemm_bytes(cells, source, pages)
+    if not have:
+        raise Refused(f"{getattr(source, 'label', 'q source')}: no R3 cell has a per-GEMM q; "
+                      "ovl.gemm.bytes needs the R3 arms (--r3)")
+    measured = [c for c in have if c.q_origin == "measured"]
+    fitted = measured or have
+    scored = [c for c in have if c not in fitted]
+    f = fit(GEMM_BYTES, fitted, ctx, starts=starts)
+    rel = score(f, scored, ctx) if scored else np.zeros(0)
+    return GemmBytesColumn(label=getattr(source, "label", "q source"), fit=f, fitted=fitted,
+                           scored=scored, scored_rel=rel, untimed=lack,
+                           model_only=not measured, status=getattr(source, "status", ""),
+                           status_lines=tuple(getattr(source, "status_lines", ())))
+
+
+def _rms_text(r: np.ndarray) -> str:
+    return _pct(float(np.sqrt(np.mean(r ** 2)))).strip() if r.size else "n/a"
+
+
+def gemm_bytes_lines(columns: list[GemmBytesColumn], ctx: Context) -> list[str]:
+    """The PER-GEMM BYTES section. Each distinct q-source status is printed
+    once in the header with what would falsify it (review F5, 2026-09-26: the
+    section had said nothing of the byte model being NOT FINAL). A fit or a
+    score that leaned on OUT-OF-DOMAIN q says how many cells did, with its rms
+    without them (review F7: a model-only column had fitted on them
+    silently)."""
+    out = [f"PER-GEMM BYTES: {GEMM_BYTES.key}, {GEMM_BYTES.formula()}",
+           "  one column per q source, never averaged; BW = W / tau. INTERPRETATION grade: "
+           "timed and counted pages ran under different clocks and flushes"]
+    seen = []
+    for col in columns:
+        key = (col.status, col.status_lines)
+        if key in seen or not (col.status or col.status_lines):
+            continue
+        seen.append(key)
+        who = ", ".join(c.label for c in columns if (c.status, c.status_lines) == key)
+        out.append(f"  q source status ({who}): {col.status or 'see below'}; model q comes from "
+                   "scripts/wave_split_bytes.py, and a measured q from its counter pages")
+        out += [f"    {line.strip()}" for line in col.status_lines]
+    for col in columns:
+        f = col.fit
+        bw = f.bandwidth_gbps
+        bw_text = (f"{bw:.0f} GB/s" if f.bandwidth_identified and math.isfinite(bw)
+                   else "not identified")
+        what = ("the model's q (no counter page for this card; nothing held out)"
+                if col.model_only else "measured q (the card's counter pages)")
+        out.append(f"  [{col.label}] fitted on {len(col.fitted)} cells with {what}: rms "
+                   f"{_pct(f.rms).strip()}, worst {_pct(f.worst).strip()}, BW {bw_text}")
+        ood_fit = col.fitted_out_of_domain()
+        if ood_fit.any():
+            out.append(f"    {int(ood_fit.sum())} of the {len(col.fitted)} fitted cells take an "
+                       "OUT-OF-DOMAIN q (w2 SHARED/NATIVE at G >= 32; printed, never scored): "
+                       f"rms without them {_rms_text(np.asarray(f.rel)[~ood_fit])} over "
+                       f"{int((~ood_fit).sum())} cells; the fit itself used them")
+        out.append(f"    {_param_text(f)}")
+        if col.scored:
+            r = col.scored_rel
+            ood = np.array([OUT_OF_DOMAIN_TAG in c.q_origin for c in col.scored])
+            line = (f"    scored, never refitted: {len(col.scored)} cells with the model's q, rms "
+                    f"{_rms_text(r)}, worst {_pct(float(np.max(np.abs(r)))).strip()}")
+            if ood.any():
+                line += (f"; without the {int(ood.sum())} whose q is OUT-OF-DOMAIN, rms "
+                         f"{_rms_text(r[~ood])}")
+            out.append(line)
+            for c, e in zip(col.scored, r, strict=True):
+                out.append(f"      {c.arm:<11} G={c.group_m:<3} n={c.tread}  q_w1 {c.q_w1:.3f} "
+                           f"q_w2 {c.q_w2:.3f}  {e * 100:+.2f}%  ({c.q_origin})")
+        if col.untimed:
+            out.append(f"    not timed ({len(col.untimed)}): an R1 cell, or a cell whose q is "
+                       "ILL-POSED in the model")
+    return out
+
+
+def gemm_bytes_card(pages) -> str:
+    """The one device every fitted page ran on, for `ovl.gemm.bytes` (one DRAM
+    rate per card). REFUSED when the pages ran on several, or when any page has
+    no DEVICE file: its card cannot be established, and its cells would take
+    the model's q beside another page's measured q under one rate (review F10,
+    2026-09-26: such a page had been left out of the count)."""
+    unknown = [p.run for p in pages if not p.card]
+    if unknown:
+        raise Refused(f"--gemm-bytes fits one DRAM rate per card and pages {unknown} record no "
+                      "DEVICE, so the card they ran on cannot be established; fit only pages "
+                      "that name their device")
+    cards = sorted({p.card for p in pages})
+    if len(cards) != 1:
+        raise Refused(f"--gemm-bytes fits one DRAM rate per card and the fitted pages "
+                      f"ran on {len(cards)} cards ({', '.join(cards)}); fit each alone")
+    return cards[0]
+
+
+# --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 
@@ -1289,6 +1561,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="write the pages, cells, fits, scan, leave-one-G-out and "
                         "predictions as JSON to this file")
+    p.add_argument("--gemm-bytes", type=Path, nargs="+", default=None,
+                   help="add ovl.gemm.bytes, one column per wave-split params JSON "
+                        "(scripts/wave_split_bytes.py --params-out): q from that card's "
+                        "counter page where it measured the cell on the same card, else "
+                        "from its parameters; needs --r3 (e.g. --r3-arms "
+                        "native,shared,private)")
     return p
 
 
@@ -1303,10 +1581,12 @@ def _context(pages, ruler: Ruler, f_ref: float | None) -> Context:
     if model not in MODEL_CONFIGS:
         raise Refused(f"model {model!r} is not in moe.spec.MODEL_CONFIGS")
     w = routed_expert_weight_bytes(model, dtype)
+    by = routed_expert_weight_bytes_by_gemm(MODEL_CONFIGS[model], dtype)
     top = max(c.mhz for p in pages for c in p.cells)
     return Context(weight_bytes=w, experts=MODEL_CONFIGS[model].num_experts,
                    tau_pin_ms=tau_ms_at(w, ruler.pin_gbps),
-                   f_ref=float(f_ref) if f_ref else top, f_top=top)
+                   f_ref=float(f_ref) if f_ref else top, f_top=top,
+                   weight_bytes_by_gemm=(("w1", int(by["w1"])), ("w2", int(by["w2"]))))
 
 
 def _resolve_ruler(pages, explicit: Path | None) -> Ruler:
@@ -1369,6 +1649,20 @@ def run(args) -> tuple[list[str], dict]:
     cells = [c for p in use for c in p.cells]
     groups = sorted({c.group_m for c in cells})
     cards = sorted({p.card for p in use if p.card})
+    sources, page_of_run = [], {p.run: p for p in use}
+    if args.gemm_bytes:
+        # Every --gemm-bytes refusal comes here, before the long fits: one
+        # card that every page names, each params file's counter pages where
+        # it says, and every R3 page on the byte model's kernel.
+        import wave_split_bytes as WSB
+        gemm_bytes_card(use)
+        for path in args.gemm_bytes:
+            try:
+                sources.append(WSB.q_source(path))
+            except WSB.Refused as exc:
+                raise Refused(str(exc)) from exc
+        for source in sources:
+            with_gemm_bytes(cells, source, page_of_run)
     read = ruler.patterns.get("read_stream")
     ceiling = ruler.patterns.get(ruler.ceiling_pattern)
     lines = [f"per_tile_model_fit: {len(cells)} cells from {len(use)} pages, G in {groups}",
@@ -1445,6 +1739,21 @@ def run(args) -> tuple[list[str], dict]:
                 else:
                     rms[f.structure.key] = float(np.sqrt(np.mean(r ** 2)))
             doc["predict"] = {"pages": [p.run for p in puse], "rms": rms}
+    if args.gemm_bytes:
+        cols = [fit_gemm_bytes(cells, ctx, source, page_of_run) for source in sources]
+        lines += ["", *gemm_bytes_lines(cols, ctx)]
+        doc["gemm_bytes"] = []
+        for c in cols:
+            ood = c.fitted_out_of_domain()
+            rel = np.asarray(c.fit.rel)
+            doc["gemm_bytes"].append(dict(
+                _fit_json(c.fit), source=c.label, model_only=c.model_only,
+                q_source_status=c.status, q_source_status_lines=list(c.status_lines),
+                fitted=len(c.fitted), fitted_out_of_domain=int(ood.sum()),
+                rms_fitted_in_domain=(float(np.sqrt(np.mean(rel[~ood] ** 2)))
+                                      if (~ood).any() else None),
+                scored=[dict(dataclasses.asdict(x), rel=float(e))
+                        for x, e in zip(c.scored, c.scored_rel, strict=True)]))
     return lines, doc
 
 
