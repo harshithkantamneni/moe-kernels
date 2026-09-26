@@ -888,7 +888,13 @@ declaration only drops dead tiles from the tail). At G = 64 it is a
 different call, the dead tiles sitting inside each column pass, and its w2
 calls on the A100 did not overlap SHARED's at n=1 and n=2; there the pool is
 a union that contains SHARED's own bracket, so it can only turn a verdict
-about SHARED into UNKNOWN. V7 holds the two within their own spread. A page reduced
+about SHARED into UNKNOWN. V7 holds the two within their own spread. The
+two are not strictly one call even at G <= 16 (6.8, 2026-09-26: their
+requested L2 counts lean apart by up to about 1%, the same way in the same
+cells on both Hoppers), so each page also prints SHARED's own bracket, from
+its calls alone, and every gate that reads otherwise on it; the pooled
+bracket stays the page's and no verdict moves. On the Lambda pages one gate
+did: GH200 G=16 C2 reads REFUSE pooled and FAIL on SHARED alone. A page reduced
 before 2026-09-25 lists no per-GEMM calls, so its GEMM brackets are the
 means and V3 holds its every tread to 1%, as it did; `--reduce-only`
 rebuilds it with the lists. C5 at G >= 4 and C6 read the K calls too: the

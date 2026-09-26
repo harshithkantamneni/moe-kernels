@@ -2484,6 +2484,50 @@ def test_v7_holds_each_gemm_to_its_own_repeat_spread():
     assert _gates(DCR.planted_r3_page("declaration", 4))["V7"] == FAIL
 
 
+def test_the_page_prints_shareds_own_bracket_beside_the_pooled_one():
+    """Owner, 2026-09-26: NATIVE stays pooled into SHARED's bracket, and the
+    page also prints SHARED's own, with every gate that reads otherwise on it.
+    NATIVE's w2 at n=2 planted 1.5% high with its calls 1% apart (inside V7)
+    widens the pooled bracket past SHARED's own, which lies inside it; no gate
+    moves here, so the line says so. On SHARED alone nothing is scored twice."""
+    page = DCR.planted_r3_page("group", 4)
+    native = next(c for c in page["cells"] if (c["arm"], c["n"]) == ("native", 2))
+    for field in ("dram_bytes_read", "l2_fill_device_sectors", "l2_read_miss_sectors"):
+        native["per_gemm"]["w2"][field] *= 1.015
+    _spread_calls(native, "w2", 0.01)
+    gates, summary = DCR.score_r3_page(page)
+    est = summary["estimates"]
+    pooled, alone = est["alpha_bracket"]["w2"], est["alpha_bracket_shared"]["w2"]
+    assert pooled[0] <= alone[0] and alone[1] <= pooled[1]
+    assert pooled != alone and "SHARED or NATIVE" in est["alpha_bracket_note"]
+    assert summary["shared_alone"] == {}
+    line = next(x for x in DCR.r3_page_lines(page, gates, summary) if "own calls alone" in x)
+    assert f"w2 [{alone[0]:.4f}, {alone[1]:.4f}]" in line
+    assert "every gate reads the same on it" in line and "changes no verdict" in line
+    gates1, summary1 = DCR.score_r3_page(page, pool=DCR.R3_SHARED_ALONE)
+    assert "shared_alone" not in summary1
+    assert summary1["estimates"]["alpha_bracket"]["w2"] == alone
+    assert not any("own calls alone" in x for x in DCR.r3_page_lines(page, gates1, summary1))
+
+
+_GH200_G16 = (REPO / "results/published/2026-09-25-nvidia_gh200_480gb-session/results"
+              "/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g16.json")
+
+
+@pytest.mark.skipif(not _GH200_G16.exists(), reason="the GH200 session is not in this tree")
+def test_the_gh200_g16_page_names_the_claim_pooling_hides():
+    """The one Lambda page where pooling moved a gate (2026-09-26): on the
+    GH200 at G=16, C2 (SHARED's w2 reads never exceed the group model's
+    count) reads REFUSE on the pooled bracket and FAIL on SHARED's own calls.
+    The page's verdicts are the pooled ones; the line names the other."""
+    page = json.loads(_GH200_G16.read_text())
+    gates, summary = DCR.score_r3_page(page)
+    assert {g.number: g.verdict for g in gates}["C2"] == "REFUSE"
+    assert summary["shared_alone"] == {"C2": ["REFUSE", FAIL]}
+    line = next(x for x in DCR.r3_page_lines(page, gates, summary) if "own calls alone" in x)
+    assert "gates that read otherwise on it: C2 FAIL (pooled REFUSE)" in line
+
+
 def test_a_page_reduced_before_per_gemm_values_scores_on_the_means():
     """Pages written before 2026-09-25 carry no `per_gemm_values`: their GEMM
     edges are the means, V3 reads the per-call total at n=1 and V7 the

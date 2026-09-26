@@ -4886,7 +4886,22 @@ def r3_call_edges(payload: dict, byte_model: dict | None = None) -> dict:
     return out
 
 
-def r3_weight_bracket(q: dict, treads, edges: dict | None = None) -> tuple[dict, dict, dict]:
+#: The arms whose calls make SHARED's weight-only bracket. NATIVE is pooled
+#: with SHARED (owner, 2026-09-25): at G <= 16 it runs SHARED's live tiles in
+#: SHARED's order at SHARED's addresses, and a union can only widen the
+#: bracket, so it can turn a verdict into UNKNOWN and never create one. On
+#: 2026-09-26 V6 found the two arms' requested L2 counts leaning apart by up to
+#: about 1%, the same way in the same cells on the GH200 and the H100, so they
+#: are not strictly one call. The pooled bracket stays the page's, and
+#: `r3_estimates` and `score_r3_page` also give SHARED's own, with every gate
+#: that reads otherwise on it (owner, 2026-09-26): on the Lambda pages the one
+#: such gate was GH200 G=16 C2, REFUSE pooled and FAIL on SHARED alone.
+R3_BRACKET_POOL: tuple[str, ...] = ("shared", "native")
+R3_SHARED_ALONE: tuple[str, ...] = ("shared",)
+
+
+def r3_weight_bracket(q: dict, treads, edges: dict | None = None, *,
+                      pool: tuple[str, ...] = R3_BRACKET_POOL) -> tuple[dict, dict, dict]:
     """`(e, lo, hi)`, each `{part: {n: value}}`: the WEIGHT-ONLY q of the call
     the study fits lies in [lo, hi]; without `edges`, [min(q_S, q_N) - e,
     max(q_S, q_N)], e being PRIVATE's excess over n.
@@ -4910,13 +4925,14 @@ def r3_weight_bracket(q: dict, treads, edges: dict | None = None) -> tuple[dict,
     so it can turn a verdict about SHARED into UNKNOWN and never create one,
     and e, measured on SHARED's grid, is not shown to bound NATIVE's own
     activation re-read. V7 holds the two within their own repeat spread.
+    `pool=R3_SHARED_ALONE` is SHARED's own calls, without NATIVE's.
     """
     edges = edges or {}
 
     def edge(arm: str, part: str, n: int) -> tuple[float, float]:
         return ((edges.get(arm) or {}).get(part) or {}).get(n) or (0.0, 0.0)
 
-    pooled = [a for a in ("shared", "native") if a in q]
+    pooled = [a for a in pool if a in q]
     e = {p: {n: max(q["private"][p][n] + edge("private", p, n)[1] - n, 0.0)
              for n in treads} for p in ("total", "w1", "w2")}
     hi = {p: {n: max(q[a][p][n] + edge(a, p, n)[1] for a in pooled) for n in treads}
@@ -5458,7 +5474,7 @@ def r3_q(payload: dict, byte_model: dict | None = None) -> dict:
     return out
 
 
-def r3_estimates(payload: dict) -> dict:
+def r3_estimates(payload: dict, *, pool: tuple[str, ...] = R3_BRACKET_POOL) -> dict:
     """The page's estimates, recomputed from its cells.
 
     The PRIMARY product is q_S(n) per tread beside `group_reads`: the model
@@ -5483,12 +5499,17 @@ def r3_estimates(payload: dict) -> dict:
     / W, the slope of q_S - (q_P - n) on the means: it cancels an activation
     term only where it is IDENTICAL in both arms, and PRIVATE's wider slab
     traffic evicts A at least as often as SHARED's.
+
+    `pool` picks the arms the bracket is built from (`R3_BRACKET_POOL`). With
+    NATIVE pooled, `alpha_bracket_shared` is the same bracket from SHARED's
+    own calls alone, inside the pooled one by construction.
     """
     design = payload["design"]
     cfg = MODEL_CONFIGS[design["model"]]
     bm = r3_byte_model(cfg, design["dtype"], int(design["block_m"]))
     q = r3_q(payload, bm)
     shared, private = "shared", "private"
+    pooled = "native" in pool and "native" in q
     treads = sorted(q[shared]["total"])
     cells = _cell_map(payload)
 
@@ -5502,7 +5523,10 @@ def r3_estimates(payload: dict) -> dict:
                                for n in treads])
     raw_p = ols_slope(treads, [cells[(private, n)]["per_call"]["dram_bytes_read"]
                                for n in treads])
-    excess, lo, hi = r3_weight_bracket(q, treads, r3_call_edges(payload, bm))
+    edges = r3_call_edges(payload, bm)
+    excess, lo, hi = r3_weight_bracket(q, treads, edges, pool=pool)
+    _e, lo_s, hi_s = (r3_weight_bracket(q, treads, edges, pool=R3_SHARED_ALONE)
+                      if pooled else (None, lo, hi))
 
     def raw_bounds(arm: str) -> tuple[float, float]:
         calls = {n: (r3_call_values(cells[(arm, n)], "total")
@@ -5518,9 +5542,14 @@ def r3_estimates(payload: dict) -> dict:
                                                    [hi[p][n] for n in treads]))
                           for p in ("total", "w1", "w2")},
         "alpha_bracket_note": ("the least and greatest OLS slope over SHARED's weight-"
-                               "only q, from the lowest single call of SHARED or NATIVE, "
-                               "less e, to the highest; e PRIVATE's excess over n at "
+                               "only q, from the lowest single call of "
+                               + ("SHARED or NATIVE" if pooled else "SHARED")
+                               + ", less e, to the highest; e PRIVATE's excess over n at "
                                "its highest call"),
+        "alpha_bracket_shared": {p: list(ols_slope_bounds(treads,
+                                                          [lo_s[p][n] for n in treads],
+                                                          [hi_s[p][n] for n in treads]))
+                                 for p in ("total", "w1", "w2")},
         "e_P": {p: {str(n): v for n, v in excess[p].items()} for p in excess},
         "q_S_bracket": {p: {str(n): [lo[p][n], hi[p][n]] for n in treads} for p in lo},
         "alpha_slope": {p: slope(shared, p) for p in ("total", "w1", "w2")},
@@ -5631,7 +5660,8 @@ def _worst(items) -> str:
     return "; ".join(items[:4]) + (f"; and {len(items) - 4} more" if len(items) > 4 else "")
 
 
-def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gate], dict]:
+def score_r3_page(payload: dict, *, timed: dict | None = None,
+                  pool: tuple[str, ...] = R3_BRACKET_POOL) -> tuple[list[Gate], dict]:
     """Score one r3-arms page. Pure over the payload, recomputing every number
     from its cells; nothing stored under `estimates` is trusted.
 
@@ -5640,6 +5670,12 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
     non-affine shared ladders at G = 2, 4 and 16 (q(4) = 1 < q(3) = 1.5 at
     G=4), and those two gates would void a correct page. A test holds that a
     planted G=4 staircase with its n=4 drop is VALID.
+
+    `pool` picks the arms SHARED's weight-only bracket is built from
+    (`R3_BRACKET_POOL`). With NATIVE pooled, the page is scored a second time
+    on SHARED's own calls, and `summary["shared_alone"]` holds every gate that
+    reads otherwise there, `{number: [pooled, shared alone]}`. It changes no
+    verdict: the pooled gates are the page's.
     """
     for key in ("family", "design", "cells"):
         if key not in payload:
@@ -5789,7 +5825,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
 
     bm = r3_byte_model(cfg, design["dtype"], int(design["block_m"]))
     q = r3_q(payload, bm)
-    est = r3_estimates(payload)
+    est = r3_estimates(payload, pool=pool)
     summary["estimates"] = est
     gm = {n: group_reads(e, n, g_m) for n in treads}
     summary["group_model"] = gm
@@ -5798,7 +5834,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
                                int(design["block_n"]), g_m, n) for n in treads}
     summary["exposure"], summary["l2_bytes"] = exposure, l2
     call_edges = r3_call_edges(payload, bm)
-    e_q, lo_q, hi_q = r3_weight_bracket(q, treads, call_edges)
+    e_q, lo_q, hi_q = r3_weight_bracket(q, treads, call_edges, pool=pool)
 
     def exposed(gemm: str, arm: str, ns=None) -> list[int]:
         """The treads whose column pass is not held by THIS card's L2."""
@@ -6236,6 +6272,12 @@ def score_r3_page(payload: dict, *, timed: dict | None = None) -> tuple[list[Gat
                          "re-reads included, as the timed ratio's time pays for them"]))
         else:
             summary["not_asked"].append(f"C5: no registered C5 at G={g_m}")
+    if "native" in pool and "native" in arms:
+        alone, _summary = score_r3_page(payload, timed=timed, pool=R3_SHARED_ALONE)
+        pooled_verdicts = {g.number: g.verdict for g in gates}
+        summary["shared_alone"] = {
+            g.number: [pooled_verdicts.get(g.number), g.verdict] for g in alone
+            if pooled_verdicts.get(g.number) != g.verdict}
     return gates, summary
 
 
@@ -6290,6 +6332,22 @@ def check_r3_page(payload: dict) -> None:
             raise CounterRunRefused(f"cell {c.get('arm')}/{c.get('n')} is missing {gone}")
 
 
+def r3_shared_alone_lines(est: dict, summary: dict) -> list[str]:
+    """The page's line for SHARED's own bracket, beside the pooled one
+    (`R3_BRACKET_POOL`): its alpha, and every gate that reads otherwise on
+    SHARED's calls alone. None when NATIVE was not pooled."""
+    sa, differ = est.get("alpha_bracket_shared"), summary.get("shared_alone")
+    if not sa or differ is None:
+        return []
+    return [f"  SHARED's own calls alone, NATIVE not pooled: alpha in "
+            f"[{sa['total'][0]:.4f}, {sa['total'][1]:.4f}] (w1 [{sa['w1'][0]:.4f}, "
+            f"{sa['w1'][1]:.4f}], w2 [{sa['w2'][0]:.4f}, {sa['w2'][1]:.4f}]); "
+            + ("gates that read otherwise on it: " + ", ".join(
+                f"{k} {v[1]} (pooled {v[0]})" for k, v in sorted(differ.items()))
+               if differ else "every gate reads the same on it")
+            + ". The pooled bracket above is the page's; this line changes no verdict"]
+
+
 def r3_page_lines(payload: dict, gates: list[Gate], summary: dict) -> list[str]:
     """What a human reads: the card first, the per-tread q beside the group
     model, the estimates, and every gate."""
@@ -6324,6 +6382,7 @@ def r3_page_lines(payload: dict, gates: list[Gate], summary: dict) -> list[str]:
                 f"  alpha(G={d['group_m']}) in [{ab['total'][0]:.4f}, {ab['total'][1]:.4f}] "
                 f"(w1 [{ab['w1'][0]:.4f}, {ab['w1'][1]:.4f}], w2 [{ab['w2'][0]:.4f}, "
                 f"{ab['w2'][1]:.4f}]): {est['alpha_bracket_note']}",
+                *r3_shared_alone_lines(est, summary),
                 f"  the OLS slope of q_S's K-call means, every activation re-read counted "
                 f"as a weight re-read: {a['total']:.4f} (w1 {a['w1']:.4f}, w2 "
                 f"{a['w2']:.4f}), max relative residual {est['residual']:.2%}: "
