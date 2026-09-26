@@ -320,7 +320,7 @@ def test_gh200_k_w_1_is_worse_than_the_half_window(gh200):
 def test_gh200_registered_predictions(gh200):
     """The judge's P1 to P7 for the next GH200 run, from this fit."""
     P = gh200["predictions"]
-    for eta, want in ((1.0, (0.6654, 0.6259, 0.5872)), (0.35, (0.5878, 0.5754, 0.5627))):
+    for eta, want in ((1.0, (0.6654, 0.6259, 0.5854)), (0.35, (0.5878, 0.5754, 0.5621))):
         for f, w in zip(M.P1_CLOCKS, want, strict=True):
             assert P["P1"][f"G4/f{f:.0f}/eta{eta}"]["slope_2_6"] == pytest.approx(w, abs=5e-4)
     for eta, want in ((1.0, (0.550, 0.731, 0.600, 0.733, 0.598)),

@@ -141,7 +141,7 @@ measured Gs either side (n=1 apart from n >= 2), PRIVATE the nearest measured
 G's (by log2; a tie takes the smaller G, as the judge's reference does, so
 G=8 reads G=4's); a prediction no measured G brackets prints n/a and the rest
 still print. c at another clock f is c (clock / f)^eta.
-  P1  a held lock at 1410, 1500 and 1600 MHz: the G=4 SHARED slope 2-6, and
+  P1  a held lock at 1410, 1500 and 1605 MHz: the G=4 SHARED slope 2-6, and
       the G=2 increments at 1410, at eta 1 (a fixed cycle count) and at eta
       0.35 (what the GH200's unlocked pages read). The eta the G=4 slope gives
       and the eta the G=2 low steps give must agree.
@@ -335,8 +335,16 @@ T4_TOL = 0.02
 
 #: P1: the held locks registered for the next GH200 run, and the two clock
 #: exponents the floor might have: 1 (a fixed cycle count) and 0.35 (what the
-#: GH200's unlocked pages read, the judge's clock check).
-P1_CLOCKS = (1410.0, 1500.0, 1600.0)
+#: GH200's unlocked pages read, the judge's clock check). The judge registered
+#: 1600 MHz, which is off the 15 MHz grid of supported graphics clocks (the
+#: H100's recorded list runs 345 to 1980 in 15 MHz steps: 1590 and 1605, no
+#: 1600), and nvidia-smi and locked_r3.py refuse an unsupported lock. So 1605,
+#: re-registered 2026-09-26 before any page at it exists: G=4 slope 0.5854 at
+#: eta 1 and 0.5621 at eta 0.35 (1600 read 0.5872 and 0.5627). The GH200's own
+#: list is read on the box before the first lock; if it lacks 1605, the nearest
+#: supported clock is used and its numbers printed before the run (1590: 0.5909
+#: and 0.5639).
+P1_CLOCKS = (1410.0, 1500.0, 1605.0)
 P1_ETAS = (1.0, 0.35)
 #: P2: the unmeasured Gs, and the band around the model's flat slope: 1% of
 #: noise either side and 1% more below, the fall of the measured floor with G
