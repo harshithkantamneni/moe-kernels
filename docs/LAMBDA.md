@@ -455,6 +455,36 @@ GH200's did not: every cell at 1980 MHz, V0 to V8 PASS (C1 CLAIM_FAIL at
 under SM clock locks, of which 1710 MHz held at every G. Both cards' sessions
 are published on branches lambda-gh200 and lambda-h100.
 
+**Locked R3 is `scripts/locked_r3.py` (2026-09-26).** Run it with the VM's
+`python3` after the chain has stopped, never beside it: nothing in the chain
+notices a lock. Before each lock it waits up to `--idle-cap-s` for
+`nvidia-smi --query-compute-apps` to list nothing, and it never locks a card
+another process holds. For each lock in `--locks`, top down, it runs
+`-lgc F,F` and then R3 at every G under the tag `<session>-lock<F>`, with the
+chain's R3 arguments unless others follow `--`. A timed cell more than 15 MHz under F
+stops that lock, and the next lock down starts again at the first G. It takes
+each attempt's run directory only from that attempt's own R3 plan (its
+`session` and `WRITES TO` lines), never by modification time. Finding it by
+time is what left the H100's 1890 MHz lock untested
+(`results/published/2026-09-25-nvidia_h100_80gb_hbm3-session/session/README.md`,
+"The 1890 attempt measured nothing"). Every lock must be a supported graphics
+clock. `-rgc` runs on every exit a process can catch, so stop it early with
+`pkill -TERM -f '[l]ocked_r3.py'` (R3 stops, then the clock resets); after a
+`kill -9`, run `sudo -n nvidia-smi -rgc` by hand. The ledger (`status`, one
+UTC line per event) and `summary.json` are in
+`$SESSION_ROOT/locked-r3/<session>/`. Exit 0 means one lock held at every G, 1
+every lock slipped, 3 the ladder stopped short after measuring, 2 nothing was
+measured (a busy card or an R3 refusal before the first timed cell included),
+and 4 a crash or a card left locked.
+
+```bash
+. ~/moe/env.sh && cd "$REPO" && export MOE_RESULTS_DIR=$RESULTS_ROOT/gaps-$MOE_CARD
+T=$(basename "$(ls -td "$SESSION_ROOT"/alpha_g-"$MOE_CARD"-*/ | head -1)")   # the chain's session
+python3 scripts/locked_r3.py --session-tag "$T" --locks 1980 1890 1800 1710 --dry-run
+nohup setsid python3 scripts/locked_r3.py --session-tag "$T" --locks 1980 1890 1800 1710 \
+  >> "$WORKSPACE/locked_r3.out" 2>&1 < /dev/null &
+```
+
 ## 4. Exfiltrate, before anything else
 
 The disk dies with the instance. From the laptop:
