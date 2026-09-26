@@ -19,6 +19,7 @@ import json
 import math
 import re
 import statistics
+import subprocess
 import sys
 from pathlib import Path
 
@@ -2596,8 +2597,11 @@ def test_c5_at_g4_and_c6_read_the_k_calls_not_their_mean():
     design = {"model": d["model"], "dtype": d["dtype"], "block_m": d["block_m"],
               "pinned.BLOCK_SIZE_N": d["block_n"], "pinned.BLOCK_SIZE_K": d["block_k"],
               "pinned.num_warps": d["num_warps"], "pinned.num_stages": d["num_stages"]}
-    timed = {4: {"G": 4, "mean": ratio - 0.005, "sd": 0.0, "runs": [], "cards": ["x"],
-                 "design": design, "duty": 0.25, "windows": [1]}}
+    timed = {4: [{"G": 4, "clock_mhz": None, "duty": 0.25, "mean": ratio - 0.005,
+                  "sd": 0.0, "interval": None, "edge": ratio - 0.005, "edge_basis": "planted",
+                  "runs": [], "cards": [DCR.R3_PLANTED_CARD["slug"]],
+                  "uuids": [DCR.R3_PLANTED_CARD["uuid"]], "design": design,
+                  "windows": [1]}]}
 
     def verdicts(p) -> dict:
         return {g.number: g.verdict for g in DCR.score_r3_page(p, timed=timed)[0]}
@@ -2980,10 +2984,42 @@ def test_the_page_header_names_the_payloads_card_and_an_uncarded_page_fails_v0()
     card = page["card"]
     assert first == DCR.card_line(card)
     assert first.startswith(f"CARD {card['name']} ({card['slug']}, UUID {card['uuid']}")
-    assert f"the study's timing pages are {DCR.STUDY_CARD}" in first
+    assert first.endswith("every number here is THIS card's; not one of the study's four "
+                          "cards.")
     bare = DCR.planted_r3_page("uncarded", 4)
     assert _gates(bare)["V0"] == FAIL
     assert DCR.card_line(bare["card"]).startswith("CARD none")
+
+
+def test_the_card_line_names_each_cards_role_among_the_studys_four():
+    """Owner, 2026-09-25: the study has four cards, each keeping its own
+    numbers, never averaged. Until 2026-09-26 every page's first line said
+    "the study's timing pages are nvidia_h200", one card for all four. The line
+    now names the card's own role from `STUDY_CARDS`, keyed by the slug the
+    live card block computes, or says it is none of the four, and every number
+    stays THIS card's. The card block carries the role (`study_role`)."""
+    assert DCR.STUDY_CARDS == {
+        "nvidia_gh200_480gb": "the primary card",
+        "nvidia_h100_80gb_hbm3": "the second Hopper",
+        "nvidia_a100_sxm4_40gb": "the non-Hopper control (bytes only)",
+        "nvidia_h200": "the fourth card (timing only, on RunPod)"}
+    for name in ("NVIDIA GH200 480GB", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-40GB",
+                 "NVIDIA H200"):
+        slug = PV.card_slug(name)
+        card = dict(DCR.R3_PLANTED_CARD, name=name, slug=slug)
+        assert DCR.card_line(card).endswith(
+            "every number here is THIS card's; one of the study's four cards: "
+            f"{DCR.STUDY_CARDS[slug]}."), name
+    planted = DCR.card_line(DCR.R3_PLANTED_CARD)
+    assert planted.endswith("THIS card's; not one of the study's four cards.")
+    assert "timing pages" not in planted and "nvidia_h200" not in planted
+    assert "study_role" in DCR.R3_CARD_KEYS and DCR.R3_PLANTED_CARD["study_role"] is None
+    assert "same_card_as_study" not in DCR.R3_CARD_KEYS
+    assert "no number here can be given to any of the study's four cards" in \
+        DCR.card_line(None)
+    doc = (REPO / "docs" / "COUNTERS.md").read_text()
+    for slug in DCR.STUDY_CARDS:
+        assert f"| `{slug}` | {DCR.study_role(slug)} |" in doc, slug
 
 
 def test_the_r3_schema_text_and_the_writer_name_the_same_keys():
@@ -3098,27 +3134,49 @@ def test_analyse_refuses_two_card_uuids(tmp_path, capsys):
     assert "card UUID" in out and exit_codes.parse_result_lines(out) == []
 
 
-def _timed_report(tmp_path, g: int, ratio: float, seed: int, **over) -> Path:
+def _timed_report(tmp_path, g: int, ratio: float, seed: int, *, clock=None,
+                  uuid=None, cells=None, **over) -> Path:
     """A measured, VALID R3 report.json at G, with the planted page's design:
     R3's own `pinned_config` at the page's BLOCK_N and num_stages, so no knob
-    is typed here. `over` replaces any top-level key."""
+    is typed here, and the planted page's card (2026-09-26: C5 reads its own
+    card's timing only). Its 90% interval is the ratio +-0.001. `clock`
+    plants every `treads_table` row's `sm_clock_load_mhz` (None plants no
+    table); `uuid` writes R3's DEVICE file beside the report; `cells`, a list
+    of `(sm_clock_load_mhz, status)`, writes a cells.csv beside it that R3's
+    own `read_samples` reads (None writes none). `over` replaces any
+    top-level key."""
     plan = DCR.planted_r3_plan(g)
     rep = {"experiment": "private_weight_reference", "synthetic": False,
-           "card": "nvidia_h200", "seed": seed, "ratio": ratio,
+           "card": DCR.R3_PLANTED_CARD["slug"], "seed": seed, "ratio": ratio,
+           "ratio_interval": [ratio - 0.001, ratio + 0.001], "ratio_interval_pct": 90.0,
            "model": plan["model"], "dtype": plan["dtype"], "block_m": plan["block_m"],
            "pinned": R3.pinned_config(plan["block_n"], g, plan["num_stages"]),
            "duty": 0.25, "claim_min_tread": 1,
            "gates": [{"tag": "V1", "kind": "VALIDITY", "verdict": PASS},
                      {"tag": "C1", "kind": "CLAIM", "verdict": FAIL}]}
+    if clock is not None:
+        rep["treads_table"] = [{"arm": arm, "tiles": n, "sm_clock_load_mhz": clock}
+                               for arm in R3.ARMS for n in DCR.R3_TREADS]
     rep.update(over)
-    path = tmp_path / f"timed-g{g}-s{seed}-{len(list(tmp_path.glob('timed-*')))}.json"
+    run = tmp_path / f"timed-g{g}-s{seed}-{len(list(tmp_path.glob('timed-*')))}"
+    run.mkdir()
+    if uuid is not None:
+        (run / R3.DEVICE_FILE).write_text(uuid + "\n")
+    if cells is not None:
+        head = ("arm,repeat,block_m,tiles,rows_per_expert,tokens,copies,experts_declared,"
+                "ms_p50,sm_clock_load_mhz,status")
+        (run / "cells.csv").write_text("\n".join(
+            [head] + [f"shared,{i},32,1,32,128,1,72,0.85,{mhz},{status}"
+                      for i, (mhz, status) in enumerate(cells)]) + "\n")
+    path = run / "report.json"
     path.write_text(json.dumps(rep))
     return path
 
 
 def test_c5_compares_the_bytes_with_the_timed_pages_it_reads(tmp_path, capsys):
-    """C5 is cross-card, asked only with --timed-reference, and every number it
-    compares with is read from those files. At G >= 4 the group world's byte
+    """C5 is the same card's (SAME-CARD since 2026-09-26), asked only with
+    --timed-reference, and every number it compares with is read from those
+    files. At G >= 4 the group world's byte
     ratio sits far below any floored time ratio (PASS); at G=1 the group
     world's co-resident w2 sharing puts alpha(1) below a bracket whose lower
     edge the planted timed pages put above it (FAIL, a finding)."""
@@ -3130,7 +3188,7 @@ def test_c5_compares_the_bytes_with_the_timed_pages_it_reads(tmp_path, capsys):
         == exit_codes.DONE
     out = capsys.readouterr().out
     c5 = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C5")
-    assert c5.verdict == PASS and "CROSS-CARD" in out
+    assert c5.verdict == PASS and "SAME-CARD" in out and "CROSS-CARD" not in out
     (g1,) = _write_pages(tmp_path, [("group", 1, {})])
     alpha1 = DCR.r3_estimates(json.loads(g1.read_text()))["alpha_slope"]["total"]
     timed1 = [_timed_report(tmp_path, 1, min(alpha1 + 0.05, 0.999), s) for s in (0, 1)]
@@ -3147,8 +3205,9 @@ def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
     seed and the window, and nothing else, so C5 scored bytes against a timed
     ratio from another tile, model, dtype or pinned block, or from a planted
     or INVALID report. Each of those is now refused before any page is
-    scored, the runs pooled at one G must share their duty and window, and
-    the cross-card lines name each run's duty and fit window."""
+    scored, the runs pooled at one G must share their design and window, and
+    the same-card lines name each run's duty and fit window. Two duties at one
+    G are two regimes (2026-09-26): each scored on its own, never pooled."""
     (g4,) = _write_pages(tmp_path, [("group", 4, {})])
     ratio = DCR.r3_estimates(json.loads(g4.read_text()))["alpha_ratio"]
     pinned = R3.pinned_config(DCR.planted_r3_plan(4)["block_n"], 4,
@@ -3174,8 +3233,14 @@ def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
     mixed = [_timed_report(tmp_path, 4, ratio + 0.5, 0),
              _timed_report(tmp_path, 4, ratio + 0.5, 1, duty=1.0)]
     assert main(["--analyse", str(g4), "--timed-reference", *map(str, mixed)]) \
+        == exit_codes.DONE
+    names = {ln.name for ln in exit_codes.parse_result_lines(capsys.readouterr().out)}
+    assert {"C5@unclocked/duty0.25", "C5@unclocked/duty1"} <= names and "C5" not in names
+    wider = [_timed_report(tmp_path, 4, ratio + 0.5, 0),
+             _timed_report(tmp_path, 4, ratio + 0.5, 1, claim_min_tread=2)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, wider)]) \
         == exit_codes.REFUSED
-    assert "differ in duty" in capsys.readouterr().out
+    assert "differ in claim_min_tread" in capsys.readouterr().out
     timed = [_timed_report(tmp_path, 4, ratio + 0.5, s) for s in (0, 1)]
     assert main(["--analyse", str(g4), "--timed-reference", *map(str, timed)]) \
         == exit_codes.DONE
@@ -3183,11 +3248,260 @@ def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
     assert "duty 0.25, fit window n >= 1" in out and "timed at duty 0.25" in out
     page = json.loads(g4.read_text())
     ref = DCR.load_timed_reference(
-        [_timed_report(tmp_path, 4, ratio + 0.5, 0, block_m=64)])
+        [_timed_report(tmp_path, 4, ratio + 0.5, 0, block_m=64)], card=page["card"])
     gates, summary = DCR.score_r3_page(page, timed=ref)
     assert "C5" not in [g.number for g in gates]
     assert any(s.startswith("C5: the timed reports at G=4 are another kernel")
                for s in summary["not_asked"])
+
+
+def test_c5_refuses_another_cards_timing_and_prints_both_uuids(tmp_path, capsys):
+    """Owner, 2026-09-26: C5 was labelled CROSS-CARD and compared a Lambda
+    card's bytes with the H200's timed ratios. Each of the study's cards keeps
+    its own numbers, so a timed report whose card slug is not the pages' is
+    REFUSED before any page is scored, the refusal naming both UUIDs (the timed
+    one read off R3's DEVICE file beside its report). The same card on another
+    board is the same card: joined, the SAME-CARD line naming both boards. A
+    reference from another card handed to the scorer directly asks no C5."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    h200 = [_timed_report(tmp_path, 4, ratio + 0.5, s, card="nvidia_h200",
+                          uuid="h200-board") for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, h200)]) \
+        == exit_codes.REFUSED
+    out = " ".join(capsys.readouterr().out.split())
+    assert "REFUSED: --timed-reference" in out
+    assert "was timed on nvidia_h200 (UUID h200-board)" in out
+    card = DCR.R3_PLANTED_CARD
+    assert f"the counter pages are {card['slug']} (UUID {card['uuid']})" in out
+    assert exit_codes.parse_result_lines(out) == []
+    unread = [_timed_report(tmp_path, 4, ratio + 0.5, 0, card="nvidia_h200")]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, unread)]) \
+        == exit_codes.REFUSED
+    assert "(UUID unread: no DEVICE file beside the report)" in capsys.readouterr().out
+    board = [_timed_report(tmp_path, 4, ratio + 0.5, s, uuid="planted-9999") for s in (0, 1)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, board)]) \
+        == exit_codes.DONE
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"SAME-CARD: the timed reports and this page are both {card['slug']}" in out
+    assert (f"timed on UUID planted-9999, this page's UUID {card['uuid']}: another "
+            "board of the same card") in out
+    ref = DCR.load_timed_reference(board, card=page["card"])
+    ref[4][0]["cards"] = ["nvidia_h200"]
+    gates, summary = DCR.score_r3_page(page, timed=ref)
+    assert "C5" not in [g.number for g in gates]
+    assert any(s.startswith("C5: the timed reports at G=4 are another card's")
+               for s in summary["not_asked"]), summary["not_asked"]
+
+
+def test_c5_never_pools_two_clock_regimes_and_one_run_reads_its_own_interval(
+        tmp_path, capsys):
+    """2026-09-26. The H100's three VALID G=1 reports on Lambda are all seed 0,
+    timed under locks read at 1980, 1800 and 1710 MHz, and C5 pooled them as
+    three seeds of one ratio. The pooling key is now G, the timed cells'
+    median SM clock to the 15 MHz step, and the duty: two clocks are two
+    references and two gates, each named by its regime, and runs at one
+    regime still pool (the mean less their seed sd). With one run the seed sd
+    is 0, so the edge is the lower end of that run's own 90% interval: a byte
+    ratio above that end and below the point passed against the point, and
+    fails against the interval. One run with no interval is refused."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    r_lo, r_hi = DCR.r3_estimates(page)["alpha_ratio_bracket"]
+    timed = r_hi + 0.01
+    one = _timed_report(tmp_path, 4, timed, 0, clock=1710.0,
+                        ratio_interval=[r_lo - 0.005, timed + 0.005])
+    ref = DCR.load_timed_reference([one], card=page["card"])
+    (only,) = ref[4]
+    assert (only["sd"], only["edge"], only["clock_mhz"]) == (0.0, r_lo - 0.005, 1710.0)
+    assert "one run, so no seed sd: the lower end of its own 90% interval" in only["edge_basis"]
+    assert {g.number: g.verdict for g in DCR.score_r3_page(page, timed=ref)[0]}["C5"] == FAIL
+    split = [_timed_report(tmp_path, 4, timed, 0, clock=c) for c in (1712.0, 1965.0)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, split)]) \
+        == exit_codes.DONE
+    out = capsys.readouterr().out
+    names = [ln.name for ln in exit_codes.parse_result_lines(out) if ln.name.startswith("C5")]
+    assert names == ["C5@1710MHz/duty0.25", "C5@1965MHz/duty0.25"], names
+    assert "timed at 1710 MHz, duty 0.25" in " ".join(out.split())
+    seeds = [_timed_report(tmp_path, 4, timed + 0.01 * s, s, clock=1710.0) for s in range(3)]
+    (pooled,) = DCR.load_timed_reference(seeds, card=page["card"])[4]
+    ratios = [timed + 0.01 * s for s in range(3)]
+    assert len(pooled["runs"]) == 3 and pooled["interval"] is None
+    assert pooled["sd"] == pytest.approx(statistics.stdev(ratios))
+    assert pooled["edge"] == pytest.approx(statistics.fmean(ratios) - statistics.stdev(ratios))
+    assert DCR.timed_report_clock({"treads_table": [{"sm_clock_load_mhz": 1712.0},
+                                                    {"sm_clock_load_mhz": 1703.0},
+                                                    {"sm_clock_load_mhz": None}]}) \
+        == (1710.0, DCR.R3_TIMED_CLOCK_ROWS)
+    assert DCR.timed_report_clock({}) == (None, DCR.R3_TIMED_CLOCK_NONE)
+    bare = [_timed_report(tmp_path, 4, timed, 0, ratio_interval=None)]
+    assert main(["--analyse", str(g4), "--timed-reference", *map(str, bare)]) \
+        == exit_codes.REFUSED
+    assert "carries no ratio_interval" in capsys.readouterr().out
+
+
+def test_c5_is_registered_at_g2_under_the_floor_rule_and_not_at_g3(tmp_path):
+    """2026-09-26: the G=2 timed SHARED ladder zig-zags with the byte
+    staircase, so G=2 is partly floored, and C5 there is the G >= 4 rule, the
+    byte ratio below the timed ratio. Until then G=2 read "no registered C5".
+    G=3 stays un-registered, and its not-asked line says why."""
+    page = DCR.planted_r3_page("group", 2)
+    ratio = DCR.r3_estimates(page)["alpha_ratio"]
+    for timed, verdict in ((ratio + 0.5, PASS), (ratio - 0.05, FAIL)):
+        ref = DCR.load_timed_reference(
+            [_timed_report(tmp_path, 2, timed, s) for s in (0, 1)], card=page["card"])
+        gates, summary = DCR.score_r3_page(page, timed=ref)
+        c5 = next(g for g in gates if g.number == "C5")
+        assert c5.verdict == verdict and c5.claim == "the byte ratio sits below the timed ratio"
+        assert any("registered at G=2 on 2026-09-26" in line for line in c5.lines)
+        assert not any(s.startswith("C5") for s in summary["not_asked"])
+    page3 = DCR.planted_r3_page("group", 3)
+    ref3 = DCR.load_timed_reference([_timed_report(tmp_path, 3, ratio + 0.5, 0)],
+                                    card=page3["card"])
+    gates3, summary3 = DCR.score_r3_page(page3, timed=ref3)
+    assert not any(g.number.startswith("C5") for g in gates3)
+    why = next(s for s in summary3["not_asked"] if s.startswith("C5"))
+    assert why.startswith("C5: no registered C5 at G=3: ") and "G=2 (2026-09-26)" in why
+    assert "no G of the plan" in why
+    # A timed page at G=3 WAS read here: the line says none had been when C5
+    # was registered, never that none has been (the 2026-09-26 review).
+    assert "no timed page at it had been read when C5 was registered" in why
+    assert "no timed page has been read at it" not in why
+    # With no timed page at G=3 the line still says why G=3 is not registered.
+    ref4 = DCR.load_timed_reference([_timed_report(tmp_path, 4, ratio + 0.5, 0)],
+                                    card=page3["card"])
+    (none3,) = [s for s in DCR.score_r3_page(page3, timed=ref4)[1]["not_asked"]
+                if s.startswith("C5")]
+    assert none3.startswith("C5: no timed reference page at G=3, and no registered C5 at "
+                            "G=3: "), none3
+    assert "no G of the plan" in none3
+    (none4,) = [s for s in DCR.score_r3_page(DCR.planted_r3_page("group", 4),
+                                             timed={})[1]["not_asked"] if s.startswith("C5")]
+    assert none4 == "C5: no timed reference page at G=4"
+
+
+def test_a_timed_run_read_twice_is_refused_and_one_seed_scores_its_intervals(
+        tmp_path, capsys):
+    """2026-09-26 review. The loader counted runs, not seeds: one report named
+    twice, or two reruns at one seed, pooled as "the mean less its seed sd"
+    with sd 0, so C5 scored the bare point the one-run interval rule was
+    written to remove. R3's `load_replicates` refuses a replicate named twice,
+    or one whose run id or provenance stamp another carries, and so does this
+    loader now. Two DISTINCT runs at one seed score against the lowest lower
+    end of their own intervals: here that end sits below the byte ratio's
+    bracket, where the point (the old edge) sat above it, so C5 reads FAIL
+    where it read PASS. A seed a report does not record makes no second one."""
+    (g4,) = _write_pages(tmp_path, [("group", 4, {})])
+    page = json.loads(g4.read_text())
+    r_lo, r_hi = DCR.r3_estimates(page)["alpha_ratio_bracket"]
+    timed = r_hi + 0.01
+    one = _timed_report(tmp_path, 4, timed, 0, clock=1710.0)
+    assert main(["--analyse", str(g4), "--timed-reference", str(one), str(one)]) \
+        == exit_codes.REFUSED
+    out = " ".join(capsys.readouterr().out.split())
+    assert "REFUSED: --timed-reference" in out and f"{one} is named twice" in out
+    assert exit_codes.parse_result_lines(out) == []
+    prov = {"utc": "2026-09-25T08:13:37+00:00", "hostname": "planted-host"}
+    copies = {"run id": [dict(run_id="r3-planted-0"), dict(run_id="r3-planted-0")],
+              "provenance stamp": [dict(run_id="a", provenance=prov),
+                                   dict(run_id="b", provenance=prov)]}
+    for what, overs in copies.items():
+        paths = [_timed_report(tmp_path, 4, timed, 0, clock=1710.0, **o) for o in overs]
+        with pytest.raises(DCR.CounterRunRefused, match=f"the same {what}"):
+            DCR.load_timed_reference(paths, card=page["card"])
+    reruns = [_timed_report(tmp_path, 4, timed, 0, clock=1710.0, run_id=f"rerun-{i}",
+                            ratio_interval=iv)
+              for i, iv in enumerate(([timed - 0.001, timed + 0.001],
+                                      [r_lo - 0.005, timed + 0.002]))]
+    (ref,) = DCR.load_timed_reference(reruns, card=page["card"])[4]
+    assert (ref["sd"], ref["edge"], ref["seeds"]) == (0.0, r_lo - 0.005, [0])
+    assert ref["interval"] == [r_lo - 0.005, timed + 0.002]
+    assert ref["edge_basis"].startswith("2 runs at one seed, 0, so no seed sd: the lowest "
+                                        "lower end of their own 90% intervals")
+    c5 = next(g for g in DCR.score_r3_page(page, timed={4: [ref]})[0] if g.number == "C5")
+    assert c5.verdict == FAIL, c5.measured
+    unseeded = [_timed_report(tmp_path, 4, timed, None, clock=1710.0,
+                              run_id=f"unseeded-{i}") for i in (0, 1)]
+    (bare,) = DCR.load_timed_reference(unseeded, card=page["card"])[4]
+    assert bare["seeds"] == [] and "at no recorded seed" in bare["edge_basis"]
+    seeds = [_timed_report(tmp_path, 4, timed, s, clock=1710.0) for s in (0, 1)]
+    (two,) = DCR.load_timed_reference(seeds, card=page["card"])[4]
+    assert two["edge_basis"] == "the mean less its seed sd over 2 runs at seeds 0, 1"
+
+
+def test_c5_at_g1_scores_one_runs_interval_not_its_point(tmp_path):
+    """With one timed run at G=1 the edge alpha(1) is held to is the lower end
+    of that run's own interval, not the run's point (2026-09-26 review: only
+    G=4 was tested, and a mutation to the point passed). Here the point sits
+    above alpha(1)'s whole bracket (FAIL against it) and the interval's lower
+    end below it (PASS)."""
+    page = DCR.planted_r3_page("group", 1)
+    got_lo, got_hi = DCR.r3_estimates(page)["alpha_bracket"]["total"]
+    point = got_hi + 0.02
+    assert point < DCR.R3_ALPHA1_CEILING
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 1, point, 0, ratio_interval=[got_lo - 0.01, point + 0.001])],
+        card=page["card"])
+    c5 = next(g for g in DCR.score_r3_page(page, timed=ref)[0] if g.number == "C5")
+    assert c5.verdict == PASS, c5.measured
+    assert f"against [{got_lo - 0.01:.4f}, 1.0]" in c5.measured
+    assert DCR.bracket_verdict(got_lo, got_hi, point, DCR.R3_ALPHA1_CEILING) == FAIL
+
+
+def test_the_timed_clock_is_the_median_of_the_usable_cells_then_of_the_rows(tmp_path):
+    """The regime's clock is the median `sm_clock_load_mhz` of the report's
+    usable timed cells, read off the cells.csv beside it, to the 15 MHz step;
+    only without one does it fall back to the `treads_table` rows, and the
+    regime then says so (2026-09-26 review: the rows were read first, and a
+    mean passed the tests). Five skewed cells, 1695 x 3 and 1800 x 2, have a
+    median of 1695 and a mean that rounds to 1740; a failed cell at 3000 is
+    not usable, and the rows' 1965 is not read beside the cells."""
+    skew = [(1695.0, "ok")] * 3 + [(1800.0, "ok")] * 2
+    rows = [{"arm": "shared", "tiles": n, "sm_clock_load_mhz": 1965.0} for n in range(5)]
+    cells = _timed_report(tmp_path, 4, 0.7, 0, cells=skew + [(3000.0, "failed")],
+                          treads_table=rows)
+    rep = json.loads(cells.read_text())
+    assert DCR.timed_report_clock(rep, cells) == (1695.0, DCR.R3_TIMED_CLOCK_CELLS)
+    table = [{"sm_clock_load_mhz": mhz} for mhz, _status in skew]
+    only_rows = _timed_report(tmp_path, 4, 0.7, 1, treads_table=table)
+    assert DCR.timed_report_clock(json.loads(only_rows.read_text()), only_rows) \
+        == (1695.0, DCR.R3_TIMED_CLOCK_ROWS)
+    card = DCR.planted_r3_page("group", 4)["card"]
+    (by_cells,) = DCR.load_timed_reference([cells], card=card)[4]
+    (by_rows,) = DCR.load_timed_reference([only_rows], card=card)[4]
+    assert DCR.timed_regime_word(by_cells) == "1695 MHz, duty 0.25"
+    assert DCR.timed_regime_word(by_rows) == (
+        "1695 MHz, duty 0.25 (the clock read off the treads_table rows of 1 of its 1 "
+        "runs: no usable clocked cell in a cells.csv beside them)")
+
+
+def test_c5_says_whether_bytes_and_time_were_read_at_one_clock_and_on_one_board(tmp_path):
+    """C5's lines are where a reader learns whether a page's bytes and its
+    timing were read at one clock and on one board (2026-09-26 review: neither
+    line was tested). A page locked at 1710 against reports timed at 1710 on
+    the page's own board reads "one clock" and "the same board"; the same
+    reports against the base-clock page, or a page locked a step off, read
+    "not shown to be the timed clock"."""
+    page = DCR.planted_r3_page("group", 4)
+    uuid = page["card"]["uuid"]
+    ref = DCR.load_timed_reference(
+        [_timed_report(tmp_path, 4, 0.9, s, clock=1710.0, uuid=uuid) for s in (0, 1)],
+        card=page["card"])
+
+    def lines(p) -> str:
+        c5 = next(g for g in DCR.score_r3_page(p, timed=ref)[0] if g.number == "C5")
+        return " ".join(" ".join(c5.lines).split())
+    locked = lines(_at_lock(json.loads(json.dumps(page)), 1710.0))
+    assert "counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none): one " \
+           "clock" in locked
+    assert f"timed on UUID {uuid}, this page's UUID {uuid}: the same board" in locked
+    base = lines(page)
+    assert "counted at ncu's base clock (--clock-control base): not shown to be the " \
+           "timed clock" in base
+    off = lines(_at_lock(json.loads(json.dumps(page)), 1740.0))
+    assert "lock of 1740 MHz (ncu --clock-control none): not shown to be the timed " \
+           "clock" in off
 
 
 def test_the_self_test_runs_the_family_worlds(capsys):
@@ -3413,11 +3727,17 @@ def _plant_the_box(monkeypatch, *, world="group", card=None, probe=None):
     whose --import prints the planted world's CSV for that manifest."""
     card = dict(DCR.R3_PLANTED_CARD) if card is None else card
     probe = _planted_open() if probe is None else probe
-    monkeypatch.setattr(DCR, "probe_ncu", lambda family=None: dict(probe))
+    calls: list[list[str]] = []
+
+    def probe_ncu(family=None, clock_control=None):
+        # Recorded beside the argv as `["probe_ncu", family, clock control]`,
+        # so a test reads the clock control each probe was asked at.
+        calls.append(["probe_ncu", str(family), str(clock_control)])
+        return dict(probe)
+    monkeypatch.setattr(DCR, "probe_ncu", probe_ncu)
     monkeypatch.setattr(DCR, "live_card_block", lambda: card)
     monkeypatch.setattr(DCR, "r3_stack_versions",
                         lambda: {"torch": "t", "triton": "tr", "vllm": "v", "python": "p"})
-    calls: list[list[str]] = []
 
     def fake_run(argv, timeout=60):
         del timeout
@@ -3555,7 +3875,8 @@ def test_the_r3_run_refuses_without_ncu_and_without_a_card(tmp_path, monkeypatch
     _plant_the_box(monkeypatch, probe=shut)
     assert main(argv) == exit_codes.REFUSED
     assert "no ncu on PATH" in capsys.readouterr().out
-    monkeypatch.setattr(DCR, "probe_ncu", lambda family=None: _planted_open())
+    monkeypatch.setattr(DCR, "probe_ncu",
+                        lambda family=None, clock_control=None: _planted_open())
     monkeypatch.setattr(DCR, "live_card_block", lambda: None)
     assert main(argv) == exit_codes.REFUSED
     assert "no card" in capsys.readouterr().out
@@ -4242,3 +4563,343 @@ def test_a_cell_whose_counters_name_no_clock_fails_the_lock(tmp_path, monkeypatc
     assert fl1.verdict == FAIL and body["clock"]["off_lock"] == ["n=2 w1 no clock"]
     w1 = body["cells"][0]["per_gemm"]["w1"]
     assert w1["sm_clock_mhz"] is None and "sm__cycles_elapsed.avg" in w1["unreadable"]
+
+
+# --------------------------------------------------------------------------
+# Byte pages at a held clock (`--page-clock`, `--page-lock-mhz`, 2026-09-26).
+# --------------------------------------------------------------------------
+
+def _plant_a_locked_page(monkeypatch, *, clock=None, lacks=()):
+    """The floor's planted box (the chip's metric list, an nvidia-smi at 1601
+    MHz) whose PAGE imports also return `sm__cycles_elapsed.avg` on every
+    launch, at `clock(row)` MHz over that launch's own duration (1601 when
+    `clock` is None; a None from it plants n/a). A census's and a floor's
+    imports carry no such column."""
+    calls = _plant_the_floor(monkeypatch, lacks=lacks)
+    inner = DCR._run
+
+    def cycles(_metric, row):
+        mhz = clock(row) if clock else 1601.0
+        return "n/a" if mhz is None else repr(mhz * float(row["gpu__time_duration.sum"]) / 1e3)
+
+    def run(argv, timeout=60):
+        rc, out, err = inner(argv, timeout=timeout)
+        if "--import" in argv:
+            name = Path(argv[argv.index("--import") + 1]).name
+            if not name.startswith("census") and ".floor." not in name:
+                out = _floor_columns(out, [DCR.R3_PAGE_CLOCK_METRIC], cycles)
+        return rc, out, err
+    monkeypatch.setattr(DCR, "_run", run)
+    return calls
+
+
+def _page_argv(census: Path, out: Path, *extra: str, g: int = 4) -> list[str]:
+    return ["--run", "--family", "r3-arms", "--group-m", str(g), "--census", str(census),
+            *extra, "--out", str(out)]
+
+
+def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
+        tmp_path, monkeypatch, capsys):
+    """Until 2026-09-26 only the floor could run under a lock, and every page
+    passed --clock-control base, so the GH200's bytes (ncu's base clock) and
+    its timed pages (a 1710 MHz lock) were read at two clocks. `--page-clock
+    none --page-lock-mhz F` passes `none` to the census's and the page's ncu,
+    writes the clock control and F into the page, its capture record and its
+    run id, asks the page's `sm__cycles_elapsed.avg` (never the census's), and
+    V10 holds every cell's clock, those cycles over its duration, within one
+    15 MHz step of F. The planted counters run at 1601 MHz: 1601 and 1615.9
+    hold, 1616.1 and 1710 do not (INVALID, the page written, its off cells
+    named). The base page asks no clock and has no V10, and every clock and
+    lock is its own run id. `--reduce-only` rebuilds a locked page at the
+    CAPTURE's clock and lock, run id included."""
+    calls = _plant_a_locked_page(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--page-clock", "none",
+                 "--page-lock-mhz", "1601", "--out", str(census)]) == exit_codes.DONE
+    cen = json.loads(census.read_text())
+    assert (cen["ncu"]["clock_control"], cen["ncu"]["lock_mhz"]) == ("none", 1601.0)
+    assert cen["ncu"]["smi_before"]["rows"][0]["clocks.sm"] == "1601"
+    capture = [a for a in calls if "--counter-child" in a][-1]
+    assert capture[capture.index("--clock-control") + 1] == "none"
+    assert DCR.R3_PAGE_CLOCK_METRIC not in capture[capture.index("--metrics") + 1]
+    ids = [cen["run_id"]]
+    for lock, rc in (("1601", exit_codes.DONE), ("1615.9", exit_codes.DONE),
+                     ("1616.1", exit_codes.INVALID), ("1710", exit_codes.INVALID)):
+        out = tmp_path / f"r3c-g4-lock{lock}.json"
+        capsys.readouterr()
+        assert main(_page_argv(census, out, "--page-clock", "none",
+                               "--page-lock-mhz", lock)) == rc, lock
+        text = capsys.readouterr().out
+        v10 = next(r for r in exit_codes.parse_result_lines(text) if r.name == "V10")
+        assert v10.verdict == (PASS if rc == exit_codes.DONE else FAIL), lock
+        page = json.loads(out.read_text())
+        assert (page["ncu"]["clock_control"], page["ncu"]["lock_mhz"]) == ("none", float(lock))
+        assert page["ncu"]["smi_after"]["rows"][0]["clocks.sm"] == "1601"
+        assert page["instrument"] == DCR.R3_RUN_INSTRUMENT_AT.format(clock="none")
+        capture = [a for a in calls if "--counter-child" in a][-1]
+        assert capture[capture.index("--clock-control") + 1] == "none"
+        assert capture[capture.index("--metrics") + 1].split(",")[-1] == \
+            DCR.R3_PAGE_CLOCK_METRIC
+        assert DCR.r3_cell_clock_mhz(page["cells"][0], "w1") == pytest.approx(1601.0)
+        assert f"counted at an nvidia-smi lock of {float(lock):g} MHz" in text
+        ids.append(page["run_id"])
+    v10 = next(g for g in page["gates"] if g["number"] == "V10")
+    assert v10["measured"].startswith("off the lock: native/1 w1 1601 MHz; native/1 w2")
+    base = tmp_path / "r3c-g4-base.json"
+    assert main(_page_argv(census, base)) == exit_codes.DONE
+    body = json.loads(base.read_text())
+    assert (body["ncu"]["clock_control"], body["ncu"]["lock_mhz"]) == ("base", None)
+    assert "smi_before" not in body["ncu"] and body["instrument"] == DCR.R3_RUN_INSTRUMENT
+    assert "V10" not in [g["number"] for g in body["gates"]]
+    assert DCR.R3_PAGE_CLOCK_METRIC not in body["ncu"]["metrics_asked"]
+    ids.append(body["run_id"])
+    assert len(set(ids)) == len(ids), ids
+    held = tmp_path / "r3c-g4-lock1601.json"
+    first = json.loads(held.read_text())
+    held.unlink()
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(held)]) == exit_codes.DONE
+    again = json.loads(held.read_text())
+    assert (again["ncu"]["clock_control"], again["ncu"]["lock_mhz"]) == ("none", 1601.0)
+    assert again["run_id"] == first["run_id"] and again["instrument"] == first["instrument"]
+    assert {g["number"]: g["verdict"] for g in again["gates"]}["V10"] == PASS
+
+
+def test_a_locked_cell_whose_counters_name_no_clock_fails_v10(tmp_path, monkeypatch, capsys):
+    """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the page
+    is written, but that cell's clock is not shown: V10 names it `no clock`.
+    A page at the card's own clock (`--page-clock none`, no lock) has no F and
+    no V10, and still records nvidia-smi either side of its capture."""
+    _plant_a_locked_page(monkeypatch, clock=lambda row: None if row["ID"] == "0" else 1601.0)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3c-g4.json"
+    capsys.readouterr()
+    assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
+                           "1601")) == exit_codes.INVALID
+    v10 = next(g for g in json.loads(out.read_text())["gates"] if g["number"] == "V10")
+    assert v10["verdict"] == FAIL and v10["measured"] == "off the lock: native/1 w1 no clock"
+    free = tmp_path / "r3c-g4-none.json"
+    assert main(_page_argv(census, free, "--page-clock", "none")) == exit_codes.DONE
+    body = json.loads(free.read_text())
+    assert (body["ncu"]["clock_control"], body["ncu"]["lock_mhz"]) == ("none", None)
+    assert "V10" not in [g["number"] for g in body["gates"]]
+    assert body["ncu"]["smi_before"]["returncode"] == 0
+
+
+def test_a_lock_on_a_chip_that_lists_no_cycle_counter_refuses_before_any_capture(
+        tmp_path, monkeypatch, capsys):
+    """V10 reads each cell's `sm__cycles_elapsed.avg`, and one metric name ncu
+    does not know aborts the whole capture, so a chip whose metric list does
+    not offer it refuses the locked page before its capture."""
+    calls = _plant_a_locked_page(monkeypatch, lacks={"sm__cycles_elapsed"})
+    census = _a_census(tmp_path)
+    captures = sum("--counter-child" in a for a in calls)
+    out = tmp_path / "r3c-g4.json"
+    capsys.readouterr()
+    assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
+                           "1710")) == exit_codes.REFUSED
+    said = capsys.readouterr().out
+    assert "this chip's metric list does not offer it" in said and "Nothing was captured" in said
+    assert sum("--counter-child" in a for a in calls) == captures and not out.exists()
+
+
+def test_the_probe_before_a_capture_under_a_lock_sets_no_clock_either(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-26 review. `do_run_r3` runs `probe_ncu` before every census,
+    page and floor, and the probe passed no `--clock-control`, so inside the
+    runbook's `nvidia-smi -lgc F,F` block ncu held its default, the base
+    clock, over the probe's launch and restored the clock after it. Whether
+    that restore keeps an nvidia-smi lock was never read off a box. The probe
+    now takes the capture's clock control: `none` beside `--page-clock none`
+    and `--floor-clock none`, in every ask it makes, recorded in its payload
+    and beside the capture (`probe_clock_control`); a base-clock capture's
+    probe passes nothing, as before."""
+    base = DCR.ncu_probe_argv("ncu", Path("/l.csv"))
+    held = DCR.ncu_probe_argv("ncu", Path("/l.csv"), clock_control="none")
+    at = base.index("--csv")
+    assert held == base[:at] + ["--clock-control", "none"] + base[at:]
+    offered = "\n".join(f"{DCR.metric_base(m)}  some description"
+                        for m in DCR.R3_ALL_METRICS if not m.startswith("launch__"))
+    for clock in (None, "none"):
+        seen = _plant_family_ncu(monkeypatch, names=offered,
+                                 log=_family_probe_log(DCR.R3_ALL_METRICS))
+        info = DCR.probe_ncu(DCR.R3_FAMILY, clock_control=clock)
+        asks = [a for a in seen if "--log-file" in a]
+        assert asks and info["counters_read"] and info["clock_control"] == clock
+        assert [a[a.index("--clock-control") + 1] if "--clock-control" in a else None
+                for a in asks] == [clock] * len(asks)
+    calls = _plant_a_locked_page(monkeypatch)
+
+    def probed() -> str:
+        return [c[2] for c in calls if c[0] == "probe_ncu"][-1]
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--page-clock", "none",
+                 "--page-lock-mhz", "1601", "--out", str(census)]) == exit_codes.DONE
+    assert probed() == "none"
+    assert json.loads(census.read_text())["ncu"]["probe_clock_control"] == "none"
+    runs = {("--page-clock", "none", "--page-lock-mhz", "1601"): "none",
+            ("--page-clock", "none"): "none", (): "None"}
+    for extra, want in runs.items():
+        out = tmp_path / f"r3c-g4-{len(extra)}.json"
+        assert main(_page_argv(census, out, *extra)) == exit_codes.DONE, extra
+        assert probed() == want, extra
+        page = json.loads(out.read_text())
+        assert str(page["ncu"]["probe_clock_control"]) == want, extra
+    for clock, want in (("none", "none"), ("base", "None")):
+        out = tmp_path / f"r3f-g64-{clock}.json"
+        assert main(_floor_argv(census, out, "--floor-clock", clock)) == exit_codes.DONE
+        assert probed() == want, clock
+        assert str(json.loads(out.read_text())["ncu"]["probe_clock_control"]) == want
+    capsys.readouterr()
+
+
+def test_a_base_clock_page_keeps_the_run_id_it_was_published_with():
+    """2026-09-26 review. A draft of `--page-clock` put `clock_control` into
+    every page's and census's run id, base included, so no published page's id
+    could be reproduced by a `--reduce-only` rebuild of its capture. The clock
+    control is a knob only when it is not the base clock, as the lock is only
+    when one is given: every r3-arms page and census in results/published/
+    gets back the id it carries, and a `none` page and a locked one still get
+    ids of their own."""
+    published = sorted((REPO / "results" / "published").glob("*/results/*-r3-counters/r3c-g*.json"))
+    censuses = sorted((REPO / "results" / "published").glob("*/session/census.json"))
+    assert len(published) >= 15 and len(censuses) >= 3
+    for path in published + censuses:
+        d = json.loads(path.read_text())
+        mode = "r3-census" if d.get("kind") == "census" else "r3-run"
+        argv = ["--run", "--family", "r3-arms",
+                *(["--census-only"] if mode == "r3-census"
+                  else ["--group-m", str(d["design"]["group_m"])]), "--out", "x.json"]
+        args = build_parser().parse_args(argv)
+        DCR.resolve_r3_defaults(args, argv)
+        assert DCR.run_id_for(mode, args, d["card"]["name"]) == d["run_id"], path
+        if mode == "r3-run":
+            ids = {d["run_id"]}
+            for clock, lock in (("none", None), ("none", 1710.0), ("none", 1800.0)):
+                args.page_clock, args.page_lock_mhz = clock, lock
+                ids.add(DCR.run_id_for(mode, args, d["card"]["name"]))
+            assert len(ids) == 4, path
+
+
+def test_the_page_clock_flags_are_refused_where_they_mean_nothing(capsys):
+    """Each refusal is its own guard's, by its text, before any box is asked."""
+    refusals = {
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--page-lock-mhz", "1710"):
+            "--page-lock-mhz belongs to --run --family r3-arms --page-clock none",
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--page-clock", "none",
+         "--page-lock-mhz", "0"): "must be above zero",
+        ("--run", "--family", "r3-arms", "--group-m", "64", "--floor", "--page-clock",
+         "none"): "--page-clock belongs to --run --family r3-arms, for a page or the census",
+        ("--run", "--family", "r3-arms", "--group-m", "4", "--reduce-only",
+         "--page-clock", "none"): "--reduce-only reads the capture's clock off its record",
+        ("--dry-run", "--family", "r3-arms", "--page-clock", "none"):
+            "--page-clock belongs to --run --family r3-arms",
+    }
+    for argv, why in refusals.items():
+        capsys.readouterr()
+        assert main([*argv, "--out", "x.json"]) == exit_codes.REFUSED, argv
+        assert why in capsys.readouterr().out, argv
+
+
+def _at_lock(page: dict, mhz: float | None) -> dict:
+    """`page` as one captured under an nvidia-smi lock of `mhz` (None: at the
+    card's own clock), its cells' recorded cycles at that clock."""
+    page["ncu"].update(clock_control="none", lock_mhz=mhz)
+    for cell in page["cells"]:
+        for g in ("w1", "w2"):
+            cell["recorded"][g][DCR.R3_PAGE_CLOCK_METRIC] = \
+                (mhz or 1601.0) * cell["per_gemm"][g]["gpu_time_ns"] / 1e3
+    return page
+
+
+def test_analyse_refuses_to_join_pages_of_two_clock_regimes(tmp_path, capsys):
+    """An alpha(G) table across ncu's base clock and a lock, or across two
+    locks, compares two apparatuses, not two G. Pages at one lock join, and
+    their V10 passes."""
+    for regimes, want in (((None, 1710.0), exit_codes.REFUSED),
+                          ((1800.0, 1710.0), exit_codes.REFUSED),
+                          (("free", 1710.0), exit_codes.REFUSED),
+                          ((1710.0, 1710.0), exit_codes.DONE)):
+        paths = _write_pages(tmp_path, [("group", 4, {}), ("group", 1, {})])
+        for path, lock in zip(paths, regimes, strict=True):
+            if lock is not None:
+                page = _at_lock(json.loads(path.read_text()),
+                                None if lock == "free" else lock)
+                path.write_text(json.dumps(page))
+        capsys.readouterr()
+        assert main(["--analyse", *map(str, paths)]) == want, regimes
+        out = capsys.readouterr().out
+        assert ("clock regime" in out) is (want == exit_codes.REFUSED), regimes
+    assert "counted at an nvidia-smi lock of 1710 MHz" in out
+    assert [r.verdict for r in exit_codes.parse_result_lines(out)
+            if r.name.endswith("V10")] == [PASS, PASS]
+
+
+def test_the_runbooks_lock_block_runs_flags_the_family_accepts(tmp_path, monkeypatch, capsys):
+    """docs/LAMBDA.md section 3's optional block takes a census and the pages
+    under the timed lock. Each of its dram_counter_route.py captures, with its
+    shell values filled in, passes every flag guard and reaches the box (here a
+    closed route, so it refuses there and nothing runs), at `--page-clock none`
+    and the block's F; the pages read the census the block wrote; and the
+    block's EXIT trap resets both ncu's and nvidia-smi's locks.
+
+    PASTE-SAFE (2026-09-26 review). Its last line kept a literal placeholder,
+    `<this card's R3 report.json files timed at F>`: pasted, `<` is a redirect
+    and the apostrophe opens a quote that never closes, so the shell sat at a
+    continuation prompt. The block and COUNTERS.md 6.13's now parse under
+    `bash -n`, and the score line takes the reports from `TIMED`, which bash
+    splits into `--timed-reference`'s files, or leaves out when it is empty."""
+    text = (REPO / "docs" / "LAMBDA.md").read_text()
+    head = text.index("**Optional: the byte pages again, at the timed lock**")
+    start = text.index("```bash", head)
+    block = text[start + len("```bash"):text.index("```\n", start + 7)]
+    counters = (REPO / "docs" / "COUNTERS.md").read_text()
+    c613 = counters.index("### 6.13 Byte pages at a held clock")
+    cstart = counters.index("```bash", c613)
+    for label, code in (("LAMBDA.md", block),
+                        ("COUNTERS.md 6.13", counters[cstart + 7:counters.index("```\n",
+                                                                                cstart + 7)])):
+        parsed = subprocess.run(["bash", "-n"], input=code, capture_output=True, text=True,
+                                timeout=60)
+        assert parsed.returncode == 0, (label, parsed.stderr)
+        assert "<this" not in code, label
+    score = next(line for line in block.replace("\\\n", " ").splitlines()
+                 if "dram_counter_route.py --analyse" in line)
+    for timed in (["/t/a/report.json", "/t/b/report.json"], []):
+        shell = (f'L={tmp_path}/L; TIMED="{" ".join(timed)}"; '
+                 + score.replace("python3 scripts/dram_counter_route.py", "printf '%s\\n'"))
+        got = subprocess.run(["bash", "-c", shell], capture_output=True, text=True,
+                             timeout=60)
+        assert got.returncode == 0, got.stderr
+        args = build_parser().parse_args(got.stdout.splitlines())
+        assert args.timed_reference == (timed or None), got.stdout
+        assert [Path(a).name for a in args.analyse] == [
+            f"r3c-g{g}.json" for g in (1, 2, 4, 64)]
+    trap = next(line for line in block.splitlines() if "EXIT" in line)
+    assert "ncu --clock-control reset" in trap and "nvidia-smi -rgc" in trap
+    lock = re.search(r"^F=(\d+)", block, re.M).group(1)
+    joined = block.replace("\\\n", " ")
+    shell = {"$F": lock, "$G": "4", "$S": str(tmp_path / "S"), "$L": str(tmp_path / "L"),
+             "$PY_VLLM": "python"}
+    captures = []
+    for line in joined.splitlines():
+        if "scripts/dram_counter_route.py --run" not in line:
+            continue
+        cmd = line.split("|", 1)[0]
+        for var, value in shell.items():
+            cmd = cmd.replace(var, value)
+        argv = [a for a in cmd.split("scripts/dram_counter_route.py", 1)[1].split()
+                if a != "2>&1"]
+        captures.append([a.strip('"') for a in argv])
+    assert len(captures) == 2 and "--census-only" in captures[0], captures
+    census_out = captures[0][captures[0].index("--out") + 1]
+    assert captures[1][captures[1].index("--census") + 1] == census_out
+    monkeypatch.setattr(DCR, "probe_ncu", lambda family=None, clock_control=None: {
+        "present": False, "counters_read": False, "why": "planted: a closed route"})
+    for argv in captures:
+        args = build_parser().parse_args(argv)
+        assert (args.page_clock, args.page_lock_mhz) == ("none", float(lock)), argv
+        capsys.readouterr()
+        assert main(argv) == exit_codes.REFUSED, argv
+        assert "planted: a closed route" in capsys.readouterr().out, argv
