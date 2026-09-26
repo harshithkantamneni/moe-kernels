@@ -3081,7 +3081,7 @@ def test_the_r3_dry_run_prints_the_ncu_argv_the_run_builds_and_prices_it(capsys)
 
 
 def test_the_r3_dry_run_refuses_a_tread_outside_r3s_ladder(capsys):
-    assert main(["--dry-run", "--family", "r3-arms", "--tiles", "1,2,3,7"]) \
+    assert main(["--dry-run", "--family", "r3-arms", "--tiles", "1,2,3,10"]) \
         == exit_codes.REFUSED
     assert "not a subset of R3's ladder" in capsys.readouterr().out
 

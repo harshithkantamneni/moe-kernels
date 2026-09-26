@@ -726,12 +726,17 @@ Three arms x G in {64, 1, 4, 2} (in that order; 16 optional) x n in
 call. n=3 is needed for an OLS residual and is where G=2 first pays a second
 group. n=4 is where the tiles align with the groups at G=4 and G=16 and the
 group model predicts a drop, which no per-tile scalar alpha can produce. n=5
-is omitted: its prediction equals n=6's at G=2 and G=4.
+is omitted: its prediction equals n=6's at G=2 and G=4. Those are the
+defaults; `--tiles` may ask for any treads from 1 to 9 (`COUNTER_MAX_TREADS`),
+the depth of R3's deep timed pages (2026-09-26, for the GH200 model tests,
+which register byte predictions at n=5 and n=8).
 
-The declaration is R3's (`declared_copies_for` over R3's whole ladder, 9
+The declaration is R3's (`declared_copies_for` over R3's default ladder, 9
 copies and 72 slots), never recomputed from the subset, because it sizes the
-launch grid. The child refuses a plan whose treads are not a subset of R3's
-ladder or whose declaration is not R3's. Its memory plan is R3's
+launch grid. The ladder to 9 declares the same 9 copies, which is why the
+counter ladder stops there: tread 10 would declare 10, another grid. The
+child refuses a plan whose treads are not a subset of that ladder or whose
+declaration is not R3's. Its memory plan is R3's
 `memory_plan` with no flush buffer, checked against the attached card: the
 dry run prints the predicted peak and the free memory it needs.
 

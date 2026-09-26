@@ -7898,18 +7898,32 @@ class CounterPlanRefused(PrivateWeightRefusal):
     """A counter plan the child will not run: not R3's call, or not countable."""
 
 
+#: The deepest tread a counter plan may count. R3 times 1 .. DEFAULT_TREADS by
+#: default and deeper pages on request (`--treads 9`, the GH200 model tests of
+#: 2026-09-26); 9 is the deepest ladder whose declaration is still the one R3
+#: makes at its default depth (9 copies for mixtral at BLOCK_M 32: at 1..6 the
+#: id counts straddle the small-batch bound and E x 9 clears the expert bound,
+#: at 1..9 n_max is 9 itself). Tread 10 would declare 10 copies, another launch
+#: grid from every other page's, so it stays outside.
+COUNTER_MAX_TREADS = 9
+
+
 def counter_ladder(cfg, block_m: int) -> list[int]:
-    """R3's own tread ladder, `DEFAULT_TREADS` deep. A counter plan measures a
-    SUBSET of it, and the declaration below is this ladder's, not the
-    subset's: the declaration sizes the launch grid, so recomputing it from
-    the subset would profile a call R3 never timed."""
-    return ladder_treads(cfg, block_m, DEFAULT_TREADS)
+    """The treads a counter plan may count: R3's ladder to
+    `COUNTER_MAX_TREADS`. A counter plan measures a SUBSET of it, and the
+    declaration below is R3's default ladder's, not the subset's: the
+    declaration sizes the launch grid, so recomputing it from the subset
+    would profile a call R3 never timed."""
+    return ladder_treads(cfg, block_m, COUNTER_MAX_TREADS)
 
 
 def counter_declaration(cfg, block_m: int) -> tuple[int, str]:
-    """`declared_copies_for` over R3's own ladder: the copies every counter
-    plan declares (9 for mixtral at BLOCK_M 32, E x 9 = 72 slots)."""
-    return declared_copies_for(cfg, counter_ladder(cfg, block_m), block_m)
+    """`declared_copies_for` over R3's default ladder (`DEFAULT_TREADS`): the
+    copies every counter plan declares (9 for mixtral at BLOCK_M 32, E x 9 =
+    72 slots). The deeper counter ladder declares the same count; a test pins
+    that, so a page at tread 7, 8 or 9 profiles the grid R3 times."""
+    return declared_copies_for(cfg, ladder_treads(cfg, block_m, DEFAULT_TREADS),
+                               block_m)
 
 
 def validate_counter_plan(plan: dict):

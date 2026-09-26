@@ -4535,7 +4535,9 @@ R3_OPTIONAL_GROUP = 16
 #: first tread where G=2 pays a second group, G=4's mid-step); n=4 is where
 #: tiles align with groups at G=4 and G=16 and the group model predicts a DROP
 #: from n=3, which no per-tile scalar alpha can produce. n=5 is omitted: its
-#: q equals q(6) at G=2 and G=4.
+#: q equals q(6) at G=2 and G=4 under the group model. These are the default;
+#: `--tiles` may ask for any subset of R3's counter ladder, to
+#: `COUNTER_MAX_TREADS` (9), at the same declaration.
 R3_TREADS: tuple[int, ...] = (1, 2, 3, 4, 6)
 #: The census's mini plan: NATIVE at these treads, one warmup, one call.
 R3_CENSUS_TREADS: tuple[int, ...] = (1, 6)
@@ -6950,7 +6952,9 @@ def do_dry_run_r3(args) -> int:
           f"{e * first['copies_declared']} slots: {first['declared_reason']}")
     print(f"  arms            {list(r3.ARMS)}; declared experts "
           f"{ {x: r3.declared_experts(x, e, first['copies_declared']) for x in r3.ARMS} }")
-    print(f"  treads          {treads} (n=5 omitted: its q equals q(6) at G=2 and G=4)")
+    print(f"  treads          {treads}"
+          + ("" if 5 in treads else
+             " (n=5 omitted: the group model's q(5) equals q(6) at G=2 and G=4)"))
     mem = r3.memory_plan(cfg, args.dtype, dtype_bytes(args.dtype),
                          first["copies_declared"],
                          tokens_for_rows(cfg, max(treads) * bm), None,

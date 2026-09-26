@@ -6638,7 +6638,7 @@ def test_the_counter_plan_must_be_r3s_own_call():
     have, or cells out of manifest order: each would profile a call R3 never
     timed, and each is refused before a card is touched."""
     PW.validate_counter_plan(_counter_plan())
-    for bad, needle in (({"treads": [1, 2, 7]}, "not a subset of R3's ladder"),
+    for bad, needle in (({"treads": [1, 2, 10]}, "not a subset of R3's ladder"),
                         ({"copies_declared": 8}, "not R3's declaration"),
                         ({"arms": ["shared", "sideways"]}, "not a subset"),
                         ({"gemms_per_call": 3}, "not the cited"),
@@ -6649,6 +6649,27 @@ def test_the_counter_plan_must_be_r3s_own_call():
     shuffled["cells"] = list(reversed(shuffled["cells"]))
     with pytest.raises(PW.CounterPlanRefused, match="manifest order"):
         PW.validate_counter_plan(shuffled)
+
+
+def test_the_counter_ladder_reaches_tread_9_at_r3s_own_declaration():
+    """Byte pages may count treads 7 to 9, the deep timed pages' treads, and
+    the declaration stays R3's: the copies over the deep ladder equal the
+    copies R3 declares at its default depth, so a deep byte page profiles the
+    launch grid every other page profiles. One tread past the ladder is
+    refused."""
+    bm = PW.DEFAULT_BLOCK_M
+    ladder = PW.counter_ladder(CFG, bm)
+    assert ladder == list(range(1, PW.COUNTER_MAX_TREADS + 1))
+    assert PW.COUNTER_MAX_TREADS > PW.DEFAULT_TREADS
+    copies, _why = PW.counter_declaration(CFG, bm)
+    at_default = PW.declared_copies_for(
+        CFG, PW.ladder_treads(CFG, bm, PW.DEFAULT_TREADS), bm)[0]
+    at_deepest = PW.declared_copies_for(CFG, ladder, bm)[0]
+    assert copies == at_default == at_deepest >= ladder[-1]
+    for treads in ([1, 2, 3, 4, 5, 6, 8], ladder):
+        PW.validate_counter_plan(_counter_plan(treads=treads))
+    with pytest.raises(PW.CounterPlanRefused, match="not a subset of R3's ladder"):
+        PW.validate_counter_plan(_counter_plan(treads=[1, PW.COUNTER_MAX_TREADS + 1]))
 
 
 def _child_log(tmp_path, plan: dict) -> tuple[int, str]:
@@ -6666,7 +6687,7 @@ def test_the_counter_child_refuses_off_a_gpu_and_refuses_a_plan_that_is_not_r3s(
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     rc, out = _child_log(tmp_path, _counter_plan())
     assert rc == exit_codes.REFUSED and "no CUDA device" in out, out
-    for bad in ({"treads": [1, 2, 7]}, {"copies_declared": 12}, {"calls_per_cell": 1}):
+    for bad in ({"treads": [1, 2, 10]}, {"copies_declared": 12}, {"calls_per_cell": 1}):
         rc, out = _child_log(tmp_path, _counter_plan(**bad))
         assert rc == exit_codes.REFUSED and "REFUSED:" in out, (bad, out)
     assert exit_codes.parse_result_lines(out) == []
