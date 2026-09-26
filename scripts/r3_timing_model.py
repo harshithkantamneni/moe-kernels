@@ -201,11 +201,14 @@ NATIVE against SHARED. PRIVATE at G=64. Anything on the H200's bytes: it has
 no counter page of its own. Single pages per G and no seeds on the GH200 and
 the H100.
 
-It writes nothing unless --out is given.
+It writes nothing unless --out is given. No line it prints carries a device
+uuid: a device is printed as `board` and six hex digits of the uuid's sha256
+(`board()`), which still tells two boards apart; the JSON keeps the uuid.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -635,6 +638,16 @@ def discover_timed(inputs) -> list[TimedPage]:
     return pages
 
 
+def board(device) -> str:
+    """How printed text names a device: `board` and the first six hex digits
+    of the sha256 of its uuid, or `board unread` when the page recorded none.
+    Two boards still read apart, and no printed line carries the uuid itself
+    (the JSON's `device` keeps it, for provenance)."""
+    if not device:
+        return "board unread"
+    return "board " + hashlib.sha256(str(device).encode()).hexdigest()[:6]
+
+
 def admit(pages: list[TimedPage]) -> list[TimedPage]:
     """The VALID pages, after every refusal the model's footing needs."""
     use = [p for p in pages if p.label == PTF.VALID and p.rows]
@@ -643,7 +656,7 @@ def admit(pages: list[TimedPage]) -> list[TimedPage]:
     cards = {(p.card, p.device) for p in use}
     if len({c for c, _d in cards}) > 1 or len({d for _c, d in cards if d}) > 1:
         raise Refused("the VALID pages come from more than one card ("
-                      + "; ".join(f"{p.run}: {p.card} {p.device[:13]}" for p in use)
+                      + "; ".join(f"{p.run}: {p.card} {board(p.device)}" for p in use)
                       + "); cards are never pooled: pass one card's pages")
     want = (MODEL, DTYPE, BLOCK_M, BLOCK_N, BLOCK_K)
     for p in use:
@@ -736,7 +749,7 @@ def counter_card(pages: dict[int, dict], where: str) -> tuple[str, str | None] |
     if len(cards) > 1:
         raise Refused(f"the counter pages {where} come from more than one card ("
                       + "; ".join(f"G={G}: {p['card']['slug']} "
-                                  f"{str(p['card'].get('uuid') or '')[:13]}"
+                                  f"{board(p['card'].get('uuid'))}"
                                   for G, p in sorted(pages.items()))
                       + "); cards are never pooled: pass one card's counter pages")
     return next(iter(cards), None)
@@ -1429,8 +1442,8 @@ def build(args) -> dict:
         oc = next(iter(own.values()))["card"]
         if oc["slug"] != card or (device and oc.get("uuid") and oc["uuid"] != device):
             if args.bytes == "counted":
-                raise Refused(f"the counter pages are {oc['slug']} {oc.get('uuid', '')[:13]}, "
-                              f"the timed pages {card} {device[:13]}: counted bytes come from "
+                raise Refused(f"the counter pages are {oc['slug']} {board(oc.get('uuid'))}, "
+                              f"the timed pages {card} {board(device)}: counted bytes come from "
                               "the card's own pages; --bytes borrowed:DIR labels a borrow")
             own = None
     source = byte_source(args, use, own)
@@ -1718,7 +1731,7 @@ def lines_of(R: dict) -> list[str]:
          "per-card model at one locked clock; it fails on the H100 at G=1, carries one fitted "
          "study constant (k_w) and has no identified clock term. Falsified by any of:"]
     L += [f"  - {f}" for f in FALSIFIERS]
-    L += ["", f"CARD {card} {ctx.device[:13]} (never pooled with another card)",
+    L += ["", f"CARD {card} {board(ctx.device)} (never pooled with another card)",
           f"  SMs {ctx.sms} from {ctx.sms_source}; occupancy w1 {ctx.occupancy['w1']} / w2 "
           f"{ctx.occupancy['w2']} CTAs per SM, {ctx.occupancy_source}",
           f"  bytes: {ctx.byte_label}",

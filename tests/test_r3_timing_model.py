@@ -737,6 +737,36 @@ def test_the_counter_pages_device_is_checked_not_only_the_card_name(tmp_path):
         build(*runs, "--counters", one)
 
 
+def test_no_printed_line_carries_a_device_uuid(gh200, tmp_path):
+    """The CARD line and the device refusals name a board by a hash tag, never
+    by the uuid or a prefix of it; two boards still read apart, and the JSON
+    keeps the uuid. Each check is a bool, so a failure never prints a uuid."""
+    device = gh200["ctx"].device
+    assert device
+    text = "\n".join(M.lines_of(gh200))
+    tagged, leaked = M.board(device) in text, device[:8] in text
+    assert tagged and not leaked
+    other = "00000000-0000-0000-0000-000000000000"
+    apart = M.board(other) != M.board(device)
+    assert apart and M.board(None) == "board unread"
+    runs = [run_dir(GH200, r) for r in GH200_RUNS]
+    for gs, needle in ((GS, "counted bytes come from"), ((64,), "more than one card")):
+        counters = _gh200_counters_with_uuid(tmp_path / str(len(gs)), other, gs)
+        with pytest.raises(M.Refused, match=needle) as refused:
+            build(*runs, "--counters", counters)
+        said = str(refused.value)
+        tagged, leaked = M.board(other) in said, other[:8] in said or device[:8] in said
+        assert tagged and not leaked, needle
+    (tmp_path / "pages").mkdir()
+    b = _copy_page("df37ea07", tmp_path / "pages")
+    (b / "DEVICE").write_text(other + "\n")
+    with pytest.raises(M.Refused, match="more than one card") as refused:
+        build(run_dir(GH200, "d9f1f37c"), b, "--counters", GH200_COUNTERS)
+    said = str(refused.value)
+    tagged, leaked = M.board(other) in said, other[:8] in said or device[:8] in said
+    assert tagged and not leaked
+
+
 def _unit_fit(bw=3000.0, identified=(True,) * 5, at_bound=(False,) * 5, gs=GS):
     return M.Fit(label="unit", k_w=0.5, x=np.array([0.05, 206.0, bw, 0.0, 0.0]),
                  fitted_gs=tuple(gs), identified=tuple(identified), at_bound=tuple(at_bound),
