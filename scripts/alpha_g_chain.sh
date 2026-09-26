@@ -36,6 +36,9 @@
 # ruler into the tracked file, every row after it carries git_dirty, and the
 # yaml is committed WITH the results. The exfil line carries it and
 # calibrate's own run directory.
+# ON A LAMBDA VM, the same chain from the checkout setup_vm.sh made, after
+# `. ~/moe/env.sh`, appending to "$WORKSPACE/alpha_g_chain.out" instead:
+# docs/LAMBDA.md, section 3b.
 #
 # WHICH SESSION. A bare run REFUSES when a chain session for this card already
 # holds CHAIN.tsv: every R1 and R3 run id carries the session's tag, so a
@@ -84,7 +87,9 @@
 #                  /opt/nvidia/nsight-compute/*/ncu by default), and runs
 #                  scripts/dram_counter_route.py --probe --family r3-arms, the
 #                  R3 counter run's own probe, from PY_BASE with the first
-#                  one's directory first on PATH: the chip's metric list, then
+#                  one's directory first on PATH, and through
+#                  MOE_COUNTER_LAUNCHER when that is set (a Lambda VM's
+#                  counter door, from its ~/moe/env.sh): the chip's metric list, then
 #                  one real kernel under ncu asked for every metric the
 #                  r3-arms pages gate on, and every STRICT one read back or
 #                  refused, so OPEN means the R3 counter run can happen on
@@ -93,7 +98,15 @@
 #                  is INFO; the verdict (OPEN, BLOCKED, ABSENT, UNTESTED or
 #                  ERROR), ncu's path and version, the exact error and the two
 #                  capabilities go into the note and $SESSION/COUNTERS, beside
-#                  the probe's own payload, $SESSION/COUNTERS.json. It runs on
+#                  the probe's own payload, $SESSION/COUNTERS.json. After a
+#                  probe that found an ncu and could have profiled (any
+#                  verdict but BLOCKED), that ncu's --clock-control reset
+#                  runs through the same launcher (ncu locks the clocks while
+#                  it profiles, and a probe its cap killed can leave them
+#                  locked under every arm after it), and the note ends with
+#                  what the reset did and the clocks after it; after a
+#                  BLOCKED probe, which locked nothing, it ends "no clock
+#                  reset" and asks no second refused ncu. It runs on
 #                  every measuring pass (a counter route is a property of the
 #                  pod), priced in minutes at the driver's own arm_minutes for
 #                  counter_plan and capped like an arm; a dry run prices it and
@@ -331,6 +344,21 @@ PROBE_CHECK_S=120
 #: the CUDA toolkit's bin and Nsight Compute's own directory hold an ncu that
 #: no PATH entry names. Set it to add a place an image uses.
 NCU_SEARCH="${NCU_SEARCH:-/usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu}"
+#: HOW THE COUNTER PROBE REACHES A COUNTER where the driver keeps them for
+#: admins: the counter door's launcher, which scripts/setup_vm.sh writes into a
+#: VM's ~/moe/env.sh (`sudo -E env PATH=... HOME=...` under its sudo door;
+#: empty under the open door, and never set on a pod). Empty runs the probe as
+#: this user, as it always ran. Under a launcher every ncu on the box runs as
+#: one user, which ncu's lock file under /tmp needs (docs/LAMBDA.md, section 3:
+#: whoever runs ncu first owns it, and a lock the login user made refuses
+#: root's ncu), and the probe's files are handed back after it, as env.sh's
+#: moe_counter hands back a counter step's.
+MOE_COUNTER_LAUNCHER="${MOE_COUNTER_LAUNCHER:-}"
+#: THE CAP ON THE CLOCK RESET after the counter probe (`clock_reset`), in
+#: seconds. The reset launches no program: ncu resets the clocks and exits,
+#: and two minutes covers its start-up off a cold disk. A reset past the cap
+#: is recorded as not done, and the chain goes on.
+CLOCK_RESET_S=120
 #: The exfil allowance: the tar of the session, the results and the ruler.
 EXFIL_S=300
 #: THE HANG CAP ON AN ARM STEP: max(ARM_CAP_FACTOR x its price, ARM_CAP_FLOOR_S),
@@ -633,7 +661,7 @@ driver_minutes() {
 #: reached those children and steered them into the real session.
 #: MOE_RESULTS_DIR stays (tests/conftest.py sandboxes it), and so do PY_BASE
 #: and PY_VLLM (tests/_hermetic.py replaces them).
-CHAIN_KNOBS="REPO SESSION SESSION_ROOT RESULTS_ROOT WORKSPACE G_LADDER SEEDS R3_DUTY R1_DUTY NCU_SEARCH RATE_USD_H SUITE_S_PER_TEST SUITE_TIMEOUT_S GPU_TESTS_TIMEOUT_S END_SUITE LOCK_TOOL CAPABILITY"
+CHAIN_KNOBS="REPO SESSION SESSION_ROOT RESULTS_ROOT WORKSPACE G_LADDER SEEDS R3_DUTY R1_DUTY NCU_SEARCH MOE_COUNTER_LAUNCHER RATE_USD_H SUITE_S_PER_TEST SUITE_TIMEOUT_S GPU_TESTS_TIMEOUT_S END_SUITE LOCK_TOOL CAPABILITY"
 without_knobs() {
   local -a unset_args=()
   local k
@@ -910,6 +938,82 @@ counter_probe_price() {
   return 0
 }
 
+#: WHAT A PROBE RUN THROUGH THE LAUNCHER WROTE, handed back to this user, as
+#: env.sh's moe_counter hands back a counter step's: under the sudo door the
+#: probe runs as root and can leave root-owned files in this session and in
+#: the caches every later arm writes to (Triton's, inductor's, CUDA's).
+#: Never fails the pass: a path it cannot chown is left as it is.
+hand_back() {
+  local d
+  for d in "$SESSION" "${TRITON_CACHE_DIR:-}" "${TORCHINDUCTOR_CACHE_DIR:-}" "${HF_HOME:-}" \
+           "$HOME/.cache" "$HOME/.triton" "$HOME/.nv"; do
+    [[ -n "$d" && -e "$d" ]] || continue
+    sudo -n chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
+  done
+  return 0
+}
+
+#: THE CLOCKS THE COUNTER PROBE LEAVES BEHIND. ncu locks the GPC and memory
+#: clocks while it profiles: the probe passes no --clock-control, and ncu's
+#: default was `base` and is `boost` in Nsight Compute's current CLI docs
+#: (2026-09-25). A normal exit restores them; a probe its cap killed (INT,
+#: then KILL 60 s later) can leave them locked, and ncu's docs name
+#: `--clock-control reset` for exactly that. Nothing after the probe would
+#: notice a lock: the thermal gate and calibrate ran before it, V7 passes when
+#: both ratio arms share one locked clock, and R1's V1 fails at every G. So
+#: after a probe that could have profiled, the ncu it found resets the clocks
+#: through the probe's own launcher (root under a VM's sudo door; this user
+#: under a VM's open door, where this user can profile too), capped at
+#: CLOCK_RESET_S, and the clocks nvidia-smi reads after it are recorded. A
+#: probe that read BLOCKED was refused the counters, could not profile and so
+#: locked nothing (the Lambda GH200's BLOCKED probe, 2026-09-25, left none:
+#: the R3 pages after it read 1905 to 1965 MHz, moving with board power), and
+#: `counter_probe_step` asks for no reset after it: that is every RunPod pass
+#: on record, where a second ncu as the same refused user would likely be
+#: refused too and print CLOCKS NOT RESET for a lock that was never made. An
+#: idle clock does not show a lock by itself: the record is for the reader,
+#: the reset is the remedy.
+#: $1 the ncu, $2 the log it appends to, then the launcher's words (none
+#: without one). Prints the note's one clause; never fails the pass, since
+#: the step is INFORMATIONAL like the probe. A reset past its cap reads TIMED
+#: OUT by the rule `counters` reads the probe's with: exit 124 (the INT), or
+#: 137 (the KILL 10 s later, for a reset that ignored the INT) once it ran the
+#: whole cap; a 137 sooner is something else's kill and reads as an exit.
+clock_reset() {
+  local bin="$1" log="$2" rc=0 out smi fields="clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem" what
+  local cap=0 t0 secs
+  shift 2
+  local -a tmo=()
+  if command -v timeout >/dev/null 2>&1; then
+    cap="$CLOCK_RESET_S"; tmo=(timeout --signal=INT --kill-after=10 "$cap")
+  fi
+  t0="$(date +%s)"
+  out="$("$@" ${tmo[@]+"${tmo[@]}"} "$bin" --clock-control reset 2>&1)" || rc=$?
+  secs="$(( $(date +%s) - t0 ))"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    smi="$(nvidia-smi --query-gpu="$fields" --format=csv,noheader 2>&1)" \
+      || smi="nvidia-smi failed: $smi"
+  else
+    smi="unread: no nvidia-smi on PATH"
+  fi
+  smi="$(printf '%s' "$smi" | tr '\t\n' ' ;')"
+  {
+    echo "# $(date -u +%Y-%m-%dT%H:%M:%SZ) after the counter probe:$(printf ' %s' "$@" ${tmo[@]+"${tmo[@]}"} "$bin") --clock-control reset"
+    [[ -n "$out" ]] && printf '%s\n' "$out"
+    echo "# exit $rc in $secs s"
+    echo "# $fields after it: $smi"
+  } >> "$log"
+  if (( rc == 0 )); then
+    what="clocks reset after it ($bin --clock-control reset, exit 0)"
+  elif (( cap > 0 )) && { (( rc == 124 )) || (( rc == 137 && secs >= cap )); }; then
+    what="CLOCKS NOT RESET: $bin --clock-control reset TIMED OUT after $secs s against a cap of $cap s (exit $rc); a lock the probe left, if it left one, stands under every arm after it"
+  else
+    what="CLOCKS NOT RESET: $bin --clock-control reset exited $rc ($(printf '%s\n' "${out:-no output}" | tail -n 1)); a lock the probe left, if it left one, stands under every arm after it"
+  fi
+  printf '%s; %s after it: %s; %s' "$what" "$fields" "$smi" "$log" | tr '\t\n' '  '
+  return 0
+}
+
 #: THE COUNTER PROBE, one measuring pass's. INFORMATIONAL: it gates nothing,
 #: and its row's state is INFO, which no pass latches, so every pass asks
 #: again (a counter route is a property of the pod). $1 its price in seconds,
@@ -919,11 +1023,20 @@ counter_probe_price() {
 #: asks the same one before it measures) from PY_BASE under the arm cap, with the
 #: found ncu's directory first on PATH, and hands the probe's payload
 #: ($SESSION/COUNTERS.json) and page to `counters`, which writes
-#: $SESSION/COUNTERS and the note. Returns 0 whatever the probe read.
+#: $SESSION/COUNTERS and the note. Returns 0 whatever the probe read. Under
+#: MOE_COUNTER_LAUNCHER the probe runs through it, the cap inside it, and
+#: `hand_back` returns what it and the reset wrote, after both. When it found
+#: an ncu and `counters` read anything but BLOCKED (OPEN, UNTESTED, ERROR,
+#: a timed-out probe's among them), `clock_reset` runs that ncu's
+#: --clock-control reset through the same launcher, and the note ends with
+#: what the reset did and the clocks after it; after a BLOCKED probe it ends
+#: "no clock reset" and why. $LOGS/clock-reset.log keeps every such pass's.
+#: `counters` reads the probe's payload before `hand_back`: sudo's umask
+#: (0022 unless sudoers says otherwise) leaves a root-written file readable.
 counter_probe_step() {
   local price="$1" log="$LOGS/counter-probe.log" located bin where cands cap how
-  local rc=0 hrc=0 t0 secs out note
-  local -a pathenv=() tmo=()
+  local rc=0 hrc=0 t0 secs out note reset=""
+  local -a pathenv=() tmo=() launch=()
   located="$("$PY_BASE" "$HELPERS" ncu-locate "$NCU_SEARCH" 2>/dev/null)" || located=""
   [[ -n "$located" ]] || located=$'none\tnone\tnone'
   IFS=$'\t' read -r bin where cands <<< "$located"
@@ -936,10 +1049,12 @@ counter_probe_step() {
   else
     cap=0; how="no timeout(1) on this box: uncapped"
   fi
+  [[ -n "$MOE_COUNTER_LAUNCHER" ]] && read -r -a launch <<< "$MOE_COUNTER_LAUNCHER"
   echo "  counter-probe: capped at $cap s ($how); informational, it gates nothing"
+  (( ${#launch[@]} )) && echo "  counter-probe: through the counter door's launcher: ${launch[*]}"
   rm -f "$SESSION/COUNTERS.json"
   t0="$(date +%s)"
-  env ${pathenv[@]+"${pathenv[@]}"} ${tmo[@]+"${tmo[@]}"} "$PY_BASE" \
+  ${launch[@]+"${launch[@]}"} env ${pathenv[@]+"${pathenv[@]}"} ${tmo[@]+"${tmo[@]}"} "$PY_BASE" \
     "$REPO/scripts/dram_counter_route.py" --probe --family r3-arms \
     --out "$SESSION/COUNTERS.json" > "$log" 2>&1 || rc=$?
   secs="$(( $(date +%s) - t0 ))"
@@ -949,6 +1064,15 @@ counter_probe_step() {
   if (( hrc != 0 )) || [[ -z "$note" ]]; then
     note="ERROR: the counters helper exited $hrc (${note:-no output}); read $log"
   fi
+  if [[ "$bin" != none && "$note" == BLOCKED:* ]]; then
+    reset="no clock reset: the probe read BLOCKED, so ncu was refused the counters, could not profile, and locked no clock"
+    echo "# $(date -u +%Y-%m-%dT%H:%M:%SZ) after the counter probe: $reset" >> "$LOGS/clock-reset.log"
+  elif [[ "$bin" != none ]]; then
+    reset="$(clock_reset "$bin" "$LOGS/clock-reset.log" ${launch[@]+"${launch[@]}"})"
+  fi
+  [[ -n "$reset" ]] && echo "  counter-probe: $reset"
+  (( ${#launch[@]} )) && hand_back
+  [[ -n "$reset" ]] && note="$note; $reset"
   printf '%s\tINFO\t%s\t%s\t%s\t%s\t%s\n' counter-probe "$rc" "$secs" "$(dirty_count)" \
     "$log" "$note" >> "$LEDGER"
   printf '%-16s %-10s rc=%s %5ss  %s\n' counter-probe INFO "$rc" "$secs" "$note"
@@ -1527,7 +1651,7 @@ echo; echo "== counter-probe: can this pod read a DRAM counter (informational; g
 COUNTER_PROBE_S="$(counter_probe_price)"
 if (( DRY )); then
   IFS=$'\t' read -r CP_CAP CP_HOW < <(cap_for "$COUNTER_PROBE_S")
-  skip_row counter-probe "a dry run does not run it: it is the r3-arms family's probe, which asks ncu for the chip's metric list and then launches the probe kernel under ncu on the card one to three times. Priced ~${COUNTER_PROBE_S:-0} s at the driver's own arm_minutes for counter_plan, whose probe is the ladder family's one-metric one, not this; capped on the pod at $CP_CAP s ($CP_HOW); informational, it gates nothing and runs on every measuring pass"
+  skip_row counter-probe "a dry run does not run it: it is the r3-arms family's probe, which asks ncu for the chip's metric list and then launches the probe kernel under ncu on the card one to three times. Priced ~${COUNTER_PROBE_S:-0} s at the driver's own arm_minutes for counter_plan, whose probe is the ladder family's one-metric one, not this; capped on the pod at $CP_CAP s ($CP_HOW); informational, it gates nothing and runs on every measuring pass. Then, unless it read BLOCKED, the ncu it found runs --clock-control reset through MOE_COUNTER_LAUNCHER (${MOE_COUNTER_LAUNCHER:-unset here, so as this user}), capped at $CLOCK_RESET_S s, and the clocks after it are recorded in chain-logs/clock-reset.log"
   CLOCK_S=$(( CLOCK_S + ${COUNTER_PROBE_S:-0} ))
 else
   # never gated, never latched: whatever it reads, the chain goes on

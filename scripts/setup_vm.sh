@@ -809,6 +809,24 @@ card_slug() {
   PYTHONPATH="$repo" "$(helper_python)" -c 'import sys; from moe.bench.provenance import card_slug; print(card_slug(sys.argv[1]))' "$GPU_NAME" 2>/dev/null || echo unknown
 }
 
+#: NO MOE_RESULTS_DIR. scripts/alpha_g_chain.sh and scripts/h200_gaps_session.sh
+#: REFUSE a MOE_RESULTS_DIR that does not name the card, and $RESULTS does not,
+#: so exporting it here stopped the timing chain before its first step on every
+#: VM (the Lambda GH200's chain, 2026-09-25, ran only after an `unset
+#: MOE_RESULTS_DIR` typed after sourcing). The chain and its driver export
+#: MOE_RESULTS_DIR=$RESULTS_ROOT/gaps-<card> to every arm they run, and section
+#: 3's counter run names its own directory under $RESULTS_ROOT. An arm run BY
+#: HAND gets none from this file: most scripts' results_root() then fall back
+#: to $WORKSPACE/results, which is $RESULTS, but replicate_noise_floor.py and
+#: tuned_vs_fallback.py look at /workspace and then the checkout's results/,
+#: and calibrate_hardware.py writes under the checkout's results/ whatever is
+#: set (the chain's exfil tar carries its calibrate's run directory).
+#: docs/LAMBDA.md section 4's rsync copies nothing from the checkout, so
+#: section 3b has an arm run by hand export
+#: MOE_RESULTS_DIR=$RESULTS_ROOT/gaps-$MOE_CARD first.
+#: The file UNSETS it rather than only not setting it: a shell that sourced an
+#: older env.sh still holds the old export, and sourcing this one again must
+#: clear it.
 env_text() {
   local repo="$1" ncu_dir=""
   [[ "$NCU_BIN" != none ]] && ncu_dir="$(dirname "$NCU_BIN"):"
@@ -820,7 +838,9 @@ export WORKSPACE="$MOE_HOME"
 export PY_BASE="$PY_BASE"
 export PY_VLLM="$PY_VLLM"
 export RESULTS_ROOT="$RESULTS"
-export MOE_RESULTS_DIR="$RESULTS"
+# the chain and its driver refuse a MOE_RESULTS_DIR without the card's name,
+# and an older env.sh exported one: runs go under \$RESULTS_ROOT/gaps-<card>
+unset MOE_RESULTS_DIR
 export SESSION_ROOT="$SESSION"
 export HF_HOME="$HF_CACHE"
 export TRITON_CACHE_DIR="$TRITON_CACHE"

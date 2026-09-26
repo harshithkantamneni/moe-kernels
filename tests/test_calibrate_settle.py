@@ -134,3 +134,25 @@ def test_an_unknown_device_gets_no_pin_rate_rather_than_a_guess():
     from scripts.calibrate_hardware import _memory_bus_bits
     assert _memory_bus_bits("NVIDIA GeForce RTX 5090") is None
     assert _memory_bus_bits("") is None
+
+
+@pytest.mark.parametrize("name,bits", [
+    ("NVIDIA GH200 480GB", None),               # Grace Hopper: "H200" is only a substring
+    ("NVIDIA GH200 144G HBM3e", None),
+    ("NVIDIA H200", 6016),
+    ("NVIDIA H200 NVL", 6016),
+    ("NVIDIA H100 80GB HBM3", 5120),
+    ("NVIDIA A100-SXM4-40GB", 5120),
+    ("NVIDIA A100-SXM4-80GB", 5120),
+])
+def test_the_bus_width_table_matches_a_whole_word_of_the_name(name, bits):
+    """A substring match gave "NVIDIA GH200 480GB" the H200's 6016 bits, the
+    harvest of the 141 GB part: a GH200 calibration on a Lambda VM would have
+    written that width into its ruler as the table's disagreement with NVML,
+    and used it as the pin rate had NVML not answered. A card the table does
+    not name gets NVML's width alone, or no pin rate."""
+    from scripts.calibrate_hardware import _memory_bus_bits, resolve_memory_bus_bits
+    assert _memory_bus_bits(name) == bits
+    if bits is None:
+        assert resolve_memory_bus_bits(name, 6144) == (6144, "nvml", None)
+        assert resolve_memory_bus_bits(name, None) == (None, "none", None)

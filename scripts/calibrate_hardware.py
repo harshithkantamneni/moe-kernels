@@ -275,7 +275,8 @@ def _device_facts() -> dict:
     return out
 
 
-#: Memory bus width in bits, by substring of the device name: THE FALLBACK when
+#: Memory bus width in bits, by a whole word of the device name (so "GH200"
+#: does not read as "H200"; a substring until 2026-09-25): THE FALLBACK when
 #: NVML cannot answer (`_nvml_memory_bus_bits`), and the number NVML is checked
 #: against. Each entry is checked by reproducing the vendor bandwidth figure:
 #:   H200  3201 MHz x 2 x 6016 / 8 = 4814.3 GB/s  (spec 4.8 TB/s; NVML reports
@@ -295,8 +296,16 @@ _MEMORY_BUS_BITS = {
 
 
 def _memory_bus_bits(gpu_name: str) -> int | None:
+    """The table's width for a WHOLE word of the name, or None. A substring
+    match read "NVIDIA GH200 480GB" as an H200 and gave a Grace Hopper the
+    6016 bits of the 141 GB part's harvest, which it is not; its own NVML
+    answer then carried that width beside it as the table's disagreement,
+    as the Lambda GH200's ruler did on 2026-09-25 (memory_bus_bits 6144 from
+    NVML, memory_bus_bits_table 6016, pin_rate_gbps_at_table_width 3939.0).
+    Not in the table, it gets NVML's answer alone, or no pin rate."""
+    words = "".join(c if c.isalnum() else " " for c in gpu_name).split()
     for key, bits in _MEMORY_BUS_BITS.items():
-        if key in gpu_name:
+        if key in words:
             return bits
     return None
 

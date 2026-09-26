@@ -541,7 +541,9 @@ It runs, in order:
    default, each one's matches newest name first), and runs
    `scripts/dram_counter_route.py --probe --family r3-arms`, the R3 counter
    run's own probe and not a second copy of it, from PY_BASE with the first
-   one's directory first on PATH: the chip's metric list, then one real kernel
+   one's directory first on PATH, and through `MOE_COUNTER_LAUNCHER` when that
+   is set (a Lambda VM's counter door, `docs/LAMBDA.md` section 3b; never set
+   on a pod): the chip's metric list, then one real kernel
    under ncu asked for every metric the r3-arms pages gate on, and every
    STRICT one read back or refused, so OPEN means the R3 counter run can
    happen on this pod (the driver's `counter_plan` asks the ladder family's
@@ -551,7 +553,24 @@ It runs, in order:
    ERROR) and carries ncu's path and version, the exact error line and the
    two capabilities (`CAP_PERFMON`, `CAP_SYS_ADMIN`); `COUNTERS` in the
    session directory holds the same, with the probe's own notes, beside its
-   payload, `COUNTERS.json`. When ncu is found off PATH, `COUNTERS` says so:
+   payload, `COUNTERS.json`. After a probe that found an ncu and could have
+   profiled (any verdict but BLOCKED), that ncu's `--clock-control reset`
+   runs through the same launcher: ncu locks the clocks while it profiles,
+   and a probe its cap killed can leave them locked under every arm after it.
+   The note ends with what the reset did and the clocks nvidia-smi read after
+   it; after a BLOCKED probe, every pod's on record, it ends `no clock reset`
+   and why (refused the counters, the probe could not profile and so locked
+   nothing), and no second ncu is asked. `chain-logs/clock-reset.log` keeps
+   every such pass's. A note ending `CLOCKS NOT RESET` means a lock the probe
+   may have left still stands under every arm after it: stop the chain, clear
+   it (`ncu --clock-control reset` as the user that profiled, or
+   `nvidia-smi -rgc` where the pod allows it), and `--resume`; the probe asks
+   again on every pass. On a pod whose counters are refused, the pod user may
+   not be able to run that reset either, and the note's one clock reading,
+   taken right after the reset attempt, cannot show whether a lock stands.
+   The next R3 page can: V7 prints each tread's under-load clocks for both
+   arms, and clocks that move with power from tread to tread are not held by
+   a lock. When ncu is found off PATH, `COUNTERS` says so:
    the driver's `counter_plan` and `dram_counter_route.py --run` look on PATH
    only. A dry run prices it at the driver's own `arm_minutes` for
    `counter_plan` and writes a SKIPPED row. RunPod's record, as this repo
