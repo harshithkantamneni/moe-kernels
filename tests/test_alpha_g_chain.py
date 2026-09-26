@@ -53,6 +53,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import alpha_g_chain_helpers as H  # noqa: E402
 from _committed import ncu_refusals  # noqa: E402
 from _hermetic import laptop_env  # noqa: E402
+from _shared_run import shared  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
 
@@ -1946,32 +1947,43 @@ class Pod:
     """A planted world: a session root, a results root, the two interpreters."""
 
     def __init__(self, root: Path):
+        self._paths(root)
+        self.base.write_text(STUB_BASE.replace("@PYTHON@", sys.executable)
+                             .replace("@LADDER@", str(STUB_LADDER_S))
+                             .replace("@PROBE@", str(STUB_PROBE_S))
+                             .replace("@R1@", str(STUB_R1_S)))
+        self.arm.write_text(STUB_ARM.replace("@PYTHON@", sys.executable)
+                            .replace("@ROOT@", str(ROOT))
+                            .replace("@BANDWIDTH@", repr(STUB_BANDWIDTH_GBPS))
+                            .replace("@EXPERT_SET@", repr(STUB_EXPERT_SET_BYTES)))
+        self.probe.write_text(STUB_PROBE.replace("@PYTHON@", sys.executable)
+                              .replace("@ROOT@", str(ROOT)).replace("@ERR@", STUB_ERR)
+                              .replace("@VERSION@", STUB_NCU_VERSION))
+        self.base.write_text(self.base.read_text().replace("@COUNTER_PROBE@", str(self.probe)))
+        for f in (self.base, self.arm, self.probe):
+            f.chmod(0o755)
+        self.set_plan({})
+
+    def _paths(self, root: Path):
         self.root = root
         self.sessions = root / "session"
         self.results = root / "results" / f"gaps-{CARD}"
         self.trace = root / "trace.txt"
         self.plan = root / "plan.json"
         self.base = root / "py-base"
-        self.base.write_text(STUB_BASE.replace("@PYTHON@", sys.executable)
-                             .replace("@LADDER@", str(STUB_LADDER_S))
-                             .replace("@PROBE@", str(STUB_PROBE_S))
-                             .replace("@R1@", str(STUB_R1_S)))
         self.arm = root / "py-arm"
-        self.arm.write_text(STUB_ARM.replace("@PYTHON@", sys.executable)
-                            .replace("@ROOT@", str(ROOT))
-                            .replace("@BANDWIDTH@", repr(STUB_BANDWIDTH_GBPS))
-                            .replace("@EXPERT_SET@", repr(STUB_EXPERT_SET_BYTES)))
         self.probe = root / "py-probe"
-        self.probe.write_text(STUB_PROBE.replace("@PYTHON@", sys.executable)
-                              .replace("@ROOT@", str(ROOT)).replace("@ERR@", STUB_ERR)
-                              .replace("@VERSION@", STUB_NCU_VERSION))
-        self.base.write_text(self.base.read_text().replace("@COUNTER_PROBE@", str(self.probe)))
         #: where the counter probe's globs look: a directory of this world's own,
         #: so no ncu the test box carries under /usr/local or /opt is found
         self.ncu_root = root / "ncu-planted"
-        for f in (self.base, self.arm, self.probe):
-            f.chmod(0o755)
-        self.set_plan({})
+
+    @classmethod
+    def view(cls, root: Path) -> Pod:
+        """A world already planted and run, read only: its paths, with none of
+        `__init__`'s writes (a shared world is frozen, tests/_shared_run.py)."""
+        pod = cls.__new__(cls)
+        pod._paths(root)
+        return pod
 
     def set_plan(self, plan: dict):
         self.plan.write_text(json.dumps(plan))
@@ -2018,23 +2030,28 @@ def _rows(path: Path) -> list[list[str]]:
     return [ln.split("\t") for ln in path.read_text().splitlines()[1:]]
 
 
-@pytest.fixture(scope="module")
-def two_passes(tmp_path_factory):
+@pytest.fixture(scope="session")
+def two_passes(request, tmp_path_factory):
     """Pass 1: r1-g1 crashes; G=4's R1 page is INVALID (planted at the
     all-tread reading of session 4's G=16 cells, above V7's admissible edge);
     G=16's seed 0 reads V7 FAIL. Pass 2, --resume: r1-g1 lands, and nothing
-    else is bought."""
-    pod = Pod(tmp_path_factory.mktemp("pod"))
-    s = pod.session()
-    plan = {"r3-g1-s0": {"low": 2}, "r3-g16-s0": {"V7": "FAIL"},
-            "r1-g4": {"V7": "FAIL", "C1": "FAIL", "eta": [1.1335, 1.2861]}}
-    pod.set_plan({**plan, "r1-g1": {"crash": True}})
-    first = pod.run("--resume", G_LADDER="1 4 16")
-    after_first = {"trace": pod.traced(), "pairs": (s / "PAIRS.tsv").read_text(),
-                   "ledger": _rows(s / "CHAIN.tsv")}
-    pod.set_plan(plan)
-    second = pod.run("--resume", G_LADDER="1 4 16")
-    return pod, s, first, after_first, second
+    else is bought. Both passes run once per pytest run, shared across xdist
+    workers (tests/_shared_run.py); the tests get a read-only `Pod.view`."""
+    def produce(root: Path):
+        pod = Pod(root)
+        s = pod.session()
+        plan = {"r3-g1-s0": {"low": 2}, "r3-g16-s0": {"V7": "FAIL"},
+                "r1-g4": {"V7": "FAIL", "C1": "FAIL", "eta": [1.1335, 1.2861]}}
+        pod.set_plan({**plan, "r1-g1": {"crash": True}})
+        first = pod.run("--resume", G_LADDER="1 4 16")
+        after_first = {"trace": pod.traced(), "pairs": (s / "PAIRS.tsv").read_text(),
+                       "ledger": _rows(s / "CHAIN.tsv")}
+        pod.set_plan(plan)
+        second = pod.run("--resume", G_LADDER="1 4 16")
+        return s, first, after_first, second
+    root, (s, first, after_first, second) = shared(request, tmp_path_factory,
+                                                   "chain-two-passes", produce)
+    return Pod.view(root), s, first, after_first, second
 
 
 def test_a_measuring_pass_runs_the_owners_order_at_duty_0_25(two_passes):
@@ -2995,18 +3012,24 @@ def test_every_rebuild_prints_the_bound_with_its_ceiling_and_what_the_ratio_read
 # the laptop dry run: priced off the arms' own plans, nothing written into the tree
 # --------------------------------------------------------------------------
 
-@pytest.fixture(scope="module")
-def dry(tmp_path_factory):
-    root = tmp_path_factory.mktemp("chain")
-    env = chain_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
-                    SESSION_ROOT=str(root / "session"), RESULTS_ROOT=str(root / "results"),
-                    MOE_RESULTS_DIR=str(root / "results" / "gaps-nocard"), WORKSPACE=str(root))
-    before = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"],
-                            capture_output=True, text=True).stdout
-    got = subprocess.run(["bash", str(CHAIN), "--dry-run"], capture_output=True,
-                         text=True, timeout=1500, env=env)
-    after = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"],
-                           capture_output=True, text=True).stdout
+@pytest.fixture(scope="session")
+def dry(request, tmp_path_factory):
+    """ONE chain --dry-run, `(CompletedProcess, root, git status before,
+    after)`, shared across xdist workers (tests/_shared_run.py): as a module
+    fixture it ran on every worker that took one of its six tests."""
+    def produce(root: Path):
+        env = chain_env(REPO=str(ROOT), PY_BASE=sys.executable, PY_VLLM=sys.executable,
+                        SESSION_ROOT=str(root / "session"), RESULTS_ROOT=str(root / "results"),
+                        MOE_RESULTS_DIR=str(root / "results" / "gaps-nocard"),
+                        WORKSPACE=str(root))
+        before = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"],
+                                capture_output=True, text=True).stdout
+        got = subprocess.run(["bash", str(CHAIN), "--dry-run"], capture_output=True,
+                             text=True, timeout=1500, env=env)
+        after = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"],
+                               capture_output=True, text=True).stdout
+        return got, before, after
+    root, (got, before, after) = shared(request, tmp_path_factory, "chain-dry", produce)
     return got, root, before, after
 
 
