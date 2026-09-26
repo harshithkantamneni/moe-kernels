@@ -237,6 +237,67 @@ echo "floor block exit $?"; sleep 5
 nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,clocks_event_reasons.active --format=csv | tee "$S/clocks-after-floor.txt"
 ```
 
+**Optional: the byte pages again, at the timed lock** (COUNTERS.md 6.13). The
+pages above count bytes at ncu's base clock; this card's timed R3 pages ran
+under an nvidia-smi lock (the GH200's at 1710 MHz). This block takes a census
+and the four pages again under that lock (`--page-clock none --page-lock-mhz
+F`), so bytes and time are compared at one clock, and gate V10 makes a page
+INVALID when any of its cells ran off F. Same shell as the blocks above,
+inside tmux, and only while nothing else uses the GPU.
+
+- **Commit.** The block needs a bundle whose commit carries `--page-clock`.
+  Its census is its own (`$S/census-lock$F.json`) and its pages go to their
+  own directory (`$R/lock$F`): each capture deletes its own `--out` first, so
+  nothing the base-clock pages wrote is touched.
+- **F.** The lock the timed pages ran at, and one this card holds at every
+  G: 1710 MHz on the GH200 and the H100 (2026-09-25). An F above the card's
+  maximum clock stops the block before the lock.
+- **Stops.** One subshell that stops at the first capture that does not exit
+  0: 2 is refused, 3 is INVALID (a V10 failure is INVALID: the page is
+  written and names its off cells), any other code is the shell or `tee`.
+  After a stop, fix the cause and rerun the block with only the steps that
+  did not pass (the census line out once it has passed): each capture
+  deletes its own `--out` first, and the trap has cleared the lock, which
+  the block sets again.
+- **Locks.** Its trap clears both kinds however it ends, Ctrl-C included, and
+  ignores a second Ctrl-C while it does: ncu's own (`--clock-control reset`)
+  and nvidia-smi's (`-rgc`). Inside the lock no ncu sets a clock: each
+  capture, and the probe each capture runs first, passes `--clock-control
+  none`. The last lines record the clocks after the reset, then score the
+  pages.
+- **TIMED.** The timed reports C5 scores the pages against: this card's
+  VALID R3 report.json files timed at F, space-separated, set on the block's
+  second line before it is pasted. The GH200's of 2026-09-25 are the five
+  under `results/published/2026-09-25-nvidia_gh200_480gb-session/results/gaps-nvidia_gh200_480gb/private_weight_reference/`
+  whose `session_tag` ends `-lock1710`. C5 refuses another card's report, an
+  INVALID one, and one named twice. Left empty, the pages are still scored
+  and C5 is not asked.
+
+```bash
+F=1710                    # the lock this card's timed pages ran at (GH200 and H100: 1710)
+TIMED=""                  # this card's VALID R3 report.json files timed at F (see TIMED above)
+L=$R/lock$F && mkdir -p "$L"
+( set -o pipefail
+  trap 'trap "" INT TERM HUP; moe_counter ncu --clock-control reset >/dev/null 2>&1; sudo -n nvidia-smi -rgc >/dev/null' EXIT
+  trap 'exit 130' INT TERM HUP                             # stop the block; EXIT still resets
+  moe_counter ncu --clock-control reset                    # a clock a killed ncu left, before the lock
+  MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
+  [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
+  sudo -n nvidia-smi -lgc "$F,$F" || exit 2
+  moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --census-only \
+    --page-clock none --page-lock-mhz "$F" --out "$S/census-lock$F.json" 2>&1 \
+    | tee "$S/logs/census-lock$F.log" || exit              # 2 refused, 3 INVALID: stop, read it
+  for G in 64 1 4 2; do
+    moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m $G \
+      --census "$S/census-lock$F.json" --page-clock none --page-lock-mhz "$F" \
+      --out "$L/r3c-g$G.json" 2>&1 | tee "$S/logs/r3c-g$G-lock$F.log" || exit
+  done )
+echo "lock block exit $?"; sleep 5
+nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,clocks_event_reasons.active --format=csv | tee "$S/clocks-after-lock-pages.txt"
+python3 scripts/dram_counter_route.py --analyse "$L"/r3c-g{1,2,4,64}.json \
+  ${TIMED:+--timed-reference $TIMED} --out "$L/summary.json"   # bash splits $TIMED
+```
+
 Do not mix doors on one box: ncu's lock file under `/tmp` is created by the
 first user that runs it, and a root-owned one refuses a later unprivileged ncu.
 The reverse can refuse too: with Ubuntu's `fs.protected_regular`, root's

@@ -12,8 +12,9 @@ when every check PASSED, 1 otherwise, 4 on a crash. A SKIP is a check not run
 because an earlier one already failed, and it counts against the box.
 
   PF1 card    nvidia-smi and torch in BOTH venvs name one card (name and
-              UUID); capability, SMs and L2 are recorded, and the page says
-              when this is not the study's H200.
+              UUID); capability, SMs and L2 are recorded, and the page names
+              the card's role among the study's four cards, or says it is
+              none of them (dram_counter_route.py's `STUDY_CARDS`).
   PF2 wheel   each venv's torch.version.cuda major is at most the driver's
               CUDA major, and a kernel launch succeeds: a PyPI cu13 torch in
               the vLLM venv on a pre-r580 driver fails here, not mid-session.
@@ -70,9 +71,6 @@ FAMILY = "r3-arms"
 #: The three metric classes PF4 and PF5 read off dram_counter_route.py, in the
 #: order STRICT (the run refuses without them), CROSS-CHECK, RECORDED.
 METRIC_CLASSES = ("R3_STRICT_METRICS", "R3_CROSSCHECK_METRICS", "R3_RECORDED_METRICS")
-#: The card every timed page of the study was measured on (H200 sessions 1-5).
-#: A page from any other card is that card's, and says so.
-STUDY_CARD = "nvidia_h200"
 #: Host RAM against the footprint when ncu's first-pass save spills to the host.
 HOST_SAVE_FACTOR = 1.5
 PROBE_TIMEOUT_S = 600
@@ -261,11 +259,17 @@ def implied_code(log_text: str) -> int | None:
 # --------------------------------------------------------------------------
 
 def card_line(t: dict, slug: str) -> str:
+    """The preflight's CARD line, in the pages' own form (`dram_counter_route.
+    card_line`): every number THIS card's, and the card's role among the
+    study's four. Until 2026-09-26 it named one study card, nvidia_h200, as
+    "the study's timing pages"; the roster is dram_counter_route.py's
+    `STUDY_CARDS`, read here and never copied."""
+    from dram_counter_route import study_role
     l2 = t.get("l2_bytes") or 0
     return (f"CARD {t.get('name')} ({slug}, UUID {bare_uuid(t.get('uuid'))}, "
             f"sm_{str(t.get('capability', '?')).replace('.', '')}, {t.get('sm_count')} SMs, "
-            f"{l2 / 2**20:.0f} MiB L2): every number here is THIS card's; the study's timing "
-            f"pages are {STUDY_CARD}.")
+            f"{l2 / 2**20:.0f} MiB L2): every number here is THIS card's; "
+            f"{study_role(slug)}.")
 
 
 def pf1_card(smi: dict | None, base: dict, vllm: dict) -> Check:
@@ -292,14 +296,14 @@ def pf1_card(smi: dict | None, base: dict, vllm: dict) -> Check:
         slug = card_slug(str(base["name"]))
     except Exception as exc:                                          # noqa: BLE001
         return Check("PF1", what, FAIL, f"the card has no slug: {exc}")
+    from dram_counter_route import STUDY_CARDS, study_role
     data = {"name": base["name"], "slug": slug, "uuid": uuids["base"],
             "capability": base.get("capability"), "sm_count": base.get("sm_count"),
             "l2_bytes": base.get("l2_bytes"), "memory_bytes": base.get("memory_bytes"),
-            "driver": smi.get("driver"), "study_card": STUDY_CARD,
-            "same_card_as_study": slug == STUDY_CARD, "card_line": card_line(base, slug)}
-    note = ("" if slug == STUDY_CARD
-            else f"; NOT the study's {STUDY_CARD}: every alpha here is this card's")
-    return Check("PF1", what, PASS, f"{base['name']} ({slug}), UUID {uuids['base']}{note}", data)
+            "driver": smi.get("driver"), "study_role": STUDY_CARDS.get(slug),
+            "card_line": card_line(base, slug)}
+    return Check("PF1", what, PASS, f"{base['name']} ({slug}), UUID {uuids['base']}; "
+                 f"{study_role(slug)}; every number here is this card's", data)
 
 
 def pf2_wheel(smi: dict | None, base: dict, vllm: dict) -> Check:

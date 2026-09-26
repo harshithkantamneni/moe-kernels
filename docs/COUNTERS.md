@@ -816,6 +816,10 @@ not run: under kernel replay ncu's first-pass save of the ~26 GB footprint
 streams through L2 right before the kernel. `--clock-control base` is passed
 and recorded, because the documented default has moved between versions (the
 floor capture of 6.12 passes `none` once, by request: `--floor-clock none`).
+Since 2026-09-26 a page or a census passes `none` under `--page-clock none`,
+so that bytes can be counted under the nvidia-smi lock the timed pages ran
+at (`--page-lock-mhz F`, gate V10, 6.13); every page before that date, and
+every page without the flag, is at the base clock and reads as such.
 
 **Activation re-reads, added 2026-09-24.** The byte model charges each GEMM's
 A operand ONCE per M-tile, the compulsory cold read. The kernel requests it
@@ -897,7 +901,7 @@ bracket stays the page's and no verdict moves. On the Lambda pages one gate
 did: GH200 G=16 C2 reads REFUSE pooled and FAIL on SHARED alone. A page reduced
 before 2026-09-25 lists no per-GEMM calls, so its GEMM brackets are the
 means and V3 holds its every tread to 1%, as it did; `--reduce-only`
-rebuilds it with the lists. C5 at G >= 4 and C6 read the K calls too: the
+rebuilds it with the lists. C5 at G=2 and G >= 4 and C6 read the K calls too: the
 byte ratio over each tread's lowest and highest call, and PRIVATE's lowest
 and highest call, UNKNOWN where they straddle the threshold.
 
@@ -948,7 +952,9 @@ within max(1%, 3 x that GEMM's own repeat spread), and their calls no more
 than 1% apart (NATIVE's lowest above SHARED's highest, or the reverse), so a
 noisy GEMM cannot hide a declaration effect; V8 DRAM bytes agree with 32 x
 the L2 fill sectors within 2% (asked
-only if proven); V9 R3's five-part buffer proof.
+only if proven); V9 R3's five-part buffer proof; V10, only on a page taken
+under `--page-lock-mhz F`, every cell and GEMM's clock within one 15 MHz step
+of F (6.13).
 
 V6 AND THE L2 REQUEST COALESCER (2026-09-25). The arms issue identical loads
 (one kernel binary per GEMM: registers and occupancy limits are equal across
@@ -1069,25 +1075,72 @@ failure is a finding about bytes, PRIVATE's activation re-read localised by
 GEMM, and it says the private arm's timed G-cost is bytes SHARED does not pay
 only as far as SHARED re-reads less; at G >= E n every live M-tile is in one
 group and SHARED is exposed to the same re-reads.
-C5 only with `--timed-reference`, labelled cross-card, comparing alpha(1)'s bracket with
-the timed bracket and the G >= 4 byte ratios with the timed ratios, every timed
-number read from R3's report.json files and none typed. The join refuses a
+C5 only with `--timed-reference`, comparing alpha(1)'s bracket with the timed
+bracket, and the byte ratio at G=2 and G >= 4 with the timed ratio (below it
+is the floor reading), every timed number read from R3's report.json files
+and none typed. THE SAME CARD'S TIMING ONLY (owner, 2026-09-26). Until that
+date C5 was labelled cross-card and read the H200's timed ratios beside a
+Lambda card's bytes; each of the study's four cards keeps its own numbers, so
+the join now refuses a timed report whose card slug is not the pages', naming
+both UUIDs (the timed one off R3's `DEVICE` file beside its report), and the
+gate's lines say SAME-CARD and name both boards. The join also refuses a
 timed report that is planted, that is not VALID by its own gates, or whose
 model, dtype, BLOCK_M or pinned block (G aside) differs from the page's
-design, and refuses to pool one G's runs across two duties or two fit
-windows; each run's duty and fit window are printed beside C5.
+design, and refuses to pool one regime's runs across two fit windows; each
+run's duty and fit window are printed beside C5.
+
+NOT POOLED ACROSS REGIMES (2026-09-26). Runs are pooled per G and per regime:
+the median `sm_clock_load_mhz` of the report's usable timed cells, read off
+the `cells.csv` R3 writes beside it (on a locked report every cell reads the
+lock), rounded to the 15 MHz clock step, and the duty. A report with no
+cells.csv falls back to its `treads_table` rows, each already the median of
+one arm and tread's cells, and its regime says so; the two agree on every
+VALID published report. Until that date one G's runs pooled whatever
+clocks they ran at: the H100's three VALID G=1 reports are all seed 0, timed
+under locks read at 1980, 1800 and 1710 MHz, and pooled they were three seeds
+of one ratio. Two regimes at one G are now two gates, `C5@1710MHz/duty0.25`
+and so on, each on its own reports. The edge C5 scores against is the mean
+less the seed sd over runs at two or more distinct seeds, as registered; at
+one seed the seed sd is 0, so the edge is the lower end of that run's own
+90% interval (`ratio_interval`), or with several runs at that seed the
+lowest of their lower ends, and a run with none is refused. A report named
+twice, or two sharing a run id or a provenance stamp, are refused, as R3's
+own `--replicate-of` refuses them: pooled, one run read twice would score
+against its bare point. An unlocked card's median can land a step either
+side between runs, and such runs are then scored apart rather than pooled.
+
+WHERE C5 IS REGISTERED. At G=1 and G >= 4 as written above, and at G=2 since
+2026-09-26 under the G >= 4 rule (the byte ratio below the timed ratio): the
+group model's staircase at G=2 is 1, 1, 2, 2, 3 over the treads, the timed
+SHARED ladder zig-zags with it, and so G=2's timing follows the traffic only
+in part and is partly floored. G=3, which is no G of the plan and had no
+timed page when C5 was registered, stays un-registered, and its NOT ASKED
+line says why, whether a timed page at G=3 is given or not.
 
 ### 6.9 The card
 
 Every page's first line reads `CARD <name> (<slug>, UUID <uuid>, sm_<cc>, <SMs>
-SMs, <L2> MiB L2): every number here is THIS card's; the study's timing pages
-are nvidia_h200.` The run id carries the live slug, `--analyse` refuses to join
-pages from two UUIDs, two commits, two vLLM versions or two designs, or pages
-that name no commit, and a page without a card block fails V0. The counter
-cards are Lambda's GH200 480GB (the primary card, 60 MiB L2), H100 SXM5 (the
-second Hopper, 50 MiB L2) and A100 40 GB (the non-Hopper control); each
-card's alpha is its own and none is the H200's, which RunPod times without
-counters. The card block's compute capability also
+SMs, <L2> MiB L2): every number here is THIS card's; <role>.`, the role read
+off `STUDY_CARDS` by the card's slug (2026-09-26; before that the line ended
+"the study's timing pages are nvidia_h200", and the logs published before
+then keep it, as records):
+
+| slug | role in the line |
+|---|---|
+| `nvidia_gh200_480gb` | one of the study's four cards: the primary card |
+| `nvidia_h100_80gb_hbm3` | one of the study's four cards: the second Hopper |
+| `nvidia_a100_sxm4_40gb` | one of the study's four cards: the non-Hopper control (bytes only) |
+| `nvidia_h200` | one of the study's four cards: the fourth card (timing only, on RunPod) |
+| any other | not one of the study's four cards |
+
+The card block carries the role as `study_role` (null for any other card),
+and the VM preflight's PF1 prints the same line. The run id carries the live
+slug, `--analyse` refuses to join pages from two UUIDs, two commits, two vLLM
+versions, two designs or two clock regimes (6.13), or pages that name no
+commit, and a page without a card block fails V0. The counter cards are
+Lambda's GH200 480GB (60 MiB L2), H100 SXM5 (50 MiB L2) and A100 40 GB; each
+card's alpha is its own and is never averaged with another card's, and the
+H200 is timed on RunPod without counters. The card block's compute capability also
 picks V6's rule (6.8): the H100 and the GH200 are Hopper (sm_90), which has an
 L2 Request Coalescer, and the A100 (sm_80) counts every load.
 
@@ -1199,4 +1252,47 @@ python scripts/dram_counter_route.py --dry-run --family r3-arms --floor --chip g
 $PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census.json --floor --out $R/r3f-g64.json
 #   then --group-m 2; then, under sudo nvidia-smi -lgc F,F (LAMBDA.md section 3 has the whole block and its resets):
 $PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census.json --floor --floor-clock none --floor-lock-mhz F --out $R/r3f-g64-lockF.json
+```
+
+### 6.13 Byte pages at a held clock (`--page-clock`)
+
+Written 2026-09-26; nothing here has run. Every page and census before that
+date passed `--clock-control base`, the clock ncu holds while it profiles,
+and the GH200's timed R3 pages ran under a 1710 MHz nvidia-smi lock (the
+lock that held at every G on both Hoppers, 6.12), so C5 compared bytes and
+time read at two clocks. That bytes do not follow the SM clock is an
+assumption, not a reading, so the byte pages can now be taken at the lock
+the timed pages ran at, and bytes and time compared at one clock.
+
+`--page-clock none` passes `--clock-control none` to a page's or a census's
+ncu, leaving the clock to the card or to an nvidia-smi lock, and records an
+nvidia-smi reading either side of the capture. The probe `--run` makes
+first, one profiled launch, passes `none` too (and `--floor-clock none`
+does the same for the floor's): left at ncu's default it would hold the
+base clock inside the lock and restore the clock after, and whether that
+restore keeps an nvidia-smi lock has never been read off a box. The capture
+records what its probe passed (`ncu.probe_clock_control`). `--page-lock-mhz F` (only with
+`--page-clock none`) names the lock: the page then also asks
+`sm__cycles_elapsed.avg` (parsed soft and recorded per cell and GEMM beside
+the occupancy, its unit table the floor's), refused before the capture when
+the chip's metric list does not offer it, and gate V10 holds every cell and
+GEMM's clock, those cycles over `gpu__time_duration.sum`, within one 15 MHz
+step of F: INVALID otherwise, the page written and its off cells named (a
+cell whose cycles could not be read is named `no clock`). The census takes
+the same flags for its own capture and records them; it measures launches
+and grids, which no clock moves, so it gates no clock, and a census at
+either clock licenses a page at either. The page records the clock control
+and the lock (`ncu.clock_control`, `ncu.lock_mhz`), the run id carries each
+when it is not the base clock's (so every base-clock page and census keeps
+the id it was published with) and the instrument the clock control,
+`--reduce-only` rebuilds a page at its capture's clock, and `--analyse`
+refuses to join pages of two clock regimes: ncu's base clock against a lock,
+the card's own clock against a lock, or two locks.
+
+```bash
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --census-only --page-clock none --page-lock-mhz F --out $S/census-lockF.json
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census-lockF.json --page-clock none --page-lock-mhz F --out $R/lockF/r3c-g64.json
+#   then --group-m 1, 4, 2, all under sudo nvidia-smi -lgc F,F (LAMBDA.md section 3 has the whole block and its resets)
+#   TIMED: this card's VALID R3 report.json files timed at F, space-separated (LAMBDA.md section 3)
+python scripts/dram_counter_route.py --analyse $R/lockF/r3c-g{1,2,4,64}.json --timed-reference $TIMED
 ```

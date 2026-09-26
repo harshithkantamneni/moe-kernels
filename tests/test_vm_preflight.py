@@ -137,14 +137,31 @@ SMI = VP.parse_smi(f"{H100}, {UUID}, 580.95.05, 81559, 81000",
                    "| NVIDIA-SMI 580.95.05   Driver Version: 580.95.05   CUDA Version: 13.0 |")
 
 
-def test_pf1_names_one_card_and_says_it_is_not_the_studys():
+def test_pf1_names_one_card_and_its_role_among_the_studys_four():
+    """Until 2026-09-26 PF1 named one study card, nvidia_h200, and called every
+    other card "NOT the study's". The study has four cards (owner, 2026-09-25),
+    each keeping its own numbers: PF1 and the CARD line name this card's role
+    from dram_counter_route's roster, or say it is none of the four."""
     ok = VP.pf1_card(SMI, _torch(), _torch())
     assert ok.verdict == VP.PASS, ok.detail
-    assert ok.data["slug"] == "nvidia_h100_80gb_hbm3" and ok.data["same_card_as_study"] is False
+    assert ok.data["slug"] == "nvidia_h100_80gb_hbm3"
+    assert ok.data["study_role"] == "the second Hopper"
+    assert "same_card_as_study" not in ok.data and "study_card" not in ok.data
     assert ok.data["card_line"].startswith(
         "CARD NVIDIA H100 80GB HBM3 (nvidia_h100_80gb_hbm3, UUID 0ffa33b8-")
     assert "132 SMs, 50 MiB L2" in ok.data["card_line"]
-    assert "NOT the study's nvidia_h200" in ok.detail
+    assert ok.data["card_line"].endswith(
+        "every number here is THIS card's; one of the study's four cards: the second "
+        "Hopper.")
+    assert "one of the study's four cards: the second Hopper" in ok.detail
+    assert "nvidia_h200" not in ok.detail and "nvidia_h200" not in ok.data["card_line"]
+    ada = "NVIDIA RTX 6000 Ada Generation"
+    other = VP.pf1_card(VP.parse_smi(f"{ada}, {UUID}, 580.95.05, 49140, 49000",
+                                     "CUDA Version: 13.0"),
+                        _torch(name=ada), _torch(name=ada))
+    assert other.verdict == VP.PASS and other.data["study_role"] is None
+    assert other.data["card_line"].endswith("not one of the study's four cards.")
+    assert "not one of the study's four cards" in other.detail
     other = VP.pf1_card(SMI, _torch(), _torch(uuid="aaaa"))
     assert other.verdict == VP.FAIL and "disagree" in other.detail
     blind = VP.pf1_card(SMI, _torch(), {"torch_error": "ModuleNotFoundError: torch"})

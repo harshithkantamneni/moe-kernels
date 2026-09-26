@@ -21,6 +21,9 @@
     python scripts/dram_counter_route.py --run --family r3-arms --group-m 64 \
                                          --census census.json --floor --floor-clock none \
                                          --floor-lock-mhz 1710 --out r3f-g64-lock1710.json
+    python scripts/dram_counter_route.py --run --family r3-arms --group-m 64 \
+                                         --census census-lock1710.json --page-clock none \
+                                         --page-lock-mhz 1710 --out lock1710/r3c-g64.json
 
 WHY THIS EXISTS. Every alpha in this study is `B / L`, the fraction of one full
 weight read that a second M-tile costs, and `L` is an EXTRAPOLATION of the fitted
@@ -1726,7 +1729,8 @@ def probe_module_flag() -> dict:
 
 
 def ncu_probe_argv(binary: str, log_file: Path,
-                   metrics: tuple[str, ...] = (NCU_PROBE_METRIC,)) -> list[str]:
+                   metrics: tuple[str, ...] = (NCU_PROBE_METRIC,),
+                   clock_control: str | None = None) -> list[str]:
     """The probe invocation: the registered metrics over one real kernel.
 
     The ladder family asks its one metric. The r3-arms family asks its WHOLE
@@ -1759,9 +1763,28 @@ def ncu_probe_argv(binary: str, log_file: Path,
       `--log-file`         ncu's CSV and the child's own stdout otherwise
                            interleave in one stream, and the child's stdout is
                            where the probe kernel's marker line lands.
+
+    And a fifth only when the caller names one (2026-09-26):
+
+      `--clock-control C`  the clock control of the capture this probe
+                           licenses (`r3_probe_clock_control`). Left at ncu's
+                           default the probe holds the base clock while it
+                           profiles its one launch and restores the clock
+                           after, and `do_run_r3` runs it before every page,
+                           census and floor, so under `--page-clock none` or
+                           `--floor-clock none` it runs INSIDE the nvidia-smi
+                           lock the capture is to be read at. Whether ncu's
+                           restore keeps an nvidia-smi lock has never been read
+                           off a box; if it does not, every locked page runs at
+                           the card's own clock and V10 voids it. So there the
+                           probe passes `none` too and sets no clock. The
+                           ladder probe and a base-clock capture's pass
+                           nothing, as before. The 2026-09-26 review found the
+                           probe inside the lock.
     """
     return [binary, "--metrics", ",".join(metrics),
             "--launch-count", "1", "--target-processes", "all",
+            *(("--clock-control", clock_control) if clock_control else ()),
             "--csv", "--page", "raw", "--log-file", str(log_file),
             "--", sys.executable, str(NCU_PROBE_KERNEL)]
 
@@ -1784,7 +1807,7 @@ def probe_kernel_word(blob: str) -> tuple[str, str]:
     return "", ""
 
 
-def probe_ncu(family: str = LADDER_FAMILY) -> dict:
+def probe_ncu(family: str = LADDER_FAMILY, clock_control: str | None = None) -> dict:
     """Is ncu installed, and CAN IT READ A COUNTER ON THIS BOX?
 
     THE DEFECT THIS REPLACES, measured on a rented H200 on 2026-09-15. This
@@ -1849,6 +1872,11 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
     2026-09-24 the retry ran only when the list could not be read, so one
     `launch__` name this ncu does not know read REFUSE on a box whose
     counters work, and `--run --family r3-arms` refused with it.
+
+    `clock_control` is passed to every ask as ncu's `--clock-control`, and
+    recorded as the payload's `clock_control` (None: not passed, ncu's
+    default), so a probe run inside an nvidia-smi lock need not set a clock
+    of its own (`ncu_probe_argv`, 2026-09-26).
     """
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
@@ -1856,7 +1884,8 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
     rc, out, err = _run([binary, "--version"], timeout=30)
     version = (out or err).strip().splitlines()[-1] if (out or err) else ""
     if family != R3_FAMILY:
-        return _probe_once(binary, version, (NCU_PROBE_METRIC,), ())
+        return _probe_once(binary, version, (NCU_PROBE_METRIC,), (),
+                           clock_control=clock_control)
     names, query = query_metric_names(binary)
     strict, optional, dropped, refused = r3_probe_metrics(names)
     if refused:
@@ -1865,7 +1894,8 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
                 "probe_kernel": "NOT_RUN", "probe_kernel_detail": "",
                 "counters_read": False, "permission_refused": False,
                 "metric_value": None, "metrics_query": query,
-                "metrics_dropped": dropped, "cause": refused, "output_head": ""}
+                "metrics_dropped": dropped, "cause": refused, "output_head": "",
+                "clock_control": clock_control}
     verified = () if names is None else tuple(m for m in optional
                                               if not m.startswith("launch__"))
     asks: list[tuple[str, ...]] = []
@@ -1875,7 +1905,8 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
     attempts: list[dict] = []
     info: dict = {}
     for ask in asks:
-        info = _probe_once(binary, version, strict, ask, family=R3_FAMILY)
+        info = _probe_once(binary, version, strict, ask, family=R3_FAMILY,
+                           clock_control=clock_control)
         error = next((ln.strip() for ln in str(info.get("output_head") or "").splitlines()
                       if "==ERROR==" in ln), "")
         attempts.append({"metrics": list(strict + ask),
@@ -1903,15 +1934,19 @@ def probe_ncu(family: str = LADDER_FAMILY) -> dict:
 
 
 def _probe_once(binary: str, version: str, strict: tuple[str, ...],
-                optional: tuple[str, ...], family: str = LADDER_FAMILY) -> dict:
-    """One profiled launch of the probe kernel asking `strict + optional`."""
+                optional: tuple[str, ...], family: str = LADDER_FAMILY,
+                clock_control: str | None = None) -> dict:
+    """One profiled launch of the probe kernel asking `strict + optional`, at
+    `clock_control` (None: ncu's default), which the payload records."""
     with tempfile.TemporaryDirectory(prefix="ncu-counter-probe-") as tmp:
         log_file = Path(tmp) / "probe.csv"
-        rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file, strict + optional),
+        rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file, strict + optional,
+                                              clock_control=clock_control),
                                timeout=NCU_PROBE_TIMEOUT_S)
         log_text = log_file.read_text() if log_file.exists() else ""
-    return probe_reading(binary, version, rc2, out2, err2, log_text,
-                         strict=strict, optional=optional, family=family)
+    return {**probe_reading(binary, version, rc2, out2, err2, log_text,
+                            strict=strict, optional=optional, family=family),
+            "clock_control": clock_control}
 
 
 def query_metric_names(binary: str, chip: str = "") -> tuple[frozenset[str] | None, str]:
@@ -2998,6 +3033,21 @@ def run_id_for(mode: str, args, card: str) -> str:
                          clock_control=getattr(args, "floor_clock", "base"))
             if getattr(args, "floor_lock_mhz", None) is not None:
                 knobs["lock_mhz"] = args.floor_lock_mhz
+        else:
+            # A page's and a census's clock control and lock, the same way
+            # (2026-09-26, `--page-clock`, `--page-lock-mhz`): a page at the
+            # base clock and one under a lock at the same G are two readings,
+            # and two ids. Each is a knob only when it is not what every page
+            # before that date ran at, as the lock is above: a draft of this
+            # branch always added `clock_control`, which moved the id of every
+            # base-clock page and census, so a `--reduce-only` rebuild of a
+            # published capture no longer reproduced its page's id (the
+            # 2026-09-26 review found it). The base clock adds nothing, and
+            # `none` and each lock still get ids of their own.
+            if getattr(args, "page_clock", "base") != "base":
+                knobs["clock_control"] = args.page_clock
+            if getattr(args, "page_lock_mhz", None) is not None:
+                knobs["lock_mhz"] = args.page_lock_mhz
     elif mode == "run":
         # Everything the profiler consumed, and the two knobs a timed run does
         # not have: the cache-control mode and the marker the call count was
@@ -4262,8 +4312,9 @@ def do_analyse(args) -> int:
 #
 # WHAT IT DOES NOT DO. It uses no ridge, no bandwidth and no calibration, so
 # `--card` is not read and `measured_ridge` does not gate it. Its bytes are
-# the ATTACHED card's: every page's first line names that card
-# (`card_line`), and none of them is the study's H200.
+# the ATTACHED card's: every page's first line names that card and its role
+# among the study's four (`card_line`, `STUDY_CARDS`), and no page's bytes are
+# averaged with another card's.
 # ==========================================================================
 
 #: The metrics the family asks, in three classes, and the reason for each.
@@ -4417,6 +4468,19 @@ R3_FLOOR_LOCK_STEP_MHZ = 15.0
 R3_FLOOR_SMI_FIELDS: tuple[str, ...] = (
     "uuid", "clocks.sm", "power.draw", "power.limit", "clocks_event_reasons.active",
     "persistence_mode")
+#: BYTE PAGES AT A HELD CLOCK (`--page-clock none --page-lock-mhz F`,
+#: 2026-09-26). Until this date only `--floor` could run under an nvidia-smi
+#: lock, and every page and census passed `--clock-control base`, the clock
+#: ncu holds. The GH200's timed R3 pages ran at a 1710 MHz lock (the one lock
+#: that held at every G on both Hoppers; see `R3_FLOOR_LOCK_STEP_MHZ`), so a
+#: page at ncu's base clock compared bytes and time taken at two clocks. Under a
+#: lock a page also asks this metric, parsed SOFT and recorded per cell and
+#: GEMM beside the occupancy (`r3_reduce_cells`), and V10 holds every cell's
+#: clock, these cycles over `gpu__time_duration.sum`, within one
+#: `R3_FLOOR_LOCK_STEP_MHZ` of F, as FL1 holds the floor's: a lock is read
+#: back, never assumed. It is not asked at the base clock, where a page asks
+#: what it always asked. Its unit table is the floor's (`_floor_unit`).
+R3_PAGE_CLOCK_METRIC = "sm__cycles_elapsed.avg"
 
 
 def _floor_unit(metric: str) -> tuple[str, dict[str, float]]:
@@ -4487,14 +4551,38 @@ R3_KERNEL_FILTER = "regex:^fused_moe_kernel$"
 #: The script whose `--counter-child` mode ncu runs.
 R3_CHILD = REPO / "scripts" / "private_weight_reference.py"
 
-#: The card the study's timing pages were measured on. Every page and
-#: summary says whether it is this one; none of the counter boxes is.
-STUDY_CARD = "nvidia_h200"
+#: THE STUDY'S FOUR CARDS AND THE ROLE OF EACH, keyed by the slug
+#: `provenance.card_slug` gives it (owner, 2026-09-25). Each card keeps its own
+#: numbers and none is ever averaged with another's. Until 2026-09-26 this was
+#: one slug, `STUDY_CARD = "nvidia_h200"`, and every page's first line said
+#: "the study's timing pages are nvidia_h200": true of sessions 1 to 6, and
+#: false from the day the GH200 became the primary card and timed its own R3
+#: on Lambda. `card_line` here and PF1 in `scripts/vm_preflight.py` print the
+#: card's own role from this table (`study_role`), or that it is none of the
+#: four; the logs published before the change keep the old line, as records.
+STUDY_CARDS: dict[str, str] = {
+    "nvidia_gh200_480gb": "the primary card",
+    "nvidia_h100_80gb_hbm3": "the second Hopper",
+    "nvidia_a100_sxm4_40gb": "the non-Hopper control (bytes only)",
+    "nvidia_h200": "the fourth card (timing only, on RunPod)",
+}
+
+
+def study_role(slug) -> str:
+    """What the study's roster (`STUDY_CARDS`) says of the card `slug`: its
+    role among the four cards, or that it is not one of them."""
+    role = STUDY_CARDS.get(str(slug or ""))
+    return (f"one of the study's four cards: {role}" if role
+            else "not one of the study's four cards")
+
 
 #: The keys a card block carries, and the ones V0 requires non-empty.
+#: `study_role` is the card's role in `STUDY_CARDS`, None for any other card;
+#: pages written before 2026-09-26 carry `study_card` and `same_card_as_study`
+#: in its place, which nothing reads.
 R3_CARD_KEYS: tuple[str, ...] = ("name", "slug", "uuid", "sm_count", "l2_bytes",
                                  "capability", "memory_bytes", "driver",
-                                 "study_card", "same_card_as_study")
+                                 "study_role")
 R3_CARD_REQUIRED: tuple[str, ...] = ("name", "uuid", "sm_count", "l2_bytes",
                                      "capability", "driver")
 
@@ -4570,9 +4658,12 @@ R3_COST_PREFLIGHT_S = 180.0
 R3_VM_BOOKING_H = 1.5
 
 #: The instruments the family's modes stamp. None is `timing.TIMING_BASIS`.
-R3_RUN_INSTRUMENT = ("nsight-compute/dram-counters/replay-mode-kernel/cache-control-all/"
-                     "clock-control-base/r3-arms-fused_moe_kernel-launches-attributed-"
-                     "by-order-and-grid; NOT timing.TIMING_BASIS")
+#: A page's names the clock control it ran at (`--page-clock`, 2026-09-26);
+#: `R3_RUN_INSTRUMENT` is the base clock's, every page's until that date.
+R3_RUN_INSTRUMENT_AT = ("nsight-compute/dram-counters/replay-mode-kernel/cache-control-all/"
+                        "clock-control-{clock}/r3-arms-fused_moe_kernel-launches-"
+                        "attributed-by-order-and-grid; NOT timing.TIMING_BASIS")
+R3_RUN_INSTRUMENT = R3_RUN_INSTRUMENT_AT.format(clock="base")
 R3_CENSUS_INSTRUMENT = ("nsight-compute/launch-census/no-skip-no-cap/fused_moe_kernel-only; "
                         "counts launches and reads grids, times nothing")
 R3_ANALYSE_INSTRUMENT = "arithmetic-over-r3-counter-pages/no-kernel-timed"
@@ -4597,12 +4688,14 @@ R3_SCHEMA_TEXT = """\
   "family": "r3-arms", "schema": 1, "run_id": "<live card slug>-...",
   "provenance": {...},     # commit, dirty, host: the PV stamp
   "card": {"name", "slug", "uuid", "sm_count", "l2_bytes", "capability",
-           "memory_bytes", "driver", "study_card": "nvidia_h200",
-           "same_card_as_study"},        # THE LIVE DEVICE, never --card
+           "memory_bytes", "driver",
+           "study_role": "the primary card"|...|null},  # THE LIVE DEVICE, never --card
   "stack": {"torch", "triton", "vllm", "python"},
   "ncu": {"binary", "version", "argv", "replay_mode": "kernel",
-          "cache_control": "all", "clock_control": "base", "report",
-          "report_sha256", "csv", "csv_layout": "wide"|"long",
+          "cache_control": "all", "clock_control": "base"|"none",
+          "lock_mhz": F|null, "probe_clock_control": "none"|null,
+          "smi_before", "smi_after",  # the two only at none
+          "report", "report_sha256", "csv", "csv_layout": "wide"|"long",
           "metrics_asked", "metrics_dropped", "capture_commit"},
   "design": {"model", "dtype", "block_m", "block_n", "block_k", "num_warps",
              "num_stages", "group_m", "treads", "arms", "copies_declared",
@@ -4620,7 +4713,8 @@ R3_SCHEMA_TEXT = """\
               "per_gemm": {"w1": {..., "grid_size"}, "w2": {...}},
               "per_call_values": [K reads], "spread_rel": 0.001,
               "per_gemm_values": {"w1": [K reads], "w2": [K reads]},
-              "recorded": {"w1": {occupancy ...}, "w2": {...}} }, ... ],
+              "recorded": {"w1": {occupancy ..., and sm__cycles_elapsed.avg
+                                  under an nvidia-smi lock}, "w2": {...}} }, ... ],
   "group_model": {"model", "q": {"n": group_reads(E, n, G)}},
   "estimates": {"alpha_bracket": {"total", "w1", "w2"}: [lo, hi],
                 "e_P", "q_S_bracket", "alpha_slope": {"total", "w1", "w2"},
@@ -4653,9 +4747,20 @@ R3_SCHEMA_TEXT = """\
   q; alpha_bracket is the least and greatest OLS slope over it, and
   alpha_slope the slope of q_S's K-call means. C1, C2, C3 and C5 at G=1
   are scored on both edges and read UNKNOWN where they disagree; C5 at
-  G >= 4 reads alpha_ratio_bracket, the byte ratio over each tread's
-  lowest and highest call, and C6 PRIVATE's lowest and highest call, the
-  same way.
+  G=2 and G >= 4 reads alpha_ratio_bracket, the byte ratio over each
+  tread's lowest and highest call, and C6 PRIVATE's lowest and highest
+  call, the same way.
+
+  THE CLOCK. `ncu.clock_control` is `base` (ncu holds the base clock, the
+  default) or `none` (`--page-clock none`: the clock the card picks, or an
+  nvidia-smi lock). Under a lock, `ncu.lock_mhz` is F, every cell's
+  `recorded` carries `sm__cycles_elapsed.avg`, and V10 holds each cell and
+  GEMM's clock, those cycles over `gpu_time_ns`, within one 15 MHz step of
+  F. `ncu.probe_clock_control` is what the probe run before the capture
+  passed: `none` beside a `none` capture, so the probe sets no clock inside
+  the lock either, and null (ncu's default) at the base clock. Pages written
+  before 2026-09-26 carry neither `lock_mhz` nor `probe_clock_control` and
+  read as base.
 """
 
 
@@ -5063,22 +5168,23 @@ def live_card_block() -> dict | None:
             "l2_bytes": int(getattr(props, "L2_cache_size", 0) or 0) or None,
             "capability": f"{props.major}.{props.minor}",
             "memory_bytes": int(props.total_memory), "driver": driver,
-            "study_card": STUDY_CARD, "same_card_as_study": slug == STUDY_CARD}
+            "study_role": STUDY_CARDS.get(slug)}
 
 
 def card_line(card) -> str:
     """THE FIRST LINE OF EVERY PAGE AND SUMMARY: which card every number on it
-    belongs to, and that it is not the study's H200 unless it is."""
+    belongs to, and that card's role among the study's four (`study_role`),
+    or that it is none of them."""
     if not isinstance(card, dict) or not card.get("name"):
         return ("CARD none: this page carries no card block, so nothing on it names "
-                "the card it came from, and V0 fails it; the study's timing pages "
-                f"are {STUDY_CARD}.")
+                "the card it came from, and V0 fails it; no number here can be "
+                "given to any of the study's four cards.")
     cc = str(card.get("capability") or "?").replace(".", "")
     l2 = card.get("l2_bytes")
     l2_text = f"{l2 / 2 ** 20:g}" if l2 else "?"
     return (f"CARD {card['name']} ({card.get('slug')}, UUID {card.get('uuid')}, "
             f"sm_{cc}, {card.get('sm_count')} SMs, {l2_text} MiB L2): every number "
-            f"here is THIS card's; the study's timing pages are {STUDY_CARD}.")
+            f"here is THIS card's; {study_role(card.get('slug'))}.")
 
 
 def r3_coalesces(card) -> bool | None:
@@ -5095,6 +5201,35 @@ def r3_coalesces(card) -> bool | None:
     cap = card.get("capability") if isinstance(card, dict) else None
     m = re.fullmatch(r"(\d+)\.(\d+)", str(cap).strip()) if cap not in (None, "") else None
     return None if m is None else int(m.group(1)) >= R3_COALESCING_MAJOR
+
+
+def r3_page_clock(payload: dict) -> tuple[str, float | None]:
+    """`(ncu clock control, nvidia-smi lock in MHz or None)` a page or census
+    was captured at, off its `ncu` block (`--page-clock`, `--page-lock-mhz`).
+    A page written before 2026-09-26 passed `--clock-control base` and names
+    no lock, and reads `("base", None)`."""
+    ncu = payload.get("ncu") or {}
+    lock = ncu.get("lock_mhz")
+    return str(ncu.get("clock_control") or "base"), (None if lock is None else float(lock))
+
+
+def r3_clock_word(control: str, lock: float | None) -> str:
+    """A page's clock regime as a person reads it."""
+    if lock is not None:
+        return f"an nvidia-smi lock of {lock:g} MHz (ncu --clock-control {control})"
+    if control == "base":
+        return "ncu's base clock (--clock-control base)"
+    return f"the clock the card chose, no lock (ncu --clock-control {control})"
+
+
+def r3_cell_clock_mhz(cell: dict, gemm: str) -> float | None:
+    """The SM clock one page cell's GEMM ran at, in MHz, off its own counters:
+    `R3_PAGE_CLOCK_METRIC` (recorded under a lock, the mean over the K calls)
+    over the mean `gpu_time_ns`, as `r3_floor_cells` reads the floor's. None
+    where either is missing, which V10 names as `no clock`."""
+    cyc = ((cell.get("recorded") or {}).get(gemm) or {}).get(R3_PAGE_CLOCK_METRIC)
+    ns = ((cell.get("per_gemm") or {}).get(gemm) or {}).get("gpu_time_ns")
+    return 1e3 * cyc / ns if cyc and ns else None
 
 
 def r3_same_live_pids(design: dict, grid_a: int, grid_b: int, gemm: str, n: int) -> bool:
@@ -5244,11 +5379,14 @@ def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
                               the kernel, so "none" is "the L2 ncu's save left".
       `--clock-control base`  passed and recorded: the documented default has
                               moved between versions, and bytes should not
-                              care, so no default is trusted. Only `--floor
+                              care, so no default is trusted. `--floor
                               --floor-clock none` passes `none`: L2 and DRAM
                               do not follow the SM clock, so one floor file
                               is read at the clock the card picks, or at an
-                              nvidia-smi lock (`--floor-lock-mhz`).
+                              nvidia-smi lock (`--floor-lock-mhz`). And since
+                              2026-09-26 `--page-clock none` does, for a page
+                              or a census under a lock (`--page-lock-mhz`),
+                              so bytes and time are read at one clock.
       `-k regex:^fused_moe_kernel$ --kernel-name-base function`
                               the GEMM launches only; the alignment, the
                               activation and the reduction run unprofiled.
@@ -5406,7 +5544,9 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
             vals["grid_size"] = grids.pop() if len(grids) == 1 else None
             per_gemm[g] = vals
             rec = {}
-            for metric in R3_RECORDED_METRICS:
+            # The page's clock counter rides here too, and only a page taken
+            # under a lock asks it (`R3_PAGE_CLOCK_METRIC`, V10).
+            for metric in R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,):
                 xs = [ln.metrics[metric] for ln in runs if metric in ln.metrics]
                 if len(xs) == k:
                     rec[metric] = statistics.fmean(xs)
@@ -5494,8 +5634,8 @@ def r3_estimates(payload: dict, *, pool: tuple[str, ...] = R3_BRACKET_POOL) -> d
     ratio, over every byte both arms read, on the K-call means;
     `alpha_ratio_bracket` is the least and greatest ratio any series inside
     each tread's lowest and highest single call allows (`ols_slope_bounds` on
-    each arm, then the four corners), which C5 scores at G >= 4 since V3 no
-    longer voids a spread at n >= 2. `alpha_diff` is 1 - (slope_P - slope_S)
+    each arm, then the four corners), which C5 scores at G=2 and G >= 4 since
+    V3 no longer voids a spread at n >= 2. `alpha_diff` is 1 - (slope_P - slope_S)
     / W, the slope of q_S - (q_P - n) on the means: it cancels an activation
     term only where it is IDENTICAL in both arms, and PRIVATE's wider slab
     traffic evicts A at least as often as SHARED's.
@@ -5586,24 +5726,141 @@ def _timed_value(rep: dict, key: str):
     return rep.get(key)
 
 
-def load_timed_reference(paths) -> dict[int, dict]:
-    """R3's timed report.json files, grouped by GROUP_SIZE_M: the ratio each
-    reads, their mean and sd across seeds, the card they were timed on, and
-    each run's duty and fit window. READ, never typed: the 0.915 / 0.706 /
-    0.680 / 0.617 of session 5 are whatever these files hold.
+#: THE TIMED REGIME, the pooling key beside G (2026-09-26). A timed ratio is a
+#: reading at one operating point, its duty and the SM clock its cells ran
+#: at, and until this date `load_timed_reference` pooled every VALID report
+#: at one G as seed replicates, a mean and a seed sd over whatever clocks they
+#: ran at. The H100's three VALID G=1 reports on Lambda (2026-09-25) are all
+#: seed 0, timed under locks their cells read at 1980, 1800 and 1710 MHz, so
+#: pooled they were three "seeds" of one ratio. The clock is the median
+#: `sm_clock_load_mhz` of the report's usable timed cells (R3's `Sample.usable`,
+#: read off the `cells.csv` R3 writes beside every report; on a locked report
+#: every cell reads the lock), rounded to `R3_FLOOR_LOCK_STEP_MHZ`, the clock
+#: step Hopper lists. A report with no cells.csv beside it, or none of whose
+#: usable cells names a clock, falls back to the median of its `treads_table`
+#: rows, each already the median of one arm and tread's usable cells, and the
+#: regime says so (`R3_TIMED_CLOCK_ROWS`). The two agree on every VALID
+#: published report; they part on skewed runs (the H200's session 6 G=1 at
+#: duty 0.5 reads 1890 MHz by rows and 1905 by cells), so the cells, the
+#: spec's reading, come first. A draft of 2026-09-26 read the rows only (the
+#: review of that day found it). An unlocked card's median can move by a step
+#: between runs (the H200's session 5 read 1950 MHz at G=1 and 1965 at G=4, its
+#: three seeds at each G agreeing); two runs at one G a step apart are then two
+#: regimes, each scored on its own, never pooled. A report that names no clock
+#: either way is a regime of its own, its clock `None`.
+R3_TIMED_CLOCK_FIELD = "sm_clock_load_mhz"
+#: Where a timed report's clock was read: its cells, or (the fallback) its
+#: `treads_table` rows, or neither.
+R3_TIMED_CLOCK_CELLS = "cells.csv"
+R3_TIMED_CLOCK_ROWS = "treads_table"
+R3_TIMED_CLOCK_NONE = "none"
+
+
+def timed_report_clock(rep: dict, path=None) -> tuple[float | None, str]:
+    """`(the SM clock a timed report's cells ran at in MHz, where it was read)`:
+    the median `sm_clock_load_mhz` of the usable cells in the `cells.csv`
+    beside `path`, else of its `treads_table` rows, rounded to the nearest
+    `R3_FLOOR_LOCK_STEP_MHZ`; `(None, R3_TIMED_CLOCK_NONE)` where neither
+    names a clock."""
+    step = R3_FLOOR_LOCK_STEP_MHZ
+    cells = _r3().read_samples(Path(path).parent / "cells.csv") if path is not None else []
+    clocks = [float(s.sm_clock_load_mhz) for s in cells
+              if s.usable and s.sm_clock_load_mhz]
+    source = R3_TIMED_CLOCK_CELLS
+    if not clocks:
+        clocks = [float(row[R3_TIMED_CLOCK_FIELD]) for row in rep.get("treads_table") or []
+                  if isinstance(row, dict) and row.get(R3_TIMED_CLOCK_FIELD)]
+        source = R3_TIMED_CLOCK_ROWS
+    if not clocks:
+        return None, R3_TIMED_CLOCK_NONE
+    return math.floor(statistics.median(clocks) / step + 0.5) * step, source
+
+
+def timed_regime_word(ref: dict) -> str:
+    """`1710 MHz, duty 0.25`: a timed regime as a person reads it, naming the
+    fallback where any run's clock came off its `treads_table` rows."""
+    clock = ref.get("clock_mhz")
+    rows = [r for r in ref.get("runs") or () if r.get("clock_source") == R3_TIMED_CLOCK_ROWS]
+    return ((f"{clock:g} MHz" if clock is not None else "clock unread")
+            + f", duty {ref.get('duty', 1.0):g}"
+            + (f" (the clock read off the treads_table rows of {len(rows)} of its "
+               f"{len(ref['runs'])} runs: no usable clocked cell in a cells.csv beside "
+               "them)" if rows else ""))
+
+
+def timed_regime_tag(ref: dict) -> str:
+    """`1710MHz/duty0.25`: a timed regime as one token, the suffix C5's gate
+    takes where one G has references at several regimes."""
+    clock = ref.get("clock_mhz")
+    return ((f"{clock:g}MHz" if clock is not None else "unclocked")
+            + f"/duty{ref.get('duty', 1.0):g}")
+
+
+def _timed_uuid(path: Path) -> str | None:
+    """The UUID R3 wrote beside a timed report (its `DEVICE` file, which
+    `device_guard` writes on the run's first cell), or None without one: R3's
+    report.json names the card's slug and not the card."""
+    device = Path(path).parent / _r3().DEVICE_FILE
+    try:
+        return device.read_text().strip() or None
+    except OSError:
+        return None
+
+
+def load_timed_reference(paths, *, card) -> dict[int, list[dict]]:
+    """R3's timed report.json files, grouped by GROUP_SIZE_M and, inside a G,
+    by the regime they were timed at (`timed_report_clock` and the duty): one
+    reference per (G, regime), each with the ratio every run reads, their mean
+    and seed sd, the edge C5 scores against, the card and each run's UUID, and
+    each run's fit window. READ, never typed: the 0.915 / 0.706 / 0.680 /
+    0.617 of session 5 are whatever these files hold. `card` is the counter
+    pages' card block.
 
     REFUSES what R3 itself would not pool as a replicate. Until 2026-09-24
     this read only the experiment, the ratio, G, the card, the seed and the
     window, so C5 scored a page's bytes against a planted report, an INVALID
     one, or one from another tile, model, dtype or duty. Now a report that is
     not R3's, formed no ratio, is planted (`synthetic`), or whose own VALIDITY
-    gates did not all PASS is refused; the runs pooled at one G must share
-    R3's design (`R3_TIMED_DESIGN`, the duty and the fit window), because a
-    mean and sd over two designs is two estimators in one envelope; and the
-    page's own design is held to them by `timed_reference_mismatch`.
+    gates did not all PASS is refused; the runs pooled at one (G, regime) must
+    share R3's design (`R3_TIMED_DESIGN` and the fit window), because a mean
+    and sd over two designs is two estimators in one envelope; and the page's
+    own design is held to them by `timed_reference_mismatch`.
+
+    ONE CARD (owner, 2026-09-26). C5 was labelled CROSS-CARD and compared the
+    bytes of a Lambda card with the H200's timing. Each of the study's four
+    cards keeps its own numbers (`STUDY_CARDS`), so a report timed on another
+    card than the pages' (R3's `card` slug against the pages' slug,
+    `timed_reference_card_mismatch`) is REFUSED, the refusal printing both
+    UUIDs. The slug is what is compared: two boards of one card type are one
+    card here, and the UUIDs say which boards they were.
+
+    NOT POOLED ACROSS REGIMES (2026-09-26, `R3_TIMED_CLOCK_FIELD`). Two duties
+    or two clocks at one G are two references, each scored on its own, where
+    until this date two duties refused and two clocks pooled. THE EDGE: with
+    runs at two or more DISTINCT seeds it is their mean less their sd, the
+    seed sd, as registered. With one seed the seed sd is 0, which would score
+    a byte ratio against the bare point, so the edge is the lower end of that
+    run's own interval (`ratio_interval`, R3's `INTERVAL_PCT` bootstrap band,
+    90%), and with several runs at that one seed the lowest of their lower
+    ends; a run with no interval is then refused. Until the 2026-09-26 review
+    the rule counted runs, not seeds, so two reruns at one seed, or one report
+    named twice, pooled as "the mean less its seed sd" with an sd near 0: the
+    bare point the interval rule was written to remove. A seed a report does
+    not record is no seed here, so it never makes a second one.
+
+    ONE RUN, ONE READING (2026-09-26). R3's `load_replicates` refuses a
+    replicate named twice, or one whose run id or provenance stamp another
+    already carries, and this loader pooled whatever it was given: a
+    `--timed-reference` glob over a `results/` copy and a `results/published/`
+    copy of one run read it twice. The same three duplicates are refused
+    here, by the same keys (the resolved path, `run_id`, and R3's
+    `RunReading.stamp`, the provenance `utc@hostname`).
     """
     r3 = _r3()
-    by_g: dict[int, list[dict]] = {}
+    slug, page_uuid = ((card.get("slug"), card.get("uuid")) if isinstance(card, dict)
+                       else (None, None))
+    by_key: dict[tuple, list[dict]] = {}
+    read_by: dict[str, dict] = {"path": {}, "run id": {}, "provenance stamp": {}}
     for p in paths or ():
         rep = json.loads(Path(p).read_text())
         if rep.get("experiment") != "private_weight_reference" or rep.get("ratio") is None:
@@ -5621,28 +5878,91 @@ def load_timed_reference(paths) -> dict[int, dict]:
                 f"{p} is not a VALID R3 page ("
                 + (f"VALIDITY gates {broken}" if broken else "it carries no gates")
                 + "); its ratio is not quotable, so C5 does not compare with it")
+        uuid = _timed_uuid(Path(p))
+        # A page that names no card (V0 fails it) is no card's: nothing joins it.
+        if not slug or rep.get("card") != slug:
+            raise CounterRunRefused(
+                f"{p} was timed on {rep.get('card')} (UUID "
+                f"{uuid or 'unread: no DEVICE file beside the report'}) and the counter "
+                f"pages are {slug} (UUID {page_uuid}); C5 compares one card's bytes with "
+                "that card's own timing, and each of the study's cards keeps its own "
+                "numbers")
+        prov = rep.get("provenance") or {}
+        keys = {"path": str(Path(p).resolve()), "run id": rep.get("run_id"),
+                "provenance stamp": (f"{prov['utc']}@{prov['hostname']}"
+                                     if prov.get("utc") and prov.get("hostname") else None)}
+        for what, key in keys.items():
+            if key and key in read_by[what]:
+                raise CounterRunRefused(
+                    (f"{p} is named twice" if what == "path" else
+                     f"{p} repeats {read_by[what][key]}: the same {what} ({key})")
+                    + "; R3 refuses a replicate it has already read, and one run read "
+                    "twice is still one run, with no seed sd")
+        for what, key in keys.items():
+            if key:
+                read_by[what][key] = str(p)
+        iv = rep.get("ratio_interval") or [None, None]
         g = int(rep["pinned"]["GROUP_SIZE_M"])
-        by_g.setdefault(g, []).append({
+        duty = float(r3.design_value(rep, "duty"))
+        clock, clock_source = timed_report_clock(rep, Path(p))
+        by_key.setdefault((g, clock, duty), []).append({
             "path": str(p), "ratio": float(rep["ratio"]), "card": rep.get("card"),
-            "seed": rep.get("seed"),
-            "duty": float(r3.design_value(rep, "duty")),
+            "uuid": uuid, "seed": rep.get("seed"), "duty": duty, "clock_mhz": clock,
+            "clock_source": clock_source,
+            "interval": ([float(iv[0]), float(iv[1])]
+                         if iv[0] is not None and iv[1] is not None else None),
+            "interval_pct": rep.get("ratio_interval_pct"),
             "claim_min_tread": int(r3.design_value(rep, "claim_min_tread")),
             "design": {k: _timed_value(rep, k) for k, _page_key in R3_TIMED_DESIGN}})
-    out = {}
-    for g, rows in by_g.items():
-        for key in ("design", "duty", "claim_min_tread"):
+    out: dict[int, list[dict]] = {}
+    for (g, clock, duty), rows in sorted(
+            by_key.items(), key=lambda kv: (kv[0][0], kv[0][1] is None, kv[0][1] or 0.0,
+                                            kv[0][2])):
+        regime = timed_regime_word({"clock_mhz": clock, "duty": duty})
+        for key in ("design", "claim_min_tread"):
             seen = {json.dumps(r[key], sort_keys=True) for r in rows}
             if len(seen) > 1:
                 raise CounterRunRefused(
-                    f"the timed reports at G={g} differ in {key} ({sorted(seen)}); a "
-                    "mean and sd over two designs pools two estimators, which R3 "
-                    "refuses for its own replicates")
+                    f"the timed reports at G={g} ({regime}) differ in {key} "
+                    f"({sorted(seen)}); a mean and sd over two designs pools two "
+                    "estimators, which R3 refuses for its own replicates")
         ratios = [r["ratio"] for r in rows]
-        out[g] = {"G": g, "mean": statistics.fmean(ratios),
-                  "sd": statistics.stdev(ratios) if len(ratios) >= 2 else 0.0,
-                  "runs": rows, "cards": sorted({str(r["card"]) for r in rows}),
-                  "design": rows[0]["design"], "duty": rows[0]["duty"],
-                  "windows": sorted({int(r["claim_min_tread"]) for r in rows})}
+        mean = statistics.fmean(ratios)
+        seeds = sorted({int(r["seed"]) for r in rows if r["seed"] is not None})
+        if len(seeds) >= 2:
+            sd = statistics.stdev(ratios)
+            edge = mean - sd
+            basis = (f"the mean less its seed sd over {len(rows)} runs at seeds "
+                     f"{', '.join(map(str, seeds))}")
+            interval = None
+        else:
+            bare = [r["path"] for r in rows if r["interval"] is None]
+            if bare:
+                raise CounterRunRefused(
+                    f"the timed reports at G={g} ({regime}) are at one seed, so their "
+                    "seed sd is 0 and the edge C5 scores against is their own interval, "
+                    f"and {_worst(bare)} carries no ratio_interval")
+            sd = 0.0
+            interval = [min(r["interval"][0] for r in rows),
+                        max(r["interval"][1] for r in rows)]
+            edge = interval[0]
+            pcts = sorted({r["interval_pct"] for r in rows if r["interval_pct"] is not None})
+            pct = f"{pcts[0]:g}% " if len(pcts) == 1 else ""
+            at = f"one seed, {seeds[0]}" if seeds else "no recorded seed"
+            basis = (f"one run, so no seed sd: the lower end of its own "
+                     f"{pct}interval [{interval[0]:.4f}, {interval[1]:.4f}]"
+                     if len(rows) == 1 else
+                     f"{len(rows)} runs at {at}, so no seed sd: the lowest "
+                     f"lower end of their own {pct}intervals, {edge:.4f}, their "
+                     f"envelope [{interval[0]:.4f}, {interval[1]:.4f}]")
+        out.setdefault(g, []).append({
+            "G": g, "clock_mhz": clock, "duty": duty, "mean": mean, "sd": sd,
+            "seeds": seeds,
+            "interval": interval, "edge": edge, "edge_basis": basis, "runs": rows,
+            "cards": sorted({str(r["card"]) for r in rows}),
+            "uuids": sorted({r["uuid"] or "unread" for r in rows}),
+            "design": rows[0]["design"],
+            "windows": sorted({int(r["claim_min_tread"]) for r in rows})})
     return out
 
 
@@ -5654,6 +5974,21 @@ def timed_reference_mismatch(ref: dict, design: dict) -> list[str]:
             f"{design.get(page_key)!r}"
             for key, page_key in R3_TIMED_DESIGN
             if ref["design"].get(key) != design.get(page_key)]
+
+
+def timed_reference_card_mismatch(ref: dict, card) -> str:
+    """Why a (G, regime)'s timed reports are not the counter page's card, or
+    "" when they are: every report's card slug must be the page's. The loader
+    refuses such a report before any page is scored and C5 does not ask
+    itself against one, so one rule decides both, as
+    `timed_reference_mismatch` does for the design."""
+    slug = card.get("slug") if isinstance(card, dict) else None
+    if slug and ref.get("cards") == [str(slug)]:
+        return ""
+    return (f"the timed reports are {ref.get('cards')} (UUID {ref.get('uuids')}) and "
+            f"this page is {slug} (UUID "
+            f"{card.get('uuid') if isinstance(card, dict) else None}); C5 compares one "
+            "card's bytes with that card's own timing")
 
 
 def _worst(items) -> str:
@@ -5706,7 +6041,7 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
         card_line(card) if not absent else f"card block missing {absent}",
         f"a card block with {list(R3_CARD_REQUIRED)}",
         "every number on the page: bytes without the card they came from cannot be "
-        "compared with anything, least of all the study's H200"))
+        "compared with anything, least of all with that card's own timing"))
 
     # V1 COUNT AND ATTRIBUTION, and the census that proved GEMMS_PER_CALL.
     want = [(a, n) for a in arms for n in treads]
@@ -6112,6 +6447,29 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
     gates.append(Gate("V9", "VALIDITY", g9.claim, g9.verdict, g9.measured, g9.threshold,
                       g9.consequence, list(g9.lines)))
 
+    # V10 THE LOCK, asked only of a page taken under one (`--page-lock-mhz F`,
+    # 2026-09-26, `R3_PAGE_CLOCK_METRIC`): every cell and GEMM's clock, its own
+    # counters' cycles over its duration, within one supported-clock step of F,
+    # as FL1 holds the floor's. A page at ncu's base clock, or at the card's own
+    # clock with no lock, has no F to hold and no V10.
+    control, lock = r3_page_clock(payload)
+    if lock is not None:
+        off10 = [f"{a}/{n} {g} " + ("no clock" if mhz is None else f"{mhz:.0f} MHz")
+                 for (a, n), c in sorted(cells.items()) for g in gemms
+                 for mhz in (r3_cell_clock_mhz(c, g),)
+                 if mhz is None or abs(mhz - lock) > R3_FLOOR_LOCK_STEP_MHZ]
+        gates.append(Gate(
+            "V10", "VALIDITY",
+            f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
+            "counters' clock", FAIL if off10 else PASS,
+            f"off the lock: {_worst(off10)}" if off10 else
+            f"all {len(cells) * len(gemms)} within the band",
+            f"|{R3_PAGE_CLOCK_METRIC} / gpu_time_ns - {lock:g}| <= "
+            f"{R3_FLOOR_LOCK_STEP_MHZ:g} MHz, one step, in every cell and GEMM",
+            f"every byte on the page as a reading at {lock:g} MHz, the clock the timed "
+            "pages it is compared with ran at; its bytes stand only as readings at the "
+            "clocks its cells name"))
+
     # C1 GROUP ARITHMETIC ON w1, C2 AND C3: SCORED ON BOTH EDGES of SHARED's
     # weight-only bracket (`r3_weight_bracket`, the K calls' extremes). A verdict only
     # where the two edges agree; where they disagree the claim reads UNKNOWN,
@@ -6215,63 +6573,116 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
           "exposed to the same re-reads there, over narrower slabs"] if whole else [])
         + [exposure_line(g) for g in gemms]))
 
-    # C5 CROSS-CARD, only with --timed-reference.
-    ref = (timed or {}).get(g_m)
-    mismatch = timed_reference_mismatch(ref, design) if ref is not None else []
-    if timed is not None and ref is None:
-        summary["not_asked"].append(f"C5: no timed reference page at G={g_m}")
-    elif mismatch:
-        summary["not_asked"].append(
-            f"C5: the timed reports at G={g_m} are another kernel ({'; '.join(mismatch)}), "
-            "so their ratio is not this page's to compare with")
-    elif ref is not None:
-        cross = [f"CROSS-CARD: the timed pages are {ref['cards']}, this page is "
-                 f"{(card or {}).get('slug')}; the same sm_90 kernel on 132 SMs where "
-                 "both are H100/H200, a different card either way",
-                 "timed ratios read from "
-                 + "; ".join(f"{r['path']} (seed {r['seed']}, duty {r['duty']:g}, fit "
-                             f"window n >= {r['claim_min_tread']})" for r in ref["runs"])
-                 + f"; timed at duty {ref['duty']:g}, where this page's bytes carry no "
-                 "duty: a timed ratio belongs to its duty's operating point"]
+    # C5 SAME-CARD, only with --timed-reference: this page's bytes against its
+    # OWN card's timing (owner, 2026-09-26). Until that date it was labelled
+    # CROSS-CARD and read the H200's timed ratios beside a Lambda card's bytes;
+    # the loader now refuses a report from another card, and this gate asks
+    # nothing of one (`timed_reference_card_mismatch`), so one rule decides
+    # both. One gate per timed regime at this G (`R3_TIMED_CLOCK_FIELD`): `C5`
+    # where there is one, and `C5@<clock>/duty<d>` for each where there are
+    # several, never one gate over two operating points.
+    #
+    # WHERE IT IS REGISTERED. At G=1, alpha(1) against the timed bracket; at
+    # G >= 4, the byte ratio below the timed ratio, the floor reading; and at
+    # G=2 under the G >= 4 rule since 2026-09-26: the group model's staircase
+    # there is 1, 1, 2, 2, 3 over treads 1, 2, 3, 4, 6, the timed SHARED ladder
+    # zig-zags with it, so G=2's timing follows the traffic only in part and
+    # is partly floored, and the floor reading is the question it can carry.
+    # G=3 stays un-registered, and says why, with a timed page at it or
+    # without one. A draft of 2026-09-26 said "no timed page has been read at
+    # it" on the one branch where one had been, and gave no reason on the
+    # other (the review of that day found both).
+    refs = (timed or {}).get(g_m) or []
+    registered = g_m in (1, 2) or g_m >= 4
+    unregistered = (
+        f"no registered C5 at G={g_m}: C5 is registered at G=1 (alpha(1) against the "
+        "timed bracket), at G >= 4, where the floor hides the traffic, and at G=2 "
+        "(2026-09-26), whose timed SHARED ladder zig-zags with the byte staircase and "
+        f"so is partly floored; G={g_m} is no G of the plan ({list(R3_GROUPS)}, then "
+        f"{R3_OPTIONAL_GROUP}), no timed page at it had been read when C5 was "
+        "registered, and no reading was registered for its ratio before it ran")
+    if timed is not None and not refs:
+        summary["not_asked"].append(f"C5: no timed reference page at G={g_m}"
+                                    + ("" if registered else f", and {unregistered}"))
+    elif refs and not registered:
+        summary["not_asked"].append(f"C5: {unregistered}")
+    slug, uuid = ((card.get("slug"), card.get("uuid")) if isinstance(card, dict)
+                  else (None, None))
+    for ref in refs if registered else []:
+        name = "C5" if len(refs) == 1 else f"C5@{timed_regime_tag(ref)}"
+        mismatch = timed_reference_mismatch(ref, design)
+        other = timed_reference_card_mismatch(ref, card)
+        if mismatch or other:
+            summary["not_asked"].append(
+                f"{name}: the timed reports at G={g_m} are "
+                + (f"another kernel ({'; '.join(mismatch)})" if mismatch
+                   else f"another card's: {other}")
+                + f", at {timed_regime_word(ref)}, so their ratio is not this page's "
+                "to compare with")
+            continue
+        boards = ("the same board" if ref["uuids"] == [str(uuid)] else
+                  "a timed board with no DEVICE file, not shown to be this one"
+                  if "unread" in ref["uuids"] else "another board of the same card")
+        one_clock = (lock is not None and ref["clock_mhz"] is not None
+                     and abs(ref["clock_mhz"] - lock) <= R3_FLOOR_LOCK_STEP_MHZ)
+        same = [f"SAME-CARD: the timed reports and this page are both {slug} "
+                f"({study_role(slug)}); timed on UUID {', '.join(ref['uuids'])}, this "
+                f"page's UUID {uuid}: {boards}",
+                f"timed at {timed_regime_word(ref)} (the median sm_clock_load_mhz of its "
+                f"usable timed cells, to the {R3_FLOOR_LOCK_STEP_MHZ:g} MHz step; a lock "
+                f"reads as itself); this page's bytes were counted at "
+                f"{r3_clock_word(control, lock)}: "
+                + ("one clock" if one_clock else "not shown to be the timed clock"),
+                "timed ratios read from "
+                + "; ".join(f"{r['path']} (seed {r['seed']}, duty {r['duty']:g}, fit "
+                            f"window n >= {r['claim_min_tread']})" for r in ref["runs"])
+                + f"; timed at duty {ref['duty']:g}, where this page's bytes carry no "
+                "duty: a timed ratio belongs to its duty's and its clock's operating point",
+                f"the timed edge {ref['edge']:.4f} is {ref['edge_basis']}"]
         if g_m == 1:
             got_lo, got_hi = est["alpha_bracket"]["total"]
-            lo_edge = ref["mean"] - ref["sd"]
-            v5 = bracket_verdict(got_lo, got_hi, lo_edge, R3_ALPHA1_CEILING)
+            v5 = bracket_verdict(got_lo, got_hi, ref["edge"], R3_ALPHA1_CEILING)
             gates.append(Gate(
-                "C5", "CLAIM", "alpha(1) from bytes lies inside the timed bracket",
+                name, "CLAIM", "alpha(1) from bytes lies inside the timed bracket",
                 v5 or REFUSE,
-                f"alpha(1) in [{got_lo:.4f}, {got_hi:.4f}] against [{ref['mean']:.4f} - "
-                f"sd {ref['sd']:.4f}, 1.0]",
-                f"timed mean - sd <= alpha(1) <= {R3_ALPHA1_CEILING}, on both edges of "
-                "alpha(1)'s weight-only bracket; UNKNOWN where they disagree",
+                f"alpha(1) in [{got_lo:.4f}, {got_hi:.4f}] against [{ref['edge']:.4f}, "
+                f"1.0]; timed {ref['mean']:.4f} (sd {ref['sd']:.4f})",
+                f"timed edge <= alpha(1) <= {R3_ALPHA1_CEILING}, the edge being the timed "
+                "mean less its seed sd over two or more seeds, or at one seed the lowest "
+                "lower end of its runs' own intervals; on both edges of alpha(1)'s "
+                "weight-only bracket; UNKNOWN where they disagree",
                 "inside refutes co-residency sharing as the source of G=1 reuse; "
                 "below says the timed lower edge's equal-rate assumption fails on "
                 "this architecture (the private arm pays a per-copy rate cost)",
-                cross))
-        elif g_m >= 4:
+                same))
+        else:
             # On the K calls, not their mean, like every other claim since V3
             # stopped voiding a spread at n >= 2: the ratio's bracket over each
             # tread's lowest and highest call (`alpha_ratio_bracket`).
             got = est["alpha_ratio"]
             r_lo, r_hi = est.get("alpha_ratio_bracket") or (got, got)
-            edge = ref["mean"] - ref["sd"]
+            edge = ref["edge"]
             v5 = (FAIL if got is None or r_lo is None else
                   PASS if r_hi < edge else FAIL if r_lo >= edge else REFUSE)
             gates.append(Gate(
-                "C5", "CLAIM", "the byte ratio sits below the timed ratio",
+                name, "CLAIM", "the byte ratio sits below the timed ratio",
                 v5,
                 (f"byte ratio {got:.4f}, its K calls allowing [{r_lo:.4f}, {r_hi:.4f}], "
                  if got is not None and r_lo is not None else "no byte ratio, ")
-                + f"against timed {ref['mean']:.4f} (sd {ref['sd']:.4f})",
-                "slope(R_S)/slope(R_P) < timed mean - its seed sd on every ratio the "
-                "K calls allow; UNKNOWN where they straddle it",
+                + f"against timed {ref['mean']:.4f} (sd {ref['sd']:.4f}), edge {edge:.4f}",
+                "slope(R_S)/slope(R_P) < the timed edge (the mean less its seed sd over "
+                "two or more seeds, or at one seed the lowest lower end of its runs' own "
+                "intervals) on every ratio the K calls allow; UNKNOWN where they straddle "
+                "it",
                 "finding 4.2's floor reading: a byte ratio equal to the timed ratio "
-                "refutes it, and says the timed ratios at G >= 4 are traffic "
+                "refutes it, and says the timed ratios at G=2 and G >= 4 are traffic "
                 "fractions after all",
-                cross + ["the byte ratio counts every byte both arms read, activation "
-                         "re-reads included, as the timed ratio's time pays for them"]))
-        else:
-            summary["not_asked"].append(f"C5: no registered C5 at G={g_m}")
+                same + ["the byte ratio counts every byte both arms read, activation "
+                        "re-reads included, as the timed ratio's time pays for them"]
+                + (["registered at G=2 on 2026-09-26, under the G >= 4 rule: its timed "
+                    "SHARED ladder zig-zags with the byte staircase (group_reads 1, 1, 2, "
+                    "2, 3 over treads 1, 2, 3, 4, 6), so its timing follows the traffic "
+                    "only in part and G=2 is partly floored"] if g_m == 2 else [])))
     if "native" in pool and "native" in arms:
         alone, _summary = score_r3_page(payload, timed=timed, pool=R3_SHARED_ALONE)
         pooled_verdicts = {g.number: g.verdict for g in gates}
@@ -6360,6 +6771,10 @@ def r3_page_lines(payload: dict, gates: list[Gate], summary: dict) -> list[str]:
            f"calls per cell after {d['warmup_calls']} warmups; {d['launch_count']} "
            "profiled launches; declared "
            f"{d['copies_declared']} copies ({d['declared_by_arm']})"]
+    control, lock = r3_page_clock(payload)
+    out.append(f"  counted at {r3_clock_word(control, lock)}"
+               + ("; V10 reads each cell's clock back off its own counters"
+                  if lock is not None else ""))
     est = summary.get("estimates")
     gm = summary.get("group_model")
     if est and gm:
@@ -6519,10 +6934,12 @@ def do_dry_run_r3(args) -> int:
           "counter, one GROUP_SIZE_M per ncu invocation")
     print()
     print("CARD: DECIDED ON THE BOX. The page's card is the live device, read off torch")
-    print("  and nvidia-smi; --card is not read. The target is 1x H100 SXM5 (80 GB, 132")
-    print("  SMs, 50 MB L2), with an optional A100 40 GB shake-out first. Neither is the")
-    print(f"  study's {STUDY_CARD}: every alpha a page prints is the attached card's own, and")
-    print("  every page's first line says which card that is.")
+    print("  and nvidia-smi; --card is not read. The study has four cards, each keeping")
+    print("  its own numbers, never averaged with another's (STUDY_CARDS):")
+    for slug, role in STUDY_CARDS.items():
+        print(f"    {slug:<24}{role}")
+    print("  Every alpha a page prints is the attached card's own, and every page's first")
+    print("  line names that card and its role, or says it is none of the four.")
     print()
     print(f"  model           {args.model} {args.dtype}  E={e} k={cfg.top_k} "
           f"H={cfg.hidden_size} F={cfg.intermediate_size}")
@@ -6609,7 +7026,9 @@ def do_dry_run_r3(args) -> int:
           f"x the GEMM's own spread) and their calls no more than "
           f"{R3_DECLARATION_FLOOR:.0%} apart;")
     print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
-          "if proven; V9 R3's five-part buffer proof.")
+          "if proven; V9 R3's five-part buffer proof; V10, only on a page taken under")
+    print(f"  --page-lock-mhz F, every cell's clock ({R3_PAGE_CLOCK_METRIC} over its "
+          f"duration) within {R3_FLOOR_LOCK_STEP_MHZ:g} MHz of F.")
     print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
     print(f"CLAIMS, a failure is a result: C1 w1 within {R3_GROUP_TOL:.0%} of the group "
           "model at every n for G >= 2; at G=1 q_S,w1(n) >= "
@@ -6617,13 +7036,18 @@ def do_dry_run_r3(args) -> int:
     print("  co-residency window is below num_pid_n(w1), and NOT ASKED when the occupancy "
           f"limits were not proven readable; C2 w2 <= {R3_W2_CEILING} x the model;")
     print(f"  C3 at G=1 alpha_w2 < alpha_w1; C6 q_P,total(n) <= {1 + R3_PRIVATE_EXCESS:g} n; "
-          "C5 only with --timed-reference, labelled cross-card.")
+          "C5 only with")
+    print("  --timed-reference and the same card's timing (a report from another card is")
+    print("  refused), one gate per timed regime (median clock and duty) at G=1, G=2 and")
+    print("  G >= 4, its edge the timed mean less its seed sd over two or more seeds, or")
+    print("  at one seed the lowest lower end of its runs' own intervals; a run read twice")
+    print("  is refused; not registered at G=3.")
     print("  C1, C2, C3 and C5 at G=1 read SHARED's WEIGHT-ONLY q, the bracket from the")
     print("  lowest call of SHARED or NATIVE less e to the highest, e = q_P - n at PRIVATE's")
     print("  highest call (its activation re-read, which bounds SHARED's), on both edges:")
     print("  FAIL only where both edges fail, UNKNOWN where they disagree, so an activation")
-    print("  re-read is never scored as a refutation. C5 at G >= 4 and C6 read the K calls'")
-    print("  extremes the same way.")
+    print("  re-read is never scored as a refutation. C5 at G=2 and G >= 4 and C6 read the")
+    print("  K calls' extremes the same way.")
     print()
     print("METRICS, three classes. The box asks only what its probe proved readable.")
     print(f"  STRICT, refused without:   {', '.join(R3_STRICT_METRICS)}")
@@ -6897,6 +7321,7 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     capture = {"argv": argv, "binary": ncu.get("binary"), "version": ncu.get("version"),
                "returncode": rc, "metrics_asked": list(asked), "metrics_dropped": dropped,
                "metrics_query": query, "clock_control": clock, "lock_mhz": lock,
+               "probe_clock_control": r3_probe_clock_control(args),
                "smi_before": smi_before, "smi_after": smi_after,
                "card": card, "stack": stack, "commit": commit}
     capture_path.write_text(json.dumps(capture, indent=2))
@@ -6972,6 +7397,7 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
                     "report_sha256": _sha256(report), "csv": str(csv_path),
                     "capture": str(capture_path), "replay_mode": "kernel",
                     "cache_control": "all", "clock_control": clock,
+                    "probe_clock_control": capture["probe_clock_control"],
                     "metrics_asked": list(asked), "metrics_dropped": dropped,
                     "metrics_missing": missing, "metrics_query": query}}
     out.write_text(json.dumps(stamped(body, mode="r3-floor", args=args,
@@ -7009,6 +7435,17 @@ def do_floor_names(args) -> int:
     return exit_codes.DONE
 
 
+def r3_probe_clock_control(args) -> str | None:
+    """The `--clock-control` the probe `do_run_r3` runs first passes: the
+    capture's own when it is not the base clock (`--floor-clock` for a floor,
+    `--page-clock` for a page or the census), so a probe inside an nvidia-smi
+    lock sets no clock of its own; None (ncu's default, as before) otherwise
+    (`ncu_probe_argv`, 2026-09-26)."""
+    clock = (getattr(args, "floor_clock", "base") if getattr(args, "floor", False)
+             else getattr(args, "page_clock", "base"))
+    return None if clock == "base" else clock
+
+
 def do_run_r3(args) -> int:
     """The census or one G's page. REFUSED before the child runs when the route
     is not open for this family, when there is no card, when git cannot name
@@ -7016,7 +7453,21 @@ def do_run_r3(args) -> int:
     or its census, and when the census is another card's, another commit's or
     another vLLM's, or names no commit. With `--floor` it is one G's floor
     capture instead of a page, which `r3_floor` takes once the census has
-    licensed it."""
+    licensed it.
+
+    THE CLOCK (2026-09-26). `--page-clock none` passes `--clock-control none`
+    to the census's or the page's ncu, which leaves the SM clock to the card or
+    to an nvidia-smi lock, and records an nvidia-smi reading either side of the
+    capture (`floor_smi_reading`). `--page-lock-mhz F` names that lock: the
+    page then asks `R3_PAGE_CLOCK_METRIC` too, REFUSED before the capture when
+    this chip's metric list does not offer it (one name ncu does not know
+    aborts the whole capture), and V10 holds every cell's clock to F. The
+    census takes the flags for its own capture and records them; it measures
+    launches and grids, which no clock moves, so it gates no clock and a
+    census at either clock licenses a page at either. The probe that runs
+    first takes the capture's clock control too (`r3_probe_clock_control`),
+    so nothing inside the lock has ncu set the clock; the capture records
+    what it passed (`probe_clock_control`)."""
     if not args.out:
         print("REFUSE: --run needs --out <path>; a measurement nobody wrote down is "
               "not a measurement.")
@@ -7038,7 +7489,7 @@ def do_run_r3(args) -> int:
             print("REFUSE: --out is the census this run is licensed by, and a capture "
                   "deletes its --out before ncu starts, so it would delete the census")
             return exit_codes.REFUSED
-    ncu = probe_ncu(R3_FAMILY)
+    ncu = probe_ncu(R3_FAMILY, clock_control=r3_probe_clock_control(args))
     if not counter_route_is_open(ncu):
         print("REFUSE: the r3-arms family's counters could not be read on this box. "
               f"--probe --family {R3_FAMILY} says: {ncu.get('cause', ncu.get('why'))}")
@@ -7093,6 +7544,20 @@ def do_run_r3(args) -> int:
     if getattr(args, "floor", False):
         return r3_floor(args, ncu, card, stack, commit, out, profiles)
 
+    clock = getattr(args, "page_clock", "base")
+    lock = getattr(args, "page_lock_mhz", None)
+    if lock is not None:
+        names, query = query_metric_names(ncu["binary"])
+        if names is None or metric_base(R3_PAGE_CLOCK_METRIC) not in names:
+            print(f"REFUSE: --page-lock-mhz {lock:g} is gated (V10) on each cell's own "
+                  f"{R3_PAGE_CLOCK_METRIC}, and "
+                  + (f"this box's metric list could not be read ({query}), so ncu is "
+                     "not shown to know it" if names is None else
+                     "this chip's metric list does not offer it")
+                  + ". Nothing was captured: one name ncu does not know aborts the "
+                  "whole capture")
+            return exit_codes.REFUSED
+        metrics += tuple(m for m in (R3_PAGE_CLOCK_METRIC,) if m not in metrics)
     g_m, stem = args.group_m, f"g{args.group_m}"
     try:
         plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
@@ -7109,17 +7574,21 @@ def do_run_r3(args) -> int:
     report = profiles / f"{stem}.ncu-rep"
     csv_path = profiles / f"{stem}.csv"
     argv = r3_ncu_argv(ncu["binary"], plan_path, report, metrics,
-                       launch_skip=sched.launch_skip, launch_count=sched.launch_count)
+                       launch_skip=sched.launch_skip, launch_count=sched.launch_count,
+                       clock_control=clock)
     print(card_line(card))
     print(f"R3 COUNTER RUN  G={g_m}  {len(plan['cells'])} cells, {sched.launch_count} "
-          f"profiled launches after {sched.launch_skip} skipped")
+          f"profiled launches after {sched.launch_skip} skipped, at "
+          f"{r3_clock_word(clock, lock)}")
     print(f"  ncu        {ncu.get('binary')}  [{ncu.get('version', '')}]")
     print(f"  metrics    {len(metrics)} asked: {', '.join(metrics)}")
     print(f"  profiles   {profiles}")
     manifest_path = Path(plan["manifest"])
     capture_path = profiles / f"{stem}.capture.json"
+    smi_before = floor_smi_reading() if clock != "base" else None
     rc, tail = _r3_capture(argv, profiles / f"{stem}.ncu.log", args.ncu_timeout,
                            stale=(manifest_path, report, csv_path, capture_path, out))
+    smi_after = floor_smi_reading() if clock != "base" else None
     absent = [str(p) for p in (manifest_path, report) if not p.exists()]
     if absent:
         raise CounterRunRefused(
@@ -7132,6 +7601,10 @@ def do_run_r3(args) -> int:
                "returncode": rc, "metrics_asked": list(metrics),
                "metrics_dropped": sorted(set(ncu.get("metrics_dropped") or [])
                                          | set(ncu.get("metrics_unproven") or {})),
+               "clock_control": clock, "lock_mhz": lock,
+               "probe_clock_control": r3_probe_clock_control(args),
+               **({"smi_before": smi_before, "smi_after": smi_after}
+                  if clock != "base" else {}),
                "card": card, "stack": stack, "commit": commit}
     capture_path.write_text(json.dumps(capture, indent=2))
     csv_text = _r3_reduce(ncu["binary"], report, csv_path)
@@ -7151,14 +7624,21 @@ def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census
             f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
             f"page's card is {card['uuid']}")
     metrics = capture["metrics_asked"]
-    launches = parse_ncu_csv(csv_text, soft=frozenset(R3_RECORDED_METRICS))
+    # The clock is the CAPTURE's, off its record, as its card and argv are: a
+    # record written before 2026-09-26 names none and was taken at base.
+    clock, lock = capture.get("clock_control") or "base", capture.get("lock_mhz")
+    launches = parse_ncu_csv(csv_text,
+                             soft=frozenset(R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,)))
     cells = r3_reduce_cells(attribute_launches(launches, manifest), manifest, metrics)
     layout, _header = ncu_csv_layout(csv_text)
     page = build_r3_page(
         plan=plan, manifest=manifest, cells=cells, card=card, stack=capture["stack"],
         ncu={"binary": capture.get("binary"), "version": capture.get("version"),
              "argv": capture["argv"], "replay_mode": "kernel", "cache_control": "all",
-             "clock_control": "base", "report": str(report),
+             "clock_control": clock, "lock_mhz": lock,
+             **{k: capture[k] for k in ("probe_clock_control", "smi_before", "smi_after")
+                if k in capture},
+             "report": str(report),
              "report_sha256": _sha256(report), "csv": str(csv_path),
              "csv_layout": layout, "metrics_asked": list(metrics),
              "metrics_dropped": list(capture.get("metrics_dropped") or []),
@@ -7168,7 +7648,7 @@ def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census
     gates, summary = score_r3_page(page)
     page["gates"] = [asdict(g) for g in gates]
     payload = stamped(page, mode="r3-run", args=args, card=card["name"],
-                      instrument=R3_RUN_INSTRUMENT)
+                      instrument=R3_RUN_INSTRUMENT_AT.format(clock=clock))
     check_r3_page(payload)
     out.write_text(json.dumps(payload, indent=2))
     for line in r3_page_lines(payload, gates, summary):
@@ -7241,9 +7721,16 @@ def do_reduce_r3(args) -> int:
     else:
         print(f"REFUSE: no ncu on PATH to import {report} and no CSV at {csv_path}")
         return exit_codes.REFUSED
+    # The run id names the CAPTURE's clock and lock, off its record, as the page
+    # does (`_r3_write_page`): `--page-clock` and `--page-lock-mhz` are refused
+    # with --reduce-only, and their defaults would name the base clock.
+    args.page_clock = capture.get("clock_control") or "base"
+    args.page_lock_mhz = capture.get("lock_mhz")
     print(card_line(capture.get("card")))
     print(f"R3 COUNTER REDUCTION  G={args.group_m}  from {profiles}, captured at "
-          f"commit {capture.get('commit')}; nothing is measured here")
+          f"commit {capture.get('commit')} at "
+          f"{r3_clock_word(args.page_clock, args.page_lock_mhz)}; nothing is measured "
+          "here")
     return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
                           census=census, report=report, csv_path=csv_path,
                           csv_text=csv_text, out=out)
@@ -7256,7 +7743,14 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
     skip and no cap: the report must hold exactly GEMMS_PER_CALL x 4 launches
     and their grids must equal the child's vLLM-derived ones. The child
     builds R3's whole declaration, so its memory plan is checked too. A census
-    with no commit licenses nothing, so none is written (`r3_commit`)."""
+    with no commit licenses nothing, so none is written (`r3_commit`). It runs
+    at `--page-clock` (and names `--page-lock-mhz`) like the pages it licenses
+    (2026-09-26), and so does the probe `do_run_r3` runs before it
+    (`r3_probe_clock_control`): under `--page-clock none` neither this capture
+    nor that probe has ncu set the clock inside the lock. A draft of that day
+    said so of the capture alone while the probe still ran at ncu's default,
+    the base clock (the review of that day found it). It gates no clock
+    (`do_run_r3`)."""
     if not commit:
         print(f"REFUSE: {r3_commit()[1]}")
         return exit_codes.REFUSED
@@ -7274,14 +7768,20 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
     plan_path = profiles / "census.plan.json"
     plan_path.write_text(json.dumps(plan, indent=2))
     report = profiles / "census.ncu-rep"
+    clock = getattr(args, "page_clock", "base")
+    lock = getattr(args, "page_lock_mhz", None)
     argv = r3_ncu_argv(ncu["binary"], plan_path, report, R3_STRICT_METRICS,
-                       launch_skip=sched.launch_skip, launch_count=sched.launch_count)
+                       launch_skip=sched.launch_skip, launch_count=sched.launch_count,
+                       clock_control=clock)
     print(card_line(card))
     print(f"R3 COUNTER CENSUS  {len(plan['cells'])} cells, "
-          f"{len(sched.warmups) + len(sched.measured)} calls, no skip and no cap")
+          f"{len(sched.warmups) + len(sched.measured)} calls, no skip and no cap, at "
+          f"{r3_clock_word(clock, lock)}")
     manifest_path = Path(plan["manifest"])
+    smi_before = floor_smi_reading() if clock != "base" else None
     rc, tail = _r3_capture(argv, profiles / "census.ncu.log", args.ncu_timeout,
                            stale=(manifest_path, report, profiles / "census.csv", out))
+    smi_after = floor_smi_reading() if clock != "base" else None
     if not manifest_path.exists() or not report.exists():
         raise CounterRunRefused(f"ncu exited {rc} and the census child left no manifest "
                                 f"or no report: {tail}")
@@ -7318,7 +7818,10 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
             "memory_plan": manifest.get("memory_plan"),
             "ncu": {"binary": ncu.get("binary"), "version": ncu.get("version"),
                     "argv": argv, "report": str(report),
-                    "report_sha256": _sha256(report)},
+                    "report_sha256": _sha256(report), "clock_control": clock,
+                    "lock_mhz": lock, "probe_clock_control": r3_probe_clock_control(args),
+                    **({"smi_before": smi_before, "smi_after": smi_after}
+                       if clock != "base" else {})},
             "gates": [asdict(g) for g in gates],
             "verdict": PASS if rc_all == exit_codes.DONE else FAIL}
     payload = stamped(body, mode="r3-census", args=args, card=card["name"],
@@ -7342,8 +7845,11 @@ def _page_commit(d: dict):
 
 def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
     """Score each page; with several, print the alpha(G) table and REFUSE a
-    join across two card UUIDs, two commits, two vLLM versions or two designs
-    (the design with its G taken out)."""
+    join across two card UUIDs, two commits, two vLLM versions, two designs
+    (the design with its G taken out) or two clock regimes (2026-09-26: ncu's
+    base clock against an nvidia-smi lock, or two locks, `r3_page_clock`; a
+    page written before that date reads as base). The timed reports C5 reads
+    are loaded against the pages' card (`load_timed_reference`)."""
     families = {d.get("family") for _p, d in loaded}
     if families != {R3_FAMILY}:
         print(f"REFUSED: --analyse was given {sorted(map(str, families))}; an r3-arms "
@@ -7366,6 +7872,7 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
             "vLLM": lambda d: (d.get("stack") or {}).get("vllm"),
             "design": lambda d: json.dumps({k: v for k, v in d["design"].items()
                                             if k != "group_m"}, sort_keys=True),
+            "clock regime": lambda d: r3_clock_word(*r3_page_clock(d)),
         }
         for name, read in apparatus.items():
             values = sorted({str(read(d)) for _p, d in loaded})
@@ -7379,18 +7886,21 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
             print(f"REFUSED: two pages at one G ({sorted(gs)}); the table has one row per G")
             return exit_codes.REFUSED
     try:
-        timed = (load_timed_reference(args.timed_reference)
+        timed = (load_timed_reference(args.timed_reference,
+                                      card=loaded[0][1].get("card"))
                  if getattr(args, "timed_reference", None) else None)
     except (OSError, ValueError, KeyError, CounterRunRefused) as exc:
         print(f"REFUSED: --timed-reference: {exc}")
         return exit_codes.REFUSED
-    for g_ref, ref in sorted((timed or {}).items()):
-        mismatch = timed_reference_mismatch(ref, loaded[0][1]["design"])
-        if mismatch:
-            print(f"REFUSED: --timed-reference: the reports at G={g_ref} timed another "
-                  f"kernel than these pages measured ({'; '.join(mismatch)}); C5 compares "
-                  "one kernel configuration's bytes with its own timing")
-            return exit_codes.REFUSED
+    for g_ref, refs in sorted((timed or {}).items()):
+        for ref in refs:
+            mismatch = timed_reference_mismatch(ref, loaded[0][1]["design"])
+            if mismatch:
+                print(f"REFUSED: --timed-reference: the reports at G={g_ref} "
+                      f"({timed_regime_word(ref)}) timed another kernel than these pages "
+                      f"measured ({'; '.join(mismatch)}); C5 compares one kernel "
+                      "configuration's bytes with its own timing")
+                return exit_codes.REFUSED
     loaded = sorted(loaded, key=lambda pd: int(pd[1]["design"]["group_m"]))
     scored = []
     for path, d in loaded:
@@ -7406,7 +7916,7 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
     else:
         print(card_line(card))
         print(f"ALPHA(G) OVER {len(scored)} PAGES, one card, one commit, one vLLM, one "
-              "design")
+              f"design, counted at {r3_clock_word(*r3_page_clock(loaded[0][1]))}")
         print("  alpha lo/hi: the least and greatest OLS slope over SHARED's weight-only "
               "q, lowest call of SHARED or NATIVE less e to the highest,")
         print("  e PRIVATE's excess over n at its highest call; slope: q_S's K-call means', "
@@ -7517,7 +8027,7 @@ R3_PLANTED_CARD: dict = {
     "name": "PLANTED-CARD-not-a-device", "slug": "planted_card_not_a_device",
     "uuid": "planted-0000", "sm_count": 132, "l2_bytes": 50 * 2 ** 20,
     "capability": "9.0", "memory_bytes": 80 * 10 ** 9, "driver": "planted",
-    "study_card": STUDY_CARD, "same_card_as_study": False}
+    "study_role": None}
 
 #: The share of SHARED's and NATIVE's requested L2 sectors the "request-coalesced"
 #: world takes off the count at n >= 2, inside the 4.0% to 6.2% PRIVATE counted
@@ -7869,6 +8379,21 @@ def build_parser() -> argparse.ArgumentParser:
                          "when any cell's clock, read off its own counters, is more "
                          "than one 15 MHz step from F. Refused under --floor-clock "
                          "base, where ncu sets the clock itself")
+    ap.add_argument("--page-clock", default="base", choices=("base", "none"),
+                    help="with --run --family r3-arms, a page or the census: ncu "
+                         "--clock-control for its capture. 'base' (the default, and "
+                         "every page before 2026-09-26) is the clock ncu holds; "
+                         "'none' leaves it to the card, or to an nvidia-smi lock "
+                         "(--page-lock-mhz), so bytes are counted at the clock the "
+                         "timed pages ran at. Recorded on the page and in its run id")
+    ap.add_argument("--page-lock-mhz", type=float, default=None, metavar="F",
+                    help="with --run --family r3-arms --page-clock none: the SM clock "
+                         "an nvidia-smi lock (-lgc F,F) holds during the capture. The "
+                         "page also asks sm__cycles_elapsed.avg and is INVALID (gate "
+                         "V10) when any cell's clock, read off its own counters, is "
+                         "more than one 15 MHz step from F. Recorded on the page and "
+                         "in its run id; --analyse refuses to join pages of two clock "
+                         "regimes")
     ap.add_argument("--chip", default="",
                     help="with --dry-run --family r3-arms --floor: check the names "
                          "against this chip's metric list (gh100) instead of the "
@@ -7881,8 +8406,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "parser fix never needs the box again")
     ap.add_argument("--timed-reference", nargs="+", default=None, metavar="REPORT",
                     help="with --analyse over r3-arms pages: R3's timed report.json "
-                         "files, whose ratios C5 compares the bytes with, labelled "
-                         "cross-card. Read, never typed")
+                         "files, whose ratios C5 compares the bytes with. The same "
+                         "card's only: a report timed on another card is refused. "
+                         "Pooled per G and per regime (the timed cells' median SM "
+                         "clock and the duty). Read, never typed")
     ap.add_argument("--card", default="nvidia_h200",
                     choices=sorted(DATASHEET_PEAK_GBPS),
                     help="which card the plan is written for. The H200 by default, "
@@ -8005,6 +8532,24 @@ def main(argv=None) -> int:
     if args.floor_lock_mhz is not None and not args.floor_lock_mhz > 0:
         print("REFUSE: --floor-lock-mhz is the locked SM clock in MHz and must be "
               "above zero")
+        return exit_codes.REFUSED
+    if args.page_clock != "base" and not (
+            args.run and args.family == R3_FAMILY and not args.floor
+            and not args.reduce_only):
+        print("REFUSE: --page-clock belongs to --run --family r3-arms, for a page or the "
+              "census: the floor's clock is --floor-clock, and --reduce-only reads the "
+              "capture's clock off its record")
+        return exit_codes.REFUSED
+    if args.page_lock_mhz is not None and not (
+            args.run and args.family == R3_FAMILY and args.page_clock == "none"
+            and not args.floor and not args.reduce_only):
+        print("REFUSE: --page-lock-mhz belongs to --run --family r3-arms --page-clock "
+              "none, for a page or the census: under the base clock ncu sets the SM "
+              "clock itself, so no nvidia-smi lock holds during the capture")
+        return exit_codes.REFUSED
+    if args.page_lock_mhz is not None and not args.page_lock_mhz > 0:
+        print("REFUSE: --page-lock-mhz is the locked SM clock in MHz and must be above "
+              "zero")
         return exit_codes.REFUSED
     if args.chip and not (args.floor and args.dry_run):
         print("REFUSE: --chip belongs to --dry-run --floor, the name check; a capture "
