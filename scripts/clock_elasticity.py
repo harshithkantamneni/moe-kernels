@@ -4,6 +4,7 @@
     python scripts/clock_elasticity.py --dry-run     # the priced plan and the registered bands
     python scripts/clock_elasticity.py --self-test   # the scorer and the estimator, off GPU
     python scripts/clock_elasticity.py --card 'NVIDIA H200'    # the pod run
+    python scripts/clock_elasticity.py --lock-clocks 1980 1755 1530   # LOCK MODE, root only
 
 WHAT IS GATED. eta_b = -d log b / d log f, where b is the per-M-tile cost in
 ms = a(f) + b(f) n, read off the fixed-tread slopes of treads 2 and deeper
@@ -31,9 +32,10 @@ in the study is quotable. This arm measures it.
 WHAT IS MEASURED. One pinned cell -- BLOCK_SIZE_M 32, BLOCK_SIZE_N 64,
 BLOCK_SIZE_K 64, GROUP_SIZE_M 16, num_warps 8, num_stages 4, mixtral-8x7b bf16 --
 run as a ladder of exactly-full tile stacks, at three or more SUSTAINED DUTY
-CYCLES. The tensors are built ONCE and reused in every state, so "the same
-kernel over the same bytes" is true by construction and not by assertion, and the
-rows carry the tile they ran under so it is checked off the rows as well.
+CYCLES (in LOCK MODE, below, at three or more LOCKED SM CLOCKS, one duty). The
+tensors are built ONCE and reused in every state, so "the same kernel over the
+same bytes" is true by construction and not by assertion, and the rows carry the
+tile they ran under so it is checked off the rows as well.
 
 WHY DUTY CYCLE AND NOT nvidia-smi -lgc. Setting a clock needs root and a rented
 pod refuses it; `nvidia-smi -lgc` on a RunPod container returns "Insufficient
@@ -44,6 +46,28 @@ whose bytes and instructions never change. The gap is OUTSIDE every measured
 interval, and the FIRST call of every burst is discarded because it launches into
 a drained queue and carries launch latency the other calls do not.
 
+LOCK MODE, WHERE -lgc IS PERMITTED (--lock-clocks, 2026-09-25). On a VM where
+we are root the states are LOCKED SM CLOCKS instead: `nvidia-smi -lgc F,F`
+(through `sudo -n` when not root) before each state, `nvidia-smi -rgc` at exit
+on every path `ClockLock` can catch, every state at ONE duty (--lock-duty, 0.25)
+to keep board power low. In each measured cell, warm-up and timed bursts
+alike, every gap is sized from the burst it follows, so every lock achieves
+that duty in the rows the fit reads. The 10 s settle before a state is NOT:
+`_settle` sizes its gap from the one full-duty sizing pass, run before any lock,
+so at a lock where the call is slower than there it runs above the lock duty.
+It can go BELOW the full-duty clock, which duty mode cannot. The claim, the
+bands and every gate are unchanged, and the regressor is still the clock READ
+BACK per burst, never the lock: a row whose read-back clock is more than
+`timing.DRIFT_FRACTION` off its lock is excluded as `off_lock` and counted (V0,
+V4), and the page names every lock that did not hold and how many of the
+planned locks the fit read (`off_lock_lines`), so a lock the cap pulled down is
+caught and not fitted. THE TOP LOCK IS THE ONE AT RISK, and a low duty does not
+by itself protect it: on the Lambda GH200 a 1965 lock read ~1800-1830 MHz under
+its 700 W cap during R3's bursts at duty 0.25, while 1710 held exactly. So the
+locks come from a short hold test on the card, not from its maximum. A container
+that refuses -lgc is refused before anything is written, and so is a box whose
+-rgc did not release the probe lock.
+
 THE CLOCK IS READ WITH WORK IN FLIGHT, which is why this arm cannot use
 `timing.BackgroundClockSampler`: a free-running poller at 10% duty lands in an
 idle gap nine times in ten and reports the boost clock of an idle card. The
@@ -51,13 +75,14 @@ reader is `timing.nvml_clock_reader`, the same one `scripts/thermal_acceptance.p
 samples with, called once per burst after the last enqueue and BEFORE the
 synchronise -- thermal_acceptance's own method, reused rather than rewritten.
 
-WHAT IT CANNOT DO. It cannot make the card SLOWER than its full-duty clock at
-this kernel: full duty is already the most sustained pressure a byte-identical
-kernel can apply. So the swept range runs from the full-duty clock UP toward the
-card's boost ceiling, and it is widest at the shallow treads (the 2026-09-10
-corpus has this cell at 1485 MHz at tread 1 against 1815 at tread 8, on a part
-whose maximum is 1980). V1 refuses a run whose states did not separate, which is
-the honest outcome if the governor does not respond.
+WHAT IT CANNOT DO, IN DUTY MODE (lock mode can). It cannot make the card SLOWER
+than its full-duty clock at this kernel: full duty is already the most sustained
+pressure a byte-identical kernel can apply. So the swept range runs from the
+full-duty clock UP toward the card's boost ceiling, and it is widest at the
+shallow treads (the 2026-09-10 corpus has this cell at 1485 MHz at tread 1
+against 1815 at tread 8, on a part whose maximum is 1980). V1 refuses a run
+whose states did not separate, which is the honest outcome if the governor does
+not respond.
 
 WHAT IT WRITES, under `$MOE_RESULTS_DIR` or `/workspace/results` or `<repo>/results`:
 
@@ -82,16 +107,27 @@ remembered a flag. `--min-clock-ratio` is not one either, and it took a rule to
 keep it from becoming one: it may TIGHTEN V1's threshold and `registered_clock_ratio`
 REFUSES a value below the design's own requirement, because the flag is out of the
 run id and a looser threshold would re-score the cells already on disk into the
-same directory and overwrite the page that said INVALID.
+same directory and overwrite the page that said INVALID. LOCK MODE adds two codes
+that are NOT in that table: 128 + the signal (143 for SIGTERM, 129 for SIGHUP)
+when `ClockLock` caught a kill and reset the clock before exiting, which it says
+on stderr first ("SIGTERM caught: ..."), because a shell reports 143 for an
+uncaught SIGTERM as well. A Ctrl-C still ends in KeyboardInterrupt, 130 to a
+shell, as in duty mode, after the same line and the same reset. No driver runs
+lock mode, so no ledger reads them yet. A run whose own reset FAILED after
+measuring exits ERROR (4) whatever its verdict, so a chain stops before it
+measures anything else on a card left locked; the page keeps the verdict.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import math
 import os
 import random
+import re
+import signal
 import statistics
 import subprocess
 import sys
@@ -126,6 +162,21 @@ INSTRUMENT = (
     "drained-queue launch, a host-side idle gap after each burst setting the "
     "sustained duty cycle, and the SM clock, board power and memory clock read "
     "through NVML with the burst still in flight; NOT timing.TIMING_BASIS")
+
+#: What LOCK MODE adds to that instrument, on its rows, page and provenance.
+LOCK_INSTRUMENT = (
+    INSTRUMENT + "; LOCK MODE: the SM clock locked per state with nvidia-smi "
+    "-lgc F,F and read back per burst, one duty in every state, each measured "
+    "burst's gap sized from that burst")
+
+#: LOCK MODE's one duty, every state, chosen to keep board power off the cap so
+#: the LOCK sets the clock: session 4's H200 held 1965 MHz at 0.25 with no
+#: drifting cell, and at 0.5 its clock still tracked board power. EXPECTED, NOT
+#: GUARANTEED, and the top lock is where it fails first: on the Lambda GH200
+#: (2026-09-25) a 1965 lock read ~1800-1830 MHz during R3's bursts at 0.25, SW
+#: power cap, while 1710 held. A lock the card does not hold is excluded
+#: (`off_lock`) and named on the page (`off_lock_lines`), never fitted.
+DEFAULT_LOCK_DUTY = 0.25
 
 #: HOW `time_duty` SIZES THE IDLE GAP AFTER A BURST, one of two, named by the
 #: caller. GAP_FROM_SIZING, this arm's own and the default: one gap for the
@@ -249,8 +300,16 @@ DEFAULT_DRAWS = 2000
 MIN_TREADS_PER_STATE = 4
 MIN_REPEATS_PER_STATE = 3
 #: States the fit needs. Two states give a slope with zero degrees of freedom and
-#: no way to see curvature; the brief's own floor is three.
+#: no way to see curvature; the brief's own floor is three. IN LOCK MODE V3 NEEDS
+#: EVERY PLANNED LOCK (owner, 2026-09-25): a ladder the card cut short is not the
+#: design that was planned, even where three locks are left.
 MIN_STATES = 3
+
+#: One step of the SM clock grid a lock sits on (15 MHz on the H100, H200 and
+#: GH200). A lock whose KEPT rows read back more than this off it at a tread is
+#: named on the page as held only loosely (owner, 2026-09-25): the rule the hold
+#: test in the run plan and the H100's locked R3 driver both use for a slip.
+LOCK_STEP_MHZ = 15
 
 #: Share of rows that may be dropped for DRIFT or for being host-bound before the
 #: kept set stops describing the run that was paid for. One in five: above that,
@@ -484,7 +543,8 @@ class Gate:
 
 @dataclass
 class Row:
-    """One (duty state, tread, repeat) measurement.
+    """One (state, tread, repeat) measurement: a state is a duty, or in lock
+    mode a lock (`row_state`).
 
     The tile fields are on EVERY row rather than in a header: V2 reads the tile
     off the rows, and a tile recorded once per file cannot witness that all four
@@ -543,6 +603,9 @@ class Row:
     status: str = "ok"
     detail: str = ""
     instrument: str = INSTRUMENT
+    #: LOCK MODE's lock for this row's state, MHz; None in duty mode. The
+    #: read-back is `sm_clock_load_mhz`, and `exclusion` compares the two.
+    clock_lock_mhz: float | None = None
 
 
 # --------------------------------------------------------------------------
@@ -555,6 +618,7 @@ DROP_HOST = "host_bound"
 DROP_STATUS = "status"
 DROP_NO_CLOCK = "no_clock"
 DROP_NO_TIME = "no_time"
+DROP_OFF_LOCK = "off_lock"
 
 
 def exclusion(row: Row) -> str:
@@ -575,6 +639,13 @@ def exclusion(row: Row) -> str:
     host-bound interval holds host enqueue time, so it bounds the kernel from
     above rather than measuring it, and a bound that moves with the clock is
     indistinguishable from the elasticity being measured.
+
+    OFF-LOCK EXCLUDES in lock mode (`off_lock`): a read-back more than
+    `timing.DRIFT_FRACTION` of the lock away from it is a state the lock did not
+    set. The power cap is what pulls a lock down, and not only at full duty: on
+    the Lambda GH200 (2026-09-25, 700 W shared with the Grace CPU) a 1965 MHz
+    lock read back ~1800-1830 MHz during R3's bursts at duty 0.25, clock event
+    reason 0x4 (SW power cap), while 1710 held exactly.
     """
     if row.status != "ok":
         return DROP_STATUS
@@ -586,7 +657,19 @@ def exclusion(row: Row) -> str:
         return DROP_HOST
     if not row.sm_clock_load_mhz or row.sm_clock_load_mhz <= 0:
         return DROP_NO_CLOCK
+    if off_lock(row):
+        return DROP_OFF_LOCK
     return ""
+
+
+def off_lock(row: Row) -> bool:
+    """A lock-mode row whose clock READ BACK sits more than
+    `timing.DRIFT_FRACTION` of its lock away from it. The ONE test: `exclusion`
+    drops on it and `off_lock_lines` names the locks it caught, whatever other
+    reason also dropped a row, so the page and the fit cannot disagree on it."""
+    return bool(row.clock_lock_mhz and row.sm_clock_load_mhz
+                and abs(row.sm_clock_load_mhz - row.clock_lock_mhz)
+                > T.DRIFT_FRACTION * row.clock_lock_mhz)
 
 
 def kept_rows(rows) -> list[Row]:
@@ -614,8 +697,61 @@ def _duty_key(value: float) -> str:
     return f"{float(value):.4f}"
 
 
+def states_of(args) -> list[tuple[float, int | None]]:
+    """The run's states in order, (duty, lock MHz or None): THE ONE PLACE the
+    two modes differ in what a state is. Lock mode is every lock at one duty."""
+    locks = getattr(args, "lock_clocks", None) or []
+    if locks:
+        return [(float(args.lock_duty), int(f)) for f in locks]
+    return [(float(d), None) for d in args.duty]
+
+
+def instrument_of(args) -> str:
+    return LOCK_INSTRUMENT if getattr(args, "lock_clocks", None) else INSTRUMENT
+
+
+def state_key(duty: float, lock: int | float | None = None) -> str:
+    """A state as a dictionary key: its lock in lock mode, else its duty."""
+    return f"{float(lock):.0f}MHz" if lock else _duty_key(duty)
+
+
+def row_state(row: Row) -> str:
+    return state_key(row.duty_requested, row.clock_lock_mhz)
+
+
+def state_label(key: str, *, as_key: bool = False) -> str:
+    """"duty 0.25" or "lock 1980MHz", for a page, from a `state_key`.
+
+    `as_key` spells a duty as its key, "duty 0.2500", which is V3's spelling
+    on every duty page since 2026-09-10. A DUTY PAGE READS BYTE FOR BYTE AS IT
+    DID BEFORE LOCK MODE (second review, 2026-09-25): the draft had moved V1's
+    claim, V3's text and the console lines of every duty run, and nothing
+    measured had changed to earn that."""
+    if key.endswith("MHz"):
+        return f"lock {key}"
+    return f"duty {key}" if as_key else f"duty {float(key):g}"
+
+
+def console_state(duty: float, lock: int | None = None) -> tuple[str, str]:
+    """`run_arm`'s two spellings of a state: its state lines ("duty=0.25",
+    "lock 1980 MHz") and its per-cell lines ("duty 0.25", "lock 1980"). The
+    duty ones are the console's since 2026-09-10, kept so a duty log reads as
+    before."""
+    if lock:
+        return f"lock {int(lock)} MHz", f"lock {int(lock):4d}"
+    return f"duty={duty:g}", f"duty {duty:4.2f}"
+
+
+def row_label(row: Row) -> str:
+    """One row's state for a page: "lock 1980MHz", or its duty exactly as
+    requested, "duty 0.25", the spelling V5 and the console always used."""
+    return (f"lock {row.clock_lock_mhz:.0f}MHz" if row.clock_lock_mhz
+            else f"duty {row.duty_requested:g}")
+
+
 def collapse(rows, repeats=None) -> dict[tuple[int, str], tuple[float, float, int]]:
-    """Per (tread, duty state) median ms and median under-load clock.
+    """Per (tread, state) median ms and median under-load clock, the state
+    keyed by `row_state`: its duty, or in lock mode its lock.
 
     `repeats` is a MULTISET of repeat indices. Passed the run's own repeats it is
     the point estimate; passed a draw with replacement it is one bootstrap
@@ -625,7 +761,7 @@ def collapse(rows, repeats=None) -> dict[tuple[int, str], tuple[float, float, in
     """
     by: dict[tuple[int, str], dict[int, list[tuple[float, float]]]] = {}
     for r in kept_rows(rows):
-        cell = by.setdefault((r.tiles, _duty_key(r.duty_requested)), {})
+        cell = by.setdefault((r.tiles, row_state(r)), {})
         cell.setdefault(r.repeat, []).append((r.ms_p50, float(r.sm_clock_load_mhz)))
     out = {}
     for key, per_repeat in by.items():
@@ -1097,7 +1233,7 @@ def loosening_refusal(args) -> str:
     if not asked:
         return ""
     need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
-                                states=len(args.duty))
+                                states=len(states_of(args)))
     rounded = math.ceil(need * 100.0) / 100.0
     if float(asked) >= rounded:
         return ""
@@ -1110,6 +1246,29 @@ def loosening_refusal(args) -> str:
             f"a DONE for the price of the settles, with nothing re-measured. A "
             f"design that needs a lower threshold lowers the REQUIREMENT, by "
             f"running fewer treads or more repeats.")
+
+
+def lock_refusal(args) -> str:
+    """The refusal text for a LOCK MODE design that cannot exist, else "".
+    Decided from the flags alone, before a plan is built, like the duty ones."""
+    locks = list(getattr(args, "lock_clocks", None) or [])
+    if not locks:
+        return ""
+    why = ""
+    if len(locks) < MIN_STATES:
+        why = (f"{len(locks)} locked clocks is below the {MIN_STATES} this design "
+               "needs")
+    elif len(set(locks)) != len(locks) or min(locks) <= 0:
+        why = f"--lock-clocks {locks} repeats a clock or names one <= 0"
+    elif not 0.0 < args.lock_duty <= 1.0:
+        why = f"--lock-duty {args.lock_duty} is outside (0, 1]"
+    elif [float(d) for d in args.duty] != list(DUTY_LEVELS):
+        why = ("--duty and --lock-clocks name two state axes; a lock run's one "
+               "duty is --lock-duty")
+    elif max(locks) / min(locks) < registered_clock_ratio(args)[0]:
+        why = (f"the lock span {max(locks) / min(locks):.4f}x is below V1's "
+               f"{registered_clock_ratio(args)[0]:.3f}x, so V1 could not pass")
+    return f"REFUSED before any GPU time. {why}." if why else ""
 
 
 def registered_clock_ratio(args) -> tuple[float, str]:
@@ -1126,7 +1285,7 @@ def registered_clock_ratio(args) -> tuple[float, str]:
     of which move the computed requirement with them.
     """
     need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
-                                states=len(args.duty))
+                                states=len(states_of(args)))
     rounded = math.ceil(need * 100.0) / 100.0
     asked = getattr(args, "min_clock_ratio", None)
     if asked and float(asked) >= rounded:
@@ -1137,7 +1296,7 @@ def registered_clock_ratio(args) -> tuple[float, str]:
     # branch is what makes the rule true if a caller skips that check.
     return rounded, (f"the design's own requirement {need:.4f}, rounded up to "
                      f"the next hundredth, from {args.repeats} repeats x "
-                     f"{args.treads} treads x {len(args.duty)} states against a "
+                     f"{args.treads} treads x {len(states_of(args))} states against a "
                      f"{CORPUS_REPEAT_SPREAD:.5f} across-repeat spread")
 
 
@@ -1168,7 +1327,8 @@ def gate_v0_non_vacuity(rows, keep) -> Gate:
         "directory nobody wrote to")
 
 
-def gate_v1_separation(cells, threshold: float, source: str) -> Gate:
+def gate_v1_separation(cells, threshold: float, source: str, *,
+                       locked: bool = False) -> Gate:
     """Did the states actually SEPARATE in clock.
 
     THE GATE THE BRIEF NAMES: three states at one clock measure nothing. It is
@@ -1188,8 +1348,11 @@ def gate_v1_separation(cells, threshold: float, source: str) -> Gate:
     # treads out of the design and V1 still said every one had separated.
     present = sorted({t for t, _ in cells})
     silent = [t for t in present if t not in ratios]
+    # By mode, so a duty page keeps the words it has always printed.
+    claim = (f"the {'locked' if locked else 'duty'} states separated in clock "
+             "at every tread")
     if not ratios:
-        return Gate(VALIDITY, "1", "the duty states separated in clock at every tread",
+        return Gate(VALIDITY, "1", claim,
                     FAIL, "no tread has two states with a usable clock",
                     f"every one of the {len(present)} kept treads spans "
                     f">= {threshold:.3f}x",
@@ -1198,7 +1361,7 @@ def gate_v1_separation(cells, threshold: float, source: str) -> Gate:
     worst = ratios[worst_tread]
     ok = worst >= threshold and not silent
     return Gate(
-        VALIDITY, "1", "the duty states separated in clock at every tread",
+        VALIDITY, "1", claim,
         PASS if ok else FAIL,
         f"narrowest tread {worst_tread} spans {worst:.4f}x "
         f"(widest {max(ratios.values()):.4f}x over {len(ratios)} of "
@@ -1249,28 +1412,39 @@ def gate_v2_one_kernel(keep) -> Gate:
         [f"tile: {sorted(tiles)[0]}"] if tiles else [])
 
 
-def gate_v3_depth(keep, duties, threshold_treads: int, threshold_repeats: int,
+def gate_v3_depth(keep, planned, threshold_treads: int, threshold_repeats: int,
                   min_states: int) -> Gate:
     """Enough treads and enough repeats, in EVERY state.
 
     Per state rather than in total: a design that measured one state deeply and
     the others once has the same row count and no second point to take a slope
     between.
+
+    `planned` is `states_of(args)`, (duty, lock) pairs. A PLANNED STATE WITH NO
+    KEPT ROW IS NAMED (2026-09-25): listing only the states that kept rows, a
+    lock the power cap pulled off in every row simply vanished from this line,
+    and "2 of 3" was all that was left of a two-point ladder.
     """
     per_state: dict[str, tuple[set[int], set[int]]] = {}
     for r in keep:
-        treads, reps = per_state.setdefault(_duty_key(r.duty_requested), (set(), set()))
+        treads, reps = per_state.setdefault(row_state(r), (set(), set()))
         treads.add(r.tiles)
         reps.add(r.repeat)
     good = {d: v for d, v in per_state.items()
             if len(v[0]) >= threshold_treads and len(v[1]) >= threshold_repeats}
     ok = len(good) >= min_states
-    detail = "; ".join(f"duty {d}: {len(v[0])} treads x {len(v[1])} repeats"
+    detail = "; ".join(f"{state_label(d, as_key=True)}: {len(v[0])} treads x "
+                       f"{len(v[1])} repeats"
                        for d, v in sorted(per_state.items())) or "no state"
+    empty = [state_label(k, as_key=True)
+             for k in (state_key(d, lock) for d, lock in planned)
+             if k not in per_state]
+    if empty:
+        detail += f"; planned and with NO kept row: {', '.join(empty)}"
     return Gate(
         VALIDITY, "3", "every state the fit reads is deep enough to be a state",
         PASS if ok else FAIL,
-        f"{len(good)} of {len(duties)} planned states are deep enough ({detail})",
+        f"{len(good)} of {len(planned)} planned states are deep enough ({detail})",
         f">= {min_states} states with >= {threshold_treads} treads and "
         f">= {threshold_repeats} repeats each",
         "the interval: a bootstrap over two repeats has three distinct draws, "
@@ -1280,13 +1454,15 @@ def gate_v3_depth(keep, duties, threshold_treads: int, threshold_repeats: int,
 def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
     """Were the exclusions a trim or the measurement.
 
-    DRIFT and host-bound are the two reasons `exclusion` gives, and above a
-    ceiling what is left is not the run that was paid for but a subsample the
-    card chose. LEVEL is NOT in this count on either side, and the line below
-    prints the LEVEL sides so a reader can see that they were kept.
+    DRIFT and host-bound are the two reasons `exclusion` gives (off-lock is a
+    third in lock mode), and above a ceiling what is left is not the run that
+    was paid for but a subsample the card chose: a lock the cap pulled down in
+    a quarter of the rows fails here. LEVEL is NOT in this count on either
+    side, and the line below prints the LEVEL sides so a reader can see that
+    they were kept.
     """
     total = len(rows)
-    drops = {DROP_DRIFT: 0, DROP_HOST: 0}
+    drops = {DROP_DRIFT: 0, DROP_HOST: 0, DROP_OFF_LOCK: 0}
     other = 0
     for r in rows:
         why = exclusion(r)
@@ -1294,15 +1470,18 @@ def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
             drops[why] += 1
         elif why:
             other += 1
-    excluded = drops[DROP_DRIFT] + drops[DROP_HOST] + other
+    excluded = sum(drops.values()) + other
     share = excluded / total if total else 1.0
     ok = total > 0 and share <= ceiling
     sides = level_counts(keep)
+    locked = any(r.clock_lock_mhz for r in rows)
     return Gate(
         VALIDITY, "4", "the excluded rows are a trim and not the measurement",
         PASS if ok else FAIL,
         f"{excluded} of {total} rows excluded ({100 * share:.1f}%): "
-        f"drift {drops[DROP_DRIFT]}, host-bound {drops[DROP_HOST]}, other {other}",
+        f"drift {drops[DROP_DRIFT]}, host-bound {drops[DROP_HOST]}, "
+        + (f"off-lock {drops[DROP_OFF_LOCK]}, " if locked else "")
+        + f"other {other}",
         f"<= {100 * ceiling:.0f}% of all rows",
         "the fit: past this the kept set is a sample the card selected",
         [f"LEVEL among the KEPT rows, recorded and never a reason to exclude: "
@@ -1351,7 +1530,7 @@ def _v5_carry_share(moved: int, n: int, repeats: int) -> float:
                for kc in range(0, min(km, repeats - km) + 1))
 
 
-def gate_v5_within_burst(keep) -> Gate:
+def gate_v5_within_burst(keep, *, locked: bool = False) -> Gate:
     """Was the clock steady INSIDE a burst, not only across the run.
 
     The DRIFT verdict compares the first and last clock sample of a cell, and
@@ -1382,7 +1561,7 @@ def gate_v5_within_burst(keep) -> Gate:
                     "operating points inside one burst")
     cells: dict[tuple[str, int], list[int]] = {}
     for r in scored:
-        seen = cells.setdefault((_duty_key(r.duty_requested), r.tiles), [0, 0])
+        seen = cells.setdefault((row_state(r), r.tiles), [0, 0])
         seen[0] += 1
         seen[1] += int(r.within_burst_ok is False)
     repeats = len({r.repeat for r in keep})
@@ -1394,10 +1573,10 @@ def gate_v5_within_burst(keep) -> Gate:
     worst = ""
     if bad:
         pick = max(bad, key=lambda r: abs((r.tail_ms or 0) - (r.head_ms or 0)))
-        worst = (f"worst: duty {pick.duty_requested:g} tread {pick.tiles}, "
+        worst = (f"worst: {row_label(pick)} tread {pick.tiles}, "
                  f"{pick.head_ms:.4f} -> {pick.tail_ms:.4f} ms")
     lines = [worst] if worst else []
-    lines += [f"duty {float(d):g} tread {t}: {moved} of its {n} kept repeats "
+    lines += [f"{state_label(d)} tread {t}: {moved} of its {n} kept repeats "
               f"moved, and they carry the cell's median in {share:.2%} of the "
               f"interval's draws (at most {V5_CARRY_CEILING:.1%})"
               for d, t, moved, n, share in carried]
@@ -1410,10 +1589,12 @@ def gate_v5_within_burst(keep) -> Gate:
            if carried else ""),
         f"at most {V5_ROW_BUDGET} row{'s' if V5_ROW_BUDGET != 1 else ''} at "
         f"{T.DRIFT_FRACTION:.2f}, the repository's DRIFT fraction, and in no "
-        "duty-and-tread cell enough of them to carry its median, at the point "
+        f"{'lock' if locked else 'duty'}-and-tread cell enough of them to carry "
+        "its median, at the point "
         f"estimate or in more than {V5_CARRY_CEILING:.1%} of the interval's draws",
         "the per-call time: inside one burst it would be an average over two "
-        "operating points, and the average moves with the duty cycle",
+        "operating points, and the average moves with "
+        + ("how hard the cap pulls on each lock" if locked else "the duty cycle"),
         lines)
 
 
@@ -1568,14 +1749,16 @@ def gates_for(rows, args, threshold: float, source: str,
     """
     keep = kept_rows(rows)
     cells = collapse(keep)
+    locked = bool(getattr(args, "lock_clocks", None))
     return [
         gate_v0_non_vacuity(rows, keep),
-        gate_v1_separation(cells, threshold, source),
+        gate_v1_separation(cells, threshold, source, locked=locked),
         gate_v2_one_kernel(keep),
-        gate_v3_depth(keep, args.duty, MIN_TREADS_PER_STATE,
-                      MIN_REPEATS_PER_STATE, MIN_STATES),
+        gate_v3_depth(keep, states_of(args), MIN_TREADS_PER_STATE,
+                      MIN_REPEATS_PER_STATE,
+                      len(states_of(args)) if locked else MIN_STATES),
         gate_v4_exclusions(rows, keep, EXCLUSION_CEILING),
-        gate_v5_within_burst(keep),
+        gate_v5_within_burst(keep, locked=locked),
         gate_v6_memory_clock(keep),
         gate_v7_admissible(est),
         gate_c1_resolved(est),
@@ -1630,8 +1813,9 @@ def estimated_seconds(args) -> tuple[float, list[str]]:
         ms = corpus_call_ms(tread)
         calls, bursts, _kept = burst_shape(ms, args.burst_ms, args.target_ms)
         per_repeat_kernel_ms += args.warm_ms + args.trials * bursts * calls * ms
-    inflation = sum(1.0 / d for d in args.duty)
-    settles = len(args.duty) * args.settle_seconds
+    duties = [d for d, _lock in states_of(args)]
+    inflation = sum(1.0 / d for d in duties)
+    settles = len(duties) * args.settle_seconds
     per_repeat = settles + per_repeat_kernel_ms * inflation / 1000.0
     total = args.repeats * per_repeat + ALLOCATION_SECONDS
     lines = [
@@ -1639,9 +1823,9 @@ def estimated_seconds(args) -> tuple[float, list[str]]:
         f"over {args.treads} treads ({args.warm_ms:.0f} ms warm + "
         f"{args.trials} x ~{args.target_ms:.0f} ms each)",
         f"  duty inflation                {inflation:7.2f}x "
-        f"= sum of 1/duty over {', '.join(f'{d:g}' for d in args.duty)}",
+        f"= sum of 1/duty over {', '.join(f'{d:g}' for d in duties)}",
         f"  settles per repeat            {settles:7.2f} s "
-        f"= {len(args.duty)} states x {args.settle_seconds:.0f} s",
+        f"= {len(duties)} states x {args.settle_seconds:.0f} s",
         f"  per repeat                    {per_repeat:7.2f} s",
         f"  x {args.repeats} repeats                 "
         f"{args.repeats * per_repeat:7.2f} s",
@@ -1664,7 +1848,7 @@ def mde_lines(args) -> list[str]:
     threshold for the design actually requested, and the span the claim needs
     to reach the target. V1 itself is unchanged.
     """
-    states = len(args.duty)
+    states = len(states_of(args))
     sigma_cell = MEDIAN_SE_PENALTY * CORPUS_REPEAT_SPREAD / math.sqrt(args.repeats)
     need, source = registered_clock_ratio(args)
     shape = math.sqrt((states + 1) / (12.0 * (states - 1))) if states > 1 else 0.0
@@ -1736,6 +1920,13 @@ def prediction_lines(args) -> list[str]:
         "FAIL), which is",
         "  a result about the design and not a licence to read the nearer edge.",
     ]
+    if getattr(args, "lock_clocks", None):
+        out += ["", "  LOCK MODE: P1's states are LOCKED SM clocks, not duty "
+                "cycles, and V1 scores it on the clock READ BACK exactly as in "
+                "duty mode. P2, P3 and the bands are unchanged: the same eta.",
+                "  A P1 FAIL in lock mode is not a governor that ignores duty: the "
+                "locks did not hold (the page",
+                "  names each one the card pulled off) or did not separate."]
     return out
 
 
@@ -1760,16 +1951,37 @@ def plan_lines(args, run_id: str, out_dir: Path, card: str,
         f"{treads[0]}..{treads[-1]}, tokens "
         f"{SWEEP.tokens_for_rows(cfg, treads[0])}.."
         f"{SWEEP.tokens_for_rows(cfg, treads[-1])}",
-        f"states      duty {', '.join(f'{d:g}' for d in args.duty)}, "
-        f"{args.settle_seconds:.0f} s of the state's own cadence before its "
+        (f"states      SM clock LOCKED at "
+         f"{', '.join(str(f) for f in args.lock_clocks)} MHz, every state at duty "
+         f"{args.lock_duty:g} (each measured burst's gap sized from that burst, "
+         "the settle's from the full-duty sizing pass), "
+         if args.lock_clocks else
+         f"states      duty {', '.join(f'{d:g}' for d in args.duty)}, ")
+        + f"{args.settle_seconds:.0f} s of the state's own cadence before its "
         "first cell",
         f"repeats     {args.repeats}, state order reversed on alternate repeats "
         "so a thermal trend does not line up with the state axis",
         f"burst       target {args.burst_ms:.0f} ms of GPU per burst, at least "
         f"{MIN_CALLS_PER_BURST} calls, the FIRST call of every burst discarded",
-        f"instrument  {INSTRUMENT}",
+        f"instrument  {instrument_of(args)}",
         f"WRITES TO   {out_dir}",
     ]
+    if args.lock_clocks:
+        out += [
+            "locks       `sudo -n nvidia-smi -lgc F,F` before each state (no sudo "
+            "when root), `nvidia-smi -rgc` at exit, on an exception and on "
+            "SIGTERM/SIGHUP/SIGINT (a signal the launcher ignored, nohup's "
+            "SIGHUP, stays ignored); before anything is written "
+            "every lock is checked against `nvidia-smi -q -d SUPPORTED_CLOCKS` "
+            "and one -lgc is probed and must be released by -rgc, and a refusal "
+            "is REFUSED with its text",
+            f"            the lock span ASKED is "
+            f"{max(args.lock_clocks) / min(args.lock_clocks):.4f}x against V1's "
+            f"{threshold:.3f}x; V1 scores the clock READ BACK per burst, so a lock "
+            "the card does not hold narrows it: a row more than "
+            f"{T.DRIFT_FRACTION:.0%} off its lock is EXCLUDED (off_lock), "
+            "counted in V0 and V4, and the page names the lock",
+        ]
     for label, path in paths.items():
         out.append(f"  {label:<12}{path}   {git_visibility(path)}")
     out += [
@@ -1780,8 +1992,14 @@ def plan_lines(args, run_id: str, out_dir: Path, card: str,
         "pod for the",
         "LEVEL RECORD only, and LEVEL excludes nothing here on either side; "
         "DRIFT and",
-        "host-bound are the two exclusions and V4 holds them to "
-        f"{100 * EXCLUSION_CEILING:.0f}% of all rows.",
+        # A LOCK PAGE HAS A THIRD EXCLUSION, and this line said "the two" on
+        # it until the second review (2026-09-25) after V4's text had moved.
+        ("host-bound are the two exclusions and V4 holds them to "
+         f"{100 * EXCLUSION_CEILING:.0f}% of all rows." if not args.lock_clocks else
+         "host-bound are exclusions, and in lock mode so is off-lock (a read-back "
+         f"more than {T.DRIFT_FRACTION:.0%} off"),
+        *([f"its lock); V4 holds the three to {100 * EXCLUSION_CEILING:.0f}% of all "
+           "rows."] if args.lock_clocks else []),
         "",
         "THE BURST TABLE, computed by the same `burst_shape` the pod calls:",
         "  tread   modelled ms   calls/burst   bursts/trial   kept calls/trial",
@@ -2126,6 +2344,166 @@ def time_duty(fn, *, duty: float, calls_per_burst: int, bursts: int,
         gap_basis=gap_basis)
 
 
+class LockRefused(RuntimeError):
+    """`nvidia-smi -lgc` refused or failed, the command and its own output
+    verbatim in the message. `preflight` turns it into a REFUSED (2) before
+    anything is written; raised later, from `run_arm`, the lock broke in use
+    and `main` exits ERROR (4), and a resume keeps the cells already on disk."""
+
+
+class ClockLock:
+    """`nvidia-smi -lgc F,F` per state and `nvidia-smi -rgc`: the ONE place
+    either is run.
+
+    ENTERED, it turns SIGTERM and SIGHUP into SystemExit(128 + the signal) and
+    SIGINT into the KeyboardInterrupt Ctrl-C always raised, so its exit, which
+    ALWAYS runs -rgc, runs on a kill as well as on a return or an exception. A
+    signal ALREADY IGNORED when it is entered stays ignored: `nohup` starts a
+    process with SIGHUP ignored, and replacing that ended a plain `nohup ... &`
+    lock run when its SSH connection dropped (review, 2026-09-25).
+
+    THE FIRST KILL WINS (second review, 2026-09-25). The handler's FIRST act is
+    `_quiet`, which ignores all three, so a second kill (a double Ctrl-C, or the
+    hangup plus bash re-sending SIGHUP to its jobs) can interrupt neither the
+    unwinding to the reset nor the reset. And the reset is the `finally` of
+    `__exit__`'s own prologue, which is `_quiet` again: a kill landing INSIDE
+    that prologue on a clean exit raised there, skipped -rgc and printed no
+    warning, because the warning follows a failed -rgc only. While -rgc runs all
+    three are ignored and the -rgc child inherits the ignore across exec, so a
+    Ctrl-C cannot have subprocess.run kill it. What no handler can catch leaves
+    the card locked: SIGKILL, and a native crash (a segfault or a CUDA abort
+    inside Triton or the driver). The operator's line after the run,
+    `sudo -n nvidia-smi -rgc`, is the reset for those. `self.held` is the lock
+    still on the card, None once a reset succeeded, and `_main` reads it after
+    BOTH `with` blocks. `sudo -n` only when not root, so a root container gets
+    the driver's own answer (a RunPod container: "Insufficient Permissions").
+    No `-i`: every GPU on the box.
+    """
+
+    SIGNALS = ("SIGTERM", "SIGHUP", "SIGINT")
+
+    def __init__(self, run=None, euid=None) -> None:
+        self._run = run or subprocess.run
+        self.prefix = [] if (os.geteuid() if euid is None else euid) == 0 else ["sudo", "-n"]
+        self.log: list[dict] = []
+        self.held: int | None = None
+        #: The handlers `__enter__` replaced, and the ones `_quiet` replaced,
+        #: all put back by `__exit__`. Where both hold a signal `__enter__`'s
+        #: wins, because `_quiet`'s is this lock's own `_on_signal`.
+        self._saved: dict = {}
+        self._quieted: dict = {}
+
+    def _call(self, argv: list[str], *, root: bool = True) -> tuple[int, str]:
+        cmd = [*(self.prefix if root else []), "nvidia-smi", *argv]
+        try:
+            done = self._run(cmd, capture_output=True, text=True, timeout=60)
+            rc, text = done.returncode, ((done.stdout or "") + (done.stderr or "")).strip()
+        except (OSError, subprocess.SubprocessError) as exc:
+            rc, text = -1, f"{type(exc).__name__}: {exc}"
+        self.log.append({"command": " ".join(cmd), "rc": rc, "output": text[-400:]})
+        return rc, text
+
+    def lock(self, mhz: int) -> None:
+        rc, text = self._call(["-lgc", f"{int(mhz)},{int(mhz)}"])
+        if rc != 0:
+            raise LockRefused(f"`{self.log[-1]['command']}` exited {rc}: "
+                              f"{text or 'no output'}")
+        self.held = int(mhz)
+
+    def preflight(self, locks) -> str:
+        """"" when every lock is a supported graphics clock and -lgc is
+        permitted here, else why not, with nvidia-smi's own words."""
+        rc, text = self._call(["-q", "-d", "SUPPORTED_CLOCKS"], root=False)
+        supported = sorted({int(m) for m in re.findall(r"Graphics\s*:\s*(\d+)\s*MHz", text)})
+        if rc != 0 or not supported:
+            return (f"`nvidia-smi -q -d SUPPORTED_CLOCKS` exited {rc} and listed "
+                    f"{len(supported)} graphics clocks: {text[-300:] or 'no output'}")
+        off = [f for f in locks if int(f) not in supported]
+        if off:
+            return (f"--lock-clocks {off} are not supported graphics clocks here "
+                    f"({len(supported)} of them, {supported[0]}..{supported[-1]} MHz); "
+                    "the driver would round the lock and the rows would name a "
+                    "clock that never ran")
+        try:
+            self.lock(max(locks))
+        except LockRefused as exc:
+            return str(exc.args[0])
+        return ""
+
+    def _signals(self):
+        return [s for s in (getattr(signal, n, None) for n in self.SIGNALS) if s]
+
+    def __enter__(self) -> ClockLock:
+        for sig in self._signals():
+            old = signal.getsignal(sig)
+            # IGNORED STAYS IGNORED: nohup's SIGHUP is the launcher's decision
+            # that a dropped terminal must not end the run, not this file's. A
+            # handler installed from C reads None and is left alone, because
+            # it could not be put back.
+            if old in (None, signal.SIG_IGN):
+                continue
+            with contextlib.suppress(ValueError):   # not the main thread
+                signal.signal(sig, self._on_signal)
+                self._saved[sig] = old
+        return self
+
+    def _quiet(self) -> None:
+        """Ignore SIGTERM, SIGHUP and SIGINT until `__exit__` puts back what
+        this replaced. Idempotent, and safe to re-enter: a kill that lands in
+        here runs `_on_signal`, whose own `_quiet` finishes the job."""
+        for sig in self._signals():
+            if sig in self._quieted:
+                continue
+            old = signal.getsignal(sig)
+            if old in (None, signal.SIG_IGN):
+                continue
+            with contextlib.suppress(ValueError):   # not the main thread
+                signal.signal(sig, signal.SIG_IGN)
+                self._quieted.setdefault(sig, old)
+
+    def _on_signal(self, signum, _frame):
+        self._quiet()
+        # SAID BEFORE THE EXIT, because the exit status cannot say it: a shell
+        # reports 143 for a process SIGTERM killed with no handler at all, so
+        # only this line tells the kill test on the VM that the reset was reached.
+        print(f"{signal.Signals(signum).name} caught: resetting the SM clock, "
+              f"then exiting {128 + signum}", file=sys.stderr, flush=True)
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
+        raise SystemExit(128 + signum)
+
+    def _reset(self) -> None:
+        held = self.held
+        rc, text = self._call(["-rgc"])
+        if rc != 0 and held is not None:
+            print(f"WARNING: the SM clock is STILL LOCKED at {held} MHz: "
+                  f"`{self.log[-1]['command']}` exited {rc}: {text}. Reset it "
+                  "by hand: sudo nvidia-smi -rgc", file=sys.stderr)
+        elif rc == 0:
+            self.held = None
+            if held is not None:
+                print(f"SM clock reset: `{self.log[-1]['command']}` exited 0, "
+                      f"the {held} MHz lock is released", flush=True)
+
+    def __exit__(self, *exc) -> bool:
+        # NOTHING MAY ABORT THE RESET, and nothing may SKIP it: the prologue
+        # that ignores the three signals is a `try` whose `finally` is the
+        # reset, so a kill landing in the prologue raises there and still
+        # resets, with all three ignored by then (its handler ran `_quiet`).
+        try:
+            try:
+                self._quiet()
+            finally:
+                self._reset()
+        finally:
+            for sig, old in {**self._quieted, **self._saved}.items():
+                with contextlib.suppress(ValueError):   # not the main thread
+                    signal.signal(sig, old)
+            self._saved.clear()
+            self._quieted.clear()
+        return False
+
+
 class _MemClockReader:
     """NVML's memory clock, or 0.0 forever if it cannot be read.
 
@@ -2203,8 +2581,11 @@ def build_ladder(cfg, args, treads):
     return built
 
 
-def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]:
-    """The metered part. Appends every row as it lands, so aborting keeps it."""
+def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None,
+            locker: ClockLock | None = None) -> list[Row]:
+    """The metered part. Appends every row as it lands, so aborting keeps it.
+    In lock mode `locker` locks each state's clock; the CALLER holds it open
+    and so owns the reset."""
     import torch
     from vllm.model_executor.layers.fused_moe import fused_experts
 
@@ -2240,7 +2621,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
     # cell would double every row in the file and the medians would be taken
     # over two thermal histories with no column saying so.
     done = read_rows(csv_path)
-    have = {(r.repeat, _duty_key(r.duty_requested), r.tiles)
+    have = {(r.repeat, row_state(r), r.tiles)
             for r in done if r.status == "ok"}
     if have:
         print(f"resuming: {len(have)} cells already on disk in {csv_path}")
@@ -2296,33 +2677,36 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
               + adopted)
 
     rows: list[Row] = []
-    order = list(args.duty)
+    order = states_of(args)
     try:
         for repeat in range(args.repeats):
             states = order if repeat % 2 == 0 else list(reversed(order))
-            for index, duty in enumerate(states):
+            for index, (duty, lock) in enumerate(states):
+                key = state_key(duty, lock)
+                said, cell = console_state(duty, lock)
                 # THE SETTLE IS A COST OF MEASURING, so a state with nothing
                 # left to measure does not pay it. Outside this test, a resume
                 # of a COMPLETE run still ran every settle -- 13 repeats x 4
                 # states x 10 s = 520 s of cadence -- to produce no new row.
-                todo = [t for t in treads
-                        if (repeat, _duty_key(duty), t) not in have]
+                todo = [t for t in treads if (repeat, key, t) not in have]
                 if not todo:
-                    print(f"\nrepeat {repeat} state duty={duty:g}: already on "
-                          "disk, no settle and no cells")
+                    print(f"\nrepeat {repeat} state {said}: already on disk, "
+                          "no settle and no cells")
                     continue
+                if locker is not None:
+                    locker.lock(lock)
                 calls, bursts, per_call = shape[treads[len(treads) // 2]]
                 mid = built[treads[len(treads) // 2]]
                 settle_call = SWEEP._make_call(fused_experts, mid[2], mid[3],
                                                mid[5], mid[4], mid[6])
-                print(f"\nrepeat {repeat} state duty={duty:g}: settling "
+                print(f"\nrepeat {repeat} state {said}: settling "
                       f"{args.settle_seconds:.0f} s at this cadence")
                 with FC.forcing_tile_config(pinned_for(args.group_m)):
                     _settle(settle_call, duty=duty, calls=calls,
                             per_call_ms=per_call, seconds=args.settle_seconds,
                             flusher=flusher)
                 for tread in treads:
-                    if (repeat, _duty_key(duty), tread) in have:
+                    if (repeat, key, tread) in have:
                         continue
                     rows_per_expert, tokens, x, weights, ids, w, kw = built[tread]
                     calls, bursts, per_call = shape[tread]
@@ -2337,9 +2721,10 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                                 per_call_ms=per_call,
                                 reference_clock_mhz=reference_clock,
                                 clock_read=read, mem_read=mem_read,
-                                flusher=flusher)
+                                flusher=flusher,
+                                gap_basis=GAP_FROM_BURST if lock else GAP_FROM_SIZING)
                         row = _row_from(t, args, duty, index, repeat, tread,
-                                        rows_per_expert, tokens, observed)
+                                        rows_per_expert, tokens, observed, lock=lock)
                     except T.TimingRefused:
                         # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR.
                         # Filed as a failed row, the arm would walk the whole
@@ -2350,11 +2735,11 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                         row = _failed_row(args, duty, index, repeat, tread,
                                           rows_per_expert, tokens,
                                           f"{type(exc).__name__}: {exc}",
-                                          observed)
-                        print(f"  FAILED duty={duty:g} tread={tread}: {row.detail}")
+                                          observed, lock=lock)
+                        print(f"  FAILED {said} tread={tread}: {row.detail}")
                     rows.append(row)
                     append_row(csv_path, row, prov)
-                    print(f"  duty {duty:4.2f} tread {tread:2d} "
+                    print(f"  {cell} tread {tread:2d} "
                           f"{row.ms_p50:9.4f} ms  "
                           f"clock {row.sm_clock_load_mhz or 0:7.1f} MHz  "
                           f"power {row.power_w or 0:6.1f} W  "
@@ -2407,8 +2792,9 @@ def observed_tile(observed: dict | None, pinned: dict | None = None) -> dict:
 
 
 def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
-              rows_per_expert, tokens, observed: dict | None = None) -> Row:
-    """One row. `state_index` is the duty's own place in `--duty` and
+              rows_per_expert, tokens, observed: dict | None = None,
+              lock: int | None = None) -> Row:
+    """One row. `state_index` is the state's own place in `states_of` and
     `order_index` is where it fell in THIS repeat, which are different numbers
     on the reversed repeats and are both worth keeping: the first identifies the
     state, the second is what a reader checks a thermal trend against.
@@ -2418,7 +2804,7 @@ def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
     tile = observed_tile(observed, pinned_for(args.group_m))
     return Row(
         duty_requested=duty, duty_achieved=t.duty_achieved,
-        state_index=list(args.duty).index(duty),
+        state_index=states_of(args).index((float(duty), lock)),
         repeat=repeat, order_index=index, model=args.model, dtype=args.dtype,
         block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
         block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
@@ -2440,15 +2826,17 @@ def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
         mem_clock_mhz=t.mem_clock_mhz, host_bound=t.host_bound,
         host_enqueue_ms=t.host_enqueue_ms,
         host_backlog_iters=t.host_backlog_iters, warmup_ms=t.warmup_ms,
-        l2_flush=t.l2_flush, status="ok", detail=t.clock_note)
+        l2_flush=t.l2_flush, status="ok", detail=t.clock_note,
+        instrument=instrument_of(args), clock_lock_mhz=lock)
 
 
 def _failed_row(args, duty, index, repeat, tread, rows_per_expert, tokens,
-                detail: str, observed: dict | None = None) -> Row:
+                detail: str, observed: dict | None = None,
+                lock: int | None = None) -> Row:
     tile = observed_tile(observed, pinned_for(args.group_m))
     return Row(
         duty_requested=duty, duty_achieved=0.0,
-        state_index=list(args.duty).index(duty), repeat=repeat,
+        state_index=states_of(args).index((float(duty), lock)), repeat=repeat,
         order_index=index, model=args.model, dtype=args.dtype,
         block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
         block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
@@ -2463,7 +2851,7 @@ def _failed_row(args, duty, index, repeat, tread, rows_per_expert, tokens,
         reference_clock_mhz=None, power_w=None, mem_clock_mhz=None,
         host_bound=None, host_enqueue_ms=None, host_backlog_iters=None,
         warmup_ms=0.0, l2_flush=not args.no_l2_flush, status="failed",
-        detail=detail)
+        detail=detail, instrument=instrument_of(args), clock_lock_mhz=lock)
 
 
 # --------------------------------------------------------------------------
@@ -2523,7 +2911,8 @@ def append_row(path: Path, row: Row, prov=None) -> None:
 
 _OPT_FLOAT = {"head_ms", "tail_ms", "sm_clock_load_mhz", "sm_clock_start_mhz",
               "sm_clock_end_mhz", "reference_clock_mhz", "power_w",
-              "mem_clock_mhz", "host_enqueue_ms", "host_backlog_iters"}
+              "mem_clock_mhz", "host_enqueue_ms", "host_backlog_iters",
+              "clock_lock_mhz"}
 _OPT_BOOL = {"within_burst_ok", "clock_level_ok", "clock_drift_ok", "host_bound"}
 
 
@@ -2587,7 +2976,7 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
                jitter: float = 0.0, seed: int = 7,
                block_m_at=None, drift_at=(), host_at=(),
                level_at=None, mem_at=None, burst_moves_at=(),
-               calls_per_burst: int = 24) -> list[Row]:
+               calls_per_burst: int = 24, locks=None) -> list[Row]:
     """Rows from a stated law: `ms(n, f) = a (f_ref / f) ** eps_a + b n (f_ref / f) ** eps`,
     `eps_a` defaulting to `eps` (one elasticity for the whole call). An
     intercept with its own `eps_a` is still ON the law: every tread's
@@ -2608,6 +2997,9 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
     purpose: LEVEL on either side must be KEPT and DRIFT must be EXCLUDED, and a
     planter that only ever put them on the same row could not tell a counter that
     filters on LEVEL from one that filters on DRIFT.
+
+    `locks` plants LOCK MODE: state i carries lock `locks[i]` and reads back
+    `mhz[i]`, so a `mhz` below its lock is a lock the card could not hold.
     """
     rng = random.Random(seed)
     level_at = level_at or {}
@@ -2663,7 +3055,8 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
                     mem_clock_mhz=(mem_at.get(key, PLANTED_MEM_MHZ)
                                    if mem_at else PLANTED_MEM_MHZ),
                     host_bound=(key in host_at), host_enqueue_ms=0.5,
-                    host_backlog_iters=40.0, warmup_ms=200.0, l2_flush=True))
+                    host_backlog_iters=40.0, warmup_ms=200.0, l2_flush=True,
+                    clock_lock_mhz=locks[index % len(locks)] if locks else None))
     return out
 
 
@@ -3089,12 +3482,18 @@ def default_run_id(args) -> str:
     OUT: `--draws`, `--seed-bootstrap` and `--min-clock-ratio`, which re-analyse
     one set of cells, and `--out`, `--run-id`, `--dry-run`, `--self-test`. Two
     analyses of one sweep belong in one directory.
+
+    LOCK MODE adds `lock` (the lock set) and keys `duty` on `--lock-duty`, so a
+    lock run and a duty run never share a directory, and a duty run's id is the
+    one it had before lock mode existed.
     """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
     return PV.run_id(
         card=resolve_card(args),
         model=args.model, dtype=args.dtype,
         tile="_".join(f"{k}{v}" for k, v in sorted(pinned_for(args.group_m).items())),
-        treads=int(args.treads), duty=[float(d) for d in args.duty],
+        treads=int(args.treads),
+        duty=[float(args.lock_duty)] if locks else [float(d) for d in args.duty],
         repeats=int(args.repeats), burstms=float(args.burst_ms),
         targetms=float(args.target_ms), trials=int(args.trials),
         warmms=float(args.warm_ms), settle=float(args.settle_seconds),
@@ -3102,7 +3501,8 @@ def default_run_id(args) -> str:
         # The session tag is in the key WHEN GIVEN, as the ratio arm's is, so
         # a new session measures fresh and a resumed one resumes; a bare run's
         # id is the id the same command produced before the knob existed.
-        **({"session": args.session_tag} if args.session_tag else {}))
+        **({"session": args.session_tag} if args.session_tag else {}),
+        **({"lock": locks} if locks else {}))
 
 
 def results_root() -> Path:
@@ -3115,26 +3515,157 @@ def results_root() -> Path:
     return Path(__file__).resolve().parents[1] / "results"
 
 
+def off_lock_lines(rows, args) -> list[str]:
+    """LOCK MODE: every lock the card did not hold, BY NAME, and how many of
+    the planned locks the fit read. None in duty mode or when every lock held.
+
+    V0 and V4 COUNT the off-lock rows and V3 fails a lock ladder that lost
+    any planned lock, but a count is not a name. On a power-capped card
+    the top lock is the one at risk (the GH200's 1965 read ~1815 during R3's
+    bursts, 2026-09-25), and it can fail two ways that both need saying: at
+    every tread, which leaves the fit a ladder one lock short, or only at the
+    deep treads, where the call draws the most power, which can leave the page
+    VALID with those treads' slopes resting on the other locks.
+
+    EVERY ROW READ OFF ITS LOCK IS NAMED, SPLIT BY WHAT EXCLUDED IT (second
+    review, 2026-09-25). `exclusion` tests DRIFT and host-bound before off-lock,
+    and a cap pulling a lock down mid-burst is exactly what DRIFT flags, so on
+    the GH200's failure one lock's rows are dropped under two reasons. V0 and
+    V4 count each row once, under its first; the draft's line counted them all
+    as "excluded as off_lock" and put a second number on the page beside V4's.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    if not locks:
+        return []
+    every = sorted({r.tiles for r in rows})
+    kept_locks = {int(r.clock_lock_mhz) for r in kept_rows(rows) if r.clock_lock_mhz}
+    named = []
+    for lock in locks:
+        read = [r for r in rows if r.clock_lock_mhz and int(r.clock_lock_mhz) == lock
+                and r.sm_clock_load_mhz]
+        off = [r for r in read if off_lock(r)]
+        if not off:
+            continue
+        why: dict[str, int] = {}
+        for r in off:
+            why[exclusion(r)] = why.get(exclusion(r), 0) + 1
+        split = ", ".join(
+            [f"{why.pop(DROP_OFF_LOCK, 0)} excluded as {DROP_OFF_LOCK}"]
+            + [f"{n} already excluded as {k}" for k, n in sorted(why.items())])
+        mhz = statistics.median(r.sm_clock_load_mhz for r in off)
+        treads = sorted({r.tiles for r in off})
+        where = ("at every tread" if treads == every else
+                 f"at treads {', '.join(str(t) for t in treads)}")
+        named.append(
+            f"    lock {lock} MHz: {len(off)} of its {len(read)} rows read back "
+            f"more than {T.DRIFT_FRACTION:.0%} off it ({split}), median "
+            f"{mhz:.0f} MHz ({100 * abs(mhz - lock) / lock:.1f}% "
+            f"{'below' if mhz < lock else 'above'}), {where}")
+    if not named:
+        return []
+    return ["", "  LOCKS THE CARD DID NOT HOLD, those rows EXCLUDED and never fitted "
+            "(V0 and V4 count each once, under its first reason):", *named,
+            f"  THE FIT READ {len(kept_locks)} OF THE {len(locks)} PLANNED LOCKS. The "
+            "plan's lock span is the span ASKED for;",
+            "  the clock span per tread above and V1 are the span the fit saw, and "
+            "at a tread that lost",
+            "  a lock its slope rests on the others. The next run's locks come from "
+            "a short hold test",
+            "  per lock on this card at this duty."]
+
+
+def loose_lock_lines(rows, args) -> list[str]:
+    """LOCK MODE: every lock whose KEPT rows read back more than one
+    `LOCK_STEP_MHZ` step off it at some tread, by name, with those treads.
+    None in duty mode or when every lock held within a step.
+
+    Such rows are inside `timing.DRIFT_FRACTION`, so they are kept and fitted at
+    the clock read back, which does not bias the fit. But the page would call
+    the lock held, and on the Lambda H100 (2026-09-25) an 1800 MHz lock read
+    1770 at R3's G=2: 1.7% off, under the 5% rule, and not what "held" means to
+    the hold test that picks the locks. Each (lock, tread) cell is judged on its
+    median read-back over its kept rows, so one noisy NVML read names nothing.
+    """
+    locks = [int(f) for f in (getattr(args, "lock_clocks", None) or [])]
+    if not locks:
+        return []
+    keep = [r for r in kept_rows(rows) if r.clock_lock_mhz and r.sm_clock_load_mhz]
+    every = sorted({r.tiles for r in rows})
+    named = []
+    for lock in locks:
+        cells: dict[int, list[float]] = {}
+        for r in keep:
+            if int(r.clock_lock_mhz) == lock:
+                cells.setdefault(r.tiles, []).append(float(r.sm_clock_load_mhz))
+        loose = sorted(t for t, mhz in cells.items()
+                       if abs(statistics.median(mhz) - lock) > LOCK_STEP_MHZ)
+        if not loose:
+            continue
+        mhz = statistics.median(m for t in loose for m in cells[t])
+        where = ("at every tread" if loose == every else
+                 f"at treads {', '.join(str(t) for t in loose)}")
+        named.append(f"    lock {lock} MHz: median {mhz:.0f} MHz "
+                     f"({100 * abs(mhz - lock) / lock:.1f}% "
+                     f"{'below' if mhz < lock else 'above'}), {where}")
+    if not named:
+        return []
+    return ["", f"  LOCKS HELD ONLY LOOSELY, those rows KEPT and fitted at the clock "
+            f"read back (more than one {LOCK_STEP_MHZ} MHz step off the lock, "
+            f"within {T.DRIFT_FRACTION:.0%}):", *named]
+
+
+def left_locked_lines(locker) -> list[str]:
+    """The FIRST lines of report.txt, above the plan, when the run's OWN reset
+    failed, else none. The first lines of the file and not of the tail (second
+    review, 2026-09-25): under the ~80-line plan the warning sat where nobody
+    opening the page looks first."""
+    if locker is None or locker.held is None:
+        return []
+    last = locker.log[-1] if locker.log else {}
+    return [f"THE SM CLOCK WAS LEFT LOCKED at {locker.held} MHz after this run: "
+            f"`{last.get('command', 'nvidia-smi -rgc')}` exited {last.get('rc')}: "
+            f"{last.get('output') or 'no output'}.",
+            "  The cells on this page were measured under their locks and stand. "
+            "Anything run on this card",
+            "  next runs at that clock until it is reset by hand: sudo nvidia-smi -rgc",
+            f"  This run exits ERROR ({exit_codes.ERROR}), not its verdict's code, so "
+            "a chain stops here.",
+            ""]
+
+
 def report_lines(rows, est: Elasticity, args) -> list[str]:
     keep = kept_rows(rows)
     cells = collapse(keep)
     sides = level_counts(keep)
+    locked = bool(getattr(args, "lock_clocks", None))
     out = ["", "THE STATES, as measured"]
-    out.append("  duty   rows   median clock   median power   median duty seen")
-    for duty in args.duty:
-        mine = [r for r in keep if _duty_key(r.duty_requested) == _duty_key(duty)]
+    out.append("  lock MHz   rows   clock read back   median power   median duty seen"
+               "   read off lock" if locked else
+               "  duty   rows   median clock   median power   median duty seen")
+    for duty, lock in states_of(args):
+        key = state_key(duty, lock)
+        mine = [r for r in keep if row_state(r) == key]
+        head = f"  {lock:8d}" if locked else f"  {duty:4.2f}"
+        dropped = sum(1 for r in rows if row_state(r) == key and off_lock(r))
+        off = f"   {dropped:13d}" if locked else ""
         if not mine:
-            out.append(f"  {duty:4.2f}      0   (no kept row)")
+            out.append(f"{head}      0   (no kept row){off}")
             continue
         out.append(
-            f"  {duty:4.2f}   {len(mine):4d}   "
+            f"{head}   {len(mine):4d}   "
             f"{statistics.median(r.sm_clock_load_mhz for r in mine):9.1f} MHz   "
             f"{statistics.median(r.power_w or 0.0 for r in mine):9.1f} W   "
-            f"{statistics.median(r.duty_achieved for r in mine):13.3f}")
+            f"{statistics.median(r.duty_achieved for r in mine):13.3f}{off}")
+    if locked:
+        out += [f"  read off lock: rows read back more than {T.DRIFT_FRACTION:.0%} "
+                "off their lock, WHATEVER excluded them;",
+                "  V0 and V4 count each excluded row once, under its first reason"]
     ratios = clock_ratio_by_tread(cells)
     if ratios:
         out.append("  clock span per tread: "
                    + ", ".join(f"n{t}={v:.4f}x" for t, v in sorted(ratios.items())))
+    out += off_lock_lines(rows, args)
+    out += loose_lock_lines(rows, args)
     out += [
         "",
         f"  LEVEL among kept rows: {sides[T.LEVEL_HIGH]} HIGH, "
@@ -3296,6 +3827,22 @@ def build_parser() -> argparse.ArgumentParser:
                     help="sustained GPU-busy fractions, one state each. 1.0 is "
                          "no host sleep at all, the highest sustained "
                          "pressure a byte-identical kernel can apply")
+    ap.add_argument("--lock-clocks", type=int, nargs="+", default=[],
+                    help="LOCK MODE: SM clocks in MHz, one state each, locked "
+                         "with nvidia-smi -lgc F,F (root or passwordless sudo; "
+                         "a rented container refuses it) and reset with -rgc "
+                         "at exit. Each must be in nvidia-smi -q -d "
+                         "SUPPORTED_CLOCKS, and the top one must be a clock "
+                         "the card HOLDS at --lock-duty (a short hold test "
+                         "first: a power-capped card pulls a high lock down, "
+                         "and those rows are excluded as off_lock). Replaces "
+                         "--duty as the state axis; in the run id")
+    ap.add_argument("--lock-duty", type=float, default=DEFAULT_LOCK_DUTY,
+                    help="LOCK MODE's one duty, every state, chosen to keep "
+                         "board power off the cap so the lock sets the clock "
+                         "(expected, not guaranteed; the page names a lock "
+                         "that did not hold). In the run id in lock mode only, "
+                         "the one mode it measures in")
     ap.add_argument("--repeats", type=int, default=DEFAULT_REPEATS,
                     help="passes over the whole design; the interval is a "
                          "bootstrap over these")
@@ -3367,7 +3914,7 @@ def _main(argv=None) -> int:
               "is no host sleep at all and is the most sustained pressure a "
               "byte-identical kernel can apply.")
         return exit_codes.REFUSED
-    loosened = loosening_refusal(args)
+    loosened = loosening_refusal(args) or lock_refusal(args)
     if loosened:
         print(loosened)
         return exit_codes.REFUSED
@@ -3400,8 +3947,8 @@ def _main(argv=None) -> int:
         for line in items:
             print(line)
         print(f"  rows                          "
-              f"{args.repeats * len(args.duty) * args.treads} "
-              f"({args.repeats} repeats x {len(args.duty)} states x "
+              f"{args.repeats * len(states_of(args)) * args.treads} "
+              f"({args.repeats} repeats x {len(states_of(args))} states x "
               f"{args.treads} treads)")
         print("  EVERY TERM IS ON THE WALL CLOCK. This arm holds a cadence for "
               "a stated number of")
@@ -3455,8 +4002,34 @@ def _main(argv=None) -> int:
               "regress. Install")
         print("  nvidia-ml-py in THIS interpreter and re-run.")
         return exit_codes.REFUSED
+    # LOCK MODE'S DOOR, before anything is written: every lock a supported
+    # clock, and one -lgc actually taken and reset, so a container that refuses
+    # it is refused here in the driver's own words and not after the build.
+    locker = ClockLock() if args.lock_clocks else None
+    if locker is not None:
+        with locker:
+            refused = locker.preflight(args.lock_clocks)
+        if refused:
+            print("\nREFUSED. Nothing was measured.")
+            print(f"  The SM clock cannot be locked here: {refused}")
+            print("  Lock mode needs nvidia-smi -lgc, which a rented container "
+                  "refuses; run duty mode (no --lock-clocks) there.")
+            return exit_codes.REFUSED
+        # AND THE PROBE'S RESET IS CHECKED, not assumed (review, 2026-09-25).
+        # Unchecked, a -rgc that failed left the probe's lock on the card and
+        # the run went on: the burst sizing and the reference clock were read
+        # under a lock nobody chose, and the card stayed locked at the end.
+        if locker.held is not None:
+            last = locker.log[-1]
+            print("\nREFUSED. Nothing was measured.")
+            print(f"  `{last['command']}` did not release the probe lock at "
+                  f"{locker.held} MHz: it exited {last['rc']}: "
+                  f"{last['output'] or 'no output'}")
+            print("  The card is STILL LOCKED. Reset it by hand (sudo nvidia-smi "
+                  "-rgc) and find why the reset failed before a lock run.")
+            return exit_codes.REFUSED
 
-    prov = PV.provenance_block(instrument=INSTRUMENT, warmup_ms=args.warm_ms,
+    prov = PV.provenance_block(instrument=instrument_of(args), warmup_ms=args.warm_ms,
                                target_ms=args.target_ms)
     out_dir.mkdir(parents=True, exist_ok=True)
     # THE CARD FILE IS THE RESUME GUARD THE RUN ID CANNOT BE. The id is keyed on
@@ -3480,18 +4053,34 @@ def _main(argv=None) -> int:
         print(f"REFUSED. {wrong_card}")
         return exit_codes.REFUSED
     stamp.write_text(card + "\n")
-    rows = run_arm(args, cfg, paths["cells.csv"], out_dir / "triton-cache", prov)
+    # THE RESET IS THIS `with`'s EXIT: a return, an exception, SIGTERM, SIGHUP
+    # or Ctrl-C.
+    with locker if locker is not None else contextlib.nullcontext():
+        rows = run_arm(args, cfg, paths["cells.csv"], out_dir / "triton-cache",
+                       prov, locker=locker)
+    # THE SECOND CALL SITE OF THE PROBE'S RULE. The cells were measured under
+    # their locks and stand, so the verdict is not moved; but the card is left
+    # at the last lock, and whatever runs next on it measures under a lock
+    # nobody set for it, so the PAGE and report.json say so, not only stderr.
+    left_locked = locker.held if locker is not None else None
 
     est = fit(rows, draws=args.draws, seed=args.seed_bootstrap)
     threshold, source = registered_clock_ratio(args)
     gates = gates_for(rows, args, threshold, source, est)
+    left = left_locked_lines(locker)
     tail = report_tail(report_lines(rows, est, args), gates)
+    if left:
+        print("\n" + "\n".join(left[:-1]))
     print("\n".join(tail))
 
-    (out_dir / "report.txt").write_text("\n".join(header + tail) + "\n")
+    (out_dir / "report.txt").write_text("\n".join(left + header + tail) + "\n")
     payload = prov.stamp({
         "run_id": run_id, "card": card, "device": identity,
-        "pinned": pinned_for(args.group_m), "duty": list(args.duty),
+        "pinned": pinned_for(args.group_m),
+        "duty": [d for d, _lock in states_of(args)],
+        "clock_locks_mhz": list(args.lock_clocks) or None,
+        "clock_lock_log": locker.log if locker is not None else [],
+        "clock_left_locked_mhz": left_locked,
         "predictions": [asdict(p) for p in PREDICTIONS],
         "bands": [{"name": n, "lo": lo, "hi": hi, "consequence": c}
                   for n, lo, hi, c in BANDS],
@@ -3506,6 +4095,14 @@ def _main(argv=None) -> int:
     print(f"json     {paths['report.json']}")
 
     rc = exit_codes.classify(g.scored() for g in gates)
+    if left_locked is not None:
+        # A CARD LEFT LOCKED STOPS A CHAIN (owner, 2026-09-25). The verdict on
+        # the page stands; the exit code is what a driver reads, and anything
+        # it ran next on this card would measure under a lock nobody set.
+        print(f"verdict  {exit_codes.describe(rc)}")
+        print(f"exit     {exit_codes.describe(exit_codes.ERROR)}: the SM clock "
+              f"was left locked at {left_locked} MHz")
+        return exit_codes.ERROR
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 

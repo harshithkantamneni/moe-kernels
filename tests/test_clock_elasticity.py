@@ -31,6 +31,7 @@ import inspect
 import json
 import math
 import re
+import signal
 import statistics
 import subprocess
 import sys
@@ -963,16 +964,20 @@ def test_this_file_defines_no_store_class():
 ID_EXEMPT = {"dry_run", "self_test", "out", "run_id", "card", "draws",
              "seed_bootstrap", "min_clock_ratio"}
 
+#: Knobs that measure in ONE mode only, and the flags that select it: moved
+#: from THAT mode's base, where they change the milliseconds on a row.
+MODE_ONLY = {"lock_duty": ["--lock-clocks", "1980", "1755", "1530"]}
+
 
 def test_every_knob_that_changes_a_measurement_is_in_the_run_id():
-    args = parsed(["--card", "NVIDIA H200"])
-    base = CE.default_run_id(args)
     for action in CE.build_parser()._actions:
         if not action.option_strings or action.dest in ("help",):
             continue
         if action.dest in ID_EXEMPT:
             continue
-        moved = parsed(["--card", "NVIDIA H200"])
+        mode = MODE_ONLY.get(action.dest, [])
+        base = CE.default_run_id(parsed(["--card", "NVIDIA H200", *mode]))
+        moved = parsed(["--card", "NVIDIA H200", *mode])
         current = getattr(moved, action.dest)
         if isinstance(current, bool):
             setattr(moved, action.dest, not current)
@@ -1424,10 +1429,12 @@ def test_a_resume_adopts_the_burst_shape_already_on_its_rows(tmp_path):
 
 def test_the_resume_key_is_the_cell_and_not_the_row_count():
     """Skipping N rows because N are on disk would resume the wrong cells the
-    moment one in the middle failed. The key is (repeat, duty, tread)."""
+    moment one in the middle failed. The key is (repeat, state, tread), the
+    state its duty or, in lock mode, its lock."""
     body = inspect.getsource(CE.run_arm)
-    assert "(r.repeat, _duty_key(r.duty_requested), r.tiles)" in body
-    assert "if (repeat, _duty_key(duty), tread) in have:" in body
+    assert "(r.repeat, row_state(r), r.tiles)" in body
+    assert "key = state_key(duty, lock)" in body
+    assert "if (repeat, key, tread) in have:" in body
 
 
 def test_a_resumed_arm_scores_the_whole_file_and_not_only_what_it_measured():
@@ -1715,3 +1722,595 @@ def test_the_arm_line_carries_every_flag_that_moves_the_plan():
     # And the measuring branch runs the interpreter that has vLLM in it.
     measuring = [ln for ln in lines if "--dry-run" not in ln][0]
     assert "$PY_VLLM" in measuring, measuring
+
+
+# --------------------------------------------------------------------------
+# 15. LOCK MODE: the states are locked SM clocks (2026-09-25)
+# --------------------------------------------------------------------------
+
+LOCKS = (1980, 1755, 1530)
+LOCK_ARGS = ["--lock-clocks", *(str(f) for f in LOCKS)]
+#: Held here because `_lock_main` replaces `CE.ClockLock` with a factory.
+REAL_CLOCK_LOCK = CE.ClockLock
+
+#: `nvidia-smi -q -d SUPPORTED_CLOCKS`'s layout, with the clocks the GH200
+#: listed on 2026-09-25: 1980 MHz down in 15 MHz steps (the floor here is
+#: illustrative), under one memory clock.
+SUPPORTED = "\n".join(
+    ["    Supported Clocks", "        Memory                            : 2619 MHz"]
+    + [f"            Graphics                      : {f} MHz"
+       for f in range(1980, 344, -15)])
+
+
+class _Smi:
+    """nvidia-smi, planted: the supported-clock page, and an rc and text for
+    -lgc and -rgc. Records every command it was handed. `rgc` may be a LIST of
+    answers, taken in order and the last one repeated, so a test can fail the
+    run's reset and not the probe's."""
+
+    def __init__(self, lgc=(0, "GPU clocks set"), rgc=(0, "All done.")):
+        self.lgc, self.calls = lgc, []
+        self.rgc = list(rgc) if isinstance(rgc, list) else [rgc]
+
+    def __call__(self, cmd, **_kw):
+        self.calls.append(list(cmd))
+        if "-q" in cmd:
+            rc, text = 0, SUPPORTED
+        elif "-lgc" in cmd:
+            rc, text = self.lgc
+        else:
+            rc, text = self.rgc.pop(0) if len(self.rgc) > 1 else self.rgc[0]
+        return subprocess.CompletedProcess(cmd, rc, text, "")
+
+    def verbs(self):
+        return [c[c.index("nvidia-smi") + 1] for c in self.calls]
+
+
+def _lock_rows(readback, **kw):
+    return CE.plant_rows(eps=0.05, jitter=0.004, duties=(0.25,) * len(LOCKS),
+                         mhz=readback, locks=LOCKS, **kw)
+
+
+def _lock_score(rows):
+    return _score(rows, lock_clocks=list(LOCKS), lock_duty=0.25)
+
+
+def test_a_held_lock_is_fitted_on_its_read_back_and_recovers_the_planted_eta():
+    """1980 read back as 1965, inside 5% of its lock: KEPT, and the fit reads
+    the clock that ran, so the planted eta comes back. Every gate passes."""
+    rows = _lock_rows((1965.0, 1755.0, 1530.0))
+    assert all(CE.exclusion(r) == "" for r in rows)
+    gates = _lock_score(rows)
+    assert {t: g.verdict for t, g in gates.items()} == dict.fromkeys(gates, CE.PASS)
+    assert "3 of 3 planned states" in gates["V3"].measured
+    assert CE.fit(rows, draws=200).value == pytest.approx(0.05, abs=0.05)
+
+
+def test_a_lock_the_card_cannot_hold_is_excluded_counted_and_voids_the_run(tmp_path):
+    """The power cap pulls the 1980 lock down to 1800, 9% off: every row of that
+    state is EXCLUDED as off_lock and never fitted, V0 and V4 count them, and
+    the design is left two states wide, so V3 and V4 FAIL and the page is
+    INVALID rather than a slope over a clock nobody set."""
+    rows = _lock_rows((1800.0, 1755.0, 1530.0))
+    off = [r for r in rows if CE.exclusion(r) == CE.DROP_OFF_LOCK]
+    assert len(off) == len(rows) // 3
+    assert {r.clock_lock_mhz for r in off} == {1980}
+    gates = _lock_score(rows)
+    assert f"off_lock {len(off)}" in gates["V0"].measured
+    assert f"off-lock {len(off)}" in gates["V4"].measured
+    assert gates["V4"].verdict == CE.FAIL and gates["V3"].verdict == CE.FAIL
+    # And the lock survives the CSV, so a resume keys the same state.
+    CE.append_row(tmp_path / "cells.csv", off[0])
+    back = CE.read_rows(tmp_path / "cells.csv")[0]
+    assert back.clock_lock_mhz == 1980.0 and CE.row_state(back) == "1980MHz"
+
+
+@pytest.mark.parametrize("argv,why", [
+    (["--lock-clocks", "1980", "1755"], "below the 3 this design needs"),
+    (["--lock-clocks", "1980", "1755", "1755"], "repeats a clock"),
+    ([*LOCK_ARGS, "--duty", "1.0", "0.5", "0.25"], "two state axes"),
+    ([*LOCK_ARGS, "--lock-duty", "1.5"], "outside (0, 1]"),
+    (["--lock-clocks", "1530", "1515", "1500"], "so V1 could not pass"),
+])
+def test_a_lock_design_that_cannot_exist_is_refused_before_anything(
+        argv, why, capsys, tmp_path):
+    rc = CE.main([*argv, "--card", "NVIDIA GH200 480GB", "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert out.startswith("REFUSED before any GPU time") and why in out, out
+    assert not list(tmp_path.rglob("*"))
+
+
+def test_a_lock_dry_run_prints_the_locks_the_reset_and_its_own_run_id(tmp_path):
+    got = run(["--dry-run", *LOCK_ARGS, "--out", str(tmp_path)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "RESULT: " not in got.stdout
+    for want in ("SM clock LOCKED at 1980, 1755, 1530 MHz, every state at duty 0.25",
+                 "`sudo -n nvidia-smi -lgc F,F` before each state",
+                 "`nvidia-smi -rgc` at exit", "SUPPORTED_CLOCKS",
+                 "more than 5% off its lock is EXCLUDED (off_lock)",
+                 "lock1980_1755_1530", "(13 repeats x 3 states x 8 treads)"):
+        assert want in got.stdout, want
+    assert not list(tmp_path.rglob("*")), "a plan wrote something"
+
+
+def test_a_lock_run_and_a_duty_run_never_share_a_directory():
+    duty = CE.default_run_id(parsed(["--card", "NVIDIA H200"]))
+    lock = CE.default_run_id(parsed(["--card", "NVIDIA H200", *LOCK_ARGS]))
+    assert duty != lock and "lock1980_1755_1530" in lock
+    assert duty == CE.default_run_id(parsed(["--card", "NVIDIA H200",
+                                             "--lock-duty", "0.5"])), (
+        "--lock-duty measures nothing in duty mode and must not move its id")
+
+
+def _lock_main(monkeypatch, out, smi, arm=None, euid=1000, locks=LOCKS):
+    """`main` in lock mode with every GPU door planted open, nvidia-smi
+    planted as `smi` and `run_arm` replaced by `arm(locker)`."""
+    monkeypatch.setattr(CE, "resolve_card", lambda args: "NVIDIA GH200 480GB")
+    monkeypatch.setattr(CE.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(CE.T, "require_cuda", lambda: None)
+    monkeypatch.setattr(CE.T, "nvml_clock_reader", lambda *a, **k: None)
+    monkeypatch.setattr(CE, "device_identity", lambda: "GPU-lock")
+    monkeypatch.setattr(CE, "ClockLock", lambda: REAL_CLOCK_LOCK(run=smi, euid=euid))
+    arms = []
+
+    def fake_run_arm(*args, locker=None, **kwargs):
+        arms.append(locker)
+        return arm(locker) if arm else []
+    monkeypatch.setattr(CE, "run_arm", fake_run_arm)
+    rc = CE.main(["--out", str(out), "--run-id", "r", "--draws", "50",
+                  "--lock-clocks", *(str(f) for f in locks)])
+    return rc, arms
+
+
+def test_lgc_refused_is_refused_before_anything_with_the_drivers_own_words(
+        tmp_path, monkeypatch, capsys):
+    """A RunPod container is root and nvidia-smi says "Insufficient
+    Permissions": REFUSED with that text, no sudo in front of it, nothing
+    written, nothing measured, and the reset still attempted."""
+    smi = _Smi(lgc=(4, "Insufficient Permissions"), rgc=(4, "Insufficient Permissions"))
+    rc, arms = _lock_main(monkeypatch, tmp_path, smi, euid=0)
+    got = capsys.readouterr()
+    assert rc == exit_codes.REFUSED, got.out[-800:]
+    assert "`nvidia-smi -lgc 1980,1980` exited 4: Insufficient Permissions" in got.out
+    assert not arms and not list(tmp_path.rglob("*"))
+    assert smi.verbs() == ["-q", "-lgc", "-rgc"]
+    assert all(c[0] == "nvidia-smi" for c in smi.calls), "root needs no sudo"
+    assert "STILL LOCKED" not in got.err, "nothing was ever locked"
+
+
+def test_a_lock_the_card_does_not_support_is_refused_before_any_lgc(
+        tmp_path, monkeypatch, capsys):
+    """The driver would round 1760 to a clock it supports, and every row would
+    then name a lock that never ran."""
+    smi = _Smi()
+    rc, arms = _lock_main(monkeypatch, tmp_path, smi, locks=(1980, 1760, 1530))
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert "--lock-clocks [1760] are not supported graphics clocks here" in out
+    assert not arms and not list(tmp_path.rglob("*"))
+    assert smi.verbs() == ["-q", "-rgc"], "an unsupported lock must never reach -lgc"
+
+
+def test_the_clock_is_reset_on_success_on_an_exception_and_on_sigterm(
+        tmp_path, monkeypatch, capsys):
+    """-rgc is the exit of the `with` around run_arm: it runs when the arm
+    returns, when it raises, and when the process is sent SIGTERM, and the
+    signal handler it installed is gone afterwards."""
+    before = signal.getsignal(signal.SIGTERM)
+
+    def measured(locker):
+        for f in LOCKS:
+            locker.lock(f)
+        return _lock_rows((1965.0, 1755.0, 1530.0))
+    smi = _Smi()
+    rc, arms = _lock_main(monkeypatch, tmp_path, smi, arm=measured)
+    assert rc == exit_codes.DONE, capsys.readouterr().out[-1500:]
+    assert type(arms[0]).__name__ == "ClockLock", "run_arm was not handed the lock"
+    assert smi.verbs() == ["-q", "-lgc", "-rgc", "-lgc", "-lgc", "-lgc", "-rgc"]
+    assert all(c[:2] == ["sudo", "-n"] for c in smi.calls if "-q" not in c)
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    payload = json.loads((run_dir / "report.json").read_text())
+    assert payload["clock_locks_mhz"] == list(LOCKS)
+    assert payload["clock_lock_log"][-1]["command"] == "sudo -n nvidia-smi -rgc"
+    page = (run_dir / "report.txt").read_text()
+    assert "lock MHz   rows   clock read back" in page
+    assert "SM clock LOCKED at 1980, 1755, 1530 MHz" in page
+
+    def raises(locker):
+        locker.lock(1755)
+        raise RuntimeError("planted")
+    smi = _Smi()
+    rc, _ = _lock_main(monkeypatch, tmp_path / "x", smi, arm=raises)
+    assert rc == exit_codes.ERROR and smi.verbs() == ["-q", "-lgc", "-rgc", "-lgc", "-rgc"]
+    assert "RuntimeError: planted" in capsys.readouterr().err
+
+    def killed(locker):
+        locker.lock(1530)
+        # Only send it with the handler in place: without it SIGTERM ends pytest.
+        assert signal.getsignal(signal.SIGTERM) not in (signal.SIG_DFL, before)
+        signal.raise_signal(signal.SIGTERM)
+        raise AssertionError("SIGTERM did not stop the arm")
+    smi = _Smi()
+    rc, _ = _lock_main(monkeypatch, tmp_path / "y", smi, arm=killed)
+    assert rc == 128 + signal.SIGTERM
+    assert smi.verbs() == ["-q", "-lgc", "-rgc", "-lgc", "-rgc"]
+    assert signal.getsignal(signal.SIGTERM) == before
+
+    # A reset that fails after a lock says so, loudly, with the remedy.
+    capsys.readouterr()
+    lock = REAL_CLOCK_LOCK(run=_Smi(rgc=(1, "denied")), euid=1000)
+    with lock:
+        lock.lock(1530)
+    assert "STILL LOCKED at 1530 MHz" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# 16. LOCK MODE after its review (2026-09-25): the probe's reset is checked,
+#     nothing aborts a reset, a launcher's ignored signal stays ignored, and a
+#     lock the card did not hold is NAMED on the page
+# --------------------------------------------------------------------------
+
+def _lock_args():
+    """The planted design in lock mode, as `_score` builds it, for `report_lines`."""
+    args = CE._self_test_args(CE.build_parser().parse_args(["--dry-run"]))
+    args.lock_clocks, args.lock_duty = list(LOCKS), 0.25
+    return args
+
+
+def test_a_probe_lock_the_reset_did_not_release_is_refused_before_anything(
+        tmp_path, monkeypatch, capsys):
+    """-lgc works and -rgc fails: the probe's lock is still on the card. The
+    draft went on and measured the sizing pass under it; this is REFUSED, with
+    nothing written, the lock named and the remedy printed."""
+    smi = _Smi(rgc=(1, "Unable to reset clocks"))
+    rc, arms = _lock_main(monkeypatch, tmp_path, smi)
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert not arms, "the arm ran under a probe lock nobody released"
+    assert not list(tmp_path.rglob("*"))
+    assert smi.verbs() == ["-q", "-lgc", "-rgc"]
+    assert "did not release the probe lock at 1980 MHz" in out
+    assert "exited 1: Unable to reset clocks" in out
+    assert "sudo nvidia-smi -rgc" in out
+
+
+def test_a_run_whose_last_reset_failed_says_so_on_its_page_and_in_its_json(
+        tmp_path, monkeypatch, capsys):
+    """The second call site of the probe's rule. The cells were measured under
+    their locks and stand, but the card is left at the last one, and whatever
+    runs next on it would measure under a lock nobody set for it: the page and
+    report.json say so, not only a line on stderr."""
+    def measured(locker):
+        for f in LOCKS:
+            locker.lock(f)
+        return _lock_rows((1965.0, 1755.0, 1530.0))
+    smi = _Smi(rgc=[(0, "All done."), (1, "denied")])
+    rc, _ = _lock_main(monkeypatch, tmp_path, smi, arm=measured)
+    # ERROR since the owner's decision (2026-09-25): a card left locked stops a
+    # chain; the page keeps its verdict (section 18).
+    assert rc == exit_codes.ERROR, capsys.readouterr().out[-1500:]
+    run_dir = tmp_path / "clock_elasticity" / "r"
+    page = (run_dir / "report.txt").read_text()
+    # THE FILE'S FIRST LINE, above the ~80-line plan, where a reader starts.
+    assert page.startswith("THE SM CLOCK WAS LEFT LOCKED at 1530 MHz"), page[:300]
+    assert "sudo nvidia-smi -rgc" in page.splitlines()[2]
+    payload = json.loads((run_dir / "report.json").read_text())
+    assert payload["clock_left_locked_mhz"] == 1530
+
+
+def test_a_signal_the_launcher_ignored_stays_ignored():
+    """`nohup` starts a process with SIGHUP ignored. The draft replaced that
+    with its SystemExit handler, so a plain `nohup ... &` lock run died with
+    exit 129 when its SSH connection dropped, where duty mode survives it.
+    SIGTERM, which nothing ignored, is still turned into the reset."""
+    before = signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    try:
+        lock = REAL_CLOCK_LOCK(run=_Smi(), euid=0)
+        try:
+            with lock:
+                lock.lock(1530)
+                assert signal.getsignal(signal.SIGTERM) == lock._on_signal
+                signal.raise_signal(signal.SIGHUP)
+        except SystemExit as exc:
+            pytest.fail(f"a SIGHUP nohup had ignored ended the run: exit {exc.code}")
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+        assert lock.held is None
+    finally:
+        signal.signal(signal.SIGHUP, before)
+
+
+def test_neither_a_second_sigterm_nor_a_ctrl_c_can_abort_the_reset():
+    """Both arrive WHILE -rgc runs. A second SIGTERM was already ignored there;
+    a Ctrl-C was not, and it raised KeyboardInterrupt inside subprocess.run,
+    which kills the -rgc child and leaves the card locked. Both are ignored for
+    the reset only, and SIGINT is Python's own handler again afterwards."""
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    seen = {}
+
+    def smi(cmd, **_kw):
+        if "-rgc" in cmd:
+            seen["int"] = signal.getsignal(signal.SIGINT)
+            signal.raise_signal(signal.SIGTERM)
+            signal.raise_signal(signal.SIGINT)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    lock = REAL_CLOCK_LOCK(run=smi, euid=0)
+    try:
+        with lock:
+            lock.lock(1530)
+    except KeyboardInterrupt:
+        pytest.fail("a Ctrl-C during nvidia-smi -rgc escaped and aborted the reset")
+    assert seen["int"] is signal.SIG_IGN
+    assert lock.held is None, "the reset did not complete"
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+def test_a_kill_says_in_the_log_that_it_was_caught_and_the_clock_reset(capsys):
+    """What the 2-minute kill test on the VM reads. An exit status of 143 is
+    what a shell reports for a process SIGTERM killed with NO handler too, so
+    it cannot tell a caught kill from an uncaught one; these two lines can."""
+    before = signal.getsignal(signal.SIGTERM)
+    lock = REAL_CLOCK_LOCK(run=_Smi(), euid=0)
+    with pytest.raises(SystemExit) as got:
+        with lock:
+            lock.lock(1530)
+            assert signal.getsignal(signal.SIGTERM) not in (signal.SIG_DFL, before)
+            signal.raise_signal(signal.SIGTERM)
+    assert got.value.code == 128 + signal.SIGTERM
+    seen = capsys.readouterr()
+    assert "SIGTERM caught: resetting the SM clock, then exiting 143" in seen.err
+    assert "SM clock reset: `nvidia-smi -rgc` exited 0, the 1530 MHz lock is released" in seen.out
+
+
+def test_a_lock_the_card_never_held_is_named_on_the_page_and_in_v3():
+    """The GH200 (2026-09-25): a 1965 lock the 700 W cap pulled to ~1815 during
+    R3's bursts. Every row of that lock is off_lock, and the ladder the fit reads
+    is two locks wide. V3 and V4 already FAIL it; the page now also NAMES the
+    lock, where the card held it instead, and how many planned locks the fit
+    read, so nobody reads a two-point slope as the three-lock design."""
+    rows = _lock_rows((1800.0, 1755.0, 1530.0))
+    gates = _lock_score(rows)
+    assert "planned and with NO kept row: lock 1980MHz" in gates["V3"].measured
+    est = CE.fit(rows, draws=200)
+    page = "\n".join(CE.report_lines(rows, est, _lock_args()))
+    assert "LOCKS THE CARD DID NOT HOLD" in page
+    assert ("lock 1980 MHz: 104 of its 104 rows read back more than 5% off it "
+            "(104 excluded as off_lock), median 1800 MHz (9.1% below), at every "
+            "tread") in page
+    assert "THE FIT READ 2 OF THE 3 PLANNED LOCKS" in page
+
+
+def test_a_lock_held_only_at_the_shallow_treads_is_kept_there_and_the_rest_named():
+    """The partial case: the top lock holds where the call draws less power and
+    is pulled down at the deep treads. 39 of 312 rows is under V4's ceiling and
+    the top lock is still deep enough for V3, so the page can be VALID; it must
+    then say which treads lost that lock, because there the slope rests on the
+    other two."""
+    rows = _lock_rows((1965.0, 1755.0, 1530.0))
+    for r in rows:
+        if r.clock_lock_mhz == 1980 and r.tiles >= 6:
+            r.sm_clock_load_mhz = 1800.0
+    gates = _lock_score(rows)
+    assert all(gates[t].verdict == CE.PASS for t in ("V0", "V1", "V3", "V4"))
+    est = CE.fit(rows, draws=200)
+    page = "\n".join(CE.report_lines(rows, est, _lock_args()))
+    assert ("lock 1980 MHz: 39 of its 104 rows read back more than 5% off it "
+            "(39 excluded as off_lock), median 1800 MHz (9.1% below), at treads "
+            "6, 7, 8") in page
+    assert "THE FIT READ 3 OF THE 3 PLANNED LOCKS" in page
+
+
+# --------------------------------------------------------------------------
+# 17. LOCK MODE after its second review (2026-09-25): a duty page reads as it
+#     did, the page's off-lock count agrees with V0 and V4, a lock page names
+#     its third exclusion, and the first kill wins
+# --------------------------------------------------------------------------
+
+def test_a_duty_page_and_log_keep_the_words_they_printed_before_lock_mode():
+    """The draft moved V1's claim, V3's text and every console line of a DUTY
+    run, and nothing measured had changed to earn it. Each is now chosen by
+    mode: a duty page reads as session 4's and 5's pages do, a lock page says
+    lock where it means lock."""
+    duty = _score(CE.plant_rows(eps=0.05, jitter=0.004))
+    assert duty["V1"].claim == "the duty states separated in clock at every tread"
+    assert ("(duty 0.1000: 8 treads x 13 repeats; duty 0.2500: 8 treads x 13 "
+            "repeats;") in duty["V3"].measured
+    assert "in no duty-and-tread cell" in duty["V5"].threshold
+    assert duty["V5"].invalidates.endswith("the average moves with the duty cycle")
+    assert CE.console_state(0.25) == ("duty=0.25", "duty 0.25")
+    assert CE.console_state(1.0) == ("duty=1", "duty 1.00")
+    locked = _lock_score(_lock_rows((1965.0, 1755.0, 1530.0)))
+    assert locked["V1"].claim == "the locked states separated in clock at every tread"
+    assert "(lock 1530MHz: 8 treads x 13 repeats;" in locked["V3"].measured
+    assert "in no lock-and-tread cell" in locked["V5"].threshold
+    assert CE.console_state(0.25, 1980) == ("lock 1980 MHz", "lock 1980")
+    body = inspect.getsource(CE.run_arm)
+    assert "said, cell = console_state(duty, lock)" in body
+    assert "state_label(" not in body, "run_arm spells its states through console_state"
+
+
+def test_a_lock_row_that_also_drifted_is_counted_on_the_page_as_v4_counts_it():
+    """The GH200's failure, planted: the cap pulls the 1980 lock to 1800 at
+    every tread, and on alternate repeats the burst also DRIFTED, which is what
+    a cap pulling mid-burst does. `exclusion` tests drift first, so V0 and V4
+    count 56 drift and 48 off_lock. The draft's page said all 104 were
+    "EXCLUDED as off_lock": two numbers for one thing on one page."""
+    rows = _lock_rows((1800.0, 1755.0, 1530.0),
+                      drift_at={(0, t, r) for t in range(1, 9) for r in range(0, 13, 2)})
+    gates = _lock_score(rows)
+    v4 = re.search(r"drift (\d+), host-bound (\d+), off-lock (\d+)", gates["V4"].measured)
+    drift, off = int(v4.group(1)), int(v4.group(3))
+    assert (drift, off) == (56, 48), gates["V4"].measured
+    assert f"drift {drift}, off_lock {off}" in gates["V0"].measured
+    page = "\n".join(CE.report_lines(rows, CE.fit(rows, draws=100), _lock_args()))
+    assert (f"lock 1980 MHz: 104 of its 104 rows read back more than 5% off it "
+            f"({off} excluded as off_lock, {drift} already excluded as drift)") in page
+    assert "those rows EXCLUDED and never fitted" in page
+    assert "EXCLUDED as off_lock" not in page
+    assert "WHATEVER excluded them" in page, "the table's column says what it counts"
+
+
+def test_a_lock_plan_names_off_lock_as_an_exclusion_and_reads_a_p1_fail_for_locks(
+        tmp_path):
+    """The plan printed "DRIFT and host-bound are the two exclusions" on a lock
+    run after V4 had gained a third, and P1's FAIL reading blamed a governor
+    that ignores duty. A duty plan keeps its own line."""
+    got = run(["--dry-run", *LOCK_ARGS, "--out", str(tmp_path)])
+    flat = " ".join(got.stdout.split())
+    assert "the two exclusions" not in flat
+    assert ("DRIFT and host-bound are exclusions, and in lock mode so is off-lock "
+            "(a read-back more than 5% off its lock); V4 holds the three to 20% of "
+            "all rows.") in flat
+    assert ("A P1 FAIL in lock mode is not a governor that ignores duty: the locks "
+            "did not hold") in flat
+    duty = " ".join(run(["--dry-run", "--out", str(tmp_path)]).stdout.split())
+    assert "DRIFT and host-bound are the two exclusions and V4 holds them" in duty
+    assert "LOCK MODE" not in duty
+
+
+def _kill_in_reset(monkeypatch, body):
+    """A ClockLock whose `signal.getsignal` sends ONE SIGTERM the first time it
+    is called after `body` arms it, and whose nvidia-smi sends a SIGTERM and a
+    Ctrl-C while -rgc runs: three kills, the last two inside the reset."""
+    real = signal.getsignal
+    before = {s: real(s) for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)}
+    armed, calls = {"on": False}, []
+
+    def getsignal(sig):
+        if armed["on"] and real(signal.SIGTERM) not in (signal.SIG_DFL, None):
+            armed["on"] = False
+            signal.raise_signal(signal.SIGTERM)
+        return real(sig)
+
+    def smi(cmd, **_kw):
+        calls.append(cmd[-1])
+        if "-rgc" in cmd:
+            signal.raise_signal(signal.SIGTERM)
+            signal.raise_signal(signal.SIGINT)
+        return subprocess.CompletedProcess(cmd, 0, "All done.", "")
+    lock = REAL_CLOCK_LOCK(run=smi, euid=0)
+    monkeypatch.setattr(signal, "getsignal", getsignal)
+    try:
+        with pytest.raises(SystemExit) as got:
+            with lock:
+                lock.lock(1530)
+                body(armed)
+    finally:
+        monkeypatch.undo()
+    assert {s: signal.getsignal(s) for s in before} == before, "handlers not restored"
+    return got.value.code, calls, lock
+
+
+def test_a_second_kill_as_the_first_is_handled_can_neither_skip_nor_abort_the_reset(
+        monkeypatch, capsys):
+    """The review's simulation. The first SIGTERM lands in the arm; a second
+    lands before the ignores are in place, and more arrive while -rgc runs. The
+    draft's second kill raised inside `__exit__`'s prologue, so -rgc never ran
+    and no STILL LOCKED line was printed. Now the first handler ignores all
+    three before it does anything else: the first kill wins."""
+    def first_kill(armed):
+        armed["on"] = True
+        signal.raise_signal(signal.SIGTERM)
+    code, calls, lock = _kill_in_reset(monkeypatch, first_kill)
+    assert code == 128 + signal.SIGTERM
+    assert calls == ["1530,1530", "-rgc"], calls
+    assert lock.held is None, "the reset did not complete"
+    assert "the 1530 MHz lock is released" in capsys.readouterr().out
+
+
+def test_a_kill_landing_as_a_clean_exit_begins_its_reset_still_resets(
+        monkeypatch, capsys):
+    """No kill during the arm: the body returns and a SIGTERM lands in the
+    first lines of `__exit__`, before the ignores are in place. The prologue is
+    a `try` whose `finally` is the reset, so -rgc still runs, and the kills
+    that arrive while it runs are ignored."""
+    def clean(armed):
+        armed["on"] = True
+    code, calls, lock = _kill_in_reset(monkeypatch, clean)
+    assert code == 128 + signal.SIGTERM
+    assert calls == ["1530,1530", "-rgc"], calls
+    assert lock.held is None, "the reset did not complete"
+    assert "SIGTERM caught: resetting the SM clock" in capsys.readouterr().err
+
+
+def test_a_ctrl_c_mid_run_is_caught_resets_and_still_ends_as_a_keyboard_interrupt(
+        capsys):
+    """Ctrl-C goes through the same handler as a kill: it says so, ignores a
+    second one, resets, and still ends in the KeyboardInterrupt (130 to a
+    shell) duty mode ends in. Python's own Ctrl-C handler is back afterwards."""
+    smi = _Smi()
+    lock = REAL_CLOCK_LOCK(run=smi, euid=0)
+    with pytest.raises(KeyboardInterrupt):
+        with lock:
+            lock.lock(1530)
+            signal.raise_signal(signal.SIGINT)
+    err = capsys.readouterr().err
+    assert "SIGINT caught: resetting the SM clock, then exiting 130" in err
+    assert smi.verbs() == ["-lgc", "-rgc"] and lock.held is None
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+# --------------------------------------------------------------------------
+# 18. LOCK MODE, the owner's decisions (2026-09-25): a lock ladder needs every
+#     planned lock, a clock left locked stops a chain, and a lock held only
+#     loosely is named
+# --------------------------------------------------------------------------
+
+LOCKS5 = (1980, 1890, 1755, 1620, 1530)
+
+
+def test_a_lock_ladder_missing_any_planned_lock_fails_v3():
+    """Owner decision 1: in lock mode V3 needs EVERY planned lock deep enough.
+    Five locks, the top one pulled to 1800 in every row: one lock in five is
+    exactly V4's 20% ceiling, so V4 passes, and under the duty rule (three
+    states needed) V3 would pass on four. The ladder the fit reads is not the
+    one planned, so V3 FAILS. A duty design keeps its three."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.004, duties=(0.25,) * len(LOCKS5),
+                         mhz=(1800.0, 1890.0, 1755.0, 1620.0, 1530.0), locks=LOCKS5)
+    gates = _score(rows, lock_clocks=list(LOCKS5), lock_duty=0.25)
+    assert gates["V4"].verdict == CE.PASS, gates["V4"].measured
+    assert gates["V3"].verdict == CE.FAIL, gates["V3"].measured
+    assert "4 of 5 planned states are deep enough" in gates["V3"].measured
+    assert gates["V3"].threshold.startswith(">= 5 states"), gates["V3"].threshold
+    assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V3"].threshold.startswith(">= 3 states")
+
+
+def test_a_clock_left_locked_after_the_run_exits_error_so_a_chain_stops(
+        tmp_path, monkeypatch, capsys):
+    """Owner decision 2: the cells stand and the page keeps its verdict, but a
+    card left locked makes whatever runs next on it wrong, so the run EXITS
+    ERROR (4) and the page's first lines say why its exit is not its verdict."""
+    def measured(locker):
+        for f in LOCKS:
+            locker.lock(f)
+        return _lock_rows((1965.0, 1755.0, 1530.0))
+    smi = _Smi(rgc=[(0, "All done."), (1, "denied")])
+    rc, _ = _lock_main(monkeypatch, tmp_path, smi, arm=measured)
+    out = capsys.readouterr().out
+    assert rc == exit_codes.ERROR, out[-1500:]
+    page = (tmp_path / "clock_elasticity" / "r" / "report.txt").read_text()
+    head = "\n".join(page.splitlines()[:5])
+    assert "This run exits ERROR (4), not its verdict's code" in head, head
+    assert "READING IT. Validity holds." in page, "the verdict itself stands"
+
+
+def test_a_lock_held_only_loosely_is_kept_fitted_at_its_read_back_and_named():
+    """Owner decision 3: on the Lambda H100 (2026-09-25) an 1800 MHz lock read
+    1770 at R3's G=2, 1.7% off: inside 5%, so KEPT and fitted at the clock read
+    back, which does not bias the fit, but "held" would overstate it. A lock
+    whose kept rows read back more than one 15 MHz step off it, at any tread,
+    is NAMED with its treads. One step off (1965 at a 1980 lock) is held."""
+    rows = _lock_rows((1965.0, 1755.0, 1530.0))
+    for r in rows:
+        if r.clock_lock_mhz == 1755 and r.tiles >= 6:
+            r.sm_clock_load_mhz = 1725.0
+    assert all(CE.exclusion(r) == "" for r in rows)
+    gates = _lock_score(rows)
+    assert all(g.verdict == CE.PASS for g in gates.values())
+    page = "\n".join(CE.report_lines(rows, CE.fit(rows, draws=100), _lock_args()))
+    assert "LOCKS HELD ONLY LOOSELY" in page, page
+    assert "lock 1755 MHz: median 1725 MHz (1.7% below), at treads 6, 7, 8" in page
+    assert "lock 1980" not in page.split("LOCKS HELD ONLY LOOSELY")[1]
+    held = _lock_rows((1965.0, 1755.0, 1530.0))
+    assert "LOCKS HELD ONLY LOOSELY" not in "\n".join(
+        CE.report_lines(held, CE.fit(held, draws=100), _lock_args()))
