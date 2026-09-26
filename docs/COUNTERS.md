@@ -805,7 +805,8 @@ them run normally. The timed apparatus flushed once per call, not between the
 two GEMMs, which changes only activation traffic. `--cache-control none` is
 not run: under kernel replay ncu's first-pass save of the ~26 GB footprint
 streams through L2 right before the kernel. `--clock-control base` is passed
-and recorded, because the documented default has moved between versions.
+and recorded, because the documented default has moved between versions (the
+floor capture of 6.12 passes `none` once, by request: `--floor-clock none`).
 
 **Activation re-reads, added 2026-09-24.** The byte model charges each GEMM's
 A operand ONCE per M-tile, the compulsory cold read. The kernel requests it
@@ -997,3 +998,72 @@ at a locked clock with a cold L2 per GEMM, not the timed apparatus's per-call
 flush, which leaves weights unaffected and moves activations slightly. The
 group model is derived from vLLM's pid mapping, not measured: a C1 failure is
 a result, and the brute-force test guards the arithmetic, not the hardware.
+
+### 6.12 The floor counters (`--floor`)
+
+Written 2026-09-25; nothing here has run. On the H200 (sessions 5 and 6, R3
+at duty 0.25 over treads 2 to 6) R3's SHARED arm costs about 0.52 ms per
+tread at every G >= 2, and R1, timing the same call, reads that cost as
+following the SM clock where it has a valid page (G = 4 and 64; G = 2 and 16
+are withheld INVALID). That is an on-chip floor, and bytes cannot say which
+unit sets it. Each card's floor file is read against that card's own timing
+(for the GH200, its locked R3 at 1710 MHz), never the H200's. `--floor` adds
+one ncu capture per G after the pages: NATIVE only, treads 2, 3, 4 and 6, two
+calls each, 16 profiled launches, under the page's own flags (kernel replay,
+a cold L2, the base clock). It asks STRICT plus `R3_FLOOR_METRICS`: SM cycles,
+the tensor pipe and the HMMA (`mma.sync`) instruction count, issue slots, LDSM
+and LDGSTS counts, the shared-memory banks, L2 and the L2-to-L1 return, DRAM
+throughput, occupancy and 18 stall reasons. It scores no finding, never
+changes a page, and `--analyse` refuses a floor file.
+
+The ask is the chip's own list: `--dry-run --family r3-arms --floor --chip
+gh100` checks each floor metric's base name (the part before the first dot)
+against `ncu --query-metrics --chip gh100` with no GPU. It does not check the
+suffix after the dot, or the STRICT names, which the probe proves on the box:
+a name ncu does not know is found only at the capture, where one unknown name
+aborts the whole call. A capture drops what the attached chip does not list
+and refuses, before capturing, when a decisive group (SM cycles, the tensor
+pipe, the HMMA count, shared memory, L2, five stall reasons) has no name
+listed. The floor columns are parsed soft: one that cannot be read costs that
+reading.
+
+After the capture its record, `g<G>.floor.capture.json` (argv, ncu's return
+code, card, stack, commit, the ask, an nvidia-smi reading either side), is
+written before anything is read. These are INVALID and write no floor file,
+keeping the report, the CSV and the record: ncu's nonzero exit; no manifest or
+no report; a child on another card; a decisive group no measured launch
+returned; an HMMA count that reads zero, or is unreadable, on any measured
+launch. No `--reduce-only` path rebuilds a floor file yet. A rerun at the same
+`--out` deletes the last capture's manifest, report, CSV and record, and the
+result file at `--out`, before ncu starts, as the census and the page do: a
+result whose report is gone cannot be checked, so a rerun whose capture fails
+leaves no earlier result. A census rerun at the pages' census path does the
+same to that census, so a census for a new commit goes to its own path, and
+a page or floor whose `--out` is its own census is refused.
+
+`--floor-clock none` passes `--clock-control none` for one extra G=64
+capture, because L2 and DRAM do not follow the SM clock. Under an nvidia-smi
+lock (`-lgc F,F`) `--floor-lock-mhz F` writes F into the file, and gate FL1
+fails (INVALID, the file written) when any cell's clock, `sm__cycles_elapsed.avg`
+over `gpu__time_duration.sum`, is unreadable or more than one 15 MHz step from
+F. F must be a lock the card holds under this load. On Lambda (2026-09-25, R3's
+timed runs at duty 0.25; published on branches lambda-gh200 and lambda-h100)
+1710 MHz held at every G on both the GH200 and the H100, and the higher locks
+did not: the GH200's 1965 read 1830 MHz in the second it was set and its cells
+ran at 1785 to 1830; the H100's 1980 never read 1980 (all 62 nvidia-smi
+samples and both of its cells read 1830), and its 1800 read 1770 in one of its
+first ten G=2 cells. The GH200's ledger blames the power cap, but no file
+settles the cause: its SW power-capping and SW thermal-slowdown counters both
+grew while its cells drew about 300 W against a 700 W limit. Whether a lock
+holds under a floor capture is not measured, and another card needs its own
+hold test. Nor is any offset between the counters' clock and the true clock.
+An FL1 failure with every cell the same distance from F looks like such an
+offset; a gap that grows with n looks like the card pulling its clock down
+under load.
+
+```bash
+python scripts/dram_counter_route.py --dry-run --family r3-arms --floor --chip gh100
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census.json --floor --out $R/r3f-g64.json
+#   then --group-m 2; then, under sudo nvidia-smi -lgc F,F (LAMBDA.md section 3 has the whole block and its resets):
+$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --group-m 64 --census $S/census.json --floor --floor-clock none --floor-lock-mhz F --out $R/r3f-g64-lockF.json
+```

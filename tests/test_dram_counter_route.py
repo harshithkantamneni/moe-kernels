@@ -1236,8 +1236,9 @@ def test_every_out_write_site_reports_its_git_visibility():
     # writes the file every other mode only talks about) and --contrast (the
     # mode that scores the ratio across those files). Seven since 2026-09-24:
     # the r3-arms family writes a page per G, a census and an --analyse summary.
-    assert text.count("out.write_text(") == 7
-    assert text.count("git_visibility(out)") == 7
+    # Eight since 2026-09-25: --floor writes the on-chip floor's counters.
+    assert text.count("out.write_text(") == 8
+    assert text.count("git_visibility(out)") == 8
 
 
 # --------------------------------------------------------------------------
@@ -1631,6 +1632,44 @@ def test_an_ncu_that_wrote_no_log_refuses_with_its_own_stderr(tmp_path, monkeypa
                         lambda argv, timeout=60: (1, "", "ERR_NVGPUCTRPERM"))
     args = build_parser().parse_args(["--block-m", "64"])
     with pytest.raises(CounterRunRefused, match="ERR_NVGPUCTRPERM"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def _ladder_capture(argv, timeout=60):
+    """A ladder capture that writes the canned profile and the sweep's one
+    row, as `test_one_profiled_tile_count_reduces_to_one_schema_row` plants."""
+    del timeout
+    Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+    run = Path(argv[argv.index("--out") + 1]) / "block_m_crossing" / "someid"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "cells.csv").write_text("block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+                                   "64,4,0.94,10,1,ok\n")
+    return 0, "", ""
+
+
+def test_a_ladder_rerun_never_reduces_the_last_capture(tmp_path, monkeypatch):
+    """The fourth capture site (second review, 2026-09-25): the ladder
+    family's `profile_one_tile_count` never deleted its last log or its
+    sweep's cells.csv, and checked only that the log existed. A rerun into
+    the same profile dir whose ncu died before writing reduced the LAST
+    capture as this one's; one whose sweep died before its row read the last
+    row's call floor. Each now refuses."""
+    import scripts.dram_counter_route as DCR
+    args = build_parser().parse_args(["--block-m", "64"])
+    monkeypatch.setattr(DCR, "_run", _ladder_capture)
+    assert DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)["calls"] == 11
+    monkeypatch.setattr(DCR, "_run", lambda argv, timeout=60: (1, "", "ERR_NVGPUCTRPERM"))
+    with pytest.raises(CounterRunRefused, match="wrote no counters-n4"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+    def log_only(argv, timeout=60):
+        del timeout
+        Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+        return 0, "", ""
+    monkeypatch.setattr(DCR, "_run", _ladder_capture)
+    DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+    monkeypatch.setattr(DCR, "_run", log_only)
+    with pytest.raises(CounterRunRefused, match="0 cells.csv under"):
         DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
 
 
@@ -3213,6 +3252,19 @@ def test_a_page_is_rebuilt_from_its_profiles_with_no_card_and_no_child(
     assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "16",
                  "--census", str(census), "--out", str(page_path)]) == exit_codes.REFUSED
     assert "no capture to reduce" in capsys.readouterr().out
+    # A run whose --out is its own census refuses before it asks the box,
+    # because a capture deletes its --out first (2026-09-25): the census stays.
+    before = census.read_bytes()
+    assert main(["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                 str(census), "--out", str(census)]) == exit_codes.REFUSED
+    assert "--out is the census" in capsys.readouterr().out
+    assert census.read_bytes() == before
+    # And a census that is gone (a census rerun whose capture failed deletes
+    # it) is a refusal here, not a traceback.
+    census.unlink()
+    assert main(["--run", "--family", "r3-arms", "--reduce-only", "--group-m", "4",
+                 "--census", str(census), "--out", str(page_path)]) == exit_codes.REFUSED
+    assert "cannot read the census" in capsys.readouterr().out
 
 
 def test_a_page_is_rebuilt_after_its_profiles_are_copied_off_the_box(
@@ -3427,3 +3479,513 @@ def test_the_duration_accepts_both_spellings_and_scales_them_alike():
     for long, short in (("nsecond", "ns"), ("usecond", "us"), ("msecond", "ms"), ("second", "s")):
         assert table[long] == table[short]
     assert "" not in table, "an empty unit on a duration still refuses"
+
+
+# --------------------------------------------------------------------------
+# The floor counters (`--floor`): their own capture, never a page's.
+# --------------------------------------------------------------------------
+
+def test_the_floor_list_never_rides_on_a_page_and_every_unit_is_named():
+    """A page's replay passes are its cost, so no floor metric is in the page
+    ask; every floor metric is registered, in one of four units, none empty."""
+    assert not set(DCR.R3_FLOOR_METRICS) & set(DCR.R3_ALL_METRICS)
+    assert all(DCR.registered_metric(m) for m in DCR.R3_FLOOR_METRICS)
+    assert {DCR.unit_table(m)[0] for m in DCR.R3_FLOOR_METRICS} == {
+        "%", "cycle", "byte", "inst"}
+    assert all("" not in DCR.unit_table(m)[1] for m in DCR.R3_FLOOR_METRICS)
+    assert DCR.unit_table("sm__pipe_tensor_op_hmma_cycles_active.avg."
+                          "pct_of_peak_sustained_active")[0] == "%"
+
+
+def test_the_floor_ask_is_strict_plus_what_the_chip_lists_and_never_blind():
+    listed = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS}
+    asked, dropped, why = DCR.r3_floor_metrics(
+        frozenset(listed - {"smsp__inst_executed_op_ldgsts"}))
+    assert not why and asked[:len(DCR.R3_STRICT_METRICS)] == DCR.R3_STRICT_METRICS
+    assert dropped == ["smsp__inst_executed_op_ldgsts.sum"]
+    assert len(asked) == len(DCR.R3_STRICT_METRICS) + len(DCR.R3_FLOOR_METRICS) - 1
+    assert DCR.r3_floor_metrics(None)[2], "an unreadable list refuses"
+
+
+def test_the_floor_plan_is_native_only_and_profiles_sixteen_launches():
+    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"))
+    sched = R3.counter_schedule(plan)
+    assert plan["arms"] == [R3.NATIVE] and plan["treads"] == list(DCR.R3_FLOOR_TREADS)
+    assert sched.launch_count == R3.GEMMS_PER_CALL * DCR.R3_FLOOR_CALLS * 4 == 16
+    assert sched.launch_skip == R3.GEMMS_PER_CALL * DCR.R3_WARMUP_CALLS * 4
+
+
+def test_floor_cells_average_the_calls_derive_the_clock_and_keep_bad_units_soft():
+    plan = DCR.r3_floor_plan(2, profile_dir=Path("p"))
+    manifest = DCR.planted_r3_manifest(plan, device_uuid="planted")
+    metrics = DCR.R3_STRICT_METRICS + DCR.R3_FLOOR_METRICS
+    units = {m: DCR.unit_table(m)[0] for m in metrics}
+    units["smsp__inst_executed_op_ldsm.sum"] = "furlong"
+    rows = []
+    for key, call, gemm, _warm in DCR.r3_launch_sequence(manifest):
+        row = {m: "50" for m in metrics}
+        row.update({"kernel": DCR.GEMM_MARKER,
+                    "launch__grid_size": str(manifest["grids"][key][gemm]),
+                    "gpu__time_duration.sum": "1000000",
+                    "sm__cycles_elapsed.avg": str(1.6e6 + 2e3 * call)})
+        rows.append(row)
+    launches = parse_ncu_csv(_wide_csv(rows, units),
+                             soft=frozenset(DCR.R3_FLOOR_METRICS))
+    cells = DCR.r3_floor_cells(DCR.attribute_launches(launches, manifest), manifest)
+    assert [(c["arm"], c["n"]) for c in cells] == [
+        ("native", n) for n in DCR.R3_FLOOR_TREADS]
+    w1 = cells[0]["per_gemm"]["w1"]
+    assert w1["sm__cycles_elapsed.avg"] == pytest.approx(1.601e6)
+    assert w1["sm_clock_mhz"] == pytest.approx(1601.0)
+    assert w1["smsp__issue_active.avg.pct_of_peak_sustained_active"] == 50.0
+    assert w1["smsp__inst_executed_op_ldsm.sum"] is None
+    assert w1["unreadable"] == ["smsp__inst_executed_op_ldsm.sum"]
+
+
+def test_floor_belongs_to_the_r3_run_and_is_neither_a_census_nor_a_reduction(capsys):
+    """Each refusal is its own guard's, by its text: on a box without ncu the
+    probe or a missing --group-m would refuse these commands for another
+    reason, and a box with ncu would then run a census and drop --floor."""
+    assert DCR.main(["--dry-run", "--floor"]) == exit_codes.REFUSED
+    assert "--floor belongs to --run or --dry-run --family r3-arms" in \
+        capsys.readouterr().out
+    for extra in ("--census-only", "--reduce-only"):
+        assert DCR.main(["--run", "--family", "r3-arms", "--floor", extra,
+                         "--out", "x.json"]) == exit_codes.REFUSED
+        assert "--floor is its own capture" in capsys.readouterr().out
+    assert DCR.main(["--run", "--family", "r3-arms", "--group-m", "64", "--floor",
+                     "--tiles", "2,3", "--out", "x.json"]) == exit_codes.REFUSED
+    assert "--floor profiles its own treads [2, 3, 4, 6]" in capsys.readouterr().out
+
+
+STALL_BASES = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS if "_stalled_" in m}
+
+
+def _floor_names(lacks=()) -> str:
+    """What `ncu --query-metrics` prints for a chip listing every floor and
+    page metric but the base names in `lacks`."""
+    every = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS + DCR.R3_ALL_METRICS}
+    return "\n".join(sorted(every - set(lacks)))
+
+
+def _floor_columns(text: str, returned, cell=None) -> str:
+    """The planted wide CSV plus a column for each floor metric in `returned`.
+    Each cell reads 50 in its own unit, unless `cell(metric, row)` returns
+    another string for it, `row` being that launch's own cells by column."""
+    import csv
+    lines = text.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.startswith('"ID"'))
+    header = next(csv.reader([lines[at]]))
+    add = [m for m in DCR.R3_FLOOR_METRICS if m in set(returned)]
+    lines[at] += "".join(f',"{m}"' for m in add)
+    lines[at + 1] += "".join(f',"{DCR.unit_table(m)[0]}"' for m in add)
+    for i in range(at + 2, len(lines)):
+        row = dict(zip(header, next(csv.reader([lines[i]])), strict=True))
+        values = [(cell(m, row) if cell else None) or "50" for m in add]
+        lines[i] += "".join(f',"{v}"' for v in values)
+    return "\n".join(lines) + "\n"
+
+
+#: What the planted `nvidia-smi` prints for `R3_FLOOR_SMI_FIELDS`: one card at
+#: 1601 MHz under a 700 W cap, no clock event, persistence mode on.
+_SMI = "GPU-planted, 1601, 61.25, 700.00, 0x0000000000000000, Enabled\n"
+
+
+def _plant_the_floor(monkeypatch, *, lacks=(), child_uuid=None,
+                     returned=DCR.R3_FLOOR_METRICS, cell=None, capture_rc=0,
+                     capture_writes=True):
+    """The planted box, plus the chip's metric list, an nvidia-smi, an import
+    of a FLOOR report that returns the floor metrics in `returned` (see
+    `_floor_columns` for `cell`), and optionally a child that reports another
+    card's UUID in its manifest. Every capture (census, page or floor) exits
+    `capture_rc`; with `capture_writes=False` it dies before writing anything,
+    as ncu does on the /tmp lock-file refusal."""
+    calls = _plant_the_box(monkeypatch)
+    inner = DCR._run
+
+    def run(argv, timeout=60):
+        if "--query-metrics" in argv:
+            calls.append(list(argv))
+            return 0, _floor_names(lacks), ""
+        if argv[0] == "nvidia-smi":
+            calls.append(list(argv))
+            return 0, _SMI, ""
+        if "--counter-child" in argv and not capture_writes:
+            calls.append(list(argv))
+            return capture_rc, "", "==ERROR== planted: ncu stopped before the child ran\n"
+        rc, out, err = inner(argv, timeout=timeout)
+        if "--import" in argv and ".floor." in Path(argv[argv.index("--import") + 1]).name:
+            out = _floor_columns(out, returned, cell)
+        if child_uuid and "--counter-child" in argv:
+            plan = json.loads(Path(argv[argv.index("--counter-child") + 1]).read_text())
+            manifest = json.loads(Path(plan["manifest"]).read_text())
+            manifest["device"]["uuid"] = child_uuid
+            Path(plan["manifest"]).write_text(json.dumps(manifest))
+        if "--counter-child" in argv:
+            rc = capture_rc
+        return rc, out, err
+    monkeypatch.setattr(DCR, "_run", run)
+    return calls
+
+
+def test_a_decisive_floor_reading_the_chip_lacks_refuses_and_a_minor_one_does_not():
+    every = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS}
+    hmma = "sm__pipe_tensor_op_hmma_cycles_active"
+    assert not DCR.r3_floor_metrics(frozenset(every - {hmma}))[2], "its alternative is listed"
+    assert DCR.r3_floor_metrics(frozenset(every - {hmma, "sm__pipe_tensor_cycles_active"}))[2]
+    _asked, dropped, why = DCR.r3_floor_metrics(frozenset(every - STALL_BASES))
+    assert "long_scoreboard" in why and "mio_throttle" in why
+    assert len(dropped) == len(DCR.R3_STALL_REASONS)
+    minor = "smsp__warp_issue_stalled_drain_per_warp_active"
+    assert not DCR.r3_floor_metrics(frozenset(every - {minor}))[2], "a minor stall is a column"
+
+
+def test_the_floor_capture_end_to_end_at_the_base_clock_and_with_none(
+        tmp_path, monkeypatch, capsys):
+    """The page's base clock, then the one extra capture at `--clock-control
+    none`: each writes its own file, records its clock, and has its own id."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    bodies = {}
+    for clock in ("base", "none"):
+        out = tmp_path / f"r3f-g64-{clock}.json"
+        assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census",
+                     str(census), "--floor", "--floor-clock", clock, "--out",
+                     str(out)]) == exit_codes.DONE
+        capture = [a for a in calls if "--counter-child" in a][-1]
+        assert capture[capture.index("--clock-control") + 1] == clock
+        assert capture[capture.index("--launch-count") + 1] == "16"
+        # THE ASK ITSELF (2026-09-25 review): the planted import adds the floor
+        # columns to any `.floor.` report whatever ncu was asked, so only the
+        # argv shows the capture asked STRICT plus every floor metric listed.
+        want = [*DCR.R3_STRICT_METRICS, *DCR.R3_FLOOR_METRICS]
+        assert capture[capture.index("--metrics") + 1].split(",") == want
+        body = json.loads(out.read_text())
+        assert body["ncu"]["metrics_asked"] == want
+        assert body["kind"] == "floor" and body["ncu"]["clock_control"] == clock
+        assert f"clock-control-{clock}/" in body["instrument"]
+        assert [(c["arm"], c["n"]) for c in body["cells"]] == [
+            ("native", n) for n in DCR.R3_FLOOR_TREADS]
+        hmma = "sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active"
+        assert body["cells"][0]["per_gemm"]["w1"][hmma] == 50.0
+        assert body["ncu"]["metrics_missing"] == []
+        assert body["ncu"]["returncode"] == 0 and body["gates"] == []
+        assert body["clock"]["lock_mhz"] is None and body["clock"]["held"] is None
+        bodies[clock] = body
+    assert bodies["base"]["run_id"] != bodies["none"]["run_id"]
+    capsys.readouterr()
+    assert main(["--analyse", str(out)]) == exit_codes.REFUSED
+    assert "are not pages" in capsys.readouterr().out
+
+
+def test_a_floor_capture_missing_a_decisive_reading_writes_nothing(
+        tmp_path, monkeypatch, capsys):
+    """A minor reading no launch returned is listed in `metrics_missing`; a
+    decisive group no launch returned is INVALID, writes no file, and keeps
+    the report and the CSV."""
+    drain = "smsp__warp_issue_stalled_drain_per_warp_active.pct"
+    _plant_the_floor(monkeypatch,
+                     returned=[m for m in DCR.R3_FLOOR_METRICS if m != drain])
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    floor = ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+             "--floor", "--out", str(out)]
+    assert main(floor) == exit_codes.DONE
+    assert json.loads(out.read_text())["ncu"]["metrics_missing"] == [drain]
+    out.unlink()
+    _plant_the_floor(monkeypatch, returned=[m for m in DCR.R3_FLOOR_METRICS
+                                            if "_tensor_" not in m])
+    capsys.readouterr()
+    assert main(floor) == exit_codes.INVALID and not out.exists()
+    text = capsys.readouterr().out
+    assert "REFUSED: no measured launch of the floor capture returned" in text
+    assert "sm__pipe_tensor_cycles_active" in text and "long_scoreboard" not in text
+    profiles = tmp_path / "r3f-g64.profiles"
+    assert (profiles / "g64.floor.ncu-rep").exists() and (profiles / "g64.floor.csv").exists()
+
+
+def test_the_floor_refuses_before_any_capture_and_on_another_cards_child(
+        tmp_path, monkeypatch, capsys):
+    calls = _plant_the_floor(monkeypatch, lacks=STALL_BASES)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    floor = ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+             "--floor", "--out", str(out)]
+    captures = sum("--counter-child" in a for a in calls)
+    capsys.readouterr()
+    assert main(floor) == exit_codes.REFUSED
+    assert "Nothing was captured" in capsys.readouterr().out
+    assert sum("--counter-child" in a for a in calls) == captures and not out.exists()
+    _plant_the_floor(monkeypatch, child_uuid="GPU-another-card")
+    assert main(floor) == exit_codes.INVALID and not out.exists()
+
+
+def test_the_floor_name_check_needs_no_gpu_and_refuses_a_lost_decisive_group(
+        monkeypatch, capsys):
+    asked, lacks = [], set()
+
+    def query_only(argv, timeout=60):
+        assert "--query-metrics" in argv, argv
+        asked.append(list(argv))
+        return 0, _floor_names(lacks), ""
+
+    def no_box(*a, **k):
+        raise AssertionError("the name check asked the box")
+    monkeypatch.setattr(DCR, "_run", query_only)
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: "/planted/ncu")
+    for name in ("probe_ncu", "live_card_block"):
+        monkeypatch.setattr(DCR, name, no_box)
+    check = ["--dry-run", "--family", "r3-arms", "--floor", "--chip", "gh100"]
+    assert main(check) == exit_codes.DONE
+    assert asked[-1][-2:] == ["--chip", "gh100"]
+    lacks |= STALL_BASES
+    assert main(check) == exit_codes.REFUSED
+    assert "REFUSE" in capsys.readouterr().out
+    for stray in (["--chip", "gh100"], ["--floor-clock", "none"]):
+        assert main(["--dry-run", "--family", "r3-arms", *stray]) == exit_codes.REFUSED
+    capsys.readouterr()
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--floor", "--chip",
+                 "gh100", "--out", "x.json"]) == exit_codes.REFUSED
+    assert "--chip belongs to --dry-run --floor" in capsys.readouterr().out
+
+
+def _a_census(tmp_path) -> Path:
+    """The census every floor capture below is licensed by, on the planted box."""
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    return census
+
+
+def _floor_argv(census: Path, out: Path, *extra: str) -> list[str]:
+    return ["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+            "--floor", *extra, "--out", str(out)]
+
+
+def test_a_rerun_whose_ncu_dies_never_rebuilds_from_the_last_capture(
+        tmp_path, monkeypatch, capsys):
+    """2026-09-25 review: nothing deleted the last capture's manifest and
+    report, so a rerun at the same --out whose ncu died before writing
+    anything rebuilt the census, the page or the floor from the LAST capture
+    and exited 0 under the new argv. `_r3_capture` now deletes them first, at
+    all three call sites, and each rerun is INVALID.
+
+    TWICE, because the floor refuses a nonzero exit before it looks for its
+    files: under an ncu that exits 1 that refusal alone voids the floor, and
+    emptying the floor's own `stale` list passed every test (second review).
+    An ncu that exits 0 and writes nothing reaches the floor's 'left no'
+    check, which only the deletion makes true.
+
+    THE RESULT FILE AT --out GOES TOO (owner, 2026-09-25), so each rerun
+    whose capture fails leaves none. The census reruns last: once its file is
+    gone, no page is licensed until a census passes, which the last lines
+    check."""
+    census = tmp_path / "census.json"
+    outs = {"census": census, "page": tmp_path / "r3c-g4.json",
+            "floor": tmp_path / "r3f-g64.json"}
+    runs = {"census": ["--run", "--family", "r3-arms", "--census-only", "--out",
+                       str(census)],
+            "page": ["--run", "--family", "r3-arms", "--group-m", "4", "--census",
+                     str(census), "--out", str(outs["page"])],
+            "floor": _floor_argv(census, outs["floor"])}
+    for rc, floor_says in ((1, "REFUSED: ncu exited 1 on the floor capture"),
+                           (0, "REFUSED: ncu exited 0 and the floor capture left no")):
+        _plant_the_floor(monkeypatch)
+        for name in ("census", "page", "floor"):
+            assert main(runs[name]) == exit_codes.DONE, (rc, name)
+            assert outs[name].exists(), (rc, name)
+        _plant_the_floor(monkeypatch, capture_rc=rc, capture_writes=False)
+        for name in ("page", "floor", "census"):
+            capsys.readouterr()
+            assert main(runs[name]) == exit_codes.INVALID, (rc, name)
+            text = capsys.readouterr().out
+            assert f"REFUSED: ncu exited {rc}" in text, (rc, name)
+            assert not outs[name].exists(), (rc, name, "the last result was left")
+            if name == "floor":
+                assert floor_says in text, rc
+        assert main(runs["page"]) == exit_codes.REFUSED, rc
+        assert "cannot read the census" in capsys.readouterr().out, rc
+
+
+def test_the_floor_records_its_capture_first_and_refuses_a_nonzero_ncu_exit(
+        tmp_path, monkeypatch, capsys):
+    """`g<G>.floor.capture.json` is written before anything the capture left
+    is read: ncu's return code, the argv, the card, the stack, the commit, the
+    ask, and an nvidia-smi reading either side. A nonzero return code is
+    INVALID even when the child finished and the report exists."""
+    _plant_the_floor(monkeypatch)
+    census = _a_census(tmp_path)
+    calls = _plant_the_floor(monkeypatch, capture_rc=1)
+    out = tmp_path / "r3f-g64.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out)) == exit_codes.INVALID and not out.exists()
+    assert "REFUSED: ncu exited 1 on the floor capture" in capsys.readouterr().out
+    profiles = tmp_path / "r3f-g64.profiles"
+    record = json.loads((profiles / "g64.floor.capture.json").read_text())
+    assert record["returncode"] == 1 and record["commit"]
+    assert record["card"] == DCR.R3_PLANTED_CARD and record["stack"]["vllm"] == "v"
+    assert record["argv"][record["argv"].index("--launch-count") + 1] == "16"
+    assert record["metrics_asked"][:len(DCR.R3_STRICT_METRICS)] == list(DCR.R3_STRICT_METRICS)
+    assert [a[0] for a in calls].count("nvidia-smi") == 2
+    planted = ("GPU-planted", "1601", "61.25", "700.00", "0x0000000000000000", "Enabled")
+    for side in ("smi_before", "smi_after"):
+        assert record[side]["returncode"] == 0 and record[side]["utc"].endswith("Z")
+        assert record[side]["rows"] == [dict(zip(DCR.R3_FLOOR_SMI_FIELDS, planted,
+                                                 strict=True))]
+    assert (profiles / "g64.floor.ncu-rep").exists()
+
+
+def test_an_unreadable_tensor_group_is_invalid_end_to_end_and_the_record_is_kept(
+        tmp_path, monkeypatch, capsys):
+    """Both tensor-pipe names read n/a on every launch. The soft parse keeps
+    them out of the readings, the decisive check finds the group on no
+    launch, and the capture is INVALID with no file, keeping the report, the
+    CSV and the capture's own record."""
+    def tensor_na(metric, row):
+        return "n/a" if metric.startswith("sm__pipe_tensor") else None
+    _plant_the_floor(monkeypatch, cell=tensor_na)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out)) == exit_codes.INVALID and not out.exists()
+    text = capsys.readouterr().out
+    assert "REFUSED: no measured launch of the floor capture returned" in text
+    assert "sm__pipe_tensor_cycles_active" in text and "long_scoreboard" not in text
+    profiles = tmp_path / "r3f-g64.profiles"
+    for name in ("g64.floor.ncu-rep", "g64.floor.csv", "g64.floor.capture.json"):
+        assert (profiles / name).exists(), name
+    assert json.loads((profiles / "g64.floor.capture.json").read_text())["returncode"] == 0
+
+
+def test_the_floor_reads_its_own_columns_soft_end_to_end(tmp_path, monkeypatch):
+    """A minor floor column that reads n/a on every launch, and another that
+    reads n/a on one launch, cost those readings and nothing else: DONE, the
+    first in `metrics_missing`, both in the cells' `unreadable`. The capture's
+    soft parse is what makes that so: with it strict (the review's mutation,
+    `soft=frozenset()` in `r3_floor`) either one refuses the whole file."""
+    ldgsts = "smsp__inst_executed_op_ldgsts.sum"
+    drain = "smsp__warp_issue_stalled_drain_per_warp_active.pct"
+
+    def gaps(metric, row):
+        return "n/a" if metric == ldgsts or (metric == drain and row["ID"] == "0") else None
+    _plant_the_floor(monkeypatch, cell=gaps)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64.json"
+    assert main(_floor_argv(census, out)) == exit_codes.DONE
+    body = json.loads(out.read_text())
+    assert body["ncu"]["metrics_missing"] == [ldgsts]
+    w1, w2 = (body["cells"][0]["per_gemm"][g] for g in ("w1", "w2"))
+    assert w1["unreadable"] == [ldgsts, drain] and w2["unreadable"] == [ldgsts]
+    assert w1[drain] is None and w2[drain] == 50.0 and w1[ldgsts] is None
+
+
+def test_a_floor_whose_hmma_count_is_not_above_zero_writes_nothing(
+        tmp_path, monkeypatch, capsys):
+    """Zero is a number, so until 2026-09-25 a tensor reading of 0 counted as
+    decisive and the file was written. The HMMA instruction count is now a
+    decisive group of its own and must be above zero on every measured
+    launch: one launch at 0 is INVALID, named, and nothing is written. One
+    launch whose count reads n/a (the soft parse keeps it out of the
+    readings) is INVALID too, and named as unreadable, not as zero."""
+    hmma = DCR.R3_FLOOR_HMMA_COUNT
+    assert hmma in DCR.R3_FLOOR_METRICS and (hmma,) in DCR.R3_FLOOR_DECISIVE
+    out = tmp_path / "r3f-g64.json"
+    said = {"0": f"REFUSED: {hmma} is not above zero on every measured launch: "
+                 "launch(es) ['5'] read it at zero, so they retired no HMMA",
+            "n/a": f"REFUSED: {hmma} is not above zero on every measured launch: "
+                   "launch(es) ['5'] could not read it, which proves nothing"}
+    census = None
+    for reading, why in said.items():
+        def one_idle(metric, row, reading=reading):
+            return reading if metric == hmma and row["ID"] == "5" else None
+        _plant_the_floor(monkeypatch, cell=one_idle)
+        census = census or _a_census(tmp_path)
+        capsys.readouterr()
+        assert main(_floor_argv(census, out)) == exit_codes.INVALID, reading
+        assert not out.exists(), reading
+        text = capsys.readouterr().out
+        assert why in text, reading
+        assert ("read it at zero" in text) is (reading == "0"), reading
+
+
+def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock(
+        tmp_path, monkeypatch, capsys):
+    """`--floor-lock-mhz F` goes into the file, and every cell's clock read off
+    its own counters must sit within one 15 MHz step of F, or the file is
+    written with gate FL1 FAIL and exits INVALID. The planted counters run at
+    1601 MHz: a lock of 1601 holds, 1710 does not, and the band's two edges
+    are pinned just inside and just outside (1601 +/- 15 exactly rounds
+    either way in floating point), so a band of two or five steps fails
+    here (second review). Each lock, and no lock, is its own run id. The
+    flag belongs to a capture at --floor-clock none, and a lock must be
+    above zero."""
+    def at_1601(metric, row):
+        if metric != "sm__cycles_elapsed.avg":
+            return None
+        return repr(1601.0 * float(row["gpu__time_duration.sum"]) / 1e3)
+    _plant_the_floor(monkeypatch, cell=at_1601)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64-lock.json"
+    ids = []
+    for lock, rc in (("1601", exit_codes.DONE),
+                     ("1615.9", exit_codes.DONE), ("1616.1", exit_codes.INVALID),
+                     ("1586.1", exit_codes.DONE), ("1585.9", exit_codes.INVALID),
+                     ("1710", exit_codes.INVALID)):
+        capsys.readouterr()
+        assert main(_floor_argv(census, out, "--floor-clock", "none",
+                                "--floor-lock-mhz", lock)) == rc, lock
+        fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
+                   if r.name == "FL1")
+        body = json.loads(out.read_text())
+        clock = body["clock"]
+        assert clock["lock_mhz"] == float(lock) and clock["band_mhz"] == 15.0, lock
+        assert clock["held"] is (rc == exit_codes.DONE), lock
+        assert fl1.verdict == (PASS if clock["held"] else FAIL), lock
+        assert clock["smi_before"]["rows"][0]["clocks.sm"] == "1601"
+        ids.append(body["run_id"])
+    assert clock["off_lock"] == [f"n={n} {g} 1601 MHz" for n in DCR.R3_FLOOR_TREADS
+                                 for g in ("w1", "w2")]
+    unlocked = tmp_path / "r3f-g64-none.json"
+    assert main(_floor_argv(census, unlocked, "--floor-clock", "none")) == exit_codes.DONE
+    ids.append(json.loads(unlocked.read_text())["run_id"])
+    assert len(set(ids)) == len(ids), ids
+    refusals = {("--floor-lock-mhz", "1710"): "belongs to --run --floor --floor-clock none",
+                ("--floor-clock", "none", "--floor-lock-mhz", "0"): "must be above zero"}
+    for extra, why in refusals.items():
+        capsys.readouterr()
+        assert main(_floor_argv(census, out, *extra)) == exit_codes.REFUSED, extra
+        assert why in capsys.readouterr().out, extra
+    assert main(["--dry-run", "--family", "r3-arms", "--floor", "--floor-clock", "none",
+                 "--floor-lock-mhz", "1710"]) == exit_codes.REFUSED
+
+
+def test_a_cell_whose_counters_name_no_clock_fails_the_lock(tmp_path, monkeypatch, capsys):
+    """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the
+    capture goes on, and the other launches return it, so its decisive group
+    is met; but that cell's mean, and so its clock, is None. Under a lock
+    that cell is not shown to have run at F, and FL1 names it 'no clock'
+    (second review: the None branch was never exercised)."""
+    def at_1601_but_one(metric, row):
+        if metric != "sm__cycles_elapsed.avg":
+            return None
+        if row["ID"] == "0":
+            return "n/a"
+        return repr(1601.0 * float(row["gpu__time_duration.sum"]) / 1e3)
+    _plant_the_floor(monkeypatch, cell=at_1601_but_one)
+    census = _a_census(tmp_path)
+    out = tmp_path / "r3f-g64-lock.json"
+    capsys.readouterr()
+    assert main(_floor_argv(census, out, "--floor-clock", "none",
+                            "--floor-lock-mhz", "1601")) == exit_codes.INVALID
+    fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
+               if r.name == "FL1")
+    body = json.loads(out.read_text())
+    assert fl1.verdict == FAIL and body["clock"]["off_lock"] == ["n=2 w1 no clock"]
+    w1 = body["cells"][0]["per_gemm"]["w1"]
+    assert w1["sm_clock_mhz"] is None and "sm__cycles_elapsed.avg" in w1["unreadable"]

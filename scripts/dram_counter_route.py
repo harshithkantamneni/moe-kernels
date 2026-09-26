@@ -15,6 +15,12 @@
     python scripts/dram_counter_route.py --run --family r3-arms --group-m 4 \
                                          --census census.json --out r3c-g4.json
     python scripts/dram_counter_route.py --analyse r3c-g1.json r3c-g4.json  # alpha(G)
+    python scripts/dram_counter_route.py --dry-run --family r3-arms --floor --chip gh100
+    python scripts/dram_counter_route.py --run --family r3-arms --group-m 64 \
+                                         --census census.json --floor --out r3f-g64.json
+    python scripts/dram_counter_route.py --run --family r3-arms --group-m 64 \
+                                         --census census.json --floor --floor-clock none \
+                                         --floor-lock-mhz 1710 --out r3f-g64-lock1710.json
 
 WHY THIS EXISTS. Every alpha in this study is `B / L`, the fraction of one full
 weight read that a second M-tile costs, and `L` is an EXTRAPOLATION of the fitted
@@ -155,6 +161,7 @@ import sys
 import tempfile
 import traceback
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -1907,7 +1914,7 @@ def _probe_once(binary: str, version: str, strict: tuple[str, ...],
                          strict=strict, optional=optional, family=family)
 
 
-def query_metric_names(binary: str) -> tuple[frozenset[str] | None, str]:
+def query_metric_names(binary: str, chip: str = "") -> tuple[frozenset[str] | None, str]:
     """`(the base metric names this ncu offers on this box, how that was
     read)`, or `(None, why not)`.
 
@@ -1916,9 +1923,11 @@ def query_metric_names(binary: str) -> tuple[frozenset[str] | None, str]:
     rather than in the name). Parsed as every token shaped like a metric
     name, so a column reordering in a future ncu cannot empty the set; an
     empty set, or a nonzero exit, is `None` and the caller asks the whole
-    list instead.
+    list instead. `chip` (`gh100`) lists that chip's metrics instead, which
+    needs no GPU: the floor's name check can run on any machine with ncu.
     """
-    rc, out, err = _run([binary, "--query-metrics"], timeout=120)
+    rc, out, err = _run([binary, "--query-metrics", *(("--chip", chip) if chip else ())],
+                        timeout=120)
     names = frozenset(re.findall(r"\b[a-z][a-z0-9]*__[a-z0-9_]+\b", out or ""))
     if rc != 0 or not names:
         return None, (f"ncu --query-metrics exited {rc} and listed {len(names)} "
@@ -2693,6 +2702,15 @@ def profile_one_tile_count(args, n: int, binary: str, profile_dir: Path) -> dict
     log_file = profile_dir / f"counters-n{n}-cc{args.cache_control}.csv"
     out_dir = profile_dir / f"sweep-n{n}-cc{args.cache_control}"
     out_dir.mkdir(parents=True, exist_ok=True)
+    # A RERUN STARTS FROM NOTHING (2026-09-25 review; the r3-arms family's
+    # `_r3_capture` does the same at its three call sites). Until then a rerun
+    # into the same profile dir found the last capture's log and its sweep's
+    # cells.csv in place: an ncu that died before writing had them reduced as
+    # this capture's, and the sweep resumes a cells.csv it finds by run id
+    # (its module docstring), so a live rerun would measure no cell at all.
+    log_file.unlink(missing_ok=True)
+    for stale in out_dir.rglob("cells.csv"):
+        stale.unlink()
     argv = ncu_argv(binary, args.cache_control, log_file) + sweep_argv(args, n, out_dir)
     rc, out, err = _run(argv, timeout=args.ncu_timeout)
     if not log_file.exists():
@@ -2958,7 +2976,7 @@ def run_id_for(mode: str, args, card: str) -> str:
                  "tolerance": CONTRAST_TOLERANCE}
     elif mode == "self-test":
         knobs = {"mode": mode}
-    elif mode in ("r3-run", "r3-census"):
+    elif mode in ("r3-run", "r3-census", "r3-floor"):
         # The r3-arms family's page and census: the cell (model, dtype, the
         # pinned tile, the G), the treads, and the call schedule. `--card` is
         # not a knob here: the page's card is the live device, in `card=`.
@@ -2967,6 +2985,19 @@ def run_id_for(mode: str, args, card: str) -> str:
                  "block_n": args.block_n, "block_m": args.block_m,
                  "num_stages": args.num_stages, "tiles": list(args.tiles),
                  "calls": R3_CALLS_PER_CELL, "warmups": R3_WARMUP_CALLS}
+        if mode == "r3-floor":
+            # The floor capture's own treads, calls, ask, clock and lock, so a
+            # floor file and a page at the same G, or two clocks or two locks
+            # at one G, never share an id. The lock is a knob only when one
+            # was given, as `timed_reference` is above: `provenance` refuses a
+            # knob that is None (UnresolvedKnob), so a None here crashes every
+            # unlocked floor after its capture (a draft of this mode did; the
+            # 2026-09-25 review found it).
+            knobs.update(tiles=list(R3_FLOOR_TREADS), calls=R3_FLOOR_CALLS,
+                         metrics=list(R3_FLOOR_METRICS),
+                         clock_control=getattr(args, "floor_clock", "base"))
+            if getattr(args, "floor_lock_mhz", None) is not None:
+                knobs["lock_mhz"] = args.floor_lock_mhz
     elif mode == "run":
         # Everything the profiler consumed, and the two knobs a timed run does
         # not have: the cache-control mode and the marker the call count was
@@ -4216,6 +4247,12 @@ def do_analyse(args) -> int:
 # n measures its own share and bounds SHARED's, so every weight claim is
 # scored on SHARED's weight-only bracket (`r3_weight_bracket`).
 #
+# AND ONE CAPTURE THAT IS NOT BYTES (`--floor`, 2026-09-25). After the pages,
+# one NATIVE-only capture per G reads the on-chip counters (SM cycles, the
+# tensor pipe, issue slots, shared memory, L2, occupancy, stall reasons) for
+# the floor that hides the traffic. It scores no finding and never changes a
+# page: `R3_FLOOR_METRICS`, `r3_floor`, docs/COUNTERS.md section 6.12.
+#
 # WHY IT LIVES HERE AND NOT IN A NEW SCRIPT. This file already owns the
 # permission probe, the CSV parser and its unit tables, Gate and the exit
 # codes, provenance stamping and git visibility. A parallel script would fork
@@ -4270,6 +4307,130 @@ R3_RECORDED_METRICS: tuple[str, ...] = (
 R3_OCCUPANCY_LIMITS: tuple[str, ...] = R3_RECORDED_METRICS[:4]
 R3_ALL_METRICS: tuple[str, ...] = (R3_STRICT_METRICS + R3_CROSSCHECK_METRICS
                                    + R3_RECORDED_METRICS)
+
+#: THE FLOOR COUNTERS (`--floor`, 2026-09-25). On the H200 (sessions 5 and 6)
+#: R3's SHARED arm costs about 0.52 ms per tread (one more M-tile in each of
+#: the 8 experts, over the whole fused_experts call; treads 2 to 6, duty 0.25)
+#: at every G >= 2, and R1, timing the same call, reads that cost as following
+#: the SM clock where it has a valid page (G = 4 and 64). Spread over both
+#: GEMMs' 32x64x64 CTA steps per tread (w1 229,376 plus w2 114,688) on the
+#: H200's 132 SMs at 1965 MHz that is about 390 SM cycles per CTA step, and
+#: bytes cannot say which unit sets it. Each card's floor file is read against
+#: that card's own timing, never the H200's.
+#: These name the candidates: the tensor pipe mma.sync runs on (HMMA), issue
+#: slots, the shared-memory banks LDSM reads and LDGSTS fills share, the
+#: L2-to-SM return, occupancy, and why each warp stalls. ASKED ONLY ON THEIR
+#: OWN NATIVE-ONLY CAPTURE (`r3_floor`), NEVER ON A PAGE: a page is 90
+#: launches at 5 replay passes each and this list is several times that in
+#: passes, so it rides on 16 launches instead. Parsed SOFT, and no reading is
+#: scored as a finding; the chip's own metric list decides which are asked.
+#: These write no file (INVALID): ncu's nonzero exit, no manifest or no
+#: report, a child on another card, a decisive group no measured launch
+#: returned (`R3_FLOOR_DECISIVE`), and an HMMA count not above zero, or
+#: unreadable, on any measured launch (`R3_FLOOR_HMMA_COUNT`). A
+#: `--floor-lock-mhz` lock not held writes the file with FL1 FAIL (INVALID).
+R3_STALL_REASONS: tuple[str, ...] = (
+    "barrier", "long_scoreboard", "short_scoreboard", "mio_throttle",
+    "lg_throttle", "math_pipe_throttle", "wait", "not_selected", "selected",
+    "dispatch_stall", "no_instruction", "drain", "membar", "branch_resolving",
+    "sleeping", "misc", "tex_throttle", "imc_miss")
+R3_FLOOR_METRICS: tuple[str, ...] = (
+    "sm__cycles_elapsed.avg",
+    "sm__cycles_active.avg",
+    "lts__cycles_elapsed.avg",
+    "sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active",
+    "sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active",
+    "sm__inst_executed_pipe_tensor_op_hmma.sum",
+    "smsp__issue_active.avg.pct_of_peak_sustained_active",
+    "smsp__inst_executed.sum",
+    "smsp__inst_executed_op_ldsm.sum",
+    "smsp__inst_executed_op_ldgsts.sum",
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__data_bank_reads.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__data_bank_writes.avg.pct_of_peak_sustained_elapsed",
+    "l1tex__throughput.avg.pct_of_peak_sustained_active",
+    "l1tex__m_xbar2l1tex_read_bytes.sum",
+    "lts__t_sectors.avg.pct_of_peak_sustained_elapsed",
+    "lts__throughput.avg.pct_of_peak_sustained_elapsed",
+    "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+    "sm__warps_active.avg.pct_of_peak_sustained_active",
+    *(f"smsp__warp_issue_stalled_{r}_per_warp_active.pct" for r in R3_STALL_REASONS),
+)
+#: The floor capture's cells: NATIVE at these treads, two calls each (so a
+#: spread exists), after R3's own warmups, which ncu skips.
+R3_FLOOR_TREADS: tuple[int, ...] = (2, 3, 4, 6)
+R3_FLOOR_CALLS = 2
+#: THE PROOF THE TENSOR COUNTERS COUNT THIS KERNEL (2026-09-25). The HMMA
+#: pipe readings say whether the tensor pipe sets the floor only if the
+#: launch retired HMMA (mma.sync) instructions. At R3's BLOCK_M 32 Triton
+#: does not emit wgmma (its rule needs BLOCK_M % 64 == 0, see
+#: scripts/check_mma_path.sh), but until this date a column that read 0 on
+#: every launch counted as a decisive reading, because zero is a number. So
+#: this count is a decisive group of its own (a chip that lacks it refuses
+#: before the capture) and must be above zero on EVERY measured launch, or
+#: the capture is INVALID and no file is written.
+R3_FLOOR_HMMA_COUNT = "sm__inst_executed_pipe_tensor_op_hmma.sum"
+#: THE READINGS THE FLOOR IS DECIDED ON. Dropping a name the chip does not
+#: list costs one column, except for these: the SM cycle count (cycles per
+#: CTA step), the tensor pipe (H1) and the HMMA count that proves it counts
+#: this kernel, shared memory (H2), L2 (H3) and the five stall reasons H1 to
+#: H4 name, which are the split between H2, H3 and H4. A group is met by any
+#: one of its names; a group the chip lists none of REFUSES before any
+#: capture, and one no measured launch returned is INVALID after it, because
+#: that file could not decide anything.
+R3_FLOOR_DECISIVE: tuple[tuple[str, ...], ...] = (
+    ("sm__cycles_elapsed.avg",),
+    ("sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active",
+     "sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active"),
+    (R3_FLOOR_HMMA_COUNT,),
+    ("l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed",
+     "l1tex__data_bank_reads.avg.pct_of_peak_sustained_elapsed"),
+    ("lts__t_sectors.avg.pct_of_peak_sustained_elapsed",
+     "lts__throughput.avg.pct_of_peak_sustained_elapsed"),
+    *((f"smsp__warp_issue_stalled_{r}_per_warp_active.pct",)
+      for r in ("barrier", "long_scoreboard", "short_scoreboard", "mio_throttle",
+                "math_pipe_throttle")),
+)
+#: How far a cell's clock may sit from `--floor-lock-mhz` (2026-09-25): one
+#: supported-clock step. Hopper lists its SM clocks 15 MHz apart (the GH200:
+#: 1980, 1965, 1950, ...), so a cell further off ran at a clock the card chose,
+#: not at the lock. The clock is the counters' own, `sm__cycles_elapsed.avg`
+#: over `gpu__time_duration.sum` per cell and GEMM (`r3_floor_cells`), because
+#: a lock is read back, never assumed. On Lambda (2026-09-25, R3's timed runs
+#: at duty 0.25) the GH200's 1965 MHz lock read 1830 MHz in the second it was
+#: set and its R3 cells ran at 1785 to 1830; the H100's 1980 lock never read
+#: 1980 (all 62 nvidia-smi samples and both of its cells read 1830), and its
+#: 1800 lock read 1770 in one of its first ten G=2 cells. 1710 held at every G
+#: on both. The GH200's ledger blames the power cap, but no file settles the
+#: cause: its SW power-capping and SW thermal-slowdown counters both grew while
+#: its cells drew about 300 W against a 700 W limit.
+R3_FLOOR_LOCK_STEP_MHZ = 15.0
+#: What the floor file records of the card either side of its capture
+#: (`floor_smi_reading`). RECORDED, never gated: these are idle readings
+#: between runs, not readings under a launch, and the lock's gate is the
+#: counters' clock above. `clocks_event_reasons.active` is the mask that names
+#: why a clock moved (0x4 is the software power cap), and a lock set with
+#: persistence mode off can be dropped when the driver's last client exits.
+R3_FLOOR_SMI_FIELDS: tuple[str, ...] = (
+    "uuid", "clocks.sm", "power.draw", "power.limit", "clocks_event_reasons.active",
+    "persistence_mode")
+
+
+def _floor_unit(metric: str) -> tuple[str, dict[str, float]]:
+    """The unit a floor metric reduces to: percent for every ratio, cycles for
+    the clocks, bytes for the L2-to-L1 return, instructions for the counts.
+    No floor metric accepts the empty unit, which stays `launch__*`-only."""
+    if metric.endswith(".pct") or ".pct_of_peak_" in metric:
+        return "%", {"%": 1.0, "percent": 1.0}
+    if "__cycles_" in metric:
+        return "cycle", {"cycle": 1.0, "Kcycle": 1e3, "Mcycle": 1e6, "Gcycle": 1e9}
+    if metric.endswith("_bytes.sum"):
+        return "byte", {"byte": 1.0, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9,
+                        "Tbyte": 1e12}
+    return "inst", {"inst": 1.0, "Kinst": 1e3, "Minst": 1e6, "Ginst": 1e9}
+
+
+NCU_METRIC_UNITS.update({m: _floor_unit(m) for m in R3_FLOOR_METRICS})
 
 #: The page field each summed or averaged metric lands in. `launch__grid_size`
 #: lands in `grid_size`, per GEMM, and the recorded ones in `recorded`.
@@ -4373,6 +4534,9 @@ R3_RUN_INSTRUMENT = ("nsight-compute/dram-counters/replay-mode-kernel/cache-cont
 R3_CENSUS_INSTRUMENT = ("nsight-compute/launch-census/no-skip-no-cap/fused_moe_kernel-only; "
                         "counts launches and reads grids, times nothing")
 R3_ANALYSE_INSTRUMENT = "arithmetic-over-r3-counter-pages/no-kernel-timed"
+R3_FLOOR_INSTRUMENT = ("nsight-compute/floor-counters/replay-mode-kernel/cache-control-all/"
+                       "clock-control-{clock}/native-only-fused_moe_kernel; records the "
+                       "on-chip counters and scores no finding; NOT timing.TIMING_BASIS")
 
 R3_SCHEMA_VERSION = 1
 
@@ -4781,6 +4945,40 @@ def r3_probe_metrics(names) -> tuple[tuple[str, ...], tuple[str, ...], list[str]
             [m for m in rest if not offered(m)], "")
 
 
+def r3_floor_metrics(names) -> tuple[tuple[str, ...], list[str], str]:
+    """`(asked, dropped, refusal)` for `--floor`: STRICT (attribution needs
+    the grid, and bytes and time come off the same launch) plus every floor
+    metric this chip's `--query-metrics` lists. ONE name ncu does not know
+    aborts the whole invocation, so a list that could not be read REFUSES
+    rather than guessing, and every name left out is listed. A DECISIVE group
+    (`R3_FLOOR_DECISIVE`) the list offers no name of also REFUSES."""
+    if names is None:
+        return (), [], ("ncu --query-metrics could not be read on this box, and one "
+                        "unknown metric name aborts the whole floor capture")
+    offered = tuple(m for m in R3_FLOOR_METRICS if metric_base(m) in names)
+    lost = [" or ".join(g) for g in R3_FLOOR_DECISIVE if not set(g) & set(offered)]
+    return (R3_STRICT_METRICS + offered,
+            [m for m in R3_FLOOR_METRICS if m not in offered],
+            f"this chip's metric list offers none of {lost}, and the floor is decided "
+            "on each of them" if lost else "")
+
+
+def r3_floor_plan(group_m: int, *, profile_dir: Path, model: str = "mixtral-8x7b",
+                  dtype: str = "bf16", block_m: int | None = None,
+                  block_n: int | None = None, num_stages: int | None = None) -> dict:
+    """The floor capture's plan: NATIVE only, `R3_FLOOR_TREADS`, K =
+    `R3_FLOOR_CALLS`, R3's warmups skipped by ncu. A `measure` plan, so R3
+    validates and schedules it exactly as it does a page's."""
+    r3 = _r3()
+    fixed = r3.SWEEP.FIXED
+    return r3_plan(model=model, dtype=dtype, block_m=block_m or r3.DEFAULT_BLOCK_M,
+                   block_n=block_n or fixed["BLOCK_SIZE_N"],
+                   num_stages=num_stages or fixed["num_stages"], group_m=group_m,
+                   treads=R3_FLOOR_TREADS, kind="measure", arms=(r3.NATIVE,),
+                   calls=R3_FLOOR_CALLS, warmups=R3_WARMUP_CALLS,
+                   profile_dir=profile_dir, stem=f"g{group_m}.floor")
+
+
 # --------------------------------------------------------------------------
 # The card, which is the live device and never a flag.
 # --------------------------------------------------------------------------
@@ -4933,7 +5131,8 @@ def r3_design(plan: dict) -> dict:
 
 def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
                 launch_skip: int, launch_count: int | None,
-                python: str | None = None, child: Path = R3_CHILD) -> list[str]:
+                python: str | None = None, child: Path = R3_CHILD,
+                clock_control: str = "base") -> list[str]:
     """ncu over R3's child: the arm GEMMs only, at a cold L2, a base clock,
     and exactly the planned launch window.
 
@@ -4945,7 +5144,11 @@ def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
                               the kernel, so "none" is "the L2 ncu's save left".
       `--clock-control base`  passed and recorded: the documented default has
                               moved between versions, and bytes should not
-                              care, so no default is trusted.
+                              care, so no default is trusted. Only `--floor
+                              --floor-clock none` passes `none`: L2 and DRAM
+                              do not follow the SM clock, so one floor file
+                              is read at the clock the card picks, or at an
+                              nvidia-smi lock (`--floor-lock-mhz`).
       `-k regex:^fused_moe_kernel$ --kernel-name-base function`
                               the GEMM launches only; the alignment, the
                               activation and the reduction run unprofiled.
@@ -4960,7 +5163,7 @@ def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
     from the vLLM venv.
     """
     argv = [binary, "--target-processes", "all", *ncu_common_flags("all"),
-            "--clock-control", "base", "--nvtx", "-k", R3_KERNEL_FILTER,
+            "--clock-control", clock_control, "--nvtx", "-k", R3_KERNEL_FILTER,
             "--kernel-name-base", "function", "--launch-skip", str(launch_skip)]
     if launch_count is not None:
         argv += ["--launch-count", str(launch_count)]
@@ -6301,7 +6504,28 @@ def r3_commit() -> tuple[str | None, str]:
                   f"r3-arms census and page is matched by commit: {remedy}")
 
 
-def _r3_capture(argv: list[str], log_path: Path, timeout: float) -> tuple[int, str]:
+def _r3_capture(argv: list[str], log_path: Path, timeout: float, *,
+                stale: tuple[Path, ...]) -> tuple[int, str]:
+    """Run one capture, after deleting the files the last capture at these
+    paths left (`stale`: the manifest, the report, the CSV, the record, and
+    the result file at --out).
+
+    REQUIRED, AND AT ALL THREE CALL SITES, because until 2026-09-25 nothing
+    deleted them. A rerun at the same --out whose ncu died before writing
+    anything (the /tmp lock-file refusal, a counter-permission error, a
+    wedged GPU) found the LAST capture's manifest and report in place, and
+    the census, the page and the floor each rebuilt their file from them and
+    exited 0 under the new argv. A keyword with no default, so no caller can
+    leave it out. THE RESULT FILE GOES TOO (owner, 2026-09-25): once its
+    report is deleted, the last run's result, left at --out when a rerun's
+    capture then failed, reads as current and cannot be checked. So a census
+    rerun whose capture fails leaves no census, and no page is licensed until
+    one passes. A rerun refused before its capture deletes nothing and keeps
+    the old file with its report. The ladder family's capture does not come
+    through here and had the same hole: `profile_one_tile_count` deletes its
+    own log and its sweep's cells.csv."""
+    for path in stale:
+        path.unlink(missing_ok=True)
     rc, out, err = _run(argv, timeout=timeout)
     log_path.write_text((out or "") + (err or ""))
     return rc, ((err or out or "").strip()[-600:])
@@ -6317,12 +6541,239 @@ def _r3_reduce(binary: str, report: Path, csv_path: Path) -> str:
     return out
 
 
+def r3_floor_cells(attributed: list[dict], manifest: dict) -> list[dict]:
+    """Per NATIVE cell and GEMM: each asked metric's mean over the measured
+    calls (None where a call lacks it), the SM clock the capture ran at
+    (`sm__cycles_elapsed.avg` over the duration, MHz), and the floor metrics
+    a unit refusal left unread. NO FINDING IS SCORED: the reading is which
+    unit sits nearest its own peak, and a person reads that off these numbers.
+    `sm_clock_mhz` is what `--floor-lock-mhz` is gated on, in `r3_floor`."""
+    runs: dict[str, dict[str, list[Launch]]] = {}
+    for rec in attributed:
+        if not rec["warmup"]:
+            runs.setdefault(rec["key"], {}).setdefault(rec["gemm"], []).append(
+                rec["launch"])
+    cells = []
+    for arm, n in manifest["order"]:
+        key = f"{arm}/{n}"
+        per_gemm: dict[str, dict] = {}
+        for gemm, lns in runs.get(key, {}).items():
+            vals: dict = {}
+            for m in R3_STRICT_METRICS + R3_FLOOR_METRICS:
+                xs = [ln.metrics.get(m) for ln in lns]
+                vals[m] = (statistics.fmean(xs) if xs and all(x is not None for x in xs)
+                           else None)
+            cyc, ns = vals["sm__cycles_elapsed.avg"], vals["gpu__time_duration.sum"]
+            vals["sm_clock_mhz"] = 1e3 * cyc / ns if cyc and ns else None
+            vals["unreadable"] = sorted({m for ln in lns for m in ln.unreadable})
+            per_gemm[gemm] = vals
+        cells.append({"arm": str(arm), "n": int(n),
+                      "calls": int(manifest["calls_per_cell"]),
+                      "grid": dict(manifest["grids"][key]), "per_gemm": per_gemm})
+    return cells
+
+
+def floor_smi_reading() -> dict:
+    """`nvidia-smi`'s reading of `R3_FLOOR_SMI_FIELDS` for every card, and the
+    UTC second it was taken. Never raises: a box whose nvidia-smi cannot
+    answer still captures, and the record says why it holds no reading."""
+    argv = ["nvidia-smi", f"--query-gpu={','.join(R3_FLOOR_SMI_FIELDS)}",
+            "--format=csv,noheader,nounits"]
+    utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rc, out, err = _run(argv, timeout=30)
+    rows = [dict(zip(R3_FLOOR_SMI_FIELDS, (c.strip() for c in line.split(",")),
+                     strict=False))
+            for line in (out or "").splitlines() if line.strip()] if rc == 0 else []
+    return {"utc": utc, "argv": argv, "returncode": rc, "rows": rows,
+            "error": "" if rc == 0 else (err or out or "").strip()[:300]}
+
+
+def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
+             profiles: Path) -> int:
+    """`--floor`: the on-chip floor's counters, on a capture of their own.
+
+    Licensed by the same census as a page (`do_run_r3` checks it first).
+    NATIVE only, `R3_FLOOR_TREADS` x `R3_FLOOR_CALLS` calls x 2 GEMMs = 16
+    profiled launches, under the page's own flags (`r3_ncu_argv`: kernel
+    replay, cold L2, base clock, or `--floor-clock none`). The ask is STRICT
+    plus the floor metrics this chip lists, and a decisive group it lacks
+    refuses before the capture.
+
+    AFTER THE CAPTURE, IN THIS ORDER (2026-09-25). The capture's own record,
+    `g<G>.floor.capture.json` (argv, ncu's return code, card, stack, commit,
+    the ask, and an nvidia-smi reading either side), is written before
+    anything is read back, as the page's is, so a refusal below costs the
+    floor file and nothing a person or a later reduction needs. Then each of
+    these is INVALID: ncu's nonzero exit; no manifest or no report
+    (`_r3_capture` deleted the last capture's, so these are this one's); a
+    child on another card; a decisive group no measured launch returned; an
+    HMMA count that reads zero, or is unreadable, on any measured launch.
+    None of them writes the floor file; the `.ncu-rep`, the CSV and the
+    record are kept, and no `--reduce-only` path rebuilds a floor file yet.
+    `metrics_missing` names every asked floor metric no measured launch
+    returned (absent, or a unit the parser has not been shown). LAST,
+    `--floor-lock-mhz F`: the file IS written, with gate FL1, and it is
+    INVALID when any cell's `sm_clock_mhz` sits more than one
+    `R3_FLOOR_LOCK_STEP_MHZ` from F, or could not be read, because its
+    numbers are then real readings at the clocks its cells name, and not at
+    F."""
+    clock, lock = args.floor_clock, args.floor_lock_mhz
+    names, query = query_metric_names(ncu["binary"])
+    asked, dropped, refusal = r3_floor_metrics(names)
+    if refusal:
+        print(f"REFUSE: {refusal}. Nothing was captured (the probe's one kernel ran; "
+              "the floor's did not).")
+        return exit_codes.REFUSED
+    r3 = _r3()
+    try:
+        plan = r3_floor_plan(args.group_m, profile_dir=profiles, model=args.model,
+                             dtype=args.dtype, block_m=args.block_m,
+                             block_n=args.block_n, num_stages=args.num_stages)
+    except r3.CounterPlanRefused as exc:
+        print(f"REFUSE: {exc}")
+        return exit_codes.REFUSED
+    stem = f"g{args.group_m}.floor"
+    sched = r3.counter_schedule(plan)
+    plan_path = profiles / f"{stem}.plan.json"
+    plan_path.write_text(json.dumps(plan, indent=2))
+    manifest_path = Path(plan["manifest"])
+    report, csv_path = profiles / f"{stem}.ncu-rep", profiles / f"{stem}.csv"
+    capture_path = profiles / f"{stem}.capture.json"
+    argv = r3_ncu_argv(ncu["binary"], plan_path, report, asked,
+                       launch_skip=sched.launch_skip, launch_count=sched.launch_count,
+                       clock_control=clock)
+    print(card_line(card))
+    print(f"R3 FLOOR CAPTURE  G={args.group_m}  NATIVE at treads {list(R3_FLOOR_TREADS)}, "
+          f"{sched.launch_count} profiled launches at --clock-control {clock}"
+          + (f" under an nvidia-smi lock of {lock:g} MHz" if lock else "")
+          + f"; {len(asked)} metrics asked, dropped {dropped}")
+    smi_before = floor_smi_reading()
+    rc, tail = _r3_capture(argv, profiles / f"{stem}.ncu.log", args.ncu_timeout,
+                           stale=(manifest_path, report, csv_path, capture_path, out))
+    smi_after = floor_smi_reading()
+    capture = {"argv": argv, "binary": ncu.get("binary"), "version": ncu.get("version"),
+               "returncode": rc, "metrics_asked": list(asked), "metrics_dropped": dropped,
+               "metrics_query": query, "clock_control": clock, "lock_mhz": lock,
+               "smi_before": smi_before, "smi_after": smi_after,
+               "card": card, "stack": stack, "commit": commit}
+    capture_path.write_text(json.dumps(capture, indent=2))
+    kept = (f"no floor file was written, and {report.name}, {csv_path.name} and "
+            f"{capture_path.name} are kept under {profiles} where they exist")
+    if rc != 0:
+        raise CounterRunRefused(f"ncu exited {rc} on the floor capture, so nothing it "
+                                f"left is read; {kept}. ncu's log ends: {tail}")
+    absent = [p.name for p in (manifest_path, report) if not p.exists()]
+    if absent:
+        raise CounterRunRefused(f"ncu exited 0 and the floor capture left no {absent}; "
+                                f"{kept}. ncu's log ends: {tail}")
+    manifest = json.loads(manifest_path.read_text())
+    if (manifest.get("device") or {}).get("uuid") != card["uuid"]:
+        raise CounterRunRefused(
+            f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
+            f"floor capture's card is {card['uuid']}; {kept}")
+    launches = parse_ncu_csv(_r3_reduce(ncu["binary"], report, csv_path),
+                             soft=frozenset(R3_FLOOR_METRICS))
+    attributed = attribute_launches(launches, manifest)
+    cells = r3_floor_cells(attributed, manifest)
+    measured = [rec["launch"] for rec in attributed if not rec["warmup"]]
+    returned = {m for ln in measured for m in ln.metrics}
+    missing = [m for m in asked if m in R3_FLOOR_METRICS and m not in returned]
+    lost = [" or ".join(g) for g in R3_FLOOR_DECISIVE if not set(g) & returned]
+    if lost:
+        raise CounterRunRefused(
+            f"no measured launch of the floor capture returned {lost}, and the floor "
+            f"is decided on each of them; {kept}")
+    # Two ways a launch fails this, named apart (2026-09-25 review): a count
+    # that READ zero says the launch retired no HMMA instruction the counter
+    # saw, and a count the soft parse could not read says nothing either way.
+    hmma = [(ln.launch_id, ln.metrics.get(R3_FLOOR_HMMA_COUNT)) for ln in measured]
+    zero = [i for i, v in hmma if v is not None and not v > 0.0]
+    unread = [i for i, v in hmma if v is None]
+    if zero or unread:
+        raise CounterRunRefused(
+            f"{R3_FLOOR_HMMA_COUNT} is not above zero on every measured launch: "
+            + "; ".join(([f"launch(es) {zero} read it at zero, so they retired no "
+                          "HMMA (mma.sync) instruction the counter saw"] if zero else [])
+                        + ([f"launch(es) {unread} could not read it, which proves "
+                            "nothing"] if unread else []))
+            + f". The tensor readings cannot then say whether that pipe sets the "
+            f"floor; {kept}")
+    off: list[str] = []
+    if lock:
+        for c in cells:
+            for gemm, v in c["per_gemm"].items():
+                mhz = v["sm_clock_mhz"]
+                if mhz is None or abs(mhz - lock) > R3_FLOOR_LOCK_STEP_MHZ:
+                    off.append(f"n={c['n']} {gemm} "
+                               + ("no clock" if mhz is None else f"{mhz:.0f} MHz"))
+    gates = [Gate(
+        "FL1", "VALIDITY",
+        f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
+        "counters' clock", FAIL if off else PASS,
+        f"off the lock: {off}" if off else
+        f"all {sum(len(c['per_gemm']) for c in cells)} within the band",
+        f"|sm_clock_mhz - {lock:g}| <= {R3_FLOOR_LOCK_STEP_MHZ:g} MHz, one step",
+        f"this file as a reading at {lock:g} MHz; its numbers stand only as readings "
+        "at the clocks its cells name")] if lock else []
+    body = {"family": R3_FAMILY, "kind": "floor", "card": card, "stack": stack,
+            "commit": commit, "plan": plan, "cells": cells,
+            "clock": {"control": clock, "lock_mhz": lock,
+                      "band_mhz": R3_FLOOR_LOCK_STEP_MHZ if lock else None,
+                      "held": (not off) if lock else None, "off_lock": off,
+                      "basis": "sm__cycles_elapsed.avg / gpu__time_duration.sum per "
+                               "cell and GEMM, each the mean over its calls",
+                      "smi_before": smi_before, "smi_after": smi_after},
+            "gates": [asdict(g) for g in gates],
+            "ncu": {"binary": ncu.get("binary"), "version": ncu.get("version"),
+                    "argv": argv, "returncode": rc, "report": str(report),
+                    "report_sha256": _sha256(report), "csv": str(csv_path),
+                    "capture": str(capture_path), "replay_mode": "kernel",
+                    "cache_control": "all", "clock_control": clock,
+                    "metrics_asked": list(asked), "metrics_dropped": dropped,
+                    "metrics_missing": missing, "metrics_query": query}}
+    out.write_text(json.dumps(stamped(body, mode="r3-floor", args=args,
+                                      card=card["name"],
+                                      instrument=R3_FLOOR_INSTRUMENT.format(clock=clock)),
+                              indent=2))
+    for g in gates:
+        for line in g.render():
+            print(line)
+    print(f"wrote {out}")
+    print(f"git   {git_visibility(out)}")
+    return exit_codes.classify(g.scored() for g in gates) if gates else exit_codes.DONE
+
+
+def do_floor_names(args) -> int:
+    """`--dry-run --family r3-arms --floor --chip gh100`: the floor capture's
+    name check, run with no GPU and no capture. It is the same
+    `r3_floor_metrics` the capture refuses on, over `ncu --query-metrics
+    --chip CHIP`, so on any machine with ncu a decisive name the chip lacks
+    is found before a box is rented. Needs an ncu on PATH (the Mac has none);
+    without `--chip` it reads the attached chip."""
+    binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
+    if not binary:
+        print("REFUSE: no ncu on PATH, and the floor's name check is ncu's own "
+              "`--query-metrics` list")
+        return exit_codes.REFUSED
+    names, query = query_metric_names(binary, args.chip)
+    asked, dropped, refusal = r3_floor_metrics(names)
+    print(f"R3 FLOOR NAME CHECK  chip {args.chip or 'on this box'}: {query}")
+    print(f"  asked    {len(asked)}: {', '.join(asked)}")
+    print(f"  dropped  {dropped}")
+    if refusal:
+        print(f"REFUSE: {refusal}")
+        return exit_codes.REFUSED
+    return exit_codes.DONE
+
+
 def do_run_r3(args) -> int:
     """The census or one G's page. REFUSED before the child runs when the route
     is not open for this family, when there is no card, when git cannot name
     this tree's commit (`r3_commit`), when a page is asked for without its G
     or its census, and when the census is another card's, another commit's or
-    another vLLM's, or names no commit."""
+    another vLLM's, or names no commit. With `--floor` it is one G's floor
+    capture instead of a page, which `r3_floor` takes once the census has
+    licensed it."""
     if not args.out:
         print("REFUSE: --run needs --out <path>; a measurement nobody wrote down is "
               "not a measurement.")
@@ -6339,6 +6790,10 @@ def do_run_r3(args) -> int:
         if not args.census:
             print("REFUSE: a page needs --census <census.json>, the census THIS card, "
                   "commit and vLLM wrote. Run --census-only first.")
+            return exit_codes.REFUSED
+        if Path(args.out).resolve() == Path(args.census).resolve():
+            print("REFUSE: --out is the census this run is licensed by, and a capture "
+                  "deletes its --out before ncu starts, so it would delete the census")
             return exit_codes.REFUSED
     ncu = probe_ncu(R3_FAMILY)
     if not counter_route_is_open(ncu):
@@ -6392,6 +6847,8 @@ def do_run_r3(args) -> int:
         print(f"REFUSE: the census {census_path} cannot license this page: "
               + "; ".join(why))
         return exit_codes.REFUSED
+    if getattr(args, "floor", False):
+        return r3_floor(args, ncu, card, stack, commit, out, profiles)
 
     g_m, stem = args.group_m, f"g{args.group_m}"
     try:
@@ -6416,8 +6873,10 @@ def do_run_r3(args) -> int:
     print(f"  ncu        {ncu.get('binary')}  [{ncu.get('version', '')}]")
     print(f"  metrics    {len(metrics)} asked: {', '.join(metrics)}")
     print(f"  profiles   {profiles}")
-    rc, tail = _r3_capture(argv, profiles / f"{stem}.ncu.log", args.ncu_timeout)
     manifest_path = Path(plan["manifest"])
+    capture_path = profiles / f"{stem}.capture.json"
+    rc, tail = _r3_capture(argv, profiles / f"{stem}.ncu.log", args.ncu_timeout,
+                           stale=(manifest_path, report, csv_path, capture_path, out))
     absent = [str(p) for p in (manifest_path, report) if not p.exists()]
     if absent:
         raise CounterRunRefused(
@@ -6431,7 +6890,6 @@ def do_run_r3(args) -> int:
                "metrics_dropped": sorted(set(ncu.get("metrics_dropped") or [])
                                          | set(ncu.get("metrics_unproven") or {})),
                "card": card, "stack": stack, "commit": commit}
-    capture_path = profiles / f"{stem}.capture.json"
     capture_path.write_text(json.dumps(capture, indent=2))
     csv_text = _r3_reduce(ncu["binary"], report, csv_path)
     return _r3_write_page(args, plan=plan, capture=capture, census_path=census_path,
@@ -6519,7 +6977,14 @@ def do_reduce_r3(args) -> int:
         print(f"REFUSE: {no_commit}")
         return exit_codes.REFUSED
     census_path = Path(args.census)
-    census = json.loads(census_path.read_text())
+    try:
+        census = json.loads(census_path.read_text())
+    except (OSError, ValueError) as exc:
+        # As `do_run_r3` refuses it. A census rerun whose capture failed deletes
+        # the census at its --out (`_r3_capture`), so a missing one is expected
+        # here and is a refusal, not a traceback.
+        print(f"REFUSE: cannot read the census {census_path}: {exc}")
+        return exit_codes.REFUSED
     if (census.get("card") or {}).get("uuid") != (capture.get("card") or {}).get("uuid"):
         print(f"REFUSE: the census is card {(census.get('card') or {}).get('uuid')} and "
               f"the capture is card {(capture.get('card') or {}).get('uuid')}")
@@ -6571,8 +7036,9 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
     print(card_line(card))
     print(f"R3 COUNTER CENSUS  {len(plan['cells'])} cells, "
           f"{len(sched.warmups) + len(sched.measured)} calls, no skip and no cap")
-    rc, tail = _r3_capture(argv, profiles / "census.ncu.log", args.ncu_timeout)
     manifest_path = Path(plan["manifest"])
+    rc, tail = _r3_capture(argv, profiles / "census.ncu.log", args.ncu_timeout,
+                           stale=(manifest_path, report, profiles / "census.csv", out))
     if not manifest_path.exists() or not report.exists():
         raise CounterRunRefused(f"ncu exited {rc} and the census child left no manifest "
                                 f"or no report: {tail}")
@@ -6639,6 +7105,11 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
     if families != {R3_FAMILY}:
         print(f"REFUSED: --analyse was given {sorted(map(str, families))}; an r3-arms "
               "summary joins r3-arms pages only")
+        return exit_codes.REFUSED
+    kinds = [f"{p} ({d['kind']})" for p, d in loaded if "kind" in d]
+    if kinds:
+        print(f"REFUSED: --analyse scores r3-arms pages, and {kinds} are not pages "
+              "(a page carries no kind)")
         return exit_codes.REFUSED
     if len(loaded) > 1:
         bare = [str(p) for p, d in loaded if not _page_commit(d)]
@@ -7114,6 +7585,33 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--census", default="",
                     help="with --run --family r3-arms: the census.json this card, "
                          "commit and vLLM wrote; a page refuses any other")
+    ap.add_argument("--floor", action="store_true",
+                    help="with --run --family r3-arms --group-m G --census C: instead "
+                         "of a page, profile NATIVE at treads 2 3 4 6 (two calls "
+                         "each) with the on-chip floor's counters (tensor pipe, issue, "
+                         "shared-memory banks, L2 return, occupancy, stall reasons) "
+                         "and write them to --out; it scores no finding, and writes "
+                         "nothing (INVALID) when ncu exits nonzero, a decisive "
+                         "reading came back on no launch, or the HMMA count reads "
+                         "zero, or cannot be read, on any launch. With --dry-run "
+                         "--family r3-arms: only check the names, no GPU")
+    ap.add_argument("--floor-clock", default="base", choices=("base", "none"),
+                    help="with --floor: ncu --clock-control for the floor capture. "
+                         "'base' is the page's; 'none' leaves the clock to the card, "
+                         "or to an nvidia-smi lock (--floor-lock-mhz), for the one "
+                         "extra G=64 capture, since L2 and DRAM do not follow the SM "
+                         "clock")
+    ap.add_argument("--floor-lock-mhz", type=float, default=None, metavar="F",
+                    help="with --run --floor --floor-clock none: the SM clock an "
+                         "nvidia-smi lock (-lgc F,F) holds during the capture. It is "
+                         "written into the file, and the file is INVALID (gate FL1) "
+                         "when any cell's clock, read off its own counters, is more "
+                         "than one 15 MHz step from F. Refused under --floor-clock "
+                         "base, where ncu sets the clock itself")
+    ap.add_argument("--chip", default="",
+                    help="with --dry-run --family r3-arms --floor: check the names "
+                         "against this chip's metric list (gh100) instead of the "
+                         "attached one; needs no GPU")
     ap.add_argument("--reduce-only", action="store_true",
                     help="with --run --family r3-arms --group-m G --census C --out "
                          "P: rebuild the page from the profiles a capture left under "
@@ -7231,9 +7729,37 @@ def main(argv=None) -> int:
         print("REFUSE: --census-only, --census and --reduce-only belong to --run "
               "--family r3-arms")
         return exit_codes.REFUSED
+    if args.floor and not ((args.run or args.dry_run) and args.family == R3_FAMILY):
+        print("REFUSE: --floor belongs to --run or --dry-run --family r3-arms")
+        return exit_codes.REFUSED
+    if args.floor_clock != "base" and not args.floor:
+        print("REFUSE: --floor-clock belongs to --floor")
+        return exit_codes.REFUSED
+    if args.floor_lock_mhz is not None and not (
+            args.run and args.floor and args.floor_clock == "none"):
+        print("REFUSE: --floor-lock-mhz belongs to --run --floor --floor-clock none: "
+              "under the base clock ncu sets the SM clock itself, so no nvidia-smi lock "
+              "holds during the capture")
+        return exit_codes.REFUSED
+    if args.floor_lock_mhz is not None and not args.floor_lock_mhz > 0:
+        print("REFUSE: --floor-lock-mhz is the locked SM clock in MHz and must be "
+              "above zero")
+        return exit_codes.REFUSED
+    if args.chip and not (args.floor and args.dry_run):
+        print("REFUSE: --chip belongs to --dry-run --floor, the name check; a capture "
+              "asks by the attached chip's own list")
+        return exit_codes.REFUSED
     if args.reduce_only and args.census_only:
         print("REFUSE: --reduce-only rebuilds a page; a census is never reduced apart "
               "from its capture")
+        return exit_codes.REFUSED
+    if args.floor and (args.census_only or args.reduce_only):
+        print("REFUSE: --floor is its own capture, licensed by --census; it is not a "
+              "census and is never reduced apart from its capture")
+        return exit_codes.REFUSED
+    if args.floor and _given(argv, "--tiles"):
+        print(f"REFUSE: --floor profiles its own treads {list(R3_FLOOR_TREADS)}; "
+              "--tiles is a page's")
         return exit_codes.REFUSED
     if args.timed_reference and not args.analyse:
         print("REFUSE: --timed-reference is read by --analyse over r3-arms pages")
@@ -7278,7 +7804,7 @@ def main(argv=None) -> int:
                                          str(exc).replace("\n", " ")[:160]))
             return exit_codes.INVALID
     if args.family == R3_FAMILY:
-        return do_dry_run_r3(args)
+        return do_floor_names(args) if args.floor else do_dry_run_r3(args)
     return do_dry_run(args)
 
 
