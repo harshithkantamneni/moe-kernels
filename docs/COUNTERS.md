@@ -929,6 +929,35 @@ registered: co-residency (w1 re-read whole, w2 shared, so alpha(1) can sit
 well below the timed bracket) and the timed edge (both arms at one rate, so
 alpha(1) sits inside it).
 
+THE WAVE-SPLIT BYTE MODEL (2026-09-26, NOT FINAL). `scripts/wave_split_bytes.py`
+fits where the counted q leaves `group_reads`, per card and never pooled. A w2
+slab re-read across GROUP_SIZE_M groups is partly served when the re-reader
+launches inside the co-residency window W_c (SMs x the least recorded
+occupancy limit, read off each page: 432 / 432 on the A100, 660 / 528 on GH200
+and H100, w1 / w2), and A tiles are partly re-read from DRAM. The re-reads come
+from an exact walk of vLLM 0.27.1's pid mapping, held to a closed form; each
+survives with exp(-(F / C)^beta) in the bytes F the L2 takes in between, and q
+is the least fixed point of that map. Stage 1 fits the A law on PRIVATE (50
+cells), stage 2 the slab law and the first window on SHARED and NATIVE at
+G <= 4 (60 cells); G = 16 and 64 are held out. On the 120 cells with n >= 2,
+where `group_reads` misses by 18.04 / 17.96 / 18.73% rms (A100 / GH200 / H100),
+the registered fill view misses by 3.75 / 6.20 / 6.13%, and by 5.17 / 4.84 /
+5.10% on w2 SHARED and NATIVE at G <= 16. It prints no number where its fixed
+point is ill-posed (Hopper w2 G=1, n >= 6), calls w2 SHARED and NATIVE at
+G >= 32 out of domain, and flags the A100's slab law as not identified.
+Through `per_tile_model_fit.py --gemm-bytes` (structure `ovl.gemm.bytes`, one
+overlap max per GEMM) the counted bytes fit the 1710 MHz timed pages at 1.19%
+(GH200) and 0.72% (H100) rms, and the model's q predicts the n=5 times, which
+no counter page measured, to 1.69% and 0.39%. It is fitted, not measured: the
+dead-CTA effect at G=64, the cross-group recovery it over-states at G=2 on the
+Hoppers, and a slab capacity near 70 MiB on both Hoppers (larger than either
+L2) are unexplained, and the script's docstring lists what would falsify it.
+One of those tests, n=5 time errors over 3% at G=1 or G=2 SHARED, already
+reads -3.14% at GH200 G=2 SHARED on the lock pages it was set on; the tool
+prints that as an open question for the judge, not a pass. `--gemm-bytes`
+refuses a timed page that ran another kernel or declaration than the counter
+pages, or that names no DEVICE, and an ILL-POSED cell is null in the JSON.
+
 THE TIMING MODEL (2026-09-26). `scripts/r3_timing_model.py` puts this
 schedule in launch order and fits R3's timed call times with it, per card and
 never pooled. vLLM's pid walk marks the CTA that first pulls each weight slab
