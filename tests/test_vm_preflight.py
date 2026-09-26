@@ -148,7 +148,10 @@ def test_pf1_names_one_card_and_its_role_among_the_studys_four():
     assert ok.data["study_role"] == "the second Hopper"
     assert "same_card_as_study" not in ok.data and "study_card" not in ok.data
     assert ok.data["card_line"].startswith(
-        "CARD NVIDIA H100 80GB HBM3 (nvidia_h100_80gb_hbm3, UUID 0ffa33b8-")
+        f"CARD NVIDIA H100 80GB HBM3 (nvidia_h100_80gb_hbm3, {D.board(UUID)},")
+    assert D.board(UUID) == D.board(UUID[4:]), "one board reads alike from either source"
+    assert UUID[4:12] not in ok.data["card_line"] and UUID[4:12] not in ok.detail
+    assert ok.data["uuid"] == UUID[4:].lower(), "the record keeps the UUID"
     assert "132 SMs, 50 MiB L2" in ok.data["card_line"]
     assert ok.data["card_line"].endswith(
         "every number here is THIS card's; one of the study's four cards: the second "
@@ -164,6 +167,7 @@ def test_pf1_names_one_card_and_its_role_among_the_studys_four():
     assert "not one of the study's four cards" in other.detail
     other = VP.pf1_card(SMI, _torch(), _torch(uuid="aaaa"))
     assert other.verdict == VP.FAIL and "disagree" in other.detail
+    assert D.board("aaaa") in other.detail and UUID[4:12] not in other.detail
     blind = VP.pf1_card(SMI, _torch(), {"torch_error": "ModuleNotFoundError: torch"})
     assert blind.verdict == VP.FAIL and "vllm" in blind.detail
     assert VP.pf1_card(None, _torch(), _torch()).verdict == VP.FAIL

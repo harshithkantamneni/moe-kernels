@@ -1130,7 +1130,7 @@ and none typed. THE SAME CARD'S TIMING ONLY (owner, 2026-09-26). Until that
 date C5 was labelled cross-card and read the H200's timed ratios beside a
 Lambda card's bytes; each of the study's four cards keeps its own numbers, so
 the join now refuses a timed report whose card slug is not the pages', naming
-both UUIDs (the timed one off R3's `DEVICE` file beside its report), and the
+both boards (the timed one off R3's `DEVICE` file beside its report), and the
 gate's lines say SAME-CARD and name both boards. The join also refuses a
 timed report that is planted, that is not VALID by its own gates, or whose
 model, dtype, BLOCK_M or pinned block (G aside) differs from the page's
@@ -1167,7 +1167,7 @@ line says why, whether a timed page at G=3 is given or not.
 
 ### 6.9 The card
 
-Every page's first line reads `CARD <name> (<slug>, UUID <uuid>, sm_<cc>, <SMs>
+Every page's first line reads `CARD <name> (<slug>, board <tag>, sm_<cc>, <SMs>
 SMs, <L2> MiB L2): every number here is THIS card's; <role>.`, the role read
 off `STUDY_CARDS` by the card's slug (2026-09-26; before that the line ended
 "the study's timing pages are nvidia_h200", and the logs published before

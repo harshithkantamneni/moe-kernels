@@ -2983,7 +2983,8 @@ def test_the_page_header_names_the_payloads_card_and_an_uncarded_page_fails_v0()
     first = DCR.r3_page_lines(page, gates, summary)[0]
     card = page["card"]
     assert first == DCR.card_line(card)
-    assert first.startswith(f"CARD {card['name']} ({card['slug']}, UUID {card['uuid']}")
+    assert first.startswith(f"CARD {card['name']} ({card['slug']}, {DCR.board(card['uuid'])},")
+    assert card["uuid"] not in first
     assert first.endswith("every number here is THIS card's; not one of the study's four "
                           "cards.")
     bare = DCR.planted_r3_page("uncarded", 4)
@@ -3132,6 +3133,7 @@ def test_analyse_refuses_two_card_uuids(tmp_path, capsys):
     assert main(["--analyse", *map(str, paths)]) == exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "card UUID" in out and exit_codes.parse_result_lines(out) == []
+    assert DCR.board("another-card") in out and "another-card" not in out
 
 
 def _timed_report(tmp_path, g: int, ratio: float, seed: int, *, clock=None,
@@ -3255,14 +3257,15 @@ def test_c5_joins_only_measured_valid_timed_pages_of_the_pages_own_kernel(
                for s in summary["not_asked"])
 
 
-def test_c5_refuses_another_cards_timing_and_prints_both_uuids(tmp_path, capsys):
+def test_c5_refuses_another_cards_timing_and_names_both_boards(tmp_path, capsys):
     """Owner, 2026-09-26: C5 was labelled CROSS-CARD and compared a Lambda
     card's bytes with the H200's timed ratios. Each of the study's cards keeps
     its own numbers, so a timed report whose card slug is not the pages' is
-    REFUSED before any page is scored, the refusal naming both UUIDs (the timed
-    one read off R3's DEVICE file beside its report). The same card on another
-    board is the same card: joined, the SAME-CARD line naming both boards. A
-    reference from another card handed to the scorer directly asks no C5."""
+    REFUSED before any page is scored, the refusal naming both boards (the timed
+    one read off R3's DEVICE file beside its report) by their hash tags, never
+    by UUID. The same card on another board is the same card: joined, the
+    SAME-CARD line naming both boards. A reference from another card handed to
+    the scorer directly asks no C5."""
     (g4,) = _write_pages(tmp_path, [("group", 4, {})])
     page = json.loads(g4.read_text())
     ratio = DCR.r3_estimates(page)["alpha_ratio"]
@@ -3272,20 +3275,23 @@ def test_c5_refuses_another_cards_timing_and_prints_both_uuids(tmp_path, capsys)
         == exit_codes.REFUSED
     out = " ".join(capsys.readouterr().out.split())
     assert "REFUSED: --timed-reference" in out
-    assert "was timed on nvidia_h200 (UUID h200-board)" in out
+    assert f"was timed on nvidia_h200 ({DCR.board('h200-board')})" in out
     card = DCR.R3_PLANTED_CARD
-    assert f"the counter pages are {card['slug']} (UUID {card['uuid']})" in out
+    assert f"the counter pages are {card['slug']} ({DCR.board(card['uuid'])})" in out
+    assert "h200-board" not in out and card["uuid"] not in out
     assert exit_codes.parse_result_lines(out) == []
     unread = [_timed_report(tmp_path, 4, ratio + 0.5, 0, card="nvidia_h200")]
     assert main(["--analyse", str(g4), "--timed-reference", *map(str, unread)]) \
         == exit_codes.REFUSED
-    assert "(UUID unread: no DEVICE file beside the report)" in capsys.readouterr().out
+    assert "(board unread: no DEVICE file beside the report)" in capsys.readouterr().out
     board = [_timed_report(tmp_path, 4, ratio + 0.5, s, uuid="planted-9999") for s in (0, 1)]
     assert main(["--analyse", str(g4), "--timed-reference", *map(str, board)]) \
         == exit_codes.DONE
     out = " ".join(capsys.readouterr().out.split())
     assert f"SAME-CARD: the timed reports and this page are both {card['slug']}" in out
-    assert (f"timed on UUID planted-9999, this page's UUID {card['uuid']}: another "
+    assert "planted-9999" not in out and card["uuid"] not in out
+    assert (f"timed on {DCR.board('planted-9999')}, this page's {DCR.board(card['uuid'])}: "
+            "another "
             "board of the same card") in out
     ref = DCR.load_timed_reference(board, card=page["card"])
     ref[4][0]["cards"] = ["nvidia_h200"]
@@ -3495,7 +3501,8 @@ def test_c5_says_whether_bytes_and_time_were_read_at_one_clock_and_on_one_board(
     locked = lines(_at_lock(json.loads(json.dumps(page)), 1710.0))
     assert "counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none): one " \
            "clock" in locked
-    assert f"timed on UUID {uuid}, this page's UUID {uuid}: the same board" in locked
+    assert f"timed on {DCR.board(uuid)}, this page's {DCR.board(uuid)}: the same board" \
+        in locked
     base = lines(page)
     assert "counted at ncu's base clock (--clock-control base): not shown to be the " \
            "timed clock" in base

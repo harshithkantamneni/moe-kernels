@@ -208,7 +208,6 @@ uuid: a device is printed as `board` and six hex digits of the uuid's sha256
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import re
@@ -638,14 +637,10 @@ def discover_timed(inputs) -> list[TimedPage]:
     return pages
 
 
-def board(device) -> str:
-    """How printed text names a device: `board` and the first six hex digits
-    of the sha256 of its uuid, or `board unread` when the page recorded none.
-    Two boards still read apart, and no printed line carries the uuid itself
-    (the JSON's `device` keeps it, for provenance)."""
-    if not device:
-        return "board unread"
-    return "board " + hashlib.sha256(str(device).encode()).hexdigest()[:6]
+#: How printed text names a device: the counter pages' own tag (`DCR.board`,
+#: six hex digits of the uuid's sha256), so one board reads alike in both
+#: tools' output. The JSON's `device` keeps the uuid, for provenance.
+board = DCR.board
 
 
 def admit(pages: list[TimedPage]) -> list[TimedPage]:

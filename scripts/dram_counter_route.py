@@ -152,6 +152,7 @@ before anything runs, and a successful measurement of a clustered cell passes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -5173,6 +5174,20 @@ def live_card_block() -> dict | None:
             "study_role": STUDY_CARDS.get(slug)}
 
 
+def board(uuid) -> str:
+    """How printed text names a device: `board` and the first six hex digits
+    of the sha256 of its UUID in one spelling (the chain's `_bare_uuid`: torch
+    prints it bare, nvidia-smi as `GPU-...`), or `board unread` when there is
+    none (or the loaders' "unread"). Two boards still read apart, one board
+    reads alike from either source, and no line this script prints carries a
+    UUID; every page, census and floor file it writes keeps the UUID itself,
+    and every check compares UUIDs, never tags."""
+    if not uuid or uuid == "unread":
+        return "board unread"
+    from alpha_g_chain_helpers import _bare_uuid
+    return "board " + hashlib.sha256(_bare_uuid(str(uuid)).encode()).hexdigest()[:6]
+
+
 def card_line(card) -> str:
     """THE FIRST LINE OF EVERY PAGE AND SUMMARY: which card every number on it
     belongs to, and that card's role among the study's four (`study_role`),
@@ -5184,7 +5199,7 @@ def card_line(card) -> str:
     cc = str(card.get("capability") or "?").replace(".", "")
     l2 = card.get("l2_bytes")
     l2_text = f"{l2 / 2 ** 20:g}" if l2 else "?"
-    return (f"CARD {card['name']} ({card.get('slug')}, UUID {card.get('uuid')}, "
+    return (f"CARD {card['name']} ({card.get('slug')}, {board(card.get('uuid'))}, "
             f"sm_{cc}, {card.get('sm_count')} SMs, {l2_text} MiB L2): every number "
             f"here is THIS card's; {study_role(card.get('slug'))}.")
 
@@ -5884,9 +5899,10 @@ def load_timed_reference(paths, *, card) -> dict[int, list[dict]]:
         # A page that names no card (V0 fails it) is no card's: nothing joins it.
         if not slug or rep.get("card") != slug:
             raise CounterRunRefused(
-                f"{p} was timed on {rep.get('card')} (UUID "
-                f"{uuid or 'unread: no DEVICE file beside the report'}) and the counter "
-                f"pages are {slug} (UUID {page_uuid}); C5 compares one card's bytes with "
+                f"{p} was timed on {rep.get('card')} ("
+                f"{board(uuid) + (': no DEVICE file beside the report' if not uuid else '')}"
+                f") and the counter pages are {slug} ({board(page_uuid)}); C5 compares one "
+                "card's bytes with "
                 "that card's own timing, and each of the study's cards keeps its own "
                 "numbers")
         prov = rep.get("provenance") or {}
@@ -5987,9 +6003,10 @@ def timed_reference_card_mismatch(ref: dict, card) -> str:
     slug = card.get("slug") if isinstance(card, dict) else None
     if slug and ref.get("cards") == [str(slug)]:
         return ""
-    return (f"the timed reports are {ref.get('cards')} (UUID {ref.get('uuids')}) and "
-            f"this page is {slug} (UUID "
-            f"{card.get('uuid') if isinstance(card, dict) else None}); C5 compares one "
+    return (f"the timed reports are {ref.get('cards')} "
+            f"({', '.join(board(u) for u in ref.get('uuids') or ())}) and "
+            f"this page is {slug} ("
+            f"{board(card.get('uuid') if isinstance(card, dict) else None)}); C5 compares one "
             "card's bytes with that card's own timing")
 
 
@@ -6628,8 +6645,8 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
         one_clock = (lock is not None and ref["clock_mhz"] is not None
                      and abs(ref["clock_mhz"] - lock) <= R3_FLOOR_LOCK_STEP_MHZ)
         same = [f"SAME-CARD: the timed reports and this page are both {slug} "
-                f"({study_role(slug)}); timed on UUID {', '.join(ref['uuids'])}, this "
-                f"page's UUID {uuid}: {boards}",
+                f"({study_role(slug)}); timed on {', '.join(board(u) for u in ref['uuids'])}"
+                f", this page's {board(uuid)}: {boards}",
                 f"timed at {timed_regime_word(ref)} (the median sm_clock_load_mhz of its "
                 f"usable timed cells, to the {R3_FLOOR_LOCK_STEP_MHZ:g} MHz step; a lock "
                 f"reads as itself); this page's bytes were counted at "
@@ -7341,8 +7358,8 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     manifest = json.loads(manifest_path.read_text())
     if (manifest.get("device") or {}).get("uuid") != card["uuid"]:
         raise CounterRunRefused(
-            f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
-            f"floor capture's card is {card['uuid']}; {kept}")
+            f"the child ran on {board((manifest.get('device') or {}).get('uuid'))} and "
+            f"this floor capture's card is {board(card['uuid'])}; {kept}")
     launches = parse_ncu_csv(_r3_reduce(ncu["binary"], report, csv_path),
                              soft=frozenset(R3_FLOOR_METRICS))
     attributed = attribute_launches(launches, manifest)
@@ -7528,8 +7545,8 @@ def do_run_r3(args) -> int:
     if census.get("family") != R3_FAMILY or census.get("kind") != "census":
         why.append("it is not an r3-arms census")
     if (census.get("card") or {}).get("uuid") != card["uuid"]:
-        why.append(f"card {(census.get('card') or {}).get('uuid')} is not this card "
-                   f"{card['uuid']}")
+        why.append(f"card {board((census.get('card') or {}).get('uuid'))} is not this "
+                   f"card {board(card['uuid'])}")
     if not census.get("commit"):
         why.append("it names no commit, and a census licenses a page by commit")
     elif census.get("commit") != commit:
@@ -7625,8 +7642,8 @@ def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census
     card = capture["card"]
     if (manifest.get("device") or {}).get("uuid") != card["uuid"]:
         raise CounterRunRefused(
-            f"the child ran on {(manifest.get('device') or {}).get('uuid')} and this "
-            f"page's card is {card['uuid']}")
+            f"the child ran on {board((manifest.get('device') or {}).get('uuid'))} and "
+            f"this page's card is {board(card['uuid'])}")
     metrics = capture["metrics_asked"]
     # The clock is the CAPTURE's, off its record, as its card and argv are: a
     # record written before 2026-09-26 names none and was taken at base.
@@ -7713,8 +7730,8 @@ def do_reduce_r3(args) -> int:
         print(f"REFUSE: cannot read the census {census_path}: {exc}")
         return exit_codes.REFUSED
     if (census.get("card") or {}).get("uuid") != (capture.get("card") or {}).get("uuid"):
-        print(f"REFUSE: the census is card {(census.get('card') or {}).get('uuid')} and "
-              f"the capture is card {(capture.get('card') or {}).get('uuid')}")
+        print(f"REFUSE: the census is card {board((census.get('card') or {}).get('uuid'))}"
+              f" and the capture is card {board((capture.get('card') or {}).get('uuid'))}")
         return exit_codes.REFUSED
     report, csv_path = profiles / f"{stem}.ncu-rep", profiles / f"{stem}.csv"
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
@@ -7810,7 +7827,7 @@ def r3_census(args, ncu: dict, card: dict, stack: dict, commit, out: Path,
              "the attribution every page makes, launch by launch"),
         Gate("CEN3", "VALIDITY", "the child ran on this card",
              PASS if (manifest.get("device") or {}).get("uuid") == card["uuid"] else FAIL,
-             str((manifest.get("device") or {}).get("uuid")), card["uuid"],
+             board((manifest.get("device") or {}).get("uuid")), board(card["uuid"]),
              "the census's card, which every page is matched to"),
     ]
     rc_all = exit_codes.classify(g.scored() for g in gates)
@@ -7881,8 +7898,9 @@ def do_analyse_r3(args, loaded: list[tuple[Path, dict]]) -> int:
         for name, read in apparatus.items():
             values = sorted({str(read(d)) for _p, d in loaded})
             if len(values) > 1:
+                shown = [board(v) for v in values] if name == "card UUID" else values
                 print(f"REFUSED: the pages carry {len(values)} values of {name} "
-                      f"({values}); an alpha(G) table across them compares two "
+                      f"({shown}); an alpha(G) table across them compares two "
                       "apparatuses, not two G")
                 return exit_codes.REFUSED
         gs = [int(d["design"]["group_m"]) for _p, d in loaded]
