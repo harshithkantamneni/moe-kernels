@@ -1,0 +1,22 @@
+ROUTE PROBE  family r3-arms: every metric its pages ask
+  host      Linux x86_64
+  caps      {'available': True, 'cap_eff': '0x1ffffffffff', 'cap_eff_field': '000001ffffffffff', 'cap_eff_bits': 64, 'sys_admin': True, 'perfmon': True}
+  module    {'available': False, 'why': 'the parameter is not listed by this driver'}
+  ncu       counters readable: all 5 STRICT metrics of the r3-arms family came back as numbers on a profiled launch of the probe kernel (dram__bytes_read.sum 4.20147e+06); 11 of 11 cross-check and recorded metrics proven; the CSV was WIDE  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  kernel    LAUNCHED  NVIDIA H100 80GB HBM3: one add_ over 1048576 fp32
+  metrics   query: ncu --query-metrics listed 3582 base metric names
+            proven ['dram__bytes_read.sum', 'dram__bytes_write.sum', 'lts__t_sectors_srcunit_tex_op_read.sum', 'launch__grid_size', 'gpu__time_duration.sum', 'lts__d_sectors_fill_device.sum', 'lts__t_sectors_op_read_lookup_miss.sum', 'lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum', 'lts__t_sector_op_read_hit_rate.pct', 'launch__occupancy_limit_blocks', 'launch__occupancy_limit_registers', 'launch__occupancy_limit_shared_mem', 'launch__occupancy_limit_warps', 'launch__registers_per_thread', 'launch__waves_per_multiprocessor', 'lts__t_sectors_srcunit_ltcfabric.sum']
+            unproven []  dropped []
+  csv       wide: "ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","c2clink__enabled_mask","c2clink__present",
+  nsys      no nsys on PATH
+
+  VERDICT   OPEN
+            - ncu read every STRICT metric of the r3-arms family off a profiled launch of the probe kernel, from a WIDE CSV: the R3 counter run can happen on this box. Next: --run --family r3-arms --census-only, then one --run --family r3-arms --group-m G --census <census.json> per registered G (--dry-run --family r3-arms prints them and their price).
+            - proven beyond STRICT: ['lts__d_sectors_fill_device.sum', 'lts__t_sectors_op_read_lookup_miss.sum', 'lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum', 'lts__t_sector_op_read_hit_rate.pct', 'launch__occupancy_limit_blocks', 'launch__occupancy_limit_registers', 'launch__occupancy_limit_shared_mem', 'launch__occupancy_limit_warps', 'launch__registers_per_thread', 'launch__waves_per_multiprocessor', 'lts__t_sectors_srcunit_ltcfabric.sum']; not proven, so never gated: none; dropped by the metric query: none
+
+RESULT: CLAIM P1 PASS a DRAM counter can be READ on this box: route OPEN: counters readable: all 5 STRICT metrics of the r3-arms family came back as numbers on a profiled launch of t
+GATE P1  CLAIM    PASS   a DRAM counter can be READ on this box
+              measured route OPEN: counters readable: all 5 STRICT metrics of the r3-arms family came back as numbers on a profiled launch of the probe kernel (dram__bytes_read.sum 4.20147e+06); 11 of 11 cross-check and recorded metrics proven; the CSV was WIDE   gate OPEN
+
+  wrote /home/ubuntu/moe/session/probe.json
+  git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/session/probe.json: '/home/ubuntu/moe/session/probe.json' is outside repository at '/home/ubuntu/moe/repo')

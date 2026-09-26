@@ -1,0 +1,28 @@
+2026-09-25T14:03:07Z lock ladder [1980, 1890, 1800, 1710, 1620, 1530] (supported max 1980)
+2026-09-25T14:03:08Z locked at 1980 MHz
+2026-09-25T14:03:08Z G=1 start at lock 1980
+2026-09-25T14:03:39Z G=1 slipped rc=None cells=2 worst=1830.0 32 s
+2026-09-25T14:03:39Z lock 1980 did not hold; stepping down
+2026-09-25T14:03:39Z locked at 1890 MHz
+2026-09-25T14:03:39Z G=1 start at lock 1890
+2026-09-25T14:03:51Z G=1 slipped rc=None cells=2 worst=1830.0 12 s
+2026-09-25T14:03:51Z lock 1890 did not hold; stepping down
+2026-09-25T14:03:51Z locked at 1800 MHz
+2026-09-25T14:03:51Z G=1 start at lock 1800
+2026-09-25T14:14:32Z G=1 done rc=1 cells=162 worst=1800.0 641 s
+2026-09-25T14:14:32Z G=2 start at lock 1800
+2026-09-25T14:15:32Z G=2 slipped rc=None cells=10 worst=1770.0 60 s
+2026-09-25T14:15:32Z lock 1800 did not hold; stepping down
+2026-09-25T14:15:32Z locked at 1710 MHz
+2026-09-25T14:15:32Z G=1 start at lock 1710
+2026-09-25T14:26:13Z G=1 done rc=1 cells=162 worst=1710.0 641 s
+2026-09-25T14:26:13Z G=2 start at lock 1710
+2026-09-25T14:36:53Z G=2 done rc=0 cells=162 worst=1710.0 641 s
+2026-09-25T14:36:53Z G=4 start at lock 1710
+2026-09-25T14:47:34Z G=4 done rc=0 cells=162 worst=1710.0 641 s
+2026-09-25T14:47:34Z G=16 start at lock 1710
+2026-09-25T14:58:15Z G=16 done rc=0 cells=162 worst=1710.0 641 s
+2026-09-25T14:58:15Z G=64 start at lock 1710
+2026-09-25T15:08:56Z G=64 done rc=1 cells=162 worst=1710.0 641 s
+2026-09-25T15:08:56Z all G done at lock 1710 MHz
+2026-09-25T15:08:56Z clock reset; DONE rc=0

@@ -1,0 +1,84 @@
+{
+  "family": "r3-arms",
+  "kind": "census",
+  "order": [
+    [
+      "native",
+      1
+    ],
+    [
+      "native",
+      6
+    ]
+  ],
+  "calls_per_cell": 1,
+  "warmup_calls": 1,
+  "gemms_per_call": 2,
+  "launch_skip": 0,
+  "launch_count": null,
+  "tokens": {
+    "1": 128,
+    "6": 768
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/1": "8ff820039769e4f4184da628dc0fb4dacdaab397c0ae3a0f87c7633eb8d8e819",
+    "native/6": "32462167f09ce1d6fa09104f484c1c11ec1a4e3802c75859cfb3c8312159ff39"
+  },
+  "sorted_ids_len": {
+    "native/1": 504,
+    "native/6": 1784
+  },
+  "grids": {
+    "native/1": {
+      "w1": 7168,
+      "w2": 1024
+    },
+    "native/6": {
+      "w1": 25088,
+      "w2": 3584
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n1",
+    "r3/native/g64/n6"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 157286400,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 25839009792,
+    "device_free_bytes": 84320518144,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 6
+  },
+  "versions": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA H100 80GB HBM3",
+    "uuid": "4e782590-2a78-3dae-2f1b-a3ce1000a28f"
+  }
+}
