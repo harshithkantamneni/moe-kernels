@@ -170,6 +170,53 @@ Each page keeps its `.ncu-rep` beside it (`<out>.profiles/`), so a parser
 defect found later is a laptop fix, not a re-rent. The first G's measured
 per-launch time re-prices the rest.
 
+**Optional, after the pages: the floor counters** (COUNTERS.md 6.12). Two
+captures at the base clock, then one G=64 capture under an nvidia-smi lock at
+F. Run it in the same shell as the block above (it uses `$S`, `$R` and
+`moe_counter`), inside tmux, and only while nothing else uses the GPU.
+
+- **Census.** The floor needs a bundle whose commit carries `--floor` and a
+  census at that commit. `C` is the pages' census when the pages ran at that
+  commit. Otherwise write a new one to its own path (`--census-only --out
+  "$S/census-floor.json"`), so the pages' census stays.
+- **F.** A lock this card holds at every G: 1710 MHz held in R3's timed runs on
+  both the GH200 and the H100 (2026-09-25, published on branches lambda-gh200
+  and lambda-h100). Another card needs its own hold test first, and an F above
+  the card's maximum clock (the A100's is 1410 MHz) stops the block before the
+  lock.
+- **Stops.** The block is one subshell and stops at the first capture that does
+  not exit 0: 2 is refused, 3 is INVALID, any other code is the shell or `tee`
+  (read the screen). After a stop, fix the cause and rerun only the step that
+  stopped: each capture deletes its own `--out` first, so rerunning the whole
+  block would delete the files that passed.
+- **Locks.** Its trap clears both kinds of lock however it ends, Ctrl-C
+  included, and ignores a second Ctrl-C while it does: ncu's own
+  (`--clock-control reset`, for clocks a killed ncu can leave locked) and
+  nvidia-smi's (`-rgc`). The last lines record the clocks a few seconds after
+  the reset, for whatever runs next.
+
+```bash
+F=1710                    # a lock this card holds at every G (GH200 and H100: 1710)
+C=$S/census.json          # the census at this commit (see Census above)
+( set -o pipefail
+  trap 'trap "" INT TERM HUP; moe_counter ncu --clock-control reset >/dev/null 2>&1; sudo -n nvidia-smi -rgc >/dev/null' EXIT
+  trap 'exit 130' INT TERM HUP                             # stop the block; EXIT still resets
+  for G in 64 2; do
+    moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m $G \
+      --census "$C" --floor --out "$R/r3f-g$G.json" 2>&1 | tee "$S/logs/r3f-g$G.log" \
+      || exit                                              # 2 refused, 3 INVALID: stop, read it
+  done
+  moe_counter ncu --clock-control reset                    # a clock a killed ncu left, before the lock
+  MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
+  [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
+  sudo -n nvidia-smi -lgc "$F,$F" || exit 2
+  moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m 64 \
+    --census "$C" --floor --floor-clock none --floor-lock-mhz "$F" \
+    --out "$R/r3f-g64-lock$F.json" 2>&1 | tee "$S/logs/r3f-g64-lock$F.log" )
+echo "floor block exit $?"; sleep 5
+nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,clocks_event_reasons.active --format=csv | tee "$S/clocks-after-floor.txt"
+```
+
 Do not mix doors on one box: ncu's lock file under `/tmp` is created by the
 first user that runs it, and a root-owned one refuses a later unprivileged ncu.
 The reverse can refuse too: with Ubuntu's `fs.protected_regular`, root's
