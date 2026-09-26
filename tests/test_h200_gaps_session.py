@@ -110,6 +110,7 @@ CODE = "\n".join(ln for ln in TEXT.splitlines() if not ln.lstrip().startswith("#
 sys.path.insert(0, str(ROOT))
 from _committed import ncu_refusals  # noqa: E402
 from _hermetic import LAPTOP_ENV  # noqa: E402
+from _shared_run import shared  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
 
@@ -190,6 +191,19 @@ def run(args, cwd=None, session=None, env_extra=None):
     env.update(env_extra or {})
     return _spawn(["bash", str(DRIVER), *args], cwd=str(cwd or ROOT),
                           capture_output=True, text=True, timeout=900, env=env)
+
+
+@pytest.fixture(scope="session")
+def gaps_dry(request, tmp_path_factory):
+    """ONE `--dry-run` of the driver, SESSION=<shared dir>/s, for every test
+    that only reads it: `(session dir, CompletedProcess)`. Until 2026-09-26
+    each of those tests ran its own copy, about 30 s apiece, 17 a suite.
+    Shared across xdist workers and frozen read-only (tests/_shared_run.py).
+    A test that writes into a session, or asks with another argv or
+    environment, runs its own."""
+    where, got = shared(request, tmp_path_factory, "gaps-dry-s",
+                        lambda d: run(["--dry-run"], session=d / "s"))
+    return where / "s", got
 
 
 def lift(script: str, **variables):
@@ -379,7 +393,7 @@ def test_a_claim_gate_failing_is_finished_and_never_re_run():
     assert got.stdout.strip() == "CLAIM_FAIL"
 
 
-def test_the_estimated_total_is_printed_before_anything_is_spent(tmp_path):
+def test_the_estimated_total_is_printed_before_anything_is_spent(gaps_dry):
     """THE ONE NUMBER THAT DECIDES WHETHER TO RENT USED TO BE PRINTED ONLY
     AFTER THE DECISION. `TOTAL ~$total minutes` sat inside the `else` of
     `if (( DRY ))`, so --dry-run listed twenty per-arm minutes and no sum, and
@@ -387,7 +401,7 @@ def test_the_estimated_total_is_printed_before_anything_is_spent(tmp_path):
     hours. Both modes print it now, with the cumulative minute each arm starts
     at beside it, because "how long is the session" and "what is still
     unstarted when I release the pod" are different questions."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     assert "WHAT THIS COMMITS YOU TO" in got.stdout
     body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1]
     assert body.index("SESSION  card=") > 0
@@ -418,13 +432,13 @@ def test_the_estimated_total_is_printed_before_anything_is_spent(tmp_path):
         running += booked[name]
 
 
-def test_no_arm_books_a_figure_this_file_invented(tmp_path):
+def test_no_arm_books_a_figure_this_file_invented(gaps_dry):
     """THE COST TABLE WAS WRONG BY 2.1x OVERALL AND BY 10x ON THE NOISE FLOOR,
     and the fix is not a better guess: every row now names the command whose
     plan printed its figure, and what that figure leaves out. A row with no
     basis is a number somebody made up, which is the state the whole table was
     in."""
-    body = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+    body = gaps_dry[1].stdout.split(
         "WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
     for name in ARMS:
         basis = lift(f'arm_basis {shlex.quote(name)}', REPO=str(ROOT))
@@ -459,7 +473,7 @@ KERNEL_ARMS = ("private-mixtral-bm32", "roofline-n64-g1", "bm128_depth",
                "span_dense")
 
 
-def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
+def test_the_cost_column_names_the_clock_each_figure_is_on(gaps_dry):
     """THE TOTAL ADDED TWO DIFFERENT UNITS. Fixing every figure to be the arm's
     own left them in mixed clocks and said so nowhere: noise_floor's 120 and
     anchor_measure's 5 are WALL, while seven arms are booked at what their plans
@@ -471,8 +485,7 @@ def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
     -- the defect this whole slice keeps meeting -- and this test re-derives the
     same answer a third way, from what each arm's own --dry-run PRINTS, which is
     the only source neither of them can quietly disagree with."""
-    session = tmp_path / "s"
-    got = run(["--dry-run"], session=session)
+    session, got = gaps_dry
     assert got.returncode == 0, got.stdout[-3000:]
     logs = session / "logs"
     found = {"KERNEL": [], "WALL": [], "ALLOW": [], "FREE": []}
@@ -515,7 +528,7 @@ def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
                              listing, re.M), (name, clock)
 
 
-def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(tmp_path):
+def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(gaps_dry):
     """"BOOK ABOVE THAT AND NEVER AT IT" WITH NO NUMBER TO BOOK ABOVE. The old
     banner printed one total over mixed units, computed the "starts at" column
     -- the one thing a rental is sized with -- from that sum, and then declined
@@ -526,7 +539,7 @@ def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(tmp_
 
     Both numbers are printed now, the second is arithmetic over the first, and
     no per-arm figure is touched by it."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
     priced = int(re.search(r"TOTAL ~(\d+) minutes", body).group(1))
     kernel = re.search(r"of which ~(\d+) are KERNEL minutes", body)
@@ -1015,7 +1028,7 @@ def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
         f"{arm_name} is skipped rather than planned"
 
 
-def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
+def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(gaps_dry):
     """The end-to-end form of the four fixes above, on a box with no GPU: the
     only arms without a PLANNED row are the two pin probes, the anchor rescore
     and the counter contrast, each of which is NOT_PLANNED with a reason.
@@ -1027,9 +1040,9 @@ def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
     with `--dry-run` in the runner, and the two payloads it reads are written by
     the counter pair on the card. The predictions it is scored against are
     registered off GPU all the same, in section 2 of each counter arm's plan."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    session, got = gaps_dry
     rows = dict(ln.split("\t")[:2] for ln in
-                (tmp_path / "s" / "ARMS-dryrun.tsv").read_text().splitlines()[1:])
+                (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:])
     # NOT_PLANNED: no plan mode reachable here, named with the reason.
     # PLAN_REFUSED: the two BLOCK_N=256 rooflines print their refusal on line
     # one and never plan, which is that arm's own finding -- no BLOCK_M=256
@@ -1253,13 +1266,12 @@ def test_a_plan_gets_planning_words_and_a_refusal_is_not_a_breakage(rc, state):
     assert got.stdout.strip() == state, "with no log to read, rc 2 printed nothing"
 
 
-def test_a_dry_run_writes_a_separate_ledger_and_marks_nothing_done(tmp_path):
+def test_a_dry_run_writes_a_separate_ledger_and_marks_nothing_done(gaps_dry):
     """A PLAN IS NOT A MEASUREMENT, and the resume path reads the ledger. Written
     into the measuring ledger a plan's exit code would mark arms finished having
     measured nothing, and the pod run would skip them, ending with a confident
     summary of twenty arms and no data."""
-    session = tmp_path / "s"
-    got = run(["--dry-run"], session=session)
+    session, got = gaps_dry
     assert (session / "ARMS-dryrun.tsv").exists()
     assert not (session / "ARMS.tsv").exists()
     rows = [r.split("\t") for r in
@@ -1472,12 +1484,12 @@ def test_the_resume_check_does_not_depend_on_a_gnu_only_grep():
 # 5. the card is in every name
 # --------------------------------------------------------------------------
 
-def test_the_results_root_carries_the_card(tmp_path):
+def test_the_results_root_carries_the_card(gaps_dry):
     """AUDIT A5. The comment said the card was "IN BOTH NAMES" while the export
     was a bare /workspace/results. That volume outlives the pod: two published
     arms, one for sm_count 132 and one for 108, contain a report file of the
     same name because a second card resumed the first card's directories."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     line = [ln for ln in got.stdout.splitlines() if "MOE_RESULTS_DIR" in ln
             and "results " in ln]
     assert line, got.stdout
@@ -1579,11 +1591,11 @@ def test_an_invalid_arm_says_in_the_summary_that_nothing_may_be_quoted(tmp_path)
     assert "RESULT: VALIDITY V0 PASS" in got.stdout
 
 
-def test_an_arm_with_no_result_line_is_reported_rather_than_omitted(tmp_path):
+def test_an_arm_with_no_result_line_is_reported_rather_than_omitted(gaps_dry):
     """A CHECK THAT EXAMINED NOTHING REPORTS NO FAILURES. An arm whose log
     carries no RESULT line has not passed its gates; printing nothing for it
     would read as having found nothing wrong."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     assert "PLAN ONLY: a --dry-run scores no gate" in got.stdout
     assert "This arm was NOT scored" in TEXT
     assert "do not read prose in it as a verdict" in TEXT
@@ -1758,15 +1770,15 @@ def test_it_asks_git_check_ignore_rather_than_asserting_the_rule():
     assert "It is NOT 'tracked'" in TEXT
 
 
-def test_the_git_verdict_is_asked_of_a_path_an_arm_really_writes(tmp_path):
+def test_the_git_verdict_is_asked_of_a_path_an_arm_really_writes(gaps_dry):
     """`results/` itself is not ignored -- the pattern is `results/*` -- so
     asking about the ROOT answers the wrong question and reports "tracked" for a
     tree whose every child git drops."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     assert "/bm128_roofline" in got.stdout
 
 
-def test_it_never_commits_terminates_or_pushes(tmp_path):
+def test_it_never_commits_terminates_or_pushes(gaps_dry):
     # These may appear only as printed ADVICE to the operator, inside the
     # closing heredoc or a comment, never as a command this script runs.
     runnable = [ln for ln in CODE.splitlines()
@@ -1775,7 +1787,7 @@ def test_it_never_commits_terminates_or_pushes(tmp_path):
                       "shutdown", "poweroff", "rm -rf"):
         for line in runnable:
             assert forbidden not in line, line
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     assert "NOTHING HERE IS COMMITTED AND NOTHING IS PUSHED" in got.stdout
 
 
@@ -2302,12 +2314,11 @@ def test_a_plan_that_printed_and_then_refused_is_planned_and_one_that_did_not_is
     assert lift(f'dry_state 2 {prose}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
 
 
-def test_the_dry_run_ledger_still_distinguishes_the_two(tmp_path):
+def test_the_dry_run_ledger_still_distinguishes_the_two(gaps_dry):
     """The same distinction end to end, against the real scripts rather than a
     planted log: some arm has to reach each word, or the ledger has one word
     for two things again."""
-    session = tmp_path / "s"
-    got = run(["--dry-run"], session=session)
+    session, got = gaps_dry
     assert got.returncode in (0, exit_codes.INVALID), got.stdout[-2000:]
     states = {r.split("\t")[0]: r.split("\t")[1] for r in
               (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:]}
@@ -2940,7 +2951,7 @@ def test_the_rental_subsets_are_priced_by_the_table_and_not_by_a_second_copy():
     assert bogus.returncode != 0 and bogus.stdout.strip() == "0 0"
 
 
-def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(tmp_path):
+def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(gaps_dry):
     """THE DECISION THIS BLOCK RECORDS. The owner's payload is bn_g16 and the
     alias ablation; the noise floor is 120 WALL minutes and sits above both of
     them in the read order. A rental that ENTERS the floor without finishing it
@@ -2963,7 +2974,7 @@ def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(tmp_path):
         assert "calibrate" in names
         assert {"pin_probe-n64-g1", "pin_probe-n256-g16"} <= set(names)
     assert set(two) < set(three)
-    body = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+    body = gaps_dry[1].stdout.split(
         "WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
     assert "WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES" in body
     assert "NEITHER SET CONTAINS THE NOISE FLOOR" in body
@@ -2978,7 +2989,7 @@ def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(tmp_path):
         assert f"~{priced} priced / ~{bound} bounded min" in body, fn
 
 
-def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
+def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(gaps_dry):
     """The roofline verdict is a fraction of a roof, and the alias ablation is
     what says the fraction is a fraction of the right thing. So it is read
     first among the arms about the ROOF, and the block says why rather than
@@ -2990,7 +3001,7 @@ def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
     block's own criterion, and leaving them out of it while the arm comments
     said that was the same contradiction the rental subsets carried. The
     heading no longer counts its own entries."""
-    got = run(["--dry-run"], session=tmp_path / "s").stdout
+    got = gaps_dry[1].stdout
     block = got.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     assert block.index("alias_ablation") < block.index("roofline-n256-g16")
     assert "BEFORE the roofline verdict" in block
@@ -3011,7 +3022,7 @@ def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
     assert "alias_ablation/<run id>" in commit
 
 
-def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
+def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(gaps_dry):
     """THE RECURRING DEFECT AGAIN, at the two surfaces read at the END of a
     rental. The body comment above the arm always disclosed what
     `--dot-fallback allow` buys: a dot ladder measures a LOWER BOUND, leaves P1
@@ -3069,7 +3080,7 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
     assert lines and all("--dot-fallback refuse" in ln for ln in lines), lines
 
     closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
-    block = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+    block = gaps_dry[1].stdout.split(
         "READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     entry = block.split("roofline-n256-g16")[0]
     for surface in (closes, entry):
@@ -3928,15 +3939,14 @@ PLAN_DUTY_WALL = (r"WALL CLOCK at duty [\d.]+: the ladder's (\d+) s of kernel "
                   r"time takes about (\d+) s")
 
 
-def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_path):
+def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(gaps_dry):
     """F6. dtype was booked 6 KERNEL minutes "from ... 315 s of timed kernel"
     while its plan, run exactly as this driver runs it, prints 454 s (7.6
     min): d789b5f charged the warmup as time and the driver's three copies of
     the old figure were not updated, and no test pinned arm_minutes to the
     figure its plan prints. Every KERNEL booking is now read off the plan the
     dry run itself produced and must be that figure's ceiling in minutes."""
-    session = tmp_path / "s"
-    got = run(["--dry-run"], session=session)
+    session, got = gaps_dry
     assert got.returncode == 0, got.stdout[-3000:]
     at_duty = []
     for name in KERNEL_ARMS:
@@ -3969,7 +3979,7 @@ def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_
             assert "until d789b5f" in line, line
 
 
-def test_the_production_arms_no_longer_promise_a_confirmation_no_card_can_give(tmp_path):
+def test_the_production_arms_no_longer_promise_a_confirmation_no_card_can_give(gaps_dry):
     """F7. `--list` still explained the BLOCK_N=256 refusal by its OLD reason
     (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory
     against 227 at 16), said "one fix unblocks both", and the closing summary
@@ -3986,7 +3996,7 @@ def test_the_production_arms_no_longer_promise_a_confirmation_no_card_can_give(t
     assert "65536 of 65536 registers per block" in listing
     assert "there is no fix on sm_90 that unblocks either" in listing
     assert "the only arm that can confirm it" not in listing
-    body = run(["--dry-run"], session=tmp_path / "s").stdout
+    body = gaps_dry[1].stdout
     block = body.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     assert "only arm here that can CONFIRM" not in block
     assert "CANNOT be confirmed on sm_90" in block
@@ -4227,10 +4237,10 @@ def test_the_commit_advice_names_the_ruler_gate_that_exists_and_its_polarity():
         "A C1 FAIL is the designed null" in " ".join(body.split()), body[:1500]
 
 
-def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
+def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(gaps_dry):
     """The latch is right and the advice around it was not: "to resume it" was
     the only route named, and a resume re-runs no INVALID row."""
-    got = run(["--dry-run"], session=tmp_path / "s")
+    _, got = gaps_dry
     flat = " ".join(got.stdout.split())
     assert "A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW" in flat, flat[-3000:]
     assert "A rerun of those arms on this driver is --new" in flat
@@ -5364,15 +5374,17 @@ def _flag(words: list[str], flag: str) -> str:
     return words[words.index(flag) + 1]
 
 
-@pytest.fixture(scope="module")
-def interpretation_dry(tmp_path_factory):
+@pytest.fixture(scope="session")
+def interpretation_dry(request, tmp_path_factory):
     """ONE laptop dry session for the tests below, `(session dir, stdout)`.
     Named the way the driver names its own, so the tag its arms carry is the
-    shape a pod's is."""
-    session = tmp_path_factory.mktemp("interp") / "gaps-nocard-20260922T000000Z"
-    got = run(["--dry-run"], session=session)
+    shape a pod's is. Shared across xdist workers (tests/_shared_run.py): as a
+    module fixture it ran once per worker that took one of its tests."""
+    name = "gaps-nocard-20260922T000000Z"
+    where, got = shared(request, tmp_path_factory, "gaps-dry-stamped",
+                        lambda d: run(["--dry-run"], session=d / name))
     assert got.returncode == 0, got.stdout[-3000:]
-    return session, got.stdout
+    return where / name, got.stdout
 
 
 def test_the_private_reference_runs_at_the_owners_duty_on_both_branches(interpretation_dry):
