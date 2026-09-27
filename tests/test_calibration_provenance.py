@@ -420,6 +420,10 @@ def test_every_published_arm_has_a_declared_verdict():
         # The Lambda H100 80GB HBM3 session, the study's second Hopper card: a
         # raw session with a KIND file saying `session` and no rows of its own.
         "2026-09-25-nvidia_h100_80gb_hbm3-session": SESSION,
+        # The Lambda GH200 model-test session of 2026-09-27 (docs/LAMBDA.md 3c),
+        # another board of the primary card, run unattended: a raw session with
+        # a KIND file saying `session` and no rows of its own.
+        "2026-09-27-nvidia_gh200_480gb-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

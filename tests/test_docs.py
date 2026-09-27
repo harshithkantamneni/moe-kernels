@@ -44,8 +44,8 @@ def _readme_int(pattern: str) -> int:
 def _arms() -> list[Path]:
     """The published arms, which is not every directory under that root.
 
-    Eight of the directories there are whole sessions (five on the H200, and
-    the Lambda A100 counter run and GH200 and H100 sessions) committed for
+    Nine of the directories there are whole sessions (five on the H200, and
+    the Lambda A100 counter run, two GH200 sessions and one H100) committed for
     provenance, and each says so in a `KIND` file. Counting them as arms is
     how this test came to demand "16 published arms" of a README that
     correctly says 14. `published.is_session` is the same question the
