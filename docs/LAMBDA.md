@@ -8,7 +8,9 @@ instance), and Lambda instances can only be launched, restarted or terminated
 storage attached only when an instance is created (`file_system_names` in the
 launch call, in the instance's region). **This runbook launches without
 one**, so the local disk is all there is and section 4's exfiltration is the
-only copy of the results; attaching one at launch would keep results past
+only copy of the results (section 3c's unattended run instead pushes its
+results to its own branch of this repo after every step); attaching one at
+launch would keep results past
 termination, and a filesystem left behind is billed until it is deleted. The
 one command that turns a fresh instance into a box that can take the
 measurement is `scripts/setup_vm.sh`; this page is everything around it.
@@ -485,9 +487,192 @@ nohup setsid python3 scripts/locked_r3.py --session-tag "$T" --locks 1980 1890 1
   >> "$WORKSPACE/locked_r3.out" 2>&1 < /dev/null &
 ```
 
+## 3c. The GH200 model-test session, unattended
+
+This session tests the two NOT-FINAL models of docs/COUNTERS.md 6.7 on a
+GH200 (`gpu_1x_gh200`): the wave-split byte model (`scripts/wave_split_bytes.py`)
+and the timing model LOWM-1/2 (`scripts/r3_timing_model.py`, predictions P1 to
+P8). It runs in place of 3 and 3b on this card. The duty chain cannot hold the
+GH200's clock still (3b, the record of 2026-09-25: V7 and V0 failed under
+duty), so every timed page here runs under an nvidia-smi lock through
+`scripts/locked_r3.py`. The owner decided four things on 2026-09-26: byte
+pages count every tread from 1 to 9; calibrate runs on the VM after the byte
+pages; the GPU power limit is set to 700 W at the start (`-sc 0`), the limit
+the 2026-09-25 lock pages ran at; and a VM that ships r570 gets the same
+upgrade as on 2026-09-25 (section 2's driver note) before `setup_vm.sh`.
+
+**Nobody pastes anything on the VM.** `scripts/gh200_model_session.sh` runs
+the session unattended, and after every step `scripts/vm_results_push.sh`
+pushes the VM's results and session to the run's own branch of this repo, so
+the laptop reads what was measured with `git fetch`, minutes after it was
+measured, and section 4's copy at the end is not needed. From the laptop,
+after launching one GH200 (section 1):
+
+```bash
+RUN=gh200-$(date -u +%Y%m%dT%H%MZ); BR=run-gh200-$(date -u +%F)
+DEADLINE=$(( $(date +%s) + 400 * 60 ))       # launch + 400 min: the driver ends by then, for a 7 h stop
+bash scripts/vm_run.sh prepare --ip "$IP" --run-id "$RUN" --branch "$BR"
+bash scripts/vm_run.sh start   --ip "$IP" --run-id "$RUN" --deadline "$DEADLINE"
+bash scripts/vm_run.sh watch   --run-id "$RUN"    # every ~10 min: exit 0 once DRIVER-DONE is pushed
+bash scripts/vm_run.sh verify  --run-id "$RUN"    # every pushed file against the VM's SHA256SUMS
+# terminate (section 5), then:
+bash scripts/vm_run.sh forget  --run-id "$RUN"    # delete the run's deploy key
+```
+
+`prepare` must run from a clean checkout at a commit GitHub has, since the VM
+clones that commit. It waits for ssh, stops apt's timers (nothing may upgrade
+a package under the loaded module during the run), upgrades a driver below
+r580 to `nvidia-driver-580-server-open` 580.105.08-0lambda0.22.04.1 (the
+newest 580 build from Lambda's repository if that one is gone) and reboots,
+copies the three scripts and `setup_vm.sh` to the VM, and has the VM make its
+own deploy key. Only the public half leaves the VM; `gh` adds it to this repo
+with write access, and the VM pushes the branch's first commit to prove the
+key. `start` records the driver's plan (`--dry-run`) and starts it detached:
+`setup_vm.sh --repo https://github.com/harshithkantamneni/moe-kernels
+--commit <sha>`, then the checkout's own copy of the driver. The laptop's
+record of the run (ip, branch, commit, deploy key id, plan, log) is under
+`~/moe-kernels-exfil/runs/<run id>/`.
+
+**The results branch** is an orphan, `run-gh200-<date>`, never main or a
+model or integrate branch, committed in `~/moe/push`, a repository that shares
+nothing with the measured checkout `~/moe/repo`, so a push cannot make a page
+`git_dirty`. It holds `vm/results/` and `vm/session/` (copies of `~/moe/results`
+and `~/moe/session`), `vm/setup_vm.log`, `vm/driver580.log` and
+`vm/gh200-driver.out`, and beside them `SHA256SUMS` (the manifest of every file
+under `vm/` as committed), `HELD-BACK.txt` (a file over 95 MB is committed
+xz-compressed when that fits, else listed with its size and sha256 and left on
+the VM, to be copied by hand before the terminate), `PUSHES.txt` (one line per
+push) and, with the last push, `DRIVER-DONE` (the driver's exit). Each push is
+the whole snapshot, so a push that fails is carried by the next. The driver
+pushes only between steps, after both kinds of lock are reset, never while a
+page is measured. GitHub's host key is pinned in `vm_results_push.sh`, not
+learned on first contact. The publish step curates from this branch.
+
+The steps run in the owner's priority order, so a run cut short has run the
+earlier ones. Minutes are estimates from the 2026-09-25 logs and the tools'
+own plans; each step also has a cap, past which the driver stops it:
+
+| step | what | min | cap | answers |
+|---|---|---|---|---|
+| prelude (3c.1) | supported clocks, persistence, 700 W | 3 | 15 | the locks the later steps may use |
+| bytes (3c.2) | byte pages at the 1710 MHz lock, G = 1 2 4 16 8 32 3 64, treads 1-9, and one base-clock control | 55 | 120 | the byte predictions (w2 at G=8 and 32, n=5, n=7, n=8); counted bytes for every timed G |
+| calibrate (3c.3) | the card's ruler, with no lock in force | 8 | 30 | the ruler R3 needs |
+| timed (3c.3) | timed R3 at 1710: G=8 and 32 (treads 6), G=3 (treads 8) | 37 | 90 | P2, P5 |
+| eta (3c.4) | timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4) | 50 | 115 | P1 |
+| floor (3c.5) | floor counters: G=64 and G=2 at ncu's base clock, G=64 unlocked (a record), G=64 under the 1710 lock | 15 | 45 | P6 |
+| deep (3c.6) | timed R3 at 1710 to tread 9, G=4 then G=2 | 33 | 75 | P3, P4 |
+| r1lock (3c.7) | R1 in lock mode at 1710 1500 1410, G=4 then G=1 | 62 | 130 | the floor's clock exponent (eta) |
+
+About 263 minutes of steps, plus about 30 for `setup_vm.sh` and 15 for a
+driver upgrade: book 6 hours (about $13.74 at $2.29/h) and stop by 7.
+`--deadline` is the epoch second by which the driver must have ended, final
+push included. Before each step the driver adds the estimates of every step
+still to run; while that overruns the deadline less 8 minutes it drops, in
+this order, R1 at G=1, then R1 at G=4, then the 1605 lock, then the G=64 byte
+page and the base-clock control, and it skips a step whose own estimate no
+longer fits. No step's cap runs past the deadline.
+
+**The rules.** Each step runs in its own process under its cap, with its own
+EXIT trap resetting both kinds of lock (ncu's `--clock-control reset` and
+`nvidia-smi -rgc`), and between steps the driver resets both again, waits for
+an idle card and records the clocks. The rules below are the Stops of the
+blocks this section was drafted as, read by the driver instead of a person. A
+stop ends its own step: the driver pushes what the step wrote and goes on,
+since every step checks the card for itself before it locks. Three things end
+the session instead, because nothing after them could be trusted: the prelude
+refusing; an `nvidia-smi -rgc` that exits non-zero (the card may still be
+locked); and a card still busy five minutes after a step ended.
+
+- **prelude.** Refused (the session ends, exit 2) when `git status
+  --porcelain` prints anything, `sudo -n` needs a password, a compute process
+  holds the card, 1710 MHz is not a supported graphics clock, or persistence
+  (`-pm 1`) or the power limit (`-pl 700 -sc 0`) does not read back. Both
+  power scopes are recorded before and after (`power-at-start.txt`,
+  `power-set.txt`). 1605 falls back to 1590, whose P1 numbers were registered
+  with 1605's (`scripts/r3_timing_model.py`, `P1_CLOCKS`); 1410 or 1500 off
+  the card's list take the nearest supported clock one 15 MHz step away,
+  labelled SUBSTITUTED (P1 at it is computed after registration), or are
+  dropped. The plan is `lock-plan.txt` and the driver's `locks.env`.
+- **bytes.** One lock block over G = 1 2 4 16 8 32 3 64, each page at
+  `--page-clock none --page-lock-mhz 1710`, treads 1 to 9 (a test holds this to
+  `COUNTER_MAX_TREADS`). It goes on past exit 0 and 1, and past exit 3 only when
+  the page was written, G >= 32, and V7 alone failed (V7 is expected to fail
+  there; the page's bytes still read). Every other INVALID stops the block,
+  V10 (a cell off the lock) included. If the G=1 page took over 7 minutes, the
+  G=64 page and the base-clock control are dropped. The base-clock control
+  (G=2 at ncu's base clock, same board, commit and treads) and the analysis of
+  the pages written run however the block ended; the analysis scores C5
+  against the five GH200 pages of 2026-09-25 timed at 1710 (another board,
+  which its SAME-CARD line says).
+- **calibrate.** Runs with no lock in force, because it takes the clock it
+  sees as its reference, and writes `moe/bench/hardware/measured_nvidia_gh200_480gb.yaml`
+  into the checkout, so every page after it is stamped `git_dirty` and
+  `setup_vm.sh --check` refuses the checkout from here on. Exit 0 keeps the
+  ruler. Exit 1 with `not_throttled` FAILED, and any exit but 0 or 1, deletes
+  it: every later R3 then takes `--ridge 177.93 --bandwidth-gbps 3725.1`, the
+  2026-09-25 ruler's (a test holds these to that ruler's file). Exit 1 on
+  another gate keeps it, and the ledger names the gates that failed.
+- **timed, eta, deep.** Each design runs R3's own `--dry-run` first and is
+  locked only when the plan prints no `REFUSED:` line, `n_decl = 9 against
+  n_max`, a retracted tread of at least the treads planned, and a ridge that is
+  not R3's H200 HYPOTHESIS (without a ruler R3 plans on it and refuses the
+  timed run on the card; at treads 9 it also retracts at tread 8). A design
+  that fails is left out and the rest run. In `timed`, a locked_r3 exit of 4
+  (a crash, or the card left locked) ends the step; otherwise P5 runs whatever
+  P2 read. In `eta`, 1410 runs first (it alone answers the falsifier), each lock
+  is its own run with its own tag, and an exit 1 (the lock slipped) this far
+  under 1710 more likely means a lock left over than the power cap: the
+  driver resets, records the clocks, and tries once more under a new tag
+  (`...b`). The deep reader prints P3 and P4 off the two pages only when both
+  show every VALIDITY gate passing and the 9-copy declaration.
+- **floor.** Captures G=64 then G=2 at ncu's base clock, then G=64 unlocked
+  with an NVML sampler beside it (a RECORD that scores nothing: P7 is
+  registered for the duty-0.25 timed regime, which a kernel-replay capture does
+  not reproduce), then G=64 under the 1710 lock. Exit 3 (INVALID; the file is
+  written) goes on to the next capture; exit 2 (refused: census, commit or
+  door) or worse ends the step. More than 50 replay passes a launch on the
+  first capture drops the G=2 capture.
+- **r1lock.** Takes 1710 and the eta locks that held (exit 0 in `eta`); its
+  lowest lock must be at or under 1459 MHz for the claim's span, or R1 is not
+  run. Exit 0 or 1 goes on to G=1; exit 1 is expected either way: the answer
+  is report.json's elasticity value and interval.
+
+**Watching it.** `vm_run.sh watch` prints the branch's last push and the tail
+of the driver's ledger (`vm/session/gh200-driver/status`: one UTC line per
+event, with each step's START and END, every drop and skip, and the lock
+ledger lines that name no card). The ledger never copies a `card:` line;
+locked_r3.py's own logs and ledgers, and every page, carry the card's UUID,
+so read those through a grep, never whole into a chat. To stop the driver on
+the VM: `pkill -TERM -f '[g]h200_model_session.sh'` (each layer resets the
+clock, then the driver pushes and exits 143). To resume at a step:
+`bash ~/moe/repo/scripts/gh200_model_session.sh --from <step> --deadline <epoch s>`;
+a rerun takes a fresh session tag (`...b`), since locked_r3.py refuses one
+already used.
+
+**Before the terminate**, `vm_run.sh verify` must print VERIFIED, and every
+file `HELD-BACK.txt` lists as LEFT ON THE VM must be copied off by hand.
+Then terminate (section 5) and `vm_run.sh forget`: the deploy key opens this
+repository for writing, and it must not outlive the VM.
+
+### What this session does not answer
+
+P7 as registered: the in-kernel clock of the duty-0.25 unlocked timed pages
+against NVML. A kernel-replay capture runs another regime, so the floor step's
+unlocked capture is a record, not a test. P8: an H100 measurement. The
+cross-card checks (H100 against GH200 at the new cells) and the dead-CTA
+declaration sweep need other captures. T(10) at G=2 is not taken: tread 9
+keeps the 9-copy, 72-slot declaration of every other page; tread 10 would not.
+The timing model scores counted bytes only at treads 1, 2, 3, 4 and 6 until
+its `LADDER` is widened after this session, so the counted n = 5, 7, 8 and 9
+cells wait for that change.
+
 ## 4. Exfiltrate, before anything else
 
-The disk dies with the instance. From the laptop:
+The disk dies with the instance. Section 3c's run does not need this block:
+its VM pushed everything to the run's branch, and `scripts/vm_run.sh verify`
+checks the branch against the VM's manifest; only a file its `HELD-BACK.txt`
+lists as LEFT ON THE VM is copied off by hand. Every other run, from the
+laptop:
 
 ```bash
 DEST=~/moe-kernels-exfil/lambda-$(date -u +%F)
@@ -513,6 +698,10 @@ curl -s "${AUTH[@]}" -H 'Content-Type: application/json' $API/instance-operation
 curl -s "${AUTH[@]}" $API/instances | jq -r '.data[] | "\(.id) \(.status) \(.name)"'   # <id> gone or terminated
 ```
 
+After section 3c's run, once the instance is gone, delete the deploy key the
+run added, since it opens this repository for writing: `bash scripts/vm_run.sh
+forget --run-id <run id>`.
+
 ## 6. Cost
 
 The rate is the listing's `price_cents_per_hour` for the type, read at launch
@@ -528,6 +717,7 @@ priced by the design and re-priced by the first G's measured per-launch time:
 | H100 | the same at a pessimistic 5 s per launch | ~40 min |
 | H100 | **book** (the above, one parser or door debug loop, exfil) | **1.5 h** |
 | A100 40 GB | shake-out, G in {1, 64}; ncu's save goes to host memory, ~1 s per launch more | ~12 min measured, **~45 min** of VM |
+| GH200 | section 3c unattended: ~263 min of steps, ~30 min of `setup_vm.sh`, ~15 min for an r580 upgrade and its reboot; the driver's deadline is launch + 400 min | ~5.2 h, **book 6 h, stop by 7 h** |
 | any | section 3b's chain at G in {1, 2, 4, 16, 64}, 3 seeds: 15 R3 runs at ~12 min, 5 R1 runs at ~19 min, ~6 min of preconditions and checks (H200 session 5's ledger; the dry run re-prices it on this card); `SEEDS=0`, as the GH200 ran it, is 5 R3 and 5 R1 runs, ~2.7 h | **~4.7 h** |
 
 Cost = hours booked x `price_cents_per_hour` / 100. Treat the meter as running
