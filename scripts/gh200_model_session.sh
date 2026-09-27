@@ -423,10 +423,16 @@ step_bytes() {
       failed=$(grep -E '^RESULT: VALIDITY [^ ]+ FAIL' "$LOG" | awk '{print $3}' | sort -u | tr '\n' ' ')
       case $rc in
         0|1) ;;
-        3) if [ -f "$L/r3c-g$G.json" ] && [ "$G" -ge 32 ] && [ "$failed" = "V7 " ]; then
-             echo "G=$G INVALID on V7 alone, as expected at G >= 32: the page is written, go on"
+        # A WRITTEN INVALID PAGE GOES ON (2026-09-27). The draft stopped on any
+        # INVALID but V7 alone at G >= 32; on the 2026-09-27 GH200 that stopped
+        # the loop at G=1 on V10, a gate defect since fixed, and the G=2 page
+        # still fails V7 on one cell at the noise edge. Every page keeps its
+        # .ncu-rep and its gates re-score on the laptop (--analyse), so a page
+        # written is data; only a page NOT written stops the loop.
+        3) if [ -f "$L/r3c-g$G.json" ]; then
+             echo "G=$G INVALID on ${failed:-no gate line}: the page is written, go on (re-scored later)"
            else
-             echo "G=$G INVALID on ${failed:-no gate line}: the byte pages stop here; read $LOG"; exit 3
+             echo "G=$G INVALID and no page written: the byte pages stop here; read $LOG"; exit 3
            fi ;;
         *) exit "$rc" ;;
       esac
@@ -442,7 +448,9 @@ step_bytes() {
   sleep 5
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks_event_reasons.active,persistence_mode \
     --format=csv | tee "$S/clocks-after-lock-pages.txt"
-  if (( ! tail_dropped )); then
+  if (( ! tail_dropped )) && [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
+    ledger "bytes: no base-clock control (it compares clock regimes on $DEFAULT_MODEL; no $MODEL prediction reads it)"
+  elif (( ! tail_dropped )); then
     # the base-clock control: same board, commit and treads, at ncu's base clock
     moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m 2 \
       --model "$MODEL" --tiles "$TREADS" \
@@ -663,7 +671,10 @@ step_floor() {
     }
     capture r3f-g64 --group-m 64 --census "$C" --floor --out "$R/r3f-g64.json"
     passes=$(grep -oE -- '- [0-9]+ pass(es)?' "$S/logs/r3f-g64.log" | awk '{print $2}' | sort -n | tail -1)
-    if [ "${passes:-0}" -gt "$FLOOR_MAX_PASSES" ]; then
+    if [ "$MODEL" != "$DEFAULT_MODEL" ]; then
+      # another model's registered floor test reads G=64 at base and at the lock
+      echo "r3f-g2 and r3f-g64-unlocked left out: no $MODEL prediction reads them" >> "$D/floor-results"
+    elif [ "${passes:-0}" -gt "$FLOOR_MAX_PASSES" ]; then
       echo "r3f-g2 dropped: the G=64 capture took $passes replay passes a launch, over $FLOOR_MAX_PASSES" >> "$D/floor-results"
     else
       capture r3f-g2 --group-m 2 --census "$C" --floor --out "$R/r3f-g2.json"
@@ -672,7 +683,10 @@ step_floor() {
     # a RECORD, scoring nothing: P7 is registered for the duty-0.25 timed regime
     nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks_event_reasons.active \
       --format=csv,noheader,nounits -lms 100 > "$S/logs/r3f-g64-unlocked.smi.csv" 2>&1 & SMI=$!
-    capture r3f-g64-unlocked --group-m 64 --census "$C" --floor --floor-clock none --out "$R/r3f-g64-unlocked.json"
+    if [ "$MODEL" = "$DEFAULT_MODEL" ]; then
+      capture r3f-g64-unlocked --group-m 64 --census "$C" --floor --floor-clock none \
+        --out "$R/r3f-g64-unlocked.json"
+    fi
     kill "$SMI" 2>/dev/null; SMI=
     moe_counter ncu --clock-control reset
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)

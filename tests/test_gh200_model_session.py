@@ -592,15 +592,15 @@ def test_the_plan_prints_and_refuses_as_every_dry_run_here():
 # --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("G,fail,rc,nopage,goes_on", [
-    (32, ["V7"], 3, False, True),          # V7 alone at G >= 32: expected, the page is written
-    (32, ["V6", "V7"], 3, False, False),   # V7 and another gate: stop
-    (16, ["V7"], 3, False, False),         # V7 below G = 32: stop
+    (32, ["V7"], 3, False, True),          # a written INVALID page goes on
+    (32, ["V6", "V7"], 3, False, True),    # whatever its gates: they re-score on the laptop
+    (16, ["V7"], 3, False, True),
+    (4, ["V10"], 3, False, True),
     (32, ["V7"], 3, True, False),          # no page written: stop
-    (4, ["V10"], 3, False, False),         # off the lock: stop
     (2, [], 2, False, False),              # refused: stop
+    (8, [], 4, False, False),              # a crash: stop
 ])
-def test_the_byte_loop_goes_on_only_past_v7_alone_at_g32_and_up(tmp_path, G, fail, rc, nopage,
-                                                                   goes_on):
+def test_the_byte_loop_goes_on_past_every_written_page(tmp_path, G, fail, rc, nopage, goes_on):
     box, got = run_box(tmp_path, {f"bytes:{G}": {"rc": rc, "fail": fail, "nopage": nopage}})
     order = [1, 2, 4, 16, 8, 32, 3, 64]
     ran = [int(val(a, "--group-m")) for a in box.tool("dram_counter_route")
@@ -608,7 +608,8 @@ def test_the_byte_loop_goes_on_only_past_v7_alone_at_g32_and_up(tmp_path, G, fai
     assert ran == (order if goes_on else order[:order.index(G) + 1])
     # the session goes on either way: the stop is the byte block's
     assert box.tool("calibrate_hardware") and box.tool("clock_elasticity", dry=False)
-    assert got.returncode == (exit_codes.DONE if goes_on else exit_codes.INVALID)
+    assert got.returncode == (exit_codes.DONE if goes_on else
+                              exit_codes.ERROR if rc == 4 else exit_codes.INVALID)
     assert [a for a in box.tool("dram_counter_route") if "--analyse" in a]
 
 
@@ -1217,6 +1218,9 @@ def test_another_model_runs_its_own_census_and_no_8x7b_references(tmp_path):
     for a in dcr:
         DCR.build_parser().parse_args(a)
     assert not box.tool("clock_elasticity")
+    assert not [a for a in runs if "/base/" in val(a, "--out")], "no base-clock control"
+    floors = [Path(val(a, "--out")).name for a in runs if "--floor" in a]
+    assert floors == ["r3f-g64.json", "r3f-g64-lock1710.json"]
 
 
 def test_start_passes_the_model_to_the_driver(tmp_path):

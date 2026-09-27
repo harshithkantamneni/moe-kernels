@@ -595,10 +595,12 @@ locked); and a card still busy five minutes after a step ended.
   dropped. The plan is `lock-plan.txt` and the driver's `locks.env`.
 - **bytes.** One lock block over G = 1 2 4 16 8 32 3 64, each page at
   `--page-clock none --page-lock-mhz 1710`, treads 1 to 9 (a test holds this to
-  `COUNTER_MAX_TREADS`). It goes on past exit 0 and 1, and past exit 3 only when
-  the page was written, G >= 32, and V7 alone failed (V7 is expected to fail
-  there; the page's bytes still read). Every other INVALID stops the block,
-  V10 (the page off the lock) included. If the G=1 page took over 7 minutes, the
+  `COUNTER_MAX_TREADS`). It goes on past exit 0 and 1, and past exit 3 whenever
+  the page was written, whatever its gates read: each page keeps its
+  `.ncu-rep` and its gates re-score on the laptop (`--analyse`). The draft
+  stopped on any INVALID but V7 alone at G >= 32, which on 2026-09-27 stopped
+  the loop at G=1 on V10, a gate defect since fixed. Only a page NOT written,
+  a refusal or a crash stops the block. If the G=1 page took over 7 minutes, the
   G=64 page and the base-clock control are dropped. The base-clock control
   (G=2 at ncu's base clock, same board, commit and treads) and the analysis of
   the pages written run however the block ended; the analysis scores C5
