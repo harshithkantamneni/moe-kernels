@@ -5,3 +5,4 @@ timed      exit 0 after 36 min
 eta        exit 0 after 43 min
 floor      exit 3 after 4 min
 deep       exit 0 after 32 min
+r1lock     exit 0 after 53 min

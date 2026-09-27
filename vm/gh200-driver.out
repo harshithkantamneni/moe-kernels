@@ -29,3 +29,7 @@
 2026-09-27T07:28:24Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 290 min left)
 2026-09-27T08:00:15Z deep END: exit 0 after 32 min
 2026-09-27T08:00:16Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d835cea to run-gh200-2026-09-27: deep: exit 0 (32 min)
+2026-09-27T08:00:18Z r1lock START: 3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent (estimate 62 min, cap 130 min, 258 min left)
+2026-09-27T08:53:19Z r1lock END: exit 0 after 53 min
+2026-09-27T08:53:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
