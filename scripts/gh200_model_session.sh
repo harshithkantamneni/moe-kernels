@@ -110,9 +110,15 @@ P1_FALLBACK_1605=1590
 #: The 2026-09-25 GH200 ruler's numbers: R3 takes them when calibrate fails.
 RULER_FALLBACK=(--ridge 177.93 --bandwidth-gbps 3725.1)
 #: R3's design for every timed page (the chain's, as on 2026-09-25).
-R3_BASE=(--model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0)
+#: The model R3, R1 and every counter page run (--model; the steps read it
+#: from MOE_DRIVER_MODEL, which the orchestrator exports). Mixtral 8x7B is the
+#: study's; another model is a cross-model test of the two per-card models
+#: (docs/registered/README.md), with its own census and no 8x7B references.
+DEFAULT_MODEL=mixtral-8x7b
+MODEL="${MOE_DRIVER_MODEL:-$DEFAULT_MODEL}"
+R3_BASE=(--model "$MODEL" --block-m 32 --repeats 9 --duty 0.25 --seed 0)
 #: R1 in lock mode (section 3b); each state a held SM clock.
-R1_BASE=(--model mixtral-8x7b --dtype bf16 --treads 8 --repeats 13 --burst-ms 40
+R1_BASE=(--model "$MODEL" --dtype bf16 --treads 8 --repeats 13 --burst-ms 40
          --target-ms 200 --trials 3 --warm-ms 200 --settle-seconds 10 --lock-duty 0.25)
 #: R1's claim spans down to this clock: its lowest lock must be at or under it.
 R1_SPAN_MAX_LOW=1459
@@ -126,17 +132,43 @@ FLOOR_MAX_PASSES=50
 
 # ---- the steps: name, estimate and cap in minutes, what it answers ----------
 STEPS=(prelude bytes calibrate timed eta floor deep r1lock)
+#: Another model's pages run longer by about its weight bytes over 8x7B's
+#: (8x22B: 4.83 GB against 2.82, x1.7); the estimates and caps below are
+#: 8x7B's, scaled by this percentage for the steps that measure.
+model_scale_pct() { case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; *) echo 200 ;; esac; }
+_scaled() { case "$1" in prelude|calibrate) echo "$2" ;; *) echo $(( $2 * $(model_scale_pct) / 100 )) ;; esac; }
 step_est() {
+  local m
   case "$1" in
-    prelude) echo 3 ;; bytes) echo 55 ;; calibrate) echo 8 ;; timed) echo 37 ;;
-    eta) echo 50 ;; floor) echo 15 ;; deep) echo 33 ;; r1lock) echo 62 ;;
+    prelude) m=3 ;; bytes) m=55 ;; calibrate) m=8 ;; timed) m=37 ;;
+    eta) m=50 ;; floor) m=15 ;; deep) m=33 ;; r1lock) m=62 ;;
   esac
+  _scaled "$1" "$m"
 }
 step_cap() {
+  local m
   case "$1" in
-    prelude) echo 15 ;; bytes) echo 120 ;; calibrate) echo 30 ;; timed) echo 90 ;;
-    eta) echo 115 ;; floor) echo 45 ;; deep) echo 75 ;; r1lock) echo 130 ;;
+    prelude) m=15 ;; bytes) m=120 ;; calibrate) m=30 ;; timed) m=90 ;;
+    eta) m=115 ;; floor) m=45 ;; deep) m=75 ;; r1lock) m=130 ;;
   esac
+  _scaled "$1" "$m"
+}
+#: locked_r3.py's cap on one R3 run (its default, 1800 s, fits 8x7B's pages);
+#: another model's deep page runs about 27 min, so it takes an hour.
+lr3_cap() { [[ "$MODEL" == "$DEFAULT_MODEL" ]] || printf '%s\n' --run-cap-s 3600; }
+#: The census the byte and floor pages read: the preflight's (PF6, 8x7B's) for
+#: the study's model, else one taken for this model at ncu's base clock.
+census_for() {
+  if [[ "$MODEL" == "$DEFAULT_MODEL" ]]; then printf '%s\n' "$S/census.json"; return 0; fi
+  local C="$S/census-$MODEL.json"
+  if [[ ! -s "$C" ]]; then
+    moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --census-only \
+      --model "$MODEL" --out "$C" > "$S/logs/census-$MODEL.log" 2>&1 \
+      || { ledger "census for $MODEL failed (logs/census-$MODEL.log)" >&2; return 1; }
+    moe_counter ncu --clock-control reset >/dev/null 2>&1 || true
+    ledger "census for $MODEL written ($C)" >&2
+  fi
+  printf '%s\n' "$C"
 }
 step_what() {
   case "$1" in
@@ -360,7 +392,8 @@ counters_dir() {
 
 step_bytes() {
   local R F C L G tail_dropped=0
-  R="$(counters_dir)"; F="$LOCK_TIMED"; C="$S/census.json"; L="$R/lock$F"
+  R="$(counters_dir)"; F="$LOCK_TIMED"; L="$R/lock$F"
+  C="$(census_for)" || return "$EXIT_REFUSED"
   mkdir -p "$L"
   [[ -s "$C" ]] || { ledger "bytes REFUSED: no census at $C (the preflight's PF6 writes it)"; return "$EXIT_REFUSED"; }
   dropped bytes_tail && tail_dropped=1
@@ -382,7 +415,7 @@ step_bytes() {
       LOG=$S/logs/r3c-g$G-lock$F.log
       t0=$(date +%s)
       moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m "$G" \
-        --tiles "$TREADS" --census "$C" --page-clock none --page-lock-mhz "$F" \
+        --model "$MODEL" --tiles "$TREADS" --census "$C" --page-clock none --page-lock-mhz "$F" \
         --out "$L/r3c-g$G.json" 2>&1 | tee "$LOG"
       rc=${PIPESTATUS[0]}
       secs=$(( $(date +%s) - t0 ))
@@ -411,13 +444,16 @@ step_bytes() {
     --format=csv | tee "$S/clocks-after-lock-pages.txt"
   if (( ! tail_dropped )); then
     # the base-clock control: same board, commit and treads, at ncu's base clock
-    moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m 2 --tiles "$TREADS" \
+    moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m 2 \
+      --model "$MODEL" --tiles "$TREADS" \
       --census "$C" --out "$R/base/r3c-g2.json" 2>&1 | tee "$S/logs/r3c-g2-base.log"
     ledger "bytes: base-clock control G=2 exit ${PIPESTATUS[0]}"
     moe_counter ncu --clock-control reset
   fi
   local timed=() id p
+  [[ "$MODEL" == "$DEFAULT_MODEL" ]] || ledger "bytes: no C5 references (the 2026-09-25 timed pages are $DEFAULT_MODEL's)"
   for id in "${TIMED_REF_IDS[@]}"; do
+    [[ "$MODEL" == "$DEFAULT_MODEL" ]] || break
     for p in "$REPO/$TIMED_REF_DIR"/*"$id"/report.json; do
       if [[ -f "$p" ]]; then timed+=("$p"); else ledger "bytes: timed reference *$id is missing from the checkout"; fi
     done
@@ -505,7 +541,7 @@ step_timed() {
     trap 'exit 130' INT TERM HUP
     rc2=0; rc5=0
     if (( ${#p2[@]} )); then
-      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" -- "${R6[@]}" 2>&1 \
+      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" $(lr3_cap) -- "${R6[@]}" 2>&1 \
         | tee -i "$S/logs/locked_r3-$T2.log"
       rc2=${PIPESTATUS[0]}
       echo "P2 locked_r3 exit $rc2" >> "$D/timed-results"
@@ -514,7 +550,7 @@ step_timed() {
       echo "P2 skipped: no design passed its dry run" >> "$D/timed-results"; rc2=3
     fi
     if (( p5 )); then
-      python3 scripts/locked_r3.py --session-tag "$T5" --groups 3 --locks "$LOCK_TIMED" -- "${R8[@]}" 2>&1 \
+      python3 scripts/locked_r3.py --session-tag "$T5" --groups 3 --locks "$LOCK_TIMED" $(lr3_cap) -- "${R8[@]}" 2>&1 \
         | tee -i "$S/logs/locked_r3-$T5.log"
       rc5=${PIPESTATUS[0]}
       echo "P5 locked_r3 exit $rc5" >> "$D/timed-results"
@@ -568,7 +604,7 @@ step_eta() {
       for try in 1 2; do
         tag=$(fresh_tag "$B-eta$F") || { echo "no fresh tag for $B-eta$F"; exit 4; }
         # shellcheck disable=SC2086
-        python3 scripts/locked_r3.py --session-tag "$tag" --locks "$F" --groups $GS -- "${R6[@]}" 2>&1 \
+        python3 scripts/locked_r3.py --session-tag "$tag" --locks "$F" --groups $GS $(lr3_cap) -- "${R6[@]}" 2>&1 \
           | tee -i "$S/logs/eta-lock$F-$tag.log"
         rc=${PIPESTATUS[0]}
         echo "$F $rc $tag" >> "$D/eta-results.new"
@@ -602,7 +638,8 @@ step_eta() {
 # 3c.5 floor counters (P6)
 # ==========================================================================
 step_floor() {
-  local R C F=$LOCK_TIMED; R="$(counters_dir)"; C="$S/census.json"
+  local R C F=$LOCK_TIMED; R="$(counters_dir)"
+  C="$(census_for)" || return "$EXIT_REFUSED"
   [[ -s "$C" ]] || { ledger "floor REFUSED: no census at $C"; return "$EXIT_REFUSED"; }
   : > "$D/floor-results"
   ( set -o pipefail
@@ -617,7 +654,7 @@ step_floor() {
     # 3 is INVALID with the file written, and the next capture still answers.
     capture() {   # NAME, then dram_counter_route.py's arguments
       local name=$1; shift
-      moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms "$@" 2>&1 \
+      moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --model "$MODEL" "$@" 2>&1 \
         | tee "$S/logs/$name.log"
       local rc=${PIPESTATUS[0]}
       echo "$name exit $rc" >> "$D/floor-results"
@@ -671,7 +708,7 @@ step_deep() {
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
     trap 'exit 130' INT TERM HUP
-    python3 scripts/locked_r3.py --session-tag "$T" --locks "$LOCK_TIMED" --groups "${gs[@]}" -- "${R9[@]}" 2>&1 \
+    python3 scripts/locked_r3.py --session-tag "$T" --locks "$LOCK_TIMED" --groups "${gs[@]}" $(lr3_cap) -- "${R9[@]}" 2>&1 \
       | tee -i "$S/logs/locked_r3-$T.log" )
   local rc=$?
   ledger "deep: locked_r3 exit $rc ($T, G = ${gs[*]})"
@@ -852,6 +889,7 @@ run_step() {   # NAME CAP_S
 print_plan() {
   local s total=0
   echo "THE GH200 MODEL-TEST SESSION (docs/LAMBDA.md section 3c), unattended"
+  [[ "$MODEL" == "$DEFAULT_MODEL" ]] || echo "  MODEL $MODEL: a cross-model test (docs/registered/README.md); its own census, estimates x$(model_scale_pct)%, no eta or R1 unless --steps asks"
   echo "  owner, 2026-09-26: byte treads $TREADS; calibrate after the byte pages; GPU power limit"
   echo "  ${POWER_LIMIT_W} W (-sc 0); r570 upgraded to 580.105.08 before setup (scripts/vm_run.sh)"
   printf '  %-10s %4s %4s  %s\n' step est cap what
@@ -897,6 +935,7 @@ while (( $# )); do
     --deadline) DEADLINE="${2:-}"; shift 2 ;;
     --from)     FROM="${2:-}"; shift 2 ;;
     --steps)    ONLY="${2:-}"; shift 2 ;;
+    --model)    MODEL="${2:-}"; shift 2 ;;
     --step)     ONE_STEP="${2:-}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "unknown argument: $1 (see --help)" >&2; exit "$EXIT_REFUSED" ;;
@@ -904,6 +943,10 @@ while (( $# )); do
 done
 
 is_step() { local s; for s in "${STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; done; return 1; }
+
+[[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo "--model $MODEL: not a model name" >&2; exit "$EXIT_REFUSED"; }
+export MOE_DRIVER_MODEL="$MODEL"
+R3_BASE[1]="$MODEL"; R1_BASE[1]="$MODEL"
 
 # One step, in its own process: the orchestrator runs this under a cap.
 if [[ -n "$ONE_STEP" ]]; then
@@ -922,6 +965,10 @@ if [[ -n "$ONLY" ]]; then
 elif [[ -n "$FROM" ]]; then
   is_step "$FROM" || { echo "no step $FROM (${STEPS[*]})" >&2; exit "$EXIT_REFUSED"; }
   on=0; for s in "${STEPS[@]}"; do [[ "$s" == "$FROM" ]] && on=1; (( on )) && PLAN+=("$s"); done
+elif [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
+  # P1's locks and R1 answered this card's clock question on 8x7B; another
+  # model's session measures its bytes, times and floor (docs/registered)
+  for s in "${STEPS[@]}"; do [[ "$s" == eta || "$s" == r1lock ]] || PLAN+=("$s"); done
 else
   PLAN=("${STEPS[@]}")
 fi

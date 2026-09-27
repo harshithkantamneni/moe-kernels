@@ -296,6 +296,34 @@ B_OTHER = (IDS_PER_TREAD * 2 * CFG.intermediate_size + IDS_PER_TREAD * CFG.inter
            + IDS_PER_TREAD * CFG.hidden_size
            + IDS_PER_TREAD // CFG.top_k * CFG.hidden_size) * BYTES
 
+
+
+def set_model(name: str) -> str:
+    """Rebuild every shape above for `name` (a key of MODEL_CONFIGS) and clear
+    the launch-order caches, returning the model it replaced. The schedule,
+    the byte model and the extra kernels' bytes all follow the config; the
+    fitted parameters (c per CTA k-step, bw) are the card's and carry over,
+    which is what a cross-model prediction tests (2026-09-27: Mixtral 8x22B
+    from 8x7B's fit). `build` sets the model its pages ran and restores the
+    one it found."""
+    global MODEL, CFG, E, BYTE_MODEL, W, GEOMETRY, IDS_PER_TREAD, B_OTHER
+    if name not in MODEL_CONFIGS:
+        raise Refused(f"no model {name!r}; the configs are {sorted(MODEL_CONFIGS)}")
+    old = MODEL
+    MODEL, CFG = name, MODEL_CONFIGS[name]
+    E = CFG.num_experts
+    BYTE_MODEL = DCR.r3_byte_model(CFG, DTYPE, BLOCK_M)
+    W = float(BYTE_MODEL["W"])
+    GEOMETRY = {g: _gemm(g) for g in GEMMS}
+    IDS_PER_TREAD = E * BLOCK_M
+    B_OTHER = (IDS_PER_TREAD * 2 * CFG.intermediate_size
+               + IDS_PER_TREAD * CFG.intermediate_size + IDS_PER_TREAD * CFG.hidden_size
+               + IDS_PER_TREAD // CFG.top_k * CFG.hidden_size) * BYTES
+    for f in (schedule, window):
+        f.cache_clear()
+    return old
+
+
 #: The counter pages' ladder: the treads with counted bytes, and the treads
 #: every fit uses (n = 5 is scored, never fitted, whatever the byte source).
 LADDER = (1, 2, 3, 4, 6)
@@ -700,6 +728,12 @@ def admit(pages: list[TimedPage]) -> list[TimedPage]:
         raise Refused("the VALID pages come from more than one card ("
                       + "; ".join(f"{p.run}: {p.card} {board(p.device)}" for p in use)
                       + "); cards are never pooled: pass one card's pages")
+    models = {p.tile[0] for p in use if p.tile}
+    if len(models) > 1:
+        raise Refused(f"the VALID pages ran {len(models)} models ({sorted(models)}); one fit is "
+                      "one model's shapes")
+    if models and next(iter(models)) != MODEL:
+        set_model(next(iter(models)))
     want = (MODEL, DTYPE, BLOCK_M, BLOCK_N, BLOCK_K)
     for p in use:
         if p.tile != want:
@@ -1472,6 +1506,7 @@ def build(args) -> dict:
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
     global P_KNEE
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
+    saved_model = MODEL
     if not P_KNEE >= 1:
         P_KNEE = saved
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
@@ -1480,6 +1515,8 @@ def build(args) -> dict:
         out = _build(args)
     finally:
         P_KNEE = saved
+        if MODEL != saved_model:
+            set_model(saved_model)
     return out
 
 

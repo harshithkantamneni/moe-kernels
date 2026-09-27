@@ -209,6 +209,24 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         hf_repo="mistralai/Mixtral-8x7B-Instruct-v0.1",
         verified=True,
     ),
+    "mixtral-8x22b": MoEConfig(
+        # config.json of mistralai/Mixtral-8x22B-Instruct-v0.1, read 2026-09-27:
+        # hidden_size 6144, intermediate_size 16384, num_local_experts 8,
+        # num_experts_per_tok 2, num_hidden_layers 56. Mixtral 8x7B's structure
+        # at other widths: the study's first test of its models off 8x7B's shapes.
+        name="mixtral-8x22b",
+        hidden_size=6144,
+        intermediate_size=16384,
+        num_experts=8,
+        top_k=2,
+        gate_fn="softmax",
+        norm_topk_prob=True,     # MixtralSparseMoeBlock renormalises, as 8x7B's
+        shared_experts=0,
+        num_layers=56,
+        first_moe_layer=0,
+        hf_repo="mistralai/Mixtral-8x22B-Instruct-v0.1",
+        verified=True,
+    ),
     "qwen2-57b-a14b": MoEConfig(
         name="qwen2-57b-a14b",
         hidden_size=3584,

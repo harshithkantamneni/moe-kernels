@@ -654,6 +654,17 @@ file `HELD-BACK.txt` lists as LEFT ON THE VM must be copied off by hand.
 Then terminate (section 5) and `vm_run.sh forget`: the deploy key opens this
 repository for writing, and it must not outlive the VM.
 
+**Another model: `--model`.** `gh200_model_session.sh --model mixtral-8x22b`
+runs the same steps on another model's shapes, a cross-model test of the two
+per-card models against predictions committed first under `docs/registered/`
+(`scripts/cross_model_predict.py`). R3, locked_r3 and every counter page take
+the model; the byte and floor pages read a census taken for it at ncu's base
+clock (`census-<model>.json`), never the preflight's 8x7B census; the analysis
+gets no 2026-09-25 8x7B timed references; the estimates and caps scale by the
+model's weight bytes (x1.7 for 8x22B, about 4 h of steps), locked_r3 caps one
+R3 run at an hour, and eta and R1 are left out unless `--steps` names them. Its
+peak is about 44 GB (R3's memory plan: 9 copies of 4.83 GB), inside the GH200's.
+
 ### What this session does not answer
 
 P7 as registered: the in-kernel clock of the duty-0.25 unlocked timed pages

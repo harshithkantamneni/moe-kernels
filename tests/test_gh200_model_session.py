@@ -1184,3 +1184,36 @@ def test_start_refuses_a_checkout_that_moved_since_prepare(tmp_path):
                    check=True)
     got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000")
     assert got.returncode == exit_codes.REFUSED and "moved since prepare" in got.stdout
+
+
+def test_another_model_runs_its_own_census_and_no_8x7b_references(tmp_path):
+    """--model mixtral-8x22b (the cross-model test, docs/registered): every R3,
+    locked_r3 and counter command names the model; the byte and floor pages
+    read a census taken for it (never the preflight's 8x7B census); the
+    analysis gets no 2026-09-25 8x7B timed references; eta and R1 are left
+    out; locked_r3 takes an hour per R3 run; every argv parses."""
+    import dram_counter_route as DCR
+    import locked_r3 as LR
+    import private_weight_reference as R3
+    box, got = run_box(tmp_path, {}, "--model", "mixtral-8x22b")
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    starts = re.findall(r"^\S+ (\w+) START", box.ledger(), re.M)
+    assert starts == ["prelude", "bytes", "calibrate", "timed", "floor", "deep"]
+    dcr = box.tool("dram_counter_route")
+    census = [a for a in dcr if "--census-only" in a]
+    assert len(census) == 1 and val(census[0], "--model") == "mixtral-8x22b"
+    want = str(box.session / "census-mixtral-8x22b.json")
+    assert val(census[0], "--out") == want
+    runs = [a for a in dcr if "--run" in a and "--census-only" not in a]
+    assert runs and all(val(a, "--model") == "mixtral-8x22b" and val(a, "--census") == want
+                        for a in runs)
+    assert all("--timed-reference" not in a for a in dcr if "--analyse" in a)
+    for a in box.tool("locked_r3"):
+        assert val(r3_side(a), "--model") == "mixtral-8x22b" and val(a, "--run-cap-s") == "3600"
+        LR.build_parser().parse_args(a[:a.index("--")])
+    for a in box.tool("private_weight_reference", dry=True):
+        assert val(a, "--model") == "mixtral-8x22b"
+        R3.build_parser().parse_args(a)
+    for a in dcr:
+        DCR.build_parser().parse_args(a)
+    assert not box.tool("clock_elasticity")
