@@ -9,3 +9,7 @@
 2026-09-27T05:53:01Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 385 min left)
 2026-09-27T06:05:17Z bytes END: exit 3 after 12 min
 2026-09-27T06:05:18Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 57e1d72 to run-gh200-2026-09-27: bytes: exit 3 (12 min)
+2026-09-27T06:05:19Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 373 min left)
+2026-09-27T06:05:44Z calibrate END: exit 0 after 0 min
+2026-09-27T06:05:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
