@@ -678,6 +678,66 @@ committed file.
 
 ---
 
+## The 2026-09-27 GH200 model test: the floor is a fixed cycle count, and two gaps
+
+Lambda GH200 480GB, a second board of the primary card (`board 9b6d01`),
+tree 161f9ec, run unattended by `scripts/gh200_model_session.sh` and
+published at `results/published/2026-09-27-nvidia_gh200_480gb-session`
+(its session README gives every file). Every number below is this card's,
+at a held 1710 MHz nvidia-smi lock unless it says otherwise, and was scored
+against the predictions `scripts/r3_timing_model.py` and
+`scripts/wave_split_bytes.py` registered from the 2026-09-25 board before
+any page here existed.
+
+**The floor's clock exponent is 1 at G >= 2.** R1 in lock mode (1710, 1500,
+1410 MHz, every VALIDITY gate PASS) reads the per-M-tile cost's elasticity
+at **0.988 [0.985, 0.990] at G=4** and **0.312 [0.311, 0.313] at G=1**. P1
+agrees from the timed pages: the G=4 SHARED slope 0.6598, 0.6222, 0.5812 ms
+per tread at 1410, 1500, 1605 MHz sits 0.6 to 0.8% under eta 1's 0.6654,
+0.6259, 0.5854 and far from eta 0.35's 0.5878, 0.5754, 0.5621, and the G=2
+steps at 1410 are eta 1's. The 0.35 read off the 2026-09-25 unlocked pages was
+the G=1 regime and the unlocked clock, not the floor.
+
+**The floor is 350 to 367 cycles per CTA k-step at any clock.** The floor
+captures' own counters (SM-active cycles over live CTAs x k-steps) read 350.3
+to 352.1 on w1 and 354.1 to 367.4 on w2, the same at ncu's base clock,
+unlocked and at the 1710 lock; the timing model, refitted on this board alone,
+reads c = 207.11 ns = 354.2 cycles (2026-09-25: 353.8; the PTX's shared-memory
+traffic is 352 cycles at 128 B per clock). The shared-memory pipe runs at 75 to
+83% of its peak and MIO throttle is the largest warp stall, so the
+shared-memory reading of the floor now has counters behind it (INTERPRETATION
+still: no capture varied the shared-memory load).
+
+**The timing model's registrations: five held, P5 failed.** P2 (G=8 and G=32
+SHARED steps flat inside [0.538, 0.556]), P3 (G=2's odd-n excess over G=4:
+0.154 0.153 0.162 0.160 ms against 0.143 0.145 0.144 0.151), P4 (G=4 n=8 to 9:
+0.508 ms against 0.504) and P6 held. **P5 is falsified:** G=3 was registered
+flat and its SHARED steps n=2 to 8 read 0.491 0.576 0.550 | 0.516 0.580 0.560, a
+period-3 ripple. Its bytes carry the period (w1 SHARED reads 1.38, 1.00, 2.00,
+2.38 weight sets at n=2 to 5, which the group schedule gives exactly), so the
+model has the bytes and places them on the right CTAs, and still prices the
+straddling cells (n not a multiple of 3) about 2% fast (-2.25% at n=2). The
+refit's rms is 0.53% (0.51% leave-one-G-out) and its T4 gate fails on that cell
+(native/G3/n2, -2.33%).
+
+**The byte model won its test and missed w2 at depth.** w2 SHARED at G=8 read
+1.078 and 1.100 weight sets at n=2 and 4, against WSC's 1.082 and 1.118 and the
+LRU rival's 1.139 and 1.159. Every w1 and PRIVATE cell to tread 9 sat within
+1.5% of the registered prediction (w1 SHARED G=64 to 3.9%). w2 SHARED at n >= 5
+read more than predicted beyond the registered 5%: G=16 n=5, 7, 8 by 7.5, 12.6,
+16.3%; G=4 n=8 by 5.9%; G=2 by 6.0 to 13.2% (on a page that fails V7 on one
+cell). WSC is falsified there, and its OUT-OF-DOMAIN w2 cells at G >= 32 read
+10 to 50% more than it prints.
+
+**V10 and FL1 were wrong, and every lock page here failed them on a lock that
+held.** They divided each cell's counted cycles by ncu's duration, which
+carries a fixed overhead the cycle count does not: 15 to 24 us a GEMM (on the
+G=1 page, duration = 22.7 us + cycles / 1705 MHz over 54 GEMMs). Fixed in
+f97df00 (`r3_lock_fit`, COUNTERS.md 6.12 and 6.13); re-scored, the G=1, 3, 4, 8
+and 16 lock pages pass every validity gate and the floor's FL1 passes.
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are
