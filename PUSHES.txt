@@ -9,3 +9,4 @@
 2026-09-27T08:00:17Z deep: exit 0 (32 min)
 2026-09-27T08:53:21Z r1lock: exit 0 (53 min)
 2026-09-27T08:53:24Z the session ended: driver exit 3
+2026-09-27T09:08:22Z recovery lock bytes G=2: exit 3
