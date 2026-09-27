@@ -1,2 +1,7 @@
 2026-09-27T05:51:35Z setup_vm.sh start: commit 161f9ec19347efb7aa64ac4c645c527e0d2b46d6 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-27T12:26:41Z
 2026-09-27T05:52:58Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 0eb8091 to run-gh200-2026-09-27: setup_vm.sh: READY
+2026-09-27T05:52:59Z driver start: commit 161f9ec19347efb7aa64ac4c645c527e0d2b46d6, steps prelude bytes calibrate timed eta floor deep r1lock, deadline 2026-09-27T12:26:41Z (385 min of work left)
+2026-09-27T05:52:59Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 385 min left)
+2026-09-27T05:52:59Z prelude END: exit 0 after 0 min
+2026-09-27T05:53:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
