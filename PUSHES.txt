@@ -14,3 +14,4 @@
 2026-09-27T09:20:35Z recovery lock bytes G=16: exit 3
 2026-09-27T09:26:41Z recovery lock bytes G=8: exit 3
 2026-09-27T09:32:47Z recovery lock bytes G=32: exit 3
+2026-09-27T09:38:53Z recovery lock bytes G=3: exit 3
