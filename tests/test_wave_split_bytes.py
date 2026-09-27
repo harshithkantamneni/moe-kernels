@@ -840,3 +840,49 @@ def test_the_w2_decomposition_sums_to_q_and_is_s10s(pinned_results):
             assert [d[k] for k in keys] == pytest.approx(list(want), abs=5e-4), (card, G)
     gh = {(d["G"], d["n"]): d for d in W.decomposition(pinned_results["GH200"])}
     assert gh[(1, 6)]["status"] == W.ILL_POSED and "q" not in gh[(1, 6)]
+
+
+# --------------------------------------------------------------------------
+# The mix view (2026-09-27): w1 reads the fill distance, w2 the working set.
+# --------------------------------------------------------------------------
+
+NEW_GH200 = (ROOT / "results" / "published" / "2026-09-27-nvidia_gh200_480gb-session"
+             / "results" / "2026-09-27-nvidia_gh200_480gb-r3-counters" / "lock1710")
+
+
+def test_mix_is_fill_on_w1_and_ws_on_w2_with_one_parameter_set(cards):
+    """Same parameters, three views: on w1 cells mix equals fill exactly, on w2
+    cells it equals ws exactly, so it adds no parameter."""
+    card = cards["GH200"]
+    model = W.Model(card.geom)
+    prm = pinned("GH200", "fill")
+    cells = [c for c in W.page_cells(card) if c[2] >= 2]
+    got = {v: dict(zip(cells, model.evaluate(prm.replace(view=v), cells), strict=True))
+           for v in ("fill", "ws", "mix")}
+    for c in cells:
+        want = got["fill"][c] if c[3] == "w1" else got["ws"][c]
+        assert got["mix"][c]["q"] == pytest.approx(want["q"], rel=1e-12), c
+    assert W.REGISTERED_VIEW == "mix" and "mix" in W.VIEWS
+
+
+def test_mix_on_the_0927_board_beats_fill_where_its_data_say_it_should():
+    """On the 2026-09-27 GH200 (treads to 9), each view fitted on the board:
+    mix is best on w1 and w2 at G >= 32, and moves the deep w2 cells toward
+    what was measured (G=16 n=8 1.384: fill 1.245, mix 1.41)."""
+    res = W.analyse(W.load_card(NEW_GH200))
+    rows = {(r["arm"], r["G"], r["n"], r["gemm"]): r for r in res.rows}
+
+    def rms(sel, v):
+        rel = [r[f"least_root_{v}"] / r["measured"] - 1 for r in res.rows
+               if r["n"] >= 2 and sel(r) and r[f"least_root_{v}"] is not None]
+        return float(np.sqrt(np.mean(np.square(rel))))
+
+    w1 = lambda r: r["gemm"] == "w1"  # noqa: E731
+    wide = lambda r: r["gemm"] == "w2" and r["arm"] != "private" and r["G"] >= 32  # noqa: E731
+    assert rms(w1, "mix") < rms(w1, "fill") < rms(w1, "ws")
+    assert rms(wide, "mix") < rms(wide, "ws") < rms(wide, "fill")
+    assert rms(wide, "mix") < 0.5 * rms(wide, "fill")
+    g16 = rows[("shared", 16, 8, "w2")]
+    assert g16["least_root_fill"] == pytest.approx(1.245, abs=0.002)
+    assert g16["least_root_mix"] == pytest.approx(1.410, abs=0.002)
+    assert res.params("mix").view == "mix"

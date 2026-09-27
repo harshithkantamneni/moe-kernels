@@ -35,10 +35,11 @@ weight set W_g (`DCR.r3_q`'s unit):
              misses (partners launched in the same instant duplicate their
              misses); after it they never miss;
   A events   an M-tile's A tile read again at its next column, X_e its reuse
-             distance: X = D_A fbar in the FILL view (the registered default)
-             or X = WS_col, the group's column-pass working set (live tiles x
-             ATILE + distinct owners x SLAB, `DCR.r3_exposure`'s quantity), in
-             the WS view, printed beside it;
+             distance: X = D_A fbar in the FILL view, or X = WS_col, the
+             group's column-pass working set (live tiles x ATILE + distinct
+             owners x SLAB, `DCR.r3_exposure`'s quantity), in the WS view; the
+             MIX view, registered since 2026-09-27 (REGISTERED_VIEW), reads
+             w1's in fill and w2's in ws, and the other two print beside it;
   sigma(F)   = exp(-(F / C)^beta), a capacity survival law in the bytes F the
              L2 takes in between: (C_B, beta_B) for slabs, (C_A, beta_A) for A;
   theta_e    theta1 inside the first window, 1 after it (the first window
@@ -121,8 +122,8 @@ nine decimals at 0, review F8); one that neither bound moves is flagged
 UNCONSTRAINED. G=16 and G=64 SHARED/NATIVE are HELD OUT and scored.
 "slab law NOT IDENTIFIED" prints when beta_B > 8 or C_B < 0.25 x L2 (it fires
 on the A100: C_B 6.75 MiB, beta_B 9.88, effectively a step), and every
-parameter at a bound is flagged. Both views are fitted; the fill view is the
-registered default.
+parameter at a bound is flagged. All three views are fitted; mix is the
+registered one (REGISTERED_VIEW), fill and ws print beside it.
 
 WHAT IT PRINTS. Per card: the pages and their stored gate verdicts; the
 geometry read off them; the parameters per view with stage SSEs and flags; a
@@ -275,8 +276,26 @@ STAGE2_G = (1, 2, 4)
 PREDICT_G = (8, 32)
 PREDICT_N = (5, 7, 8)
 
-FILL, WS = "fill", "ws"
-VIEWS = (FILL, WS)
+FILL, WS, MIX = "fill", "ws", "mix"
+VIEWS = (FILL, WS, MIX)
+#: THE REGISTERED VIEW IS MIX (2026-09-27): each GEMM reads its activation
+#: reuse distance in the view its own data follow. w2's A misses at fixed G
+#: stay flat as n grows (the 2026-09-27 GH200: SHARED G=16 12.2, 10.5, 9.8% at
+#: n = 2, 4, 8; G=32 22 to 24%), which the column-pass working set gives and
+#: the fill distance does not (fbar falls about 4x from n=2 to n=8); w1 breaks
+#: under the working set (SHARED G=64 n=8 1.009 measured, 1.186 in ws) and
+#: follows the fill. No parameter is added. Fitted on one GH200 board and
+#: predicting the other: w1 1.04 -> 0.62% rms, PRIVATE w2 1.23 -> 0.95%, w2
+#: SHARED+NATIVE G <= 16 n >= 5 7.45 -> 4.89%, G >= 32 29.1 -> 12.3%; the
+#: other direction w1 1.12 -> 0.67%, n >= 5 6.25 -> 5.24%, G >= 32 17.5 ->
+#: 7.95%, its shallow w2 cells 5.41 -> 5.62%. The G=8 test still separates
+#: WSC from the LRU rival (n=2, 4: 1.084, 1.138 against 1.078, 1.100 measured
+#: and LRU's 1.139, 1.159). INTERPRETATION, untested: w1's CTAs are short
+#: (K 4096) and its followers catch their leader; w2's are long (K 14336) and
+#: do not. Not closed: G=2's over-recovery at even n, the SHARED-only dead-CTA
+#: excess at G >= 32, and a C_A above the L2. The fill and ws views are fitted
+#: and printed beside it.
+REGISTERED_VIEW = MIX
 
 FIT, HELD_OUT, PREDICTED = "FIT", "HELD-OUT", "PREDICTED"
 ILL_POSED, OUT_OF_DOMAIN = "ILL-POSED", "OUT-OF-DOMAIN"
@@ -746,9 +765,13 @@ class Batch:
                 miss = self.a_k * (1.0 - sigma(tha * self.a_ws, prm.C_A * MIB, prm.beta_A))
                 add = self.at * _segsum(miss, self.a_cell, self.count) / self.Wg
                 out += add[:, None] if two else add
-            elif prm.view == FILL:
+            elif prm.view in (FILL, MIX):
                 f = fbar[self.a_cell]
                 X = (tha * self.a_D)[:, None] * f if two else tha * self.a_D * f
+                if prm.view == MIX:   # w2 reads the working set, w1 the fill
+                    w2 = ~self.is_w1[self.a_cell]
+                    Xw = tha * self.a_ws
+                    X = np.where(w2[:, None], Xw[:, None], X) if two else np.where(w2, Xw, X)
                 miss = (self.a_k[:, None] if two else self.a_k) * (
                     1.0 - sigma(X, prm.C_A * MIB, prm.beta_A))
                 s = _segsum(miss, self.a_cell, self.count)
@@ -1242,7 +1265,7 @@ def page_cells(card: Card) -> list:
     return sorted(card.measured, key=lambda c: (GEMMS.index(c[3]), ARMS.index(c[0]), c[1], c[2]))
 
 
-def _view_numbers(rf: dict, rw: dict | None) -> dict:
+def _view_numbers(rf: dict, rw: dict | None, rm: dict | None = None) -> dict:
     """A row's model numbers. q_fill and q_ws are the numbers a cell may
     print, None (null in --out's JSON) where that view is ILL-POSED or was not
     given; the raw roots the guard judged live under their own names,
@@ -1251,10 +1274,12 @@ def _view_numbers(rf: dict, rw: dict | None) -> dict:
     G=1 n=8's 1.433, 94% of re-reads avoided), never a prediction. The judge's
     comparison sets are scored on least_root_*, as the judge scored them (review
     F1, 2026-09-26: the JSON had carried that root under q_fill)."""
-    return {"q_fill": shown(rf), "q_ws": shown(rw),
+    return {"q_fill": shown(rf), "q_ws": shown(rw), "q_mix": shown(rm),
             "least_root_fill": rf["q"], "least_root_ws": rw["q"] if rw else None,
+            "least_root_mix": rm["q"] if rm else None,
             "greatest_root_fill": rf["q_high"], "kappa": rf["kappa"], "guard": rf["guard"],
-            "ill_fill": rf["ill"], "ill_ws": bool(rw and rw["ill"]), "rule": rf["rule"]}
+            "ill_fill": rf["ill"], "ill_ws": bool(rw and rw["ill"]),
+            "ill_mix": bool(rm and rm["ill"]), "rule": rf["rule"]}
 
 
 def evaluate_card(res: CardResult) -> None:
@@ -1269,8 +1294,9 @@ def evaluate_card(res: CardResult) -> None:
         arm, G, n, gemm = c
         rf = ev[FILL][c]
         rw = ev.get(WS, {}).get(c)
+        rm = ev.get(MIX, {}).get(c)
         res.rows.append({"arm": arm, "G": G, "n": n, "gemm": gemm,
-                         "measured": card.measured[c], **_view_numbers(rf, rw),
+                         "measured": card.measured[c], **_view_numbers(rf, rw, rm),
                          "q_group": group_q(card.geom, arm, G, n), "role": role(card, *c),
                          "status": status_of(role(card, *c), rf),
                          "calls": card.calls.get(c) or []})
@@ -1284,8 +1310,9 @@ def evaluate_card(res: CardResult) -> None:
     for c in want:
         rf = ev[FILL][c]
         rw = ev.get(WS, {}).get(c)
+        rm = ev.get(MIX, {}).get(c)
         res.predicted.append({"arm": c[0], "G": c[1], "n": c[2], "gemm": c[3],
-                              **_view_numbers(rf, rw),
+                              **_view_numbers(rf, rw, rm),
                               "q_group": group_q(card.geom, c[0], c[1], c[2]),
                               "status": status_of(PREDICTED, rf)})
 
@@ -1319,7 +1346,7 @@ def scores(res: CardResult) -> dict:
     def block(sel, *, own: bool):
         entry = {}
         for v in views:
-            ill = "ill_fill" if v == FILL else "ill_ws"
+            ill = f"ill_{v}"
             rs = [r for r in rows if sel(r)
                   and (not own or (not r[ill] and r["status"] != OUT_OF_DOMAIN))]
             # The model's own score reads the printable q (never None here,
@@ -1497,7 +1524,7 @@ def params_doc(res: CardResult, relative_to: Path | None = None) -> dict:
                                    else "absolute"),
             "run_ids": {str(G): r for G, r in res.card.run_ids().items()},
             "W_c": dict(res.card.geom.W_c), "l2_bytes": res.card.geom.l2_bytes,
-            "registered_view": FILL,
+            "registered_view": REGISTERED_VIEW,
             "views": {v: {"params": f.params.as_json(),
                           "stage1": dataclasses.asdict(f.stage1),
                           "stage2": dataclasses.asdict(f.stage2), "flags": f.flags}
@@ -1593,7 +1620,7 @@ class QSource:
         return self._cache[key]
 
 
-def q_source(path: Path, *, view: str = FILL) -> QSource:
+def q_source(path: Path, *, view: str | None = None) -> QSource:
     """The q source of one params JSON: its card's parameters in `view`, and
     its counter pages (measured q). A relative page path is resolved against
     the JSON's own directory, never the cwd. A JSON that names counter pages
@@ -1623,6 +1650,8 @@ def q_source(path: Path, *, view: str = FILL) -> QSource:
         if card.geom != d["geometry"]:
             raise Refused(f"{path}: the counter pages it names now read a different "
                           "geometry than the one the parameters were fitted on")
+    if view is None:   # the registered view, or fill in a JSON written before mix
+        view = REGISTERED_VIEW if REGISTERED_VIEW in d["views"] else FILL
     return QSource(d["geometry"], d["views"][view], card)
 
 
@@ -1751,7 +1780,8 @@ def card_lines(res: CardResult, sc: dict) -> list[str]:
             out.append(f"  n={x['n']}: measured saving n - q {x['saving']:+.4f} "
                        f"({x['saved_slab_reads']:.0f} slab reads), recovery phi {phi}; model "
                        f"(fill) saving {'-- (ILL-POSED)' if ms is None else f'{ms:+.4f}'}")
-    out.append(f"{tag} PREDICTED (cells no page measured): n: fill [ws]; ILL = ILL-POSED, no "
+    out.append(f"{tag} PREDICTED (cells no page measured): n: fill [ws] {{mix, the registered "
+               "view}; ILL = ILL-POSED, no "
                "number; OOD = OUT-OF-DOMAIN, printed and never scored. NATIVE is not listed: "
                "its live CTAs run in SHARED's order at every G, so the model gives it SHARED's "
                "number (it has no dead-CTA term)")
@@ -1766,8 +1796,10 @@ def card_lines(res: CardResult, sc: dict) -> list[str]:
                 parts.append(f"n{r['n']} ILL")
                 continue
             ws = "n/a" if not has_ws else "ILL" if r["ill_ws"] else _num(r["q_ws"])
+            mx = "" if r.get("least_root_mix") is None else (
+                " {ILL}" if r["ill_mix"] else f" {{{_num(r['q_mix'])}}}")
             ood = " OOD" if r["status"] == OUT_OF_DOMAIN else ""
-            parts.append(f"n{r['n']} {r['q_fill']:.3f} [{ws}]{ood}")
+            parts.append(f"n{r['n']} {r['q_fill']:.3f} [{ws}]{mx}{ood}")
         out.append(f"  {g} {arm:<7} G={G:<3} " + "  ".join(parts))
     return out
 
