@@ -1,0 +1,52 @@
+LOCKED R3: the timed R3 arm under an nvidia-smi SM clock lock, top lock first
+session tag gh200-20260927T055259Z-eta1410; each lock's pages carry gh200-20260927T055259Z-eta1410-lock<F>
+locks       1410 MHz, top down; a slip (a timed cell more than 15 MHz under the lock) stops that lock, steps down one and restarts at G=4; a cell more than 15 MHz over it means the lock is not in force and stops the ladder
+groups      G = 4 2, in this order at every lock
+R3          /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --treads 6 --group-m G --session-tag <tag>-lock<F>
+results     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/<run id>: each attempt's directory is the one its own R3 names (the plan's `session` and `WRITES TO` lines) under its own tag, created after the attempt started; never found by time
+lock        sudo -n nvidia-smi -lgc F,F, after `nvidia-smi -q -d SUPPORTED_CLOCKS` (every lock must be a supported graphics clock) and only once `nvidia-smi --query-compute-apps` lists no process on the card
+reset       sudo -n nvidia-smi -rgc on every exit: a return, an exception, SIGTERM, SIGHUP, Ctrl-C. SIGKILL cannot be caught: after one, reset by hand (sudo -n nvidia-smi -rgc)
+ledger      /home/ubuntu/moe/session/locked-r3/gh200-20260927T055259Z-eta1410/status (one UTC line per event), summary.json, r3-g<G>-lock<F>.log per attempt, smi.csv every 500 ms
+caps        one R3 run 1800 s, the whole ladder 14400 s, a busy GPU 300 s; polled every 10 s
+attempts    at most 2, in this order until one lock holds at every G:
+    1  lock 1410  G=4   /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --treads 6 --group-m 4 --session-tag gh200-20260927T055259Z-eta1410-lock1410
+    2  lock 1410  G=2   /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --treads 6 --group-m 2 --session-tag gh200-20260927T055259Z-eta1410-lock1410
+2026-09-27T06:41:25Z locked_r3 start: tag gh200-20260927T055259Z-eta1410, locks [1410], G [4, 2], R3 args --model mixtral-8x7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --treads 6, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference
+2026-09-27T06:41:25Z card: NVIDIA GH200 480GB, GPU-dadce646-493d-c7a2-548e-5646eb42ca5a, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-09-27T06:41:25Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-09-27T06:41:25Z locked at 1410 MHz: GPU clocks set to "(gpuClkMin 1410, gpuClkMax 1410)" for GPU 00000000:DD:00.0 All done.
+2026-09-27T06:41:25Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 123.74 W, 700.00 W
+2026-09-27T06:41:25Z G=4 start at lock 1410: pid 15614, tag gh200-20260927T055259Z-eta1410-lock1410, log r3-g4-lock1410.log
+2026-09-27T06:41:35Z G=4 at lock 1410: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-e9741d25
+2026-09-27T06:52:16Z G=4 held at lock 1410: R3 exit 1 CLAIM_FAIL, cells=162 worst=1410.0 MHz, 651 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-e9741d25
+2026-09-27T06:52:16Z G=2 start at lock 1410: pid 16014, tag gh200-20260927T055259Z-eta1410-lock1410, log r3-g2-lock1410.log
+2026-09-27T06:52:26Z G=2 at lock 1410: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-3085c0fe
+2026-09-27T07:03:07Z G=2 held at lock 1410: R3 exit 1 CLAIM_FAIL, cells=162 worst=1410.0 MHz, 651 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-3085c0fe
+2026-09-27T07:03:07Z all G held at lock 1410 MHz
+2026-09-27T07:03:07Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1410 MHz lock is released
+2026-09-27T07:03:07Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 92.45 W, 700.00 W
+==============================================================================
+LOCKED R3, session tag gh200-20260927T055259Z-eta1410: 1410 MHz held at every G (4 2)
+   lock   G  state              cells worst MHz  R3 exit            s  run directory
+   1410   4  held                 162    1410.0  1 CLAIM_FAIL     651  nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-e9741d25
+   1410   2  held                 162    1410.0  1 CLAIM_FAIL     651  nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-3085c0fe
+pages kept, all at 1410 MHz (each verdict is R3's own):
+  G=4   1 CLAIM_FAIL  /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x7b-e9741d25
+  G=2   1 CLAIM_FAIL  /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g2-l2flushtrue-modelmixtral_8x7b-3085c0fe
+RESULT: VALIDITY V1 PASS every attempt read only the run directory its own R3 named | measured 2 of 2 attempts | gate the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+VALIDITY 1  PASS     every attempt read only the run directory its own R3 named
+           measured 2 of 2 attempts
+           gate     the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+RESULT: VALIDITY V2 PASS the lock search reached a verdict | measured lock 1410 MHz held at every G | gate a lock held at every G, or every lock on the ladder slipped
+VALIDITY 2  PASS     the lock search reached a verdict
+           measured lock 1410 MHz held at every G
+           gate     a lock held at every G, or every lock on the ladder slipped
+RESULT: CLAIM C1 PASS a lock on the ladder held at every G | measured 1410 MHz held at G = 4 2 | gate no timed cell more than 15 MHz under the lock at any G
+CLAIM 1  PASS     a lock on the ladder held at every G
+           measured 1410 MHz held at G = 4 2
+           gate     no timed cell more than 15 MHz under the lock at any G
+SM clock reset: `sudo -n nvidia-smi -rgc` exited 0
+exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+ledger /home/ubuntu/moe/session/locked-r3/gh200-20260927T055259Z-eta1410/status; summary /home/ubuntu/moe/session/locked-r3/gh200-20260927T055259Z-eta1410/summary.json
+==============================================================================
+2026-09-27T07:03:07Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
