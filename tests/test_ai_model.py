@@ -893,7 +893,7 @@ def test_an_unknown_model_or_dtype_is_refused_by_name():
     and a guessed denominator is the failure mode the whole statistic exists to
     avoid. The message lists what IS known so the caller can pick."""
     with pytest.raises(WeightSetRefused, match="unknown model"):
-        routed_expert_weight_bytes("mixtral-8x22b", "bf16")
+        routed_expert_weight_bytes("llama-4-maverick", "bf16")   # not in MODEL_CONFIGS
     with pytest.raises(WeightSetRefused, match="unknown dtype"):
         routed_expert_weight_bytes("mixtral-8x7b", "int4")
 
