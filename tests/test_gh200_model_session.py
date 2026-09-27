@@ -1217,3 +1217,17 @@ def test_another_model_runs_its_own_census_and_no_8x7b_references(tmp_path):
     for a in dcr:
         DCR.build_parser().parse_args(a)
     assert not box.tool("clock_elasticity")
+
+
+def test_start_passes_the_model_to_the_driver(tmp_path):
+    lap = Laptop(tmp_path)
+    lap.make_branch()
+    assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
+                   "--branch", "run-gh200-t").returncode == 0
+    got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--model", "mixtral-8x22b")
+    assert got.returncode == 0, got.stdout
+    start = next(c for c in lap.vm_cmds() if "nohup setsid" in c)
+    plan = next(c for c in lap.vm_cmds() if "--dry-run" in c)
+    assert "--model mixtral-8x22b" in start and "--model mixtral-8x22b" in plan
+    assert "model=mixtral-8x22b" in (lap.state / "r" / "run.env").read_text()

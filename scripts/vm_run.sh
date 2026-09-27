@@ -2,7 +2,7 @@
 # THE LAPTOP'S SIDE OF AN UNATTENDED VM RUN (docs/LAMBDA.md section 3c).
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
-#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s>
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M]
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -182,11 +182,14 @@ cmd_start() {
   [[ "$sha" == "$(git -C "$ROOT" rev-parse HEAD)" ]] \
     || refuse "this checkout moved since prepare ($sha): the scripts on the VM are that commit's"
   ssh_opts
-  vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" > "$RUN/driver-plan.txt" 2>&1 || true
+  local model=()
+  [[ -z "${MODEL:-}" ]] || { [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || refuse "--model $MODEL: not a model name"; model=(--model "$MODEL"); }
+  vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
+    > "$RUN/driver-plan.txt" 2>&1 || true
   grep -q '^THE GH200 MODEL-TEST SESSION' "$RUN/driver-plan.txt" \
     || refuse "the driver's plan did not print on the VM: $RUN/driver-plan.txt"
-  printf 'deadline=%s\n' "$DEADLINE" >> "$RUN/run.env"
-  vm "nohup setsid bash gh200_model_session.sh --setup --commit $sha --repo https://github.com/$SLUG --deadline $DEADLINE >> gh200-driver.out 2>&1 < /dev/null & sleep 2; pgrep -f '[g]h200_model_session.sh --setup' >/dev/null && echo STARTED" \
+  printf 'deadline=%s\nmodel=%s\n' "$DEADLINE" "${MODEL:-mixtral-8x7b}" >> "$RUN/run.env"
+  vm "nohup setsid bash gh200_model_session.sh --setup --commit $sha --repo https://github.com/$SLUG --deadline $DEADLINE ${model[*]+${model[*]}} >> gh200-driver.out 2>&1 < /dev/null & sleep 2; pgrep -f '[g]h200_model_session.sh --setup' >/dev/null && echo STARTED" \
     | grep -q STARTED || refuse "the driver did not start on the VM (read ~/gh200-driver.out there)"
   say "STARTED: setup_vm.sh at $sha, then the session; deadline $(date -u -r "$DEADLINE" +%FT%TZ 2>/dev/null || date -u -d "@$DEADLINE" +%FT%TZ)"
 }
@@ -244,13 +247,14 @@ cmd_forget() {
 }
 
 sub="${1:-}"; [[ -n "$sub" ]] && shift
-IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""
+IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""
 while (( $# )); do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
     --run-id) RUN_ID="${2:-}"; shift 2 ;;
     --branch) BRANCH="${2:-}"; shift 2 ;;
     --deadline) DEADLINE="${2:-}"; shift 2 ;;
+    --model) MODEL="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) refuse "unknown argument $1" ;;
   esac
