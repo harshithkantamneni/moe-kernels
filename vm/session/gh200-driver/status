@@ -75,3 +75,5 @@
 2026-09-27T09:32:45Z recovery lock bytes G=32 exit 3 failed: V10 V7 
 2026-09-27T09:38:51Z recovery lock bytes G=3 exit 3 failed: V10 
 2026-09-27T09:45:03Z recovery lock bytes G=64 exit 3 failed: V10 V7 
+2026-09-27T09:45:07Z recovery lock block exit 0
+2026-09-27T09:45:13Z recovery analyse exit 3; recovery END
