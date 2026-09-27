@@ -24,3 +24,11 @@
 2026-09-27T06:05:43Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-09-27T06:05:44Z calibrate END: exit 0 after 0 min
 2026-09-27T06:05:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-27T06:05:45Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 (estimate 37 min, cap 90 min, 372 min left)
+2026-09-27T06:41:19Z timed: P2 locked_r3 exit 0
+2026-09-27T06:41:19Z timed: P5 locked_r3 exit 0
+2026-09-27T06:41:19Z timed: 2026-09-27T06:16:31Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g8-l2flushtrue-modelmixtral_8x7b-2085264b
+2026-09-27T06:41:19Z timed: 2026-09-27T06:27:12Z G=32 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g32-l2flushtrue-modelmixtral_8x7-8ab16728
+2026-09-27T06:41:19Z timed: 2026-09-27T06:41:13Z G=3 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=216 worst=1710.0 MHz, 841 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g3-l2flushtrue-modelmixtral_8x7b-e20972ef
+2026-09-27T06:41:19Z timed END: exit 0 after 36 min
+2026-09-27T06:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
