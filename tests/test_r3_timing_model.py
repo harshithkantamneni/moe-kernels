@@ -88,6 +88,11 @@ def run_dir(session: Path, run: str) -> Path:
     return hits[0]
 
 
+#: The judge's pins (2026-09-26) were fitted with the hard max; they are held
+#: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below.
+HARD_MAX = ("--p-knee", "inf")
+
+
 def build(*argv):
     return M.build(M.build_parser().parse_args([str(a) for a in argv]))
 
@@ -98,22 +103,24 @@ def pct(v: float) -> float:
 
 @pytest.fixture(scope="module")
 def gh200():
-    return build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS)
+    return build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS,
+                 *HARD_MAX)
 
 
 @pytest.fixture(scope="module")
 def h100():
-    return build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS)
+    return build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS,
+                 *HARD_MAX)
 
 
 @pytest.fixture(scope="module")
 def h200_groupmodel():
-    return build(*H200_SESSIONS, "--bytes", "groupmodel")
+    return build(*H200_SESSIONS, "--bytes", "groupmodel", *HARD_MAX)
 
 
 @pytest.fixture(scope="module")
 def h200_borrowed():
-    return build(*H200_SESSIONS, "--bytes", f"borrowed:{GH200_COUNTERS}")
+    return build(*H200_SESSIONS, "--bytes", f"borrowed:{GH200_COUNTERS}", *HARD_MAX)
 
 
 # --------------------------------------------------------------------------
@@ -404,7 +411,7 @@ def test_the_whole_gh200_session_dir_fits_the_same_five_valid_pages(gh200):
     two unlocked INVALID pages at G >= 2 are read for P7 alone: c refitted with
     everything else held, and a fixed 353.8 cycles per CTA k-step reads them
     as an in-kernel clock of 1782 and 1787 MHz against NVML's 1935."""
-    R = build(GH200)
+    R = build(GH200, *HARD_MAX)
     assert sorted(p.run for p in R["use"]) == sorted(GH200_RUNS)
     excluded = {p.run: p.label for p in R["all_pages"] if p not in R["use"]}
     assert excluded == {"78c2414e": "INVALID", "308f0841": "INVALID", "da469da0": "INVALID",
@@ -821,3 +828,72 @@ def test_the_cli_refuses_with_refused_and_writes_json_when_it_runs(tmp_path, cap
     assert len(doc["falsified_by"]) == 6
     assert {c["bytes_source"] for c in doc["cells"]} == {"COUNTED", "INTERPOLATED"}
     assert doc["reference_k_w_1"]["k_w"] == 1.0
+
+
+# --------------------------------------------------------------------------
+# The knee (P_KNEE, 2026-09-27): the soft max the model now runs by default.
+# --------------------------------------------------------------------------
+
+GH200_0927 = PUB / "2026-09-27-nvidia_gh200_480gb-session"
+GH200_0927_COUNTERS = (GH200_0927 / "results" / "2026-09-27-nvidia_gh200_480gb-r3-counters"
+                       / "lock1710")
+
+
+def _lock1710_runs(session: Path) -> list[Path]:
+    runs = []
+    for rep in sorted((session / "results").glob("gaps-*/private_weight_reference/*/report.json")):
+        if json.loads(rep.read_text()).get("session_tag", "").endswith("-lock1710"):
+            runs.append(rep.parent)
+    return runs
+
+
+@pytest.fixture(scope="module")
+def knee_0927():
+    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS)
+
+
+def test_the_soft_max_is_the_hard_max_at_infinity_and_never_below_it():
+    f = 1.0
+    m = np.array([0.2, 0.9, 0.97, 1.0, 1.05, 3.0])
+    assert np.array_equal(M.smax(f, m, float("inf")), np.maximum(f, m))
+    s = M.smax(f, m, 14.0)
+    assert (s >= np.maximum(f, m)).all() and s[3] == pytest.approx(2 ** (1 / 14))
+    assert s[0] - 1.0 < 1e-9 and s[-1] - 3.0 < 1e-6, "far from the knee it IS the max"
+    assert M.P_KNEE == 14.0
+
+
+def test_the_knee_closes_g3_on_the_0927_board(knee_0927):
+    """The hard max priced G=3's straddling cells, where 93% of w1's CTAs sit at
+    m/f = 0.97, 2.3% fast (P5's falsification); the soft max at p = 14 fits them
+    within 1%, and the whole board to 0.28% (hard max 0.53%), leave-one-G-out
+    0.30% (0.51%), c and bw where the hard max put them."""
+    sc = knee_0927["score"]
+    assert pct(sc["rms"]) == pytest.approx(0.28, abs=0.01)
+    assert pct(M.logo_mean(knee_0927["logo"])) == pytest.approx(0.30, abs=0.01)
+    for key in ("shared/G3/n2", "native/G3/n2", "shared/G3/n4", "native/G3/n4"):
+        assert abs(pct(sc["resid"][key])) < 1.0, key
+    hard = build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, *HARD_MAX)
+    assert pct(hard["score"]["resid"]["shared/G3/n2"]) == pytest.approx(-2.25, abs=0.01)
+    assert pct(hard["score"]["rms"]) == pytest.approx(0.53, abs=0.01)
+    p_soft, p_hard = knee_0927["main"].params, hard["main"].params
+    assert p_soft["c"] == pytest.approx(p_hard["c"], rel=0.005)
+    assert p_soft["bw"] == pytest.approx(p_hard["bw"], rel=0.005)
+
+
+def test_the_knee_improves_the_other_two_boards_held_out():
+    """One constant across boards: leave-one-G-out 0.48% -> 0.45% on the
+    2026-09-25 GH200 and 1.49% -> 1.27% on the H100; the price is the old
+    GH200's G=1 (0.44% -> 0.51%, where sigma < 1 spreads cold-L2 bytes)."""
+    old = build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS)
+    assert pct(M.logo_mean(old["logo"])) == pytest.approx(0.45, abs=0.01)
+    assert pct(old["score"]["rms"]) == pytest.approx(0.41, abs=0.01)
+    h = build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS)
+    assert pct(M.logo_mean(h["logo"])) == pytest.approx(1.27, abs=0.01)
+    assert pct(h["score"]["rms"]) == pytest.approx(1.33, abs=0.01)
+
+
+def test_a_knee_below_one_is_refused():
+    with pytest.raises(M.Refused):
+        build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS,
+              "--p-knee", "0.5")
+    assert M.P_KNEE == 14.0, "a refused build must not leave its exponent behind"

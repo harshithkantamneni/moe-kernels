@@ -53,8 +53,11 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
   5. b_bar_i = the mean of b over the box [i - floor(w/2), i + w - floor(w/2))
      clipped to the grid, w = floor(k_w x SMs x occ_g), occ_g the recorded
      CTAs per SM (the least of the page's `launch__occupancy_limit_*`).
-  6. t_i = max(q_g S_g c / SMs, b_bar_i / bw), q_g = ceil(N/SMs) / (N/SMs)
-     for N live CTAs (the last wave's idle SMs).
+  6. t_i = smax_p(q_g S_g c / SMs, b_bar_i / bw), q_g = ceil(N/SMs) / (N/SMs)
+     for N live CTAs (the last wave's idle SMs), smax_p(f, m) = (f^p + m^p)^(1/p)
+     with p = P_KNEE = 14, a fitted study constant (2026-09-27: until then a
+     hard max, which priced a CTA whose DRAM time sits near its floor at the
+     larger of the two; see P_KNEE).
   7. T = T0 + sum_g sum_i t_i + n B_other / bw, B_other = 25,165,824 B per
      tread (silu_and_mul reads [256, 2F] and writes [256, F], moe_sum reads
      [256, H] and writes [128, H], bf16), plus for NATIVE s_small when the
@@ -161,7 +164,11 @@ still print. c at another clock f is c (clock / f)^eta.
       flat in n.
   P4  G=4 n=8 to 9, where q_w2 drops (1.031 to 1.003 at 132 SMs).
   P5  G=3: flat when rho*_w1 exceeds the largest slab-fetching share a full
-      G=3 group has (2/3), a period-3 ripple when it is below.
+      G=3 group has (2/3), a period-3 ripple when it is below. FALSIFIED on
+      the 2026-09-27 GH200 (rho* 0.690, registered flat; its steps n=2..8 read
+      0.491 0.576 0.550 | 0.516 0.580 0.560). The hard max hid the fetch whenever
+      the floor exceeded it; the knee (P_KNEE) prices the near-balance cells,
+      so the rule is soft and the ladder the model prints replaces it.
   P6  the floor in cycles per CTA k-step, beside the census PTX's
       shared-memory cycles when the session carries its PTX.
   P7  on a LOCKED fit only, every unlocked page of the same card among the
@@ -309,6 +316,33 @@ ASSUMED_OCCUPANCY = {"9.0": {"w1": 5, "w2": 4}}
 #: is always printed beside whichever --k-w runs.
 K_W = 0.5
 K_W_REFERENCE = 1.0
+
+#: THE KNEE (2026-09-27): a CTA's floor and its DRAM stream overlap imperfectly
+#: when the two are nearly equal, so its time is the soft max (f^p + m^p)^(1/p)
+#: of them, not the larger. The hard max priced the cells where most CTAs sit
+#: near balance fast: on the 2026-09-27 GH200 board G=3 n=2 (93% of w1's CTAs at
+#: m/f = 0.97) by 2.3%, G=3 n=4 and G=2 n=3 by 0.6 to 1.2%; the 2026-09-25 GH200's
+#: worst cell (G=64 n=2, m/f 0.93) and the H100's (G=16 n=2, 0.98) are the same
+#: signature. Fitted free, p read 13.9, 13.9 and 12.6 on the three Hopper boards,
+#: so it is ONE study constant, not a card parameter. Held at 14: rms 0.53% ->
+#: 0.28% on the new board (G=3 0.95% -> 0.26%), 0.43% -> 0.41% on the old one,
+#: 1.51% -> 1.33% on the H100; leave-one-G-out 0.51 -> 0.30, 0.48 -> 0.45,
+#: 1.49 -> 1.27. c and bw do not move. It costs the old board's G=1 (0.44% ->
+#: 0.51%), where sigma < 1 spreads cold-L2 bytes evenly. INTERPRETATION: the data
+#: fix the knee's shape, not its cause (a shared-memory-bound floor and a slab
+#: stream contending near balance). P_KNEE = inf is the hard max.
+P_KNEE = 14.0
+
+
+def smax(f: float | np.ndarray, m: np.ndarray, p: float | None = None) -> np.ndarray:
+    """(f^p + m^p)^(1/p), written so no power overflows; p = inf is max(f, m).
+    p defaults to the module's P_KNEE, read at call time (`--p-knee` sets it
+    for one build)."""
+    p = P_KNEE if p is None else p
+    hi, lo = np.maximum(f, m), np.minimum(f, m)
+    if np.isinf(p):
+        return hi
+    return hi * (1.0 + (lo / hi) ** p) ** (1.0 / p)
 
 # --------------------------------------------------------------------------
 # The fit's parameters. None of these numbers is a calibration.
@@ -458,25 +492,30 @@ def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window
                   cumsum=np.concatenate([[0.0], np.cumsum(s)]))
 
 
-def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: int) -> float:
-    """sum_i max(q S c / SMs, (sigma b_bar_i + o) / bw), in ms: the CTAs whose
-    window mean sits under the floor's byte threshold cost the floor, the rest
-    stream."""
+def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: int,
+            p: float | None = None) -> float:
+    """sum_i smax_p(q S c / SMs, (sigma b_bar_i + o) / bw), in ms. At p = inf
+    (the hard max) the CTAs whose window mean sits under the floor's byte
+    threshold cost the floor and the rest stream, split in one search."""
     floor = wave_q(win.live, sms) * GEOMETRY[gemm].ksteps * c_ns * 1e-6 / sms
     rate = bw * 1e6
-    k = int(np.searchsorted(win.sorted_mean, (floor * rate - OUT_TILE) / sigma, side="left"))
-    return floor * k + (sigma * (win.cumsum[-1] - win.cumsum[k])
-                        + OUT_TILE * (win.live - k)) / rate
+    p = P_KNEE if p is None else p
+    if np.isinf(p):
+        k = int(np.searchsorted(win.sorted_mean, (floor * rate - OUT_TILE) / sigma,
+                                side="left"))
+        return floor * k + (sigma * (win.cumsum[-1] - win.cumsum[k])
+                            + OUT_TILE * (win.live - k)) / rate
+    return float(smax(floor, (sigma * win.sorted_mean + OUT_TILE) / rate, p).sum())
 
 
 def cta_ms(arm: str, declared: int, G: int, n: int, gemm: str, sigma: float,
-           c_ns: float, bw: float, sms: int, w: int) -> np.ndarray:
+           c_ns: float, bw: float, sms: int, w: int, p: float | None = None) -> np.ndarray:
     """t_i for every live CTA, one by one: the spec's formula as written. The
     fit uses `gemm_ms`; the tests hold the two to each other."""
     r, _ = schedule(arm, declared, G, n, gemm)
     b_bar = sigma * box_mean(r, w) + OUT_TILE
     floor = wave_q(r.size, sms) * GEOMETRY[gemm].ksteps * c_ns * 1e-6 / sms
-    return np.maximum(floor, b_bar / (bw * 1e6))
+    return smax(floor, b_bar / (bw * 1e6), p)
 
 
 def group_model_bytes(arm: str, G: int, n: int, gemm: str) -> float:
@@ -1429,7 +1468,22 @@ def find_counters(args, inputs) -> dict | None:
 
 
 def build(args) -> dict:
-    """Everything the page prints, as one dict (the --out JSON)."""
+    """Everything the page prints, as one dict (the --out JSON), under the
+    knee exponent `--p-knee` (restored after, so one build never leaks it)."""
+    global P_KNEE
+    saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
+    if not P_KNEE >= 1:
+        P_KNEE = saved
+        raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
+                      "the hard max)")
+    try:
+        out = _build(args)
+    finally:
+        P_KNEE = saved
+    return out
+
+
+def _build(args) -> dict:
     k_w = float(args.k_w)
     if not k_w > 0:
         raise Refused(f"--k-w {k_w}: the window scale must be positive")
@@ -1863,6 +1917,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--k-w", type=float, default=K_W,
                    help=f"window scale (default {K_W}, FITTED); the k_w = {K_W_REFERENCE} "
                         "fit is always printed beside it")
+    p.add_argument("--p-knee", type=float, default=P_KNEE,
+                   help=f"the knee's soft-max exponent (default {P_KNEE:g}, a FITTED study "
+                        "constant; inf is the hard max the judge's pins were fitted with)")
     p.add_argument("--out", type=Path, default=None, help="write everything as JSON here")
     return p
 
