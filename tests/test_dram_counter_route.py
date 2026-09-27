@@ -4530,8 +4530,8 @@ def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock
         assert fl1.verdict == (PASS if clock["held"] else FAIL), lock
         assert clock["smi_before"]["rows"][0]["clocks.sm"] == "1601"
         ids.append(body["run_id"])
-    assert clock["off_lock"] == [f"n={n} {g} 1601 MHz" for n in DCR.R3_FLOOR_TREADS
-                                 for g in ("w1", "w2")]
+    assert clock["off_lock"] == [e for g in ("w1", "w2") for e in (
+        [f"{g} fitted 1601 MHz"] + [f"n={n} {g} 1601 MHz" for n in DCR.R3_FLOOR_TREADS])]
     unlocked = tmp_path / "r3f-g64-none.json"
     assert main(_floor_argv(census, unlocked, "--floor-clock", "none")) == exit_codes.DONE
     ids.append(json.loads(unlocked.read_text())["run_id"])
@@ -4567,7 +4567,8 @@ def test_a_cell_whose_counters_name_no_clock_fails_the_lock(tmp_path, monkeypatc
     fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
                if r.name == "FL1")
     body = json.loads(out.read_text())
-    assert fl1.verdict == FAIL and body["clock"]["off_lock"] == ["n=2 w1 no clock"]
+    assert fl1.verdict == FAIL and body["clock"]["off_lock"][0] == "n=2 w1 no clock"
+    assert not [e for e in body["clock"]["off_lock"] if "no clock" not in e and "w1" in e]
     w1 = body["cells"][0]["per_gemm"]["w1"]
     assert w1["sm_clock_mhz"] is None and "sm__cycles_elapsed.avg" in w1["unreadable"]
 
@@ -4651,7 +4652,8 @@ def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
         assert f"counted at an nvidia-smi lock of {float(lock):g} MHz" in text
         ids.append(page["run_id"])
     v10 = next(g for g in page["gates"] if g["number"] == "V10")
-    assert v10["measured"].startswith("off the lock: native/1 w1 1601 MHz; native/1 w2")
+    assert v10["measured"].startswith("off the lock: w1 fitted 1601 MHz; native/1 w1 1601 MHz")
+    assert "(fit: w1 1601.0 MHz + 0.0 us over 15 cells; w2 1601.0 MHz" in v10["measured"]
     base = tmp_path / "r3c-g4-base.json"
     assert main(_page_argv(census, base)) == exit_codes.DONE
     body = json.loads(base.read_text())
@@ -4685,7 +4687,8 @@ def test_a_locked_cell_whose_counters_name_no_clock_fails_v10(tmp_path, monkeypa
     assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
                            "1601")) == exit_codes.INVALID
     v10 = next(g for g in json.loads(out.read_text())["gates"] if g["number"] == "V10")
-    assert v10["verdict"] == FAIL and v10["measured"] == "off the lock: native/1 w1 no clock"
+    assert v10["verdict"] == FAIL
+    assert v10["measured"].startswith("off the lock: native/1 w1 no clock (fit: w1 1601.0 MHz")
     free = tmp_path / "r3c-g4-none.json"
     assert main(_page_argv(census, free, "--page-clock", "none")) == exit_codes.DONE
     body = json.loads(free.read_text())
@@ -4910,3 +4913,34 @@ def test_the_runbooks_lock_block_runs_flags_the_family_accepts(tmp_path, monkeyp
         capsys.readouterr()
         assert main(argv) == exit_codes.REFUSED, argv
         assert "planted: a closed route" in capsys.readouterr().out, argv
+
+
+def test_a_lock_that_held_under_ncus_fixed_duration_overhead_passes_and_a_slip_does_not():
+    """The Lambda GH200 of 2026-09-27 held its 1710 MHz lock, but ncu's
+    duration carried about 23 us its cycle count did not: every cell's own
+    cycles / duration read 1624 to 1697 MHz, lowest on the shortest kernels,
+    and V10 and FL1 failed a lock that held (time = 22.7 us + cycles / 1705 MHz
+    over the 54 GEMMs of its G=1 page). The fit reads through the overhead.
+    A real slip still fails: a clock that sagged to 1650 MHz moves the fitted
+    f, one cell that slipped sits off the line, and an overhead past 50 us or
+    below zero is not an overhead."""
+    lock = 1710.0
+    cycles = [4.8e5, 9.1e5, 1.3e6, 1.7e6, 2.4e6, 3.6e6, 5.4e6, 8.2e6]
+
+    def pts(mhz=1705.0, t0=22_700.0, slip=None):
+        return [(f"shared/{i} w1", c, t0 + 1e3 * c / (slip if i == 5 and slip else mhz))
+                for i, c in enumerate(cycles)]
+
+    naive = [1e3 * c / t for _, c, t in pts()]
+    assert min(naive) < lock - 15, "the planted overhead must fail the old per-cell rule"
+    off, fit = DCR.r3_lock_fit(pts(), "w1", lock)
+    assert off == [] and fit == "w1 1705.0 MHz + 22.7 us over 8 cells"
+    off, _ = DCR.r3_lock_fit(pts(mhz=1650.0), "w1", lock)
+    assert off[0] == "w1 fitted 1650 MHz"
+    off, _ = DCR.r3_lock_fit(pts(slip=1600.0), "w1", lock)   # the slip also tilts the fit
+    slipped = [e for e in off if e.startswith("shared/5 w1 ")]
+    assert slipped and int(slipped[0].split()[2]) < lock - 3 * 15
+    assert DCR.r3_lock_fit(pts(t0=80_000.0), "w1", lock)[0] == ["w1 offset 80.0 us"]
+    assert DCR.r3_lock_fit(pts(t0=-5_000.0), "w1", lock)[0][0] == "w1 offset -5.0 us"
+    off, fit = DCR.r3_lock_fit(pts()[:2], "w1", lock)
+    assert fit == "w1 per cell (too few cells to fit)" and off

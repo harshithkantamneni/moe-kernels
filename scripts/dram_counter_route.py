@@ -5239,6 +5239,58 @@ def r3_clock_word(control: str, lock: float | None) -> str:
     return f"the clock the card chose, no lock (ncu --clock-control {control})"
 
 
+#: THE CLOCK A LOCKED CAPTURE RAN AT IS FITTED, NOT DIVIDED (2026-09-27). Each
+#: GEMM's cells are fitted as duration = t0 + cycles / f, and f is held to the
+#: lock. Until then V10 and FL1 held each cell's own cycles / duration to it,
+#: and ncu's duration carries a fixed overhead its cycle count does not: on
+#: the Lambda GH200 (2026-09-27, eight pages at a 1710 MHz lock) every GEMM
+#: fitted f = 1694 to 1712 MHz with t0 = 15 to 24 us, while the per-cell ratio
+#: read 1624 to 1697 MHz, lowest on the shortest kernels (1632 at 0.28 ms,
+#: 1697 at 4.8 ms). Every page failed a lock that held. A slip still shows:
+#: it moves f (the GH200's 1965 lock of 2026-09-25 sagged by 135 MHz or more),
+#: or leaves its cells off the line. t0 must be an overhead (0 to 50 us), and
+#: no cell may sit more than R3_CLOCK_CELL_STEPS steps of its own duration off
+#: the lock's line through t0: the eight GH200 pages' worst was 2.4 steps, on
+#: the 0.28 ms n=1 w2 kernels, so 3 is this card's scatter plus a margin, set
+#: from the data it first passed and labelled so. A GEMM with fewer than three
+#: distinct cycle counts cannot be fitted, and each of its cells is held to the
+#: lock by its own ratio, as before.
+R3_CLOCK_OFFSET_MAX_NS = 50_000.0
+#: A fit through a zero-overhead capture lands a hair either side of 0 ns.
+R3_CLOCK_OFFSET_MIN_NS = -1_000.0
+R3_CLOCK_CELL_STEPS = 3.0
+
+
+def r3_lock_fit(points: list[tuple[str, float | None, float | None]], gemm: str,
+                lock: float) -> tuple[list[str], str]:
+    """One GEMM's cells held to `lock`: `points` are (label, cycles, ns). Returns
+    the off-lock entries (empty when the lock held) and the fit, as printed."""
+    step = R3_FLOOR_LOCK_STEP_MHZ
+    off = [f"{label} no clock" for label, cyc, ns in points if not (cyc and ns)]
+    pts = [(label, float(cyc), float(ns)) for label, cyc, ns in points if cyc and ns]
+    if len({c for _, c, _ in pts}) < 3:
+        off += [f"{label} {1e3 * c / t:.0f} MHz" for label, c, t in pts
+                if abs(1e3 * c / t - lock) > step]
+        return off, f"{gemm} per cell (too few cells to fit)"
+    mx = statistics.fmean(c for _, c, _ in pts)
+    my = statistics.fmean(t for _, _, t in pts)
+    b = (sum((c - mx) * (t - my) for _, c, t in pts)
+         / sum((c - mx) ** 2 for _, c, _ in pts))
+    t0 = my - b * mx
+    f = 1e3 / b if b > 0 else float("nan")
+    fit = f"{gemm} {f:.1f} MHz + {t0 / 1e3:.1f} us over {len(pts)} cells"
+    if not abs(f - lock) <= step:
+        off.append(f"{gemm} fitted {f:.0f} MHz")
+    if not R3_CLOCK_OFFSET_MIN_NS <= t0 <= R3_CLOCK_OFFSET_MAX_NS:
+        off.append(f"{gemm} offset {t0 / 1e3:.1f} us")
+    for label, c, t in pts:
+        cell_step = 1e3 * c / (lock - step) - 1e3 * c / lock
+        if abs(t - (t0 + 1e3 * c / lock)) > R3_CLOCK_CELL_STEPS * cell_step:
+            mhz = 1e3 * c / (t - t0) if t > t0 else float("nan")
+            off.append(f"{label} {mhz:.0f} MHz")
+    return off, fit
+
+
 def r3_cell_clock_mhz(cell: dict, gemm: str) -> float | None:
     """The SM clock one page cell's GEMM ran at, in MHz, off its own counters:
     `R3_PAGE_CLOCK_METRIC` (recorded under a lock, the mean over the K calls)
@@ -6473,18 +6525,25 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
     # clock with no lock, has no F to hold and no V10.
     control, lock = r3_page_clock(payload)
     if lock is not None:
-        off10 = [f"{a}/{n} {g} " + ("no clock" if mhz is None else f"{mhz:.0f} MHz")
-                 for (a, n), c in sorted(cells.items()) for g in gemms
-                 for mhz in (r3_cell_clock_mhz(c, g),)
-                 if mhz is None or abs(mhz - lock) > R3_FLOOR_LOCK_STEP_MHZ]
+        off10, fits10 = [], []
+        for g in gemms:
+            pts = [(f"{a}/{n} {g}",
+                    ((c.get("recorded") or {}).get(g) or {}).get(R3_PAGE_CLOCK_METRIC),
+                    ((c.get("per_gemm") or {}).get(g) or {}).get("gpu_time_ns"))
+                   for (a, n), c in sorted(cells.items())]
+            o, fit = r3_lock_fit(pts, g, lock)
+            off10 += o
+            fits10.append(fit)
         gates.append(Gate(
             "V10", "VALIDITY",
             f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
             "counters' clock", FAIL if off10 else PASS,
-            f"off the lock: {_worst(off10)}" if off10 else
-            f"all {len(cells) * len(gemms)} within the band",
-            f"|{R3_PAGE_CLOCK_METRIC} / gpu_time_ns - {lock:g}| <= "
-            f"{R3_FLOOR_LOCK_STEP_MHZ:g} MHz, one step, in every cell and GEMM",
+            (f"off the lock: {_worst(off10)}" if off10 else
+             f"all {len(cells) * len(gemms)} within the band") + f" (fit: {'; '.join(fits10)})",
+            f"each GEMM's duration = t0 + {R3_PAGE_CLOCK_METRIC} / f over its cells, "
+            f"|f - {lock:g}| <= {R3_FLOOR_LOCK_STEP_MHZ:g} MHz (one step), 0 <= t0 <= "
+            f"{R3_CLOCK_OFFSET_MAX_NS / 1e3:g} us, and no cell over {R3_CLOCK_CELL_STEPS:g} "
+            "steps off the lock's line",
             f"every byte on the page as a reading at {lock:g} MHz, the clock the timed "
             "pages it is compared with ran at; its bytes stand only as readings at the "
             "clocks its cells name"))
@@ -7388,20 +7447,25 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
             + f". The tensor readings cannot then say whether that pipe sets the "
             f"floor; {kept}")
     off: list[str] = []
+    fits: list[str] = []
     if lock:
-        for c in cells:
-            for gemm, v in c["per_gemm"].items():
-                mhz = v["sm_clock_mhz"]
-                if mhz is None or abs(mhz - lock) > R3_FLOOR_LOCK_STEP_MHZ:
-                    off.append(f"n={c['n']} {gemm} "
-                               + ("no clock" if mhz is None else f"{mhz:.0f} MHz"))
+        for gemm in sorted({g for c in cells for g in c["per_gemm"]}):
+            pts = [(f"n={c['n']} {gemm}", c["per_gemm"][gemm].get("sm__cycles_elapsed.avg"),
+                    c["per_gemm"][gemm].get("gpu__time_duration.sum"))
+                   for c in cells if gemm in c["per_gemm"]]
+            o, fit = r3_lock_fit(pts, gemm, lock)
+            off += o
+            fits.append(fit)
     gates = [Gate(
         "FL1", "VALIDITY",
         f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
         "counters' clock", FAIL if off else PASS,
-        f"off the lock: {off}" if off else
-        f"all {sum(len(c['per_gemm']) for c in cells)} within the band",
-        f"|sm_clock_mhz - {lock:g}| <= {R3_FLOOR_LOCK_STEP_MHZ:g} MHz, one step",
+        (f"off the lock: {off}" if off else
+         f"all {sum(len(c['per_gemm']) for c in cells)} within the band")
+        + f" (fit: {'; '.join(fits)})",
+        f"each GEMM's duration = t0 + cycles / f over its cells, |f - {lock:g}| <= "
+        f"{R3_FLOOR_LOCK_STEP_MHZ:g} MHz (one step), 0 <= t0 <= "
+        f"{R3_CLOCK_OFFSET_MAX_NS / 1e3:g} us, no cell over {R3_CLOCK_CELL_STEPS:g} steps off",
         f"this file as a reading at {lock:g} MHz; its numbers stand only as readings "
         "at the clocks its cells name")] if lock else []
     body = {"family": R3_FAMILY, "kind": "floor", "card": card, "stack": stack,
@@ -7409,8 +7473,9 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
             "clock": {"control": clock, "lock_mhz": lock,
                       "band_mhz": R3_FLOOR_LOCK_STEP_MHZ if lock else None,
                       "held": (not off) if lock else None, "off_lock": off,
-                      "basis": "sm__cycles_elapsed.avg / gpu__time_duration.sum per "
-                               "cell and GEMM, each the mean over its calls",
+                      "basis": "each GEMM's gpu__time_duration.sum = t0 + "
+                               "sm__cycles_elapsed.avg / f fitted over its cells, each the "
+                               "mean over its calls (r3_lock_fit)", "fit": fits,
                       "smi_before": smi_before, "smi_after": smi_after},
             "gates": [asdict(g) for g in gates],
             "ncu": {"binary": ncu.get("binary"), "version": ncu.get("version"),

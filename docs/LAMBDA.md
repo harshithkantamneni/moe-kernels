@@ -598,7 +598,7 @@ locked); and a card still busy five minutes after a step ended.
   `COUNTER_MAX_TREADS`). It goes on past exit 0 and 1, and past exit 3 only when
   the page was written, G >= 32, and V7 alone failed (V7 is expected to fail
   there; the page's bytes still read). Every other INVALID stops the block,
-  V10 (a cell off the lock) included. If the G=1 page took over 7 minutes, the
+  V10 (the page off the lock) included. If the G=1 page took over 7 minutes, the
   G=64 page and the base-clock control are dropped. The base-clock control
   (G=2 at ncu's base clock, same board, commit and treads) and the analysis of
   the pages written run however the block ended; the analysis scores C5

@@ -1001,8 +1001,8 @@ than 1% apart (NATIVE's lowest above SHARED's highest, or the reverse), so a
 noisy GEMM cannot hide a declaration effect; V8 DRAM bytes agree with 32 x
 the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof; V10, only on a page taken
-under `--page-lock-mhz F`, every cell and GEMM's clock within one 15 MHz step
-of F (6.13).
+under `--page-lock-mhz F`, each GEMM's clock, fitted over its cells through
+ncu's fixed duration overhead, within one 15 MHz step of F (6.13).
 
 V6 AND THE L2 REQUEST COALESCER (2026-09-25). The arms issue identical loads
 (one kernel binary per GEMM: registers and occupancy limits are equal across
@@ -1278,9 +1278,11 @@ a page or floor whose `--out` is its own census is refused.
 `--floor-clock none` passes `--clock-control none` for one extra G=64
 capture, because L2 and DRAM do not follow the SM clock. Under an nvidia-smi
 lock (`-lgc F,F`) `--floor-lock-mhz F` writes F into the file, and gate FL1
-fails (INVALID, the file written) when any cell's clock, `sm__cycles_elapsed.avg`
-over `gpu__time_duration.sum`, is unreadable or more than one 15 MHz step from
-F. F must be a lock the card holds under this load. On Lambda (2026-09-25, R3's
+fails (INVALID, the file written) when a cell's clock is unreadable, or when
+the clock fitted over each GEMM's cells (`gpu__time_duration.sum` = t0 +
+`sm__cycles_elapsed.avg` / f, `r3_lock_fit`) is more than one 15 MHz step from
+F, its t0 is not an overhead (under -1 or over 50 us), or a cell sits more
+than 3 steps of its own duration off the lock's line through t0. F must be a lock the card holds under this load. On Lambda (2026-09-25, R3's
 timed runs at duty 0.25; published on branches lambda-gh200 and lambda-h100)
 1710 MHz held at every G on both the GH200 and the H100, and the higher locks
 did not: the GH200's 1965 read 1830 MHz in the second it was set and its cells
@@ -1290,10 +1292,16 @@ first ten G=2 cells. The GH200's ledger blames the power cap, but no file
 settles the cause: its SW power-capping and SW thermal-slowdown counters both
 grew while its cells drew about 300 W against a 700 W limit. Whether a lock
 holds under a floor capture is not measured, and another card needs its own
-hold test. Nor is any offset between the counters' clock and the true clock.
-An FL1 failure with every cell the same distance from F looks like such an
-offset; a gap that grows with n looks like the card pulling its clock down
-under load.
+hold test. THE OFFSET IS MEASURED (Lambda GH200, 2026-09-27, branch
+run-gh200-2026-09-27): ncu's duration carries a fixed overhead its cycle count
+does not, 15 to 24 us a GEMM on eight pages and the floor at a 1710 MHz lock,
+so each cell's own cycles over its duration read 1624 to 1697 MHz, lowest on
+the shortest kernels (1632 at 0.28 ms, 1697 at 4.8 ms), while the fit read
+1694 to 1717 MHz. Until then FL1 and V10 held each cell's own ratio, and
+failed every one of those captures on a lock that held. The per-cell scatter
+round the fit reached 2.4 steps, on the 0.28 ms n=1 w2 kernels, which is what
+the 3-step bound was set from; a slip still moves the fitted f or leaves its
+cells off the line.
 
 ```bash
 python scripts/dram_counter_route.py --dry-run --family r3-arms --floor --chip gh100
@@ -1323,10 +1331,12 @@ records what its probe passed (`ncu.probe_clock_control`). `--page-lock-mhz F` (
 `--page-clock none`) names the lock: the page then also asks
 `sm__cycles_elapsed.avg` (parsed soft and recorded per cell and GEMM beside
 the occupancy, its unit table the floor's), refused before the capture when
-the chip's metric list does not offer it, and gate V10 holds every cell and
-GEMM's clock, those cycles over `gpu__time_duration.sum`, within one 15 MHz
-step of F: INVALID otherwise, the page written and its off cells named (a
-cell whose cycles could not be read is named `no clock`). The census takes
+the chip's metric list does not offer it, and gate V10 holds each GEMM's
+clock, fitted over its cells as FL1's is (`r3_lock_fit`: duration = t0 +
+cycles / f, f within one 15 MHz step of F, t0 an overhead, no cell over 3
+steps off the line), to F: INVALID otherwise, the page written and its off
+GEMMs and cells named (a cell whose cycles could not be read is named `no
+clock`). The census takes
 the same flags for its own capture and records them; it measures launches
 and grids, which no clock moves, so it gates no clock, and a census at
 either clock licenses a page at either. The page records the clock control
