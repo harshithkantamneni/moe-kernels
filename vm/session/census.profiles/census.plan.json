@@ -1,0 +1,35 @@
+{
+  "family": "r3-arms",
+  "kind": "census",
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "block_m": 32,
+  "block_n": 64,
+  "num_stages": 4,
+  "group_m": 64,
+  "treads": [
+    1,
+    6
+  ],
+  "arms": [
+    "native"
+  ],
+  "cells": [
+    [
+      "native",
+      1
+    ],
+    [
+      "native",
+      6
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count runs 256..1536, across the small-batch id bound 1024, and E x n_max = 48 is under the expert bound 64; declaring 9 copies (E x 9 = 72) keeps both ratio arms on the scan kernel at every tread",
+  "calls_per_cell": 1,
+  "warmup_calls": 1,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/session/census.profiles/census.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/session/census.profiles/census.triton-cache"
+}
