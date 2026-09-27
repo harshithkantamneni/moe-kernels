@@ -736,6 +736,26 @@ G=1 page, duration = 22.7 us + cycles / 1705 MHz over 54 GEMMs). Fixed in
 f97df00 (`r3_lock_fit`, COUNTERS.md 6.12 and 6.13); re-scored, the G=1, 3, 4, 8
 and 16 lock pages pass every validity gate and the floor's FL1 passes.
 
+**Both gaps, closed in part the same day.** The G=3 miss was the timing
+model's hard max: a CTA whose DRAM time sits near its floor runs slower than
+the larger of the two (93% of w1's CTAs at G=3 n=2 sit at m/f = 0.97), and
+every board's worst cell sits near that balance. A soft max (f^p + m^p)^(1/p)
+fits p = 13.9, 13.9 and 12.6 on the three Hopper boards, so it is one study
+constant, `P_KNEE` = 14 (8900699): rms 0.53 -> 0.28% on this board (G=3 0.95 ->
+0.26%), 0.43 -> 0.41% on the 2026-09-25 GH200, 1.51 -> 1.33% on the H100,
+leave-one-G-out better on all three, c and bw unmoved; the old board's G=1
+worsens (0.44 -> 0.51%). The w2 miss is the activation term, not the slabs:
+it sits where no slab is re-read across groups, and w2's A misses at fixed G
+stay flat in n, as the column-pass working set gives and the fill distance
+does not, while w1 follows the fill. The byte model's registered view is now
+`mix` (w1 in fill, w2 in the working set, no parameter added; e5eced6):
+fitted on one GH200 board and predicting the other, w2 SHARED+NATIVE at n >= 5
+7.45 -> 4.89% and at G >= 32 29.1 -> 12.3%, w1 1.04 -> 0.62%. Still open: G=2's
+over-recovery at even n (n=8 still 13% low), the SHARED-only excess of dead
+CTAs at G >= 32, and a fitted A capacity above the 60 MiB L2. A stale-A term
+halves the deep cells again but reads 0.18 and 0.09 on two boards of one card,
+so it is not adopted.
+
 ---
 
 ## The evidence base
