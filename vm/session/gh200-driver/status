@@ -41,3 +41,10 @@
 2026-09-28T03:48:32Z floor: r3f-g64-lock1710 exit 3
 2026-09-28T03:48:32Z floor END: exit 3 after 3 min
 2026-09-28T03:48:33Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-28T03:48:35Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 56 min, cap 127 min, 268 min left)
+2026-09-28T03:56:51Z deep: locked_r3 exit 1 (gh200-20260928T015120Z-deep, G = 4 2)
+2026-09-28T03:56:56Z deep: 2026-09-28T03:56:51Z G=4 slipped at lock 1710: R3 exit 1 CLAIM_FAIL, cells=123 worst=1680.0 MHz, 492 s, dir nvidia_gh200_480gb-bm32-budget200.0-declauto-dtypebf16-duty0.25-g4-l2flushtrue-modelmixtral_8x22-b25bb67b; a timed cell read 1680 MHz, more than 15 MHz under the 1710 MHz lock
+2026-09-28T03:56:56Z deep: G=2 SHARED ms  | increments 
+2026-09-28T03:56:56Z deep: G=4 SHARED ms  | increments 
+2026-09-28T03:56:56Z deep END: exit 1 after 8 min
+2026-09-28T03:56:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
