@@ -1326,10 +1326,14 @@ def predictions(f: Fit, cells, ctx: Context, source: ByteSource, extra_pages, t3
                 ptx_cycles) -> dict:
     """P1 to P8 from the fitted parameters of this card."""
     x, k_w = f.x, f.k_w
+    # Each arm's declaration off its cells; the fallbacks are the model's own
+    # (NATIVE declares E, the ratio arms E x 9), not Mixtral's 8 and 72.
+    native_decl = {c.declared for c in cells if c.arm == "native"}
     shared_decl = {c.declared for c in cells if c.arm == "shared"}
     private_decl = {c.declared for c in cells if c.arm == "private"}
-    decl = {"native": 8, "shared": min(shared_decl) if shared_decl else 72,
-            "private": min(private_decl) if private_decl else 72}
+    decl = {"native": min(native_decl) if native_decl else E,
+            "shared": min(shared_decl) if shared_decl else 9 * E,
+            "private": min(private_decl) if private_decl else 9 * E}
     tab = sigma_table(source, ctx, k_w, decl)
     measured_gs = sorted({c.G for c in cells})
     out: dict = {"sigma": "imputed from " + source.label if tab else "GROUPMODEL (sigma = 1)",
