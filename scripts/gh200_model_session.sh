@@ -115,6 +115,9 @@ RULER_FALLBACK=(--ridge 177.93 --bandwidth-gbps 3725.1)
 #: study's; another model is a cross-model test of the two per-card models
 #: (docs/registered/README.md), with its own census and no 8x7B references.
 DEFAULT_MODEL=mixtral-8x7b
+#: The counter pages' declaration (private_weight_reference.counter_declaration
+#: over its 9-deep ladder): 9 copies for every model the driver runs.
+COUNTER_COPIES=9
 MODEL="${MOE_DRIVER_MODEL:-$DEFAULT_MODEL}"
 R3_BASE=(--model "$MODEL" --block-m 32 --repeats 9 --duty 0.25 --seed 0)
 #: R1 in lock mode (section 3b); each state a held SM clock.
@@ -135,7 +138,10 @@ STEPS=(prelude bytes calibrate timed eta floor deep r1lock)
 #: Another model's pages run longer by about its weight bytes over 8x7B's
 #: (8x22B: 4.83 GB against 2.82, x1.7); the estimates and caps below are
 #: 8x7B's, scaled by this percentage for the steps that measure.
-model_scale_pct() { case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; *) echo 200 ;; esac; }
+#: Qwen2-57B-A14B: 3.52 GB, x1.25.
+model_scale_pct() {
+  case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; qwen2-57b-a14b) echo 125 ;; *) echo 200 ;; esac
+}
 _scaled() { case "$1" in prelude|calibrate) echo "$2" ;; *) echo $(( $2 * $(model_scale_pct) / 100 )) ;; esac; }
 step_est() {
   local m
@@ -981,6 +987,12 @@ is_step() { local s; for s in "${STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; 
 [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo "--model $MODEL: not a model name" >&2; exit "$EXIT_REFUSED"; }
 export MOE_DRIVER_MODEL="$MODEL"
 R3_BASE[1]="$MODEL"; R1_BASE[1]="$MODEL"
+#: One declaration for the whole session (2026-09-28). Mixtral's auto rule
+#: declares 9 copies at every ladder depth; at E = 64 it would declare 6, 8 or
+#: 9 by the page's treads, and the byte model refuses timed pages whose
+#: declaration is not the counter pages' (the counter ladder's 9). A model
+#: other than Mixtral's pins the counter pages' count on every timed page.
+case "$MODEL" in mixtral-*) ;; *) R3_BASE+=(--declared-copies "$COUNTER_COPIES") ;; esac
 
 # One step, in its own process: the orchestrator runs this under a cap.
 if [[ -n "$ONE_STEP" ]]; then

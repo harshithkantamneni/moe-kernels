@@ -6689,6 +6689,29 @@ def test_the_counter_ladder_reaches_tread_9_at_r3s_own_declaration():
         PW.validate_counter_plan(_counter_plan(treads=[1, PW.COUNTER_MAX_TREADS + 1]))
 
 
+def test_at_64_experts_the_counter_declaration_covers_the_deep_ladder():
+    """Mixtral reaches 9 copies only through the small-batch rule at E = 8; at
+    E = 64 (qwen2-57b-a14b) the default ladder would declare 6 and PRIVATE
+    would have no slot at treads 7 to 9. The counter ladder declares instead,
+    Mixtral's declaration and its reason are unchanged, and a plan deeper
+    than its declaration is refused before a card is touched."""
+    bm = PW.DEFAULT_BLOCK_M
+    qwen = MODEL_CONFIGS["qwen2-57b-a14b"]
+    assert qwen.num_experts == 64
+    assert PW.declared_copies_for(qwen, PW.ladder_treads(qwen, bm, PW.DEFAULT_TREADS),
+                                  bm)[0] == PW.DEFAULT_TREADS
+    copies, _why = PW.counter_declaration(qwen, bm)
+    assert copies == PW.COUNTER_MAX_TREADS == PW.counter_ladder(qwen, bm)[-1]
+    mix = PW.counter_declaration(CFG, bm)
+    assert mix == PW.declared_copies_for(
+        CFG, PW.ladder_treads(CFG, bm, PW.DEFAULT_TREADS), bm)
+    plan = _counter_plan(model="qwen2-57b-a14b", copies_declared=copies,
+                         treads=list(range(1, PW.COUNTER_MAX_TREADS + 1)))
+    assert PW.validate_counter_plan(plan) is qwen
+    with pytest.raises(PW.CounterPlanRefused, match="not R3's declaration"):
+        PW.validate_counter_plan(dict(plan, copies_declared=PW.DEFAULT_TREADS))
+
+
 def _child_log(tmp_path, plan: dict) -> tuple[int, str]:
     path = tmp_path / "plan.json"
     path.write_text(json.dumps(plan))

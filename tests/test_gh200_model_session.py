@@ -553,6 +553,28 @@ def test_the_drivers_locks_and_treads_are_the_registered_ones():
     assert _driver_array("BYTE_GS") == ["1", "2", "4", "16", "8", "32", "3", "64"]
 
 
+def test_a_64_expert_model_pins_the_counter_pages_declaration_on_every_timed_page():
+    """At E = 64 R3's auto rule declares 6, 8 or 9 copies by the page's treads;
+    the byte model refuses timed pages whose declaration is not the counter
+    pages', so a non-Mixtral session pins that count (9) on every timed page.
+    Mixtral's command lines are unchanged."""
+    import private_weight_reference as R3
+
+    from moe.spec import MODEL_CONFIGS
+    copies = R3.counter_declaration(MODEL_CONFIGS["qwen2-57b-a14b"], R3.DEFAULT_BLOCK_M)[0]
+    assert re.search(rf"^COUNTER_COPIES={copies}$", DRIVER.read_text(), re.M)
+
+    def plan(*model):
+        return subprocess.run(["bash", str(DRIVER), "--dry-run", *model], capture_output=True,
+                              text=True, timeout=60,
+                              env={**os.environ, "HOME": "/nonexistent"}).stdout
+    q = [ln for ln in plan("--model", "qwen2-57b-a14b").splitlines() if "locked_r3.py" in ln]
+    assert q and all(f"--declared-copies {copies}" in ln for ln in q), q
+    assert "x125%" in plan("--model", "qwen2-57b-a14b")
+    for m in ((), ("--model", "mixtral-8x22b")):
+        assert "--declared-copies" not in plan(*m)
+
+
 def test_the_fallback_ruler_is_the_2026_09_25_gh200_ruler():
     import yaml
     y = yaml.safe_load((REPO / "results" / "published" / "2026-09-25-nvidia_gh200_480gb-session"

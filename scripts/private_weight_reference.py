@@ -7921,9 +7921,20 @@ def counter_declaration(cfg, block_m: int) -> tuple[int, str]:
     """`declared_copies_for` over R3's default ladder (`DEFAULT_TREADS`): the
     copies every counter plan declares (9 for mixtral at BLOCK_M 32, E x 9 =
     72 slots). The deeper counter ladder declares the same count; a test pins
-    that, so a page at tread 7, 8 or 9 profiles the grid R3 times."""
-    return declared_copies_for(cfg, ladder_treads(cfg, block_m, DEFAULT_TREADS),
-                               block_m)
+    that, so a page at tread 7, 8 or 9 profiles the grid R3 times.
+
+    Mixtral reaches 9 only because the small-batch rule fires at E = 8
+    (2026-09-28): at E = 64 the default ladder declares 6, and PRIVATE would
+    have no slot for treads 7 to 9. When the default declaration is under the
+    counter ladder's deepest tread, the counter ladder declares instead; every
+    session running a deep ladder then passes the same count to its timed
+    pages (`--declared-copies`)."""
+    copies, why = declared_copies_for(cfg, ladder_treads(cfg, block_m, DEFAULT_TREADS),
+                                      block_m)
+    deepest = counter_ladder(cfg, block_m)
+    if copies >= deepest[-1]:
+        return copies, why
+    return declared_copies_for(cfg, deepest, block_m)
 
 
 def validate_counter_plan(plan: dict):
@@ -7960,6 +7971,10 @@ def validate_counter_plan(plan: dict):
             f"declaration {copies} (declared_copies_for over R3's ladder "
             f"{ladder}); the declaration sizes the launch grid, so any other "
             "count profiles a call R3 never timed")
+    if max(treads) > copies:
+        raise CounterPlanRefused(
+            f"tread {max(treads)} reads more copies than the {copies} declared; "
+            "every read copy needs a slot")
     arms = list(plan["arms"])
     if not arms or set(arms) - set(ARMS):
         raise CounterPlanRefused(f"arms {arms} are not a subset of {list(ARMS)}")
