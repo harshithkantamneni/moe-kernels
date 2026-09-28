@@ -882,7 +882,8 @@ def test_mix_is_fill_on_w1_and_ws_on_w2_with_one_parameter_set(cards):
 def test_mix_on_the_0927_board_beats_fill_where_its_data_say_it_should():
     """On the 2026-09-27 GH200 (treads to 9), each view fitted on the board:
     mix is best on w1 and w2 at G >= 32, and moves the deep w2 cells toward
-    what was measured (G=16 n=8 1.384: fill 1.245, mix 1.41)."""
+    what was measured (G=16 n=8 1.384: fill 1.245, mix 1.407 with stage 3's
+    SHARED/NATIVE w2 law)."""
     res = W.analyse(W.load_card(NEW_GH200))
     rows = {(r["arm"], r["G"], r["n"], r["gemm"]): r for r in res.rows}
 
@@ -898,8 +899,35 @@ def test_mix_on_the_0927_board_beats_fill_where_its_data_say_it_should():
     assert rms(wide, "mix") < 0.5 * rms(wide, "fill")
     g16 = rows[("shared", 16, 8, "w2")]
     assert g16["least_root_fill"] == pytest.approx(1.245, abs=0.002)
-    assert g16["least_root_mix"] == pytest.approx(1.410, abs=0.002)
+    assert g16["least_root_mix"] == pytest.approx(1.407, abs=0.002)
     assert res.params("mix").view == "mix"
+
+
+@pytest.mark.later_miss
+def test_stage3_gives_shared_and_native_w2_their_own_a_law():
+    """8x7B board A, MIX view: stage 3 fits (C_A2, beta_A2) on SHARED/NATIVE w2
+    at G >= 32, n >= 2 with stages 1 and 2 held; those cells go 12.9 -> 3.7%
+    rms and PRIVATE and w1 do not move (their events keep (C_A, beta_A))."""
+    card = W.load_card(NEW_GH200)
+    f = W.fit_view(card, W.MIX)
+    p = f.params
+    assert f.stage3.names == ("C_A2", "beta_A2") and f.stage3.cells == 32
+    assert p.C_A2 == pytest.approx(86.18, abs=0.05)
+    assert p.beta_A2 == pytest.approx(1.476, abs=0.005)
+    m = W.Model(card.geom)
+
+    def rms(prm, sel):
+        cs = [c for c in sorted(card.measured) if sel(c)]
+        r = m.q(prm, cs) / np.array([card.measured[c] for c in cs]) - 1
+        return float(np.sqrt(np.mean(r ** 2)))
+
+    wide = lambda c: c[3] == "w2" and c[0] != "private" and c[1] >= 32 and c[2] >= 2  # noqa: E731
+    off = p.replace(C_A2=0.0)
+    assert rms(off, wide) == pytest.approx(0.1293, abs=0.0005)
+    assert rms(p, wide) == pytest.approx(0.0368, abs=0.0005)
+    for sel in (lambda c: c[0] == "private", lambda c: c[3] == "w1"):
+        assert rms(p, sel) == rms(off, sel)
+    assert W.fit_view(card, W.FILL).stage3 is None, "stage 3 is the MIX view's only"
 
 
 

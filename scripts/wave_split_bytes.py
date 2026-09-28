@@ -318,6 +318,19 @@ ILL_POSED, OUT_OF_DOMAIN = "ILL-POSED", "OUT-OF-DOMAIN"
 
 STAGE1_NAMES = ("C_A", "beta_A", "theta1_A")
 STAGE2_NAMES = ("C_B", "beta_B", "theta1", "eps1_w1", "eps1_w2")
+#: STAGE 3 (2026-09-28, MIX view only): SHARED and NATIVE w2's A re-reads follow
+#: their own survival law (C_A2, beta_A2), fitted on their G >= 32, n >= 2 cells
+#: with stages 1 and 2 held. Stage 1 fits the A law on PRIVATE alone, whose miss
+#: rises slowly in the column-pass working set (8x7B: 28% at 84 MiB); SHARED and
+#: NATIVE, compute-bound, miss steeply near the L2 (30, 38, 45% at 56, 63, 70
+#: MiB), and so do 8x22B's. The excess is SHARED's and NATIVE's alike (G=64 n=8
+#: 2.933 vs 2.940), so it is not the dead CTAs (they exit after one 4-B load).
+#: Fitted on 8x7B board A and applied to 8x22B, every parameter held: w2
+#: SHARED+NATIVE G >= 32 16.2 -> 7.1% rms (worst -15.9%, G=64 deep n), G <= 16
+#: 1.90 -> 2.03%; PRIVATE and w1 untouched. The first-window dead-CTA term the
+#: gap study also fitted (phi_d 0.32 on 8x7B, 0.16 on 8x22B) did not agree across
+#: models and is left out. G >= 32 stays OUT-OF-DOMAIN: partially modelled.
+STAGE3_NAMES = ("C_A2", "beta_A2")
 
 
 class Refused(Exception):
@@ -712,6 +725,9 @@ class Params:
     eps1_w1: float
     eps1_w2: float
     view: str = FILL
+    #: SHARED and NATIVE w2's own A law (MIX view, stage 3); 0 = PRIVATE's.
+    C_A2: float = 0.0
+    beta_A2: float = 0.0
 
     def replace(self, **kw) -> Params:
         return dataclasses.replace(self, **kw)
@@ -766,6 +782,8 @@ class Batch:
                                      or [np.zeros(0, int)]).astype(int)
         self.a_D, self.a_k, self.a_ws = cat("a_D"), cat("a_k"), cat("a_ws")
         self.a_w1 = cat("a_win1", bool)
+        self.a_sn2 = np.concatenate([np.full(e.a_D.size, e.arm != "private" and e.gemm == "w2")
+                                     for e in ev] or [np.zeros(0, bool)])
         self.q_min = self.slabs / self.S
         self.q_max = ((self.slabs + _segsum(self.x_k, self.x_cell, self.count)
                        + self.in1 + self.inl) / self.S
@@ -802,8 +820,13 @@ class Batch:
                     w2 = ~self.is_w1[self.a_cell]
                     Xw = tha * self.a_ws
                     X = np.where(w2[:, None], Xw[:, None], X) if two else np.where(w2, Xw, X)
-                miss = (self.a_k[:, None] if two else self.a_k) * (
-                    1.0 - sigma(X, prm.C_A * MIB, prm.beta_A))
+                C, beta = prm.C_A * MIB, prm.beta_A
+                if prm.view == MIX and prm.C_A2 > 0:   # SHARED/NATIVE w2's own law
+                    C = np.where(self.a_sn2, prm.C_A2 * MIB, C)
+                    beta = np.where(self.a_sn2, prm.beta_A2, beta)
+                    if two:
+                        C, beta = C[:, None], beta[:, None]
+                miss = (self.a_k[:, None] if two else self.a_k) * (1.0 - sigma(X, C, beta))
                 s = _segsum(miss, self.a_cell, self.count)
                 out += s * (self.at / self.Wg)[:, None] if two else s * self.at / self.Wg
             else:
@@ -1103,6 +1126,7 @@ class ViewFit:
     stage1: StageFit
     stage2: StageFit
     flags: list = field(default_factory=list)
+    stage3: StageFit | None = None
 
 
 def _run_stage(model: Model, cells, meas, pack, x0, step, starts: int = FIT_STARTS,
@@ -1141,8 +1165,16 @@ def stage2_cells(card: Card) -> list:
             for n in card.treads if (a, G, n, g) in card.measured]
 
 
+def stage3_cells(card: Card) -> list:
+    """SHARED and NATIVE w2 at G >= OUT_OF_DOMAIN_G, n >= 2 (MIX view only)."""
+    return [(a, G, n, "w2") for a in ("shared", "native") for G in sorted(card.pages)
+            for n in card.treads
+            if G >= OUT_OF_DOMAIN_G and n >= 2 and (a, G, n, "w2") in card.measured]
+
+
 def fit_view(card: Card, view: str, model: Model | None = None) -> ViewFit:
-    """Stage 1 then stage 2 on one card, in one view."""
+    """Stage 1 then stage 2 on one card, in one view; in the MIX view, stage 3
+    (SHARED/NATIVE w2's A law) where the card has its cells."""
     model = model or Model(card.geom)
     l2 = card.geom.l2_bytes / MIB
     c1 = stage1_cells(card)
@@ -1168,7 +1200,20 @@ def fit_view(card: Card, view: str, model: Model | None = None) -> ViewFit:
                             [math.log(l2), math.log(2.0), _logit(0.4), _logit(0.05),
                              _logit(0.1)], [0.4, 0.3, 0.8, 0.8, 0.8])
     prm = pack2(v2)
-    fit = ViewFit(view=view, params=prm,
+    st3 = None
+    c3 = stage3_cells(card) if view == MIX else []
+    if c3:
+        B = prm
+
+        def pack3(v):
+            return B.replace(C_A2=math.exp(v[0]), beta_A2=math.exp(v[1]))
+
+        v3, s3, e3 = _run_stage(model, c3, [card.measured[c] for c in c3], pack3,
+                                [math.log(1.3 * l2), math.log(2.0)], [0.2, 0.3])
+        prm = pack3(v3)
+        st3 = StageFit(STAGE3_NAMES, tuple(getattr(prm, k) for k in STAGE3_NAMES), s3,
+                       len(c3), e3)
+    fit = ViewFit(view=view, params=prm, stage3=st3,
                   stage1=StageFit(STAGE1_NAMES, tuple(getattr(A, k) for k in STAGE1_NAMES),
                                   s1, len(c1), e1),
                   stage2=StageFit(STAGE2_NAMES, tuple(getattr(prm, k) for k in STAGE2_NAMES),
@@ -1557,7 +1602,9 @@ def params_doc(res: CardResult, relative_to: Path | None = None) -> dict:
             "registered_view": REGISTERED_VIEW,
             "views": {v: {"params": f.params.as_json(),
                           "stage1": dataclasses.asdict(f.stage1),
-                          "stage2": dataclasses.asdict(f.stage2), "flags": f.flags}
+                          "stage2": dataclasses.asdict(f.stage2),
+                          "stage3": f.stage3 and dataclasses.asdict(f.stage3),
+                          "flags": f.flags}
                       for v, f in res.fits.items()}}
 
 
@@ -1724,7 +1771,9 @@ def param_line(fit: ViewFit, geom: Geometry) -> str:
     return (f"C_A {p.C_A:.2f} MiB ({p.C_A / l2:.3f} x L2), beta_A {p.beta_A:.3f}, "
             f"theta1_A {p.theta1_A:.3f}; C_B {p.C_B:.2f} MiB ({p.C_B / l2:.3f} x L2), "
             f"beta_B {p.beta_B:.3f}, theta1 {p.theta1:.3f}, eps1_w1 {p.eps1_w1:.4f}, "
-            f"eps1_w2 {p.eps1_w2:.4f}")
+            f"eps1_w2 {p.eps1_w2:.4f}"
+            + (f"; C_A2 {p.C_A2:.2f} MiB ({p.C_A2 / l2:.3f} x L2), beta_A2 {p.beta_A2:.3f}"
+               if p.C_A2 > 0 else ""))
 
 
 def card_lines(res: CardResult, sc: dict) -> list[str]:
