@@ -8,3 +8,12 @@
 2026-09-28T01:51:21Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20260928T015120Z
 2026-09-28T01:51:21Z prelude END: exit 0 after 0 min
 2026-09-28T01:51:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-28T01:51:22Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 93 min, cap 204 min, 385 min left)
+2026-09-28T01:51:41Z census for mixtral-8x22b written (/home/ubuntu/moe/session/census-mixtral-8x22b.json)
+2026-09-28T02:02:04Z OPERATOR (laptop): bytes-tail-repriced removed: the 420 s re-price threshold is 8x7B's; an 8x22B page runs ~1.7x longer and 385 min remain, so G=64 (registered) stays in
+2026-09-28T03:09:19Z bytes: lock block exit 0 (G=1 exit 0 02:01:25 583 s;G=2 exit 0 02:11:07 582 s;G=4 exit 1 02:20:49 582 s;G=16 exit 1 02:30:31 582 s;G=8 exit 1 02:40:13 582 s;G=32 exit 3 02:49:54 581 s;G=3 exit 0 02:59:36 582 s;G=64 exit 3 03:09:19 583 s;)
+2026-09-28T03:09:24Z bytes: no base-clock control (it compares clock regimes on mixtral-8x7b; no mixtral-8x22b prediction reads it)
+2026-09-28T03:09:24Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-09-28T03:09:26Z bytes: analyse of 8 pages exit 3 (/home/ubuntu/moe/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/summary.json)
+2026-09-28T03:09:26Z bytes END: exit 0 after 78 min
+2026-09-28T03:09:27Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
