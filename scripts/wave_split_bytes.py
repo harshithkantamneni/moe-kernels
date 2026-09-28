@@ -198,6 +198,7 @@ they are gone rather than drop to the model's q.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import json
 import math
@@ -296,6 +297,21 @@ VIEWS = (FILL, WS, MIX)
 #: excess at G >= 32, and a C_A above the L2. The fill and ws views are fitted
 #: and printed beside it.
 REGISTERED_VIEW = MIX
+#: At G >= 2 a cross-group slab re-read past the first co-residency window is
+#: a certain miss (2026-09-28; `cell_events`). False restores the survival law
+#: there, the law the judge's 2026-09-26 pins were fitted with (`later_law`).
+LATER_MISS = True
+
+
+@contextlib.contextmanager
+def later_law(later_miss: bool):
+    """Evaluate under LATER_MISS = `later_miss`, restored after."""
+    global LATER_MISS
+    saved, LATER_MISS = LATER_MISS, later_miss
+    try:
+        yield
+    finally:
+        LATER_MISS = saved
 
 FIT, HELD_OUT, PREDICTED = "FIT", "HELD-OUT", "PREDICTED"
 ILL_POSED, OUT_OF_DOMAIN = "ILL-POSED", "OUT-OF-DOMAIN"
@@ -661,6 +677,20 @@ def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str) -> Events:
             raise Refused(f"{geom.card} {arm} G={G} n={n} {gemm}: the walk's largest "
                           f"column-pass working set {ev.a_ws.max():.0f} B is not "
                           f"DCR.r3_exposure's {want} B")
+    if LATER_MISS and G >= 2 and ev.x_D.size:
+        # THE LATER CROSS-GROUP RE-READ MISSES AT G >= 2 (2026-09-28). Past the
+        # first co-residency window the re-read sits D = 2P-1 CTAs on (8x7B w2:
+        # 105 to 141 MiB of fill, 8x22B: 189 to 252 MiB, 1.7 to 4.2 x the 60 MiB
+        # L2), where the slab law, fitted mostly at G=1 near 1.1 x L2, still gave
+        # 3 to 12% survival. Measured, survival there is about 0; the tail
+        # over-stated G=2's recovery 8.5% rms on 8x7B (n=8 -14.8%). Counted as
+        # certain misses: 8x7B G=2 w2 SHARED 8.5 -> 2.2% rms, 8x22B 2.3 -> 1.0%,
+        # cross-model worst 3.2 to 4.3% (the fill-view law gave -72% from 8x22B's
+        # parameters); w1 unchanged. G=1 keeps the law. No parameter added.
+        later = ~ev.x_win1
+        ev = dataclasses.replace(ev, slabs=ev.slabs + int(ev.x_k[later].sum()),
+                                 x_D=ev.x_D[~later], x_win1=ev.x_win1[~later],
+                                 x_k=ev.x_k[~later])
     return dataclasses.replace(ev, gemm=gemm, per_set=geom.per_set(gemm),
                                weight_bytes=geom.get("W", gemm), atile=geom.atile(gemm))
 

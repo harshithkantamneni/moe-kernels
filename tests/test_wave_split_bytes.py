@@ -145,17 +145,31 @@ def cards():
     return {c: W.load_card(d) for c, d in PAGES.items()}
 
 
+#: The judge's pins (2026-09-26) were fitted with the slab law at every re-read;
+#: they are held there. The later-miss rule (LATER_MISS, 2026-09-28) has its own
+#: tests at the end of this file.
+@pytest.fixture(autouse=True)
+def _judge_law(request):
+    if "later_miss" in request.keywords:
+        yield
+        return
+    with W.later_law(False):
+        yield
+
+
 @pytest.fixture(scope="module")
 def pinned_results(cards):
-    return {c: W.analyse(cards[c], params={v: pinned(c, v) for v in ("fill", "ws")})
-            for c in cards}
+    with W.later_law(False):
+        return {c: W.analyse(cards[c], params={v: pinned(c, v) for v in ("fill", "ws")})
+                for c in cards}
 
 
 @pytest.fixture(scope="module")
 def fitted(cards):
     """The fill view fitted from scratch on each card alone (about five
     seconds a card)."""
-    return {c: W.fit_view(cards[c], "fill") for c in cards}
+    with W.later_law(False):
+        return {c: W.fit_view(cards[c], "fill") for c in cards}
 
 
 def _npm(arm: str, n: int) -> int:
@@ -886,3 +900,28 @@ def test_mix_on_the_0927_board_beats_fill_where_its_data_say_it_should():
     assert g16["least_root_fill"] == pytest.approx(1.245, abs=0.002)
     assert g16["least_root_mix"] == pytest.approx(1.410, abs=0.002)
     assert res.params("mix").view == "mix"
+
+
+
+
+@pytest.mark.later_miss
+def test_the_later_cross_group_reread_misses_at_g2_and_up():
+    """8x7B board A, fitted on itself: with the later re-reads past the first
+    window counted as misses, w2 SHARED at G=2 comes to within about 4% (the
+    survival law's tail put n=8 at -14.8%); w1 is untouched; G=1 keeps the law."""
+    card = W.load_card(NEW_GH200)
+    assert W.LATER_MISS is True
+    ev = W.cell_events(card.geom, "shared", 2, 8, "w2")
+    assert ev.x_win1.all(), "no later cross-group event is left to the survival law"
+    ev1 = W.cell_events(card.geom, "shared", 1, 8, "w2")
+    assert (~ev1.x_win1).any(), "G=1 keeps its later events under the law"
+    res = W.analyse(card)
+    rows = {(r["arm"], r["G"], r["n"], r["gemm"]): r for r in res.rows}
+    g2 = [rows[("shared", 2, n, "w2")] for n in range(2, 10)]
+    rel = [r["least_root_mix"] / r["measured"] - 1 for r in g2]
+    assert max(abs(x) for x in rel) < 0.05, rel
+    with W.later_law(False):
+        old = W.analyse(card)
+    orow = {(r["arm"], r["G"], r["n"], r["gemm"]): r for r in old.rows}
+    assert orow[("shared", 2, 8, "w2")]["least_root_mix"] / orow[("shared", 2, 8, "w2")][
+        "measured"] - 1 < -0.10

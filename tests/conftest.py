@@ -72,6 +72,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "no_gpu: asserts the laptop path; skipped when a CUDA device is attached")
+    config.addinivalue_line(
+        "markers", "later_miss: a wave_split_bytes test run under LATER_MISS (2026-09-28), "
+        "not the judge's law")
 
 
 def pytest_collection_modifyitems(config, items):
