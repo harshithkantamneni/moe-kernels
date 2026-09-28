@@ -90,7 +90,7 @@ def run_dir(session: Path, run: str) -> Path:
 
 #: The judge's pins (2026-09-26) were fitted with the hard max; they are held
 #: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below.
-HARD_MAX = ("--p-knee", "inf")
+HARD_MAX = ("--p-knee", "inf", "--no-tail")
 
 
 def build(*argv):
@@ -247,6 +247,35 @@ def test_the_fast_sum_is_the_per_cta_maximum_summed():
             fast = M.gemm_ms(M.window(arm, D, G, n, gemm, w), gemm, sigma, c_ns, bw, 132)
             slow = float(M.cta_ms(arm, D, G, n, gemm, sigma, c_ns, bw, 132, w).sum())
             assert fast == pytest.approx(slow, rel=1e-12), (arm, G, n, gemm, w)
+
+
+def test_the_partial_last_wave_costs_at_least_one_cta_lifetime(monkeypatch):
+    """Under two waves of SMs x occ slots the last k CTAs cost max(their summed
+    time, S c occ); a lone partial wave is that tail entire; two or more waves,
+    or TAIL off, price every CTA at throughput as before."""
+    sms, occ, c_ns, inf = 132, 2, 206.9, float("inf")
+    geo = M.GEOMETRY["w2"]
+    life = geo.ksteps * c_ns * 1e-6 * occ
+
+    def flat(N):
+        m = np.zeros(N)
+        return M.Window(live=N, leads=N, reads=0.0, sorted_mean=m,
+                        cumsum=np.zeros(N + 1), mean=m)
+
+    for N in (100, 264, 300, 527):
+        floor = M.wave_q(N, sms) * geo.ksteps * c_ns * 1e-6 / sms
+        k = N - sms * occ if N > sms * occ else N
+        want = (N - k) * floor + max(k * floor, life)
+        got = M.gemm_ms(flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ)
+        assert got == pytest.approx(want, rel=1e-9), N
+    assert M.gemm_ms(flat(100), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ) == \
+        pytest.approx(life, rel=1e-9), "a lone partial wave is one lifetime"
+    for N in (528, 900):
+        assert M.gemm_ms(flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ) == \
+            M.gemm_ms(flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf), N
+    monkeypatch.setattr(M, "TAIL", False)
+    assert M.gemm_ms(flat(300), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ) == \
+        M.gemm_ms(flat(300), "w2", 1.0, c_ns, 1e15, sms, p=inf)
 
 
 def test_the_constants_are_the_specs():
@@ -849,7 +878,7 @@ def _lock1710_runs(session: Path) -> list[Path]:
 
 @pytest.fixture(scope="module")
 def knee_0927():
-    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS)
+    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, "--no-tail")
 
 
 def test_the_soft_max_is_the_hard_max_at_infinity_and_never_below_it():
@@ -873,6 +902,7 @@ def test_the_knee_closes_g3_on_the_0927_board(knee_0927):
     for key in ("shared/G3/n2", "native/G3/n2", "shared/G3/n4", "native/G3/n4"):
         assert abs(pct(sc["resid"][key])) < 1.0, key
     hard = build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, *HARD_MAX)
+    assert hard is not knee_0927
     assert pct(hard["score"]["resid"]["shared/G3/n2"]) == pytest.approx(-2.25, abs=0.01)
     assert pct(hard["score"]["rms"]) == pytest.approx(0.53, abs=0.01)
     p_soft, p_hard = knee_0927["main"].params, hard["main"].params
@@ -884,10 +914,11 @@ def test_the_knee_improves_the_other_two_boards_held_out():
     """One constant across boards: leave-one-G-out 0.48% -> 0.45% on the
     2026-09-25 GH200 and 1.49% -> 1.27% on the H100; the price is the old
     GH200's G=1 (0.44% -> 0.51%, where sigma < 1 spreads cold-L2 bytes)."""
-    old = build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS)
+    old = build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS,
+                "--no-tail")
     assert pct(M.logo_mean(old["logo"])) == pytest.approx(0.45, abs=0.01)
     assert pct(old["score"]["rms"]) == pytest.approx(0.41, abs=0.01)
-    h = build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS)
+    h = build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS, "--no-tail")
     assert pct(M.logo_mean(h["logo"])) == pytest.approx(1.27, abs=0.01)
     assert pct(h["score"]["rms"]) == pytest.approx(1.33, abs=0.01)
 

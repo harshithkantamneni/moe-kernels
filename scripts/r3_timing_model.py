@@ -510,24 +510,52 @@ class Window:
     reads: float
     sorted_mean: np.ndarray
     cumsum: np.ndarray
+    #: The same box means in launch order (the tail's CTAs are the last ones).
+    mean: np.ndarray
 
 
 @cache
 def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window:
     r, leads = schedule(arm, declared, G, n, gemm)
-    s = np.sort(box_mean(r, w))
+    m = box_mean(r, w)
+    s = np.sort(m)
+    m.setflags(write=False)
     return Window(live=int(r.size), leads=leads, reads=float(r.sum()), sorted_mean=s,
-                  cumsum=np.concatenate([[0.0], np.cumsum(s)]))
+                  cumsum=np.concatenate([[0.0], np.cumsum(s)]), mean=m)
+
+
+#: THE PARTIAL LAST WAVE (2026-09-28). A grid of N live CTAs under 2 x SMs x
+#: occ runs one full wave and then a partial one that starts together (every
+#: first-wave CTA did the same work), and a CTA in that partial wave takes its
+#: whole lifetime, S_g k-steps x c x occ_g, however few CTAs share its SM: the
+#: floor is a per-CTA latency, not only a throughput. So those k CTAs cost
+#: max(their summed time, S_g c occ_g); a single partial wave (N <= SMs x occ)
+#: is that tail entire. The throughput floor gave 8x22B's w2 at n=1 (768 CTAs,
+#: 1.45 waves of 528) 60 us too few: every 8x22B n=1 cell -3.8% from 8x7B's fit
+#: (8x7B's n=1 is 0.97 of a wave, so no 8x7B cell carries a partial second
+#: wave). With it, fitted on 8x7B only: 8x22B's registered cells 1.78 -> 1.18%
+#: rms, its n=1 cells -3.8 -> +1.25% mean; 8x7B rms 0.275 -> 0.256%, LOGO 0.303
+#: -> 0.284%; the 2026-09-25 GH200 0.41 -> 0.38%, the H100 1.33 -> 1.32%. Applied
+#: to every tail (many-wave grids) it breaks every fit (8x7B 0.94%), as ncu shows
+#: no tail cost in w1's many-wave tails. No parameter added. `--no-tail` (the
+#: judge's pins) prices every CTA at throughput.
+TAIL = True
 
 
 def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: int,
-            p: float | None = None) -> float:
+            p: float | None = None, occ: int | None = None) -> float:
     """sum_i smax_p(q S c / SMs, (sigma b_bar_i + o) / bw), in ms. At p = inf
     (the hard max) the CTAs whose window mean sits under the floor's byte
     threshold cost the floor and the rest stream, split in one search."""
     floor = wave_q(win.live, sms) * GEOMETRY[gemm].ksteps * c_ns * 1e-6 / sms
     rate = bw * 1e6
     p = P_KNEE if p is None else p
+    if TAIL and occ and win.live < 2 * sms * occ:
+        slots = sms * occ
+        k = win.live - slots if win.live > slots else win.live
+        t = smax(floor, (sigma * win.mean + OUT_TILE) / rate, p)
+        lifetime = GEOMETRY[gemm].ksteps * c_ns * 1e-6 * occ
+        return float(t[:win.live - k].sum() + max(float(t[win.live - k:].sum()), lifetime))
     if np.isinf(p):
         k = int(np.searchsorted(win.sorted_mean, (floor * rate - OUT_TILE) / sigma,
                                 side="left"))
@@ -983,7 +1011,7 @@ def call_ms(x, cell: Cell, ctx: Context, k_w: float, *, c_scale: float = 1.0,
         win = window(cell.arm, cell.declared, cell.G, cell.n, g,
                      window_width(k_w, ctx.sms, ctx.occupancy[g]))
         sigma = cell.sigma[g] * (w2_scale if g == "w2" else 1.0)
-        t += gemm_ms(win, g, sigma, c_ns * c_scale, bw, ctx.sms)
+        t += gemm_ms(win, g, sigma, c_ns * c_scale, bw, ctx.sms, occ=ctx.occupancy[g])
     if cell.arm == "native":
         t += s_small if cell.path == SMALL_BATCH else s_block
     return t
@@ -1504,17 +1532,19 @@ def find_counters(args, inputs) -> dict | None:
 def build(args) -> dict:
     """Everything the page prints, as one dict (the --out JSON), under the
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
-    global P_KNEE
+    global P_KNEE, TAIL
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
+    saved_tail, TAIL = TAIL, not getattr(args, "no_tail", False)
     saved_model = MODEL
     if not P_KNEE >= 1:
-        P_KNEE = saved
+        P_KNEE, TAIL = saved, saved_tail
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
                       "the hard max)")
     try:
         out = _build(args)
     finally:
         P_KNEE = saved
+        TAIL = saved_tail
         if MODEL != saved_model:
             set_model(saved_model)
     return out
@@ -1957,6 +1987,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--p-knee", type=float, default=P_KNEE,
                    help=f"the knee's soft-max exponent (default {P_KNEE:g}, a FITTED study "
                         "constant; inf is the hard max the judge's pins were fitted with)")
+    p.add_argument("--no-tail", action="store_true",
+                   help="price a partial last wave at throughput (the judge's pins); by "
+                        "default its CTAs cost their whole lifetime (TAIL)")
     p.add_argument("--out", type=Path, default=None, help="write everything as JSON here")
     return p
 
