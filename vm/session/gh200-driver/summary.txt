@@ -2,3 +2,4 @@ prelude    exit 0 after 0 min
 bytes      exit 0 after 60 min
 calibrate  exit 0 after 0 min
 timed      exit 0 after 36 min
+floor      exit 0 after 2 min
