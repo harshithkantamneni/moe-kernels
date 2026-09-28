@@ -156,6 +156,21 @@ step_cap() {
 #: locked_r3.py's cap on one R3 run (its default, 1800 s, fits 8x7B's pages);
 #: another model's deep page runs about 27 min, so it takes an hour.
 lr3_cap() { [[ "$MODEL" == "$DEFAULT_MODEL" ]] || printf '%s\n' --run-cap-s 3600; }
+#: Set an nvidia-smi lock and confirm it by reading it back, once more if the
+#: first read-back is off (2026-09-28: the 8x22B floor's lock capture ran at
+#: 1800 MHz, its own nvidia-smi records reading 1980 before and after, though
+#: `-lgc 1710` had printed "GPU clocks set"). Idle, a held lock reads F.
+lock_and_check() {   # F
+  local f=$1 got try
+  for try in 1 2; do
+    sudo -n nvidia-smi -lgc "$f,$f" >/dev/null || return 2
+    sleep 2
+    got=$(nvidia-smi --query-gpu=clocks.sm --format=csv,noheader,nounits | head -1 | tr -d ' ')
+    [ "$got" = "$f" ] && return 0
+    echo "lock $f MHz not in force after -lgc (clocks.sm reads $got); try $try"
+  done
+  return 2
+}
 #: The census the byte and floor pages read: the preflight's (PF6, 8x7B's) for
 #: the study's model, else one taken for this model at ncu's base clock.
 census_for() {
@@ -409,7 +424,7 @@ step_bytes() {
     moe_counter ncu --clock-control reset
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
     [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
-    sudo -n nvidia-smi -lgc "$F,$F" || exit 2
+    lock_and_check "$F" || exit 2
     # The re-price threshold is 8x7B's page time; another model's pages run
     # longer by its scale (8x22B's G=1 page took 583 s on 2026-09-28, 1.39x
     # 8x7B's 420 s threshold, and dropped a registered G=64 page until the
@@ -686,17 +701,17 @@ step_floor() {
     fi
     moe_counter ncu --clock-control reset
     # a RECORD, scoring nothing: P7 is registered for the duty-0.25 timed regime
-    nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks_event_reasons.active \
-      --format=csv,noheader,nounits -lms 100 > "$S/logs/r3f-g64-unlocked.smi.csv" 2>&1 & SMI=$!
     if [ "$MODEL" = "$DEFAULT_MODEL" ]; then
+      nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks_event_reasons.active \
+        --format=csv,noheader,nounits -lms 100 > "$S/logs/r3f-g64-unlocked.smi.csv" 2>&1 & SMI=$!
       capture r3f-g64-unlocked --group-m 64 --census "$C" --floor --floor-clock none \
         --out "$R/r3f-g64-unlocked.json"
+      kill "$SMI" 2>/dev/null; wait "$SMI" 2>/dev/null; SMI=
     fi
-    kill "$SMI" 2>/dev/null; SMI=
     moe_counter ncu --clock-control reset
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
     [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
-    sudo -n nvidia-smi -lgc "$F,$F" || exit 2
+    lock_and_check "$F" || exit 2
     capture "r3f-g64-lock$F" --group-m 64 --census "$C" --floor --floor-clock none --floor-lock-mhz "$F" \
       --out "$R/r3f-g64-lock$F.json"
     exit "$worst" )
