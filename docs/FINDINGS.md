@@ -758,6 +758,74 @@ so it is not adopted.
 
 ---
 
+## The 2026-09-28 cross-model test: 8x7B's fit predicts Mixtral 8x22B to 1.7% in time
+
+Lambda GH200 480GB, a third board of the primary card (`board 435984`), tree
+f45358d, run unattended with `--model mixtral-8x22b` and published at
+`results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session` (its session
+README gives every file and every number below). The predictions were
+registered from the 2026-09-27 board's 8x7B fit before any page existed
+(`docs/registered/2026-09-27-mixtral-8x22b-gh200.json`): only the shapes
+changed (w1 K 6144 x 512 N-tiles, w2 K 16384 x 96), nothing was fitted on
+8x22B.
+
+**Time held.** At the registered 1710 MHz lock, 40 SHARED and PRIVATE cells
+(G=3, 8, 32, treads 1 to 8) read rms 1.71%, worst -4.73%, none beyond 5%
+(registered: at or under 2%, none beyond 5%). The G >= 8 SHARED slope read
+0.9155 and 0.9141 ms per tread (band 0.908 to 0.946), G=3's period-3 ripple
+and G=2's zig-zag kept their phase. The miss sat at tread 1 (-3.9 to -4.7%):
+8x22B's w2 at n=1 is 768 CTAs, 1.45 waves of 528, and the model priced the
+partial second wave at throughput. A CTA in a partial last wave costs its
+whole lifetime, S x c x occ, however few share its SM; with that rule (no
+parameter; 5474743) the same 8x7B fit predicts 8x22B to 1.14% rms and its n=1
+cells to +1.3%, and fits 8x7B itself better (0.275 -> 0.256%).
+
+**The floor is the tile's.** 346 to 348 cycles per CTA k-step on w1 and w2
+(registered: w1 inside 340 to 365), against 350 to 352 on 8x7B's w1: the
+k-step's cost does not depend on K, only on the tile.
+
+**Bytes: five of 240 registered cells missed.** Of the SHARED and PRIVATE
+cells the falsifiers name, five read more than 5% off: PRIVATE w1 G=64 n=9
+(-5.4%), PRIVATE w2 G=64 n=5 (+5.3%), w2 SHARED G=3 n=3, G=4 n=4, G=8 n=4
+(+6.1, +6.7, +5.5%). The byte model is FALSIFIED on those cells as registered;
+over the sets it holds w1 to 1.02% and PRIVATE w2 to 1.63%. w2 SHARED at
+G <= 16 and n >= 5, which 8x7B's own fit missed by 5 to 16%, read 2.05%. At
+G >= 32 (OUT-OF-DOMAIN) w2 SHARED and NATIVE read up to 33% more than
+printed.
+
+**Why w2 misses at G >= 32, and what was changed after seeing it.** The
+excess is SHARED's and NATIVE's alike (8x7B G=64 n=8: 2.933 and 2.940), so it
+is not the dead CTAs (vLLM's kernel exits them after one 4-byte load). The
+byte model fits its activation survival law on PRIVATE alone, whose w2 miss
+rises slowly with the column-pass working set (28% at 84 MiB on 8x7B);
+SHARED and NATIVE w2 miss steeply near the L2 (30, 38, 45% at 56, 63, 70 MiB),
+and 8x22B's fall on the same steep curve. A third fitting stage gives them
+their own law (C_A2 86 MiB, beta_A2 1.48, fitted on 8x7B; fb440c5): 8x22B's
+G >= 32 w2 cells go from 16.2 to 7.1% rms with every parameter from 8x7B,
+PRIVATE and w1 unmoved. That law's form was chosen after these pages were
+seen, so it is a post-registration change, not a held prediction; G >= 32
+stays OUT-OF-DOMAIN. A first-window dead-CTA term the same study fitted read
+0.32 on 8x7B and 0.16 on 8x22B and is left out.
+
+**The knee is not a Hopper constant.** Profiling p with the other timing
+parameters refitted gives 95% intervals 13 to 15, 11 to 26 and 11 to 16 on
+the three 8x7B boards, so p = 14 is consistent there; 8x22B's own pages want
+p about 23 and exclude 14, identified only through its G=3 cells, and the
+2026-09-25 board prefers an additive overlap max(f, m) + gamma min(f, m). The
+knee form moves the cross-model time error by about 0.1 point. p is reported
+as an empirical knee fitted on 8x7B. INTERPRETATION, untested: 8x22B's CTAs
+run 1.5x the k-steps, so the start and end of each CTA, where one resource
+idles, weigh less and the knee sharpens.
+
+**Two instrument findings.** The GH200 module's software power cap (reason
+0x4) fires at 315 to 335 W GPU draw under a 700 W limit and slipped the 1710
+lock on 8x22B's deep G=4 ladder (the ladder held 1605); and one `nvidia-smi
+-lgc` printed success while the clock stayed boosted (the capture fits
+1783 to 1801 MHz), so the floor's lock capture ran unlocked. Every lock is now read back before a capture
+(b994aa0).
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

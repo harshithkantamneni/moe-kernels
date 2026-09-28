@@ -235,10 +235,11 @@ Harness complete; 5580 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Nine further directories
+arms carrying 26 `*.report.json` files and no CSV. Ten further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and two Lambda GH200 sessions, 2026-09-25 and the
-unattended model test of 2026-09-27), kept so every verdict they printed can be
+run, the Lambda H100 session and three Lambda GH200 sessions, 2026-09-25, the
+unattended model test of 2026-09-27 and the Mixtral 8x22B cross-model test of
+2026-09-28), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
 sessions rather than arms.
 

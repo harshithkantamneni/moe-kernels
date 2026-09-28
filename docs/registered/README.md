@@ -37,3 +37,14 @@ What falsifies what, stated before any 8x22B page:
 - **The G=2 zig-zag and G=3's period-3 ripple** keep their phase: at G=2 the
   steps n = 2 to 3, 4 to 5 and 6 to 7 exceed n = 3 to 4, 5 to 6 and 7 to 8, and
   the G=3 steps repeat with period 3 as the table's do.
+
+**Scored 2026-09-28** on `results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session`
+(board 435984; its session README has every cell): the floor HELD (w1 346 to
+347 cycles per CTA k-step), the G >= 8 slope HELD (0.9155, 0.9141), time
+HELD at the 1710 lock (40 cells at G=3, 8, 32, rms 1.71%, worst -4.73%; G=2
+and 4 ran at 1605 on the module's power cap and are not scored), the G=2
+zig-zag and G=3 ripple HELD; bytes FALSIFIED on 5 of the 240 named cells
+(PRIVATE w1 G=64 n=9, PRIVATE w2 G=64 n=5, w2 SHARED G=3 n=3, G=4 n=4, G=8
+n=4, 5.3 to 6.7%). The files above are unchanged; changes made after these
+pages (the timing model's partial-wave rule, the byte model's stage 3) are
+scored in docs/FINDINGS.md as post-registration.

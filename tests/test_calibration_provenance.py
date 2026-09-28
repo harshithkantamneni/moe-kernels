@@ -424,6 +424,10 @@ def test_every_published_arm_has_a_declared_verdict():
         # another board of the primary card, run unattended: a raw session with
         # a KIND file saying `session` and no rows of its own.
         "2026-09-27-nvidia_gh200_480gb-session": SESSION,
+        # The cross-model test of 2026-09-28: Mixtral 8x22B on a third GH200
+        # board, run unattended: a raw session with a KIND file saying
+        # `session` and no rows of its own.
+        "2026-09-28-nvidia_gh200_480gb-8x22b-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}
