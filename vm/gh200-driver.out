@@ -25,3 +25,5 @@
 2026-09-28T03:48:35Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 56 min, cap 127 min, 268 min left)
 2026-09-28T03:56:56Z deep END: exit 1 after 8 min
 2026-09-28T03:56:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a5e9836 to run-gh200-8x22b-2026-09-28: deep: exit 1 (8 min)
+2026-09-28T03:56:59Z driver end: exit 3

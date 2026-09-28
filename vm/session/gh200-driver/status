@@ -48,3 +48,4 @@
 2026-09-28T03:56:56Z deep: G=4 SHARED ms  | increments 
 2026-09-28T03:56:56Z deep END: exit 1 after 8 min
 2026-09-28T03:56:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-28T03:56:59Z driver end: exit 3
