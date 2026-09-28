@@ -47,8 +47,8 @@
 # the card may still be locked), and a card still busy five minutes after a
 # step ended. The rules, step by step, are in docs/LAMBDA.md section 3c.
 #
-# RESULTS GO TO GITHUB AS THEY LAND. After every step, and only between steps
-# (never while a page is measured), scripts/vm_results_push.sh pushes the VM's
+# RESULTS GO TO GITHUB AS THEY LAND. After every step and every byte page, and
+# only between them (never while a page is measured), scripts/vm_results_push.sh pushes the VM's
 # results and session to the run's own branch. The laptop reads them with `git
 # fetch`, and terminates the instance once DRIVER-DONE is on the branch.
 #
@@ -466,6 +466,12 @@ step_bytes() {
         touch "$D/bytes-tail-repriced"
         echo "G=1 took $secs s, over $reprice_s: the G=64 page and the base-clock control are dropped"
       fi
+      # EVERY PAGE GOES TO GITHUB AS IT LANDS (2026-09-28): the Qwen2-57B GH200
+      # vanished 55 min into this step and took every page with it, the step
+      # pushing only at its end. Between pages nothing is measured (the page's
+      # process has exited, the next has not started), so the rule holds.
+      ledger "bytes: G=$G page exit $rc after ${secs} s"
+      push_results "bytes: G=$G page exit $rc"
     done )
   local rc=$?
   ledger "bytes: lock block exit $rc ($(tr '\n' ';' < "$S/logs/lock$F-pages.status" 2>/dev/null))"

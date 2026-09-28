@@ -9,7 +9,7 @@ storage attached only when an instance is created (`file_system_names` in the
 launch call, in the instance's region). **This runbook launches without
 one**, so the local disk is all there is and section 4's exfiltration is the
 only copy of the results (section 3c's unattended run instead pushes its
-results to its own branch of this repo after every step); attaching one at
+results to its own branch of this repo after every step and every byte page); attaching one at
 launch would keep results past
 termination, and a filesystem left behind is billed until it is deleted. The
 one command that turns a fresh instance into a box that can take the
@@ -502,7 +502,8 @@ the 2026-09-25 lock pages ran at; and a VM that ships r570 gets the same
 upgrade as on 2026-09-25 (section 2's driver note) before `setup_vm.sh`.
 
 **Nobody pastes anything on the VM.** `scripts/gh200_model_session.sh` runs
-the session unattended, and after every step `scripts/vm_results_push.sh`
+the session unattended, and after every step and every byte page
+`scripts/vm_results_push.sh`
 pushes the VM's results and session to the run's own branch of this repo, so
 the laptop reads what was measured with `git fetch`, minutes after it was
 measured, and section 4's copy at the end is not needed. From the laptop,

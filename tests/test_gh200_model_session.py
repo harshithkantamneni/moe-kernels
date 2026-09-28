@@ -968,9 +968,14 @@ def test_the_driver_pushes_after_every_step(tmp_path):
     got = box.run(push=True, **env)
     assert got.returncode == exit_codes.DONE, got.stdout
     pushes = [ln.split(" ", 1)[1] for ln in show(remote, "PUSHES.txt", "run-gh200-t").splitlines()]
-    assert [p.split(":")[0] for p in pushes] == [
+    pages = [p for p in pushes if p.startswith("bytes: G=")]
+    assert [p.split(" page")[0] for p in pages] == [
+        f"bytes: G={g}" for g in _driver_array("BYTE_GS")], "a push after every byte page"
+    assert [p.split(":")[0] for p in pushes if p not in pages] == [
         "prelude", "bytes", "calibrate", "timed", "eta", "floor", "deep", "r1lock",
         "the session ended"]
+    assert pushes.index(pages[-1]) < pushes.index(next(p for p in pushes if p.startswith(
+        "bytes: exit"))), "each page is pushed before the step's own push"
     assert show(remote, "DRIVER-DONE", "run-gh200-t").startswith("driver exit 0")
     status = show(remote, "vm/session/gh200-driver/status", "run-gh200-t")
     assert "r1lock END" in status and "card:" not in status
