@@ -60,3 +60,4 @@
 2026-09-28T23:41:13Z deep: P4 G=4 n=8 to 9: 0.713 ms against the median of the others, 0.694
 2026-09-28T23:41:13Z deep END: exit 0 after 32 min
 2026-09-28T23:41:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-28T23:41:17Z driver end: exit 0
