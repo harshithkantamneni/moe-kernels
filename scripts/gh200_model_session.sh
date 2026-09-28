@@ -410,6 +410,11 @@ step_bytes() {
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
     [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
     sudo -n nvidia-smi -lgc "$F,$F" || exit 2
+    # The re-price threshold is 8x7B's page time; another model's pages run
+    # longer by its scale (8x22B's G=1 page took 583 s on 2026-09-28, 1.39x
+    # 8x7B's 420 s threshold, and dropped a registered G=64 page until the
+    # operator restored it).
+    reprice_s=$(( BYTE_G1_REPRICE_S * $(model_scale_pct) / 100 ))
     for G in "${gs[@]}"; do
       if [ "$G" = 64 ] && [ -f "$D/bytes-tail-repriced" ]; then continue; fi
       LOG=$S/logs/r3c-g$G-lock$F.log
@@ -436,15 +441,15 @@ step_bytes() {
            fi ;;
         *) exit "$rc" ;;
       esac
-      if [ "$G" = 1 ] && [ "$secs" -gt "$BYTE_G1_REPRICE_S" ]; then
+      if [ "$G" = 1 ] && [ "$secs" -gt "$reprice_s" ]; then
         touch "$D/bytes-tail-repriced"
-        echo "G=1 took $secs s, over $BYTE_G1_REPRICE_S: the G=64 page and the base-clock control are dropped"
+        echo "G=1 took $secs s, over $reprice_s: the G=64 page and the base-clock control are dropped"
       fi
     done )
   local rc=$?
   ledger "bytes: lock block exit $rc ($(tr '\n' ';' < "$S/logs/lock$F-pages.status" 2>/dev/null))"
   [[ -f "$D/bytes-tail-repriced" ]] && tail_dropped=1 \
-    && ledger "bytes: G=1 took over $BYTE_G1_REPRICE_S s: the G=64 page and the base-clock control dropped"
+    && ledger "bytes: G=1 took over its re-price threshold: the G=64 page and the base-clock control dropped"
   sleep 5
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks_event_reasons.active,persistence_mode \
     --format=csv | tee "$S/clocks-after-lock-pages.txt"

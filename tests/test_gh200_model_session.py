@@ -1235,3 +1235,14 @@ def test_start_passes_the_model_to_the_driver(tmp_path):
     plan = next(c for c in lap.vm_cmds() if "--dry-run" in c)
     assert "--model mixtral-8x22b" in start and "--model mixtral-8x22b" in plan
     assert "model=mixtral-8x22b" in (lap.state / "r" / "run.env").read_text()
+
+
+def test_the_reprice_threshold_scales_with_the_model(tmp_path):
+    """8x22B's G=1 page takes about 1.7x 8x7B's; the 420 s threshold is 8x7B's.
+    At a threshold of 1 s, 8x7B's G=1 (the stub's ~0 s) does not trip it and the
+    G=64 page runs; the scaled threshold is what the loop compares."""
+    box, got = run_box(tmp_path, {}, "--model", "mixtral-8x22b", MOE_DRIVER_REPRICE_S=1)
+    runs = [a for a in box.tool("dram_counter_route") if "--page-lock-mhz" in a]
+    assert "64" in [val(a, "--group-m") for a in runs]
+    src = DRIVER.read_text()
+    assert 'reprice_s=$(( BYTE_G1_REPRICE_S * $(model_scale_pct) / 100 ))' in src
