@@ -13,3 +13,7 @@
 2026-09-28T22:30:26Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 329 min left)
 2026-09-28T22:30:50Z calibrate END: exit 0 after 0 min
 2026-09-28T22:30:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 68fe638 to run-gh200-qwen57-20260928t2127: calibrate: exit 0 (0 min)
+2026-09-28T22:30:53Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 (estimate 46 min, cap 112 min, 328 min left)
+2026-09-28T23:06:46Z timed END: exit 0 after 36 min
+2026-09-28T23:06:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
