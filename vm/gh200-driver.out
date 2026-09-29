@@ -1,2 +1,7 @@
 2026-09-29T22:32:34Z setup_vm.sh start: commit a1b61186bd4b12224d54942af6065e30276d7f44 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-30T05:10:50Z
 2026-09-29T22:35:20Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed f910250 to run-gh200-jetmoe8b-20260929t2230: setup_vm.sh: READY
+2026-09-29T22:35:21Z driver start: commit a1b61186bd4b12224d54942af6065e30276d7f44, steps prelude bytes calibrate timed floor deep, deadline 2026-09-30T05:10:50Z (387 min of work left)
+2026-09-29T22:35:22Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 387 min left)
+2026-09-29T22:35:22Z prelude END: exit 0 after 0 min
+2026-09-29T22:35:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
