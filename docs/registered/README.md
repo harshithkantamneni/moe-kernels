@@ -230,3 +230,21 @@ Falsifiers, this card's numbers: time from Granite's own counted bytes
 or under 2%, no cell beyond 5%; the floor per CTA k-step within 2% of 366.7
 (w1) and 467.7 (w2), a test of carrying F across cards; the G >= 8 SHARED
 slope within 2% of 0.0442; PRIVATE bytes within 5%; the rest printed.
+
+## 2026-09-29, before any Granite page: the floor falsifier's estimator, corrected
+
+The floor falsifier above (the slope of `sm__cycles_elapsed.avg` over CTA
+k-steps per SM across the floor capture's n = 2, 3, 4, 6) is biased where a
+GEMM's grid runs few waves: each cell's last wave is partly filled, by a
+different fraction per n, and a line through four such cells tilts. JetMoE-8B's
+w2 (0.97 to 2.91 waves) read 368.0 against 355.2 on it, while every GEMM with
+at least four waves per cell reads within 1.3% of its prediction on the seven
+measured models. JetMoE's registered result stands as registered (FALSIFIED on
+the estimator as written); this corrects the estimator for pages not yet taken.
+
+For Granite-3.0-3B-A800M (both registrations), the floor is scored on the cells
+of the floor capture whose live CTAs fill at least 4 waves (live CTAs / (132 x
+the GEMM's occupancy)): w2 on n = 3, 4, 6 (5.5, 7.3, 10.9 waves), its slope
+within 2% of 466.5 cycles per CTA k-step (GH200) and 467.7 (H100). w1 has one
+such cell (n = 6) and is NOT SCORABLE; its all-cell slope is printed. The other
+falsifiers are unchanged.
