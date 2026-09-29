@@ -14,3 +14,4 @@
 2026-09-29T19:16:35Z timed: exit 0 (36 min)
 2026-09-29T19:17:51Z floor: exit 3 (1 min)
 2026-09-29T19:51:52Z deep: exit 0 (33 min)
+2026-09-29T19:51:54Z the session ended: driver exit 3
