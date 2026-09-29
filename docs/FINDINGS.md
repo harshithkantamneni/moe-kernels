@@ -826,6 +826,64 @@ lock on 8x22B's deep G=4 ladder (the ladder held 1605); and one `nvidia-smi
 
 ---
 
+## The 2026-09-28 64-expert test: the floor transfers, two capacity rules do not
+
+Lambda GH200 480GB, a fourth board (`board 50e61f`), Qwen2-57B-A14B (64
+experts, top 8), tree 684a9e9, published at
+`results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session` (its
+session README gives every number below). The predictions were registered from
+Mixtral 8x7B's fit on the 2026-09-27 board before any page existed
+(`docs/registered/2026-09-28-qwen2-57b-a14b-gh200.json`, b0312ea); the R3
+design moved with the model (64 experts x 9 copies, 576 slots) and nothing was
+fitted on Qwen2-57B.
+
+**The floor and the floor-bound slope held.** w1 reads 353.3 to 353.7 cycles per
+CTA k-step on 56 k-steps a CTA (8x7B 350 to 352 on 64, 8x22B 346 to 348 on 96),
+inside the registered 340 to 365; the G >= 8 SHARED slope reads 0.6962 and
+0.6953 ms per tread against 0.6837 (band 0.670 to 0.697). The floor is a
+property of the tile at three shapes and two expert counts.
+
+**Time is falsified by a uniform bias.** The 58 SHARED and PRIVATE cells of the
+four VALID pages at 1710 read rms 2.71% (registered at or under 2%), worst
+-5.00%, the prediction 2.3 to 2.7% fast at every G and at tread 1. A uniform
+miss is a missing per-tread cost, not the knee, the schedule or the bytes
+(PRIVATE, whose bytes the model gets to 1.9%, is 1.8 to 2.6% fast too).
+INTERPRETATION, untested: the kernels around the two GEMMs (the alignment and
+sort over 576 declared slots, silu_and_mul, moe_sum) are priced by their bytes
+alone, and at 64 experts their launch and scan work per tread is no longer
+small.
+
+**Bytes are falsified by two rules written from Mixtral's shapes.**
+- *A cross-group slab re-read past the first window is a certain miss*
+  (LATER_MISS, 09b2e89): true when one expert's w2 (117 MB on 8x7B) is larger
+  than the 60 MiB L2, false when it fits (18 MB on Qwen2-57B). w2 SHARED at
+  G = 2 to 4 read about one weight set where the rule prints about n/2 (+97% at
+  G=2 n=4, +382% at n=9). The rule is a capacity condition on the expert's
+  weight footprint, not a constant.
+- *The first-window and activation parameters belong to a GEMM name*: at 64
+  experts w1's co-residency window is 4.1 M-rows, Mixtral w2's regime, and the
+  w1 cells miss by 14% rms; the 64-expert signature (w1 SHARED at G=1 levelling
+  at 1.16 to 1.23 weight sets) failed, the card reading 1.23, 1.52, 1.71, 1.91.
+  This is the risk the registration named before the pages.
+PRIVATE w2 held (1.89% rms, misses only at G=64). G=2's time zig-zag kept its
+phase but its amplitude is a fifth of the prediction: the same G=2 byte
+over-prediction, seen in time.
+
+**What the paper can claim.** Transfer to an unseen shape at the same expert
+count is supported by a pre-registered test (8x22B: time 1.71% rms). Transfer
+across expert counts is not: the floor and the floor-bound slope carry, the
+per-tread time and the byte model's capacity rules do not. Any model changed
+on these pages is fitted on them, so a claim across expert counts needs a new
+registration on a model none of it has seen.
+
+**Instrument.** Both INVALID timed pages failed V0 on NATIVE alone: its cells'
+clocks drift across their own trials under the module's power cap (0x4 in 16
+to 23% of samples), and NATIVE, the arm that shares no copy, loses 14 to 19
+cells a page. The first instance of the session vanished 55 minutes into the
+byte step; every byte page is now pushed as it lands (684a9e9).
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

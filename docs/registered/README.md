@@ -93,3 +93,13 @@ the parameters encode the window regime, not the GEMM, and the model must be
 re-keyed on the window; that would be a finding, not a refit. The G=3 ripple
 is predicted weak here (steps 0.426 0.634 0.714 | 0.655 0.681 0.702 | 0.688)
 and is not registered as a falsifier.
+
+**Scored 2026-09-29** on `results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session`
+(board 50e61f; its session README has every cell): the floor HELD (w1 353.3 to
+353.7), the G >= 8 slope HELD (0.6962, 0.6953, at the band's upper edge), time
+FALSIFIED (58 cells at 1710, rms 2.71% against 2%, worst -5.00%: a uniform
+2.3 to 2.7% bias), G=2's zig-zag HELD in phase (amplitude a fifth), bytes
+FALSIFIED (w1 14.3% rms; the G=1 w1 signature read 1.23 to 1.91 against 1.16
+to 1.23; w2 SHARED at G = 2 to 4 up to +97%; PRIVATE w2 1.89%). The stated risk
+(w1 in Mixtral w2's window regime) is among the causes; the files above are
+unchanged.
