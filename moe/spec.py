@@ -243,6 +243,25 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         hf_repo="Qwen/Qwen2-57B-A14B-Instruct",
         verified=True,
     ),
+    "olmoe-1b-7b": MoEConfig(
+        # config.json of allenai/OLMoE-1B-7B-0924, read 2026-09-29:
+        # hidden_size 2048, intermediate_size 1024 (the expert width; no dense
+        # MLP, no shared expert), num_experts 64, num_experts_per_tok 8,
+        # norm_topk_prob false, num_hidden_layers 16. The study's small-K test:
+        # w2 runs 16 k-steps a CTA (8x7B 224).
+        name="olmoe-1b-7b",
+        hidden_size=2048,
+        intermediate_size=1024,
+        num_experts=64,
+        top_k=8,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=0,
+        num_layers=16,
+        first_moe_layer=0,
+        hf_repo="allenai/OLMoE-1B-7B-0924",
+        verified=True,
+    ),
     "deepseek-v3": MoEConfig(
         name="deepseek-v3",
         hidden_size=7168,
