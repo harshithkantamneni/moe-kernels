@@ -9,3 +9,7 @@
 2026-09-29T20:25:08Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 386 min left)
 2026-09-29T21:10:39Z bytes END: exit 0 after 46 min
 2026-09-29T21:10:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed baca2a6 to run-gh200-phi35moe-20260929t2019: bytes: exit 0 (46 min)
+2026-09-29T21:10:42Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 341 min left)
+2026-09-29T21:11:06Z calibrate END: exit 0 after 0 min
+2026-09-29T21:11:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
