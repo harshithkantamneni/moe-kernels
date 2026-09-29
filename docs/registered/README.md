@@ -209,3 +209,24 @@ All four models were chosen for the ways they differ from what the model has
 seen: an expert count between 8 and 64 (Phi 16, Granite 40, Qwen1.5 60), top-k
 4 (Qwen1.5), a CTA shorter than any measured (Granite w2, 8 k-steps), and
 Mixtral's own design at another shape (JetMoE).
+
+## 2026-09-29: Granite-3.0-3B-A800M on the H100 SXM5, from that card's own 8x7B fit
+
+`2026-09-29-granite-3.0-3b-a800m-h100.json` and `.txt`: Granite's test (above)
+registered a second way, so it can run on an H100 SXM5 in parallel with the
+GH200 queue; if no H100 is rented before the GH200 queue reaches Granite, it
+runs on the GH200 under the GH200 registration instead, and this one is not
+run. The fit is the 2026-09-25 H100 session's (board b533dd; five lock-1710
+timed pages, base-clock counter pages), refit at this commit with the dead-CTA
+and per-CTA terms: T0 0.0241 ms, c 201.72 ns = 344.9 cycles per CTA k-step, bw
+2970 GB/s. The per-CTA fixed cost (CTA_FIXED_KSTEPS, measured on the GH200's
+counters) is carried to this card as a property of the tile: the H100's
+2026-09-25 pages carry no cycle counters to measure it. Before any page, the
+two cards' registrations agree on Granite: the G >= 8 SHARED slope 0.0442 here,
+0.0440 on the GH200.
+
+Falsifiers, this card's numbers: time from Granite's own counted bytes
+(`scripts/cross_model_score.py`, source = the 2026-09-25 H100 pages) at rms at
+or under 2%, no cell beyond 5%; the floor per CTA k-step within 2% of 366.7
+(w1) and 467.7 (w2), a test of carrying F across cards; the G >= 8 SHARED
+slope within 2% of 0.0442; PRIVATE bytes within 5%; the rest printed.
