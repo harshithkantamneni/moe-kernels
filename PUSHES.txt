@@ -17,3 +17,4 @@
 2026-09-28T23:41:18Z the session ended: driver exit 0
 2026-09-28T23:53:02Z recovery: G=32 retake exit 0
 2026-09-28T23:53:04Z recovery: END
+2026-09-29T00:11:41Z recovery 2: deep G=2 retake exit 0; END
