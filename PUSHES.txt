@@ -13,3 +13,4 @@
 2026-09-29T22:51:24Z calibrate: exit 0 (0 min)
 2026-09-29T23:27:15Z timed: exit 0 (36 min)
 2026-09-29T23:28:24Z floor: exit 3 (1 min)
+2026-09-29T23:48:12Z deep: exit 1 (18 min)
