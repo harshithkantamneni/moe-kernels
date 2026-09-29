@@ -1,0 +1,21 @@
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 39566 (/home/ubuntu/.local/share/uv/python/cpython-3.12.14-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+COUNTER CHILD: 4 cells, 2 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.profiles/g64.floor.manifest.json
+==PROF== Disconnected from process 39566
+==PROF== Report: /home/ubuntu/moe/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.profiles/g64.floor.ncu-rep
