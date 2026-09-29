@@ -103,3 +103,41 @@ FALSIFIED (w1 14.3% rms; the G=1 w1 signature read 1.23 to 1.91 against 1.16
 to 1.23; w2 SHARED at G = 2 to 4 up to +97%; PRIVATE w2 1.89%). The stated risk
 (w1 in Mixtral w2's window regime) is among the causes; the files above are
 unchanged.
+
+## 2026-09-29: OLMoE-1B-7B (64 experts, top 8, small K) on a GH200, from Mixtral 8x7B's fit
+
+`2026-09-29-olmoe-1b-7b-gh200.json` and `.txt`, written by
+`scripts/cross_model_predict.py` from the 2026-09-27 GH200 session (board
+9b6d01), the same pages and fit as the Qwen2-57B registration, with the model
+as it stands after the Qwen2-57B diagnosis: the dead-CTA term (ea2c77c, 1.333 ns
+per dead CTA, measured on 8x7B's counters) and the capacity rule for later
+re-reads (15a9533). Every fitted number is 8x7B's (T0 0.0441 ms, c 206.58 ns =
+353.3 cycles per CTA k-step, bw 3598 GB/s). Shapes from `moe/spec.py`'s
+`olmoe-1b-7b` (config.json read 2026-09-29): w1 K 2048 x 32 N-tiles, 0.537 GB;
+w2 K 1024 x 32 N-tiles, 0.268 GB: a CTA runs 32 and 16 k-steps (8x7B 64 and
+224), and w1's co-residency window is 10.3 M-rows (8x7B's 0.7). Design: 64
+experts x 9 copies, NATIVE on block-scan at every tread.
+
+**This is a test of the timing model, not of the byte model.** Every OLMoE
+re-read sits at 0.07 to 1.0 x the L2 in LRU reuse distance, most of them below
+0.3, where no page has measured survival and where a single card-level law was
+refuted on 8x7B and Qwen2-57B together (2026-09-29, docs/FINDINGS.md). The
+byte predictions are registered and printed; they are not a falsifier except
+PRIVATE's.
+
+What falsifies what, stated before any OLMoE page:
+
+- **Time, the primary test.** `scripts/cross_model_score.py` at this commit,
+  8x7B's fit from the 2026-09-27 pages held, every VALID lock-1710 timed cell
+  of OLMoE priced from its own counter pages' counted bytes: SHARED and
+  PRIVATE rms at or under 2%, no cell beyond 5%. The same scorer reads
+  Qwen2-57B at 1.52% (its diagnosis data). Cells at another lock are printed,
+  not scored.
+- **The floor is the tile's.** The floor capture reads 340 to 365 cycles per
+  CTA k-step on w1 though a CTA runs 32 k-steps; a per-CTA fixed cost the
+  model does not have would show here first.
+- **The G >= 8 SHARED slope** over treads 2 to 6 is 0.1597 ms per tread at
+  G=8 and G=32 (predicted bytes): falsified outside 0.1565 to 0.1629 (2%).
+- **PRIVATE bytes**, w1 and w2, every G and tread, within 5% of the JSON's q.
+- **Printed, not scored:** time from predicted bytes (the JSON's T); w1 and w2
+  SHARED/NATIVE bytes, the first measurements of L2 survival below 0.3 x L2.
