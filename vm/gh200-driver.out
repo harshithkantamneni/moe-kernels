@@ -25,3 +25,5 @@
 2026-09-29T12:57:03Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 332 min left)
 2026-09-29T13:29:05Z deep END: exit 0 after 32 min
 2026-09-29T13:29:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 026e1b6 to run-gh200-olmoe-20260929t1157: deep: exit 0 (32 min)
+2026-09-29T13:29:08Z driver end: exit 3
