@@ -1,2 +1,7 @@
 2026-09-29T11:58:43Z setup_vm.sh start: commit b87d547d7cfd550df3b9e416f3e20356162a5777 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-29T18:37:11Z
 2026-09-29T12:00:13Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 9725d5e to run-gh200-olmoe-20260929t1157: setup_vm.sh: READY
+2026-09-29T12:00:14Z driver start: commit b87d547d7cfd550df3b9e416f3e20356162a5777, steps prelude bytes calibrate timed floor deep, deadline 2026-09-29T18:37:11Z (388 min of work left)
+2026-09-29T12:00:14Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 388 min left)
+2026-09-29T12:00:15Z prelude END: exit 0 after 0 min
+2026-09-29T12:00:15Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
