@@ -7,3 +7,5 @@
 2026-09-29T12:00:15Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed 42ac7d4 to run-gh200-olmoe-20260929t1157: prelude: exit 0 (0 min)
 2026-09-29T12:00:17Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 388 min left)
+2026-09-29T12:19:37Z bytes END: exit 0 after 19 min
+2026-09-29T12:19:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
