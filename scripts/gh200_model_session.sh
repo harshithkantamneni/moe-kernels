@@ -138,9 +138,9 @@ STEPS=(prelude bytes calibrate timed eta floor deep r1lock)
 #: Another model's pages run longer by about its weight bytes over 8x7B's
 #: (8x22B: 4.83 GB against 2.82, x1.7); the estimates and caps below are
 #: 8x7B's, scaled by this percentage for the steps that measure.
-#: Qwen2-57B-A14B: 3.52 GB, x1.25. OLMoE-1B-7B: 0.81 GB, held at x1 (its pages run faster than 8x7B's; the estimates stay conservative).
+#: Qwen2-57B-A14B: 3.52 GB, x1.25. OLMoE-1B-7B 0.81 GB, Qwen1.5-MoE 1.04, Phi-3.5-MoE 2.52, JetMoE-8B 0.55, Granite-3.0-3B 0.19: held at x1 (their pages run as fast as 8x7B's or faster; the estimates stay conservative).
 model_scale_pct() {
-  case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; qwen2-57b-a14b) echo 125 ;; olmoe-1b-7b) echo 100 ;; *) echo 200 ;; esac
+  case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; qwen2-57b-a14b) echo 125 ;; olmoe-1b-7b|qwen1.5-moe-a2.7b|phi-3.5-moe|jetmoe-8b|granite-3.0-3b-a800m) echo 100 ;; *) echo 200 ;; esac
 }
 _scaled() { case "$1" in prelude|calibrate) echo "$2" ;; *) echo $(( $2 * $(model_scale_pct) / 100 )) ;; esac; }
 step_est() {

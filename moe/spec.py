@@ -262,6 +262,76 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         hf_repo="allenai/OLMoE-1B-7B-0924",
         verified=True,
     ),
+    "qwen1.5-moe-a2.7b": MoEConfig(
+        # config.json of Qwen/Qwen1.5-MoE-A2.7B, read 2026-09-29: hidden_size
+        # 2048, moe_intermediate_size 1408 (the routed expert width; the dense
+        # intermediate_size 5632 is the shared expert's, outside fused_moe),
+        # num_experts 60, num_experts_per_tok 4, norm_topk_prob false, 24 layers.
+        name="qwen1.5-moe-a2.7b",
+        hidden_size=2048,
+        intermediate_size=1408,
+        num_experts=60,
+        top_k=4,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=1,
+        num_layers=24,
+        first_moe_layer=0,
+        hf_repo="Qwen/Qwen1.5-MoE-A2.7B",
+        verified=True,
+    ),
+    "phi-3.5-moe": MoEConfig(
+        # config.json of microsoft/Phi-3.5-MoE-instruct, read 2026-09-29:
+        # hidden_size 4096, intermediate_size 6400, num_local_experts 16,
+        # num_experts_per_tok 2, 32 layers. Its router is sparsemixer; R3 fixes
+        # the routing, so the gate function does not enter the GEMMs.
+        name="phi-3.5-moe",
+        hidden_size=4096,
+        intermediate_size=6400,
+        num_experts=16,
+        top_k=2,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=0,
+        num_layers=32,
+        first_moe_layer=0,
+        hf_repo="microsoft/Phi-3.5-MoE-instruct",
+        verified=True,
+    ),
+    "jetmoe-8b": MoEConfig(
+        # config.json of jetmoe/jetmoe-8b, read 2026-09-29: hidden_size 2048,
+        # ffn_hidden_size 5632 (GLU), moe_num_experts 8, moe_top_k 2, 24 layers
+        # (its attention mixture is outside fused_moe).
+        name="jetmoe-8b",
+        hidden_size=2048,
+        intermediate_size=5632,
+        num_experts=8,
+        top_k=2,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=0,
+        num_layers=24,
+        first_moe_layer=0,
+        hf_repo="jetmoe/jetmoe-8b",
+        verified=True,
+    ),
+    "granite-3.0-3b-a800m": MoEConfig(
+        # config.json of ibm-granite/granite-3.0-3b-a800m-instruct, read
+        # 2026-09-29: hidden_size 1536, intermediate_size 512, num_local_experts
+        # 40, num_experts_per_tok 8, 32 layers. w2 runs 8 k-steps a CTA.
+        name="granite-3.0-3b-a800m",
+        hidden_size=1536,
+        intermediate_size=512,
+        num_experts=40,
+        top_k=8,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=0,
+        num_layers=32,
+        first_moe_layer=0,
+        hf_repo="ibm-granite/granite-3.0-3b-a800m-instruct",
+        verified=True,
+    ),
     "deepseek-v3": MoEConfig(
         name="deepseek-v3",
         hidden_size=7168,
