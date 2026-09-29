@@ -25,3 +25,5 @@
 2026-09-29T23:28:28Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 334 min left)
 2026-09-29T23:46:55Z deep END: exit 1 after 18 min
 2026-09-29T23:48:11Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
+[push] pushed e5f71b9 to run-gh200-jetmoe8b-20260929t2230: deep: exit 1 (18 min)
+2026-09-29T23:48:13Z driver end: exit 3
