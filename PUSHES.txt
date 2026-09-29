@@ -3,3 +3,4 @@
 2026-09-29T12:00:16Z prelude: exit 0 (0 min)
 2026-09-29T12:02:55Z bytes: G=1 page exit 3
 2026-09-29T12:05:17Z bytes: G=2 page exit 3
+2026-09-29T12:07:39Z bytes: G=4 page exit 3
