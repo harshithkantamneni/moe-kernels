@@ -48,3 +48,15 @@
 2026-09-29T19:17:49Z floor: r3f-g64-lock1710 exit 3
 2026-09-29T19:17:49Z floor END: exit 3 after 1 min
 2026-09-29T19:17:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T19:17:53Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 326 min left)
+2026-09-29T19:50:30Z deep: locked_r3 exit 0 (gh200-20260929T181646Z-deep, G = 4 2)
+2026-09-29T19:50:35Z deep: 2026-09-29T19:33:58Z G=4 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modelqwen1.5_moe_a2.-00804a3a
+2026-09-29T19:50:35Z deep: 2026-09-29T19:49:59Z G=2 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modelqwen1.5_moe_a2.-8b67e946
+2026-09-29T19:50:35Z deep: G=2 treads 1..9 declared 9 VALIDITY not PASS: none
+2026-09-29T19:50:35Z deep: G=4 treads 1..9 declared 9 VALIDITY not PASS: none
+2026-09-29T19:50:35Z deep: G=2 SHARED ms 0.3567 0.5021 0.7182 0.9335 1.1499 1.3657 1.5818 1.7971 2.0144 | increments 0.145 0.216 0.215 0.216 0.216 0.216 0.215 0.217
+2026-09-29T19:50:35Z deep: G=4 SHARED ms 0.3574 0.5009 0.7164 0.9319 1.1480 1.3639 1.5800 1.7953 2.0123 | increments 0.143 0.216 0.216 0.216 0.216 0.216 0.215 0.217
+2026-09-29T19:50:35Z deep: P3 G=2 minus G=4 at n = 3 5 7 9: 0.002 0.002 0.002 0.002 ms
+2026-09-29T19:50:35Z deep: P4 G=4 n=8 to 9: 0.217 ms against the median of the others, 0.216
+2026-09-29T19:50:35Z deep END: exit 0 after 33 min
+2026-09-29T19:51:50Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
