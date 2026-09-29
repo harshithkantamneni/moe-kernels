@@ -11,3 +11,4 @@
 2026-09-29T21:10:31Z bytes: G=64 page exit 3
 2026-09-29T21:10:41Z bytes: exit 0 (46 min)
 2026-09-29T21:11:08Z calibrate: exit 0 (0 min)
+2026-09-29T21:47:36Z timed: exit 0 (36 min)

@@ -1,0 +1,2 @@
+clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power.limit [W]
+345 MHz, 1980 MHz, 0x0000000000000001, 700.00 W
