@@ -62,6 +62,11 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
      tread (silu_and_mul reads [256, 2F] and writes [256, F], moe_sum reads
      [256, H] and writes [128, H], bf16), plus for NATIVE s_small when the
      page's path census says small-batch and s_block when it says block-scan.
+  8. Plus, per GEMM, the dead CTAs' dispatch past one effective lifetime,
+     max(0, (R - 8 n) npn_g x DEAD_CTA_NS - k_w occ_g S_g c), DEAD_CTA_NS = 1.333
+     ns MEASURED on the 2026-09-27 GH200's 8x7B counter pages (see DEAD). Fixed
+     per arm on one model's pages, so no single-card fit sees it; at 64 experts
+     x 9 copies it is 56 us a SHARED or PRIVATE call (2026-09-29).
 
 Five parameters are fitted per card, never pooled across cards: T0 (ms), c
 (ns per CTA k-step per SM), bw (GB/s), s_small and s_block (ms). k_w = 1/2 is
@@ -541,6 +546,38 @@ def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window
 #: judge's pins) prices every CTA at throughput.
 TAIL = True
 
+#: THE DEAD-CTA TAIL (2026-09-29). The grid is sized for the declaration, ceil((ids
+#: + D (BLOCK_M - 1)) / BLOCK_M) M-rows, and every CTA past the live rows loads
+#: num_tokens_post_padded and exits (fused_moe.py:405-406). Those CTAs come last in
+#: launch order, and dispatching them costs DEAD_CTA_NS each (GPU-wide, a dispatch
+#: interval, not a per-SM cost), hidden while the last live CTAs drain: one
+#: effective lifetime, k_w x occ_g x S_g x c (the window's own co-residency scale).
+#: A GEMM's call pays max(0, dead_g x DEAD_CTA_NS - k_w occ_g S_g c). MEASURED, not
+#: fitted on timing: the 2026-09-27 GH200's 8x7B counter pages, in-kernel cycles,
+#: SHARED minus NATIVE (identical bytes, 27,776 more dead CTAs on w1): w1 8.74 us
+#: (se 0.58, 72 cells), w2 0.02 us (se 0.14; its 3,968 are hidden), so 1.333 ns =
+#: (8.74 us + k_w 5 x 64 x c) / 31,360. On any one model's pages the dead count is
+#: fixed per arm, so a single-card fit moves only T0, s_small and s_block (rms,
+#: LOGO, c and bw exact). It is not small at 64 experts: Qwen2-57B's 576 declared
+#: slots make 44,640 + 31,248 dead CTAs a call (8x7B: 31,360 + 4,480), counted
+#: SHARED minus NATIVE 23.9 + 21.5 us against 30.6 + 25.1 printed here. `--no-dead`
+#: (the judge's pins) drops the term.
+DEAD_CTA_NS = 1.333
+DEAD = True
+
+
+def dead_ctas(declared: int, n: int, gemm: str) -> int:
+    """CTAs of one GEMM's grid past the live rows: they exit after one load."""
+    return (grid_rows(declared, n) - live_rows(n)) * GEOMETRY[gemm].npn
+
+
+def dead_ms(declared: int, n: int, gemm: str, c_ns: float, k_w: float, occ: int) -> float:
+    """The dead CTAs' exposed dispatch time, in ms (0 under --no-dead)."""
+    if not DEAD:
+        return 0.0
+    hidden = k_w * occ * GEOMETRY[gemm].ksteps * c_ns
+    return max(0.0, dead_ctas(declared, n, gemm) * DEAD_CTA_NS - hidden) * 1e-6
+
 
 def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: int,
             p: float | None = None, occ: int | None = None) -> float:
@@ -1012,6 +1049,7 @@ def call_ms(x, cell: Cell, ctx: Context, k_w: float, *, c_scale: float = 1.0,
                      window_width(k_w, ctx.sms, ctx.occupancy[g]))
         sigma = cell.sigma[g] * (w2_scale if g == "w2" else 1.0)
         t += gemm_ms(win, g, sigma, c_ns * c_scale, bw, ctx.sms, occ=ctx.occupancy[g])
+        t += dead_ms(cell.declared, cell.n, g, c_ns * c_scale, k_w, ctx.occupancy[g])
     if cell.arm == "native":
         t += s_small if cell.path == SMALL_BATCH else s_block
     return t
@@ -1536,12 +1574,13 @@ def find_counters(args, inputs) -> dict | None:
 def build(args) -> dict:
     """Everything the page prints, as one dict (the --out JSON), under the
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
-    global P_KNEE, TAIL
+    global P_KNEE, TAIL, DEAD
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
     saved_tail, TAIL = TAIL, not getattr(args, "no_tail", False)
+    saved_dead, DEAD = DEAD, not getattr(args, "no_dead", False)
     saved_model = MODEL
     if not P_KNEE >= 1:
-        P_KNEE, TAIL = saved, saved_tail
+        P_KNEE, TAIL, DEAD = saved, saved_tail, saved_dead
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
                       "the hard max)")
     try:
@@ -1549,6 +1588,7 @@ def build(args) -> dict:
     finally:
         P_KNEE = saved
         TAIL = saved_tail
+        DEAD = saved_dead
         if MODEL != saved_model:
             set_model(saved_model)
     return out
@@ -1994,6 +2034,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-tail", action="store_true",
                    help="price a partial last wave at throughput (the judge's pins); by "
                         "default its CTAs cost their whole lifetime (TAIL)")
+    p.add_argument("--no-dead", action="store_true",
+                   help="price the grid's dead CTAs at zero (the judge's pins); by default "
+                        f"each costs {DEAD_CTA_NS} ns of dispatch past one effective lifetime "
+                        "(DEAD_CTA_NS)")
     p.add_argument("--out", type=Path, default=None, help="write everything as JSON here")
     return p
 

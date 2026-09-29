@@ -37,6 +37,7 @@ import dataclasses
 import importlib.util
 import json
 import shutil
+import statistics
 import sys
 from pathlib import Path
 
@@ -90,7 +91,7 @@ def run_dir(session: Path, run: str) -> Path:
 
 #: The judge's pins (2026-09-26) were fitted with the hard max; they are held
 #: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below.
-HARD_MAX = ("--p-knee", "inf", "--no-tail")
+HARD_MAX = ("--p-knee", "inf", "--no-tail", "--no-dead")
 
 
 def build(*argv):
@@ -928,3 +929,92 @@ def test_a_knee_below_one_is_refused():
         build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS,
               "--p-knee", "0.5")
     assert M.P_KNEE == 14.0, "a refused build must not leave its exponent behind"
+
+
+# --------------------------------------------------------------------------
+# The dead-CTA tail (DEAD, 2026-09-29): the grid's rows past the live ones.
+# --------------------------------------------------------------------------
+
+QWEN_0928_COUNTERS = (PUB / "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session" / "results"
+                      / "2026-09-28-nvidia_gh200_480gb-r3-counters" / "lock1710")
+
+
+def _counter_cells(root: Path):
+    for f in sorted(root.glob("r3c-g*.json")):
+        page = json.loads(f.read_text())
+        for c in page["cells"]:
+            yield int(page["design"]["group_m"]), c
+
+
+def test_dead_ctas_are_the_counted_grid_less_the_live_rows():
+    """Every counter cell's grid_size, less its live rows x npn, is dead_ctas: at
+    8 experts (72 and 8 declared) and at 64 (576 and 64)."""
+    for root, model in ((GH200_0927_COUNTERS, "mixtral-8x7b"),
+                        (QWEN_0928_COUNTERS, "qwen2-57b-a14b")):
+        if not root.exists():
+            continue
+        old = M.set_model(model)
+        try:
+            for _G, c in _counter_cells(root):
+                for g in M.GEMMS:
+                    live = M.live_rows(int(c["n"])) * M.GEOMETRY[g].npn
+                    assert c["per_gemm"][g]["grid_size"] - live == \
+                        M.dead_ctas(int(c["declared"]), int(c["n"]), g), (model, c["arm"], g)
+        finally:
+            M.set_model(old)
+
+
+def test_the_dead_constant_is_the_0927_boards_shared_minus_native():
+    """SHARED and NATIVE read the same bytes and differ only in dead CTAs: the
+    in-kernel w1 cycles differ by 8.74 us at 27,776 more, w2 by nothing at
+    3,968 more (hidden). DEAD_CTA_NS is w1's delta plus the hidden lifetime."""
+    cells = {(G, c["arm"], int(c["n"])): c for G, c in _counter_cells(GH200_0927_COUNTERS)}
+    mhz = 1710.0
+
+    def delta(g):
+        v = [(cells[(G, "shared", n)]["recorded"][g]["sm__cycles_elapsed.avg"]
+              - cells[(G, "native", n)]["recorded"][g]["sm__cycles_elapsed.avg"]) / mhz
+             for (G, a, n) in cells if a == "shared"]
+        return statistics.median(v)
+    w1, w2 = delta("w1"), delta("w2")
+    assert w1 == pytest.approx(8.74, abs=0.05) and abs(w2) < 0.3
+    c_ns = 206.58   # the 0927 board's fitted c at the 1710 lock (knee, tail)
+    hidden = M.K_W * 5 * M.GEOMETRY["w1"].ksteps * c_ns * 1e-3
+    tau = (w1 + hidden) * 1e3 / M.dead_ctas(72, 1, "w1")
+    assert tau == pytest.approx(M.DEAD_CTA_NS, abs=0.002)
+    assert M.dead_ctas(8, 1, "w1") * tau * 1e-3 < hidden, "NATIVE's own dead CTAs hide"
+    assert M.dead_ms(72, 3, "w2", c_ns, M.K_W, 4) == 0.0, "w2's dead CTAs hide"
+
+
+def test_the_dead_tail_moves_only_the_offsets_of_one_models_fit():
+    """Fixed per arm on 8x7B pages: rms, LOGO, c and bw are exact with and without
+    it; T0 absorbs the SHARED arms' 8.7 us and s_small, s_block give it back."""
+    on = knee_0927_default()
+    off = build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, "--no-dead")
+    assert on["score"]["rms"] == pytest.approx(off["score"]["rms"], abs=1e-6)
+    assert M.logo_mean(on["logo"]) == pytest.approx(M.logo_mean(off["logo"]), abs=1e-6)
+    p, q = on["main"].params, off["main"].params
+    assert p["c"] == pytest.approx(q["c"], rel=1e-4) and p["bw"] == pytest.approx(q["bw"], rel=1e-4)
+    shift = q["T0"] - p["T0"]
+    assert shift == pytest.approx(M.dead_ms(72, 1, "w1", p["c"], M.K_W, 5), rel=0.01)
+    assert p["s_block"] - q["s_block"] == pytest.approx(shift, rel=0.01)
+    assert pct(on["score"]["rms"]) == pytest.approx(0.256, abs=0.002)
+    assert M.DEAD, "a build must not leave --no-dead behind"
+
+
+def knee_0927_default():
+    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS)
+
+
+def test_at_64_experts_the_dead_tail_is_56_us_a_shared_call():
+    """Qwen2-57B at 576 declared slots: 44,640 + 31,248 dead CTAs, priced 30.6 +
+    25.1 us at the 0927 fit's c (counted SHARED minus NATIVE: 23.9 + 21.5 us);
+    NATIVE's 64 slots hide."""
+    old = M.set_model("qwen2-57b-a14b")
+    try:
+        assert (M.dead_ctas(576, 1, "w1"), M.dead_ctas(576, 1, "w2")) == (44640, 31248)
+        got = [1e3 * M.dead_ms(576, 1, g, 206.58, M.K_W, occ) for g, occ in (("w1", 5), ("w2", 4))]
+        assert got == pytest.approx([30.6, 25.1], abs=0.1)
+        assert M.dead_ms(64, 1, "w1", 206.58, M.K_W, 5) == 0.0
+    finally:
+        M.set_model(old)
