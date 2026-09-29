@@ -61,3 +61,5 @@
 2026-09-29T22:22:20Z deep END: exit 0 after 33 min
 2026-09-29T22:23:36Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
 2026-09-29T22:23:38Z driver end: exit 0
+2026-09-29T22:25:11Z RECOVERY start: timed G to retake [], deep G to retake []
+2026-09-29T22:25:11Z RECOVERY END
