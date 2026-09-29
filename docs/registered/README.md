@@ -141,3 +141,23 @@ What falsifies what, stated before any OLMoE page:
 - **PRIVATE bytes**, w1 and w2, every G and tread, within 5% of the JSON's q.
 - **Printed, not scored:** time from predicted bytes (the JSON's T); w1 and w2
   SHARED/NATIVE bytes, the first measurements of L2 survival below 0.3 x L2.
+
+## 2026-09-29: the same OLMoE test on the H100 SXM5, from that card's own 8x7B fit
+
+`2026-09-29-olmoe-1b-7b-h100.json` and `.txt`: the OLMoE registration above,
+made the second card's way, so the test runs on whichever of the two cards
+Lambda has first (both, if both come). The fit is the 2026-09-25 H100 80GB HBM3
+session's (board b533dd): its five lock-1710 timed pages (G = 1, 2, 4, 16, 64;
+T0 0.0242 ms, c 205.76 ns = 351.8 cycles per CTA k-step, bw 2971 GB/s) and its
+base-clock counter pages (the only ones that card has). That fit reproduces
+its own pages to 1.32% rms, against the GH200's 0.26%, so the 2% bar has less
+room on this card. Before any page, the two cards' fits agree on OLMoE: the G >=
+8 SHARED slope 0.1588 (G=8) and 0.1583 (G=32) ms per tread here, 0.1597 on the
+GH200.
+
+The falsifiers are the GH200 registration's, with this card's numbers: time
+from OLMoE's own counted bytes (`scripts/cross_model_score.py`, source = the
+2026-09-25 H100 pages above) at rms at or under 2% and no cell beyond 5%; the
+floor on w1 inside 340 to 365 cycles per CTA k-step; the G >= 8 SHARED slope
+inside 0.1556 to 0.1620 (G=8) and 0.1551 to 0.1615 (G=32); PRIVATE bytes within
+5%; SHARED/NATIVE bytes and time from predicted bytes printed only.
