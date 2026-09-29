@@ -169,3 +169,43 @@ GH200 being available first): time from its own bytes FALSIFIED (76 cells, rms
 band 0.1565 to 0.1629), w1's floor HELD (360 cycles), PRIVATE bytes HELD (w1
 1.97%, w2 0.30%, none beyond 5%); printed: time from predicted bytes 3.83%,
 SHARED bytes w1 9.8%, w2 2.9%. The files above are unchanged.
+
+## 2026-09-29: four held-out models on a GH200, from Mixtral 8x7B's fit with the per-CTA fixed cost
+
+`2026-09-29-{qwen1.5-moe-a2.7b,granite-3.0-3b-a800m,phi-3.5-moe,jetmoe-8b}-gh200.json`
+and `.txt`, written by `scripts/cross_model_predict.py` at 0f77622 from the
+2026-09-27 GH200 session (board 9b6d01), the model as it stands after all four
+measured models were used as calibration or diagnosis data: the dead-CTA term,
+the capacity rule for later re-reads, and the per-CTA fixed cost F (0f77622:
+measured on the four models' counters, c 344.1 cycles, F 520 cycles on w1 and
+979 on w2). The timing fit is 8x7B's alone (T0 0.0442 ms, c 202.55 ns, bw 3598
+GB/s). None of these four models has a page; their configs were read from
+their config.json on 2026-09-29 (`moe/spec.py`). Each runs as its own session
+of `scripts/gh200_model_session.sh --model M` on whatever GH200 board Lambda
+gives, 9 copies declared on every page.
+
+| model | E, top-k | k-steps w1 / w2 | registered floor per CTA k-step, w1 / w2 | G >= 8 SHARED slope (ms per tread) |
+|---|---|---|---|---|
+| qwen1.5-moe-a2.7b | 60, 4 | 32 / 22 | 360.4 / 388.6 | 0.2159 |
+| granite-3.0-3b-a800m | 40, 8 | 24 / 8 | 365.8 / 466.5 | 0.0440 |
+| phi-3.5-moe | 16, 2 | 64 / 100 | 352.2 / 353.9 | 0.4898 (G=8), 0.4896 (G=32) |
+| jetmoe-8b | 8, 2 | 32 / 88 | 360.4 / 355.2 | 0.1076 |
+
+What falsifies what, per model, stated before any of its pages:
+
+- **Time, the primary test.** `scripts/cross_model_score.py` at this commit,
+  8x7B's fit held, every VALID lock-1710 timed cell priced from the model's
+  own counted bytes: SHARED and PRIVATE rms at or under 2%, no cell beyond 5%.
+- **The floor.** Each GEMM's cycles per CTA k-step on the floor capture (the
+  slope of `sm__cycles_elapsed.avg` over CTA k-steps per SM) within 2% of the
+  table: the per-CTA term's direct test, sharpest on Granite's 8-k-step w2.
+- **The G >= 8 SHARED slope** over treads 2 to 6 within 2% of the table.
+- **PRIVATE bytes**, w1 and w2, every G and tread, within 5% of the JSON's q.
+- **Printed, not scored:** time from predicted bytes (the JSON's T); SHARED and
+  NATIVE bytes (an expert's weights fit in the L2 on all four, the region where
+  no survival law is calibrated).
+
+All four models were chosen for the ways they differ from what the model has
+seen: an expert count between 8 and 64 (Phi 16, Granite 40, Qwen1.5 60), top-k
+4 (Qwen1.5), a CTA shorter than any measured (Granite w2, 8 k-steps), and
+Mixtral's own design at another shape (JetMoE).
