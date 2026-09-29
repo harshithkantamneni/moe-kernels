@@ -1,0 +1,18 @@
+2026-09-29T11:58:40Z the branch's first commit: the VM can push
+2026-09-29T12:00:13Z setup_vm.sh: READY
+2026-09-29T12:00:16Z prelude: exit 0 (0 min)
+2026-09-29T12:02:55Z bytes: G=1 page exit 3
+2026-09-29T12:05:17Z bytes: G=2 page exit 3
+2026-09-29T12:07:39Z bytes: G=4 page exit 3
+2026-09-29T12:10:00Z bytes: G=16 page exit 3
+2026-09-29T12:12:22Z bytes: G=8 page exit 3
+2026-09-29T12:14:44Z bytes: G=32 page exit 3
+2026-09-29T12:17:06Z bytes: G=3 page exit 3
+2026-09-29T12:19:28Z bytes: G=64 page exit 3
+2026-09-29T12:19:38Z bytes: exit 0 (19 min)
+2026-09-29T12:20:06Z calibrate: exit 0 (0 min)
+2026-09-29T12:55:52Z timed: exit 0 (36 min)
+2026-09-29T12:57:02Z floor: exit 3 (1 min)
+2026-09-29T13:29:07Z deep: exit 0 (32 min)
+2026-09-29T13:29:10Z the session ended: driver exit 3
+2026-09-29T13:29:45Z recovery: END

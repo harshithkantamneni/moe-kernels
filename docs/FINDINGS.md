@@ -884,6 +884,80 @@ byte step; every byte page is now pushed as it lands (684a9e9).
 
 ---
 
+## After Qwen2-57B: two fixes, one refuted law (2026-09-29)
+
+Changed on the Qwen2-57B pages, so fitted on them (diagnosis, not tests):
+
+- **Dead CTAs cost time** (ea2c77c). SHARED and NATIVE read the same bytes and
+  differ only in the grid's dead CTAs; 8x7B's counters price one at 1.333 ns
+  past one effective lifetime, a constant no timing fit could see (it is fixed
+  per arm on one model's pages). At 64 experts x 9 copies it is about 56 us a
+  call. Qwen2-57B's registered time 2.71 -> 1.42% rms, its own-bytes time 1.52%;
+  8x7B unchanged, 8x22B 1.16 -> 1.00%. The non-GEMM kernels, measured
+  (alignment 5 to 13 us a call), explain 0.07 of the 2.97-point miss.
+- **A later cross-group re-read is a certain miss only past the L2 in LRU
+  reuse distance** (15a9533; the distance in closed form, equal to an exact
+  stack walk on every G >= 2 cell of three models). Identical on every Mixtral
+  card, whose expert slab set (116 to 199 MB) always exceeds the L2; Qwen2-57B's
+  w2 SHARED at G = 2 to 4 225/137/93% -> 7.2/5.8/5.2%.
+- **Refuted: one survival law per card in reuse distance.** Fitted jointly on
+  8x7B and Qwen2-57B it makes both worse than their own fits, and Qwen2-57B
+  alone cannot predict 8x7B (w2 G >= 32 73%): at the same distance, 8x7B's w2
+  re-reads survive 45 to 70% at 1.87 x L2 while Qwen2-57B's collapse between
+  0.45 and 0.65 x L2. Survival depends on something besides the distance.
+  INTERPRETATION, untested: Hopper's two-partition L2 (about 30 MiB for lines
+  every SM shares) and the CTA's lifetime (8x7B's long w2 CTAs keep lines warm
+  across the window). Nothing adopted; the mode is not merged.
+
+## The 2026-09-29 small-K test: the floor has a per-CTA fixed cost
+
+Lambda GH200 480GB, a fifth board (`board d663f7`), OLMoE-1B-7B (64 experts,
+top 8, 32 and 16 k-steps a CTA), tree b87d547, published at
+`results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session`. Predictions
+registered from 8x7B's fit, with the two changes above, before any page
+(`docs/registered/2026-09-29-olmoe-1b-7b-gh200.json`, 7d9a1a1); the primary
+test was time from OLMoE's own counted bytes (`scripts/cross_model_score.py`),
+which isolates the timing model from the byte model.
+
+**Falsified: time and the slope.** 76 SHARED and PRIVATE cells, rms 3.53%, 12
+beyond 5% (registered at or under 2%, none): SHARED is 4.5% fast, PRIVATE 2.1%.
+The G >= 8 SHARED slope reads 0.1705 ms per tread against 0.1597 (band 0.1565 to
+0.1629), 6.8% steep.
+
+**Held: w1's floor and PRIVATE's bytes.** w1 reads 360 cycles per CTA k-step
+(registered 340 to 365); PRIVATE bytes read w1 1.97%, w2 0.30% rms, no cell
+beyond 5%.
+
+**What the floor says.** The floor per CTA k-step is not a constant of the
+tile: it rises as the CTA's k-steps fall. w2 reads 354 to 367 on 8x7B (224
+k-steps), 369 on Qwen2-57B (40) and 402 on OLMoE (16); w1 350 to 352 on 8x7B
+(64), 346 to 348 on 8x22B (96), 353 on Qwen2-57B (56), 360 on OLMoE (32). That is
+the shape of a fixed cost per CTA (prologue, pipeline fill and epilogue) spread
+over its k-steps, which the timing model folds into c: on 8x7B's long CTAs it is
+invisible, on OLMoE's w2 it is about 10% of the CTA. The SHARED slope is that
+floor, so both falsified numbers are this one term. A fitted per-CTA constant
+was rejected on 2026-09-29 because 8x7B cannot identify it; the counters at
+three depths can, as the dead-CTA constant was measured, and a model that uses
+it must be tested on a model it has not seen.
+
+**What the paper can claim, after four tests.** From one card's 8x7B fit, with
+nothing fitted on the target: an unseen shape at the same expert count to 1.7%
+in time and 1.0 to 3.5% in weight-set bytes by set, 5 of 240 cells beyond 5%
+(8x22B, pre-registered); PRIVATE's bytes on every target (0.3 to 2.0% rms); the floor-bound slope to 2% where CTAs run
+40 or more k-steps. Not claimed: time across expert counts and depths (Qwen2-57B
+2.71%, OLMoE 3.53%, both pre-registered failures with the mechanism
+identified), and SHARED bytes where an expert fits in the L2. Each falsified
+registration named a rule the Mixtral data could not test: the capacity
+condition, the dead CTA, the per-CTA fixed cost.
+
+**Instrument.** Every OLMoE byte page and the floor's lock capture fail V10 or
+FL1 alone: the clock fit reads w1 at 1686 to 1689 MHz and w2 at 1662 to 1668 on
+every page, a constant gap between two GEMMs of one call that one clock cannot
+make, on GEMMs tens of microseconds long. Bytes do not depend on it; every timed
+cell held 1710 MHz by NVML.
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

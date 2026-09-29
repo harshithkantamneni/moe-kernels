@@ -431,6 +431,8 @@ def test_every_published_arm_has_a_declared_verdict():
         # The 64-expert test of 2026-09-28: Qwen2-57B-A14B on a fourth GH200
         # board: a raw session with a KIND file saying `session`.
         "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session": SESSION,
+        # The small-K test of 2026-09-29: OLMoE-1B-7B on a fifth GH200 board.
+        "2026-09-29-nvidia_gh200_480gb-olmoe-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

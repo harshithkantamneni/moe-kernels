@@ -161,3 +161,11 @@ from OLMoE's own counted bytes (`scripts/cross_model_score.py`, source = the
 floor on w1 inside 340 to 365 cycles per CTA k-step; the G >= 8 SHARED slope
 inside 0.1556 to 0.1620 (G=8) and 0.1551 to 0.1615 (G=32); PRIVATE bytes within
 5%; SHARED/NATIVE bytes and time from predicted bytes printed only.
+
+**Scored 2026-09-29** on `results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session`
+(board d663f7, the GH200 registration; the H100 registration was not run, the
+GH200 being available first): time from its own bytes FALSIFIED (76 cells, rms
+3.53%, 12 beyond 5%), the G >= 8 slope FALSIFIED (0.1705 and 0.1707 against the
+band 0.1565 to 0.1629), w1's floor HELD (360 cycles), PRIVATE bytes HELD (w1
+1.97%, w2 0.30%, none beyond 5%); printed: time from predicted bytes 3.83%,
+SHARED bytes w1 9.8%, w2 2.9%. The files above are unchanged.

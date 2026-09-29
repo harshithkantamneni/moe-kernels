@@ -42,8 +42,9 @@ and did not catch the one real defect, which happened inside a single day.
 | `2026-09-27-nvidia_gh200_480gb-session` | session | n/a | n/a | n/a | **refused** |
 | `2026-09-28-nvidia_gh200_480gb-8x22b-session` | session | n/a | n/a | n/a | **refused** |
 | `2026-09-28-nvidia_gh200_480gb-qwen2-57b-session` | session | n/a | n/a | n/a | **refused** |
+| `2026-09-29-nvidia_gh200_480gb-olmoe-session` | session | n/a | n/a | n/a | **refused** |
 
-**21 of 25 arms pass**: their calibration is either their own or declared derived. 4 does not.
+**22 of 26 arms pass**: their calibration is either their own or declared derived. 4 does not.
 
 - `2026-08-28-nvidia_h200-h200-whole-layer`: the calibration shipped with this arm is not the one its rows were quoted against: rows carry achieved_bw_gbps 4377.212185, measured.yaml reports 4374.489664; rows carry achieved_peak_tflops 701.612906 for dtype 'bf16', measured.yaml reports 770.916292
 
@@ -86,6 +87,8 @@ and did not catch the one real defect, which happened inside a single day.
 - 2026-09-28-nvidia_gh200_480gb-8x22b-session: rows carry 0 dtypes [], so there is no single ridge; pass one
 
 - 2026-09-28-nvidia_gh200_480gb-qwen2-57b-session: rows carry 0 dtypes [], so there is no single ridge; pass one
+
+- 2026-09-29-nvidia_gh200_480gb-olmoe-session: rows carry 0 dtypes [], so there is no single ridge; pass one
 
 A `ceilings_disagree` refusal above is what costs claim C5 a
 target: a cross-card `2R/b` prediction scales with the ridge,
