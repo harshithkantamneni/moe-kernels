@@ -53,8 +53,12 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
   5. b_bar_i = the mean of b over the box [i - floor(w/2), i + w - floor(w/2))
      clipped to the grid, w = floor(k_w x SMs x occ_g), occ_g the recorded
      CTAs per SM (the least of the page's `launch__occupancy_limit_*`).
-  6. t_i = smax_p(q_g S_g c / SMs, b_bar_i / bw), q_g = ceil(N/SMs) / (N/SMs)
-     for N live CTAs (the last wave's idle SMs), smax_p(f, m) = (f^p + m^p)^(1/p)
+  6. t_i = smax_p(q_g S'_g c / SMs, b_bar_i / bw), q_g = ceil(N/SMs) / (N/SMs)
+     for N live CTAs (the last wave's idle SMs), S'_g = S_g + PHI_g the CTA's
+     k-steps plus its fixed cost (PHI_w1 1.512, PHI_w2 2.846 k-steps, MEASURED on
+     the GH200's counter pages, see CTA_FIXED_KSTEPS; the partial-wave lifetime
+     and the dead CTAs' hidden lifetime use S'_g too; `--no-cta-fixed` is S'_g =
+     S_g, every pin before 2026-09-29), smax_p(f, m) = (f^p + m^p)^(1/p)
      with p = P_KNEE = 14, a fitted study constant (2026-09-27: until then a
      hard max, which priced a CTA whose DRAM time sits near its floor at the
      larger of the two; see P_KNEE).
@@ -63,7 +67,7 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
      [256, H] and writes [128, H], bf16), plus for NATIVE s_small when the
      page's path census says small-batch and s_block when it says block-scan.
   8. Plus, per GEMM, the dead CTAs' dispatch past one effective lifetime,
-     max(0, (R - 8 n) npn_g x DEAD_CTA_NS - k_w occ_g S_g c), DEAD_CTA_NS = 1.333
+     max(0, (R - 8 n) npn_g x DEAD_CTA_NS - k_w occ_g S'_g c), DEAD_CTA_NS = 1.333
      ns MEASURED on the 2026-09-27 GH200's 8x7B counter pages (see DEAD). Fixed
      per arm on one model's pages, so no single-card fit sees it; at 64 experts
      x 9 copies it is 56 us a SHARED or PRIVATE call (2026-09-29).
@@ -203,7 +207,10 @@ WHAT IT CANNOT TELL. Which unit sets the floor: 353.8 cycles per CTA k-step
 at the 1710 MHz lock on both the GH200 and the H100 matches the 352 cycles the
 PTX's shared-memory traffic needs at 128 B per clock (45056 B per CTA k-step:
 8 ldmatrix.x4 and 3 cp.async.cg per thread, 256 threads), and that shared
-memory is the limiter is an INTERPRETATION. Why k_w = 1/2 (fitted; P6 asks
+memory is the limiter is an INTERPRETATION. With the per-CTA fixed cost taken
+out (CTA_FIXED_KSTEPS) the main loop reads 344 cycles per k-step on the
+counters and 346 in the 8x7B fit, 2% under those 352 cycles: either the pipe
+moves more than 128 B a clock or it is not the whole limiter. Why k_w = 1/2 (fitted; P6 asks
 whether achieved occupancy is half the limit). The floor's clock exponent:
 unlocked pages read 383 to 387 cycles at their NVML clocks against 353.8
 locked, and an NVML over-read and partial clock scaling are indistinguishable
@@ -220,6 +227,7 @@ uuid: a device is printed as `board` and six hex digits of the uuid's sha256
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import re
@@ -552,7 +560,7 @@ TAIL = True
 #: launch order, and dispatching them costs DEAD_CTA_NS each (GPU-wide, a dispatch
 #: interval, not a per-SM cost), hidden while the last live CTAs drain: one
 #: effective lifetime, k_w x occ_g x S_g x c (the window's own co-residency scale).
-#: A GEMM's call pays max(0, dead_g x DEAD_CTA_NS - k_w occ_g S_g c). MEASURED, not
+#: A GEMM's call pays max(0, dead_g x DEAD_CTA_NS - k_w occ_g S'_g c). MEASURED, not
 #: fitted on timing: the 2026-09-27 GH200's 8x7B counter pages, in-kernel cycles,
 #: SHARED minus NATIVE (identical bytes, 27,776 more dead CTAs on w1): w1 8.74 us
 #: (se 0.58, 72 cells), w2 0.02 us (se 0.14; its 3,968 are hidden), so 1.333 ns =
@@ -565,6 +573,42 @@ TAIL = True
 DEAD_CTA_NS = 1.333
 DEAD = True
 
+#: THE PER-CTA FIXED COST (2026-09-29). A CTA on the floor costs S_g + PHI_g
+#: k-steps of c, not S_g: the prologue (offsets, the sorted ids, num_stages - 1 = 3
+#: stages of cp.async issued before the first MMA and 72 predicated-off ldgsts past
+#: the last), the pipeline's fill and drain, and the epilogue (the 4 KB bf16 tile;
+#: w2 also loads and multiplies the routed weights). Invisible on 8x7B's long CTAs
+#: (c absorbs PHI / S: 2% of w1's 64 k-steps, 1.3% of w2's 224), 15% of OLMoE's w2
+#: (16 k-steps). MEASURED, not fitted on timing: the four GH200 models' lock-1710
+#: byte counter pages (8x7B 2026-09-27, 8x22B and Qwen2-57B 2026-09-28, OLMoE
+#: 2026-09-29), every SHARED and NATIVE cell at G >= 8 and n = 2 to 9 (512 GEMM
+#: cells), sm__cycles_elapsed.avg = a_series + ceil(N_live / SMs) (S_g c + F_g), the
+#: model's own quantised floor, one c for both GEMMs as the model has: c 344.1
+#: cycles, F_w1 520 (se 13), F_w2 979 (se 8), rel rms 0.33%, so PHI = F / c. The
+#: floor pages (NATIVE G=64, n = 2, 3, 4, 6, lock and base clocks) read c 345.2, F
+#: 455 and 937 (PHI 1.32, 2.71). Cycles, not ns: the base-clock and lock captures
+#: agree to 0.3%. Mixtral's two depths alone cannot fix it (F_w2 1524 +- 236): it
+#: needs the small-K models, which are therefore calibration data. `--no-cta-fixed`
+#: (every pin before 2026-09-29) drops it.
+CTA_FIXED_KSTEPS = {"w1": 1.512, "w2": 2.846}
+CTA_FIXED = True
+
+
+def floor_ksteps(gemm: str) -> float:
+    """k-steps of c one CTA costs on the floor: S_g, plus PHI_g unless --no-cta-fixed."""
+    return GEOMETRY[gemm].ksteps + (CTA_FIXED_KSTEPS[gemm] if CTA_FIXED else 0.0)
+
+
+@contextlib.contextmanager
+def cta_fixed(on: bool):
+    """Hold CTA_FIXED at `on` for a block (a caller pricing cells outside `build`)."""
+    global CTA_FIXED
+    saved, CTA_FIXED = CTA_FIXED, bool(on)
+    try:
+        yield
+    finally:
+        CTA_FIXED = saved
+
 
 def dead_ctas(declared: int, n: int, gemm: str) -> int:
     """CTAs of one GEMM's grid past the live rows: they exit after one load."""
@@ -575,7 +619,7 @@ def dead_ms(declared: int, n: int, gemm: str, c_ns: float, k_w: float, occ: int)
     """The dead CTAs' exposed dispatch time, in ms (0 under --no-dead)."""
     if not DEAD:
         return 0.0
-    hidden = k_w * occ * GEOMETRY[gemm].ksteps * c_ns
+    hidden = k_w * occ * floor_ksteps(gemm) * c_ns
     return max(0.0, dead_ctas(declared, n, gemm) * DEAD_CTA_NS - hidden) * 1e-6
 
 
@@ -584,14 +628,14 @@ def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: i
     """sum_i smax_p(q S c / SMs, (sigma b_bar_i + o) / bw), in ms. At p = inf
     (the hard max) the CTAs whose window mean sits under the floor's byte
     threshold cost the floor and the rest stream, split in one search."""
-    floor = wave_q(win.live, sms) * GEOMETRY[gemm].ksteps * c_ns * 1e-6 / sms
+    floor = wave_q(win.live, sms) * floor_ksteps(gemm) * c_ns * 1e-6 / sms
     rate = bw * 1e6
     p = P_KNEE if p is None else p
     if TAIL and occ and win.live < 2 * sms * occ:
         slots = sms * occ
         k = win.live - slots if win.live > slots else win.live
         t = smax(floor, (sigma * win.mean + OUT_TILE) / rate, p)
-        lifetime = GEOMETRY[gemm].ksteps * c_ns * 1e-6 * occ
+        lifetime = floor_ksteps(gemm) * c_ns * 1e-6 * occ
         return float(t[:win.live - k].sum() + max(float(t[win.live - k:].sum()), lifetime))
     if np.isinf(p):
         k = int(np.searchsorted(win.sorted_mean, (floor * rate - OUT_TILE) / sigma,
@@ -607,7 +651,7 @@ def cta_ms(arm: str, declared: int, G: int, n: int, gemm: str, sigma: float,
     fit uses `gemm_ms`; the tests hold the two to each other."""
     r, _ = schedule(arm, declared, G, n, gemm)
     b_bar = sigma * box_mean(r, w) + OUT_TILE
-    floor = wave_q(r.size, sms) * GEOMETRY[gemm].ksteps * c_ns * 1e-6 / sms
+    floor = wave_q(r.size, sms) * floor_ksteps(gemm) * c_ns * 1e-6 / sms
     return smax(floor, b_bar / (bw * 1e6), p)
 
 
@@ -1196,7 +1240,7 @@ def rho_star(x, ctx: Context) -> dict:
     """The fraction of slab-fetching CTAs in a window above which it streams:
     S_g c bw / (SMs s_g). Equal on w1 and w2 (S_g / s_g is the same)."""
     c_ns, bw = float(x[1]), float(x[2])
-    return {g: GEOMETRY[g].ksteps * c_ns * bw / (ctx.sms * GEOMETRY[g].slab) for g in GEMMS}
+    return {g: floor_ksteps(g) * c_ns * bw / (ctx.sms * GEOMETRY[g].slab) for g in GEMMS}
 
 
 def _slope(ys) -> float:
@@ -1445,7 +1489,10 @@ def predictions(f: Fit, cells, ctx: Context, source: ByteSource, extra_pages, t3
                 "slab_fraction_max_G3": frac, "flat": rho["w1"] > frac}
     attempt("P5", p5)
     cyc = float(x[1]) * ctx.clock_mhz * 1e-3
-    out["P6"] = {"cycles_per_cta_kstep": cyc, "ptx_smem_cycles": ptx_cycles}
+    out["P6"] = {"cycles_per_cta_kstep": cyc, "ptx_smem_cycles": ptx_cycles,
+                 # what a floor capture's slope over CTA k-steps reads: c (1 + PHI_g / S_g)
+                 "capture_slope": {g: cyc * floor_ksteps(g) / GEOMETRY[g].ksteps for g in GEMMS},
+                 "cta_fixed": CTA_FIXED}
     p7 = {"locked_fit": ctx.locked, "cycles": cyc, "pages": []}
     if ctx.locked:
         for page, pcells in extra_pages:
@@ -1574,13 +1621,14 @@ def find_counters(args, inputs) -> dict | None:
 def build(args) -> dict:
     """Everything the page prints, as one dict (the --out JSON), under the
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
-    global P_KNEE, TAIL, DEAD
+    global P_KNEE, TAIL, DEAD, CTA_FIXED
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
     saved_tail, TAIL = TAIL, not getattr(args, "no_tail", False)
     saved_dead, DEAD = DEAD, not getattr(args, "no_dead", False)
+    saved_fixed, CTA_FIXED = CTA_FIXED, not getattr(args, "no_cta_fixed", False)
     saved_model = MODEL
     if not P_KNEE >= 1:
-        P_KNEE, TAIL, DEAD = saved, saved_tail, saved_dead
+        P_KNEE, TAIL, DEAD, CTA_FIXED = saved, saved_tail, saved_dead, saved_fixed
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
                       "the hard max)")
     try:
@@ -1589,6 +1637,7 @@ def build(args) -> dict:
         P_KNEE = saved
         TAIL = saved_tail
         DEAD = saved_dead
+        CTA_FIXED = saved_fixed
         if MODEL != saved_model:
             set_model(saved_model)
     return out
@@ -1854,6 +1903,9 @@ def _p678_lines(P: dict) -> list[str]:
     p6 = P["P6"]
     out.append(f"  P6 --floor capture: {p6['cycles_per_cta_kstep']:.1f} cycles per CTA k-step at "
                f"any held clock"
+               + (" (a capture's slope over CTA k-steps reads "
+                  + ", ".join(f"{g} {v:.1f}" for g, v in p6["capture_slope"].items())
+                  + " with the per-CTA fixed cost)" if p6.get("cta_fixed") else "")
                + ("; the census PTX's shared-memory traffic needs "
                   + ", ".join(f"{v:.0f}" for v in p6["ptx_smem_cycles"])
                   + f" at {SMEM_BYTES_PER_CLK} B per clock" if p6["ptx_smem_cycles"] else "")
@@ -2038,6 +2090,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="price the grid's dead CTAs at zero (the judge's pins); by default "
                         f"each costs {DEAD_CTA_NS} ns of dispatch past one effective lifetime "
                         "(DEAD_CTA_NS)")
+    p.add_argument("--no-cta-fixed", action="store_true",
+                   help="price a floor-bound CTA at S_g k-steps of c (every pin before "
+                        "2026-09-29); by default it costs S_g + CTA_FIXED_KSTEPS "
+                        f"{CTA_FIXED_KSTEPS}, measured on the GH200's counter pages")
     p.add_argument("--out", type=Path, default=None, help="write everything as JSON here")
     return p
 

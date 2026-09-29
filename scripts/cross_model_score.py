@@ -10,7 +10,7 @@ WHAT IT SEPARATES (2026-09-29). `scripts/cross_model_predict.py` registers a
 target's call times from PREDICTED bytes, so a byte-model miss propagates into
 time. This scores the timing model's structure alone: the source fit's
 parameters (T0, c per CTA k-step, bw, s_small, s_block, at the knee P_KNEE,
-k_w, with the partial-last-wave and dead-CTA terms) are held, and every target
+k_w, with the partial-last-wave, dead-CTA and per-CTA fixed-cost terms) are held, and every target
 cell is priced from its own page's counted DRAM bytes (sigma from the target's
 counter pages). Nothing is fitted on the target: `r3_timing_model.build` is run
 on the target only to read its cells, context and counted bytes; its fit is
@@ -40,8 +40,10 @@ SCORED = ("shared", "private")
 LIMIT = 0.05
 
 
-def _build(timed, counters):
-    return TM.build(TM.build_parser().parse_args([*map(str, timed), "--counters", str(counters)]))
+def _build(timed, counters, no_cta_fixed=False):
+    return TM.build(TM.build_parser().parse_args(
+        [*map(str, timed), "--counters", str(counters),
+         *(["--no-cta-fixed"] if no_cta_fixed else [])]))
 
 
 def _stats(v):
@@ -52,18 +54,20 @@ def _stats(v):
             "worst": max(v, key=abs), "beyond_5pct": sum(abs(x) > LIMIT for x in v)}
 
 
-def score(source_timed, source_counters, target, target_timed, target_counters) -> dict:
-    src = _build(source_timed, source_counters)
+def score(source_timed, source_counters, target, target_timed, target_counters,
+          no_cta_fixed=False) -> dict:
+    src = _build(source_timed, source_counters, no_cta_fixed)
     fit = src["main"]
     old = TM.set_model(target)
     try:
-        tgt = _build(target_timed, target_counters)
+        tgt = _build(target_timed, target_counters, no_cta_fixed)
         ctx = tgt["ctx"]
         rows = []
-        for c in tgt["cells"]:
-            p = TM.call_ms(fit.x, c, ctx, fit.k_w)
-            rows.append({"arm": c.arm, "G": c.G, "n": c.n, "measured_ms": c.ms,
-                         "predicted_ms": p, "resid": p / c.ms - 1.0})
+        with TM.cta_fixed(not no_cta_fixed):
+            for c in tgt["cells"]:
+                p = TM.call_ms(fit.x, c, ctx, fit.k_w)
+                rows.append({"arm": c.arm, "G": c.G, "n": c.n, "measured_ms": c.ms,
+                             "predicted_ms": p, "resid": p / c.ms - 1.0})
     finally:
         TM.set_model(old)
     scored = [r for r in rows if r["arm"] in SCORED]
@@ -74,6 +78,7 @@ def score(source_timed, source_counters, target, target_timed, target_counters) 
     return {"tool": "scripts/cross_model_score.py", "target": target,
             "source_model": TM.MODEL, "clock_mhz": src["ctx"].clock_mhz,
             "timing_params": fit.params, "p_knee": TM.P_KNEE, "k_w": fit.k_w,
+            "cta_fixed_ksteps": None if no_cta_fixed else dict(TM.CTA_FIXED_KSTEPS),
             "source_pages": [p.run for p in src["use"]],
             "target_pages": [p.run for p in tgt["use"]], "sets": sets, "cells": rows}
 
@@ -98,10 +103,13 @@ def main(argv=None) -> int:
     ap.add_argument("--source-counters", type=Path, required=True)
     ap.add_argument("--target-timed", nargs="+", type=Path, required=True)
     ap.add_argument("--target-counters", type=Path, required=True)
+    ap.add_argument("--no-cta-fixed", action="store_true",
+                    help="drop the per-CTA fixed cost (r3_timing_model's --no-cta-fixed)")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     try:
-        d = score(a.source_timed, a.source_counters, a.target, a.target_timed, a.target_counters)
+        d = score(a.source_timed, a.source_counters, a.target, a.target_timed, a.target_counters,
+                  a.no_cta_fixed)
     except TM.Refused as exc:
         print(f"REFUSED: {exc}")
         return 2

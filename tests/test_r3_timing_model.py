@@ -36,6 +36,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import json
+import math
 import shutil
 import statistics
 import sys
@@ -90,8 +91,9 @@ def run_dir(session: Path, run: str) -> Path:
 
 
 #: The judge's pins (2026-09-26) were fitted with the hard max; they are held
-#: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below.
-HARD_MAX = ("--p-knee", "inf", "--no-tail", "--no-dead")
+#: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below. They
+#: predate the partial last wave, the dead CTAs and the per-CTA fixed cost.
+HARD_MAX = ("--p-knee", "inf", "--no-tail", "--no-dead", "--no-cta-fixed")
 
 
 def build(*argv):
@@ -211,16 +213,21 @@ def test_n5_bytes_are_interpolated_by_the_specs_rule_and_labelled(gh200):
 # 4. The limits of the time rule
 # --------------------------------------------------------------------------
 
-def test_with_infinite_bandwidth_every_cta_costs_the_quantised_floor():
+def test_with_infinite_bandwidth_every_cta_costs_the_quantised_floor(monkeypatch):
+    """Each CTA costs S_g + PHI_g k-steps of c (S_g alone under --no-cta-fixed)."""
     sms, c_ns = 132, 206.9
-    for arm, G, n, gemm in (("shared", 1, 3, "w1"), ("native", 4, 6, "w2"),
-                            ("private", 64, 2, "w1"), ("shared", 2, 5, "w2")):
-        D = 8 if arm == "native" else 72
-        win = M.window(arm, D, G, n, gemm, 330)
-        N, geo = win.live, M.GEOMETRY[gemm]
-        q = np.ceil(N / sms) / (N / sms)
-        want = q * geo.ksteps * c_ns * 1e-6 * N / sms
-        assert M.gemm_ms(win, gemm, 1.0, c_ns, 1e15, sms) == pytest.approx(want, rel=1e-12)
+    for fixed in (True, False):
+        monkeypatch.setattr(M, "CTA_FIXED", fixed)
+        for arm, G, n, gemm in (("shared", 1, 3, "w1"), ("native", 4, 6, "w2"),
+                                ("private", 64, 2, "w1"), ("shared", 2, 5, "w2")):
+            D = 8 if arm == "native" else 72
+            win = M.window(arm, D, G, n, gemm, 330)
+            N, geo = win.live, M.GEOMETRY[gemm]
+            q = np.ceil(N / sms) / (N / sms)
+            k = geo.ksteps + (M.CTA_FIXED_KSTEPS[gemm] if fixed else 0.0)
+            assert M.floor_ksteps(gemm) == k
+            want = q * k * c_ns * 1e-6 * N / sms
+            assert M.gemm_ms(win, gemm, 1.0, c_ns, 1e15, sms) == pytest.approx(want, rel=1e-12)
 
 
 def test_with_no_floor_private_at_g1_streams_its_bytes_exactly():
@@ -255,8 +262,7 @@ def test_the_partial_last_wave_costs_at_least_one_cta_lifetime(monkeypatch):
     time, S c occ); a lone partial wave is that tail entire; two or more waves,
     or TAIL off, price every CTA at throughput as before."""
     sms, occ, c_ns, inf = 132, 2, 206.9, float("inf")
-    geo = M.GEOMETRY["w2"]
-    life = geo.ksteps * c_ns * 1e-6 * occ
+    life = M.floor_ksteps("w2") * c_ns * 1e-6 * occ
 
     def flat(N):
         m = np.zeros(N)
@@ -264,7 +270,7 @@ def test_the_partial_last_wave_costs_at_least_one_cta_lifetime(monkeypatch):
                         cumsum=np.zeros(N + 1), mean=m)
 
     for N in (100, 264, 300, 527):
-        floor = M.wave_q(N, sms) * geo.ksteps * c_ns * 1e-6 / sms
+        floor = M.wave_q(N, sms) * M.floor_ksteps("w2") * c_ns * 1e-6 / sms
         k = N - sms * occ if N > sms * occ else N
         want = (N - k) * floor + max(k * floor, life)
         got = M.gemm_ms(flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ)
@@ -879,7 +885,8 @@ def _lock1710_runs(session: Path) -> list[Path]:
 
 @pytest.fixture(scope="module")
 def knee_0927():
-    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, "--no-tail")
+    return build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, "--no-tail",
+                 "--no-cta-fixed")
 
 
 def test_the_soft_max_is_the_hard_max_at_infinity_and_never_below_it():
@@ -916,10 +923,11 @@ def test_the_knee_improves_the_other_two_boards_held_out():
     2026-09-25 GH200 and 1.49% -> 1.27% on the H100; the price is the old
     GH200's G=1 (0.44% -> 0.51%, where sigma < 1 spreads cold-L2 bytes)."""
     old = build(*(run_dir(GH200, r) for r in GH200_RUNS), "--counters", GH200_COUNTERS,
-                "--no-tail")
+                "--no-tail", "--no-cta-fixed")
     assert pct(M.logo_mean(old["logo"])) == pytest.approx(0.45, abs=0.01)
     assert pct(old["score"]["rms"]) == pytest.approx(0.41, abs=0.01)
-    h = build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS, "--no-tail")
+    h = build(*(run_dir(H100, r) for r in H100_RUNS), "--counters", H100_COUNTERS, "--no-tail",
+              "--no-cta-fixed")
     assert pct(M.logo_mean(h["logo"])) == pytest.approx(1.27, abs=0.01)
     assert pct(h["score"]["rms"]) == pytest.approx(1.33, abs=0.01)
 
@@ -1013,8 +1021,111 @@ def test_at_64_experts_the_dead_tail_is_56_us_a_shared_call():
     old = M.set_model("qwen2-57b-a14b")
     try:
         assert (M.dead_ctas(576, 1, "w1"), M.dead_ctas(576, 1, "w2")) == (44640, 31248)
-        got = [1e3 * M.dead_ms(576, 1, g, 206.58, M.K_W, occ) for g, occ in (("w1", 5), ("w2", 4))]
+        with M.cta_fixed(False):
+            got = [1e3 * M.dead_ms(576, 1, g, 206.58, M.K_W, occ)
+                   for g, occ in (("w1", 5), ("w2", 4))]
         assert got == pytest.approx([30.6, 25.1], abs=0.1)
+        # with the per-CTA fixed cost, at the refitted c: the hidden lifetime is S'_g c
+        got = [1e3 * M.dead_ms(576, 1, g, 202.55, M.K_W, occ) for g, occ in (("w1", 5), ("w2", 4))]
+        assert got == pytest.approx([30.4, 24.3], abs=0.1)
         assert M.dead_ms(64, 1, "w1", 206.58, M.K_W, 5) == 0.0
     finally:
         M.set_model(old)
+
+
+# --------------------------------------------------------------------------
+# The per-CTA fixed cost (CTA_FIXED, 2026-09-29): a CTA on the floor costs
+# S_g + PHI_g k-steps of c, PHI measured on the GH200's counter pages.
+# --------------------------------------------------------------------------
+
+CTA_COUNTER_PAGES = {
+    "mixtral-8x7b": GH200_0927_COUNTERS,
+    "mixtral-8x22b": PUB / "2026-09-28-nvidia_gh200_480gb-8x22b-session" / "results"
+    / "2026-09-28-nvidia_gh200_480gb-r3-counters" / "lock1710",
+    "qwen2-57b-a14b": QWEN_0928_COUNTERS,
+    "olmoe-1b-7b": PUB / "2026-09-29-nvidia_gh200_480gb-olmoe-session" / "results"
+    / "2026-09-29-nvidia_gh200_480gb-r3-counters" / "lock1710",
+}
+
+
+def _cta_calibration(models):
+    """sm__cycles_elapsed.avg of every SHARED and NATIVE GEMM at G >= 8, n = 2..9,
+    against a per-series intercept + ceil(N_live / SMs) (S_g c + F_g), one c;
+    least squares on relative residuals. Returns c, F_w1, F_w2 in cycles."""
+    rows, series = [], {}
+    for model in models:
+        old = M.set_model(model)
+        try:
+            for G, c in _counter_cells(CTA_COUNTER_PAGES[model]):
+                if G < 8 or c["arm"] not in ("shared", "native") or not 2 <= int(c["n"]) <= 9:
+                    continue
+                for g in M.GEMMS:
+                    N = M.live_rows(int(c["n"])) * M.GEOMETRY[g].npn
+                    k = series.setdefault((model, G, c["arm"], g), len(series))
+                    rows.append((k, g, M.GEOMETRY[g].ksteps, math.ceil(N / 132),
+                                 c["recorded"][g]["sm__cycles_elapsed.avg"]))
+        finally:
+            M.set_model(old)
+    X = np.zeros((len(rows), 3 + len(series)))
+    y = np.zeros(len(rows))
+    for i, (k, g, S, x, cyc) in enumerate(rows):
+        X[i, 0] = x * S / cyc
+        X[i, 1 if g == "w1" else 2] = x / cyc
+        X[i, 3 + k] = 1.0 / cyc
+        y[i] = 1.0
+    b, *_ = np.linalg.lstsq(X, y, rcond=None)
+    return float(b[0]), float(b[1]), float(b[2]), len(rows)
+
+
+def test_the_per_cta_fixed_cost_is_the_four_models_counter_calibration():
+    """PHI = F / c from 512 counted GEMMs of four models (8x7B, 8x22B,
+    Qwen2-57B, OLMoE): c 344.1 cycles, F_w1 520, F_w2 979, not a timing fit."""
+    if not all(p.exists() for p in CTA_COUNTER_PAGES.values()):
+        pytest.skip("the four GH200 models' counter pages are not all in this tree")
+    c, f1, f2, n = _cta_calibration(CTA_COUNTER_PAGES)
+    assert n == 512
+    assert c == pytest.approx(344.1, abs=0.1)
+    assert (f1, f2) == pytest.approx((520.4, 979.3), abs=0.5)
+    assert f1 / c == pytest.approx(M.CTA_FIXED_KSTEPS["w1"], abs=0.001)
+    assert f2 / c == pytest.approx(M.CTA_FIXED_KSTEPS["w2"], abs=0.001)
+
+
+def test_mixtral_alone_cannot_measure_the_fixed_cost():
+    """Two long-K depths per GEMM leave F_w2 unidentified (1524 against 979):
+    the small-K models are calibration data, not held out."""
+    if not all(p.exists() for p in CTA_COUNTER_PAGES.values()):
+        pytest.skip("the four GH200 models' counter pages are not all in this tree")
+    c, f1, f2, _ = _cta_calibration(("mixtral-8x7b", "mixtral-8x22b"))
+    assert f2 == pytest.approx(1524, abs=5) and c == pytest.approx(342.7, abs=0.2)
+
+
+@pytest.fixture(scope="module")
+def fixed_0927():
+    return knee_0927_default(), build(*_lock1710_runs(GH200_0927), "--counters",
+                                      GH200_0927_COUNTERS, "--no-cta-fixed")
+
+
+def test_the_fixed_cost_moves_c_and_not_the_8x7b_fit(fixed_0927):
+    """On 8x7B's long CTAs c absorbs PHI / S: c 206.58 -> 202.55 ns (353.2 -> 346.4
+    cycles, the counters' c 344.1), rms 0.256% and LOGO 0.284% as before, bw fixed."""
+    on, off = fixed_0927
+    p, q = on["main"].params, off["main"].params
+    assert q["c"] == pytest.approx(206.58, abs=0.01), "--no-cta-fixed restores the old c"
+    assert p["c"] == pytest.approx(202.55, abs=0.01)
+    assert p["bw"] == pytest.approx(q["bw"], rel=1e-4)
+    assert pct(on["score"]["rms"]) == pytest.approx(0.256, abs=0.002)
+    assert pct(off["score"]["rms"]) == pytest.approx(0.256, abs=0.002)
+    assert pct(M.logo_mean(on["logo"])) == pytest.approx(0.284, abs=0.002)
+    assert pct(M.logo_mean(off["logo"])) == pytest.approx(0.284, abs=0.002)
+    assert M.CTA_FIXED, "a build must not leave --no-cta-fixed behind"
+
+
+def test_the_floor_capture_slope_is_c_plus_f_over_s(fixed_0927):
+    """P6 prints what a capture's slope over CTA k-steps reads, c (1 + PHI / S)."""
+    on, off = fixed_0927
+    p6 = on["predictions"]["P6"]
+    assert p6["cta_fixed"] and not off["predictions"]["P6"]["cta_fixed"]
+    for g in M.GEMMS:
+        geo = M.GEOMETRY[g]
+        want = p6["cycles_per_cta_kstep"] * (geo.ksteps + M.CTA_FIXED_KSTEPS[g]) / geo.ksteps
+        assert p6["capture_slope"][g] == pytest.approx(want, rel=1e-12)

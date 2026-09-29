@@ -110,7 +110,7 @@ def target_geometry(geom: W.Geometry, target: str, design: Design | None = None)
     return out
 
 
-def predict(timed: list[Path], counters: Path, target: str) -> dict:
+def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool = False) -> dict:
     card = W.load_card(counters)
     src_cfg, tgt_cfg = MODEL_CONFIGS[card.geom.model], MODEL_CONFIGS[target]
     same = (src_cfg.num_experts, src_cfg.top_k) == (tgt_cfg.num_experts, tgt_cfg.top_k)
@@ -125,7 +125,8 @@ def predict(timed: list[Path], counters: Path, target: str) -> dict:
              for G in PLAN_G for n in plan_n]
     ev = {v: dict(zip(cells, model_t.evaluate(p, cells), strict=True)) for v, p in prm.items()}
 
-    R = TM.build(TM.build_parser().parse_args([*map(str, timed), "--counters", str(counters)]))
+    R = TM.build(TM.build_parser().parse_args([*map(str, timed), "--counters", str(counters),
+                                               *(["--no-cta-fixed"] if no_cta_fixed else [])]))
     fit, ctx = R["main"], R["ctx"]
     src_cells = R["cells"]
     path = {c.n: c.path for c in src_cells if c.arm == "native"}
@@ -156,7 +157,8 @@ def predict(timed: list[Path], counters: Path, target: str) -> dict:
                         cell = TM.Cell(arm=arm, G=G, n=n, ms=float("nan"), mhz=None,
                                        path=path[n], declared=D, runs=(), source="PREDICTED",
                                        reads=reads, sigma=sigma, fit=False)
-                        row["ms"] = TM.call_ms(fit.x, cell, ctx, fit.k_w)
+                        with TM.cta_fixed(not no_cta_fixed):
+                            row["ms"] = TM.call_ms(fit.x, cell, ctx, fit.k_w)
                     out_cells.append(row)
     finally:
         TM.set_model(old)
@@ -217,6 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="the source card's timed R3 run dirs (one lock, one card)")
     p.add_argument("--counters", type=Path, required=True,
                    help="the source card's r3c-g*.json directory (the same kernel)")
+    p.add_argument("--no-cta-fixed", action="store_true",
+                   help="drop the per-CTA fixed cost (r3_timing_model's --no-cta-fixed)")
     p.add_argument("--out", type=Path, default=None)
     return p
 
@@ -224,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        d = predict(args.timed, args.counters, args.target)
+        d = predict(args.timed, args.counters, args.target, args.no_cta_fixed)
     except (Refused, TM.Refused, W.Refused) as exc:
         print(f"REFUSED: {exc}")
         return 2
