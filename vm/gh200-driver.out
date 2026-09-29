@@ -13,3 +13,7 @@
 2026-09-29T12:19:39Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 369 min left)
 2026-09-29T12:20:04Z calibrate END: exit 0 after 0 min
 2026-09-29T12:20:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ab4922d to run-gh200-olmoe-20260929t1157: calibrate: exit 0 (0 min)
+2026-09-29T12:20:07Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 (estimate 37 min, cap 90 min, 369 min left)
+2026-09-29T12:55:50Z timed END: exit 0 after 36 min
+2026-09-29T12:55:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
