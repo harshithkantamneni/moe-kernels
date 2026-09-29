@@ -21,3 +21,7 @@
 2026-09-29T21:47:37Z floor START: 3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at 1710: P6 (estimate 15 min, cap 45 min, 304 min left)
 2026-09-29T21:49:24Z floor END: exit 0 after 2 min
 2026-09-29T21:49:26Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 0f0b1fe to run-gh200-phi35moe-20260929t2019: floor: exit 0 (2 min)
+2026-09-29T21:49:28Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 302 min left)
+2026-09-29T22:22:20Z deep END: exit 0 after 33 min
+2026-09-29T22:23:36Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
