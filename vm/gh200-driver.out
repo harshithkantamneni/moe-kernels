@@ -7,3 +7,5 @@
 2026-09-29T22:35:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed d795988 to run-gh200-jetmoe8b-20260929t2230: prelude: exit 0 (0 min)
 2026-09-29T22:35:24Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 387 min left)
+2026-09-29T22:50:50Z bytes END: exit 0 after 15 min
+2026-09-29T22:50:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
