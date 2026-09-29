@@ -953,3 +953,63 @@ def test_the_later_cross_group_reread_misses_at_g2_and_up():
     orow = {(r["arm"], r["G"], r["n"], r["gemm"]): r for r in old.rows}
     assert orow[("shared", 2, 8, "w2")]["least_root_mix"] / orow[("shared", 2, 8, "w2")][
         "measured"] - 1 < -0.10
+
+
+def _lru_stack(G, n, P, experts, slab, atile):
+    """Brute force: every SHARED cross-group slab re-read's distinct bytes in
+    between, the launch as a list of (A, slab) accesses in live-rank order."""
+    num_pid_m = experts * n
+    pid = np.arange(num_pid_m * P)
+    gid, pid_m, pid_n = W.pid_map(pid, num_pid_m, P, G)
+    stream = []
+    for g, m, j in zip(gid.tolist(), pid_m.tolist(), pid_n.tolist(), strict=True):
+        stream += [(("A", m), atile, g, None), (("S", m // n, j), slab, g, m)]
+    last, out = {}, []
+    for i, (key, _w, g, _m) in enumerate(stream):
+        if key in last and key[0] == "S" and stream[last[key]][2] != g:
+            seen = {stream[t][0]: stream[t][1] for t in range(last[key] + 1, i)}
+            out.append(float(sum(seen.values())))
+        last[key] = i
+    return sorted(out)
+
+
+def test_the_reuse_distance_is_an_exact_lru_walk():
+    """`stack_distance`'s closed form against a brute-force LRU walk of the
+    same launch; over the three published models' G >= 2 cells it agreed on
+    all 378 (2026-09-29)."""
+    for experts, n, G, P in ((4, 3, 2, 5), (4, 5, 3, 4), (8, 2, 4, 3), (3, 7, 5, 6), (6, 1, 2, 4)):
+        ev = W.walk("shared", G, n, P, 10 ** 6, experts * n, experts, slab_bytes=7, atile_bytes=3)
+        got = sorted(s for s, k in zip(ev.x_S.tolist(), ev.x_k.tolist(), strict=True)
+                     for _ in range(int(k)))
+        assert got == _lru_stack(G, n, P, experts, 7, 3), (experts, n, G, P)
+
+
+QWEN57 = (ROOT / "results" / "published" / "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session"
+          / "results" / "2026-09-28-nvidia_gh200_480gb-r3-counters" / "lock1710")
+
+
+@pytest.mark.later_miss
+def test_the_later_miss_is_a_capacity_condition():
+    """A later cross-group re-read is a certain miss only past the L2. On
+    Mixtral it always is (at least P - 1 slabs of one expert between the reads:
+    116 MB for 8x7B w2), so 8x7B is where it was; on Qwen2-57B (18 MB an
+    expert's w2) G=2's re-reads sit under the L2 and keep the survival law.
+    Qwen2-57B is DIAGNOSIS data here: nothing is fitted on it."""
+    card = W.load_card(NEW_GH200)
+    L2 = card.geom.l2_bytes
+    for G in (2, 3, 4, 8, 16):
+        for n in range(2, 10):
+            for gemm in W.GEMMS:
+                walked = W.walk("shared", G, n, card.geom.get("P", gemm),
+                                card.geom.get("W_c", gemm), card.geom.num_pid_m("shared", n),
+                                8, slab_bytes=card.geom.slab(gemm),
+                                atile_bytes=card.geom.atile(gemm))
+                later = ~walked.x_win1
+                assert (walked.x_S[later] > L2).all(), (G, n, gemm)
+    q = W.load_card(QWEN57)
+    ev = W.cell_events(q.geom, "shared", 2, 4, "w2")
+    assert (~ev.x_win1).any() and (ev.x_S < L2).all()
+    prm = W.fit_view(card, W.MIX).params
+    got = W.Model(q.geom).q(prm, [("shared", 2, n, "w2") for n in (4, 9)])
+    meas = np.array([q.measured[("shared", 2, n, "w2")] for n in (4, 9)])
+    assert np.abs(got / meas - 1).max() < 0.10, got

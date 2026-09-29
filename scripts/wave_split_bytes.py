@@ -298,8 +298,11 @@ VIEWS = (FILL, WS, MIX)
 #: and printed beside it.
 REGISTERED_VIEW = MIX
 #: At G >= 2 a cross-group slab re-read past the first co-residency window is
-#: a certain miss (2026-09-28; `cell_events`). False restores the survival law
-#: there, the law the judge's 2026-09-26 pins were fitted with (`later_law`).
+#: a certain miss when its reuse distance exceeds the card's L2 (2026-09-28,
+#: capacity form 2026-09-29; `cell_events`): the distinct bytes the launch
+#: touched between the two reads, `Events.x_S`. False restores the survival
+#: law there, the law the judge's 2026-09-26 pins were fitted with
+#: (`later_law`).
 LATER_MISS = True
 
 
@@ -519,6 +522,9 @@ class Events:
     a_win1: np.ndarray         #   inside the first window,
     a_ws: np.ndarray           #   the re-reader group's column-pass working set (B),
     a_k: np.ndarray            #   count
+    #: cross-group slab re-reads' reuse distance in bytes (`stack_distance`),
+    #: aligned with x_D; x events are counted by (D, win1, S)
+    x_S: np.ndarray = field(default_factory=lambda: np.zeros(0))
     per_set: int = 0           # E P_g
     weight_bytes: int = 0      # W_g
     atile: int = 0             # ATILE_g
@@ -555,6 +561,31 @@ def _previous(key: np.ndarray):
     return order[1:][same], order[:-1][same]
 
 
+def stack_distance(G: int, n: int, P: int, live_m: int, slab_bytes: int, atile_bytes: int,
+                   gid: np.ndarray, pid_n: np.ndarray) -> np.ndarray:
+    """The LRU reuse distance of a SHARED/NATIVE cross-group slab re-read: the
+    distinct bytes the launch touches between the two reads, CTAs in launch
+    order, each reading its A tile and then its slab.
+
+    The reader is the last M-tile of group k-1 in column j, the re-reader the
+    first of group k in column j (group k-1's other tiles come before it in
+    the column, group k's after), so in between group k-1 runs columns j+1 to
+    P-1 and group k columns 0 to j-1: O_{k-1} (P-1-j) + O_k j distinct slabs
+    (O the group's distinct experts; the two sets never share a column), and
+    the A tiles of group k-1 (when j < P-1) and of group k (when j > 0; at j = 0
+    the re-reader's own A tile only). Equal to an exact LRU stack walk of the
+    same launch on every G >= 2 cell of the three published models
+    (tests/test_wave_split_bytes.py)."""
+    groups = -(-live_m // G)
+    L = np.minimum(G, live_m - np.arange(groups) * G)
+    first = np.arange(groups) * G
+    owners = (first + L - 1) // n - first // n + 1
+    k = gid
+    return (slab_bytes * (owners[k - 1] * (P - 1 - pid_n) + owners[k] * pid_n)
+            + atile_bytes * (np.where(pid_n < P - 1, L[k - 1], 0)
+                             + np.where(pid_n > 0, L[k], 1))).astype(float)
+
+
 def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: int, *,
          slab_bytes: int = 0, atile_bytes: int = 0) -> Events:
     """Walk every pid of the launch grid through the pid mapping, dead CTAs
@@ -585,7 +616,10 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
     D = cur - prev
     inside = gid[cur] == gid[prev]
     win1 = cur < W_c
-    x = Counter(zip(D[~inside].tolist(), win1[~inside].tolist(), strict=True))
+    xc = cur[~inside]
+    S = (stack_distance(G, n, P, live_m, slab_bytes, atile_bytes, gid[xc], pid_n[xc])
+         if xc.size else np.zeros(0))
+    x = Counter(zip(D[~inside].tolist(), win1[~inside].tolist(), S.tolist(), strict=True))
     in_win1 = int(np.sum(inside & win1))
     in_later = int(np.sum(inside & ~win1))
     # Column-pass working set per group: live tiles and distinct owners.
@@ -608,10 +642,10 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
         cols = [np.array([k[i] for k in keys], dtype=float) for i in range(width)]
         return cols + [np.array([counter[k] for k in keys], dtype=float)]
 
-    x_D, x_w, x_k = arrays(x, 2)
+    x_D, x_w, x_S, x_k = arrays(x, 3)
     a_D, a_w, a_ws, a_k = arrays(a, 3)
     return Events(arm=arm, G=G, n=n, gemm="", P=P, W_c=W_c, num_pid_m=num_pid_m,
-                  live=live, slabs=slabs, x_D=x_D, x_win1=x_w.astype(bool), x_k=x_k,
+                  live=live, slabs=slabs, x_D=x_D, x_win1=x_w.astype(bool), x_k=x_k, x_S=x_S,
                   in_win1=in_win1, in_later=in_later, a_D=a_D,
                   a_win1=a_w.astype(bool), a_ws=a_ws, a_k=a_k)
 
@@ -691,7 +725,8 @@ def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str) -> Events:
                           f"column-pass working set {ev.a_ws.max():.0f} B is not "
                           f"DCR.r3_exposure's {want} B")
     if LATER_MISS and G >= 2 and ev.x_D.size:
-        # THE LATER CROSS-GROUP RE-READ MISSES AT G >= 2 (2026-09-28). Past the
+        # THE LATER CROSS-GROUP RE-READ MISSES AT G >= 2 WHEN ITS REUSE DISTANCE
+        # EXCEEDS THE L2 (2026-09-28; capacity form 2026-09-29). Past the
         # first co-residency window the re-read sits D = 2P-1 CTAs on (8x7B w2:
         # 105 to 141 MiB of fill, 8x22B: 189 to 252 MiB, 1.7 to 4.2 x the 60 MiB
         # L2), where the slab law, fitted mostly at G=1 near 1.1 x L2, still gave
@@ -700,10 +735,18 @@ def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str) -> Events:
         # certain misses: 8x7B G=2 w2 SHARED 8.5 -> 2.2% rms, 8x22B 2.3 -> 1.0%,
         # cross-model worst 3.2 to 4.3% (the fill-view law gave -72% from 8x22B's
         # parameters); w1 unchanged. G=1 keeps the law. No parameter added.
-        later = ~ev.x_win1
+        # The rule was written as a constant; it is a capacity condition. The
+        # distinct bytes between the two reads, x_S, are at least P - 1 slabs
+        # of one expert: 116 MB for 8x7B w2, 199 MB for 8x22B w2, more for w1,
+        # all past every published card's L2, so on Mixtral the condition is
+        # always true and nothing moves. Qwen2-57B's expert w2 is 18 MB: at
+        # G = 2 to 4 the re-read sits 0.3 to 0.6 L2 on and the card served it
+        # (w2 SHARED G=2 1.00 to 1.03 weight sets where the constant printed
+        # about n/2). Below the L2 the survival law decides, as at G=1.
+        later = ~ev.x_win1 & (ev.x_S > geom.l2_bytes)
         ev = dataclasses.replace(ev, slabs=ev.slabs + int(ev.x_k[later].sum()),
                                  x_D=ev.x_D[~later], x_win1=ev.x_win1[~later],
-                                 x_k=ev.x_k[~later])
+                                 x_k=ev.x_k[~later], x_S=ev.x_S[~later])
     return dataclasses.replace(ev, gemm=gemm, per_set=geom.per_set(gemm),
                                weight_bytes=geom.get("W", gemm), atile=geom.atile(gemm))
 
