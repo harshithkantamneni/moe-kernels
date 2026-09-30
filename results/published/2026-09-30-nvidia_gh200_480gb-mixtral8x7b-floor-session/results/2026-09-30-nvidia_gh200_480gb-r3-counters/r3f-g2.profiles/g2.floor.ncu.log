@@ -1,0 +1,28 @@
+==PROF== Connected to process 7584 (/home/ubuntu/.local/share/uv/python/cpython-3.12.14-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+==PROF== Profiling "fused_moe_kernel": 0%....50%....100% - 9 passes
+COUNTER CHILD: 6 cells, 2 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g2.profiles/g2.floor.manifest.json
+==PROF== Disconnected from process 7584
+==PROF== Report: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g2.profiles/g2.floor.ncu-rep

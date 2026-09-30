@@ -1034,6 +1034,15 @@ they were scored; nothing is fitted or adopted.
   w2 (3.9 waves at n = 2) reads +0.42% all-cell and -0.63% corrected, inside
   either way. JetMoE's w2 stays FALSIFIED as registered; a floor-only session
   at n = 9 to 11 is registered (79c5034) to measure it at 4+ waves.
+  Measured (2026-09-30, `results/published/2026-09-30-nvidia_gh200_480gb-{jetmoe,mixtral8x7b}-floor-session`,
+  registered before the pages): JetMoE's w2 on n = 9 to 11 reads 361.7
+  (+1.84%) and 8x7B's w2 on n = 6 to 8 reads 354.2 (+1.65%, unlocked -0.33%),
+  both HELD, their all-cell lines 367.2 and 357.9. Both earlier w2 misses were
+  the estimator. With them, the per-CTA floor 344.1 + F / S holds within 2% on
+  every GEMM the corrected estimator can score across eight models, 8 to 256
+  k-steps a CTA, on the base-clock captures (Granite's w2 lock capture, which
+  fails FL1, reads -2.22%); the per-CTA constant is measured on four of them and
+  predicted on the other four.
 
 **What the paper can claim, after eight tests.** From one card's 8x7B fit,
 with nothing fitted on the target, time from a model's own bytes to 2% on two

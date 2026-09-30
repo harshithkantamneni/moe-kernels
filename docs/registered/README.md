@@ -318,3 +318,10 @@ as the slope over each GEMM's cells of at least 4 waves, within 2%:
 Mixtral 8x7B's floor counters are calibration data for c and F; its w2 cells
 at 6 to 8 are new. JetMoE's floor data at n = 2 to 6 is published; n = 9 to 11 is
 not yet measured.
+
+**Scored 2026-09-30** on `results/published/2026-09-30-nvidia_gh200_480gb-{jetmoe,mixtral8x7b}-floor-session`
+(board 594c0f; each README has the cells), the base-clock captures: JetMoE-8B w1
+360.8 (+0.12%) and w2 on n = 9 to 11 361.7 (+1.84%), HELD; Mixtral 8x7B w1 349.9
+(-0.66%) and w2 on n = 6 to 8 354.2 (+1.65%; unlocked -0.33%, lock +0.06%),
+HELD. The lock captures fail FL1 alone (JetMoE's w2 reads +2.61% there). The
+files above are unchanged.

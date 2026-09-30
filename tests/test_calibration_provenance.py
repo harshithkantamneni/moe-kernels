@@ -440,6 +440,9 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-09-29-nvidia_gh200_480gb-phi3.5-session": SESSION,
         "2026-09-29-nvidia_gh200_480gb-jetmoe-session": SESSION,
         "2026-09-30-nvidia_gh200_480gb-granite-session": SESSION,
+        # The floor-only sessions of 2026-09-30: the floor capture at 4+ waves.
+        "2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session": SESSION,
+        "2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}
