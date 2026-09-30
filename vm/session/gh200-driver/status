@@ -16,3 +16,5 @@
 2026-09-30T06:22:34Z floor END: exit 3 after 5 min
 2026-09-30T06:22:34Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 2026-09-30T06:22:36Z driver end: exit 3
+2026-09-30T06:24:38Z RECOVERY start: timed G to retake [], deep G to retake []
+2026-09-30T06:24:38Z RECOVERY END
