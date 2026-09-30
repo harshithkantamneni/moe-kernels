@@ -1,2 +1,7 @@
 2026-09-30T00:43:00Z setup_vm.sh start: commit a15639201fe1d31e67637480ba954f4aa192c8f0 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-30T07:21:27Z
 2026-09-30T00:45:41Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 2a28734 to run-gh200-granite303ba800m-20260930t0041: setup_vm.sh: READY
+2026-09-30T00:45:42Z driver start: commit a15639201fe1d31e67637480ba954f4aa192c8f0, steps prelude bytes calibrate timed floor deep, deadline 2026-09-30T07:21:27Z (387 min of work left)
+2026-09-30T00:45:42Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 387 min left)
+2026-09-30T00:45:43Z prelude END: exit 0 after 0 min
+2026-09-30T00:45:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

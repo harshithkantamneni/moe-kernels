@@ -1,2 +1,10 @@
 2026-09-30T00:43:00Z setup_vm.sh start: commit a15639201fe1d31e67637480ba954f4aa192c8f0 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-30T07:21:27Z
 2026-09-30T00:45:41Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-09-30T00:45:42Z driver start: commit a15639201fe1d31e67637480ba954f4aa192c8f0, steps prelude bytes calibrate timed floor deep, deadline 2026-09-30T07:21:27Z (387 min of work left)
+2026-09-30T00:45:42Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 387 min left)
+2026-09-30T00:45:43Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-09-30T00:45:43Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-09-30T00:45:43Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-09-30T00:45:43Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20260930T004542Z
+2026-09-30T00:45:43Z prelude END: exit 0 after 0 min
+2026-09-30T00:45:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
