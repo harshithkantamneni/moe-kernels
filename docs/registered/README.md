@@ -210,6 +210,49 @@ seen: an expert count between 8 and 64 (Phi 16, Granite 40, Qwen1.5 60), top-k
 4 (Qwen1.5), a CTA shorter than any measured (Granite w2, 8 k-steps), and
 Mixtral's own design at another shape (JetMoE).
 
+**Scored 2026-09-30, Qwen1.5-MoE-A2.7B** on
+`results/published/2026-09-29-nvidia_gh200_480gb-qwen1.5-session` (board
+d67185, five VALID lock-1710 pages): time from its own bytes HELD (76 cells,
+rms 1.87%, worst +4.81%, none beyond 5%), the floor HELD (w1 361.0, w2 385.8
+cycles per CTA k-step at base, +0.17% and -0.73%; every cell at 7 or more
+waves), the G >= 8 slope HELD (0.2156 and 0.2154, -0.15% and -0.21%), PRIVATE
+bytes HELD (w1 1.31%, w2 0.53%, none beyond 5%); printed: time from predicted
+bytes 2.12%, SHARED bytes w1 7.4%, w2 3.9%.
+
+**Scored 2026-09-30, Phi-3.5-MoE** on
+`results/published/2026-09-29-nvidia_gh200_480gb-phi3.5-session` (board
+d67185, five VALID pages): time HELD (76 cells, rms 0.57%, worst -1.27%), the
+floor HELD (w1 349.6, -0.73%; w2 355.4, +0.42%, the lock capture 354.4), the
+slope HELD (0.4839 and 0.4828, -1.21% and -1.39%), PRIVATE bytes w1 HELD
+(0.36%) and w2 FALSIFIED (1.81% rms, but 3 cells beyond 5%: G=64 n = 7, 8, 9 at
+-5.1, -8.0, -6.8%); printed: time from predicted bytes 0.65%, SHARED bytes w1
+10.8%, w2 18.5%.
+
+**Scored 2026-09-30, JetMoE-8B** on
+`results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session` (board
+d67185, four VALID lock-1710 pages; G=2 slipped at 1710 twice and held at
+1605, not scored): time FALSIFIED (58 cells, rms 7.17%, 12 beyond 5%: every
+SHARED and PRIVATE cell at n = 1, -15 to -20%, and SHARED at n = 3, +10 to
++11%; n >= 4 at 1% or under), w1's floor HELD (360.3, -0.02%), w2's floor
+FALSIFIED (368.0 against 355.2, +3.6%, on cells of 0.97 to 2.91 waves; the
+estimator bias corrected below, for later pages only), the slope FALSIFIED
+(0.1135 and 0.1105, +5.4% and +2.6%), PRIVATE bytes HELD (w1 0.19%, w2 0.59%);
+printed: time from predicted bytes 7.16%, SHARED bytes w1 20.1%, w2 11.0%.
+
+**Scored 2026-09-30, Granite-3.0-3B-A800M** on
+`results/published/2026-09-30-nvidia_gh200_480gb-granite-session` (board
+1310e2, the GH200 registration with the corrected floor estimator below; the
+H100 registration was not run): time NOT SCORABLE and the slope NOT SCORABLE,
+every one of the ten lock-1710 timed pages INVALID on V5 (eight UNKNOWN, two
+FAIL), nine of them also failing the claim C2 (PRIVATE's apparent stream 4169
+to 7005 GB/s against the 3726 GB/s ruler); SHARED and NATIVE calls read 0.238
+to 0.291 ms at every n from 1 to 5, and the printed SHARED slopes are 71 to 84%
+under 0.0440. w2's floor HELD on n = 3, 4, 6 (459.8 cycles per CTA k-step on the
+base-clock capture, -1.43%; the lock capture, FL1 FAIL, 456.1, -2.22%); w1's
+floor NOT SCORABLE (all-cell 374.2, printed); PRIVATE bytes HELD (w1 3.02%,
+worst +4.60%; w2 0.17%); printed: SHARED bytes w1 19.3%, w2 3.9%. The files
+above are unchanged.
+
 ## 2026-09-29: Granite-3.0-3B-A800M on the H100 SXM5, from that card's own 8x7B fit
 
 `2026-09-29-granite-3.0-3b-a800m-h100.json` and `.txt`: Granite's test (above)
@@ -230,6 +273,10 @@ Falsifiers, this card's numbers: time from Granite's own counted bytes
 or under 2%, no cell beyond 5%; the floor per CTA k-step within 2% of 366.7
 (w1) and 467.7 (w2), a test of carrying F across cards; the G >= 8 SHARED
 slope within 2% of 0.0442; PRIVATE bytes within 5%; the rest printed.
+
+**Not run.** No H100 SXM5 was rented before the GH200 queue reached Granite;
+it ran on the GH200 under that registration (scored above, 2026-09-30). The
+files above are unchanged.
 
 ## 2026-09-29, before any Granite page: the floor falsifier's estimator, corrected
 

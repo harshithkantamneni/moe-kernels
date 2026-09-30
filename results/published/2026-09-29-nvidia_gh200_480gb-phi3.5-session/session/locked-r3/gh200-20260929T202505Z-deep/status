@@ -1,0 +1,15 @@
+2026-09-29T21:49:32Z locked_r3 start: tag gh200-20260929T202505Z-deep, locks [1710], G [4, 2], R3 args --model phi-3.5-moe --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --treads 9, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference
+2026-09-29T21:49:32Z card: NVIDIA GH200 480GB, GPU-2ffd21ff-af06-3b59-baff-81967dca4dec, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-09-29T21:49:32Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-09-29T21:49:32Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-09-29T21:49:32Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 151.55 W, 700.00 W
+2026-09-29T21:49:32Z G=4 start at lock 1710: pid 43975, tag gh200-20260929T202505Z-deep-lock1710, log r3-g4-lock1710.log
+2026-09-29T21:49:42Z G=4 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modelphi_3.5_moe-n64-7b62501d
+2026-09-29T22:05:13Z G=4 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 941 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modelphi_3.5_moe-n64-7b62501d
+2026-09-29T22:05:13Z G=2 start at lock 1710: pid 45021, tag gh200-20260929T202505Z-deep-lock1710, log r3-g2-lock1710.log
+2026-09-29T22:05:23Z G=2 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modelphi_3.5_moe-n64-d4af2011
+2026-09-29T22:21:44Z G=2 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 991 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modelphi_3.5_moe-n64-d4af2011
+2026-09-29T22:21:44Z all G held at lock 1710 MHz
+2026-09-29T22:22:00Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-09-29T22:22:00Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 138.92 W, 700.00 W
+2026-09-29T22:22:00Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

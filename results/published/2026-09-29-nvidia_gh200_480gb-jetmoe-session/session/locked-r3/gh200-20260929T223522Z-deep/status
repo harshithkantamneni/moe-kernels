@@ -1,0 +1,15 @@
+2026-09-29T23:28:32Z locked_r3 start: tag gh200-20260929T223522Z-deep, locks [1710], G [4, 2], R3 args --model jetmoe-8b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --treads 9, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference
+2026-09-29T23:28:32Z card: NVIDIA GH200 480GB, GPU-2ffd21ff-af06-3b59-baff-81967dca4dec, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-09-29T23:28:32Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-09-29T23:28:32Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-09-29T23:28:32Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 150.74 W, 700.00 W
+2026-09-29T23:28:32Z G=4 start at lock 1710: pid 42456, tag gh200-20260929T223522Z-deep-lock1710, log r3-g4-lock1710.log
+2026-09-29T23:28:42Z G=4 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modeljetmoe_8b-n64-p-9b196085
+2026-09-29T23:44:23Z G=4 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 951 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modeljetmoe_8b-n64-p-9b196085
+2026-09-29T23:44:23Z G=2 start at lock 1710: pid 43595, tag gh200-20260929T223522Z-deep-lock1710, log r3-g2-lock1710.log
+2026-09-29T23:44:33Z G=2 at lock 1710: R3 named its run directory nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modeljetmoe_8b-n64-p-ff64b86e
+2026-09-29T23:46:34Z G=2 slipped at lock 1710: R3 exit 1 CLAIM_FAIL, cells=28 worst=1680.0 MHz, 131 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modeljetmoe_8b-n64-p-ff64b86e; a timed cell read 1680 MHz, more than 15 MHz under the 1710 MHz lock
+2026-09-29T23:46:34Z lock 1710 MHz did not hold at G=2; no lower lock on the ladder
+2026-09-29T23:46:35Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-09-29T23:46:35Z read back after the reset: 1830 MHz, 1980 MHz, 0x0000000000000000, 144.95 W, 700.00 W
+2026-09-29T23:46:35Z locked_r3 end: exit 1, 1 CLAIM_FAIL: measured; VALIDITY passed; a CLAIM gate did not (a result, not a retry)

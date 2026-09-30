@@ -1,0 +1,66 @@
+2026-09-29T22:32:34Z setup_vm.sh start: commit a1b61186bd4b12224d54942af6065e30276d7f44 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-09-30T05:10:50Z
+2026-09-29T22:35:20Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-09-29T22:35:21Z driver start: commit a1b61186bd4b12224d54942af6065e30276d7f44, steps prelude bytes calibrate timed floor deep, deadline 2026-09-30T05:10:50Z (387 min of work left)
+2026-09-29T22:35:22Z prelude START: 3c.1 supported clocks, persistence, 700 W (estimate 3 min, cap 15 min, 387 min left)
+2026-09-29T22:35:22Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-09-29T22:35:22Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-09-29T22:35:22Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-09-29T22:35:22Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20260929T223522Z
+2026-09-29T22:35:22Z prelude END: exit 0 after 0 min
+2026-09-29T22:35:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T22:35:24Z bytes START: 3c.2 byte pages at the 1710 lock, G = 1 2 4 16 8 32 3 64, treads 1,2,3,4,5,6,7,8,9; base-clock control (estimate 55 min, cap 120 min, 387 min left)
+2026-09-29T22:35:40Z census for jetmoe-8b written (/home/ubuntu/moe/session/census-jetmoe-8b.json)
+2026-09-29T22:37:33Z bytes: G=1 page exit 3 after 110 s
+2026-09-29T22:39:25Z bytes: G=2 page exit 3 after 110 s
+2026-09-29T22:41:18Z bytes: G=4 page exit 3 after 111 s
+2026-09-29T22:43:10Z bytes: G=16 page exit 3 after 111 s
+2026-09-29T22:45:02Z bytes: G=8 page exit 3 after 110 s
+2026-09-29T22:46:55Z bytes: G=32 page exit 3 after 111 s
+2026-09-29T22:48:48Z bytes: G=3 page exit 3 after 111 s
+2026-09-29T22:50:40Z bytes: G=64 page exit 3 after 110 s
+2026-09-29T22:50:43Z bytes: lock block exit 0 (G=1 exit 3 22:37:33 110 s;G=2 exit 3 22:39:25 110 s;G=4 exit 3 22:41:18 111 s;G=16 exit 3 22:43:10 111 s;G=8 exit 3 22:45:02 110 s;G=32 exit 3 22:46:55 111 s;G=3 exit 3 22:48:48 111 s;G=64 exit 3 22:50:40 110 s;)
+2026-09-29T22:50:48Z bytes: no base-clock control (it compares clock regimes on mixtral-8x7b; no jetmoe-8b prediction reads it)
+2026-09-29T22:50:48Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-09-29T22:50:50Z bytes: analyse of 8 pages exit 3 (/home/ubuntu/moe/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/summary.json)
+2026-09-29T22:50:50Z bytes END: exit 0 after 15 min
+2026-09-29T22:50:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T22:50:53Z calibrate START: 3c.3 calibrate (the ruler), no lock in force (estimate 8 min, cap 30 min, 371 min left)
+2026-09-29T22:51:22Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-09-29T22:51:22Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3725.7 GB/s
+2026-09-29T22:51:22Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.2 GB/s against a derived pin rate of 4022.8 GB/s
+2026-09-29T22:51:22Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.2 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-09-29T22:51:22Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-09-29T22:51:22Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1440 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-09-29T22:51:22Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-09-29T22:51:22Z calibrate END: exit 0 after 0 min
+2026-09-29T22:51:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T22:51:25Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 (estimate 37 min, cap 90 min, 371 min left)
+2026-09-29T23:27:13Z timed: P2 locked_r3 exit 0
+2026-09-29T23:27:13Z timed: P5 locked_r3 exit 0
+2026-09-29T23:27:13Z timed: 2026-09-29T23:02:11Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modeljetmoe_8b-n64-p-d9bd231b
+2026-09-29T23:27:13Z timed: 2026-09-29T23:12:52Z G=32 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g32-l2flushtrue-modeljetmoe_8b-n64-1f286b22
+2026-09-29T23:27:13Z timed: 2026-09-29T23:27:08Z G=3 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=216 worst=1710.0 MHz, 841 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modeljetmoe_8b-n64-p-593be327
+2026-09-29T23:27:13Z timed END: exit 0 after 36 min
+2026-09-29T23:27:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T23:27:18Z floor START: 3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at 1710: P6 (estimate 15 min, cap 45 min, 335 min left)
+2026-09-29T23:28:22Z floor: r3f-g64 exit 0
+2026-09-29T23:28:22Z floor: r3f-g2 and r3f-g64-unlocked left out: no jetmoe-8b prediction reads them
+2026-09-29T23:28:22Z floor: r3f-g64-lock1710 exit 3
+2026-09-29T23:28:22Z floor END: exit 3 after 1 min
+2026-09-29T23:28:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-09-29T23:28:28Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 (estimate 33 min, cap 75 min, 334 min left)
+2026-09-29T23:46:50Z deep: locked_r3 exit 1 (gh200-20260929T223522Z-deep, G = 4 2)
+2026-09-29T23:46:55Z deep: 2026-09-29T23:44:23Z G=4 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 951 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g4-l2flushtrue-modeljetmoe_8b-n64-p-9b196085
+2026-09-29T23:46:55Z deep: 2026-09-29T23:46:34Z G=2 slipped at lock 1710: R3 exit 1 CLAIM_FAIL, cells=28 worst=1680.0 MHz, 131 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l2flushtrue-modeljetmoe_8b-n64-p-ff64b86e; a timed cell read 1680 MHz, more than 15 MHz under the 1710 MHz lock
+2026-09-29T23:46:55Z deep: G=4 treads 1..9 declared 9 VALIDITY not PASS: none
+2026-09-29T23:46:55Z deep: G=2 SHARED ms  | increments 
+2026-09-29T23:46:55Z deep: G=4 SHARED ms 0.2665 0.2654 0.3807 0.4904 0.6070 0.7190 0.8319 0.9409 1.0562 | increments -0.001 0.115 0.110 0.117 0.112 0.113 0.109 0.115
+2026-09-29T23:46:55Z deep: P4 G=4 n=8 to 9: 0.115 ms against the median of the others, 0.112
+2026-09-29T23:46:55Z deep END: exit 1 after 18 min
+2026-09-29T23:48:11Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
+2026-09-29T23:48:13Z driver end: exit 3
+2026-09-29T23:49:33Z RECOVERY start: timed G to retake [], deep G to retake [2 ]
+2026-09-30T00:19:07Z RECOVERY deep retake (G 2 , locks 1710 1605 1500) exit 0
+2026-09-30T00:19:07Z RECOVERY deep: 2026-09-30T00:03:16Z G=2 slipped at lock 1710: R3 exit on SIGKILL, cells=188 worst=1665.0 MHz, 821 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-
+2026-09-30T00:19:07Z RECOVERY deep: 2026-09-30T00:19:07Z G=2 held at lock 1605: R3 exit 1 CLAIM_FAIL, cells=243 worst=1605.0 MHz, 951 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l
+2026-09-30T00:19:07Z RECOVERY END

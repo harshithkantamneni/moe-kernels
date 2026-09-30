@@ -433,6 +433,13 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session": SESSION,
         # The small-K test of 2026-09-29: OLMoE-1B-7B on a fifth GH200 board.
         "2026-09-29-nvidia_gh200_480gb-olmoe-session": SESSION,
+        # The held-out queue of 2026-09-29/30, four models from 8x7B's fit:
+        # Qwen1.5-MoE-A2.7B, Phi-3.5-MoE and JetMoE-8B on a sixth GH200 board,
+        # Granite-3.0-3B-A800M on a seventh.
+        "2026-09-29-nvidia_gh200_480gb-qwen1.5-session": SESSION,
+        "2026-09-29-nvidia_gh200_480gb-phi3.5-session": SESSION,
+        "2026-09-29-nvidia_gh200_480gb-jetmoe-session": SESSION,
+        "2026-09-30-nvidia_gh200_480gb-granite-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

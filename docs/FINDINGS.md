@@ -956,6 +956,107 @@ every page, a constant gap between two GEMMs of one call that one clock cannot
 make, on GEMMs tens of microseconds long. Bytes do not depend on it; every timed
 cell held 1710 MHz by NVML.
 
+## The 2026-09-29/30 held-out queue: four models
+
+Four models none of the study had measured, each predicted from 8x7B's
+2026-09-27 GH200 fit with the per-CTA fixed cost and nothing fitted on the
+target, registered before any of their pages
+(`docs/registered/2026-09-29-{qwen1.5-moe-a2.7b,phi-3.5-moe,jetmoe-8b,granite-3.0-3b-a800m}-gh200.json`,
+0f77622, pushed at a1b6118), then run one after another, unattended, on
+Lambda GH200 480GBs: Qwen1.5-MoE-A2.7B (60 experts, top 4), Phi-3.5-MoE (16,
+top 2) and JetMoE-8B (8, top 2) on a sixth board (`board d67185`, the same
+machine three times, tree a1b6118), Granite-3.0-3B-A800M (40, top 8, 8 k-steps
+a w2 CTA) on a seventh (`board 1310e2`, tree a156392, which carries the
+corrected floor estimator below). Published at
+`results/published/2026-09-29-nvidia_gh200_480gb-{qwen1.5,phi3.5,jetmoe}-session`
+and `results/published/2026-09-30-nvidia_gh200_480gb-granite-session`; each
+session README cites the file for every number here.
+
+**Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
+each model's own counted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
+rms at or under 2%, no cell beyond 5%); the floor in cycles per CTA k-step
+within 2%; the G >= 8 SHARED slope over treads 2 to 6 within 2%; PRIVATE bytes
+within 5% on every cell.
+
+| model | time, own bytes | floor w1 | floor w2 | G >= 8 slope | PRIVATE bytes |
+|---|---|---|---|---|---|
+| Qwen1.5-MoE-A2.7B | HELD, 1.87%, none beyond 5% | HELD, 361.0 (+0.2%) | HELD, 385.8 (-0.7%) | HELD, -0.2% | HELD, w1 1.31%, w2 0.53% |
+| Phi-3.5-MoE | HELD, 0.57% | HELD, 349.6 (-0.7%) | HELD, 355.4 (+0.4%) | HELD, -1.2%, -1.4% | w1 HELD 0.36%; w2 FALSIFIED, 3 cells beyond 5% (G=64, n = 7 to 9) |
+| JetMoE-8B | FALSIFIED, 7.17%, 12 beyond 5% | HELD, 360.3 (0.0%) | FALSIFIED, 368.0 (+3.6%) | FALSIFIED, +5.4%, +2.6% | HELD, w1 0.19%, w2 0.59% |
+| Granite-3.0-3B-A800M | NOT SCORABLE, no VALID page | NOT SCORABLE (one cell of 4+ waves) | HELD, 459.8 (-1.4%), corrected estimator | NOT SCORABLE | HELD, w1 3.02%, w2 0.17% |
+
+Of four primary tests, two held, one failed and one could not be taken. The
+floor held on six of the seven GEMMs it could score, Granite's 8-k-step w2
+among them: the registered 466.5 is 344.1 + 979 / 8, the per-CTA fixed cost
+over a short CTA, and without that term the model would print 344.1, 25% under
+the capture. The floors above are the base-clock captures; the lock captures
+read within 0.3% of them, except Granite's w2, 0.8% lower (456.1, -2.22%
+against the registration, on a capture that fails FL1). PRIVATE bytes, the byte model's one scored quantity, held on seven
+of eight GEMMs; Phi's w2 misses only at its deepest G=64 cells (-5.1 to -8.0%),
+on the byte page that also fails V10 and C2.
+
+**Diagnosis, not tests.** Everything below was read off these pages after
+they were scored; nothing is fitted or adopted.
+
+- *Partial waves at low co-residency (JetMoE, n <= 3).* JetMoE's twelve
+  misses are two treads: at n = 1 every SHARED and PRIVATE cell is predicted
+  15 to 20% fast; at n = 3 SHARED is predicted 10 to 11% slow while PRIVATE is
+  within 2%; from n = 4 every tread is at 1% rms or under. JetMoE's w2 runs
+  0.48 n waves (live CTAs / (132 x occupancy 4)), so at n <= 3 its time is
+  set by the partial-last-wave term, and the miss changes sign from n = 1 to
+  n = 3 with n = 2 between (3.4% rms): a wave-quantisation pattern, not a
+  constant offset. The slope's failure is the same cells (its window starts
+  at n = 2), and the w2 floor's is the same geometry (next item). INTERPRETATION, untested: the n = 1 cells may belong to
+  the next regime instead; SHARED reads 0.2665 and 0.2654 ms at n = 1 and 2
+  on the G=4 page, a flat step, at the call time where Granite's calls level.
+- *Launch-bound calls (Granite).* Granite's SHARED and NATIVE calls read 0.238
+  to 0.291 ms at every n from 1 to 5 on all ten timed pages, where the model
+  prices SHARED from 0.110 ms at n = 1; from n = 6 they rise 0.043 to 0.046 ms
+  a tread (the prediction's own slope, 0.044) and come within 3% of it at n = 8
+  and 9 on the pages that reach them. Over the same treads the floor capture's GEMM cycles grow linearly
+  (w2 64k to 167k cycles from n = 2 to 6), so the flat part is outside the two
+  GEMMs' SM time. It is what failed the pages: PRIVATE's per-tread slope is
+  small on the plateau, so V5 (the declaration's per-M-tile cost against that
+  slope) is UNKNOWN or FAIL on all ten and C2 reads an apparent 4.2 to 7.0 TB/s
+  stream against the 3.73 TB/s ruler on nine, closest on the pages that reach
+  tread 9. INTERPRETATION, untested: the pages carry no host timeline, so a
+  launch-rate floor and the non-GEMM kernels' fixed time are not separated.
+  The timing model has no call-time floor, and one fitted on 8x7B, whose
+  calls never approach it, would not be identified.
+- *The floor estimator, corrected.* The floor falsifier was registered as the
+  slope over the floor capture's n = 2, 3, 4, 6. Where a GEMM runs few waves,
+  each cell's last wave is filled by a different fraction and the line tilts:
+  JetMoE's w2, at 0.97 to 2.91 waves, reads +3.6%, while every GEMM with at
+  least 4 waves a cell reads within 1.3% on the seven measured models. The
+  correction (a156392, registered before any Granite page, applied to Granite
+  only) scores the cells of at least 4 waves: Granite's w2 on n = 3, 4, 6 held
+  at -1.43%, where the all-cell line reads -3.63% and would have failed; Phi's
+  w2 (3.9 waves at n = 2) reads +0.42% all-cell and -0.63% corrected, inside
+  either way. JetMoE's w2 stays FALSIFIED as registered; a floor-only session
+  at n = 9 to 11 is registered (79c5034) to measure it at 4+ waves.
+
+**What the paper can claim, after eight tests.** From one card's 8x7B fit,
+with nothing fitted on the target, time from a model's own bytes to 2% on two
+of four held-out models (Qwen1.5 1.87%, Phi 0.57%); PRIVATE bytes to 5% on
+seven of the four models' eight GEMMs; the per-CTA floor on six of seven
+scorable GEMMs, down to an 8-k-step CTA. Not claimed: time where the call sits near its
+0.24 to 0.29 ms floor (Granite to n = 5, possibly JetMoE at n = 1) or where a
+GEMM runs one to one and a half waves (JetMoE at n = 3); the G >= 8 slope
+wherever those cells are in its window. Each of the two regimes is named here
+from the pages that found it and needs a registration on a model neither has
+seen.
+
+**Instrument.** Every byte page of the four fails V10, and the floors' lock
+captures FL1 on three, a gap between a call's two GEMMs' fitted clocks as on
+OLMoE (Granite's w1 fits 1623 to 1628 MHz with a negative offset); byte and
+cycle counts do not depend on the clock, and every scored timed cell held the
+1710 lock by NVML (Phi's G=3 page's worst cell 1695 MHz, inside one step). JetMoE's deep G=2 slipped
+at 1710 twice and was taken at 1605, which is not scored. The power cap (0x4)
+was in 15 to 21% of Phi's timed samples, 1 to 7% of the others', none of
+Granite's. Granite's first instance (2026-09-29, 16 minutes) never ran: it came
+up on the address the Qwen1.5 instance had released and its host key did not
+match the pinned one.
+
 ---
 
 ## The evidence base
