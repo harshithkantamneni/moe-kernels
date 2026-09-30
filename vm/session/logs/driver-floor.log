@@ -1,0 +1,30 @@
+== 2026-09-30T06:17:50Z step floor: 3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at 1710: P6
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 594c0f, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 3, 4, 6, 7, 8], 24 profiled launches at --clock-control base; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json: '/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json' is outside repository at '/home/ubuntu/moe/repo')
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 594c0f, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=2  NATIVE at treads [2, 3, 4, 6, 7, 8], 24 profiled launches at --clock-control base; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g2.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g2.json: '/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g2.json' is outside repository at '/home/ubuntu/moe/repo')
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 594c0f, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 3, 4, 6, 7, 8], 24 profiled launches at --clock-control none; 42 metrics asked, dropped []
+wrote /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-unlocked.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-unlocked.json: '/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-unlocked.json' is outside repository at '/home/ubuntu/moe/repo')
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 594c0f, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 3, 4, 6, 7, 8], 24 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 42 metrics asked, dropped []
+RESULT: VALIDITY FL1 FAIL every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock: off the lock: ['w2 fitted 1691 MHz'] (fit: w1 1712.5 MHz + 28.2 us over
+GATE FL1 VALIDITY FAIL   every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock
+              measured off the lock: ['w2 fitted 1691 MHz'] (fit: w1 1712.5 MHz + 28.2 us over 6 cells; w2 1691.4 MHz + 14.7 us over 6 cells)   gate each GEMM's duration = t0 + cycles / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell over 3 steps off
+              a FAIL here invalidates: this file as a reading at 1710 MHz; its numbers stand only as readings at the clocks its cells name
+wrote /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001
+2026-09-30T06:22:34Z floor: r3f-g64 exit 0
+2026-09-30T06:22:34Z floor: r3f-g2 exit 0
+2026-09-30T06:22:34Z floor: r3f-g64-unlocked exit 0
+2026-09-30T06:22:34Z floor: r3f-g64-lock1710 exit 3
