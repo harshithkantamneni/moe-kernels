@@ -128,6 +128,13 @@ cmd_prepare() {
   ssh_opts
   printf 'ip=%s\nbranch=%s\ncommit=%s\n' "$IP" "$BRANCH" "$sha" > "$RUN/run.env"
   say "prepare $RUN_ID: ubuntu@$IP, branch $BRANCH, commit $sha"
+  # A fresh instance has a fresh host key, and Lambda reuses IPs (2026-09-29: three
+  # GH200s in a row at one address): drop any key pinned for this IP by an earlier
+  # instance, so accept-new pins this one instead of refusing it as a changed host.
+  if [[ -f "$STATE_ROOT/known_hosts" ]] && ssh-keygen -F "$IP" -f "$STATE_ROOT/known_hosts" >/dev/null 2>&1; then
+    ssh-keygen -R "$IP" -f "$STATE_ROOT/known_hosts" >/dev/null 2>&1 \
+      && say "dropped the host key an earlier instance left for $IP"
+  fi
   wait_ssh
   # Nothing upgrades a package under the loaded module during the run (the
   # Driver/library mismatch of docs/LAMBDA.md section 2).

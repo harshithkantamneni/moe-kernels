@@ -1302,6 +1302,25 @@ def test_a_floor_only_session_on_jetmoe_plans_and_runs_its_deeper_treads(tmp_pat
         assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6, 9, 10, 11)
 
 
+def test_prepare_drops_a_host_key_an_earlier_instance_left_for_the_same_ip(tmp_path):
+    """Lambda reuses IPs: a key pinned for 1.2.3.4 by an earlier instance is removed
+    before prepare connects, and a key for another IP is kept."""
+    import shutil
+    if not shutil.which("ssh-keygen"):
+        pytest.skip("no ssh-keygen")
+    lap = Laptop(tmp_path)
+    lap.make_branch()
+    kh = lap.state / "known_hosts"
+    kh.parent.mkdir(parents=True, exist_ok=True)
+    key = ("AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl")
+    kh.write_text(f"1.2.3.4 ssh-ed25519 {key}\n5.6.7.8 ssh-ed25519 {key}\n")
+    got = lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r", "--branch", "run-gh200-t")
+    assert got.returncode == 0, got.stdout
+    assert "dropped the host key an earlier instance left for 1.2.3.4" in got.stdout
+    text = kh.read_text()
+    assert "1.2.3.4" not in text and "5.6.7.8" in text
+
+
 def test_start_passes_the_model_to_the_driver(tmp_path):
     lap = Laptop(tmp_path)
     lap.make_branch()
