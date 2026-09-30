@@ -64,3 +64,4 @@
 2026-09-30T02:08:04Z RECOVERY start: timed G to retake [3 8 32 ], deep G to retake [2 4 ]
 2026-09-30T02:22:06Z RECOVERY timed G=3 retake exit 0: G=3 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1710.0 MHz, 841 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypeb
 2026-09-30T02:32:41Z RECOVERY timed G=8 retake exit 0: G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 631 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypeb
+2026-09-30T02:43:15Z RECOVERY timed G=32 retake exit 0: G=32 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 631 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtype
