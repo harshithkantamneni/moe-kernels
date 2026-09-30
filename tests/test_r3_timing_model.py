@@ -92,8 +92,10 @@ def run_dir(session: Path, run: str) -> Path:
 
 #: The judge's pins (2026-09-26) were fitted with the hard max; they are held
 #: there, and the knee (P_KNEE, 2026-09-27) is held by its own tests below. They
-#: predate the partial last wave, the dead CTAs and the per-CTA fixed cost.
-HARD_MAX = ("--p-knee", "inf", "--no-tail", "--no-dead", "--no-cta-fixed")
+#: predate the partial last wave, the dead CTAs, the per-CTA fixed cost and the
+#: partial wave's co-residency law (`--no-cores` is implied by `--no-tail`; it is
+#: named so the tuple says every term it drops).
+HARD_MAX = ("--p-knee", "inf", "--no-tail", "--no-cores", "--no-dead", "--no-cta-fixed")
 
 
 def build(*argv):
@@ -258,9 +260,11 @@ def test_the_fast_sum_is_the_per_cta_maximum_summed():
 
 
 def test_the_partial_last_wave_costs_at_least_one_cta_lifetime(monkeypatch):
-    """Under two waves of SMs x occ slots the last k CTAs cost max(their summed
-    time, S c occ); a lone partial wave is that tail entire; two or more waves,
-    or TAIL off, price every CTA at throughput as before."""
+    """Under --no-cores (every pin before 2026-09-30): under two waves of SMs x
+    occ slots the last k CTAs cost max(their summed time, S c occ); a lone
+    partial wave is that tail entire; two or more waves, or TAIL off, price
+    every CTA at throughput as before."""
+    monkeypatch.setattr(M, "CORES", False)
     sms, occ, c_ns, inf = 132, 2, 206.9, float("inf")
     life = M.floor_ksteps("w2") * c_ns * 1e-6 * occ
 
@@ -1129,3 +1133,205 @@ def test_the_floor_capture_slope_is_c_plus_f_over_s(fixed_0927):
         geo = M.GEOMETRY[g]
         want = p6["cycles_per_cta_kstep"] * (geo.ksteps + M.CTA_FIXED_KSTEPS[g]) / geo.ksteps
         assert p6["capture_slope"][g] == pytest.approx(want, rel=1e-12)
+
+
+# --------------------------------------------------------------------------
+# The partial wave's co-residency law (CORES, 2026-09-30): round-robin k_SM,
+# g(k) = k, and the wave's bytes at min(bw, rho x its CTAs).
+# --------------------------------------------------------------------------
+
+def _flat(N, per_cta=0.0):
+    m = np.full(N, float(per_cta))
+    return M.Window(live=N, leads=N, reads=float(m.sum()), sorted_mean=np.sort(m),
+                    cumsum=np.concatenate([[0.0], np.cumsum(np.sort(m))]), mean=m,
+                    rcum=np.concatenate([[0.0], np.cumsum(m)]))
+
+
+def test_the_constants_of_the_co_residency_law():
+    assert M.CORES and not M.CORES_PER_LEAD
+    assert M.CORES_RHO_GBPS == 11.48
+
+
+def test_the_partial_waves_floor_is_the_round_robin_share():
+    """With no bytes, a lone wave of N CTAs lives ceil(N / SMs) S'c (the old
+    rule: occ S'c), and a tail of k after one full wave ceil(k / SMs) S'c."""
+    sms, occ, c_ns, inf = 132, 4, 200.0, float("inf")
+    unit = M.floor_ksteps("w2") * c_ns * 1e-6
+    for N, want_units in ((100, 1), (256, 2), (300, 3), (512, 4)):
+        got = M.gemm_ms(_flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ)
+        assert got == pytest.approx(max(want_units * unit,
+                                        N * M.wave_q(N, sms) * unit / sms), rel=1e-9), N
+    # 768 CTAs: 528 then 240 (k_SM 2); the old rule priced the tail at occ = 4 units
+    N = 768
+    floor = M.wave_q(N, sms) * unit / sms
+    got = M.gemm_ms(_flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ)
+    assert got == pytest.approx(528 * floor + max(240 * floor, 2 * unit), rel=1e-9)
+    with M.cores(False):
+        old = M.gemm_ms(_flat(N), "w2", 1.0, c_ns, 1e15, sms, p=inf, occ=occ)
+    assert old == pytest.approx(528 * floor + 4 * unit, rel=1e-9)
+    assert M.CORES, "cores() restores the switch"
+
+
+def test_the_partial_waves_bytes_stream_at_rho_per_resident_cta():
+    """With no floor (c = 0), a lone wave of N CTAs of b bytes each takes
+    N (b + o) / min(bw, rho N): rho-bound at 100 CTAs, bw-bound at 500."""
+    sms, occ, bw, b = 132, 4, 3600.0, 720_896.0
+    for N in (100, 256, 500):
+        got = M.gemm_ms(_flat(N, b), "w2", 1.0, 0.0, bw, sms, occ=occ)
+        rate = min(bw, M.CORES_RHO_GBPS * N)
+        stream = N * (b + M.OUT_TILE) / (bw * 1e6)
+        assert got == pytest.approx(max(stream, N * (b + M.OUT_TILE) / (rate * 1e6)),
+                                    rel=1e-9), N
+    assert M.CORES_RHO_GBPS * 500 > 3600.0 and M.CORES_RHO_GBPS * 256 < 3600.0
+
+
+FLOOR_BOUND_SESSIONS = {
+    "mixtral-8x7b": ("2026-09-27-nvidia_gh200_480gb-session",
+                     "2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session"),
+    "mixtral-8x22b": ("2026-09-28-nvidia_gh200_480gb-8x22b-session",),
+    "qwen2-57b-a14b": ("2026-09-28-nvidia_gh200_480gb-qwen2-57b-session",),
+    "olmoe-1b-7b": ("2026-09-29-nvidia_gh200_480gb-olmoe-session",),
+}
+
+
+def _floor_bound_cells(models):
+    """Every NATIVE and SHARED GEMM of the calibration models' lock-1710 byte
+    pages at G >= 8 and their floor captures (base and lock clock, not the
+    unlocked ones; 8x7B's include a G=2 capture), n >= 2: (series,
+    gemm, S, live CTAs, cycles)."""
+    out = []
+    for model in models:
+        old = M.set_model(model)
+        try:
+            for sess in FLOOR_BOUND_SESSIONS[model]:
+                root = next((PUB / sess / "results").glob("*r3-counters"))
+                pages = [(f, "c") for f in sorted((root / "lock1710").glob("r3c-g*.json"))]
+                pages += [(f, "f") for f in sorted(root.glob("r3f-g*.json"))
+                          if not f.stem.endswith("-unlocked")]
+                for f, kind in pages:
+                    if not f.exists():
+                        continue
+                    page = json.loads(f.read_text())
+                    G = int((page.get("design") or page["plan"])["group_m"])
+                    if kind == "c" and G < 8:
+                        continue
+                    for c in page["cells"]:
+                        if c["arm"] not in ("native", "shared") or int(c["n"]) < 2:
+                            continue
+                        rec = c["recorded"] if kind == "c" else c["per_gemm"]
+                        for g in M.GEMMS:
+                            out.append(((model, str(f), G, c["arm"], g), g, M.GEOMETRY[g].ksteps,
+                                        M.live_rows(int(c["n"])) * M.GEOMETRY[g].npn,
+                                        float(rec[g]["sm__cycles_elapsed.avg"])))
+        finally:
+            M.set_model(old)
+    return out
+
+
+def _scheduler_fit(rows, sched, c=344.1, F=None):
+    """Least squares on relative residuals: cycles = a_series + (W occ + tail) (S c + F_g),
+    W full waves; the tail at g(k_SM) (free, `rr`), at occ (`packed`, the old
+    lifetime) or N / SMs overall (`fluid`). Returns (rms, {(gemm, k): g})."""
+    F = F or {g: M.CTA_FIXED_KSTEPS[g] * c for g in M.GEMMS}
+    occ = M.ASSUMED_OCCUPANCY["9.0"]
+    series = {}
+    for r in rows:
+        series.setdefault(r[0], len(series))
+    gcols = [(g, k) for g in M.GEMMS for k in range(1, occ[g])] if sched == "rr" else []
+    X = np.zeros((len(rows), len(gcols) + len(series)))
+    y = np.ones(len(rows))
+    for i, (key, g, S, N, cyc) in enumerate(rows):
+        u, o = S * c + F[g], occ[g]
+        W = N // (132 * o)
+        rem = N - W * 132 * o
+        k = -(-rem // 132)
+        const = W * o * u if sched != "fluid" else N / 132 * u
+        if sched == "rr" and 0 < k < o:
+            X[i, gcols.index((g, k))] = u / cyc
+        elif sched == "rr" and k:
+            const += k * u
+        elif sched == "packed" and rem:
+            const += o * u
+        X[i, len(gcols) + series[key]] = 1.0 / cyc
+        y[i] -= const / cyc
+    b, *_ = np.linalg.lstsq(X, y, rcond=None)
+    fit = {gk: float(b[j]) for j, gk in enumerate(gcols)}
+    return float(np.sqrt(np.mean((X @ b - y) ** 2))), fit
+
+
+def test_the_floor_in_a_partial_wave_is_the_throughput_share_on_the_calibration_models():
+    """620 floor-bound GEMM cells of the four calibration models: g(k) free
+    reads w1 0.76, 2.10, 3.10, 4.10 and w2 1.15, 1.94, 3.21 (rms 0.349%); g(k) = k
+    0.383%; every tail CTA at its full-occupancy lifetime (the old rule) 1.86%.
+    No latency floor: g(k) / k is 0.76 to 1.15, never near occ / k."""
+    if not all((PUB / s[0]).exists() for s in FLOOR_BOUND_SESSIONS.values()):
+        pytest.skip("the four calibration sessions are not all in this tree")
+    rows = _floor_bound_cells(FLOOR_BOUND_SESSIONS)
+    assert len(rows) == 620
+    rms_rr, g = _scheduler_fit(rows, "rr")
+    assert 100 * rms_rr == pytest.approx(0.349, abs=0.005)
+    want = {("w1", 1): 0.763, ("w1", 2): 2.097, ("w1", 3): 3.099, ("w1", 4): 4.097,
+            ("w2", 1): 1.151, ("w2", 2): 1.943, ("w2", 3): 3.211}
+    for gk, v in want.items():
+        assert g[gk] == pytest.approx(v, abs=0.005), gk
+        assert 0.7 < g[gk] / gk[1] < 1.2, gk
+    assert 100 * _scheduler_fit(rows, "packed")[0] == pytest.approx(1.863, abs=0.005)
+    assert 100 * _scheduler_fit(rows, "fluid")[0] == pytest.approx(0.573, abs=0.005)
+
+
+def test_the_law_is_invisible_on_8x7b(fixed_0927):
+    """8x7B's in-domain cells (w2 n = 1, 2) run k_SM = 4 = occ and a bandwidth-
+    bound lone wave, so its fit, rms and LOGO are the old rule's exactly."""
+    on = fixed_0927[0]
+    off = build(*_lock1710_runs(GH200_0927), "--counters", GH200_0927_COUNTERS, "--no-cores")
+    assert on["main"].params == pytest.approx(off["main"].params, rel=1e-12)
+    assert on["score"]["rms"] == pytest.approx(off["score"]["rms"], rel=1e-12)
+    assert M.CORES, "a build must not leave --no-cores behind"
+
+
+def test_rho_is_the_calibration_counters_measurement(fixed_0927):
+    """rho minimises the per-GEMM model's miss against in-kernel cycles over the
+    72 calibration cells in the law's domain (8x7B w2 n = 1, 2; 8x22B w2 n = 1),
+    at the 2026-09-27 fit's c and bw: 11.48 GB/s, rms 2.25%, flat to 0.02."""
+    roots = {"mixtral-8x7b": GH200_0927_COUNTERS,
+             "mixtral-8x22b": CTA_COUNTER_PAGES["mixtral-8x22b"]}
+    if not all(r.exists() for r in roots.values()):
+        pytest.skip("the 8x7B and 8x22B counter pages are not both in this tree")
+    p = fixed_0927[0]["main"].params
+    occ = M.ASSUMED_OCCUPANCY["9.0"]
+    cells = []
+    for model, root in roots.items():
+        old = M.set_model(model)
+        try:
+            for G, c in _counter_cells(root):
+                n = int(c["n"])
+                g = "w2"
+                if M.live_rows(n) * M.GEOMETRY[g].npn >= 2 * 132 * occ[g]:
+                    continue
+                win = M.window(c["arm"], int(c["declared"]), G, n, g,
+                               M.window_width(M.K_W, 132, occ[g]))
+                cells.append((model, c["arm"], int(c["declared"]), G, n, win,
+                              c["per_gemm"][g]["dram_bytes_read"] / win.reads,
+                              c["recorded"][g]["sm__cycles_elapsed.avg"] / 1710e3))
+        finally:
+            M.set_model(old)
+    assert len(cells) == 72
+
+    def rms(rho):
+        saved, M.CORES_RHO_GBPS = M.CORES_RHO_GBPS, rho
+        try:
+            v = []
+            for model, _arm, D, _G, n, win, sigma, ms in cells:
+                old = M.set_model(model)
+                try:
+                    t = M.gemm_ms(win, "w2", sigma, p["c"], p["bw"], 132, occ=4) + \
+                        M.dead_ms(D, n, "w2", p["c"], M.K_W, 4)
+                finally:
+                    M.set_model(old)
+                v.append(t / ms - 1)
+            return float(np.sqrt(np.mean(np.square(v))))
+        finally:
+            M.CORES_RHO_GBPS = saved
+    at = rms(11.48)
+    assert 100 * at == pytest.approx(2.25, abs=0.01)
+    assert at < rms(11.28) and at < rms(11.68)

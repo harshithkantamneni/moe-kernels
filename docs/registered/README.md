@@ -325,3 +325,59 @@ not yet measured.
 (-0.66%) and w2 on n = 6 to 8 354.2 (+1.65%; unlocked -0.33%, lock +0.06%),
 HELD. The lock captures fail FL1 alone (JetMoE's w2 reads +2.61% there). The
 files above are unchanged.
+
+## 2026-09-30, before any page: the partial wave's co-residency law, Mixtral 8x7B at TP=8 (floor capture)
+
+The timing model's partial-wave rule (TAIL, a partial wave's CTAs at their
+full-occupancy lifetime S'c occ) is replaced by a co-residency law (CORES in
+`scripts/r3_timing_model.py`): the partial wave is dealt round-robin, k_SM =
+ceil(k / 132) CTAs per SM, its floor lifetime S'c g(k_SM) with g(k) = k (620
+floor-bound GEMM cells of the four calibration models: g free reads 0.76 to
+1.15 x k, the old lifetime's rms is 1.86% against 0.35%), and its bytes at
+min(bw, rho x k), rho = 11.48 GB/s per resident CTA from the calibration
+counters (8x22B's n = 1 tail). Whether rho is pooled over the wave or held per
+slab-fetching CTA the calibration cannot tell; the pooled form was chosen on
+JetMoE-8B's published n = 3 page (diagnosis). This registration tests both.
+
+Model: `mixtral-8x7b-tp8` (moe/spec.py, a TP=8 shard of the verified
+Mixtral 8x7B; no R3 page of it exists). Capture: NATIVE floor captures at
+G = 64 and 8, `--floor-treads 1 2 3 4 5 6 8 10`, base clock and the 1710 lock
+(primary: the base-clock captures; every lock capture of a short-kernel model
+has so far failed FL1 on its clock fit alone, and a lock capture that passes
+FL1 is scored beside it). Run as `gh200_model_session.sh --steps prelude,floor
+--floor-groups 64,8 --floor-treads 1,2,3,4,5,6,8,10`. Predictions:
+`2026-09-30-mixtral-8x7b-tp8-floor-gh200.{json,txt}` (per GEMM
+`sm__cycles_elapsed.avg`, every cell, under the law and its three rivals; one
+unit S'c = 22,690 cycles on w1, 10,655 on w2), from
+`scripts/cores_heldout_predict.py`, 8x7B's 2026-09-27 fit.
+
+Coverage. The one cell that separates the laws is w1 at n = 2: 896 live CTAs,
+one full wave of 660 and a partial wave of 236 at 2 per SM (104 SMs) and 1 (28),
+118 of them fetching a slab, floor-bound. w1 n = 1 (a lone wave of 448, 4 and 3
+per SM below occupancy 5, every CTA fetching) is bandwidth-bound and w2 n = 1, 2
+run k_SM = 4 = occ: controls, every law prints the same. n = 3 to 10 run two or
+more waves (partial waves of 24 to 520 CTAs, 1 to 4 per SM) and are throughput
+under every law: the rule's domain boundary.
+
+| w1, n = 2 (both G) | cycles | units | D = cycles(n=4) - cycles(n=2) |
+|---|---:|---:|---:|
+| co-residency law (registered) | 162,474 | 7.16 | 155,193 (6.84 u) |
+| old lifetime (`--no-cores`) | 230,546 | 10.16 | 87,121 (3.84 u) |
+| per fetching CTA (`--cores-per-lead`) | 196,496 | 8.66 | 121,171 (5.34 u) |
+| throughput (`--no-tail`) | 158,962 | 7.01 | 158,705 (6.99 u) |
+
+What this separates, stated before the pages: the law from the old lifetime
+(`--no-cores`) and from rho per fetching CTA (`--cores-per-lead`), each
+outside F1 and F2 at w1 n = 2; NOT from plain throughput pricing (`--no-tail`,
+158,962 and D 158,705, inside both), which the law reduces to wherever a partial
+wave is floor-bound.
+
+Falsifiers, per G, on the base-clock captures: F1 D within 0.5 unit (11,345 cycles)
+of 155,193 (D cancels the per-GEMM constant the model lacks: every calibration
+series reads 0.3 to 1.1 units above it); F2 w1 n = 2 within -3% to +8% of
+162,474; F3 every other cell within 8% of its prediction (a control that misses
+says the miss is not this law); F4 the per-CTA floor over the cells of >= 4
+waves (w1 n = 6, 8, 10; w2 n = 5, 6, 8, 10) within 2% of 352.2 (w1) and 379.1
+(w2) cycles per CTA k-step. The score reprices every cell with the capture's
+own `dram__bytes_read.sum`; the registered numbers use the launch order's own
+reads (sigma = 1).

@@ -2,7 +2,7 @@
 # THE LAPTOP'S SIDE OF AN UNATTENDED VM RUN (docs/LAMBDA.md section 3c).
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
-#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b]
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b] [--floor-groups G,G --floor-treads n,n]
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -192,6 +192,9 @@ cmd_start() {
   local model=()
   [[ -z "${MODEL:-}" ]] || { [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || refuse "--model $MODEL: not a model name"; model=(--model "$MODEL"); }
   # --steps: the driver's own step list (e.g. `floor` for a floor-only session), passed as given
+  # --floor-groups / --floor-treads: a registered floor design, passed as given
+  [[ -z "${FLOOR_GROUPS_ARG:-}" ]] || { [[ "$FLOOR_GROUPS_ARG" =~ ^[0-9]+(,[0-9]+)*$ ]] || refuse "--floor-groups $FLOOR_GROUPS_ARG: a comma-separated list of integers"; model+=(--floor-groups "$FLOOR_GROUPS_ARG"); }
+  [[ -z "${FLOOR_TREADS_ARG:-}" ]] || { [[ "$FLOOR_TREADS_ARG" =~ ^[0-9]+(,[0-9]+)*$ ]] || refuse "--floor-treads $FLOOR_TREADS_ARG: a comma-separated list of integers"; model+=(--floor-treads "$FLOOR_TREADS_ARG"); }
   [[ -z "${STEPS_ARG:-}" ]] || { [[ "$STEPS_ARG" =~ ^[a-z0-9]+(,[a-z0-9]+)*$ ]] || refuse "--steps $STEPS_ARG: a comma-separated list of step names"; model+=(--steps "$STEPS_ARG"); }
   vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
     > "$RUN/driver-plan.txt" 2>&1 || true
@@ -256,7 +259,7 @@ cmd_forget() {
 }
 
 sub="${1:-}"; [[ -n "$sub" ]] && shift
-IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""
+IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""; FLOOR_GROUPS_ARG=""; FLOOR_TREADS_ARG=""
 while (( $# )); do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
@@ -265,6 +268,8 @@ while (( $# )); do
     --deadline) DEADLINE="${2:-}"; shift 2 ;;
     --model) MODEL="${2:-}"; shift 2 ;;
     --steps) STEPS_ARG="${2:-}"; shift 2 ;;
+    --floor-groups) FLOOR_GROUPS_ARG="${2:-}"; shift 2 ;;
+    --floor-treads) FLOOR_TREADS_ARG="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) refuse "unknown argument $1" ;;
   esac

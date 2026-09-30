@@ -61,7 +61,10 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
      S_g, every pin before 2026-09-29), smax_p(f, m) = (f^p + m^p)^(1/p)
      with p = P_KNEE = 14, a fitted study constant (2026-09-27: until then a
      hard max, which priced a CTA whose DRAM time sits near its floor at the
-     larger of the two; see P_KNEE).
+     larger of the two; see P_KNEE). A grid under two waves prices its last
+     partial wave of k CTAs at no less than its co-residency lifetime (CORES,
+     2026-09-30): max(ceil(k / SMs) S'_g c, the wave's bytes / min(bw, rho k)),
+     rho = CORES_RHO_GBPS; `--no-cores` is the lifetime S'_g c occ_g before it.
   7. T = T0 + sum_g sum_i t_i + n B_other / bw, B_other = 25,165,824 B per
      tread (silu_and_mul reads [256, 2F] and writes [256, F], moe_sum reads
      [256, H] and writes [128, H], bf16), plus for NATIVE s_small when the
@@ -525,6 +528,10 @@ class Window:
     cumsum: np.ndarray
     #: The same box means in launch order (the tail's CTAs are the last ones).
     mean: np.ndarray
+    #: The prefix sums of r_i itself in launch order (not box means): what the
+    #: last k CTAs read, for the partial wave's DRAM term (CORES). None on a
+    #: hand-built Window, which then reads the box means' sum instead.
+    rcum: np.ndarray | None = None
 
 
 @cache
@@ -534,7 +541,8 @@ def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window
     s = np.sort(m)
     m.setflags(write=False)
     return Window(live=int(r.size), leads=leads, reads=float(r.sum()), sorted_mean=s,
-                  cumsum=np.concatenate([[0.0], np.cumsum(s)]), mean=m)
+                  cumsum=np.concatenate([[0.0], np.cumsum(s)]), mean=m,
+                  rcum=np.concatenate([[0.0], np.cumsum(r)]))
 
 
 #: THE PARTIAL LAST WAVE (2026-09-28). A grid of N live CTAs under 2 x SMs x
@@ -553,6 +561,82 @@ def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window
 #: no tail cost in w1's many-wave tails. No parameter added. `--no-tail` (the
 #: judge's pins) prices every CTA at throughput.
 TAIL = True
+
+#: THE PARTIAL WAVE'S CO-RESIDENCY LAW (2026-09-30), which replaces the lifetime
+#: above (`--no-cores` restores it). The last k CTAs of a grid under two waves
+#: start together and are dealt round-robin, CTA j of the partial wave to SM
+#: j mod SMs, so an SM holds k_SM = ceil(k / SMs) of them, not occ_g. Their
+#: lifetime is the larger of two terms:
+#:   floor  S'_g c g(k_SM), g(k) = k: a CTA sharing its SM with k - 1 others runs
+#:          a k-step in k c, the throughput share, at every k. MEASURED on the four
+#:          calibration models' counter pages (8x7B incl. its floor session,
+#:          8x22B, Qwen2-57B, OLMoE; 620 floor-bound NATIVE and SHARED GEMM cells,
+#:          G >= 8 and the floor captures, n >= 2): with g free and one intercept
+#:          per series, g_w1(1..4) = 0.76, 2.10, 3.10, 4.10 and g_w2(1..3) = 1.15,
+#:          1.94, 3.21 (rms 0.349%; g(k) = k 0.383%; every CTA at occ_g, the
+#:          lifetime above, 1.86%). No latency floor is seen: a CTA alone on its
+#:          SM is not held near its full-occupancy lifetime. g_w1(1) under 1 is
+#:          below the shared-memory limit (352 cycles), an intercept artefact, so
+#:          g(k) = k is adopted and adds no constant.
+#:   DRAM   the partial wave's bytes (sigma r_i + o over its k CTAs) at
+#:          min(bw, CORES_RHO_GBPS x k): the wave streams at most rho per
+#:          resident CTA. MEASURED, not fitted on timing: rho 11.48 GB/s from the
+#:          72 calibration GEMM cells in this rule's domain (8x7B w2 n = 1, 2;
+#:          8x22B w2 n = 1; every arm and G), per-GEMM model against in-kernel
+#:          cycles at the 2026-09-27 fit's c and bw; leave-one-G-out 11.34 to
+#:          11.63. Only 8x22B's n = 1 tail (240 CTAs, every one fetching its slab)
+#:          binds it; there the old lifetime was +3.2% (NATIVE, SHARED) and +5.8%
+#:          (PRIVATE) against the counters and this rule is -1.2% and +1.1%.
+#: WHICH FORM IS A CHOICE THE CALIBRATION CANNOT MAKE: rho per resident CTA
+#: pooled over the wave, or rho per slab-fetching CTA (`--cores-per-lead`),
+#: read the same on 8x22B, where every tail CTA fetches. JetMoE-8B's SHARED
+#: n = 3 w2 tail (240 CTAs, 90 fetching) separates them: pooled -4.3%, per
+#: lead +18.9%, the old lifetime +27.0% against its counters. The pooled form
+#: is chosen on that page, which is published and not calibration: it is
+#: DIAGNOSIS, and the held-out registration (docs/registered, 2026-09-30) is
+#: what tests it.
+CORES = True
+CORES_RHO_GBPS = 11.48
+CORES_PER_LEAD = False
+
+
+def cores_lifetime(win: Window, k: int, gemm: str, sigma: float, c_ns: float, bw: float,
+                   sms: int) -> float:
+    """The partial wave's lifetime in ms under the co-residency law (CORES): the
+    last k CTAs of `win`, dealt round-robin to `sms` SMs."""
+    floor = math.ceil(k / sms) * floor_ksteps(gemm) * c_ns * 1e-6
+    lo = win.live - k
+    if win.rcum is not None:
+        raw = win.rcum[win.live] - win.rcum[lo]
+    else:
+        raw = float(win.mean[lo:].sum())
+    if CORES_PER_LEAD:
+        geo = GEOMETRY[gemm]
+        dram = ((sigma * (geo.slab + geo.arow / geo.npn) + OUT_TILE) / (CORES_RHO_GBPS * 1e6)
+                if _tail_has_lead(win, k, gemm) else 0.0)
+    else:
+        dram = (sigma * raw + OUT_TILE * k) / (min(bw, CORES_RHO_GBPS * k) * 1e6)
+    return max(floor, dram)
+
+
+def _tail_has_lead(win: Window, k: int, gemm: str) -> bool:
+    """Whether any of the last k CTAs fetches a slab (r_i above the A-row share)."""
+    if win.rcum is None:
+        return False
+    geo = GEOMETRY[gemm]
+    r = np.diff(win.rcum[win.live - k:])
+    return bool((r > geo.arow / geo.npn * 1.5).any())
+
+
+@contextlib.contextmanager
+def cores(on: bool):
+    """Hold CORES at `on` for a block (a caller pricing cells outside `build`)."""
+    global CORES
+    saved, CORES = CORES, bool(on)
+    try:
+        yield
+    finally:
+        CORES = saved
 
 #: THE DEAD-CTA TAIL (2026-09-29). The grid is sized for the declaration, ceil((ids
 #: + D (BLOCK_M - 1)) / BLOCK_M) M-rows, and every CTA past the live rows loads
@@ -635,7 +719,10 @@ def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: i
         slots = sms * occ
         k = win.live - slots if win.live > slots else win.live
         t = smax(floor, (sigma * win.mean + OUT_TILE) / rate, p)
-        lifetime = floor_ksteps(gemm) * c_ns * 1e-6 * occ
+        if CORES:
+            lifetime = cores_lifetime(win, k, gemm, sigma, c_ns, bw, sms)
+        else:
+            lifetime = floor_ksteps(gemm) * c_ns * 1e-6 * occ
         return float(t[:win.live - k].sum() + max(float(t[win.live - k:].sum()), lifetime))
     if np.isinf(p):
         k = int(np.searchsorted(win.sorted_mean, (floor * rate - OUT_TILE) / sigma,
@@ -1621,14 +1708,17 @@ def find_counters(args, inputs) -> dict | None:
 def build(args) -> dict:
     """Everything the page prints, as one dict (the --out JSON), under the
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
-    global P_KNEE, TAIL, DEAD, CTA_FIXED
+    global P_KNEE, TAIL, DEAD, CTA_FIXED, CORES, CORES_PER_LEAD
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
     saved_tail, TAIL = TAIL, not getattr(args, "no_tail", False)
+    saved_cores, CORES = CORES, not getattr(args, "no_cores", False)
+    saved_lead, CORES_PER_LEAD = CORES_PER_LEAD, bool(getattr(args, "cores_per_lead", False))
     saved_dead, DEAD = DEAD, not getattr(args, "no_dead", False)
     saved_fixed, CTA_FIXED = CTA_FIXED, not getattr(args, "no_cta_fixed", False)
     saved_model = MODEL
     if not P_KNEE >= 1:
         P_KNEE, TAIL, DEAD, CTA_FIXED = saved, saved_tail, saved_dead, saved_fixed
+        CORES, CORES_PER_LEAD = saved_cores, saved_lead
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
                       "the hard max)")
     try:
@@ -1636,6 +1726,7 @@ def build(args) -> dict:
     finally:
         P_KNEE = saved
         TAIL = saved_tail
+        CORES, CORES_PER_LEAD = saved_cores, saved_lead
         DEAD = saved_dead
         CTA_FIXED = saved_fixed
         if MODEL != saved_model:
@@ -2086,6 +2177,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-tail", action="store_true",
                    help="price a partial last wave at throughput (the judge's pins); by "
                         "default its CTAs cost their whole lifetime (TAIL)")
+    p.add_argument("--no-cores", action="store_true",
+                   help="price a partial last wave's CTAs at their full-occupancy lifetime "
+                        "S'_g c occ_g (every pin before 2026-09-30); by default the "
+                        "co-residency law (CORES): round-robin k_SM, g(k) = k, and the "
+                        f"wave's bytes at min(bw, {CORES_RHO_GBPS} GB/s x its CTAs)")
+    p.add_argument("--cores-per-lead", action="store_true",
+                   help="the co-residency law's DRAM term per slab-fetching CTA (rho each) "
+                        "instead of pooled over the wave; the form the calibration cannot "
+                        "tell apart from the default")
     p.add_argument("--no-dead", action="store_true",
                    help="price the grid's dead CTAs at zero (the judge's pins); by default "
                         f"each costs {DEAD_CTA_NS} ns of dispatch past one effective lifetime "

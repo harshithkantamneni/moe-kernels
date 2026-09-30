@@ -1353,6 +1353,37 @@ def test_start_passes_a_step_list_to_the_driver_and_refuses_a_malformed_one(tmp_
     assert bad.returncode != 0 and "comma-separated list of step names" in bad.stdout
 
 
+def test_a_registered_floor_design_reaches_the_plan_and_malformed_lists_are_refused():
+    """--floor-groups/--floor-treads replace the floor layout (the 2026-09-30 tp8 design);
+    the plan names it, and a list that is not integers is refused."""
+    def plan(*a):
+        return subprocess.run(["bash", str(DRIVER), "--dry-run", *a], capture_output=True,
+                              text=True, timeout=60, env={**os.environ, "HOME": "/nonexistent"})
+    got = plan("--model", "mixtral-8x7b-tp8", "--steps", "prelude,floor",
+               "--floor-groups", "64,8", "--floor-treads", "1,2,3,4,5,6,8,10")
+    assert "registered floor design: G = 64 8, treads 1,2,3,4,5,6,8,10" in got.stdout
+    assert "--floor-treads 1 2 3 4 5 6 8 10" in got.stdout
+    assert "registered floor design" not in plan("--model", "mixtral-8x7b-tp8").stdout
+    bad = plan("--floor-groups", "8;x")
+    assert bad.returncode == exit_codes.REFUSED and "comma-separated list of integers" in bad.stderr
+
+
+def test_start_passes_a_floor_design_to_the_driver(tmp_path):
+    lap = Laptop(tmp_path)
+    lap.make_branch()
+    assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
+                   "--branch", "run-gh200-t").returncode == 0
+    got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--model", "mixtral-8x7b-tp8", "--steps", "prelude,floor",
+                  "--floor-groups", "64,8", "--floor-treads", "1,2,3,4,5,6,8,10")
+    assert got.returncode == 0, got.stdout
+    start = next(c for c in lap.vm_cmds() if "nohup setsid" in c)
+    assert "--floor-groups 64,8" in start and "--floor-treads 1,2,3,4,5,6,8,10" in start
+    bad = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--floor-groups", "64 8")
+    assert bad.returncode != 0 and "comma-separated list of integers" in bad.stdout
+
+
 def test_the_reprice_threshold_scales_with_the_model(tmp_path):
     """8x22B's G=1 page takes about 1.7x 8x7B's; the 420 s threshold is 8x7B's.
     At a threshold of 1 s, 8x7B's G=1 (the stub's ~0 s) does not trip it and the

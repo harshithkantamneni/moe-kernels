@@ -1,0 +1,727 @@
+{
+ "registered": "2026-09-30, before any page of this model",
+ "tool": "scripts/cores_heldout_predict.py --model mixtral-8x7b-tp8 --treads 1 2 3 4 5 6 8 10 --group-m 64 8",
+ "what": "a floor-style NATIVE counter capture of mixtral-8x7b-tp8 (a TP=8 shard of the verified mixtral-8x7b, moe/spec.py; no R3 page of it exists) on a Lambda GH200 480GB",
+ "capture": [
+  "python scripts/dram_counter_route.py --run --family r3-arms --model mixtral-8x7b-tp8 --census-only --out census.json",
+  "python scripts/dram_counter_route.py --run --family r3-arms --model mixtral-8x7b-tp8 --group-m {64,8} --census census.json --floor --floor-treads 1 2 3 4 5 6 8 10 --out r3f-g{G}.json",
+  "python scripts/dram_counter_route.py --run --family r3-arms --model mixtral-8x7b-tp8 --group-m {64,8} --census census.json --floor --floor-treads 1 2 3 4 5 6 8 10 --floor-clock none --floor-lock-mhz 1710 --out r3f-g{G}-lock1710.json"
+ ],
+ "primary": "the lock-1710 captures (FL1 PASS); the base-clock captures are printed",
+ "coverage": {
+  "w1 n=2 (the discriminating cell)": "896 live CTAs = one full wave of 660 (occ 5) + a partial wave of 236 dealt 2 per SM on 104 SMs and 1 on 28, 118 of them fetching a slab; floor-bound (first wave DRAM 47 us against a 66 us floor)",
+  "w1 n=1": "a lone wave of 448 CTAs, 4 per SM on 52 SMs and 3 on 80 (below occ 5), every CTA fetching: bandwidth-bound, every law prints the same",
+  "w2 n=1, 2": "k_SM = 4 = occ: a control, every law prints the same",
+  "n = 3 to 10": "two or more waves, outside the partial-wave rule: throughput under every law; w1 n=3 and n=6 end on 24 and 48 CTAs (1 per SM), n=5 and n=8 on 260 and 284 (2 and 3 per SM): the domain boundary"
+ },
+ "falsifiers": {
+  "F1 (the law)": "w1 at n=2, per G: D = cycles(n=4) - cycles(n=2) (the per-GEMM constant the model lacks cancels) within 0.5 unit (11345 cycles) of the co-residency law's 155193; the old lifetime prints 87121, the per-fetching-CTA form 121171",
+  "F2": "w1 at n=2, per G: sm__cycles_elapsed.avg within -3% to +8% of the law's 162474 (the calibration series sit +0.3 to +1.1 units above the model, about +4 to +15% of this cell's 7.16 units; -3% allows noise); the old lifetime's 230546 is outside",
+  "F3 (controls)": "every other cell within 8% of its prediction (identical under every law); a control that misses says the miss is not the partial-wave law",
+  "F4 (floor)": "the per-CTA floor over each GEMM's cells of >= 4 waves (w1 n = 6, 8, 10; w2 n = 5, 6, 8, 10) within 2% of 344.1 + F / S: w1 352.2, w2 379.1 cycles per CTA k-step",
+  "scoring bytes": "predictions use sigma = 1 (the launch order's own reads); the score reprices every cell with the capture's own dram__bytes_read.sum per GEMM and prints both"
+ },
+ "unit_cycles": {
+  "w1": 22690.5,
+  "w2": 10683.7
+ },
+ "discriminant_D_w1_cycles": {
+  "G=64": {
+   "cores": 155193,
+   "old_lifetime": 87121,
+   "cores_per_lead": 121171,
+   "throughput": 158705
+  },
+  "G=8": {
+   "cores": 155193,
+   "old_lifetime": 87121,
+   "cores_per_lead": 121171,
+   "throughput": 158705
+  }
+ },
+ "predictions": {
+  "model": "mixtral-8x7b-tp8",
+  "arm": "native",
+  "clock_mhz": 1710.0,
+  "sms": 132,
+  "occupancy": {
+   "w1": 5,
+   "w2": 4
+  },
+  "source_fit": {
+   "T0": 0.04424120842779277,
+   "c": 202.54764415801023,
+   "bw": 3597.8008530665534,
+   "s_small": 0.011975976562022109,
+   "s_block": -0.008079581651752444
+  },
+  "k_w": 0.5,
+  "p_knee": 14.0,
+  "cores_rho_gbps": 11.48,
+  "cta_fixed_ksteps": {
+   "w1": 1.512,
+   "w2": 2.846
+  },
+  "bytes": "sigma = 1: the launch order's own reads",
+  "floor_per_cta_kstep_cycles": {
+   "w1": 352.2,
+   "w2": 379.1
+  },
+  "geometry": {
+   "w1": {
+    "K": 4096,
+    "N": 3584,
+    "npn": 56,
+    "ksteps": 64
+   },
+   "w2": {
+    "K": 1792,
+    "N": 4096,
+    "npn": 64,
+    "ksteps": 28
+   }
+  },
+  "cells": [
+   {
+    "G": 64,
+    "n": 1,
+    "gemm": "w1",
+    "live_ctas": 448,
+    "dead_ctas": 448,
+    "waves": 0.679,
+    "partial_wave_ctas": 448,
+    "partial_wave_k_sm": [
+     4,
+     52
+    ],
+    "partial_wave_fetching_ctas": 448,
+    "in_domain": true,
+    "unit_cycles": 22690.5,
+    "cores": 113853,
+    "old_lifetime": 113853,
+    "cores_per_lead": 113853,
+    "throughput": 113853
+   },
+   {
+    "G": 64,
+    "n": 1,
+    "gemm": "w2",
+    "live_ctas": 512,
+    "dead_ctas": 512,
+    "waves": 0.97,
+    "partial_wave_ctas": 512,
+    "partial_wave_k_sm": [
+     4,
+     116
+    ],
+    "partial_wave_fetching_ctas": 512,
+    "in_domain": true,
+    "unit_cycles": 10683.7,
+    "cores": 57319,
+    "old_lifetime": 57319,
+    "cores_per_lead": 57319,
+    "throughput": 57319
+   },
+   {
+    "G": 64,
+    "n": 2,
+    "gemm": "w1",
+    "live_ctas": 896,
+    "dead_ctas": 448,
+    "waves": 1.358,
+    "partial_wave_ctas": 236,
+    "partial_wave_k_sm": [
+     2,
+     104
+    ],
+    "partial_wave_fetching_ctas": 118,
+    "in_domain": true,
+    "unit_cycles": 22690.5,
+    "cores": 162474,
+    "old_lifetime": 230546,
+    "cores_per_lead": 196496,
+    "throughput": 158962
+   },
+   {
+    "G": 64,
+    "n": 2,
+    "gemm": "w2",
+    "live_ctas": 1024,
+    "dead_ctas": 512,
+    "waves": 1.939,
+    "partial_wave_ctas": 496,
+    "partial_wave_k_sm": [
+     4,
+     100
+    ],
+    "partial_wave_fetching_ctas": 248,
+    "in_domain": true,
+    "unit_cycles": 10683.7,
+    "cores": 86822,
+    "old_lifetime": 86822,
+    "cores_per_lead": 86822,
+    "throughput": 85501
+   },
+   {
+    "G": 64,
+    "n": 3,
+    "gemm": "w1",
+    "live_ctas": 1344,
+    "dead_ctas": 448,
+    "waves": 2.036,
+    "partial_wave_ctas": 24,
+    "partial_wave_k_sm": [
+     1,
+     24
+    ],
+    "partial_wave_fetching_ctas": 8,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 249596,
+    "old_lifetime": 249596,
+    "cores_per_lead": 249596,
+    "throughput": 249596
+   },
+   {
+    "G": 64,
+    "n": 3,
+    "gemm": "w2",
+    "live_ctas": 1536,
+    "dead_ctas": 512,
+    "waves": 2.909,
+    "partial_wave_ctas": 480,
+    "partial_wave_k_sm": [
+     4,
+     84
+    ],
+    "partial_wave_fetching_ctas": 160,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 128205,
+    "old_lifetime": 128205,
+    "cores_per_lead": 128205,
+    "throughput": 128205
+   },
+   {
+    "G": 64,
+    "n": 4,
+    "gemm": "w1",
+    "live_ctas": 1792,
+    "dead_ctas": 448,
+    "waves": 2.715,
+    "partial_wave_ctas": 472,
+    "partial_wave_k_sm": [
+     4,
+     76
+    ],
+    "partial_wave_fetching_ctas": 118,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 317667,
+    "old_lifetime": 317667,
+    "cores_per_lead": 317667,
+    "throughput": 317667
+   },
+   {
+    "G": 64,
+    "n": 4,
+    "gemm": "w2",
+    "live_ctas": 2048,
+    "dead_ctas": 512,
+    "waves": 3.879,
+    "partial_wave_ctas": 464,
+    "partial_wave_k_sm": [
+     4,
+     68
+    ],
+    "partial_wave_fetching_ctas": 116,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 170939,
+    "old_lifetime": 170939,
+    "cores_per_lead": 170939,
+    "throughput": 170939
+   },
+   {
+    "G": 64,
+    "n": 5,
+    "gemm": "w1",
+    "live_ctas": 2240,
+    "dead_ctas": 448,
+    "waves": 3.394,
+    "partial_wave_ctas": 260,
+    "partial_wave_k_sm": [
+     2,
+     128
+    ],
+    "partial_wave_fetching_ctas": 52,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 385739,
+    "old_lifetime": 385739,
+    "cores_per_lead": 385739,
+    "throughput": 385739
+   },
+   {
+    "G": 64,
+    "n": 5,
+    "gemm": "w2",
+    "live_ctas": 2560,
+    "dead_ctas": 512,
+    "waves": 4.848,
+    "partial_wave_ctas": 448,
+    "partial_wave_k_sm": [
+     4,
+     52
+    ],
+    "partial_wave_fetching_ctas": 89,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 213674,
+    "old_lifetime": 213674,
+    "cores_per_lead": 213674,
+    "throughput": 213674
+   },
+   {
+    "G": 64,
+    "n": 6,
+    "gemm": "w1",
+    "live_ctas": 2688,
+    "dead_ctas": 448,
+    "waves": 4.073,
+    "partial_wave_ctas": 48,
+    "partial_wave_k_sm": [
+     1,
+     48
+    ],
+    "partial_wave_fetching_ctas": 8,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 476501,
+    "old_lifetime": 476501,
+    "cores_per_lead": 476501,
+    "throughput": 476501
+   },
+   {
+    "G": 64,
+    "n": 6,
+    "gemm": "w2",
+    "live_ctas": 3072,
+    "dead_ctas": 512,
+    "waves": 5.818,
+    "partial_wave_ctas": 432,
+    "partial_wave_k_sm": [
+     4,
+     36
+    ],
+    "partial_wave_fetching_ctas": 72,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 256409,
+    "old_lifetime": 256409,
+    "cores_per_lead": 256409,
+    "throughput": 256409
+   },
+   {
+    "G": 64,
+    "n": 8,
+    "gemm": "w1",
+    "live_ctas": 3584,
+    "dead_ctas": 448,
+    "waves": 5.43,
+    "partial_wave_ctas": 284,
+    "partial_wave_k_sm": [
+     3,
+     20
+    ],
+    "partial_wave_fetching_ctas": 35,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 635334,
+    "old_lifetime": 635334,
+    "cores_per_lead": 635334,
+    "throughput": 635334
+   },
+   {
+    "G": 64,
+    "n": 8,
+    "gemm": "w2",
+    "live_ctas": 4096,
+    "dead_ctas": 512,
+    "waves": 7.758,
+    "partial_wave_ctas": 400,
+    "partial_wave_k_sm": [
+     4,
+     4
+    ],
+    "partial_wave_fetching_ctas": 50,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 341879,
+    "old_lifetime": 341879,
+    "cores_per_lead": 341879,
+    "throughput": 341879
+   },
+   {
+    "G": 64,
+    "n": 10,
+    "gemm": "w1",
+    "live_ctas": 4480,
+    "dead_ctas": 448,
+    "waves": 6.788,
+    "partial_wave_ctas": 520,
+    "partial_wave_k_sm": [
+     4,
+     124
+    ],
+    "partial_wave_fetching_ctas": 64,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 771477,
+    "old_lifetime": 771477,
+    "cores_per_lead": 771477,
+    "throughput": 771477
+   },
+   {
+    "G": 64,
+    "n": 10,
+    "gemm": "w2",
+    "live_ctas": 5120,
+    "dead_ctas": 512,
+    "waves": 9.697,
+    "partial_wave_ctas": 368,
+    "partial_wave_k_sm": [
+     3,
+     104
+    ],
+    "partial_wave_fetching_ctas": 46,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 416665,
+    "old_lifetime": 416665,
+    "cores_per_lead": 416665,
+    "throughput": 416665
+   },
+   {
+    "G": 8,
+    "n": 1,
+    "gemm": "w1",
+    "live_ctas": 448,
+    "dead_ctas": 448,
+    "waves": 0.679,
+    "partial_wave_ctas": 448,
+    "partial_wave_k_sm": [
+     4,
+     52
+    ],
+    "partial_wave_fetching_ctas": 448,
+    "in_domain": true,
+    "unit_cycles": 22690.5,
+    "cores": 113853,
+    "old_lifetime": 113853,
+    "cores_per_lead": 113853,
+    "throughput": 113853
+   },
+   {
+    "G": 8,
+    "n": 1,
+    "gemm": "w2",
+    "live_ctas": 512,
+    "dead_ctas": 512,
+    "waves": 0.97,
+    "partial_wave_ctas": 512,
+    "partial_wave_k_sm": [
+     4,
+     116
+    ],
+    "partial_wave_fetching_ctas": 512,
+    "in_domain": true,
+    "unit_cycles": 10683.7,
+    "cores": 57319,
+    "old_lifetime": 57319,
+    "cores_per_lead": 57319,
+    "throughput": 57319
+   },
+   {
+    "G": 8,
+    "n": 2,
+    "gemm": "w1",
+    "live_ctas": 896,
+    "dead_ctas": 448,
+    "waves": 1.358,
+    "partial_wave_ctas": 236,
+    "partial_wave_k_sm": [
+     2,
+     104
+    ],
+    "partial_wave_fetching_ctas": 118,
+    "in_domain": true,
+    "unit_cycles": 22690.5,
+    "cores": 162474,
+    "old_lifetime": 230546,
+    "cores_per_lead": 196496,
+    "throughput": 158962
+   },
+   {
+    "G": 8,
+    "n": 2,
+    "gemm": "w2",
+    "live_ctas": 1024,
+    "dead_ctas": 512,
+    "waves": 1.939,
+    "partial_wave_ctas": 496,
+    "partial_wave_k_sm": [
+     4,
+     100
+    ],
+    "partial_wave_fetching_ctas": 248,
+    "in_domain": true,
+    "unit_cycles": 10683.7,
+    "cores": 86822,
+    "old_lifetime": 86822,
+    "cores_per_lead": 86822,
+    "throughput": 85501
+   },
+   {
+    "G": 8,
+    "n": 3,
+    "gemm": "w1",
+    "live_ctas": 1344,
+    "dead_ctas": 448,
+    "waves": 2.036,
+    "partial_wave_ctas": 24,
+    "partial_wave_k_sm": [
+     1,
+     24
+    ],
+    "partial_wave_fetching_ctas": 9,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 249620,
+    "old_lifetime": 249620,
+    "cores_per_lead": 249620,
+    "throughput": 249620
+   },
+   {
+    "G": 8,
+    "n": 3,
+    "gemm": "w2",
+    "live_ctas": 1536,
+    "dead_ctas": 512,
+    "waves": 2.909,
+    "partial_wave_ctas": 480,
+    "partial_wave_k_sm": [
+     4,
+     84
+    ],
+    "partial_wave_fetching_ctas": 180,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 128217,
+    "old_lifetime": 128217,
+    "cores_per_lead": 128217,
+    "throughput": 128217
+   },
+   {
+    "G": 8,
+    "n": 4,
+    "gemm": "w1",
+    "live_ctas": 1792,
+    "dead_ctas": 448,
+    "waves": 2.715,
+    "partial_wave_ctas": 472,
+    "partial_wave_k_sm": [
+     4,
+     76
+    ],
+    "partial_wave_fetching_ctas": 118,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 317667,
+    "old_lifetime": 317667,
+    "cores_per_lead": 317667,
+    "throughput": 317667
+   },
+   {
+    "G": 8,
+    "n": 4,
+    "gemm": "w2",
+    "live_ctas": 2048,
+    "dead_ctas": 512,
+    "waves": 3.879,
+    "partial_wave_ctas": 464,
+    "partial_wave_k_sm": [
+     4,
+     68
+    ],
+    "partial_wave_fetching_ctas": 116,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 170939,
+    "old_lifetime": 170939,
+    "cores_per_lead": 170939,
+    "throughput": 170939
+   },
+   {
+    "G": 8,
+    "n": 5,
+    "gemm": "w1",
+    "live_ctas": 2240,
+    "dead_ctas": 448,
+    "waves": 3.394,
+    "partial_wave_ctas": 260,
+    "partial_wave_k_sm": [
+     2,
+     128
+    ],
+    "partial_wave_fetching_ctas": 64,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 385741,
+    "old_lifetime": 385741,
+    "cores_per_lead": 385741,
+    "throughput": 385741
+   },
+   {
+    "G": 8,
+    "n": 5,
+    "gemm": "w2",
+    "live_ctas": 2560,
+    "dead_ctas": 512,
+    "waves": 4.848,
+    "partial_wave_ctas": 448,
+    "partial_wave_k_sm": [
+     4,
+     52
+    ],
+    "partial_wave_fetching_ctas": 112,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 213675,
+    "old_lifetime": 213675,
+    "cores_per_lead": 213675,
+    "throughput": 213675
+   },
+   {
+    "G": 8,
+    "n": 6,
+    "gemm": "w1",
+    "live_ctas": 2688,
+    "dead_ctas": 448,
+    "waves": 4.073,
+    "partial_wave_ctas": 48,
+    "partial_wave_k_sm": [
+     1,
+     48
+    ],
+    "partial_wave_fetching_ctas": 12,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 476501,
+    "old_lifetime": 476501,
+    "cores_per_lead": 476501,
+    "throughput": 476501
+   },
+   {
+    "G": 8,
+    "n": 6,
+    "gemm": "w2",
+    "live_ctas": 3072,
+    "dead_ctas": 512,
+    "waves": 5.818,
+    "partial_wave_ctas": 432,
+    "partial_wave_k_sm": [
+     4,
+     36
+    ],
+    "partial_wave_fetching_ctas": 108,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 256409,
+    "old_lifetime": 256409,
+    "cores_per_lead": 256409,
+    "throughput": 256409
+   },
+   {
+    "G": 8,
+    "n": 8,
+    "gemm": "w1",
+    "live_ctas": 3584,
+    "dead_ctas": 448,
+    "waves": 5.43,
+    "partial_wave_ctas": 284,
+    "partial_wave_k_sm": [
+     3,
+     20
+    ],
+    "partial_wave_fetching_ctas": 35,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 635334,
+    "old_lifetime": 635334,
+    "cores_per_lead": 635334,
+    "throughput": 635334
+   },
+   {
+    "G": 8,
+    "n": 8,
+    "gemm": "w2",
+    "live_ctas": 4096,
+    "dead_ctas": 512,
+    "waves": 7.758,
+    "partial_wave_ctas": 400,
+    "partial_wave_k_sm": [
+     4,
+     4
+    ],
+    "partial_wave_fetching_ctas": 50,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 341879,
+    "old_lifetime": 341879,
+    "cores_per_lead": 341879,
+    "throughput": 341879
+   },
+   {
+    "G": 8,
+    "n": 10,
+    "gemm": "w1",
+    "live_ctas": 4480,
+    "dead_ctas": 448,
+    "waves": 6.788,
+    "partial_wave_ctas": 520,
+    "partial_wave_k_sm": [
+     4,
+     124
+    ],
+    "partial_wave_fetching_ctas": 74,
+    "in_domain": false,
+    "unit_cycles": 22690.5,
+    "cores": 771477,
+    "old_lifetime": 771477,
+    "cores_per_lead": 771477,
+    "throughput": 771477
+   },
+   {
+    "G": 8,
+    "n": 10,
+    "gemm": "w2",
+    "live_ctas": 5120,
+    "dead_ctas": 512,
+    "waves": 9.697,
+    "partial_wave_ctas": 368,
+    "partial_wave_k_sm": [
+     3,
+     104
+    ],
+    "partial_wave_fetching_ctas": 46,
+    "in_domain": false,
+    "unit_cycles": 10683.7,
+    "cores": 416665,
+    "old_lifetime": 416665,
+    "cores_per_lead": 416665,
+    "throughput": 416665
+   }
+  ]
+ }
+}

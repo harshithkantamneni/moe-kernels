@@ -119,6 +119,12 @@ DEFAULT_MODEL=mixtral-8x7b
 #: over its 9-deep ladder): 9 copies for every model the driver runs.
 COUNTER_COPIES=9
 MODEL="${MOE_DRIVER_MODEL:-$DEFAULT_MODEL}"
+#: A registered floor design (2026-09-30): --floor-groups G,G and --floor-treads n,n,...
+#: replace the floor step's layout (G=64, the model's r3_floor_treads, the r3f-g2 and
+#: unlocked records) with those groups at those treads, each at ncu's base clock and at the
+#: lock. Empty: the default layout, unchanged. The steps read them from the environment.
+FLOOR_GROUPS="${MOE_DRIVER_FLOOR_GROUPS:-}"
+FLOOR_TREADS="${MOE_DRIVER_FLOOR_TREADS:-}"
 R3_BASE=(--model "$MODEL" --block-m 32 --repeats 9 --duty 0.25 --seed 0)
 #: R1 in lock mode (section 3b); each state a held SM clock.
 R1_BASE=(--model "$MODEL" --dtype bf16 --treads 8 --repeats 13 --burst-ms 40
@@ -712,6 +718,22 @@ step_floor() {
       (( rc > worst )) && worst=$rc
       case $rc in 0|3) return 0 ;; *) exit "$rc" ;; esac
     }
+    if [ -n "$FLOOR_GROUPS" ]; then
+      ft=(); [ -n "$FLOOR_TREADS" ] && ft=(--floor-treads ${FLOOR_TREADS//,/ })
+      for g in ${FLOOR_GROUPS//,/ }; do
+        capture "r3f-g$g" --group-m "$g" --census "$C" --floor "${ft[@]}" --out "$R/r3f-g$g.json"
+      done
+      moe_counter ncu --clock-control reset
+      MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
+      [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
+      lock_and_check "$F" || exit 2
+      for g in ${FLOOR_GROUPS//,/ }; do
+        capture "r3f-g$g-lock$F" --group-m "$g" --census "$C" --floor "${ft[@]}" --floor-clock none \
+          --floor-lock-mhz "$F" --out "$R/r3f-g$g-lock$F.json"
+      done
+      echo "registered floor design: groups $FLOOR_GROUPS, treads ${FLOOR_TREADS:-default}" >> "$D/floor-results"
+      exit "$worst"
+    fi
     capture r3f-g64 --group-m 64 --census "$C" --floor --out "$R/r3f-g64.json"
     passes=$(grep -oE -- '- [0-9]+ pass(es)?' "$S/logs/r3f-g64.log" | awk '{print $2}' | sort -n | tail -1)
     if [ "$MODEL" != "$DEFAULT_MODEL" ]; then
@@ -969,6 +991,7 @@ print_plan() {
   echo "  eta     python3 scripts/locked_r3.py --session-tag \$B-eta<F> --locks <F> --groups <G> -- ${R3_BASE[*]} --treads 6"
   echo "            for 1410:4 2, 1500:4, 1605:4 (1590 if 1605 is not supported)"
   echo "  floor   moe_counter \$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --floor --census \$S/census.json"
+  [[ -z "$FLOOR_GROUPS" ]] || echo "          registered floor design: G = ${FLOOR_GROUPS//,/ }, treads ${FLOOR_TREADS:-default} (${FLOOR_TREADS:+--floor-treads ${FLOOR_TREADS//,/ }}), base and lock $LOCK_TIMED; no r3f-g2 or unlocked record"
   echo "            G=64 and G=2 at base; G=64 --floor-clock none (unlocked record); G=64 --floor-clock none --floor-lock-mhz $LOCK_TIMED"
   echo "            NATIVE at treads $(floor_treads) for $MODEL (dram_counter_route.r3_floor_treads, from the model)"
   echo "  deep    python3 scripts/locked_r3.py --session-tag \$B-deep --locks $LOCK_TIMED --groups 4 2 -- ${R3_BASE[*]} --treads 9"
@@ -994,6 +1017,8 @@ while (( $# )); do
     --from)     FROM="${2:-}"; shift 2 ;;
     --steps)    ONLY="${2:-}"; shift 2 ;;
     --model)    MODEL="${2:-}"; shift 2 ;;
+    --floor-groups) FLOOR_GROUPS="${2:-}"; shift 2 ;;
+    --floor-treads) FLOOR_TREADS="${2:-}"; shift 2 ;;
     --step)     ONE_STEP="${2:-}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "unknown argument: $1 (see --help)" >&2; exit "$EXIT_REFUSED" ;;
@@ -1004,6 +1029,10 @@ is_step() { local s; for s in "${STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; 
 
 [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo "--model $MODEL: not a model name" >&2; exit "$EXIT_REFUSED"; }
 export MOE_DRIVER_MODEL="$MODEL"
+for v in "$FLOOR_GROUPS" "$FLOOR_TREADS"; do
+  [[ -z "$v" || "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "--floor-groups/--floor-treads $v: a comma-separated list of integers" >&2; exit "$EXIT_REFUSED"; }
+done
+export MOE_DRIVER_FLOOR_GROUPS="$FLOOR_GROUPS" MOE_DRIVER_FLOOR_TREADS="$FLOOR_TREADS"
 R3_BASE[1]="$MODEL"; R1_BASE[1]="$MODEL"
 #: One declaration for the whole session (2026-09-28). Mixtral's auto rule
 #: declares 9 copies at every ladder depth; at E = 64 it would declare 6, 8 or

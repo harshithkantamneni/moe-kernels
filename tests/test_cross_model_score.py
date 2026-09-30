@@ -101,3 +101,56 @@ def test_olmoe_with_and_without_the_per_cta_fixed_cost(no_cta_fixed, rms, beyond
     assert _slope(d["cells"], "predicted_ms", 8) == pytest.approx(slope, abs=0.0003)
     assert _slope(d["cells"], "measured_ms", 8) == pytest.approx(0.1705, abs=0.0003)
     assert TM.CTA_FIXED, "the scorer restores CTA_FIXED"
+
+
+def _lock_pages(session):
+    return [rep.parent for rep in sorted(session.rglob("private_weight_reference/*/report.json"))
+            if json.loads(rep.read_text()).get("session_tag", "").endswith("lock1710")]
+
+
+SJ = PUB / "2026-09-29-nvidia_gh200_480gb-jetmoe-session"
+S22 = PUB / "2026-09-28-nvidia_gh200_480gb-8x22b-session"
+
+
+@pytest.fixture(scope="module")
+def sources():
+    """8x7B's fit under the co-residency law and under the old lifetime."""
+    return {on: S._build(_pages(S27, SRC), C27, no_cores=not on) for on in (True, False)}
+
+
+@pytest.mark.parametrize("cores_on, rms, beyond, n1, n3", [
+    (False, 0.0717, 12, 0.1493, 0.0880), (True, 0.0784, 8, 0.1806, 0.0100)])
+def test_jetmoe_with_and_without_the_co_residency_law(sources, cores_on, rms, beyond, n1, n3):
+    """JetMoE-8B's four VALID lock-1710 pages, 58 cells (DIAGNOSIS: published,
+    and the pooled form of the law's DRAM term was chosen on its n = 3 page).
+    The old lifetime: 7.17%, 12 beyond 5%, n = 3 8.8% (SHARED 10 to 11% slow).
+    The law: n = 3 1.0%; n = 1 worse, 14.9 -> 18.1% (its w2 lone wave of 256
+    CTAs is priced at rho x 256, and about 40 us of the n = 1 call is outside
+    the counted GEMMs); 7.84%, 8 beyond 5%."""
+    if not SJ.exists():
+        pytest.skip("the JetMoE session is not in this tree")
+    d = S.score(None, None, "jetmoe-8b", _lock_pages(SJ),
+                SJ / "results" / "2026-09-29-nvidia_gh200_480gb-r3-counters" / "lock1710",
+                no_cores=not cores_on, source=sources[cores_on])
+    s = d["sets"]["shared+private"]
+    assert s["cells"] == 58 and s["beyond_5pct"] == beyond
+    assert s["rms"] == pytest.approx(rms, abs=0.0005)
+    assert d["sets"]["n=1"]["rms"] == pytest.approx(n1, abs=0.0005)
+    assert d["sets"]["n=3"]["rms"] == pytest.approx(n3, abs=0.0005)
+    assert (d["cores"] is None) == (not cores_on)
+    assert TM.CORES, "the scorer restores CORES"
+
+
+@pytest.mark.parametrize("cores_on, rms", [(False, 0.0093), (True, 0.0103)])
+def test_8x22b_with_and_without_the_co_residency_law(sources, cores_on, rms):
+    """8x22B's registered 40 cells: 0.93% -> 1.03% (n = 1 1.1 -> 1.6%), none
+    beyond 5% either way. Its w2 n = 1 GEMM moves toward its counters (+3.2 and
+    +5.8% -> -1.2 and +1.1%) and the call moves away."""
+    if not S22.exists():
+        pytest.skip("the 8x22B session is not in this tree")
+    d = S.score(None, None, "mixtral-8x22b", _lock_pages(S22),
+                S22 / "results" / "2026-09-28-nvidia_gh200_480gb-r3-counters" / "lock1710",
+                no_cores=not cores_on, source=sources[cores_on])
+    s = d["sets"]["shared+private"]
+    assert s["cells"] == 40 and s["beyond_5pct"] == 0
+    assert s["rms"] == pytest.approx(rms, abs=0.0005)
