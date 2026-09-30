@@ -59,3 +59,8 @@
 2026-09-29T23:46:55Z deep END: exit 1 after 18 min
 2026-09-29T23:48:11Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
 2026-09-29T23:48:13Z driver end: exit 3
+2026-09-29T23:49:33Z RECOVERY start: timed G to retake [], deep G to retake [2 ]
+2026-09-30T00:19:07Z RECOVERY deep retake (G 2 , locks 1710 1605 1500) exit 0
+2026-09-30T00:19:07Z RECOVERY deep: 2026-09-30T00:03:16Z G=2 slipped at lock 1710: R3 exit on SIGKILL, cells=188 worst=1665.0 MHz, 821 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-
+2026-09-30T00:19:07Z RECOVERY deep: 2026-09-30T00:19:07Z G=2 held at lock 1605: R3 exit 1 CLAIM_FAIL, cells=243 worst=1605.0 MHz, 951 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g2-l
+2026-09-30T00:19:07Z RECOVERY END
