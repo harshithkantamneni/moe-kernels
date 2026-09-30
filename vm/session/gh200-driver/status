@@ -18,3 +18,9 @@
 2026-09-30T00:53:09Z bytes: G=32 page exit 3 after 70 s
 2026-09-30T00:54:20Z bytes: G=3 page exit 3 after 69 s
 2026-09-30T00:55:33Z bytes: G=64 page exit 3 after 71 s
+2026-09-30T00:55:35Z bytes: lock block exit 0 (G=1 exit 3 00:47:12 70 s;G=2 exit 3 00:48:23 70 s;G=4 exit 3 00:49:35 71 s;G=16 exit 3 00:50:46 70 s;G=8 exit 3 00:51:57 70 s;G=32 exit 3 00:53:09 70 s;G=3 exit 3 00:54:20 69 s;G=64 exit 3 00:55:33 71 s;)
+2026-09-30T00:55:40Z bytes: no base-clock control (it compares clock regimes on mixtral-8x7b; no granite-3.0-3b-a800m prediction reads it)
+2026-09-30T00:55:40Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-09-30T00:55:42Z bytes: analyse of 8 pages exit 3 (/home/ubuntu/moe/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/summary.json)
+2026-09-30T00:55:42Z bytes END: exit 0 after 10 min
+2026-09-30T00:55:42Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
