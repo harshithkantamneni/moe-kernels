@@ -1,0 +1,204 @@
+{
+  "family": "r3-arms",
+  "kind": "census",
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "bc866d34-823e-318c-0d90-432d23305492",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "stack": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "commit": "e6b1e20b4e7e66c156c13d722b011d08051ff5ce",
+  "plan": {
+    "family": "r3-arms",
+    "kind": "census",
+    "model": "jetmoe-8b",
+    "dtype": "bf16",
+    "block_m": 32,
+    "block_n": 64,
+    "num_stages": 4,
+    "group_m": 64,
+    "treads": [
+      1,
+      6
+    ],
+    "arms": [
+      "native"
+    ],
+    "cells": [
+      [
+        "native",
+        1
+      ],
+      [
+        "native",
+        6
+      ]
+    ],
+    "copies_declared": 9,
+    "declared_reason": "the ladder's id count runs 256..1536, across the small-batch id bound 1024, and E x n_max = 48 is under the expert bound 64; declaring 9 copies (E x 9 = 72) keeps both ratio arms on the scan kernel at every tread",
+    "calls_per_cell": 1,
+    "warmup_calls": 1,
+    "gemms_per_call": 2,
+    "seed": 0,
+    "manifest": "/home/ubuntu/moe/session/census-jetmoe-8b.profiles/census.manifest.json",
+    "triton_cache": "/home/ubuntu/moe/session/census-jetmoe-8b.profiles/census.triton-cache"
+  },
+  "calls": 4,
+  "launches": 8,
+  "gemms_per_call_measured": 2,
+  "grids_expected": [
+    2816,
+    512,
+    9856,
+    1792,
+    2816,
+    512,
+    9856,
+    1792
+  ],
+  "grids_seen": [
+    2816,
+    512,
+    9856,
+    1792,
+    2816,
+    512,
+    9856,
+    1792
+  ],
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 553648128,
+    "weight_bytes": 4982833152,
+    "activation_bytes": 64487424,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 5176295424,
+    "device_free_bytes": 100724572160,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 1
+  },
+  "ncu": {
+    "binary": "/usr/local/cuda-13.0/bin/ncu",
+    "version": "Version 2025.3.1.0 (build 36398880) (public-release)",
+    "argv": [
+      "/usr/local/cuda-13.0/bin/ncu",
+      "--target-processes",
+      "all",
+      "--replay-mode",
+      "kernel",
+      "--cache-control",
+      "all",
+      "--clock-control",
+      "base",
+      "--nvtx",
+      "-k",
+      "regex:^fused_moe_kernel$",
+      "--kernel-name-base",
+      "function",
+      "--launch-skip",
+      "0",
+      "--metrics",
+      "dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_srcunit_tex_op_read.sum,launch__grid_size,gpu__time_duration.sum",
+      "--export",
+      "/home/ubuntu/moe/session/census-jetmoe-8b.profiles/census.ncu-rep",
+      "--force-overwrite",
+      "--",
+      "/home/ubuntu/moe/venvs/vllm/bin/python",
+      "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+      "--counter-child",
+      "/home/ubuntu/moe/session/census-jetmoe-8b.profiles/census.plan.json"
+    ],
+    "report": "/home/ubuntu/moe/session/census-jetmoe-8b.profiles/census.ncu-rep",
+    "report_sha256": "674d9b275fe307aec0e19ea86158aec4d84e313be87131772bc164245d1109f7",
+    "clock_control": "base",
+    "lock_mhz": null,
+    "probe_clock_control": null
+  },
+  "gates": [
+    {
+      "number": "CEN1",
+      "kind": "VALIDITY",
+      "claim": "one fused_experts call makes exactly 2 fused_moe_kernel launches",
+      "verdict": "PASS",
+      "measured": "8 launches over 4 calls = 2 per call",
+      "threshold": "2 x 4 = 8",
+      "invalidates": "every page's skip and count, which are GEMMS_PER_CALL multiples",
+      "lines": []
+    },
+    {
+      "number": "CEN2",
+      "kind": "VALIDITY",
+      "claim": "every launch's grid is the grid the child derived from vLLM's own sorted-id buffer",
+      "verdict": "PASS",
+      "measured": "seen [2816, 512, 9856, 1792, 2816, 512, 9856, 1792]",
+      "threshold": "want [2816, 512, 9856, 1792, 2816, 512, 9856, 1792]",
+      "invalidates": "the attribution every page makes, launch by launch",
+      "lines": []
+    },
+    {
+      "number": "CEN3",
+      "kind": "VALIDITY",
+      "claim": "the child ran on this card",
+      "verdict": "PASS",
+      "measured": "board 594c0f",
+      "threshold": "board 594c0f",
+      "invalidates": "the census's card, which every page is matched to",
+      "lines": []
+    }
+  ],
+  "verdict": "PASS",
+  "run_id": "nvidia_gh200_480gb-block_m32-block_n64-calls3-dtypebf16-familyr3_arms-group_m16-moder3_census-mo-6ab46b79",
+  "git_sha": "e6b1e20b4e7e66c156c13d722b011d08051ff5ce",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "nsight-compute/launch-census/no-skip-no-cap/fused_moe_kernel-only; counts launches and reads grids, times nothing",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "e6b1e20b4e7e66c156c13d722b011d08051ff5ce",
+    "git_dirty": false,
+    "git_dirty_files": 0,
+    "utc": "2026-09-30T06:06:21+00:00",
+    "hostname": "192-222-57-198",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "13.0",
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "nsight-compute/launch-census/no-skip-no-cap/fused_moe_kernel-only; counts launches and reads grids, times nothing",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}
