@@ -61,3 +61,5 @@
 2026-09-30T02:06:15Z deep END: exit 0 after 32 min
 2026-09-30T02:07:31Z clocks: 345 MHz, 1980 MHz, 700.00 W, 0x0000000000000001
 2026-09-30T02:07:33Z driver end: exit 3
+2026-09-30T02:08:04Z RECOVERY start: timed G to retake [3 8 32 ], deep G to retake [2 4 ]
+2026-09-30T02:22:06Z RECOVERY timed G=3 retake exit 0: G=3 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1710.0 MHz, 841 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypeb
