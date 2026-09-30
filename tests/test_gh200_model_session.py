@@ -1250,6 +1250,58 @@ def test_another_model_runs_its_own_census_and_no_8x7b_references(tmp_path):
     assert floors == ["r3f-g64.json", "r3f-g64-lock1710.json"]
 
 
+def _floor_plan_line(*model) -> str:
+    got = subprocess.run(["bash", str(DRIVER), "--dry-run", *model, "--steps", "floor"],
+                         capture_output=True, text=True, timeout=60,
+                         env={**os.environ, "HOME": "/nonexistent"})
+    assert got.returncode == exit_codes.REFUSED, got.stderr
+    lines = [ln for ln in got.stdout.splitlines() if "NATIVE at treads" in ln]
+    assert len(lines) == 1, got.stdout
+    return lines[0]
+
+
+def test_the_plan_prints_the_floor_treads_dram_counter_route_derives_for_every_model():
+    """The driver passes --model and no treads, so the capture's treads are
+    `r3_floor_treads`' (2026-09-29); the plan prints the driver's table of
+    them, which must be that function's for every model the driver can run."""
+    import dram_counter_route as DCR
+
+    from moe.spec import MODEL_CONFIGS
+    for m, cfg in MODEL_CONFIGS.items():
+        if not cfg.verified or cfg.num_experts * 9 >= 1024:
+            continue
+        want = " ".join(map(str, DCR.r3_floor_treads(cfg, 32, 64)))
+        line = _floor_plan_line("--model", m)
+        assert f"NATIVE at treads {want} for {m} " in line, (m, line)
+    assert "NATIVE at treads 2 3 4 6 7 8 for mixtral-8x7b" in _floor_plan_line()
+
+
+def test_a_floor_only_session_on_jetmoe_plans_and_runs_its_deeper_treads(tmp_path):
+    """`--steps floor --model jetmoe-8b`: the dry run shows NATIVE at 2 3 4 6 9
+    10 11, the plan holds the floor step alone, and every floor capture the
+    session makes (after the prelude it needs) names the model and no treads
+    of its own, so the capture
+    takes JetMoE's from `r3_floor_treads`."""
+    import dram_counter_route as DCR
+    got = subprocess.run(["bash", str(DRIVER), "--dry-run", "--model", "jetmoe-8b",
+                          "--steps", "floor"], capture_output=True, text=True, timeout=60,
+                         env={**os.environ, "HOME": "/nonexistent"})
+    assert re.findall(r"^  (\w+)\s+\d+\s+\d+  ", got.stdout, re.M) == ["floor"]
+    assert "NATIVE at treads 2 3 4 6 9 10 11 for jetmoe-8b" in got.stdout
+    # the floor refuses on a VM whose prelude has not passed, so the run has it
+    box, run = run_box(tmp_path, {}, "--model", "jetmoe-8b", "--steps", "prelude,floor")
+    assert run.returncode == exit_codes.DONE, run.stdout + run.stderr
+    floors = [a for a in box.tool("dram_counter_route") if "--floor" in a]
+    assert [Path(val(a, "--out")).name for a in floors] == [
+        "r3f-g64.json", "r3f-g64-lock1710.json"]
+    for a in floors:
+        assert val(a, "--model") == "jetmoe-8b"
+        assert "--tiles" not in a and "--floor-treads" not in a
+        args = DCR.build_parser().parse_args(a)
+        DCR.resolve_r3_defaults(args, a)
+        assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6, 9, 10, 11)
+
+
 def test_start_passes_the_model_to_the_driver(tmp_path):
     lap = Laptop(tmp_path)
     lap.make_branch()
@@ -1262,6 +1314,24 @@ def test_start_passes_the_model_to_the_driver(tmp_path):
     plan = next(c for c in lap.vm_cmds() if "--dry-run" in c)
     assert "--model mixtral-8x22b" in start and "--model mixtral-8x22b" in plan
     assert "model=mixtral-8x22b" in (lap.state / "r" / "run.env").read_text()
+
+
+def test_start_passes_a_step_list_to_the_driver_and_refuses_a_malformed_one(tmp_path):
+    """A floor-only session: `start --steps floor` reaches the driver's plan and its run; a
+    list that is not step names is refused before the VM is touched."""
+    lap = Laptop(tmp_path)
+    lap.make_branch()
+    assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
+                   "--branch", "run-gh200-t").returncode == 0
+    got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--model", "jetmoe-8b", "--steps", "floor")
+    assert got.returncode == 0, got.stdout
+    start = next(c for c in lap.vm_cmds() if "nohup setsid" in c)
+    plan = next(c for c in lap.vm_cmds() if "--dry-run" in c)
+    assert "--steps floor" in start and "--steps floor" in plan
+    bad = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--steps", "floor; rm -rf x")
+    assert bad.returncode != 0 and "comma-separated list of step names" in bad.stdout
 
 
 def test_the_reprice_threshold_scales_with_the_model(tmp_path):

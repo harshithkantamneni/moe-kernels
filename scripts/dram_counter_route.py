@@ -3029,7 +3029,7 @@ def run_id_for(mode: str, args, card: str) -> str:
             # knob that is None (UnresolvedKnob), so a None here crashes every
             # unlocked floor after its capture (a draft of this mode did; the
             # 2026-09-25 review found it).
-            knobs.update(tiles=list(R3_FLOOR_TREADS), calls=R3_FLOOR_CALLS,
+            knobs.update(tiles=list(r3_floor_treads_for(args)), calls=R3_FLOOR_CALLS,
                          metrics=list(R3_FLOOR_METRICS),
                          clock_control=getattr(args, "floor_clock", "base"))
             if getattr(args, "floor_lock_mhz", None) is not None:
@@ -4412,9 +4412,107 @@ R3_FLOOR_METRICS: tuple[str, ...] = (
     *(f"smsp__warp_issue_stalled_{r}_per_warp_active.pct" for r in R3_STALL_REASONS),
 )
 #: The floor capture's cells: NATIVE at these treads, two calls each (so a
-#: spread exists), after R3's own warmups, which ncu skips.
+#: spread exists), after R3's own warmups, which ncu skips. The DEFAULT: a
+#: model whose GEMMs run few waves gets more (`r3_floor_treads`).
 R3_FLOOR_TREADS: tuple[int, ...] = (2, 3, 4, 6)
 R3_FLOOR_CALLS = 2
+#: THE FLOOR'S TREADS PER MODEL (2026-09-29, docs/registered/README.md, "the
+#: floor falsifier's estimator, corrected"). The floor per CTA k-step is the
+#: slope of `sm__cycles_elapsed.avg` over the capture's cells, and a cell whose
+#: grid runs few waves ends in a partly filled wave, filled by a different
+#: fraction at each n, which tilts that line. The corrected falsifier reads
+#: only cells of at least `R3_FLOOR_MIN_WAVES` waves (live CTAs / (SMs x the
+#: GEMM's occupancy)) and needs `R3_FLOOR_MIN_CELLS` of them per GEMM. At
+#: (2, 3, 4, 6) JetMoE-8B's w2 (0.485 n waves) has none and Mixtral 8x7B's w2
+#: (0.97 n) has one, so `r3_floor_treads` adds the shallowest treads past 6
+#: that give such a GEMM its cells, up to `R3_FLOOR_MAX_TREADS`. The default
+#: cells stay in every plan, so a file's all-cell slope over 2, 3, 4, 6 can
+#: still be read beside every earlier model's.
+R3_FLOOR_MIN_WAVES = 4.0
+R3_FLOOR_MIN_CELLS = 3
+#: The deepest tread a floor plan may ask. NATIVE declares E and reads copy 0
+#: through `w1[::n_decl]`, so its treads are not bounded by the copies declared
+#: (the counter ladder's 9); the allocation is the declaration's at any tread,
+#: and 16 x BLOCK_M rows per expert is 2,048 tokens on an E = 8 model. Equal to
+#: `private_weight_reference.NATIVE_COUNTER_MAX_TREADS`, which a test pins.
+R3_FLOOR_MAX_TREADS = 16
+#: SMs of the cards the floor capture runs on (GH200 and H100 SXM5, both 132),
+#: and the compute capability whose ASSUMED occupancy sizes a wave
+#: (`r3_timing_model.ASSUMED_OCCUPANCY`: w1 5, w2 4 CTAs per SM on sm_90).
+R3_FLOOR_SMS = 132
+R3_FLOOR_CAPABILITY = "9.0"
+
+
+def _timing_model():
+    """`scripts/r3_timing_model.py`, imported on first use (it imports this
+    module)."""
+    scripts = str(REPO / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import r3_timing_model
+    return r3_timing_model
+
+
+def r3_floor_waves(cfg, n: int, gemm: str, *, block_n: int,
+                   sms: int = R3_FLOOR_SMS,
+                   capability: str = R3_FLOOR_CAPABILITY) -> float:
+    """Waves one NATIVE cell's GEMM runs: live CTAs (E x n M-tiles, every one
+    exactly full, x the GEMM's N-tiles) over SMs x the ASSUMED occupancy."""
+    occ = _timing_model().ASSUMED_OCCUPANCY[capability][gemm]
+    live = cfg.num_experts * int(n) * pid_n_count(r3_gemm_geometry(cfg, gemm)[1], block_n)
+    return live / (sms * occ)
+
+
+def r3_floor_scored(cfg, treads, *, block_n: int) -> dict[str, list[int]]:
+    """Per GEMM, the treads of `treads` whose cells run at least
+    `R3_FLOOR_MIN_WAVES` waves: the cells the corrected falsifier reads."""
+    return {g: [int(n) for n in treads
+                if r3_floor_waves(cfg, n, g, block_n=block_n) >= R3_FLOOR_MIN_WAVES]
+            for g in ("w1", "w2")}
+
+
+def r3_floor_treads(cfg, block_m: int, block_n: int | None = None) -> tuple[int, ...]:
+    """The floor capture's treads for `cfg`: `R3_FLOOR_TREADS`, unless a GEMM
+    would have fewer than `R3_FLOOR_MIN_CELLS` cells of `R3_FLOOR_MIN_WAVES`
+    waves. Then the shallowest treads past the default's deepest that run that
+    GEMM at `R3_FLOOR_MIN_WAVES` waves are added until it has them, treads R3
+    can form (whole tokens: `n x BLOCK_M` a multiple of the model's rows
+    quantum) and at most `R3_FLOOR_MAX_TREADS`. A GEMM the cap cannot give its
+    cells adds nothing (the treads would buy no scorable GEMM) and stays NOT
+    SCORABLE, which `r3_floor_plan_lines` prints. Ascending."""
+    r3 = _r3()
+    block_n = int(block_n or r3.SWEEP.FIXED["BLOCK_SIZE_N"])
+    quantum = r3.SWEEP.rows_quantum(cfg)
+    have = r3_floor_scored(cfg, R3_FLOOR_TREADS, block_n=block_n)
+    extra: set[int] = set()
+    for gemm, cells in have.items():
+        short = R3_FLOOR_MIN_CELLS - len(cells)
+        if short <= 0:
+            continue
+        add = [n for n in range(max(R3_FLOOR_TREADS) + 1, R3_FLOOR_MAX_TREADS + 1)
+               if (n * block_m) % quantum == 0
+               and r3_floor_waves(cfg, n, gemm, block_n=block_n) >= R3_FLOOR_MIN_WAVES][:short]
+        if len(add) == short:
+            extra.update(add)
+    return tuple(sorted(set(R3_FLOOR_TREADS) | extra))
+
+
+def r3_floor_plan_lines(cfg, treads, *, block_n: int) -> list[str]:
+    """What the floor plan prints about its treads: the waves of every cell per
+    GEMM, the cells the corrected falsifier reads, and a GEMM it cannot score."""
+    scored = r3_floor_scored(cfg, treads, block_n=block_n)
+    out = [f"  treads   {list(treads)} (NATIVE; default {list(R3_FLOOR_TREADS)}, "
+           f"at most {R3_FLOOR_MAX_TREADS}; a GEMM is scored on its cells of >= "
+           f"{R3_FLOOR_MIN_WAVES:g} waves, {R3_FLOOR_MIN_CELLS} of them needed)"]
+    for g in ("w1", "w2"):
+        waves = ", ".join(f"n={n} {r3_floor_waves(cfg, n, g, block_n=block_n):.2f}"
+                          for n in treads)
+        ok = len(scored[g]) >= R3_FLOOR_MIN_CELLS
+        out.append(f"  {g} waves {waves}: "
+                   + (f"scored on n = {', '.join(map(str, scored[g]))}" if ok else
+                      f"NOT SCORABLE ({len(scored[g])} cell(s) of >= "
+                      f"{R3_FLOOR_MIN_WAVES:g} waves)"))
+    return out
 #: THE PROOF THE TENSOR COUNTERS COUNT THIS KERNEL (2026-09-25). The HMMA
 #: pipe readings say whether the tensor pipe sets the floor only if the
 #: launch retired HMMA (mma.sync) instructions. At R3's BLOCK_M 32 Triton
@@ -5131,18 +5229,34 @@ def r3_floor_metrics(names) -> tuple[tuple[str, ...], list[str], str]:
 
 def r3_floor_plan(group_m: int, *, profile_dir: Path, model: str = "mixtral-8x7b",
                   dtype: str = "bf16", block_m: int | None = None,
-                  block_n: int | None = None, num_stages: int | None = None) -> dict:
-    """The floor capture's plan: NATIVE only, `R3_FLOOR_TREADS`, K =
-    `R3_FLOOR_CALLS`, R3's warmups skipped by ncu. A `measure` plan, so R3
-    validates and schedules it exactly as it does a page's."""
+                  block_n: int | None = None, num_stages: int | None = None,
+                  treads=None) -> dict:
+    """The floor capture's plan: NATIVE only, the model's floor treads
+    (`r3_floor_treads`, or `treads`, `--floor-treads`), K = `R3_FLOOR_CALLS`,
+    R3's warmups skipped by ncu. A `measure` plan, so R3 validates and
+    schedules it exactly as it does a page's (a NATIVE-only plan may run
+    treads past the counter ladder, to `R3_FLOOR_MAX_TREADS`)."""
     r3 = _r3()
     fixed = r3.SWEEP.FIXED
-    return r3_plan(model=model, dtype=dtype, block_m=block_m or r3.DEFAULT_BLOCK_M,
-                   block_n=block_n or fixed["BLOCK_SIZE_N"],
+    block_m = block_m or r3.DEFAULT_BLOCK_M
+    block_n = block_n or fixed["BLOCK_SIZE_N"]
+    if treads is None:
+        treads = r3_floor_treads(MODEL_CONFIGS[model], block_m, block_n)
+    return r3_plan(model=model, dtype=dtype, block_m=block_m, block_n=block_n,
                    num_stages=num_stages or fixed["num_stages"], group_m=group_m,
-                   treads=R3_FLOOR_TREADS, kind="measure", arms=(r3.NATIVE,),
+                   treads=treads, kind="measure", arms=(r3.NATIVE,),
                    calls=R3_FLOOR_CALLS, warmups=R3_WARMUP_CALLS,
                    profile_dir=profile_dir, stem=f"g{group_m}.floor")
+
+
+def r3_floor_treads_for(args) -> tuple[int, ...]:
+    """The treads a `--floor` invocation profiles: `--floor-treads` when given,
+    else the model's (`r3_floor_treads`). One place, read by the capture, its
+    provenance knobs and the dry run, so the three cannot name two ladders."""
+    given = getattr(args, "floor_treads", None)
+    if given:
+        return tuple(int(n) for n in given)
+    return r3_floor_treads(MODEL_CONFIGS[args.model], args.block_m, args.block_n)
 
 
 # --------------------------------------------------------------------------
@@ -7340,8 +7454,9 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     """`--floor`: the on-chip floor's counters, on a capture of their own.
 
     Licensed by the same census as a page (`do_run_r3` checks it first).
-    NATIVE only, `R3_FLOOR_TREADS` x `R3_FLOOR_CALLS` calls x 2 GEMMs = 16
-    profiled launches, under the page's own flags (`r3_ncu_argv`: kernel
+    NATIVE only, the model's floor treads (`r3_floor_treads_for`: 2, 3, 4, 6
+    by default) x `R3_FLOOR_CALLS` calls x 2 GEMMs (16 launches at the default)
+    profiled, under the page's own flags (`r3_ncu_argv`: kernel
     replay, cold L2, base clock, or `--floor-clock none`). The ask is STRICT
     plus the floor metrics this chip lists, and a decisive group it lacks
     refuses before the capture.
@@ -7375,7 +7490,8 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     try:
         plan = r3_floor_plan(args.group_m, profile_dir=profiles, model=args.model,
                              dtype=args.dtype, block_m=args.block_m,
-                             block_n=args.block_n, num_stages=args.num_stages)
+                             block_n=args.block_n, num_stages=args.num_stages,
+                             treads=r3_floor_treads_for(args))
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
         return exit_codes.REFUSED
@@ -7390,7 +7506,7 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
                        launch_skip=sched.launch_skip, launch_count=sched.launch_count,
                        clock_control=clock)
     print(card_line(card))
-    print(f"R3 FLOOR CAPTURE  G={args.group_m}  NATIVE at treads {list(R3_FLOOR_TREADS)}, "
+    print(f"R3 FLOOR CAPTURE  G={args.group_m}  NATIVE at treads {plan['treads']}, "
           f"{sched.launch_count} profiled launches at --clock-control {clock}"
           + (f" under an nvidia-smi lock of {lock:g} MHz" if lock else "")
           + f"; {len(asked)} metrics asked, dropped {dropped}")
@@ -7504,7 +7620,27 @@ def do_floor_names(args) -> int:
     `r3_floor_metrics` the capture refuses on, over `ncu --query-metrics
     --chip CHIP`, so on any machine with ncu a decisive name the chip lacks
     is found before a box is rented. Needs an ncu on PATH (the Mac has none);
-    without `--chip` it reads the attached chip."""
+    without `--chip` it reads the attached chip.
+
+    FIRST, THE PLAN (2026-09-29): the model's floor treads and each cell's
+    waves per GEMM, validated by R3 as the capture's plan is, so the treads a
+    capture would profile are read on a laptop with no ncu."""
+    r3 = _r3()
+    cfg = MODEL_CONFIGS[args.model]
+    try:
+        plan = r3_floor_plan(args.group_m if getattr(args, "group_m_given", False)
+                             else 64, profile_dir=Path("profiles"),
+                             model=args.model, dtype=args.dtype, block_m=args.block_m,
+                             block_n=args.block_n, num_stages=args.num_stages,
+                             treads=r3_floor_treads_for(args))
+    except r3.PrivateWeightRefusal as exc:
+        print(f"REFUSE: the floor plan for {args.model}: {exc}")
+        return exit_codes.REFUSED
+    print(f"R3 FLOOR PLAN  {args.model}  G={plan['group_m']}  BLOCK_M={plan['block_m']} "
+          f"BLOCK_N={plan['block_n']}  {R3_FLOOR_SMS} SMs, occupancy ASSUMED for sm_"
+          f"{R3_FLOOR_CAPABILITY.replace('.', '')}")
+    for line in r3_floor_plan_lines(cfg, plan["treads"], block_n=plan["block_n"]):
+        print(line)
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
         print("REFUSE: no ncu on PATH, and the floor's name check is ncu's own "
@@ -8445,14 +8581,21 @@ def build_parser() -> argparse.ArgumentParser:
                          "commit and vLLM wrote; a page refuses any other")
     ap.add_argument("--floor", action="store_true",
                     help="with --run --family r3-arms --group-m G --census C: instead "
-                         "of a page, profile NATIVE at treads 2 3 4 6 (two calls "
-                         "each) with the on-chip floor's counters (tensor pipe, issue, "
+                         "of a page, profile NATIVE at the model's floor treads "
+                         "(2 3 4 6 by default; --floor-treads; two calls each) "
+                         "with the on-chip floor's counters (tensor pipe, issue, "
                          "shared-memory banks, L2 return, occupancy, stall reasons) "
                          "and write them to --out; it scores no finding, and writes "
                          "nothing (INVALID) when ncu exits nonzero, a decisive "
                          "reading came back on no launch, or the HMMA count reads "
                          "zero, or cannot be read, on any launch. With --dry-run "
-                         "--family r3-arms: only check the names, no GPU")
+                         "--family r3-arms: print the model's floor treads and "
+                         "waves, then check the names, no GPU")
+    ap.add_argument("--floor-treads", type=int, nargs="+", default=None, metavar="N",
+                    help="with --floor: the NATIVE treads to profile, strictly "
+                         "ascending, at most R3_FLOOR_MAX_TREADS (16). Default: the "
+                         "model's (r3_floor_treads), 2 3 4 6 unless a GEMM would "
+                         "have fewer than 3 cells of at least 4 waves")
     ap.add_argument("--floor-clock", default="base", choices=("base", "none"),
                     help="with --floor: ncu --clock-control for the floor capture. "
                          "'base' is the page's; 'none' leaves the clock to the card, "
@@ -8651,9 +8794,18 @@ def main(argv=None) -> int:
               "census and is never reduced apart from its capture")
         return exit_codes.REFUSED
     if args.floor and _given(argv, "--tiles"):
-        print(f"REFUSE: --floor profiles its own treads {list(R3_FLOOR_TREADS)}; "
-              "--tiles is a page's")
+        print(f"REFUSE: --floor profiles its own treads {list(r3_floor_treads_for(args))} "
+              "(the model's, or --floor-treads); --tiles is a page's")
         return exit_codes.REFUSED
+    if args.floor_treads is not None and not args.floor:
+        print("REFUSE: --floor-treads belongs to --floor")
+        return exit_codes.REFUSED
+    if args.floor_treads is not None:
+        ft = list(args.floor_treads)
+        if ft != sorted(set(ft)) or ft[0] < 1 or ft[-1] > R3_FLOOR_MAX_TREADS:
+            print(f"REFUSE: --floor-treads {ft}: strictly ascending treads from 1 to "
+                  f"R3_FLOOR_MAX_TREADS = {R3_FLOOR_MAX_TREADS}")
+            return exit_codes.REFUSED
     if args.timed_reference and not args.analyse:
         print("REFUSE: --timed-reference is read by --analyse over r3-arms pages")
         return exit_codes.REFUSED

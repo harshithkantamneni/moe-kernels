@@ -2,7 +2,7 @@
 # THE LAPTOP'S SIDE OF AN UNATTENDED VM RUN (docs/LAMBDA.md section 3c).
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
-#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M]
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b]
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -184,6 +184,8 @@ cmd_start() {
   ssh_opts
   local model=()
   [[ -z "${MODEL:-}" ]] || { [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || refuse "--model $MODEL: not a model name"; model=(--model "$MODEL"); }
+  # --steps: the driver's own step list (e.g. `floor` for a floor-only session), passed as given
+  [[ -z "${STEPS_ARG:-}" ]] || { [[ "$STEPS_ARG" =~ ^[a-z0-9]+(,[a-z0-9]+)*$ ]] || refuse "--steps $STEPS_ARG: a comma-separated list of step names"; model+=(--steps "$STEPS_ARG"); }
   vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
     > "$RUN/driver-plan.txt" 2>&1 || true
   grep -q '^THE GH200 MODEL-TEST SESSION' "$RUN/driver-plan.txt" \
@@ -247,7 +249,7 @@ cmd_forget() {
 }
 
 sub="${1:-}"; [[ -n "$sub" ]] && shift
-IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""
+IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""
 while (( $# )); do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
@@ -255,6 +257,7 @@ while (( $# )); do
     --branch) BRANCH="${2:-}"; shift 2 ;;
     --deadline) DEADLINE="${2:-}"; shift 2 ;;
     --model) MODEL="${2:-}"; shift 2 ;;
+    --steps) STEPS_ARG="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) refuse "unknown argument $1" ;;
   esac

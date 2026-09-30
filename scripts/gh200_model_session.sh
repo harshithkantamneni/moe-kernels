@@ -132,6 +132,17 @@ TIMED_REF_IDS=(d9f1f37c df37ea07 01c08abd 1b285de2 6ff34777)
 #: The floor's G=2 capture is dropped when the G=64 capture's ncu log shows
 #: more replay passes than this per launch (the draft's rule).
 FLOOR_MAX_PASSES=50
+#: The NATIVE treads each floor capture profiles, for the plan to print. The
+#: capture itself takes them from dram_counter_route.r3_floor_treads by --model
+#: (2 3 4 6 unless a GEMM has fewer than 3 cells of at least 4 waves); this
+#: table is what that function returns, and a test pins it for every model.
+floor_treads() {
+  case "$MODEL" in
+    jetmoe-8b) echo "2 3 4 6 9 10 11" ;;
+    mixtral-8x7b|mixtral-8x7b-tp8|granite-3.0-3b-a800m|qwen2-57b-a14b-tp8) echo "2 3 4 6 7 8" ;;
+    *) echo "2 3 4 6" ;;
+  esac
+}
 
 # ---- the steps: name, estimate and cap in minutes, what it answers ----------
 STEPS=(prelude bytes calibrate timed eta floor deep r1lock)
@@ -959,6 +970,7 @@ print_plan() {
   echo "            for 1410:4 2, 1500:4, 1605:4 (1590 if 1605 is not supported)"
   echo "  floor   moe_counter \$PY_VLLM scripts/dram_counter_route.py --run --family r3-arms --floor --census \$S/census.json"
   echo "            G=64 and G=2 at base; G=64 --floor-clock none (unlocked record); G=64 --floor-clock none --floor-lock-mhz $LOCK_TIMED"
+  echo "            NATIVE at treads $(floor_treads) for $MODEL (dram_counter_route.r3_floor_treads, from the model)"
   echo "  deep    python3 scripts/locked_r3.py --session-tag \$B-deep --locks $LOCK_TIMED --groups 4 2 -- ${R3_BASE[*]} --treads 9"
   echo "  r1lock  \$PY_VLLM scripts/clock_elasticity.py --group-m G --lock-clocks 1710 1500 1410 ${R1_BASE[*]} --session-tag \$B-r1lock"
   echo "            for G in 4 1"

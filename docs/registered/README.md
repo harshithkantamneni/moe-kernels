@@ -248,3 +248,26 @@ the GEMM's occupancy)): w2 on n = 3, 4, 6 (5.5, 7.3, 10.9 waves), its slope
 within 2% of 466.5 cycles per CTA k-step (GH200) and 467.7 (H100). w1 has one
 such cell (n = 6) and is NOT SCORABLE; its all-cell slope is printed. The other
 falsifiers are unchanged.
+
+## 2026-09-30: the floor at 4+ waves, JetMoE-8B and Mixtral 8x7B (floor-only sessions)
+
+Before any page: two floor-only sessions (`gh200_model_session.sh --steps
+prelude,floor`, `vm_run.sh start --steps`) take the floor capture at the treads
+`dram_counter_route.r3_floor_treads` now gives each model so that every GEMM has
+at least 3 cells of at least 4 waves: JetMoE-8B at n = 2, 3, 4, 6, 9, 10, 11 and
+Mixtral 8x7B at n = 2, 3, 4, 6, 7, 8 (their earlier floor captures, at n = 2, 3,
+4, 6, had no such w2 cells: JetMoE's w2 read 368.0 on the biased all-cell
+estimator). The predictions are the per-CTA floor, 344.1 + F / S cycles per CTA
+k-step (c and F from the four calibration models' counters, 0f77622), scored
+as the slope over each GEMM's cells of at least 4 waves, within 2%:
+
+| model | GEMM | S | scored n | registered cycles per CTA k-step |
+|---|---|---|---|---|
+| jetmoe-8b | w1 | 32 | 2, 3, 4, 6, 9, 10, 11 | 360.4 |
+| jetmoe-8b | w2 | 88 | 9, 10, 11 | 355.2 |
+| mixtral-8x7b | w1 | 64 | 2, 3, 4, 6, 7, 8 | 352.2 |
+| mixtral-8x7b | w2 | 224 | 6, 7, 8 | 348.5 |
+
+Mixtral 8x7B's floor counters are calibration data for c and F; its w2 cells
+at 6 to 8 are new. JetMoE's floor data at n = 2 to 6 is published; n = 9 to 11 is
+not yet measured.

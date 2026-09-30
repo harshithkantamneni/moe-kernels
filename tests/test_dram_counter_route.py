@@ -4089,11 +4089,16 @@ def test_the_floor_ask_is_strict_plus_what_the_chip_lists_and_never_blind():
 
 
 def test_the_floor_plan_is_native_only_and_profiles_sixteen_launches():
-    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"))
+    """Sixteen at the default treads (Mixtral 8x22B's); Mixtral 8x7B's w2 needs
+    two more treads for three cells of four waves, so 24 (2026-09-29)."""
+    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"), model="mixtral-8x22b")
     sched = R3.counter_schedule(plan)
     assert plan["arms"] == [R3.NATIVE] and plan["treads"] == list(DCR.R3_FLOOR_TREADS)
     assert sched.launch_count == R3.GEMMS_PER_CALL * DCR.R3_FLOOR_CALLS * 4 == 16
     assert sched.launch_skip == R3.GEMMS_PER_CALL * DCR.R3_WARMUP_CALLS * 4
+    plan = DCR.r3_floor_plan(64, profile_dir=Path("p"))
+    assert plan["treads"] == [2, 3, 4, 6, 7, 8]
+    assert R3.counter_schedule(plan).launch_count == 24
 
 
 def test_floor_cells_average_the_calls_derive_the_clock_and_keep_bad_units_soft():
@@ -4114,7 +4119,7 @@ def test_floor_cells_average_the_calls_derive_the_clock_and_keep_bad_units_soft(
                              soft=frozenset(DCR.R3_FLOOR_METRICS))
     cells = DCR.r3_floor_cells(DCR.attribute_launches(launches, manifest), manifest)
     assert [(c["arm"], c["n"]) for c in cells] == [
-        ("native", n) for n in DCR.R3_FLOOR_TREADS]
+        ("native", n) for n in plan["treads"]]
     w1 = cells[0]["per_gemm"]["w1"]
     assert w1["sm__cycles_elapsed.avg"] == pytest.approx(1.601e6)
     assert w1["sm_clock_mhz"] == pytest.approx(1601.0)
@@ -4136,7 +4141,7 @@ def test_floor_belongs_to_the_r3_run_and_is_neither_a_census_nor_a_reduction(cap
         assert "--floor is its own capture" in capsys.readouterr().out
     assert DCR.main(["--run", "--family", "r3-arms", "--group-m", "64", "--floor",
                      "--tiles", "2,3", "--out", "x.json"]) == exit_codes.REFUSED
-    assert "--floor profiles its own treads [2, 3, 4, 6]" in capsys.readouterr().out
+    assert "--floor profiles its own treads [2, 3, 4, 6, 7, 8]" in capsys.readouterr().out
 
 
 STALL_BASES = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS if "_stalled_" in m}
@@ -4237,7 +4242,8 @@ def test_the_floor_capture_end_to_end_at_the_base_clock_and_with_none(
                      str(out)]) == exit_codes.DONE
         capture = [a for a in calls if "--counter-child" in a][-1]
         assert capture[capture.index("--clock-control") + 1] == clock
-        assert capture[capture.index("--launch-count") + 1] == "16"
+        # 2 GEMMs x 2 calls x Mixtral 8x7B's six floor treads (2026-09-29)
+        assert capture[capture.index("--launch-count") + 1] == "24"
         # THE ASK ITSELF (2026-09-25 review): the planted import adds the floor
         # columns to any `.floor.` report whatever ncu was asked, so only the
         # argv shows the capture asked STRICT plus every floor metric listed.
@@ -4248,7 +4254,8 @@ def test_the_floor_capture_end_to_end_at_the_base_clock_and_with_none(
         assert body["kind"] == "floor" and body["ncu"]["clock_control"] == clock
         assert f"clock-control-{clock}/" in body["instrument"]
         assert [(c["arm"], c["n"]) for c in body["cells"]] == [
-            ("native", n) for n in DCR.R3_FLOOR_TREADS]
+            ("native", n) for n in (2, 3, 4, 6, 7, 8)]
+        assert body["plan"]["treads"] == [2, 3, 4, 6, 7, 8]
         hmma = "sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active"
         assert body["cells"][0]["per_gemm"]["w1"][hmma] == 50.0
         assert body["ncu"]["metrics_missing"] == []
@@ -4411,7 +4418,7 @@ def test_the_floor_records_its_capture_first_and_refuses_a_nonzero_ncu_exit(
     record = json.loads((profiles / "g64.floor.capture.json").read_text())
     assert record["returncode"] == 1 and record["commit"]
     assert record["card"] == DCR.R3_PLANTED_CARD and record["stack"]["vllm"] == "v"
-    assert record["argv"][record["argv"].index("--launch-count") + 1] == "16"
+    assert record["argv"][record["argv"].index("--launch-count") + 1] == "24"
     assert record["metrics_asked"][:len(DCR.R3_STRICT_METRICS)] == list(DCR.R3_STRICT_METRICS)
     assert [a[0] for a in calls].count("nvidia-smi") == 2
     planted = ("GPU-planted", "1601", "61.25", "700.00", "0x0000000000000000", "Enabled")
@@ -4531,7 +4538,7 @@ def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock
         assert clock["smi_before"]["rows"][0]["clocks.sm"] == "1601"
         ids.append(body["run_id"])
     assert clock["off_lock"] == [e for g in ("w1", "w2") for e in (
-        [f"{g} fitted 1601 MHz"] + [f"n={n} {g} 1601 MHz" for n in DCR.R3_FLOOR_TREADS])]
+        [f"{g} fitted 1601 MHz"] + [f"n={n} {g} 1601 MHz" for n in body["plan"]["treads"]])]
     unlocked = tmp_path / "r3f-g64-none.json"
     assert main(_floor_argv(census, unlocked, "--floor-clock", "none")) == exit_codes.DONE
     ids.append(json.loads(unlocked.read_text())["run_id"])
@@ -4944,3 +4951,135 @@ def test_a_lock_that_held_under_ncus_fixed_duration_overhead_passes_and_a_slip_d
     assert DCR.r3_lock_fit(pts(t0=-5_000.0), "w1", lock)[0][0] == "w1 offset -5.0 us"
     off, fit = DCR.r3_lock_fit(pts()[:2], "w1", lock)
     assert fit == "w1 per cell (too few cells to fit)" and off
+
+
+# --------------------------------------------------------------------------
+# THE FLOOR'S TREADS PER MODEL (2026-09-29): a GEMM whose grid runs few waves
+# gets treads deep enough for three cells of at least four waves.
+# --------------------------------------------------------------------------
+
+#: The verified models the driver's 9-copy declaration can run (E x 9 under
+#: the alignment's padded-expert bound), and the treads each one's floor gets.
+_FLOOR_MODELS = sorted(k for k, c in MODEL_CONFIGS.items()
+                       if c.verified and c.num_experts * 9 < 1024)
+_FLOOR_CHANGED = {"mixtral-8x7b": (2, 3, 4, 6, 7, 8),
+                  "jetmoe-8b": (2, 3, 4, 6, 9, 10, 11),
+                  "granite-3.0-3b-a800m": (2, 3, 4, 6, 7, 8),
+                  "mixtral-8x7b-tp8": (2, 3, 4, 6, 7, 8),
+                  "qwen2-57b-a14b-tp8": (2, 3, 4, 6, 7, 8)}
+
+
+def _floor_ok(cfg, treads) -> bool:
+    scored = DCR.r3_floor_scored(cfg, treads, block_n=64)
+    return all(len(v) >= DCR.R3_FLOOR_MIN_CELLS for v in scored.values())
+
+
+def test_the_floor_waves_are_the_registered_ones():
+    """Live CTAs / (132 x occupancy): JetMoE's w2 runs 0.97 to 2.91 waves over
+    2..6 and Granite's w2 5.5, 7.3, 10.9 at 3, 4, 6 (docs/registered/README.md),
+    Mixtral 8x7B's w2 0.97 n."""
+    w = DCR.r3_floor_waves
+    jet, gran, mix = (MODEL_CONFIGS[m] for m in ("jetmoe-8b", "granite-3.0-3b-a800m",
+                                                 "mixtral-8x7b"))
+    assert [round(w(jet, n, "w2", block_n=64), 2) for n in (2, 6)] == [0.97, 2.91]
+    assert [round(w(gran, n, "w2", block_n=64), 1) for n in (3, 4, 6)] == [5.5, 7.3, 10.9]
+    assert round(w(mix, 1, "w2", block_n=64), 2) == 0.97
+    assert DCR._timing_model().ASSUMED_OCCUPANCY["9.0"] == {"w1": 5, "w2": 4}
+
+
+def test_the_floor_treads_are_the_default_unless_the_waves_need_more():
+    """Every model whose GEMMs already have three cells of four waves keeps
+    2, 3, 4, 6; the ones that do not get the shallowest treads past 6 that
+    give it, the default cells kept, ascending and under the cap."""
+    got = {m: DCR.r3_floor_treads(MODEL_CONFIGS[m], 32, 64) for m in _FLOOR_MODELS}
+    for m, treads in got.items():
+        cfg = MODEL_CONFIGS[m]
+        if _floor_ok(cfg, DCR.R3_FLOOR_TREADS):
+            assert treads == DCR.R3_FLOOR_TREADS, m
+        assert list(treads) == sorted(set(treads)), m
+        assert set(DCR.R3_FLOOR_TREADS) <= set(treads), m
+        assert max(treads) <= DCR.R3_FLOOR_MAX_TREADS, m
+    assert {m: t for m, t in got.items() if t != DCR.R3_FLOOR_TREADS} == _FLOOR_CHANGED
+    for m in ("jetmoe-8b", "mixtral-8x7b"):
+        assert not _floor_ok(MODEL_CONFIGS[m], DCR.R3_FLOOR_TREADS)
+        assert _floor_ok(MODEL_CONFIGS[m], got[m]), m
+    # the toy cannot reach four waves at any tread to the cap: nothing is added
+    assert got["toy"] == DCR.R3_FLOOR_TREADS
+
+
+def test_the_floor_treads_respect_the_cap(monkeypatch):
+    """At a cap of 10 JetMoE's w2 has two cells of four waves (9, 10), too few
+    to score, so no tread is bought for it; at 11 it has its three."""
+    jet = MODEL_CONFIGS["jetmoe-8b"]
+    monkeypatch.setattr(DCR, "R3_FLOOR_MAX_TREADS", 10)
+    assert DCR.r3_floor_treads(jet, 32, 64) == DCR.R3_FLOOR_TREADS
+    monkeypatch.setattr(DCR, "R3_FLOOR_MAX_TREADS", 11)
+    assert DCR.r3_floor_treads(jet, 32, 64) == (2, 3, 4, 6, 9, 10, 11)
+
+
+def test_the_floor_cap_is_r3s_native_ladder():
+    assert DCR.R3_FLOOR_MAX_TREADS == R3.NATIVE_COUNTER_MAX_TREADS == 16
+    assert DCR.R3_FLOOR_MAX_TREADS > R3.COUNTER_MAX_TREADS
+
+
+def test_the_floor_plan_takes_the_models_treads_and_r3_validates_it():
+    for m in _FLOOR_MODELS:
+        if m == "deepseek-v2-lite":      # R3 cannot form n = 1 at BLOCK_M 32
+            continue
+        plan = DCR.r3_floor_plan(64, profile_dir=Path("p"), model=m)
+        want = list(_FLOOR_CHANGED.get(m, DCR.R3_FLOOR_TREADS))
+        assert plan["arms"] == [R3.NATIVE] and plan["treads"] == want, m
+        assert R3.validate_counter_plan(plan) is MODEL_CONFIGS[m]
+        sched = R3.counter_schedule(plan)
+        assert sched.launch_count == R3.GEMMS_PER_CALL * DCR.R3_FLOOR_CALLS * len(want)
+    jet = DCR.r3_floor_plan(64, profile_dir=Path("p"), model="jetmoe-8b")
+    assert max(jet["treads"]) > jet["copies_declared"] == R3.COUNTER_MAX_TREADS
+    assert DCR.r3_floor_plan(64, profile_dir=Path("p"), model="jetmoe-8b",
+                             treads=(2, 3, 4, 6))["treads"] == [2, 3, 4, 6]
+
+
+def _floor_dry(monkeypatch, capsys, *extra) -> tuple[int, str]:
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: None)
+    rc = DCR.main(["--dry-run", "--family", "r3-arms", "--floor", *extra])
+    return rc, capsys.readouterr().out
+
+
+def test_the_floor_dry_run_prints_the_models_treads_and_waves(monkeypatch, capsys):
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "jetmoe-8b")
+    assert rc == exit_codes.REFUSED and "no ncu on PATH" in out
+    assert "R3 FLOOR PLAN  jetmoe-8b  G=64" in out
+    assert "treads   [2, 3, 4, 6, 9, 10, 11] (NATIVE" in out
+    assert "w2 waves n=2 0.97" in out and "scored on n = 9, 10, 11" in out
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "mixtral-8x22b")
+    assert "treads   [2, 3, 4, 6] (NATIVE" in out
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "jetmoe-8b",
+                         "--floor-treads", "2", "3", "4", "6")
+    assert "treads   [2, 3, 4, 6] (NATIVE" in out
+    assert "NOT SCORABLE (0 cell(s) of >= 4 waves)" in out
+
+
+def test_floor_treads_is_refused_off_the_floor_and_out_of_order(monkeypatch, capsys):
+    for extra, needle in ((["--floor-treads", "6", "4"], "strictly ascending"),
+                          (["--floor-treads", "2", "17"], "strictly ascending"),
+                          (["--floor-treads", "0", "2"], "strictly ascending")):
+        rc, out = _floor_dry(monkeypatch, capsys, *extra)
+        assert rc == exit_codes.REFUSED and needle in out, (extra, out)
+    rc = DCR.main(["--dry-run", "--family", "r3-arms", "--floor-treads", "2", "3"])
+    assert rc == exit_codes.REFUSED
+    assert "--floor-treads belongs to --floor" in capsys.readouterr().out
+    # a tread R3 cannot form refuses through R3's own plan check
+    rc, out = _floor_dry(monkeypatch, capsys, "--model", "deepseek-v2-lite")
+    assert rc == exit_codes.REFUSED and "REFUSE: the floor plan for deepseek-v2-lite" in out
+
+
+def test_the_floor_ids_knob_is_the_models_treads():
+    """Two floor files at one G on models with different treads never share
+    an id, and a model at its default keeps the knob it always had."""
+    args = DCR.build_parser().parse_args(
+        ["--run", "--family", "r3-arms", "--floor", "--model", "jetmoe-8b"])
+    DCR.resolve_r3_defaults(args, [])
+    assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6, 9, 10, 11)
+    args.floor_treads = [2, 3, 4, 6]
+    assert DCR.r3_floor_treads_for(args) == (2, 3, 4, 6)
+    args.floor_treads, args.model = None, "mixtral-8x22b"
+    assert DCR.r3_floor_treads_for(args) == DCR.R3_FLOOR_TREADS

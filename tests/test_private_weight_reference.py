@@ -6712,6 +6712,87 @@ def test_at_64_experts_the_counter_declaration_covers_the_deep_ladder():
         PW.validate_counter_plan(dict(plan, copies_declared=PW.DEFAULT_TREADS))
 
 
+def test_a_native_only_plan_may_run_past_the_counter_ladder_and_no_other_may():
+    """The floor capture (2026-09-29): NATIVE declares E and reads copy 0 at
+    every tread, so a NATIVE-only plan may count treads 10 to
+    NATIVE_COUNTER_MAX_TREADS at R3's own declaration. Every plan with SHARED
+    or PRIVATE keeps the 9-deep counter ladder and the copies bound, and no
+    plan passes the NATIVE cap or R3's declaration."""
+    deep = [2, 3, 4, 6, 9, 10, 11]
+    for model in (PW.DEFAULT_MODEL, "jetmoe-8b"):
+        cfg = MODEL_CONFIGS[model]
+        copies, _ = PW.counter_declaration(cfg, PW.DEFAULT_BLOCK_M)
+        assert copies == PW.COUNTER_MAX_TREADS
+        native = _counter_plan(model=model, arms=[PW.NATIVE], treads=deep,
+                               copies_declared=copies)
+        assert PW.validate_counter_plan(native) is cfg
+        PW.validate_counter_plan(dict(native, treads=[PW.NATIVE_COUNTER_MAX_TREADS],
+                                      cells=[[PW.NATIVE, PW.NATIVE_COUNTER_MAX_TREADS]]))
+        over = PW.NATIVE_COUNTER_MAX_TREADS + 1
+        with pytest.raises(PW.CounterPlanRefused, match="not a subset of R3's ladder"):
+            PW.validate_counter_plan(dict(native, treads=[2, over],
+                                          cells=[[PW.NATIVE, 2], [PW.NATIVE, over]]))
+        with pytest.raises(PW.CounterPlanRefused, match="not R3's declaration"):
+            PW.validate_counter_plan(dict(native, copies_declared=copies + 2))
+        for arms in ([PW.SHARED], [PW.PRIVATE], [PW.NATIVE, PW.SHARED], list(PW.ARMS)):
+            with pytest.raises(PW.CounterPlanRefused, match="not a subset of R3's ladder"):
+                PW.validate_counter_plan(_counter_plan(model=model, arms=arms, treads=deep,
+                                                       copies_declared=copies))
+            PW.validate_counter_plan(_counter_plan(model=model, arms=arms,
+                                                   treads=[1, 2, 3, 4, 6, 9],
+                                                   copies_declared=copies))
+    assert PW.native_only([PW.NATIVE]) and not PW.native_only([PW.NATIVE, PW.SHARED])
+
+
+def test_a_native_only_child_builds_native_routing_only_and_reads_one_copy(monkeypatch):
+    """The counter child at JetMoE's floor treads, 10 and 11 past its 9 copies:
+    it asks `arm_inputs` for NATIVE's routing alone (PRIVATE's relabelling
+    refuses a tread deeper than the declaration, by design), records one copy
+    read, and profiles NATIVE's declaration of E at every cell."""
+    import torch
+    jet = MODEL_CONFIGS["jetmoe-8b"]
+    copies, _ = PW.counter_declaration(jet, PW.DEFAULT_BLOCK_M)
+    treads = [2, 3, 4, 6, 9, 10, 11]
+    plan = _counter_plan(model="jetmoe-8b", arms=[PW.NATIVE], treads=treads,
+                         copies_declared=copies, calls_per_cell=2)
+    asked = []
+
+    def tiny_inputs(cfg, n, bm, c, seed, dtype, w_dtype, *, device, arms):
+        asked.append((n, list(arms)))
+        tokens = PW.SWEEP.tokens_for_rows(cfg, n * bm)
+        ids = torch.arange(tokens * cfg.top_k).reshape(tokens, cfg.top_k) % cfg.num_experts
+        return tokens, torch.zeros(tokens, 2), {PW.NATIVE: ids}, None, {}
+    monkeypatch.setattr(PW, "arm_inputs", tiny_inputs)
+    monkeypatch.setattr(PW, "build_private_weights", lambda cfg, dtype, c, seed, **k: (
+        torch.zeros(jet.num_experts * c, 2, 2), torch.zeros(jet.num_experts * c, 2, 2), None))
+    declared = []
+
+    def fused(hidden_states, w1, w2, topk_weights, topk_ids, global_num_experts, **k):
+        declared.append(global_num_experts)
+        return hidden_states
+
+    stack = PW.CounterStack(
+        fused_experts=fused, override_config=lambda conf: contextlib.nullcontext(),
+        align=lambda ids, bm, d, emap: (torch.empty(PW.predicted_sorted_ids(ids.numel(), d, bm)),),
+        device="cpu", synchronize=lambda: None,
+        nvtx_range=lambda name: contextlib.nullcontext(),
+        device_free=lambda: (None, "planted"), versions={"planted": True},
+        device_identity={"name": "planted", "uuid": "planted"})
+    manifest = PW.counter_child(plan, stack)
+    assert asked == [(n, [PW.NATIVE]) for n in treads]
+    assert set(declared) == {jet.num_experts}
+    assert manifest["memory_plan"]["copies_read"] == 1
+    assert manifest["memory_plan"]["copies"] == copies
+    assert manifest["proof"] is None
+    assert sorted(int(n) for n in manifest["tokens"]) == treads
+
+
+def test_arm_inputs_builds_every_arms_routing_by_default():
+    """The default is all three arms, as every page and the timed sweep call it."""
+    import inspect
+    assert inspect.signature(PW.arm_inputs).parameters["arms"].default == PW.ARMS
+
+
 def _child_log(tmp_path, plan: dict) -> tuple[int, str]:
     path = tmp_path / "plan.json"
     path.write_text(json.dumps(plan))

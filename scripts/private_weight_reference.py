@@ -7804,7 +7804,7 @@ def pinned_config(block_n: int, group_m: int, num_stages: int) -> dict:
 
 
 def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
-               dtype: str, w_dtype, *, device: str = "cuda"):
+               dtype: str, w_dtype, *, device: str = "cuda", arms=ARMS):
     """`(tokens, x, ids_by_arm, weights, kw)` for tread `n`, shared by all arms.
 
     `ids_by_arm` holds the three arms' routing: NATIVE's balanced ids, SHARED's
@@ -7814,6 +7814,10 @@ def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
     and every arm reads the same `x`, which is what makes the arms' comparison
     a comparison. `seed` names the BenchSpec the kwargs come from; `x` is drawn
     from torch's global generator, as it always was.
+
+    `arms` names the routings built (all three by default). A NATIVE-only
+    counter plan (the floor capture) builds NATIVE's alone, because its treads
+    may pass the declared copies, where `private_topk_ids` refuses by design.
     """
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
@@ -7829,13 +7833,15 @@ def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
     ids = SWEEP.balanced_ids(cfg, tokens, device)
     weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
                          device=device)
-    private_ids = private_topk_ids(ids, cfg.num_experts, block_m, rows,
-                                   copies_declared)
-    shared_ids = shared_topk_ids(ids, copies_declared)
+    by_arm = {NATIVE: ids}
+    if SHARED in arms:
+        by_arm[SHARED] = shared_topk_ids(ids, copies_declared)
+    if PRIVATE in arms:
+        by_arm[PRIVATE] = private_topk_ids(ids, cfg.num_experts, block_m, rows,
+                                           copies_declared)
     kw = vllm_call_kwargs(spec)
     kw["activation"] = MoEActivation(kw["activation"])
-    return tokens, x, {NATIVE: ids, SHARED: shared_ids,
-                       PRIVATE: private_ids}, weights, kw
+    return tokens, x, {a: by_arm[a] for a in ARMS if a in by_arm}, weights, kw
 
 
 def arm_call(fused_experts, arm: str, w1, w2, native_w1, native_w2,
@@ -7907,6 +7913,21 @@ class CounterPlanRefused(PrivateWeightRefusal):
 #: grid from every other page's, so it stays outside.
 COUNTER_MAX_TREADS = 9
 
+#: The deepest tread a NATIVE-ONLY counter plan may count (the floor capture,
+#: `dram_counter_route.r3_floor_plan`, 2026-09-29). NATIVE declares E and reads
+#: copy 0 of each expert through `w1[::n_decl]` at every tread, so the copies
+#: declared (sized on `COUNTER_MAX_TREADS`) bound the ratio arms' treads and not
+#: its: the plan still declares `counter_declaration`'s count, and the
+#: allocation is that count's at any depth. Equal to
+#: `dram_counter_route.R3_FLOOR_MAX_TREADS`, which a test pins.
+NATIVE_COUNTER_MAX_TREADS = 16
+
+
+def native_only(arms) -> bool:
+    """Whether a plan's arms are NATIVE alone: the one plan whose treads may
+    pass the counter ladder, since no call of it reads past copy 0."""
+    return list(arms) == [NATIVE]
+
 
 def counter_ladder(cfg, block_m: int) -> list[int]:
     """The treads a counter plan may count: R3's ladder to
@@ -7956,7 +7977,12 @@ def validate_counter_plan(plan: dict):
     except KeyError:
         raise CounterPlanRefused(f"unknown model {plan['model']!r}") from None
     block_m = int(plan["block_m"])
-    ladder = counter_ladder(cfg, block_m)
+    # A NATIVE-only plan reads one copy at every tread, so its ladder runs to
+    # NATIVE_COUNTER_MAX_TREADS on the same whole-token rule; every plan with
+    # SHARED or PRIVATE keeps the counter ladder and the copies bound below.
+    native = native_only(plan["arms"])
+    ladder = (ladder_treads(cfg, block_m, NATIVE_COUNTER_MAX_TREADS) if native
+              else counter_ladder(cfg, block_m))
     treads = [int(n) for n in plan["treads"]]
     outside = sorted(set(treads) - set(ladder))
     if outside or not treads:
@@ -7971,7 +7997,7 @@ def validate_counter_plan(plan: dict):
             f"declaration {copies} (declared_copies_for over R3's ladder "
             f"{ladder}); the declaration sizes the launch grid, so any other "
             "count profiles a call R3 never timed")
-    if max(treads) > copies:
+    if not native and max(treads) > copies:
         raise CounterPlanRefused(
             f"tread {max(treads)} reads more copies than the {copies} declared; "
             "every read copy needs a slot")
@@ -8142,7 +8168,8 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
                       free, free_source,
                       flush=(0, "the counter child times nothing, so no "
                                 "flush buffer"),
-                      copies_read=max(treads))
+                      copies_read=(1 if native_only(plan["arms"])
+                                   else max(treads)))
     if mem.fits is False:
         raise CounterPlanRefused(
             f"the weight copies do not fit: predicted peak "
@@ -8156,7 +8183,8 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
     declared_by_arm = {arm: declared_experts(arm, cfg.num_experts, copies)
                        for arm in ARMS}
     inputs = {n: arm_inputs(cfg, n, block_m, copies, int(plan["seed"]), dtype,
-                            w1.dtype, device=stack.device) for n in treads}
+                            w1.dtype, device=stack.device, arms=plan["arms"])
+              for n in treads}
     calls, grids, em, digests = {}, {}, {}, {}
     for arm, n in [(str(a), int(n)) for a, n in plan["cells"]]:
         tokens, x, ids_by_arm, weights, kw = inputs[n]
