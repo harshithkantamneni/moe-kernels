@@ -37,3 +37,4 @@
 2026-10-01T22:08:24Z launchfloor (unit 13/14 jetmoe-8b rental1 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3): exit 0 (9 min)
 2026-10-01T22:18:49Z launchfloor (unit 14/14 granite-3.0-1b-a400m rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9): exit 0 (10 min)
 2026-10-01T22:18:53Z the session ended: driver exit 3
+2026-10-01T22:19:19Z recovery: END

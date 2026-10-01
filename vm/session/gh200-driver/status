@@ -128,3 +128,5 @@
 2026-10-01T22:18:45Z launchfloor END: exit 0 after 10 min [unit 14/14 granite-3.0-1b-a400m rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9]
 2026-10-01T22:18:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 2026-10-01T22:18:50Z driver end: exit 3
+2026-10-01T22:19:16Z RECOVERY start: timed G to retake [], deep G to retake []
+2026-10-01T22:19:16Z RECOVERY END
