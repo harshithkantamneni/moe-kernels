@@ -3,3 +3,4 @@ floor      exit 3 after 2 min [unit 2/14 mixtral-8x7b-tp8 floor floor-groups=64,
 bytes      exit 0 after 6 min [unit 3/14 mixtral-8x7b-tp8 atile byte-groups=64,32,16,8]
 bytes      exit 0 after 7 min [unit 4/14 mixtral-8x7b-tp4 atile byte-groups=64,32,16]
 bytes      exit 0 after 11 min [unit 5/14 mixtral-8x7b-tp2 atile byte-groups=64,32,16]
+bytes      exit 0 after 25 min [unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1]

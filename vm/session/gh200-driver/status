@@ -60,3 +60,8 @@
 2026-10-01T21:00:05Z bytes: G=32 page exit 3 after 364 s
 2026-10-01T21:06:12Z bytes: G=8 page exit 1 after 364 s
 2026-10-01T21:12:20Z bytes: G=1 page exit 0 after 365 s
+2026-10-01T21:12:23Z bytes: lock block exit 0 (G=64 exit 3 20:25:25 86 s;G=32 exit 3 20:26:54 87 s;G=16 exit 3 20:28:22 87 s;G=8 exit 3 20:29:51 87 s;G=64 exit 3 20:32:27 127 s;G=32 exit 3 20:34:35 126 s;G=16 exit 3 20:36:44 127 s;G=64 exit 3 20:40:40 206 s;G=32 exit 3 20:44:09 206 s;G=16 exit 3 20:47:37 206 s;G=16 exit 3 20:53:58 365 s;G=32 exit 3 21:00:05 364 s;G=8 exit 1 21:06:12 364 s;G=1 exit 0 21:12:20 365 s;)
+2026-10-01T21:12:28Z bytes: no base-clock control (a registered --byte-groups list)
+2026-10-01T21:12:29Z bytes: analyse of 4 pages exit 3 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/summary.json)
+2026-10-01T21:12:29Z bytes END: exit 0 after 25 min [unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1]
+2026-10-01T21:12:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
