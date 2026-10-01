@@ -9,3 +9,12 @@
 2026-10-01T20:21:24Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261001T202124Z
 2026-10-01T20:21:24Z prelude END: exit 0 after 0 min [unit 1/14 -]
 2026-10-01T20:21:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-01T20:21:25Z floor START: 3c.5 registered floor design: NATIVE at G = 64 8, treads 1,2,3,4,5,6,8,10, base clock and the 1710 lock [unit 2/14 mixtral-8x7b-tp8 floor floor-groups=64,8 floor-treads=1,2,3,4,5,6,8,10] (estimate 8 min, cap 30 min, 388 min left)
+2026-10-01T20:21:40Z census for mixtral-8x7b-tp8 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp8.json)
+2026-10-01T20:23:53Z floor: r3f-g64 exit 0
+2026-10-01T20:23:53Z floor: r3f-g8 exit 0
+2026-10-01T20:23:53Z floor: r3f-g64-lock1710 exit 3
+2026-10-01T20:23:53Z floor: r3f-g8-lock1710 exit 3
+2026-10-01T20:23:53Z floor: registered floor design: groups 64,8, treads 1,2,3,4,5,6,8,10
+2026-10-01T20:23:53Z floor END: exit 3 after 2 min [unit 2/14 mixtral-8x7b-tp8 floor floor-groups=64,8 floor-treads=1,2,3,4,5,6,8,10]
+2026-10-01T20:23:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

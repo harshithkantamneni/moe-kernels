@@ -1,3 +1,4 @@
 2026-10-01T20:19:24Z the branch's first commit: the VM can push
 2026-10-01T20:21:23Z setup_vm.sh: READY
 2026-10-01T20:21:25Z prelude (unit 1/14 -): exit 0 (0 min)
+2026-10-01T20:23:55Z floor (unit 2/14 mixtral-8x7b-tp8 floor floor-groups=64,8 floor-treads=1,2,3,4,5,6,8,10): exit 3 (2 min)
