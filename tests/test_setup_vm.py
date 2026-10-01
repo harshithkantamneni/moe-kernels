@@ -722,3 +722,66 @@ def test_the_ncu_search_covers_every_place_the_chain_looks():
     m = re.search(r'^NCU_SEARCH="\$\{NCU_SEARCH:-([^}]*)\}"', chain, re.M)
     assert m, "the chain's NCU_SEARCH default moved"
     assert set(m.group(1).split()) <= set(_sh_constant("NCU_SEARCH_DEFAULT").split())
+
+
+APT_NSYS = APT_NCU_ONLY + "Inst cuda-nsight-systems-13-0 (13.0.85-1 cuda)\n"
+
+
+def _nsys_world(tmp_path: Path, nsys_sim: str) -> dict:
+    """The real-run box (ncu's simulation clean, as before), with an apt-get
+    that simulates `nsys_sim` for the nsight-systems package and whose
+    install of it drops an `nsys` where NSYS_SEARCH looks."""
+    env = _real_world(tmp_path, APT_NCU_ONLY)
+    (tmp_path / "apt-sim-nsys.txt").write_text(nsys_sim)
+    nsys_home = tmp_path / "nsys" / "bin"
+    ncu_home = tmp_path / "nsight" / "2025.3.1"
+    _stub(tmp_path / "bin", "apt-get", '#!/bin/sh\necho "apt-get $*" >> "$APT_LOG"\ncase "$*" in\n'
+          f'  "-s install"*nsight-systems*) cat "{tmp_path / "apt-sim-nsys.txt"}";;\n'
+          f'  "-s install"*) cat "{tmp_path / "apt-sim.txt"}";;\n'
+          f'  "install"*nsight-systems*) mkdir -p "{nsys_home}" && printf \'#!/bin/sh\\necho '
+          f'"NVIDIA Nsight Systems version 2025.3.2"\\n\' > "{nsys_home}/nsys" && chmod +x '
+          f'"{nsys_home}/nsys";;\n'
+          f'  "install"*) mkdir -p "{ncu_home}" && cp "{tmp_path / "ncu-src" / "ncu"}" '
+          f'"{ncu_home}/ncu";;\nesac\nexit 0\n')
+    env["NSYS_SEARCH"] = str(tmp_path / "nsys" / "*" / "nsys")
+    return env
+
+
+def test_nsys_is_installed_after_a_clean_simulation_and_recorded(tmp_path, tiny):
+    """S5b (2026-10-01, the launch-floor run's tracer fallback): with no nsys,
+    the matching cuda-nsight-systems package goes in only after `apt-get -s`
+    shows it installs and moves no driver package; session/nsys.txt names it.
+    Setup ends as it did without it (the stub box's preflight still fails PF5)."""
+    bundle, tip, _ = tiny
+    env = _nsys_world(tmp_path, APT_NSYS)
+    r = vm(env, "--commit", tip, "--bundle", str(bundle))
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "S5b NSYS" in out
+    assert "apt-get -s: cuda-nsight-systems-13-0 touches no driver package" in out
+    apt = Path(env["APT_LOG"]).read_text()
+    assert "install -y --no-install-recommends cuda-nsight-systems-13-0" in apt
+    rec = (tmp_path / "home" / "moe" / "session" / "nsys.txt").read_text()
+    assert "nsys installed: " in rec and "Nsight Systems version 2025.3.2" in rec
+
+
+@pytest.mark.parametrize("apt_sim,why", [
+    (APT_NCU_ONLY, "does not install cuda-nsight-systems-13-0"),
+    (APT_NSYS + "Inst nvidia-utils-580 [575.57.08-0ubuntu1] (580.95.05-0ubuntu1 cuda)\n",
+     "would touch the driver"),
+], ids=["absent", "moves-driver"])
+def test_nsys_never_refuses_or_fails_setup(tmp_path, tiny, apt_sim, why):
+    """Soft: an nsys the repo cannot give, or one that would move the driver,
+    is recorded as "no nsys" and setup goes on (the driver-moving case is a
+    refusal for ncu, the counter tool, and only a note for the fallback
+    tracer, since ncu's own install here moves nothing)."""
+    bundle, tip, _ = tiny
+    env = _nsys_world(tmp_path, apt_sim)
+    r = vm(env, "--commit", tip, "--bundle", str(bundle))
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "nsys: no nsys: " in out and why in out, out
+    apt = Path(env["APT_LOG"]).read_text()
+    assert "-s install --no-install-recommends cuda-nsight-systems-13-0" in apt
+    assert "install -y --no-install-recommends cuda-nsight-systems" not in apt
+    assert "no nsys" in (tmp_path / "home" / "moe" / "session" / "nsys.txt").read_text()

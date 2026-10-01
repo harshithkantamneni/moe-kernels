@@ -5,6 +5,8 @@
 #   bash gh200_model_session.sh --setup --commit <sha> --repo <url> --deadline <epoch s>
 #   bash gh200_model_session.sh --deadline <epoch s>             # after setup_vm.sh printed READY
 #   bash gh200_model_session.sh --from eta --deadline <epoch s>  # resume at a step
+#   bash gh200_model_session.sh --plan scripts/plans/<file>.plan --deadline <epoch s>
+#                                # several models' steps in one rental, in the file's order
 #
 # WHAT IT TESTS. The two NOT-FINAL models of docs/COUNTERS.md 6.7 on a GH200
 # (`gpu_1x_gh200`): the wave-split byte model (scripts/wave_split_bytes.py) and
@@ -33,6 +35,21 @@
 #                    (a record), G=64 under the 1710 lock        P6
 #   deep       3c.6  timed R3 at 1710 to tread 9, G=4 then G=2  P3, P4
 #   r1lock     3c.7  R1 in lock mode at 1710 1500 1410, G=4 then G=1   the floor's clock exponent
+#   launchfloor      scripts/launch_floor.py at the 1710 lock (2026-10-01): R3's eager timer
+#                    against a graph replay, flush levers and a profiler trace. In no default
+#                    plan: a --steps list or a --plan line asks for it
+#
+# A PLAN OF SEVERAL MODELS (2026-10-01, `--plan FILE`): one rental runs units in the
+# file's order, one per line, `<model> <step> [key=value ...]` (keys: label,
+# byte-groups, floor-groups, floor-treads, lf-treads, lf-modes, lf-trace, est, cap;
+# `#` comments). The first unit is `- prelude`. Each unit's step runs with that
+# model and those overrides in the environment (MOE_DRIVER_*), its pages in a
+# directory of its own (`<date>-<card>-<model>-<label>-r3-counters`, or
+# `-launch-floor-<label>/<model>` for launchfloor), so no two page groups mix in one
+# load_card or overwrite each other, and each unit is pushed as it lands. Before
+# each unit, while the estimates still to run overrun the deadline less
+# RESERVE_MIN, the LAST unit not yet run is dropped (the file's order is the
+# priority order). `--dry-run --plan FILE` prints every unit.
 #
 # WHY UNATTENDED, AND HOW THE DRAFT'S "STOPS" BECAME RULES. The draft of
 # section 3c (2026-09-26) was blocks a person pastes, each with a "Stops"
@@ -125,6 +142,18 @@ MODEL="${MOE_DRIVER_MODEL:-$DEFAULT_MODEL}"
 #: lock. Empty: the default layout, unchanged. The steps read them from the environment.
 FLOOR_GROUPS="${MOE_DRIVER_FLOOR_GROUPS:-}"
 FLOOR_TREADS="${MOE_DRIVER_FLOOR_TREADS:-}"
+#: A registered byte-page list (2026-10-01): --byte-groups G,G,... replaces BYTE_GS for
+#: the bytes step, the floor override's pattern. It is the registered list: nothing of
+#: it is dropped or re-priced, and no base-clock control or C5 reference is taken (they
+#: compare clock regimes and the 2026-09-25 timed pages, which no such list reads).
+BYTE_GROUPS="${MOE_DRIVER_BYTE_GROUPS:-}"
+#: A plan unit's own name for its pages' directory (see A PLAN OF SEVERAL MODELS).
+#: Empty: the session's one counters directory, as before.
+OUT_LABEL="${MOE_DRIVER_OUT_LABEL:-}"
+#: launchfloor's design (scripts/launch_floor.py; docs/registered 2026-10-01).
+LF_TREADS="${MOE_DRIVER_LF_TREADS:-1,2,3,4,5,6,7,8,9}"
+LF_MODES="${MOE_DRIVER_LF_MODES:-E240,E0,E480,GR}"
+LF_TRACE="${MOE_DRIVER_LF_TRACE:-1,2}"
 R3_BASE=(--model "$MODEL" --block-m 32 --repeats 9 --duty 0.25 --seed 0)
 #: R1 in lock mode (section 3b); each state a held SM clock.
 R1_BASE=(--model "$MODEL" --dtype bf16 --treads 8 --repeats 13 --burst-ms 40
@@ -145,13 +174,15 @@ FLOOR_MAX_PASSES=50
 floor_treads() {
   case "$MODEL" in
     jetmoe-8b) echo "2 3 4 6 9 10 11" ;;
-    mixtral-8x7b|mixtral-8x7b-tp8|granite-3.0-3b-a800m|qwen2-57b-a14b-tp8) echo "2 3 4 6 7 8" ;;
+    mixtral-8x7b|mixtral-8x7b-tp2|mixtral-8x7b-tp4|mixtral-8x7b-tp8|granite-3.0-3b-a800m|granite-3.0-1b-a400m|qwen2-57b-a14b-tp8) echo "2 3 4 6 7 8" ;;
     *) echo "2 3 4 6" ;;
   esac
 }
 
 # ---- the steps: name, estimate and cap in minutes, what it answers ----------
-STEPS=(prelude bytes calibrate timed eta floor deep r1lock)
+STEPS=(prelude bytes calibrate timed eta floor deep r1lock launchfloor)
+#: Steps no default plan runs: asked for by --steps or a --plan line only.
+OPT_IN_STEPS=(launchfloor)
 #: Another model's pages run longer by about its weight bytes over 8x7B's
 #: (8x22B: 4.83 GB against 2.82, x1.7); the estimates and caps below are
 #: 8x7B's, scaled by this percentage for the steps that measure.
@@ -164,7 +195,7 @@ step_est() {
   local m
   case "$1" in
     prelude) m=3 ;; bytes) m=55 ;; calibrate) m=8 ;; timed) m=37 ;;
-    eta) m=50 ;; floor) m=15 ;; deep) m=33 ;; r1lock) m=62 ;;
+    eta) m=50 ;; floor) m=15 ;; deep) m=33 ;; r1lock) m=62 ;; launchfloor) m=25 ;;
   esac
   _scaled "$1" "$m"
 }
@@ -172,7 +203,7 @@ step_cap() {
   local m
   case "$1" in
     prelude) m=15 ;; bytes) m=120 ;; calibrate) m=30 ;; timed) m=90 ;;
-    eta) m=115 ;; floor) m=45 ;; deep) m=75 ;; r1lock) m=130 ;;
+    eta) m=115 ;; floor) m=45 ;; deep) m=75 ;; r1lock) m=130 ;; launchfloor) m=60 ;;
   esac
   _scaled "$1" "$m"
 }
@@ -211,13 +242,16 @@ census_for() {
 step_what() {
   case "$1" in
     prelude)   echo "3c.1 supported clocks, persistence, ${POWER_LIMIT_W} W" ;;
-    bytes)     echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control" ;;
+    bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control"
+               else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control"; fi ;;
     calibrate) echo "3c.3 calibrate (the ruler), no lock in force" ;;
     timed)     echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5" ;;
     eta)       echo "3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1" ;;
-    floor)     echo "3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at ${LOCK_TIMED}: P6" ;;
+    floor)     if [[ -n "$FLOOR_GROUPS" ]]; then echo "3c.5 registered floor design: NATIVE at G = ${FLOOR_GROUPS//,/ }, treads ${FLOOR_TREADS:-default}, base clock and the ${LOCK_TIMED} lock"
+               else echo "3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at ${LOCK_TIMED}: P6"; fi ;;
     deep)      echo "3c.6 timed R3 at ${LOCK_TIMED} to tread 9, G=4 then G=2: P3, P4" ;;
     r1lock)    echo "3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent" ;;
+    launchfloor) echo "launch floor at the ${LOCK_TIMED} lock: treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE" ;;
   esac
 }
 #: What the deadline drops, in the draft's order, with the minutes each saves.
@@ -421,9 +455,12 @@ PY
 # 3c.2 byte pages at the 1710 lock
 # ==========================================================================
 counters_dir() {
-  local R
-  if [[ -s "$S/counters-dir.txt" ]]; then R="$(cat "$S/counters-dir.txt")"
-  else R="$RESULTS_ROOT/$(date -u +%F)-$MOE_CARD-r3-counters"; echo "$R" > "$S/counters-dir.txt"; fi
+  local R f="$S/counters-dir.txt" tag=""
+  # A plan unit's pages: a directory of the model and label's own, its name fixed at
+  # first use as the session's is (a unit run past midnight keeps its date).
+  [[ -n "$OUT_LABEL" ]] && { tag="$MODEL-$OUT_LABEL"; f="$S/counters-dir-$tag.txt"; }
+  if [[ -s "$f" ]]; then R="$(cat "$f")"
+  else R="$RESULTS_ROOT/$(date -u +%F)-$MOE_CARD${tag:+-$tag}-r3-counters"; echo "$R" > "$f"; fi
   mkdir -p "$R/base"
   printf '%s\n' "$R"
 }
@@ -434,11 +471,17 @@ step_bytes() {
   C="$(census_for)" || return "$EXIT_REFUSED"
   mkdir -p "$L"
   [[ -s "$C" ]] || { ledger "bytes REFUSED: no census at $C (the preflight's PF6 writes it)"; return "$EXIT_REFUSED"; }
-  dropped bytes_tail && tail_dropped=1
-  local gs=()
-  for G in "${BYTE_GS[@]}"; do
-    [[ "$G" == 64 && "$tail_dropped" == 1 ]] || gs+=("$G")
-  done
+  local gs=() override=0
+  if [[ -n "$BYTE_GROUPS" ]]; then
+    override=1
+    for G in ${BYTE_GROUPS//,/ }; do gs+=("$G"); done
+    ledger "bytes: the registered list G = ${gs[*]} ($MODEL${OUT_LABEL:+, $OUT_LABEL}): no tail drop, no re-price, no base-clock control"
+  else
+    dropped bytes_tail && tail_dropped=1
+    for G in "${BYTE_GS[@]}"; do
+      [[ "$G" == 64 && "$tail_dropped" == 1 ]] || gs+=("$G")
+    done
+  fi
   (( tail_dropped )) && ledger "bytes: the G=64 page and the base-clock control are dropped (deadline)"
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; moe_counter ncu --clock-control reset >/dev/null 2>&1; sudo -n nvidia-smi -rgc >/dev/null' EXIT
@@ -479,7 +522,7 @@ step_bytes() {
            fi ;;
         *) exit "$rc" ;;
       esac
-      if [ "$G" = 1 ] && [ "$secs" -gt "$reprice_s" ]; then
+      if [ "$override" = 0 ] && [ "$G" = 1 ] && [ "$secs" -gt "$reprice_s" ]; then
         touch "$D/bytes-tail-repriced"
         echo "G=1 took $secs s, over $reprice_s: the G=64 page and the base-clock control are dropped"
       fi
@@ -497,7 +540,9 @@ step_bytes() {
   sleep 5
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks_event_reasons.active,persistence_mode \
     --format=csv | tee "$S/clocks-after-lock-pages.txt"
-  if (( ! tail_dropped )) && [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
+  if (( override )); then
+    ledger "bytes: no base-clock control (a registered --byte-groups list)"
+  elif (( ! tail_dropped )) && [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
     ledger "bytes: no base-clock control (it compares clock regimes on $DEFAULT_MODEL; no $MODEL prediction reads it)"
   elif (( ! tail_dropped )); then
     # the base-clock control: same board, commit and treads, at ncu's base clock
@@ -510,7 +555,7 @@ step_bytes() {
   local timed=() id p
   [[ "$MODEL" == "$DEFAULT_MODEL" ]] || ledger "bytes: no C5 references (the 2026-09-25 timed pages are $DEFAULT_MODEL's)"
   for id in "${TIMED_REF_IDS[@]}"; do
-    [[ "$MODEL" == "$DEFAULT_MODEL" ]] || break
+    [[ "$MODEL" == "$DEFAULT_MODEL" && "$override" == 0 ]] || break
     for p in "$REPO/$TIMED_REF_DIR"/*"$id"/report.json; do
       if [[ -f "$p" ]]; then timed+=("$p"); else ledger "bytes: timed reference *$id is missing from the checkout"; fi
     done
@@ -879,6 +924,47 @@ step_r1lock() {
 }
 
 # ==========================================================================
+# launchfloor: R3's eager timer against its host (2026-10-01, docs/registered)
+# ==========================================================================
+#: Where one model's launch-floor files go: its own directory, under the unit's label.
+launch_dir() {
+  local f="$S/launch-dir${OUT_LABEL:+-$OUT_LABEL}.txt" R
+  if [[ -s "$f" ]]; then R="$(cat "$f")"
+  else R="$RESULTS_ROOT/$(date -u +%F)-$MOE_CARD-launch-floor${OUT_LABEL:+-$OUT_LABEL}"; echo "$R" > "$f"; fi
+  printf '%s\n' "$R/$MODEL"
+}
+
+step_launchfloor() {
+  local R; R="$(launch_dir)"
+  local LF=(--model "$MODEL" --treads "$LF_TREADS" --modes "$LF_MODES" --trace-treads "$LF_TRACE"
+            --arms native,shared,private --group-m 4 --duty 0.25 --repeats 3 --seed 0 --out "$R")
+  local busy; busy="$(gpu_busy)"
+  [[ -z "$busy" ]] || { ledger "launchfloor REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
+  # its own dry run first: 2 is a plan printed, anything else is a refusal
+  "$PY_VLLM" scripts/launch_floor.py "${LF[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-dry.log" 2>&1
+  local drc=$?
+  if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$S/logs/launchfloor-$MODEL-dry.log"; then
+    ledger "launchfloor REFUSED for $MODEL: its dry run exited $drc ($(grep -m1 '^REFUSED:' "$S/logs/launchfloor-$MODEL-dry.log" | cut -c1-160))"
+    return "$EXIT_REFUSED"
+  fi
+  mkdir -p "$R"
+  ( set -o pipefail
+    trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
+    trap 'exit 130' INT TERM HUP
+    moe_counter ncu --clock-control reset >/dev/null 2>&1 || true
+    MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
+    [ "$LOCK_TIMED" -le "$MAX" ] || { echo "F=$LOCK_TIMED MHz is above this card's maximum, $MAX MHz"; exit 2; }
+    lock_and_check "$LOCK_TIMED" || exit 2
+    "$PY_VLLM" scripts/launch_floor.py "${LF[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL.log" )
+  local rc=$?
+  sleep 5
+  nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active --format=csv \
+    | tee "$S/clocks-after-launchfloor-$MODEL.txt"
+  ledger "launchfloor: $MODEL exit $rc ($R)"
+  return "$rc"
+}
+
+# ==========================================================================
 # the orchestrator
 # ==========================================================================
 push_results() {   # MESSAGE [FINAL_EXIT]
@@ -1001,10 +1087,141 @@ print_plan() {
   echo "'n_decl = 9 against n_max', a retracted tread of at least the treads planned, and a ruler."
 }
 
-usage() { sed -n '2,7p' "$SELF" | sed 's/^# \{0,1\}//'; }
+# ---- a plan of several models (--plan FILE) ------------------------------
+U_MODEL=(); U_STEP=(); U_OPTS=(); U_EST=(); U_CAP=(); U_LABEL=()
+#: The plan file: the checkout's copy once setup has run (the commit measured is
+#: the authority), else the path as given, else the copy vm_run.sh put beside
+#: this driver for the dry run before setup.
+resolve_plan() {
+  local f="$1" c
+  for c in "$MOE_HOME/repo/$f" "$f" "$(dirname "$SELF")/$(basename "$f")"; do
+    [[ -f "$c" ]] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+plan_refuse() { echo "--plan: line $1: $2" >&2; return 1; }
+load_plan() {   # FILE
+  local f="$1" line ln=0 kv k v model step est cap label opts seen="" key
+  local -a w
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    ln=$(( ln + 1 )); line="${line%%#*}"
+    read -r -a w <<< "$line"
+    (( ${#w[@]} )) || continue
+    model="${w[0]}"; step="${w[1]:-}"; est=""; cap=""; label=""; opts=""
+    is_step "$step" || { plan_refuse "$ln" "no step '$step' (${STEPS[*]})"; return 1; }
+    if [[ "$step" == prelude ]]; then
+      [[ "$model" == - && ${#U_STEP[@]} -eq 0 ]] \
+        || { plan_refuse "$ln" "the prelude is the first unit, '- prelude', and only once"; return 1; }
+    else
+      (( ${#U_STEP[@]} )) || { plan_refuse "$ln" "the first unit is '- prelude'"; return 1; }
+      [[ "$model" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { plan_refuse "$ln" "'$model' is not a model name"; return 1; }
+    fi
+    for kv in "${w[@]:2}"; do
+      k="${kv%%=*}"; v="${kv#*=}"
+      [[ "$kv" == *=* && -n "$v" ]] || { plan_refuse "$ln" "'$kv' is not key=value"; return 1; }
+      case "$k" in
+        label) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "label $v"; return 1; }; label="$v" ;;
+        est|cap) [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: minutes"; return 1; }
+                 [[ "$k" == est ]] && est="$v" || cap="$v" ;;
+        byte-groups|floor-groups|floor-treads|lf-treads|lf-trace)
+          [[ "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { plan_refuse "$ln" "$k $v: a comma-separated list of integers"; return 1; }
+          opts+=" $k=$v" ;;
+        lf-modes) [[ "$v" =~ ^[A-Z0-9]+(,[A-Z0-9]+)*$ ]] || { plan_refuse "$ln" "lf-modes $v"; return 1; }; opts+=" $k=$v" ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace)"; return 1 ;;
+      esac
+    done
+    case "$step" in
+      prelude|launchfloor) ;;
+      bytes|floor) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its pages' directory: label=..."; return 1; } ;;
+      *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor and launchfloor"; return 1 ;;
+    esac
+    key="$model|$label|$step"
+    [[ "$seen" == *"<$key>"* ]] && { plan_refuse "$ln" "$model $step label=$label twice: two units would write one directory"; return 1; }
+    seen+="<$key>"
+    if [[ -z "$est" || -z "$cap" ]]; then
+      local keep="$MODEL"; MODEL="$model"
+      [[ -n "$est" ]] || est="$(step_est "$step")"
+      [[ -n "$cap" ]] || cap="$(step_cap "$step")"
+      MODEL="$keep"
+    fi
+    (( cap >= est )) || { plan_refuse "$ln" "cap $cap is under the estimate $est"; return 1; }
+    U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label")
+  done < "$f"
+  (( ${#U_STEP[@]} >= 2 )) || { echo "--plan: $f holds no unit after the prelude" >&2; return 1; }
+}
+#: Unit i's model and overrides into this shell and the environment its step inherits;
+#: every override not on the line is cleared, so nothing leaks from the unit before.
+apply_unit() {   # INDEX
+  local i="$1" kv k v
+  MODEL="${U_MODEL[$i]}"; [[ "$MODEL" == - ]] && MODEL="$DEFAULT_MODEL"
+  FLOOR_GROUPS=""; FLOOR_TREADS=""; BYTE_GROUPS=""; OUT_LABEL="${U_LABEL[$i]}"
+  LF_TREADS=1,2,3,4,5,6,7,8,9; LF_MODES=E240,E0,E480,GR; LF_TRACE=1,2
+  for kv in ${U_OPTS[$i]}; do
+    k="${kv%%=*}"; v="${kv#*=}"
+    case "$k" in
+      byte-groups) BYTE_GROUPS="$v" ;; floor-groups) FLOOR_GROUPS="$v" ;; floor-treads) FLOOR_TREADS="$v" ;;
+      lf-treads) LF_TREADS="$v" ;; lf-modes) LF_MODES="$v" ;; lf-trace) LF_TRACE="$v" ;;
+    esac
+  done
+  export MOE_DRIVER_MODEL="$MODEL" MOE_DRIVER_FLOOR_GROUPS="$FLOOR_GROUPS" MOE_DRIVER_FLOOR_TREADS="$FLOOR_TREADS"
+  export MOE_DRIVER_BYTE_GROUPS="$BYTE_GROUPS" MOE_DRIVER_OUT_LABEL="$OUT_LABEL"
+  export MOE_DRIVER_LF_TREADS="$LF_TREADS" MOE_DRIVER_LF_MODES="$LF_MODES" MOE_DRIVER_LF_TRACE="$LF_TRACE"
+}
+unit_text() { local i="$1"; echo "unit $(( i + 1 ))/${#U_STEP[@]} ${U_MODEL[$i]}${U_LABEL[$i]:+ ${U_LABEL[$i]}}${U_OPTS[$i]:+ ${U_OPTS[$i]}}"; }
+unit_dropped() { [[ -f "$D/plan-drops" ]] && grep -qx -- "$1" "$D/plan-drops"; }
+#: Before unit i: while the units still to run overrun the time left, drop the
+#: LAST one not yet dropped (never the prelude): the file's order is the priority.
+unit_budget() {   # INDEX
+  local i="$1" j need left
+  while :; do
+    need=0
+    for (( j = i; j < ${#U_STEP[@]}; j++ )); do unit_dropped "$j" || need=$(( need + U_EST[j] )); done
+    left="$(left_min)"
+    (( need <= left )) && return 0
+    for (( j = ${#U_STEP[@]} - 1; j >= i; j-- )); do
+      [[ "${U_STEP[$j]}" == prelude ]] && continue
+      unit_dropped "$j" && continue
+      echo "$j" >> "$D/plan-drops"
+      ledger "DROPPED $(unit_text "$j") ${U_STEP[$j]}: ${need} min of units left, ${left} min to the deadline"
+      continue 2
+    done
+    return 0
+  done
+}
+#: The plan's own page directory for unit i, as the step will name it (date aside).
+unit_dir() {
+  local i="$1" m="${U_MODEL[$i]}"; [[ "$m" == - ]] && m="$DEFAULT_MODEL"
+  case "${U_STEP[$i]}" in
+    bytes|floor) echo "\$RESULTS_ROOT/<date>-<card>-$m-${U_LABEL[$i]}-r3-counters" ;;
+    launchfloor) echo "\$RESULTS_ROOT/<date>-<card>-launch-floor${U_LABEL[$i]:+-${U_LABEL[$i]}}/$m" ;;
+    *) echo "-" ;;
+  esac
+}
+print_units() {
+  local i total=0 keep="$MODEL"
+  echo "THE GH200 MODEL-TEST SESSION (docs/LAMBDA.md section 3c), unattended: a PLAN of ${#U_STEP[@]} units"
+  echo "  plan file: $PLAN_PATH (sha256 $(sha256_of "$PLAN_PATH"))"
+  printf '  %-3s %-24s %-11s %4s %4s  %s\n' "#" model step est cap "overrides; pages"
+  for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
+    apply_unit "$i"
+    printf '  %-3s %-24s %-11s %4s %4s  %s\n' "$(( i + 1 ))" "${U_MODEL[$i]}" "${U_STEP[$i]}" \
+      "${U_EST[$i]}" "${U_CAP[$i]}" "${U_LABEL[$i]:+label=${U_LABEL[$i]} }${U_OPTS[$i]:-}${U_OPTS[$i]:+; }$(unit_dir "$i")"
+    echo "        $(step_what "${U_STEP[$i]}")"
+    total=$(( total + U_EST[i] ))
+  done
+  MODEL="$keep"
+  echo "  $total min of units, estimated, plus setup_vm.sh when --setup"
+  echo "  deadline: $([[ -n "$DEADLINE" ]] && utc_of "$DEADLINE" || echo 'none given (the run itself needs --deadline)')"
+  echo "  drop order when time runs short: the last unit first, up the file (never the prelude):"
+  local order=""; for (( i = ${#U_STEP[@]} - 1; i >= 1; i-- )); do order+=" $(( i + 1 ))"; done
+  echo "   ${order}"
+  echo "  pushes: after every unit and every byte page, to the run's branch (scripts/vm_results_push.sh)$( (( NO_PUSH )) && echo ': OFF (--no-push)')"
+}
+
+usage() { sed -n '2,9p' "$SELF" | sed 's/^# \{0,1\}//'; }
 
 # ---- arguments -----------------------------------------------------------
-DRY=0; NO_PUSH=0; SETUP=0; COMMIT=""; REPO_URL=""; DEADLINE=""; FROM=""; ONLY=""; ONE_STEP=""
+DRY=0; NO_PUSH=0; SETUP=0; COMMIT=""; REPO_URL=""; DEADLINE=""; FROM=""; ONLY=""; ONE_STEP=""; PLAN_FILE=""
 ARGS=("$@")
 while (( $# )); do
   case "$1" in
@@ -1016,9 +1233,11 @@ while (( $# )); do
     --deadline) DEADLINE="${2:-}"; shift 2 ;;
     --from)     FROM="${2:-}"; shift 2 ;;
     --steps)    ONLY="${2:-}"; shift 2 ;;
-    --model)    MODEL="${2:-}"; shift 2 ;;
+    --model)    MODEL="${2:-}"; MODEL_GIVEN=1; shift 2 ;;
     --floor-groups) FLOOR_GROUPS="${2:-}"; shift 2 ;;
     --floor-treads) FLOOR_TREADS="${2:-}"; shift 2 ;;
+    --byte-groups) BYTE_GROUPS="${2:-}"; shift 2 ;;
+    --plan)     PLAN_FILE="${2:-}"; shift 2 ;;
     --step)     ONE_STEP="${2:-}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "unknown argument: $1 (see --help)" >&2; exit "$EXIT_REFUSED" ;;
@@ -1026,13 +1245,16 @@ while (( $# )); do
 done
 
 is_step() { local s; for s in "${STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; done; return 1; }
+opt_in() { local s; for s in "${OPT_IN_STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; done; return 1; }
 
 [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo "--model $MODEL: not a model name" >&2; exit "$EXIT_REFUSED"; }
 export MOE_DRIVER_MODEL="$MODEL"
-for v in "$FLOOR_GROUPS" "$FLOOR_TREADS"; do
-  [[ -z "$v" || "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "--floor-groups/--floor-treads $v: a comma-separated list of integers" >&2; exit "$EXIT_REFUSED"; }
+for v in "$FLOOR_GROUPS" "$FLOOR_TREADS" "$BYTE_GROUPS"; do
+  [[ -z "$v" || "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "--floor-groups/--floor-treads/--byte-groups $v: a comma-separated list of integers" >&2; exit "$EXIT_REFUSED"; }
 done
 export MOE_DRIVER_FLOOR_GROUPS="$FLOOR_GROUPS" MOE_DRIVER_FLOOR_TREADS="$FLOOR_TREADS"
+export MOE_DRIVER_BYTE_GROUPS="$BYTE_GROUPS" MOE_DRIVER_OUT_LABEL="$OUT_LABEL"
+export MOE_DRIVER_LF_TREADS="$LF_TREADS" MOE_DRIVER_LF_MODES="$LF_MODES" MOE_DRIVER_LF_TRACE="$LF_TRACE"
 R3_BASE[1]="$MODEL"; R1_BASE[1]="$MODEL"
 #: One declaration for the whole session (2026-09-28). Mixtral's auto rule
 #: declares 9 copies at every ladder depth; at E = 64 it would declare 6, 8 or
@@ -1057,15 +1279,28 @@ if [[ -n "$ONLY" ]]; then
   for s in "${STEPS[@]}"; do [[ ",$ONLY," == *",$s,"* ]] && PLAN+=("$s"); done
 elif [[ -n "$FROM" ]]; then
   is_step "$FROM" || { echo "no step $FROM (${STEPS[*]})" >&2; exit "$EXIT_REFUSED"; }
-  on=0; for s in "${STEPS[@]}"; do [[ "$s" == "$FROM" ]] && on=1; (( on )) && PLAN+=("$s"); done
+  on=0; for s in "${STEPS[@]}"; do [[ "$s" == "$FROM" ]] && on=1; (( on )) && ! opt_in "$s" && PLAN+=("$s"); done
 elif [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
   # P1's locks and R1 answered this card's clock question on 8x7B; another
   # model's session measures its bytes, times and floor (docs/registered)
-  for s in "${STEPS[@]}"; do [[ "$s" == eta || "$s" == r1lock ]] || PLAN+=("$s"); done
+  for s in "${STEPS[@]}"; do [[ "$s" == eta || "$s" == r1lock ]] || opt_in "$s" || PLAN+=("$s"); done
 else
-  PLAN=("${STEPS[@]}")
+  for s in "${STEPS[@]}"; do opt_in "$s" || PLAN+=("$s"); done
 fi
 
+if [[ -n "$PLAN_FILE" ]]; then
+  for given in "$ONLY" "$FROM" "$FLOOR_GROUPS" "$FLOOR_TREADS" "$BYTE_GROUPS" "${MODEL_GIVEN:-}"; do
+    [[ -z "$given" ]] || { echo "--plan carries every unit's model, steps and overrides: drop --model, --steps, --from, --floor-*, --byte-groups" >&2; exit "$EXIT_REFUSED"; }
+  done
+  PLAN_PATH="$(resolve_plan "$PLAN_FILE")" || { echo "--plan $PLAN_FILE: no such file (looked in \$MOE_HOME/repo, as given, and beside this driver)" >&2; exit "$EXIT_REFUSED"; }
+  load_plan "$PLAN_PATH" || exit "$EXIT_REFUSED"
+fi
+
+if (( DRY )) && [[ -n "$PLAN_FILE" ]]; then
+  print_units
+  echo "DRY RUN: nothing ran, nothing was written (exit 2, as every dry run in this repo)"
+  exit "$EXIT_REFUSED"
+fi
 if (( DRY )); then
   print_plan
   echo "DRY RUN: nothing ran, nothing was written (exit 2, as every dry run in this repo)"
@@ -1116,18 +1351,19 @@ mkdir -p "$S/logs" "$D"
 trap 'on_signal TERM' TERM
 trap 'on_signal INT' INT
 trap 'on_signal HUP' HUP
-ledger "driver start: commit $(git -C "$REPO" rev-parse HEAD 2>/dev/null), steps ${PLAN[*]}, deadline $(utc_of "$DEADLINE") ($(left_min) min of work left)"
-FINAL=$EXIT_DONE
-: > "$D/summary.new"
-for (( i = 0; i < ${#PLAN[@]}; i++ )); do
-  CURRENT="${PLAN[$i]}"
-  budget "$i"
-  est="$(est_now "$CURRENT")"; left="$(left_min)"
+ledger "driver start: commit $(git -C "$REPO" rev-parse HEAD 2>/dev/null), steps $([[ -n "$PLAN_FILE" ]] && echo "of the plan $PLAN_FILE" || echo "${PLAN[*]}"), deadline $(utc_of "$DEADLINE") ($(left_min) min of work left)"
+#: One step, its estimate already settled: skip it when it no longer fits, else
+#: run it under its cap, record it, make the card safe and push. Stops the whole
+#: session (exit) on what stops it; returns otherwise. CAP_MIN empty: step_cap's.
+execute_step() {   # NAME EST [CAP_MIN] [UNIT_TEXT]
+  CURRENT="$1"; local est="$2" capm="${3:-}" utext="${4:-}" left why cap t0 rc mins what
+  local sname="$CURRENT${utext:+ ($utext)}"
+  left="$(left_min)"
   if (( est <= 0 || est > left )); then
     if (( est <= 0 )); then why="every part of it is dropped"
     else why="its estimate, $est min, is over the $left min left"; fi
-    ledger "SKIPPED $CURRENT: $why"
-    printf '%-10s SKIPPED (%s)\n' "$CURRENT" "$why" >> "$D/summary.new"
+    ledger "SKIPPED $sname: $why"
+    printf '%-10s SKIPPED (%s)%s\n' "$CURRENT" "$why" "${utext:+ [$utext]}" >> "$D/summary.new"
     (( FINAL < EXIT_INVALID )) && FINAL=$EXIT_INVALID
     if [[ "$CURRENT" == prelude ]]; then
       ledger "STOPPED: the prelude was skipped, and every step after it needs it"
@@ -1135,22 +1371,21 @@ for (( i = 0; i < ${#PLAN[@]}; i++ )); do
       push_results "prelude: SKIPPED, the session STOPPED" "$FINAL"
       exit "$FINAL"
     fi
-    push_results "$CURRENT: SKIPPED ($why)"
-    continue
+    push_results "$sname: SKIPPED ($why)"
+    return 0
   fi
-  cap=$(( $(step_cap "$CURRENT") * 60 ))
+  cap=$(( ${capm:-$(step_cap "$CURRENT")} * 60 ))
   (( cap > left * 60 )) && cap=$(( left * 60 ))
-  ledger "$CURRENT START: $(step_what "$CURRENT") (estimate $est min, cap $(( cap / 60 )) min, $left min left)"
+  ledger "$CURRENT START: $(step_what "$CURRENT")${utext:+ [$utext]} (estimate $est min, cap $(( cap / 60 )) min, $left min left)"
   t0=$(now_s)
   run_step "$CURRENT" "$cap"; rc=$?
   mins=$(( ( $(now_s) - t0 + 30 ) / 60 ))
   case $rc in
     124|137) what="STOPPED at its cap" ;;
-    0|1) what="exit $rc" ;;
     *) what="exit $rc" ;;
   esac
-  ledger "$CURRENT END: $what after $mins min"
-  printf '%-10s %s after %s min\n' "$CURRENT" "$what" "$mins" >> "$D/summary.new"
+  ledger "$CURRENT END: $what after $mins min${utext:+ [$utext]}"
+  printf '%-10s %s after %s min%s\n' "$CURRENT" "$what" "$mins" "${utext:+ [$utext]}" >> "$D/summary.new"
   if [[ "$CURRENT" == prelude && $rc -ne 0 ]]; then
     ledger "STOPPED: the prelude did not pass, and every step after it needs it"
     FINAL=$EXIT_REFUSED
@@ -1165,15 +1400,36 @@ for (( i = 0; i < ${#PLAN[@]}; i++ )); do
     *) FINAL=$EXIT_ERROR ;;
   esac
   if ! hygiene; then
-    ledger "STOPPED after $CURRENT: the card could not be made safe for the next step"
+    ledger "STOPPED after $sname: the card could not be made safe for the next step"
     FINAL=$EXIT_ERROR
     cp "$D/summary.new" "$D/summary.txt"
-    push_results "$CURRENT: $what; hygiene FAILED, the session STOPPED" "$FINAL"
+    push_results "$sname: $what; hygiene FAILED, the session STOPPED" "$FINAL"
     exit "$FINAL"
   fi
   cp "$D/summary.new" "$D/summary.txt"
-  push_results "$CURRENT: $what ($mins min)"
-done
+  push_results "$sname: $what ($mins min)"
+}
+
+FINAL=$EXIT_DONE
+: > "$D/summary.new"
+if [[ -n "$PLAN_FILE" ]]; then
+  ledger "plan: $PLAN_PATH (sha256 $(sha256_of "$PLAN_PATH")), ${#U_STEP[@]} units"
+  for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
+    unit_budget "$i"
+    if unit_dropped "$i"; then
+      apply_unit "$i"
+      execute_step "${U_STEP[$i]}" 0 "" "$(unit_text "$i")"
+      continue
+    fi
+    apply_unit "$i"
+    execute_step "${U_STEP[$i]}" "${U_EST[$i]}" "${U_CAP[$i]}" "$(unit_text "$i")"
+  done
+else
+  for (( i = 0; i < ${#PLAN[@]}; i++ )); do
+    budget "$i"
+    execute_step "${PLAN[$i]}" "$(est_now "${PLAN[$i]}")"
+  done
+fi
 CURRENT=""
 ledger "driver end: exit $FINAL"
 cp "$D/summary.new" "$D/summary.txt"

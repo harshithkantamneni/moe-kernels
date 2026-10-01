@@ -1,0 +1,75 @@
+REGISTERED 2026-10-01, before any launch-floor page: R3's small-n plateau, host-paced instrument or GPU-side floor
+  card: Lambda GH200 480GB, 1710 lock, duty 0.25, G = 4, BLOCK_M 32, R3's pin (BN 64, BK 64, 8 warps, 4 stages), 9 copies declared
+  tool: scripts/launch_floor.py (R3's call, imported); modes E240 (R3 as published), E0, E480, GR (graph replay); TR-E/TR-G Kineto traces
+  ncu: none (no counter is read)
+  fitted on what: C_reg on Mixtral 8x7B 2026-09-27 only; F = 0.0676 ms from the flush bytes and the ruler; H per cell, measured;
+    Phi 0.0998 ms FITTED ON GRANITE (SEEN), P8's plateau band only; MP zero fitted constants
+  edge cells: host-bound fraction over the 3 repeats in [0.2, 0.8], excluded from P4 and P5
+  deviation: Granite-1B at treads 1..9 (not 1..12): the 9-copy declaration and cross_model_predict's ladder
+
+C_reg ms at G = 4 (n = 1..9; JetMoE n = 1..4)
+  granite-3.0-3b-a800m   native  0.0947 0.1263 0.1690 0.2147 0.2582 0.3018 0.3401 0.3859 0.4294
+  granite-3.0-3b-a800m   shared  0.1096 0.1411 0.1838 0.2296 0.2731 0.3166 0.3550 0.4007 0.4443
+  granite-3.0-3b-a800m   private 0.1096 0.1676 0.2257 0.2841 0.3423 0.4004 0.4586 0.5170 0.5751
+  jetmoe-8b              native  0.2373 0.2851 0.4317 0.4889
+  jetmoe-8b              shared  0.2253 0.2732 0.4197 0.4970
+  jetmoe-8b              private 0.2253 0.3640 0.5485 0.6843
+  jetmoe-8b@6d2595d      native  0.2278 0.2851 0.3949 0.4889
+  jetmoe-8b@6d2595d      shared  0.2158 0.2732 0.3829 0.4970
+  jetmoe-8b@6d2595d      private 0.2158 0.3640 0.5391 0.6843
+  granite-3.0-1b-a400m   native  0.0678 0.0860 0.1097 0.1342 0.1587 0.1832 0.2077 0.2322 0.2510
+  granite-3.0-1b-a400m   shared  0.0774 0.0957 0.1193 0.1438 0.1683 0.1928 0.2173 0.2418 0.2606
+  granite-3.0-1b-a400m   private 0.0774 0.1091 0.1408 0.1724 0.2041 0.2357 0.2674 0.2990 0.3304
+
+P1 GR bands, Granite-3B n = 1..5 ([0.80, 1.10] x C_reg, ms):
+  native  n1 0.0758-0.1042  n2 0.1010-0.1389  n3 0.1352-0.1859  n4 0.1718-0.2362  n5 0.2066-0.2840
+  shared  n1 0.0877-0.1206  n2 0.1129-0.1552  n3 0.1470-0.2022  n4 0.1837-0.2526  n5 0.2185-0.3004
+  private n1 0.0877-0.1206  n2 0.1341-0.1844  n3 0.1806-0.2483  n4 0.2273-0.3125  n5 0.2738-0.3765
+
+P1: GR: the Granite n = 1..5 cells are GPU-bound and read C_reg within [0.80, 1.10] x C_reg; I_GR(5) - I_GR(1) >= 0.10 ms for SHARED and PRIVATE
+  scored on: the 15 Granite GR (arm, n <= 5) cells, the median of 3 repeats each
+  fails if: more than 1 of the 15 cells falls outside its band, or either increment is under 0.10 ms
+  rival line: any GR cell at n <= 3 reading >= 0.20 ms: the GPU-side fixed-time rival predicts >= 0.23
+  separates: host-paced instrument (GR follows C_reg) from a GPU-side fixed floor (GR stays near 0.25)
+
+P2: GR = E240 on every GPU-bound cell
+  band: max(2%, 6 us)
+  scored on: Granite n >= 7, JetMoE n >= 3, every arm (medians of 3 repeats)
+  fails if: any such cell off by more than the band: the graph changed the GPU work and P1 cannot be read
+  separates: graph replay as a clean GPU-time instrument from one that alters the call
+
+P3: E0 - E240 = F_trace - h_flush_trace - dD_tail on host-bound cells (the review's correction: the start event fires at t_flush_launch + lambda + F, so the flush's own host dispatch h_flush is not inside the E240 interval; first-order +0.068 ms - h_flush, about +0.053 to +0.063 ms for h_flush 5 to 15 us)
+  band: +/- 12 us
+  inputs: F_trace and h_flush_trace from TR-E at E240, dD_tail = D_tail(TR-G at E0) - D_tail(TR-G at E240), all at the same (arm, n)
+  scored on: Granite n = 1, 2, every arm (6 cells)
+  fails if: outside the band on more than 1 of the 6 cells
+  without traces: if a TR-E or TR-G trace at E0 or E240 for a cell is missing or unparsable, that cell is scored ONLY through MP (P6), never against the first-order number; the page states which cells
+  separates: a host-paced interval (moves by the flush it hides) from a GPU floor (moves only by warm-L2 speed-up)
+
+P4: E480 - E240 = -(F480 - F240) +/- 12 us on cells that stay host-bound (about -0.068 ms; Granite n = 1 about 0.18 ms); the crossover moves to C* = H - F480, about 0.219 ms
+  scored on: every non-edge Granite (arm, n) cell at E480 and E240
+  fails if: the moved verdict is wrong on more than 2 non-edge cells, or a shift is outside the band
+  note: NATIVE n = 4 sits 4 us under C*: expected edge
+  predicted host bound at E240 (treads): {'native': [1, 2, 3, 4, 5], 'shared': [1, 2, 3, 4, 5], 'private': [1, 2, 3, 4]}
+  predicted host bound at E480 (treads): {'native': [1, 2, 3, 4], 'shared': [1, 2, 3], 'private': [1, 2]}
+
+P5: C_reg + F < H, each cell's own H, gives the E240 and E480 host-bound verdict
+  scored on: every non-edge cell of all three models, E240 and E480 (Granite-1B E240 only)
+  fails if: agreement below 95%
+  note: post hoc 439/441 on the published pages: a low bar kept only because E480 moves the line; P4 is the real test
+
+P6: MP (max-plus over 50 steady-state iterations: each kernel starts at max(previous end, launch + lambda)) predicts I_eager
+  band: max(5%, 12 us)
+  scored on: every E240, E0 and E480 cell at the trace treads, host-bound and not, including JetMoE n = 1 (where constant Phi reads 5-8% fast)
+  fails if: any cell outside; a non-uniform profiler inflation is a way to fail without the mechanism being wrong, reported as an MP failure
+
+P7: Granite n = 1: TR-G kernel sum <= 0.13 ms, non-GEMM kernels <= 0.03 ms, eager host span of fused_experts >= 0.25 ms with launch-API time under 40% of it
+  role: classifies (Python dispatch vs launch API vs GPU), gates nothing
+
+P8: host-bound wherever C_reg + 0.0676 < H_session; plateau I_E240 = H - Phi in [0.23, 0.27] ms; GR follows C_reg within P1's band
+  fails if: P1's rule (more than 1 of 27 GR cells outside band) or P5's (< 95%) on this model
+  plateau band label: FITTED ON GRANITE (SEEN): Phi and the band come from Granite-3.0-3B's published pages
+  predicted host bound at E240 with H 0.3545 (treads): {'native': [1, 2, 3, 4, 5, 6, 7, 8, 9], 'shared': [1, 2, 3, 4, 5, 6, 7, 8, 9], 'private': [1, 2, 3, 4, 5, 6, 7]}
+
+feeds: if P1 to P6 hold, R3's eager pages get the regime boundary C + F < H, host-bound cells leave the time test, and C is scored on GR cells; no T_floor is added to call_ms (the floor is the instrument's and the host's, not the GPU's)
+scope: says nothing about fused_experts inside a forward pass, where production at small n is graph-captured

@@ -64,6 +64,13 @@
 #                 (alpha_g_chain_helpers.py ncu-locate); if absent, the CUDA
 #                 apt repo's nsight-compute package, installed only after
 #                 `apt-get -s` shows the transaction touches no driver package.
+#   S5b NSYS      SOFT, the launch-floor run's tracer fallback (torch.profiler
+#                 is its primary, and needs nothing installed): nsys on PATH
+#                 or $NSYS_SEARCH, else the CUDA apt repo's
+#                 cuda-nsight-systems package matching the ncu package, under
+#                 the same `apt-get -s` driver guard. Never refuses and never
+#                 fails setup: anything short of an installed nsys records
+#                 "no nsys" in $SESSION/nsys.txt, as every box did before.
 #   S6 DOOR       how the counter steps run: `open` (the module already allows
 #                 it), `sudo` (the default with root or passwordless sudo), or
 #                 `module` (opt-in: rewrite the module option and reload the
@@ -121,6 +128,9 @@ NCU_SEARCH_DEFAULT="/usr/local/cuda*/bin/ncu /opt/nvidia/nsight-compute/*/ncu /u
 #: (NCU_PACKAGES_RE) are exempt, and they match none of these prefixes today.
 DRIVER_PACKAGES_RE='^(nvidia-|libnvidia-|libcuda|cuda-drivers|cuda-compat|linux-modules-nvidia|linux-objects-nvidia|linux-signatures-nvidia|xserver-xorg-video-nvidia)'
 NCU_PACKAGES_RE='^(nsight-compute|cuda-nsight-compute)'
+#: Where nsys is looked for after PATH (S5b, soft).
+NSYS_SEARCH_DEFAULT="/usr/local/cuda*/bin/nsys /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda*/nsight-systems*/bin/nsys"
+NSYS_SEARCH="${NSYS_SEARCH:-$NSYS_SEARCH_DEFAULT}"
 CUDA_REPO_ROOT="https://developer.download.nvidia.com/compute/cuda/repos"
 CUDA_KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
 MODPROBE_CONF="/etc/modprobe.d/moe-ncu-profiling.conf"
@@ -727,6 +737,66 @@ install_ncu() {
 }
 
 # --------------------------------------------------------------------------
+# S5b NSYS (soft): the launch-floor tracer fallback
+# --------------------------------------------------------------------------
+NSYS_BIN=none; NSYS_NOTE=""
+
+#: cuda-nsight-systems-<ver> beside the chosen cuda-nsight-compute-<ver>.
+nsys_package() {
+  case "$NCU_PACKAGE" in cuda-nsight-compute-*) echo "cuda-nsight-systems-${NCU_PACKAGE#cuda-nsight-compute-}" ;; *) return 1 ;; esac
+}
+
+locate_nsys() {
+  NSYS_BIN=none
+  local c g
+  if c="$(command -v nsys 2>/dev/null)" && [[ -n "$c" ]]; then NSYS_BIN="$c"; return 0; fi
+  for g in $NSYS_SEARCH; do
+    for c in $g; do [[ -x "$c" && -f "$c" ]] && { NSYS_BIN="$c"; return 0; }; done
+  done
+  return 0
+}
+
+record_nsys() {   # NOTE
+  NSYS_NOTE="$1"
+  say "nsys: $1"
+  (( DRY_RUN )) && return 0
+  mkdir -p "$SESSION"
+  { echo "binary  $NSYS_BIN"; echo "note    $1"
+    [[ "$NSYS_BIN" != none ]] && { echo "--- nsys --version"; "$NSYS_BIN" --version 2>&1 || true; }
+  } > "$SESSION/nsys.txt"
+  chown_back
+}
+
+nsys_stage() {
+  stage "S5b NSYS (soft: the launch-floor tracer fallback; torch.profiler is primary)"
+  locate_nsys
+  if [[ "$NSYS_BIN" != none ]]; then record_nsys "S5b skip install: nsys at $NSYS_BIN"; return 0; fi
+  local pkg sim touched
+  pkg="$(nsys_package)" || { record_nsys "no nsys: no nsight-systems package matches '${NCU_PACKAGE:-no ncu package}'"; return 0; }
+  if (( DRY_RUN )); then
+    say "  would run: apt-get -s install --no-install-recommends $pkg, and install it only if the simulation installs $pkg and names no driver package; never refuses"
+    return 0
+  fi
+  have_root || { record_nsys "no nsys: installing $pkg needs root"; return 0; }
+  cuda_repo_dir >/dev/null || { record_nsys "no nsys: no CUDA apt repo for this box"; return 0; }
+  sim="$(apt-get -s install --no-install-recommends "$pkg" 2>&1)" \
+    || { record_nsys "no nsys: apt cannot resolve $pkg"; return 0; }
+  grep -q "^Inst $pkg " <<< "$sim" \
+    || { record_nsys "no nsys: apt-get -s does not install $pkg (the CUDA repo is not configured, or it is absent)"; return 0; }
+  touched="$(driver_packages_touched <<< "$sim")"
+  if [[ -n "$touched" ]]; then
+    record_nsys "no nsys: installing $pkg would touch the driver ($(tr '\n' ' ' <<< "$touched")): not installed"
+    return 0
+  fi
+  say "apt-get -s: $pkg touches no driver package"
+  as_root apt-get install -y --no-install-recommends "$pkg" \
+    || { record_nsys "no nsys: apt-get install $pkg failed"; return 0; }
+  locate_nsys
+  if [[ "$NSYS_BIN" != none ]]; then record_nsys "nsys installed: $NSYS_BIN"
+  else record_nsys "no nsys: $pkg installed and no nsys found on PATH or at $NSYS_SEARCH"; fi
+}
+
+# --------------------------------------------------------------------------
 # S6 COUNTER DOOR
 # --------------------------------------------------------------------------
 DOOR=""; LAUNCHER=""
@@ -952,6 +1022,7 @@ if (( DRY_RUN )); then
   PLAN_REPO="$(cd "$SELF_DIR/.." && pwd)"
   venv_stage "$PLAN_REPO"
   ncu_stage "$PLAN_REPO"
+  nsys_stage
   door_stage
   record_ncu
   env_stage "$PLAN_REPO"
@@ -1007,6 +1078,7 @@ fi
 system_packages
 venv_stage "$REPO"
 ncu_stage "$REPO"
+nsys_stage
 door_stage
 record_ncu
 env_stage "$REPO"

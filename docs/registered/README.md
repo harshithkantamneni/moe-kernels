@@ -381,3 +381,228 @@ waves (w1 n = 6, 8, 10; w2 n = 5, 6, 8, 10) within 2% of 352.2 (w1) and 379.1
 (w2) cycles per CTA k-step. The score reprices every cell with the capture's
 own `dram__bytes_read.sum`; the registered numbers use the launch order's own
 reads (sigma = 1).
+
+## 2026-10-01, before any page: rental 1, three registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental1-2026-10.plan` through
+`gh200_model_session.sh --plan` (`vm_run.sh start --plan`): units in the file's
+order, each with its own model, overrides and page directory, each pushed as it
+lands. The three sections below are committed in ONE commit with the
+scaffolding, before the rental (the census licenses pages by commit), and none
+is revised after another's pages land: B's G = 2 secondary and C's R0 are the
+same byte model.
+
+| # | unit | pages | est. min |
+|---|---|---|---:|
+| 1 | prelude | | 3 |
+| 2 | (i) mixtral-8x7b-tp8 floor, EXACTLY the 2026-09-30 design (`--floor-groups 64,8 --floor-treads 1,2,3,4,5,6,8,10`), pushed before any other tp8 page | r3f-g64, g8, base and lock | 8 |
+| 3-5 | (ii) C: tp8 G = 64 32 16 8; tp4 and tp2 G = 64 32 16 | 10 byte pages | 28 |
+| 6 | (ii) C: same-board 8x7B G = 16 32 8 1 (the rho denominators; G = 1 is B's anchor and a board check) | 4 | 26 |
+| 7-8 | (ii) C: Qwen2-57B and OLMoE at G = 128 | 2 | 13 |
+| 9-11 | (iii) B: tp2, tp4, tp8 at G = 1 and 2 | 6 | 19 |
+| 12-14 | (iv) A: launch floor, Granite-3B, JetMoE-8B, Granite-1B (ncu-free) | | 51 |
+
+148 min estimated (byte pages 55 s + 108 s per GB of routed weights, from the
+published ledgers; the 09-30 floor-only step 5 min; launch_floor's own dry-run
+estimate), against the deadline of launch + 400 min and the guardian's 410-min
+hard cap. When time runs short the driver drops the LAST unit first, up the
+file: A, then B, then C; the floor capture goes last of all.
+
+## 2026-10-01, before any page: the launch floor (Granite-3.0-3B, JetMoE-8B, Granite-3.0-1B-A400M)
+
+R3's flat 0.24 to 0.29 ms at small n (Granite-3.0-3B SHARED/NATIVE n = 1..5,
+PRIVATE n = 1..4; JetMoE n = 1) is read here as the eager timer running
+host-paced, not a GPU-side floor. The published pages already carry the
+timer's own verdict: 90/90 host-bound on every such (arm, n), host enqueue
+0.341 to 0.362 ms per call, and the fit-free rule host-bound iff C_reg + F < H
+(F = 251.7 MB / 3726 GB/s = 0.0676 ms, the flush's read) matches 439 of 441
+non-edge published cells. That is post hoc; this registration is the test.
+
+Tool: `scripts/launch_floor.py`, R3's call imported (`build_private_weights`,
+`arm_inputs`, `arm_call`, `pinned_config`, `counter_declaration`; R3's page
+path untouched), 1710 lock, duty 0.25, G = 4, BLOCK_M 32, 9 copies, 3
+repeats. Modes per (arm, n): E240 (R3 as published: `time_cell`'s duty
+sizing mirrored line for line, a 240 MiB flush), E0 (no flush), E480 (480
+MiB), GR (one captured `fused_experts` call replayed as a CUDA graph under
+E240's flush). Kineto traces (no counter, no ncu) TR-E and TR-G at E240 at
+the trace treads, and at E0 and E480 at n = 1, 2. Run by the driver's
+`launchfloor` step: Granite-3B treads 1..9 all modes, JetMoE 1..4 all modes,
+Granite-1B 1..9 E240 and GR (treads 1..9, not the design's 1..12: the 9-copy
+declaration and cross_model_predict's ladder). Predictions:
+`2026-10-01-launch-floor-gh200.{json,txt}`, C_reg from the Granite and
+JetMoE registrations of 2026-09-29 (G = 4) and, for Granite-1B, from
+`scripts/cross_model_predict.py` at this commit on 8x7B's 2026-09-27 pages.
+
+Fitted on what: C_reg on Mixtral 8x7B only; F from bytes and the ruler; H is
+each cell's own measured host enqueue (recorded on every cell, not only
+host-bound ones); Phi = 0.0998 ms and P8's plateau band are FITTED ON GRANITE
+(SEEN); the composition model MP has no fitted constant. Edge cells, fixed
+now: host-bound fraction over the 3 repeats in [0.2, 0.8], out of P4 and P5.
+
+| # | prediction (cells scored) | fails if |
+|---|---|---|
+| P1 | GR follows C_reg within [0.80, 1.10] x C_reg on the 15 Granite (arm, n <= 5) cells; n = 1 NATIVE 0.0758-0.1042, SHARED and PRIVATE 0.0877-0.1206 ms; I_GR(5) - I_GR(1) >= 0.10 ms (SHARED, PRIVATE) | more than 1 of 15 outside, or an increment under 0.10; rival line: any GR n <= 3 >= 0.20 ms (a GPU floor predicts >= 0.23) |
+| P2 | GR = E240 on GPU-bound cells (Granite n >= 7, JetMoE n >= 3) | any off by more than max(2%, 6 us) |
+| P3 | E0 - E240 = F_trace - h_flush_trace - dD_tail (the start event fires after the flush, so its host dispatch h_flush is not in the E240 interval; first order +0.053 to +0.063 ms), inputs from TR-E/TR-G at E0 and E240, Granite n = 1, 2 (6 cells) | outside +/-12 us on more than 1 of 6; a cell without both traces is scored only through MP (P6) |
+| P4 | E480 - E240 = -(F480 - F240) +/- 12 us where still host-bound (about -0.068 ms); crossover moves to C* = H - F480 = 0.219 ms: host-bound NATIVE n <= 4, SHARED n <= 3, PRIVATE n <= 2 (E240: 5, 5, 4) | the moved verdict wrong on more than 2 non-edge cells, or a shift outside the band |
+| P5 | C_reg + F < H, each cell's own H, gives the E240 and E480 verdicts on all three models | under 95% of non-edge cells (a low bar; P4 is the test) |
+| P6 | MP (max-plus, each kernel at max(previous end, launch + lambda), 50 iterations) predicts I_eager on every E240/E0/E480 cell at the trace treads, JetMoE n = 1 included | any outside max(5%, 12 us) |
+| P7 | Granite n = 1: TR-G kernel sum <= 0.13 ms, non-GEMM <= 0.03 ms, eager host span >= 0.25 ms with launch-API time under 40% | classifies only |
+| P8 | Granite-1B (unseen): host-bound wherever C_reg + 0.0676 < H (at H = 0.3545: every NATIVE and SHARED n <= 9, PRIVATE n <= 7); plateau H - Phi in [0.23, 0.27] ms (Granite-fitted, seen); GR within P1's band on all 27 cells | P1's rule (more than 1 of 27) or P5's on this model |
+
+What it separates: P1, P3 and P4 move a host-paced interval and leave a
+GPU-side fixed floor where it is (GR near 0.25 ms, no flush lever). If P1 to
+P6 hold, R3's eager pages get the regime boundary C + F < H, host-bound cells
+leave the time test and C is scored on GR cells; no T_floor is added to
+call_ms. No claim about fused_experts inside a forward pass, where small-n
+production is graph-captured.
+
+## 2026-10-01, before any page: what sets L2 survival, the TP-shard distance block (rental 1 of the L2 design)
+
+Published G=1 slab survival is not a function of the sequential reuse distance
+x = (P - 1) SLAB / L2 alone: Phi-3.5 w1 and 8x7B w2 sit at one x and differ 5x
+in s. The leading candidate is d = P / W_c, the re-reader's lag behind its
+leader in co-residency windows. Rental 1 takes only the block that needs no new
+knob: Mixtral 8x7B's TP shards at G = 1 and 2, default kernel, default metric
+list. The TP shards keep E 8, top 2, H 4096, the tile and W_c and move x and d
+apart: w1 keeps 64 k-steps and its 512 KiB slab, w2 keeps P = 64 and d = 0.121.
+
+Measure, per page and GEMM, G = 1, n = 2..9: s = (B_PRIVATE - B_SHARED) /
+((n - 1) W_g), B = `per_gemm[g].dram_bytes_read` (PRIVATE reads n weight
+sets, SHARED 1 + (1 - s)(n - 1); the activation traffic is the same tiles in
+the same order and cancels to first order). Law (`design-l2/work/register.py`,
+calibration pages ONLY: 8x7B 09-27, 8x22B, Qwen2-57B, OLMoE): s = s_cap(x) + (1 -
+s_cap) s_sync(d, n), s_sync from 8x7B w2 and 8x22B w2, s_cap 1 at x <= 0.286 and
+solved at 0.576 from Qwen2 w1. Between 0.576 and 1.84 L2 s_cap is not identified:
+H0 (one 60 MiB LRU) holds it to x = 1.0, H1 (two partitions with replication,
+C_eff 0.5 to 0.67 L2) ramps it to 0 by 0.8. That d leads was suggested by Phi-3.5
+and JetMoE (seen): hypothesis generation, not a test. Predictions:
+`2026-10-01-l2-survival-tp-gh200.{json,txt}`.
+
+| cell | x (L2) | d | s, n = 2..9, H1 + H2a | H0 + H2a (where different) |
+|---|---:|---:|---|---|
+| tp8 w2 | 0.23 | 0.121 | 1.00 at every n | same |
+| tp4 w2 | 0.47 | 0.121 | 0.85 0.84 0.85 0.86 0.87 0.88 0.88 0.89 | same |
+| tp2 w2 | 0.93 | 0.121 | 0.70 0.54 0.52 0.52 0.48 0.48 0.46 0.45 (= 8x7B w2) | 0.76 0.74 0.76 0.77 0.79 0.80 0.81 0.82 |
+| tp8 w1 | 0.47 | 0.085 | 1.00 (extrapolated in d) | same |
+| tp4 w1 | 0.93 | 0.170 | 0.35 0.22 0.20 0.17 0.15 0.15 0.13 0.12 | 0.49 0.56 0.60 0.60 0.66 0.67 0.69 0.71 |
+| tp2 w1 | 1.87 | 0.339 | 0.03 0.01 0.01 0.00 0.00 0.00 0.00 0.00 | same |
+
+Pages that score it: the plan's units 9 to 11, `<date>-<card>-mixtral-8x7b-tpT-l2-r3-counters/lock1710/r3c-g{1,2}.json`
+for T = 2, 4, 8, and the same-board anchor, unit 6's `...-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g1.json`
+(8x7B w2 at G = 1, the curve the tp2 w2 rule compares against; the +/-0.05 band
+in s is the 09-25 to 09-27 board-to-board reproduction, 0.04, and holds only
+against a same-board baseline).
+
+Decision rules, fixed now. H1 over H0: tp2 w2 within 0.08 of the same-board 8x7B
+w2 curve AND below 0.65 at every n = 4..9; H0: >= 0.74 at every n = 4..9; else
+INCONCLUSIVE. tp4 w1: H1 if under 0.40 at every n = 6..9 and within 0.08 of H1's
+numbers, H0 if over 0.40 and within 0.08 of H0's. An x-only law (s a function of
+x alone) is falsified if tp4 w1 and tp2 w2, one x and two d, differ by more than
+0.10 at three or more of n = 4..9. Controls (both hypotheses): tp8 w2 and tp8 w1
+>= 0.95; tp4 w2 within 0.05 of its row; tp2 w1 <= 0.08; a control outside says
+the law's shape failed, not H0 or H1. PRIVATE F / Mn in [0.50, 0.56] is a CONTROL
+(it holds on 1202 published cells and every hypothesis predicts it). The far
+share of SHARED's extra hits, from the recorded tex/fabric sectors, in [0.15,
+0.45] where s >= 0.1 is a RECORD. V10 does not gate survival scoring (bytes are
+clock-free; tp8 and tp4 pages will likely read 1641 to 1688 MHz like every
+short-kernel lock page); a page failing V6 has its s flagged, since V6 checks
+the activation-cancels premise (JetMoE G = 1 already fails it, 0.70%).
+
+Secondary, G = 2: every SHARED and PRIVATE cell against the registered byte
+model R0 (8x7B 09-27 MIX through `cross_model_predict.target_geometry`, nothing
+fitted on the shards) with its own 5% bar; R0's numbers are in the JSON. This R0
+is C's R0 below: both registrations are committed together, before rental 1,
+and neither is revised after the other's pages land.
+
+Not in rental 1: the R0 anchors with partition metrics, num_stages, BLOCK_K,
+the 1005 MHz clock and slot padding (rental 2: `--block-k`, `--slot-pad-rows`,
+the partition metrics and per-knob directories).
+
+## 2026-10-01, before any page: PRIVATE's A-tile reads at large G and short K (rental 1)
+
+The registered byte model (8x7B's MIX fit, carried by `cross_model_predict`)
+misses PRIVATE's A-tile reads two ways on the eight published GH200 models: w1
+is over-predicted on every top_k = 8 model at every G, G = 1 included (Qwen2
+G=64 +4.7 to +6.8%, Granite +2.7% at G=1), and w2 is under-predicted at G >= 32
+on the long-K models (Phi -8.0%, Qwen2 -5.8%). Two candidate fixes, both
+scaffolding of the existing model and both OFF by default
+(`scripts/wave_split_bytes.py`: `Model(geom, content_a=True)`,
+`Params.k0_A/a_A`; every registered number is unchanged with them off, pinned
+in `tests/test_atile_pooled_fit.py` from the code at 6d2595d):
+
+- **R1, content-keyed w1 A.** R3's routing (`SWEEP.balanced_ids` ->
+  `realize_counts`, a heap greedy with ties by expert id) puts the experts in
+  E/k classes of k with identical token sets, so k M-tiles read one w1 A tile.
+  w1's A is keyed by tile content (first read compulsory, the credit (U - E n)
+  ATILE in S_c), one A survival law for both GEMMs (w1 fill, w2 ws).
+  THIS IS A HARNESS PROPERTY: real top-k routing has no such classes, so the
+  term models R3's pages, not the hardware or a served model.
+  `wave_split_bytes.DESIGN_KEYS` now carries `routing`.
+- **R2, R1 times a duration factor** s(ks) = (1 + ks / k0_A)^(-a_A) on every A
+  distance, ks = K / BLOCK_K: long CTAs stay wave-coherent, so their A
+  re-reads sit closer in time than the byte distance says. The fit runs to its
+  exponential limit, s = exp(-c ks).
+
+Fits (`scripts/atile_pooled_fit.py`, PRIVATE cells, every G and tread, both
+GEMMs). PRIMARY, calibration models only (8x7B 09-27, 8x22B, Qwen2-57B,
+OLMoE): R1 C_A 159.61 MiB, beta_A 1.053, theta1_A 0 (fit rms 1.21%, worst
+-9.51%); R2 C_A 63.68 MiB, beta_A 1.338, c = 0.00344 per k-step (0.87%, -7.24%).
+SECONDARY, all eight models, the four diagnosis models SEEN: R1 148.13 /
+1.072 (1.00%, -9.23%); R2 73.37 / 1.316, c = 0.00293 (0.75%, -7.95%). R0 = the
+registered 8x7B MIX fit, nothing refitted. The knee form with its knee fixed at
+40 k-steps is NOT registered: the 40 was read off JetMoE and Phi.
+
+Pages (one GH200, rental 1, lock 1710, treads 1..9, all three arms; each page
+group in its own directory): `mixtral-8x7b-tp8` G = 8, 16, 32, 64 (taken only
+after the registered tp8 floor capture is pushed); `-tp4` G = 16, 32, 64;
+`-tp2` G = 16, 32, 64; Qwen2-57B and OLMoE at G = 128; Mixtral 8x7B G = 8, 16,
+32 on the SAME board (the rho denominators); the L2-survival registration's
+tp2/tp4/tp8 G = 1 pages for T3. Predictions:
+`2026-10-01-atile-ksteps-gh200.{json,txt}`, every PRIVATE cell, w1 and w2, n =
+1..9, R0 and the four fits.
+
+| cell (q, n = 8) | R0 | R1 | R2 | R2/R1 |
+|---|---:|---:|---:|---:|
+| tp8 w2 G=64 | 8.305 | 8.388 | 8.629 | +2.9% |
+| tp4 w2 G=64 | 8.690 | 8.757 | 9.246 | +5.6% |
+| tp2 w2 G=64 | 9.435 | 9.389 | 10.018 | +6.7% |
+| Qwen2 w2 G=128 | 9.135 | 9.162 | 10.076 | +10.0% |
+| Qwen2 w1 G=128 | 9.235 | 8.100 | 8.141 | R0/R1 +14.0% |
+| OLMoE w1 G=128 | 8.589 | 7.968 | 7.987 | R0/R1 +7.8% |
+
+Tests, what each separates, falsifiers fixed now:
+
+- **T1, content-keyed w1 (R1/R2 against R0).** PRIVATE w1 at G = 128 on Qwen2
+  and OLMoE: pass within 2% of R1 at every n >= 2; falsified if the measured q
+  sits nearer R0 than R1 at any n >= 4.
+- **T2, duration (R2 against every byte law).** w2 n = 9, f = (q - n) x 128 /
+  (63 n): rho42 = f(tp4 G=64) / f(8x7B G=16), rho84 = f(tp2 G=64) / f(8x7B
+  G=32), both pages from ONE board. Bands = prediction +- 2 sigma, sigma from
+  sigma_q = 0.036 (90th percentile of the per-call standard error of PRIVATE w2
+  q, G >= 8, n >= 6, 8x7B 09-27; median 0.009), propagated to each f in
+  quadrature. rho42: R1 0.961 [0.835, 1.087], R2 1.869 [1.640, 2.098] (R0
+  0.964 [0.824, 1.104]; secondary R2 1.689 [1.475, 1.902]). rho84: R1 0.989
+  [0.918, 1.061], R2 1.426 [1.338, 1.515] (R0 0.992; secondary R2 1.354 [1.267,
+  1.441]). A candidate is falsified when BOTH rho fall outside its band; both
+  between the R1 and R2 bands refutes every candidate; one in, one out is
+  inconclusive. The board-to-board difference (09-25 against 09-27, PRIVATE w2
+  up to 2.8% at G=64 n=6) is why the denominators are re-measured. Confound:
+  along each row L (8 -> 64) and W_c / L (66 -> 8 columns in flight) move with
+  the k-steps, so a byte law with a columns-in-flight term also rises; the
+  separator (8x7B G=32 at BLOCK_K 32 / 8 stages against 128 / 2) needs
+  `--block-k` and is rental 2. The 21 MiB row is supporting evidence only.
+- **T3, the G = 1 credit (sharing against none, at G = 1).** PRIVATE w1 G=1
+  n=1 on the tp shards' G=1 pages: q - 1 within +-0.0010 of R1 (the worst
+  |measured - R1| over the eight published G=1 n=1 cells is 0.00098): tp8 R1
+  -0.00446 (R0 0.00000), tp4 -0.00193 (R0 +0.00011); pass inside R1's band and
+  outside R0's. tp2 (R1 -0.00039, R0 +0.00025) is a record: its share distance,
+  W_w1 / E = 117 MB, is past the L2. The design's "within 5% of q" is replaced
+  (5% of q = 1 is ten times every credit).
+- **T4, the score.** Each candidate on every PRIVATE cell of the scoring pages
+  (G = 1 aside): pass at rms <= 2% and no G >= 32, n >= 6 cell beyond 4%.
+
+V10 does not gate any score here: the tp8 and tp4 lock pages will likely fail it
+(short kernels: the JetMoE and OLMoE lock pages read 1641-1688 MHz against 1710),
+and DRAM bytes are clock-free (base-clock against lock bytes agree to 0.03% w1,
+0.8% w2 on 8x7B 09-27).

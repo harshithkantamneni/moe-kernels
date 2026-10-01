@@ -1019,10 +1019,26 @@ they were scored; nothing is fitted or adopted.
   small on the plateau, so V5 (the declaration's per-M-tile cost against that
   slope) is UNKNOWN or FAIL on all ten and C2 reads an apparent 4.2 to 7.0 TB/s
   stream against the 3.73 TB/s ruler on nine, closest on the pages that reach
-  tread 9. INTERPRETATION, untested: the pages carry no host timeline, so a
-  launch-rate floor and the non-GEMM kernels' fixed time are not separated.
-  The timing model has no call-time floor, and one fitted on 8x7B, whose
-  calls never approach it, would not be identified.
+  tread 9. CORRECTED 2026-10-01: the pages do carry the host side. R3 records
+  per cell whether the call was host-bound (the `host_bound` column and its
+  "host enqueue X ms per call" detail): every Granite plateau cell is
+  host-bound on 90 of 90 samples, the host taking 0.352 to 0.356 ms to enqueue
+  a call, and every cell above the plateau is GPU-bound; JetMoE's n = 1 is
+  host-bound too (53 of 53). A rule with nothing fitted (host-bound when the
+  registered GPU time plus the L2 flush, 0.0676 ms, is under the host time per
+  call) gives R3's verdict on 439 of 441 cells of four models (found after the
+  fact: diagnosis). The non-GEMM kernels cannot be the floor (alignment 5.5 to
+  6.3 us a call). The timing model prices GPU time only; a registered test of
+  the host-bound regime is in docs/registered/README.md (2026-10-01,
+  launch floor).
+- *PRIVATE's activation bytes at large G (added 2026-10-01).* PRIVATE's misses at
+  G >= 32 (8x22B, Qwen2-57B, Phi, -5 to -8%) are activation re-reads, two
+  causes: in w1, R3's synthetic routing (`balanced_ids`) gives top_k experts
+  identical token sets, so k M-tiles read the same A tile, which the byte
+  model counts k times (a property of the harness's routing, not of the
+  hardware: real routing rarely repeats a token set exactly); in w2, the
+  effective reuse distance appears to shrink as CTAs lengthen. Both are tested
+  by a registration (docs/registered/README.md, 2026-10-01, A-tile k-steps).
 - *The floor estimator, corrected.* The floor falsifier was registered as the
   slope over the floor capture's n = 2, 3, 4, 6. Where a GEMM runs few waves,
   each cell's last wave is filled by a different fraction and the line tilts:

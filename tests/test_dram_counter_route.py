@@ -4966,7 +4966,11 @@ _FLOOR_CHANGED = {"mixtral-8x7b": (2, 3, 4, 6, 7, 8),
                   "jetmoe-8b": (2, 3, 4, 6, 9, 10, 11),
                   "granite-3.0-3b-a800m": (2, 3, 4, 6, 7, 8),
                   "mixtral-8x7b-tp8": (2, 3, 4, 6, 7, 8),
-                  "qwen2-57b-a14b-tp8": (2, 3, 4, 6, 7, 8)}
+                  "qwen2-57b-a14b-tp8": (2, 3, 4, 6, 7, 8),
+                  # added 2026-10-01 with their spec entries (rental 1)
+                  "mixtral-8x7b-tp2": (2, 3, 4, 6, 7, 8),
+                  "mixtral-8x7b-tp4": (2, 3, 4, 6, 7, 8),
+                  "granite-3.0-1b-a400m": (2, 3, 4, 6, 7, 8)}
 
 
 def _floor_ok(cfg, treads) -> bool:

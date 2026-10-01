@@ -188,6 +188,30 @@ whether it means pages not yet taken or a threshold nearer 3.5%. This tool
 reads it as a test of new pages and prints the GH200 cell as an open
 question for the judge; it is not counted as a pass.
 
+TWO OPTIONAL TERMS, 2026-10-01 (scripts/atile_pooled_fit.py; registration
+docs/registered/2026-10-01-atile-ksteps-gh200). Both are OFF by default, and
+with them off every number above is unchanged:
+  - CONTENT-KEYED w1 A (`Model(geom, content_a=True)`). R3's routing is
+    `SWEEP.balanced_ids` -> `realize_counts`, a heap greedy with ties broken by
+    expert id: at equal demand it hands token t the experts k (t mod E/k) ..
+    k (t mod E/k) + k - 1, so the experts fall into E/k classes of k with
+    IDENTICAL token sets, and tile j of every expert in a class holds the same
+    BLOCK_M token rows. w1's A operand is hidden_states[token], so k M-tiles
+    read ONE A tile; w2's A is the per-(token, slot) intermediate and shares
+    nothing. With the switch on, w1's A events are keyed by tile CONTENT
+    (`tile_content_ids`): the first read of a content id is compulsory, every
+    later read is an A event at its live-rank distance, the group working set
+    counts distinct contents, and the compulsory difference (U - E n) ATILE is
+    added to S_c. THIS IS A PROPERTY OF THE HARNESS, NOT OF THE HARDWARE OR OF
+    REAL ROUTING: real top-k routing does not give k experts identical token
+    sets, so the term models R3's pages and says nothing about a served model.
+  - THE DURATION FACTOR (`Params.k0_A`, `Params.a_A`; 0 = off): every A reuse
+    distance (X in fill and mix, WS_col in ws) is multiplied by s(ks) =
+    (1 + ks / k0_A)^(-a_A), ks = K_g / BLOCK_K the CTA's k-steps. A candidate
+    (CTAs of long K stay wave-coherent, so their A re-reads sit closer in time
+    than the byte distance says), registered as R2 and tested on the
+    Mixtral 8x7B TP shards' iso-working-set ladder; not a fitted fact.
+
 It writes nothing unless --out or --params-out is given. In --out's JSON,
 q_fill and q_ws are null where the cell is ILL-POSED; the raw roots the guard
 judged are kept as least_root_fill, least_root_ws and greatest_root_fill,
@@ -528,6 +552,7 @@ class Events:
     per_set: int = 0           # E P_g
     weight_bytes: int = 0      # W_g
     atile: int = 0             # ATILE_g
+    ksteps: int = 0            # K_g / BLOCK_K, the duration factor's argument
 
     def counts(self) -> dict:
         """The closed form's shape: {"x": {(D, win1): k}, "in1", "inL",
@@ -748,7 +773,84 @@ def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str) -> Events:
                                  x_D=ev.x_D[~later], x_win1=ev.x_win1[~later],
                                  x_k=ev.x_k[~later], x_S=ev.x_S[~later])
     return dataclasses.replace(ev, gemm=gemm, per_set=geom.per_set(gemm),
-                               weight_bytes=geom.get("W", gemm), atile=geom.atile(gemm))
+                               weight_bytes=geom.get("W", gemm), atile=geom.atile(gemm),
+                               ksteps=geom.get("K", gemm) // max(1, geom.block_k))
+
+
+# --------------------------------------------------------------------------
+# The content-keyed w1 A term (2026-10-01): OFF unless Model(content_a=True).
+# --------------------------------------------------------------------------
+
+_CONTENT_IDS: dict = {}
+
+
+def tile_content_ids(model: str, n: int, block_m: int) -> np.ndarray:
+    """One content id per live M-tile, expert-major (tile j of expert e at e n
+    + j), equal ids for M-tiles holding the same BLOCK_M token rows.
+
+    The routing is R3's own: `SWEEP.balanced_ids` (`realize_counts` at E
+    equal demands of n BLOCK_M rows over T = E n BLOCK_M / k tokens), each
+    expert's rows in ascending token order as `moe_align_block_size` sorts
+    them. A HARNESS PROPERTY (the module docstring): real routing has no such
+    classes."""
+    key = (model, int(n), int(block_m))
+    if key not in _CONTENT_IDS:
+        import block_m_crossing_sweep as SWEEP
+        cfg = MODEL_CONFIGS[model]
+        tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
+        ids = SWEEP.balanced_ids(cfg, tokens, "cpu").numpy()
+        seen: dict = {}
+        out = []
+        for e in range(cfg.num_experts):
+            toks = np.nonzero((ids == e).any(axis=1))[0]
+            if toks.size != n * block_m:
+                raise Refused(f"{model} n={n}: expert {e} holds {toks.size} rows, not "
+                              f"{n * block_m}; the routing is not R3's balanced one")
+            for j in range(n):
+                out.append(seen.setdefault(tuple(toks[j * block_m:(j + 1) * block_m].tolist()),
+                                           len(seen)))
+        _CONTENT_IDS[key] = np.array(out, dtype=np.int64)
+    return _CONTENT_IDS[key]
+
+
+def content_events(geom: Geometry, ev: Events) -> Events:
+    """`ev` (a w1 cell's walk) with its A events keyed by tile CONTENT: the
+    first read of a content id is compulsory (the difference U - E n of
+    distinct contents against M-tiles enters S_c in slab units), every later
+    read is an A event at its live-rank distance, and the group working set
+    counts distinct contents x ATILE + owners x SLAB."""
+    if ev.gemm != "w1":
+        return ev
+    G, n, arm = ev.G, ev.n, ev.arm
+    P, Wc, npm = ev.P, ev.W_c, ev.num_pid_m
+    live_m = geom.experts * n
+    pid = np.arange(npm * P, dtype=np.int64)
+    gid, pid_m, _pid_n = pid_map(pid, npm, P, G)
+    keep = pid_m < live_m
+    gid, pid_m = gid[keep], pid_m[keep]
+    ctab = tile_content_ids(geom.model, n, geom.block_m)
+    cid = ctab[pid_m]
+    cur, prev = _previous(cid)
+    D = cur - prev
+    w1 = cur < Wc
+    groups = -(-npm // G)
+    ws = np.zeros(groups)
+    at, sl = geom.atile("w1"), geom.slab("w1")
+    for g in range(groups):
+        first = g * G
+        tiles = range(first, min(first + G, live_m)) if first < live_m else range(0)
+        owners = len(tiles) if arm == "private" else len({m // n for m in tiles})
+        ws[g] = len({int(ctab[m]) for m in tiles}) * at + owners * sl
+    a = Counter(zip(D.tolist(), w1.tolist(), ws[gid[cur]].tolist(), strict=True))
+    keys = sorted(a)
+    U = int(np.unique(ctab).size)
+    off = (U - live_m) * at / sl
+    return dataclasses.replace(
+        ev, slabs=ev.slabs + off,
+        a_D=np.array([k[0] for k in keys], dtype=float),
+        a_win1=np.array([k[1] for k in keys], dtype=bool),
+        a_ws=np.array([k[2] for k in keys], dtype=float),
+        a_k=np.array([a[k] for k in keys], dtype=float))
 
 
 # --------------------------------------------------------------------------
@@ -771,12 +873,27 @@ class Params:
     #: SHARED and NATIVE w2's own A law (MIX view, stage 3); 0 = PRIVATE's.
     C_A2: float = 0.0
     beta_A2: float = 0.0
+    #: The duration factor (2026-10-01): the A distance times (1 + ks /
+    #: k0_A)^(-a_A), ks the cell's k-steps. 0 = off, and then absent from
+    #: as_json, so every params document written before it is unchanged.
+    k0_A: float = 0.0
+    a_A: float = 0.0
 
     def replace(self, **kw) -> Params:
         return dataclasses.replace(self, **kw)
 
     def as_json(self) -> dict:
-        return dataclasses.asdict(self)
+        d = dataclasses.asdict(self)
+        if not self.k0_A:
+            d.pop("k0_A")
+            d.pop("a_A")
+        return d
+
+    def duration(self, ksteps) -> np.ndarray | float:
+        """s(ks) = (1 + ks / k0_A)^(-a_A); 1 when the factor is off."""
+        if not self.k0_A:
+            return 1.0
+        return np.power(1.0 + np.asarray(ksteps, dtype=float) / self.k0_A, -self.a_A)
 
     @classmethod
     def from_json(cls, d: dict) -> Params:
@@ -825,6 +942,8 @@ class Batch:
                                      or [np.zeros(0, int)]).astype(int)
         self.a_D, self.a_k, self.a_ws = cat("a_D"), cat("a_k"), cat("a_ws")
         self.a_w1 = cat("a_win1", bool)
+        self.a_ks = np.concatenate([np.full(e.a_D.size, e.ksteps, dtype=float) for e in ev]
+                                   or [np.zeros(0)])
         self.a_sn2 = np.concatenate([np.full(e.a_D.size, e.arm != "private" and e.gemm == "w2")
                                      for e in ev] or [np.zeros(0, bool)])
         self.q_min = self.slabs / self.S
@@ -852,6 +971,8 @@ class Batch:
             out += _segsum(miss, self.x_cell, self.count) / (self.S[:, None] if two else self.S)
         if self.a_D.size:
             tha = np.where(self.a_w1, prm.theta1_A, 1.0)
+            if prm.k0_A:   # the duration factor, off by default
+                tha = tha * prm.duration(self.a_ks)
             if prm.view == WS:
                 miss = self.a_k * (1.0 - sigma(tha * self.a_ws, prm.C_A * MIB, prm.beta_A))
                 add = self.at * _segsum(miss, self.a_cell, self.count) / self.Wg
@@ -965,8 +1086,11 @@ def _pages_in(root: Path) -> list[Path]:
 
 
 #: The design keys every page of one card must share (G aside).
+#: `routing` (2026-10-01): the content-keyed w1 A term is a property of R3's
+#: balanced routing, so a page from another routing must not join its card; no
+#: published page records the key, and None == None on all of them.
 DESIGN_KEYS = ("model", "dtype", "block_m", "block_n", "block_k", "num_warps", "num_stages",
-               "declared_by_arm")
+               "declared_by_arm", "routing")
 
 
 def load_card(root: Path) -> Card:
@@ -1018,14 +1142,20 @@ def load_card(root: Path) -> Card:
 class Model:
     """The WSC model on one card's geometry: events cached per cell."""
 
-    def __init__(self, geom: Geometry):
+    def __init__(self, geom: Geometry, content_a: bool = False):
         self.geom = geom
+        #: w1's A keyed by tile content (`content_events`); False, the
+        #: registered model, keys it by M-tile.
+        self.content_a = bool(content_a)
         self._events: dict = {}
 
     def events(self, arm: str, G: int, n: int, gemm: str) -> Events:
         key = (arm, G, n, gemm)
         if key not in self._events:
-            self._events[key] = cell_events(self.geom, arm, G, n, gemm)
+            ev = cell_events(self.geom, arm, G, n, gemm)
+            if self.content_a:
+                ev = content_events(self.geom, ev)
+            self._events[key] = ev
         return self._events[key]
 
     def batch(self, cells) -> Batch:

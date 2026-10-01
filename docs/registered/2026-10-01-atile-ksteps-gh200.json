@@ -1,0 +1,2997 @@
+{
+ "registered": "2026-10-01",
+ "name": "atile-ksteps-gh200",
+ "design": "scratchpad design-atile/DESIGN.md with design-review/REVIEW.md section 3 fixes applied",
+ "status": "REGISTERED BEFORE ANY PAGE: no page below exists when this is committed",
+ "card": "one Lambda gpu_1x_gh200, rental 1 (one board for every page, the 8x7B denominators included); lock 1710 byte pages, treads 1..9, three arms",
+ "pages_scoring": {
+  "mixtral-8x7b-tp8": [
+   8,
+   16,
+   32,
+   64
+  ],
+  "mixtral-8x7b-tp4": [
+   16,
+   32,
+   64
+  ],
+  "mixtral-8x7b-tp2": [
+   16,
+   32,
+   64
+  ],
+  "qwen2-57b-a14b": [
+   128
+  ],
+  "olmoe-1b-7b": [
+   128
+  ],
+  "mixtral-8x7b (same board)": [
+   8,
+   16,
+   32
+  ],
+  "G=1 credit check, from the L2-survival registration pages": {
+   "mixtral-8x7b-tp2": [
+    1
+   ],
+   "mixtral-8x7b-tp4": [
+    1
+   ],
+   "mixtral-8x7b-tp8": [
+    1
+   ]
+  },
+  "board check only (scores nothing here)": {
+   "mixtral-8x7b": [
+    1
+   ]
+  }
+ },
+ "pages_order_note": "the tp8 r3c pages are taken only after the registered tp8 floor capture (2026-09-30 registration) is pushed",
+ "arm_scored": "PRIVATE only (its excess over n is A-tile reads alone: every slab key is distinct)",
+ "unit": "q = DCR.r3_q: (DRAM bytes - n x operand) / W_g, per GEMM; f = (q - n) x 128 / (63 n) for w2 (P_w2 = 64, ATILE/SLAB = 1/2 on every Mixtral shard)",
+ "candidates": {
+  "R0": "the registered 8x7B MIX fit (2026-09-27 lock pages) through cross_model_predict.target_geometry/target_design; nothing refitted",
+  "R1": "content-keyed w1 A (harness routing classes), one A survival law for both GEMMs (w1 fill, w2 ws), no duration term; scripts/atile_pooled_fit.py --form mix",
+  "R2": "R1 x s(ks) = (1 + ks/k0_A)^(-a_A) on every A distance, ks = K/BLOCK_K; --form mixT (the fit runs to the exponential limit: s = exp(-ks a_A/k0_A))"
+ },
+ "fits": {
+  "primary (calibration-only: 8x7B 09-27, 8x22B, Qwen2-57B, OLMoE)": {
+   "R1": {
+    "tool": "scripts/atile_pooled_fit.py",
+    "form": "mix",
+    "content_a": true,
+    "label": "calibration-only",
+    "view": "mix",
+    "fitted_on": [
+     "nvidia_gh200_480gb:mixtral-8x22b",
+     "nvidia_gh200_480gb:mixtral-8x7b",
+     "nvidia_gh200_480gb:olmoe-1b-7b",
+     "nvidia_gh200_480gb:qwen2-57b-a14b"
+    ],
+    "models": [
+     "mixtral-8x22b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "qwen2-57b-a14b"
+    ],
+    "params": {
+     "C_A": 159.60783760763826,
+     "beta_A": 1.0533234403818705,
+     "theta1_A": 6.692965408055478e-10,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0
+    },
+    "rms_pct": 1.212,
+    "worst_pct": -9.51,
+    "per_card_rms_pct": {
+     "nvidia_gh200_480gb:mixtral-8x7b": 0.965,
+     "nvidia_gh200_480gb:mixtral-8x22b": 1.89,
+     "nvidia_gh200_480gb:qwen2-57b-a14b": 1.122,
+     "nvidia_gh200_480gb:olmoe-1b-7b": 0.339
+    }
+   },
+   "R2": {
+    "tool": "scripts/atile_pooled_fit.py",
+    "form": "mixT",
+    "content_a": true,
+    "label": "calibration-only",
+    "view": "mix",
+    "fitted_on": [
+     "nvidia_gh200_480gb:mixtral-8x22b",
+     "nvidia_gh200_480gb:mixtral-8x7b",
+     "nvidia_gh200_480gb:olmoe-1b-7b",
+     "nvidia_gh200_480gb:qwen2-57b-a14b"
+    ],
+    "models": [
+     "mixtral-8x22b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "qwen2-57b-a14b"
+    ],
+    "params": {
+     "C_A": 63.684061982218935,
+     "beta_A": 1.3382472504013925,
+     "theta1_A": 1.928749847963918e-22,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0,
+     "k0_A": 110257.96362021669,
+     "a_A": 379.27629863610105
+    },
+    "rms_pct": 0.874,
+    "worst_pct": -7.24,
+    "per_card_rms_pct": {
+     "nvidia_gh200_480gb:mixtral-8x7b": 0.658,
+     "nvidia_gh200_480gb:mixtral-8x22b": 1.408,
+     "nvidia_gh200_480gb:qwen2-57b-a14b": 0.559,
+     "nvidia_gh200_480gb:olmoe-1b-7b": 0.576
+    }
+   }
+  },
+  "secondary (all eight published models, diagnosis models SEEN: Qwen1.5, Phi-3.5, JetMoE, Granite)": {
+   "R1": {
+    "tool": "scripts/atile_pooled_fit.py",
+    "form": "mix",
+    "content_a": true,
+    "label": "includes diagnosis models (their pages were seen)",
+    "view": "mix",
+    "fitted_on": [
+     "nvidia_gh200_480gb:granite-3.0-3b-a800m",
+     "nvidia_gh200_480gb:jetmoe-8b",
+     "nvidia_gh200_480gb:mixtral-8x22b",
+     "nvidia_gh200_480gb:mixtral-8x7b",
+     "nvidia_gh200_480gb:olmoe-1b-7b",
+     "nvidia_gh200_480gb:phi-3.5-moe",
+     "nvidia_gh200_480gb:qwen1.5-moe-a2.7b",
+     "nvidia_gh200_480gb:qwen2-57b-a14b"
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "jetmoe-8b",
+     "mixtral-8x22b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b",
+     "qwen2-57b-a14b"
+    ],
+    "params": {
+     "C_A": 148.12841834669447,
+     "beta_A": 1.0720040732157248,
+     "theta1_A": 5.837400898039492e-10,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0
+    },
+    "rms_pct": 1.003,
+    "worst_pct": -9.231,
+    "per_card_rms_pct": {
+     "nvidia_gh200_480gb:mixtral-8x7b": 0.946,
+     "nvidia_gh200_480gb:mixtral-8x22b": 1.979,
+     "nvidia_gh200_480gb:qwen2-57b-a14b": 1.054,
+     "nvidia_gh200_480gb:olmoe-1b-7b": 0.349,
+     "nvidia_gh200_480gb:qwen1.5-moe-a2.7b": 0.341,
+     "nvidia_gh200_480gb:phi-3.5-moe": 1.286,
+     "nvidia_gh200_480gb:jetmoe-8b": 0.394,
+     "nvidia_gh200_480gb:granite-3.0-3b-a800m": 0.28
+    }
+   },
+   "R2": {
+    "tool": "scripts/atile_pooled_fit.py",
+    "form": "mixT",
+    "content_a": true,
+    "label": "includes diagnosis models (their pages were seen)",
+    "view": "mix",
+    "fitted_on": [
+     "nvidia_gh200_480gb:granite-3.0-3b-a800m",
+     "nvidia_gh200_480gb:jetmoe-8b",
+     "nvidia_gh200_480gb:mixtral-8x22b",
+     "nvidia_gh200_480gb:mixtral-8x7b",
+     "nvidia_gh200_480gb:olmoe-1b-7b",
+     "nvidia_gh200_480gb:phi-3.5-moe",
+     "nvidia_gh200_480gb:qwen1.5-moe-a2.7b",
+     "nvidia_gh200_480gb:qwen2-57b-a14b"
+    ],
+    "models": [
+     "granite-3.0-3b-a800m",
+     "jetmoe-8b",
+     "mixtral-8x22b",
+     "mixtral-8x7b",
+     "olmoe-1b-7b",
+     "phi-3.5-moe",
+     "qwen1.5-moe-a2.7b",
+     "qwen2-57b-a14b"
+    ],
+    "params": {
+     "C_A": 73.37050468817988,
+     "beta_A": 1.316229678524459,
+     "theta1_A": 1.928749847963918e-22,
+     "C_B": 1000000000.0,
+     "beta_B": 1.0,
+     "theta1": 1.0,
+     "eps1_w1": 0.0,
+     "eps1_w2": 0.0,
+     "view": "mix",
+     "C_A2": 0.0,
+     "beta_A2": 0.0,
+     "k0_A": 93329.79629408717,
+     "a_A": 273.1606235836094
+    },
+    "rms_pct": 0.751,
+    "worst_pct": -7.946,
+    "per_card_rms_pct": {
+     "nvidia_gh200_480gb:mixtral-8x7b": 0.723,
+     "nvidia_gh200_480gb:mixtral-8x22b": 1.506,
+     "nvidia_gh200_480gb:qwen2-57b-a14b": 0.506,
+     "nvidia_gh200_480gb:olmoe-1b-7b": 0.448,
+     "nvidia_gh200_480gb:qwen1.5-moe-a2.7b": 0.425,
+     "nvidia_gh200_480gb:phi-3.5-moe": 0.822,
+     "nvidia_gh200_480gb:jetmoe-8b": 0.57,
+     "nvidia_gh200_480gb:granite-3.0-3b-a800m": 0.295
+    }
+   }
+  }
+ },
+ "dropped": "the knee form with the knee fixed at 40 k-steps (read off JetMoE/Phi, diagnosis models): not registered",
+ "harness_note": "the w1 A sharing is produced by SWEEP.balanced_ids -> realize_counts (heap greedy, ties by expert id: E/k classes of k experts with identical token sets). Real top-k routing does not do this. The content-keyed term and its test model R3's HARNESS, not the hardware; wave_split_bytes.DESIGN_KEYS now carries routing so a page of another routing cannot join a card.",
+ "tests": {
+  "T1 content-keyed w1 A (separates R1/R2 from R0)": {
+   "cells": "PRIVATE w1 at G=128, Qwen2-57B and OLMoE, every n >= 2",
+   "predicted_n8": {
+    "qwen2-57b-a14b:128:8:w1": {
+     "R0": 9.2351,
+     "R1-cal": 8.0997,
+     "R2-cal": 8.1411,
+     "R1-all8": 8.1041,
+     "R2-all8": 8.1227
+    },
+    "olmoe-1b-7b:128:8:w1": {
+     "R0": 8.589,
+     "R1-cal": 7.9681,
+     "R2-cal": 7.9872,
+     "R1-all8": 7.9697,
+     "R2-all8": 7.9767
+    },
+    "mixtral-8x7b-tp8:64:8:w1": {
+     "R0": 8.5076,
+     "R1-cal": 8.2466,
+     "R2-cal": 8.3735,
+     "R1-all8": 8.2586,
+     "R2-all8": 8.3306
+    }
+   },
+   "pass": "within 2% of R1 (primary) at every n >= 2, and R0 off by more than 5% (Qwen2) / 3% (OLMoE)",
+   "falsified": "the measured w1 q at G=128 nearer R0 than R1 at any n >= 4"
+  },
+  "T2 duration term (separates R2 from every byte law, R0 and R1)": {
+   "cells": "PRIVATE w2 n=9: rho42 = f(tp4 G=64) / f(8x7B G=16), rho84 = f(tp2 G=64) / f(8x7B G=32), numerator and denominator from ONE board (same-board 8x7B pages, not the 09-27 ones)",
+   "noise": {
+    "sigma_q": 0.03641213879116405,
+    "source": "90th percentile of the per-call standard error of PRIVATE w2 q over the 16 cells G >= 8, n >= 6 of the 8x7B 09-27 lock pages (3 calls a cell; median 0.0088); sigma_f = sigma_q x 128 / (63 x 9) on each of numerator and denominator, combined in quadrature; band = predicted rho +- 2 sigma",
+    "board_to_board_note": "09-25 against 09-27 8x7B PRIVATE w2 q differ up to 2.8% (G=64 n=6): a cross-board ratio would carry that, which is why the denominators are re-measured on the same board"
+   },
+   "rho": {
+    "rho42": {
+     "R0": {
+      "f_num": 0.1575,
+      "f_den": 0.1634,
+      "rho": 0.964,
+      "sigma": 0.07,
+      "band": [
+       0.824,
+       1.104
+      ]
+     },
+     "R1-cal": {
+      "f_num": 0.174,
+      "f_den": 0.181,
+      "rho": 0.961,
+      "sigma": 0.063,
+      "band": [
+       0.835,
+       1.087
+      ]
+     },
+     "R2-cal": {
+      "f_num": 0.2844,
+      "f_den": 0.1522,
+      "rho": 1.869,
+      "sigma": 0.115,
+      "band": [
+       1.64,
+       2.098
+      ]
+     },
+     "R1-all8": {
+      "f_num": 0.1825,
+      "f_den": 0.1899,
+      "rho": 0.961,
+      "sigma": 0.06,
+      "band": [
+       0.841,
+       1.081
+      ]
+     },
+     "R2-all8": {
+      "f_num": 0.2551,
+      "f_den": 0.151,
+      "rho": 1.689,
+      "sigma": 0.107,
+      "band": [
+       1.475,
+       1.902
+      ]
+     }
+    },
+    "rho84": {
+     "R0": {
+      "f_num": 0.3282,
+      "f_den": 0.3309,
+      "rho": 0.992,
+      "sigma": 0.035,
+      "band": [
+       0.922,
+       1.062
+      ]
+     },
+     "R1-cal": {
+      "f_num": 0.3197,
+      "f_den": 0.3231,
+      "rho": 0.989,
+      "sigma": 0.036,
+      "band": [
+       0.918,
+       1.061
+      ]
+     },
+     "R2-cal": {
+      "f_num": 0.4613,
+      "f_den": 0.3234,
+      "rho": 1.426,
+      "sigma": 0.044,
+      "band": [
+       1.338,
+       1.515
+      ]
+     },
+     "R1-all8": {
+      "f_num": 0.3365,
+      "f_den": 0.3401,
+      "rho": 0.989,
+      "sigma": 0.034,
+      "band": [
+       0.921,
+       1.057
+      ]
+     },
+     "R2-all8": {
+      "f_num": 0.4302,
+      "f_den": 0.3176,
+      "rho": 1.354,
+      "sigma": 0.044,
+      "band": [
+       1.267,
+       1.441
+      ]
+     }
+    }
+   },
+   "rule": "a candidate is FALSIFIED when both measured rho fall outside its own band. Both rho inside R2 (primary) bands and outside R1/R0: every byte law refuted, the duration term supported. Both inside R1 or R0 bands: the duration term refuted. Both between the bands: every candidate refuted (the shrink exists but not in this form). One in, one out: inconclusive, reported as such.",
+   "weak_row": "the 21 MiB row (8x7B G=8, tp2 G=16, tp4 G=32, tp8 G=64) separates R1 from R2 by 0.09 to 0.14 against 0.10 to 0.04 in f; scored as supporting evidence only",
+   "iso_f_n9": {
+    "21MiB": {
+     "mixtral-8x7b:G8": {
+      "R0": 0.0778,
+      "R1-cal": 0.0988,
+      "R2-cal": 0.0689,
+      "R1-all8": 0.1028,
+      "R2-all8": 0.0693
+     },
+     "mixtral-8x7b-tp2:G16": {
+      "R0": 0.0722,
+      "R1-cal": 0.0926,
+      "R2-cal": 0.104,
+      "R1-all8": 0.0962,
+      "R2-all8": 0.0968
+     },
+     "mixtral-8x7b-tp4:G32": {
+      "R0": 0.0701,
+      "R1-cal": 0.0898,
+      "R2-cal": 0.1282,
+      "R1-all8": 0.0934,
+      "R2-all8": 0.1149
+     },
+     "mixtral-8x7b-tp8:G64": {
+      "R0": 0.0697,
+      "R1-cal": 0.0891,
+      "R2-cal": 0.1434,
+      "R1-all8": 0.0926,
+      "R2-all8": 0.1262
+     }
+    },
+    "42MiB": {
+     "mixtral-8x7b:G16": {
+      "R0": 0.1634,
+      "R1-cal": 0.181,
+      "R2-cal": 0.1522,
+      "R1-all8": 0.1899,
+      "R2-all8": 0.151
+     },
+     "mixtral-8x7b-tp2:G32": {
+      "R0": 0.1585,
+      "R1-cal": 0.1756,
+      "R2-cal": 0.2317,
+      "R1-all8": 0.1842,
+      "R2-all8": 0.2143
+     },
+     "mixtral-8x7b-tp4:G64": {
+      "R0": 0.1575,
+      "R1-cal": 0.174,
+      "R2-cal": 0.2844,
+      "R1-all8": 0.1825,
+      "R2-all8": 0.2551
+     }
+    },
+    "84MiB": {
+     "mixtral-8x7b:G32": {
+      "R0": 0.3309,
+      "R1-cal": 0.3231,
+      "R2-cal": 0.3234,
+      "R1-all8": 0.3401,
+      "R2-all8": 0.3176
+     },
+     "mixtral-8x7b-tp2:G64": {
+      "R0": 0.3282,
+      "R1-cal": 0.3197,
+      "R2-cal": 0.4613,
+      "R1-all8": 0.3365,
+      "R2-all8": 0.4302
+     }
+    }
+   },
+   "iso_f_n9_measured_0927": {
+    "mixtral-8x7b:G8": 0.0957,
+    "mixtral-8x7b:G16": 0.2099,
+    "mixtral-8x7b:G32": 0.3818
+   },
+   "confound": "along each iso-working-set row L (8 -> 64) and W_c/L (66 -> 8 columns in flight) change with the k-steps; a byte law with a columns-in-flight term also predicts a rising row. The separator (8x7B G=32 at BLOCK_K 32/num_stages 8 against 128/2: k-steps at fixed L, bytes and W_c) needs --block-k and is RENTAL 2, not this run."
+  },
+  "T3 G=1 credit (separates content-keyed sharing from no sharing at G=1)": {
+   "cells": "PRIVATE w1 G=1 n=1 on the tp2, tp4, tp8 G=1 pages the L2-survival registration takes",
+   "credit": {
+    "mixtral-8x7b-tp2": {
+     "full_credit_q_minus_1": -0.00112,
+     "R1_cal_q_minus_1": -0.00039,
+     "R0_q_minus_1": 0.00025,
+     "band_R1_cal": [
+      -0.00139,
+      0.00061
+     ],
+     "band_R0": [
+      -0.00075,
+      0.00125
+     ],
+     "discriminating": false
+    },
+    "mixtral-8x7b-tp4": {
+     "full_credit_q_minus_1": -0.00223,
+     "R1_cal_q_minus_1": -0.00193,
+     "R0_q_minus_1": 0.00011,
+     "band_R1_cal": [
+      -0.00293,
+      -0.00093
+     ],
+     "band_R0": [
+      -0.00089,
+      0.00111
+     ],
+     "discriminating": true
+    },
+    "mixtral-8x7b-tp8": {
+     "full_credit_q_minus_1": -0.00446,
+     "R1_cal_q_minus_1": -0.00446,
+     "R0_q_minus_1": 0.0,
+     "band_R1_cal": [
+      -0.00546,
+      -0.00346
+     ],
+     "band_R0": [
+      -0.001,
+      0.001
+     ],
+     "discriminating": true
+    }
+   },
+   "band": "+-0.0010 in q around each candidate: the worst |measured - R1 (primary)| over the eight published G=1 n=1 w1 PRIVATE cells is 0.00098 (8x22B), the rms about 0.0005",
+   "rule": "pass if q - 1 is inside R1 (primary)'s band and outside R0's; tp2 is not discriminating (the share distance, W_w1/E = 117 MB, is past the L2, so R1 keeps only -0.0004 of the -0.0011 credit) and is a record",
+   "note": "the design's \"within 5% of q\" is replaced: 5% of q = 1 is 10 x every credit"
+  },
+  "T4 score (each candidate on its own)": {
+   "cells": "every PRIVATE cell, w1 and w2, n = 1..9, of the scoring pages above (G=1 pages excluded)",
+   "pass": "rms <= 2% and no G >= 32, n >= 6 cell beyond 4%",
+   "out_of_scope": "8x22B w1 G=64 deep-n miss (not on these pages)"
+  }
+ },
+ "split_table_q_n8": {
+  "mixtral-8x7b-tp8:64:8:w2": {
+   "R0": 8.3054,
+   "R1-cal": 8.3881,
+   "R2-cal": 8.6293,
+   "R1-all8": 8.4038,
+   "R2-all8": 8.5535
+  },
+  "mixtral-8x7b-tp4:64:8:w2": {
+   "R0": 8.69,
+   "R1-cal": 8.7573,
+   "R2-cal": 9.2464,
+   "R1-all8": 8.7949,
+   "R2-all8": 9.1176
+  },
+  "mixtral-8x7b-tp2:64:8:w2": {
+   "R0": 9.4353,
+   "R1-cal": 9.3891,
+   "R2-cal": 10.0176,
+   "R1-all8": 9.4627,
+   "R2-all8": 9.8813
+  },
+  "mixtral-8x7b-tp2:32:8:w2": {
+   "R0": 8.6838,
+   "R1-cal": 8.7505,
+   "R2-cal": 9.0007,
+   "R1-all8": 8.7878,
+   "R2-all8": 8.9249
+  },
+  "qwen2-57b-a14b:128:8:w2": {
+   "R0": 9.1347,
+   "R1-cal": 9.1622,
+   "R2-cal": 10.0762,
+   "R1-all8": 9.2231,
+   "R2-all8": 9.8667
+  },
+  "olmoe-1b-7b:128:8:w2": {
+   "R0": 8.3888,
+   "R1-cal": 8.4801,
+   "R2-cal": 8.8405,
+   "R1-all8": 8.5004,
+   "R2-all8": 8.7338
+  },
+  "qwen2-57b-a14b:128:8:w1": {
+   "R0": 9.2351,
+   "R1-cal": 8.0997,
+   "R2-cal": 8.1411,
+   "R1-all8": 8.1041,
+   "R2-all8": 8.1227
+  },
+  "olmoe-1b-7b:128:8:w1": {
+   "R0": 8.589,
+   "R1-cal": 7.9681,
+   "R2-cal": 7.9872,
+   "R1-all8": 7.9697,
+   "R2-all8": 7.9767
+  },
+  "mixtral-8x7b-tp8:64:8:w1": {
+   "R0": 8.5076,
+   "R1-cal": 8.2466,
+   "R2-cal": 8.3735,
+   "R1-all8": 8.2586,
+   "R2-all8": 8.3306
+  }
+ },
+ "validity": "tp8 and tp4 lock pages will likely FAIL V10 (short kernels: JetMoE/OLMoE lock pages read 1641-1688 MHz against 1710). V10 does not gate any score here: DRAM bytes are clock-free (09-27 G=2 base-clock against lock bytes agree to 0.03% w1, 0.8% w2). A page missing a GEMM's occupancy limit, or whose grid the walk refuses, scores nothing.",
+ "reproduce": "python scripts/atile_pooled_fit.py --form {mix,mixT} --cards <lock1710 dirs> --out R.json; python scripts/cross_model_predict.py --bytes-only --target T --counters <8x7B 09-27 lock1710> --groups G,.. --byte-params R1.json R2.json",
+ "cells_private": {
+  "mixtral-8x7b:1:1:w1": {
+   "R0": 1.00033,
+   "R1-cal": 1.00038,
+   "R2-cal": 0.9999,
+   "R1-all8": 1.00035,
+   "R2-all8": 0.99989
+  },
+  "mixtral-8x7b:1:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b:1:2:w1": {
+   "R0": 2.00073,
+   "R1-cal": 2.00182,
+   "R2-cal": 2.00101,
+   "R1-all8": 2.0018,
+   "R2-all8": 2.00096
+  },
+  "mixtral-8x7b:1:2:w2": {
+   "R0": 2.00314,
+   "R1-cal": 2.00627,
+   "R2-cal": 2.00238,
+   "R1-all8": 2.00629,
+   "R2-all8": 2.00251
+  },
+  "mixtral-8x7b:1:3:w1": {
+   "R0": 3.00113,
+   "R1-cal": 3.00315,
+   "R2-cal": 3.00159,
+   "R1-all8": 3.00308,
+   "R2-all8": 3.00154
+  },
+  "mixtral-8x7b:1:3:w2": {
+   "R0": 3.00637,
+   "R1-cal": 3.01273,
+   "R2-cal": 3.00484,
+   "R1-all8": 3.01277,
+   "R2-all8": 3.0051
+  },
+  "mixtral-8x7b:1:4:w1": {
+   "R0": 4.00154,
+   "R1-cal": 4.00436,
+   "R2-cal": 4.00216,
+   "R1-all8": 4.00425,
+   "R2-all8": 4.00209
+  },
+  "mixtral-8x7b:1:4:w2": {
+   "R0": 4.0096,
+   "R1-cal": 4.01919,
+   "R2-cal": 4.0073,
+   "R1-all8": 4.01925,
+   "R2-all8": 4.00769
+  },
+  "mixtral-8x7b:1:5:w1": {
+   "R0": 5.00194,
+   "R1-cal": 5.00553,
+   "R2-cal": 5.00273,
+   "R1-all8": 5.00538,
+   "R2-all8": 5.00264
+  },
+  "mixtral-8x7b:1:5:w2": {
+   "R0": 5.01283,
+   "R1-cal": 5.02565,
+   "R2-cal": 5.00975,
+   "R1-all8": 5.02573,
+   "R2-all8": 5.01027
+  },
+  "mixtral-8x7b:1:6:w1": {
+   "R0": 6.00234,
+   "R1-cal": 6.00668,
+   "R2-cal": 6.00329,
+   "R1-all8": 6.0065,
+   "R2-all8": 6.00319
+  },
+  "mixtral-8x7b:1:6:w2": {
+   "R0": 6.01606,
+   "R1-cal": 6.03211,
+   "R2-cal": 6.01221,
+   "R1-all8": 6.03221,
+   "R2-all8": 6.01286
+  },
+  "mixtral-8x7b:1:7:w1": {
+   "R0": 7.00274,
+   "R1-cal": 7.00783,
+   "R2-cal": 7.00386,
+   "R1-all8": 7.00762,
+   "R2-all8": 7.00374
+  },
+  "mixtral-8x7b:1:7:w2": {
+   "R0": 7.0193,
+   "R1-cal": 7.03857,
+   "R2-cal": 7.01467,
+   "R1-all8": 7.03869,
+   "R2-all8": 7.01545
+  },
+  "mixtral-8x7b:1:8:w1": {
+   "R0": 8.00315,
+   "R1-cal": 8.00898,
+   "R2-cal": 8.00443,
+   "R1-all8": 8.00874,
+   "R2-all8": 8.00429
+  },
+  "mixtral-8x7b:1:8:w2": {
+   "R0": 8.02253,
+   "R1-cal": 8.04503,
+   "R2-cal": 8.01712,
+   "R1-all8": 8.04517,
+   "R2-all8": 8.01804
+  },
+  "mixtral-8x7b:1:9:w1": {
+   "R0": 9.00355,
+   "R1-cal": 9.01013,
+   "R2-cal": 9.00499,
+   "R1-all8": 9.00985,
+   "R2-all8": 9.00484
+  },
+  "mixtral-8x7b:1:9:w2": {
+   "R0": 9.02576,
+   "R1-cal": 9.05149,
+   "R2-cal": 9.01958,
+   "R1-all8": 9.05165,
+   "R2-all8": 9.02062
+  },
+  "mixtral-8x7b:8:1:w1": {
+   "R0": 1.00458,
+   "R1-cal": 1.00354,
+   "R2-cal": 1.00279,
+   "R1-all8": 1.00356,
+   "R2-all8": 1.00256
+  },
+  "mixtral-8x7b:8:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b:8:2:w1": {
+   "R0": 2.01019,
+   "R1-cal": 2.00793,
+   "R2-cal": 2.00584,
+   "R1-all8": 2.00794,
+   "R2-all8": 2.00539
+  },
+  "mixtral-8x7b:8:2:w2": {
+   "R0": 2.04246,
+   "R1-cal": 2.05395,
+   "R2-cal": 2.03763,
+   "R1-all8": 2.05613,
+   "R2-all8": 2.03786
+  },
+  "mixtral-8x7b:8:3:w1": {
+   "R0": 3.0158,
+   "R1-cal": 3.01734,
+   "R2-cal": 3.0139,
+   "R1-all8": 3.01744,
+   "R2-all8": 3.01283
+  },
+  "mixtral-8x7b:8:3:w2": {
+   "R0": 3.0856,
+   "R1-cal": 3.10877,
+   "R2-cal": 3.07587,
+   "R1-all8": 3.11317,
+   "R2-all8": 3.07633
+  },
+  "mixtral-8x7b:8:4:w1": {
+   "R0": 4.02142,
+   "R1-cal": 4.01667,
+   "R2-cal": 4.0116,
+   "R1-all8": 4.01664,
+   "R2-all8": 4.01077
+  },
+  "mixtral-8x7b:8:4:w2": {
+   "R0": 4.12874,
+   "R1-cal": 4.16359,
+   "R2-cal": 4.11412,
+   "R1-all8": 4.1702,
+   "R2-all8": 4.11481
+  },
+  "mixtral-8x7b:8:5:w1": {
+   "R0": 5.02703,
+   "R1-cal": 5.03677,
+   "R2-cal": 5.03112,
+   "R1-all8": 5.0371,
+   "R2-all8": 5.02868
+  },
+  "mixtral-8x7b:8:5:w2": {
+   "R0": 5.17188,
+   "R1-cal": 5.21841,
+   "R2-cal": 5.15236,
+   "R1-all8": 5.22724,
+   "R2-all8": 5.15328
+  },
+  "mixtral-8x7b:8:6:w1": {
+   "R0": 6.03264,
+   "R1-cal": 6.04629,
+   "R2-cal": 6.03979,
+   "R1-all8": 6.04676,
+   "R2-all8": 6.03665
+  },
+  "mixtral-8x7b:8:6:w2": {
+   "R0": 6.21502,
+   "R1-cal": 6.27323,
+   "R2-cal": 6.1906,
+   "R1-all8": 6.28428,
+   "R2-all8": 6.19175
+  },
+  "mixtral-8x7b:8:7:w1": {
+   "R0": 7.03825,
+   "R1-cal": 7.06113,
+   "R2-cal": 7.05381,
+   "R1-all8": 7.06183,
+   "R2-all8": 7.04952
+  },
+  "mixtral-8x7b:8:7:w2": {
+   "R0": 7.25816,
+   "R1-cal": 7.32805,
+   "R2-cal": 7.22884,
+   "R1-all8": 7.34131,
+   "R2-all8": 7.23022
+  },
+  "mixtral-8x7b:8:8:w1": {
+   "R0": 8.04386,
+   "R1-cal": 8.07589,
+   "R2-cal": 8.06731,
+   "R1-all8": 8.07681,
+   "R2-all8": 8.06194
+  },
+  "mixtral-8x7b:8:8:w2": {
+   "R0": 8.3013,
+   "R1-cal": 8.38287,
+   "R2-cal": 8.26708,
+   "R1-all8": 8.39835,
+   "R2-all8": 8.2687
+  },
+  "mixtral-8x7b:8:9:w1": {
+   "R0": 9.04947,
+   "R1-cal": 9.08618,
+   "R2-cal": 9.0765,
+   "R1-all8": 9.08721,
+   "R2-all8": 9.07045
+  },
+  "mixtral-8x7b:8:9:w2": {
+   "R0": 9.34444,
+   "R1-cal": 9.43769,
+   "R2-cal": 9.30532,
+   "R1-all8": 9.45538,
+   "R2-all8": 9.30717
+  },
+  "mixtral-8x7b:16:1:w1": {
+   "R0": 1.00458,
+   "R1-cal": 1.00354,
+   "R2-cal": 1.00279,
+   "R1-all8": 1.00356,
+   "R2-all8": 1.00256
+  },
+  "mixtral-8x7b:16:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b:16:2:w1": {
+   "R0": 2.02458,
+   "R1-cal": 2.01776,
+   "R2-cal": 2.01768,
+   "R1-all8": 2.0181,
+   "R2-all8": 2.01612
+  },
+  "mixtral-8x7b:16:2:w2": {
+   "R0": 2.09592,
+   "R1-cal": 2.10528,
+   "R2-cal": 2.08958,
+   "R1-all8": 2.1105,
+   "R2-all8": 2.08886
+  },
+  "mixtral-8x7b:16:3:w1": {
+   "R0": 3.03015,
+   "R1-cal": 3.02587,
+   "R2-cal": 3.02443,
+   "R1-all8": 3.02626,
+   "R2-all8": 3.02236
+  },
+  "mixtral-8x7b:16:3:w2": {
+   "R0": 3.13906,
+   "R1-cal": 3.1601,
+   "R2-cal": 3.12782,
+   "R1-all8": 3.16754,
+   "R2-all8": 3.12733
+  },
+  "mixtral-8x7b:16:4:w1": {
+   "R0": 4.05162,
+   "R1-cal": 4.03716,
+   "R2-cal": 4.03468,
+   "R1-all8": 4.03771,
+   "R2-all8": 4.03179
+  },
+  "mixtral-8x7b:16:4:w2": {
+   "R0": 4.29086,
+   "R1-cal": 4.31923,
+   "R2-cal": 4.27164,
+   "R1-all8": 4.33507,
+   "R2-all8": 4.26945
+  },
+  "mixtral-8x7b:16:5:w1": {
+   "R0": 5.05718,
+   "R1-cal": 5.05594,
+   "R2-cal": 5.05472,
+   "R1-all8": 5.05693,
+   "R2-all8": 5.05003
+  },
+  "mixtral-8x7b:16:5:w2": {
+   "R0": 5.334,
+   "R1-cal": 5.37404,
+   "R2-cal": 5.30988,
+   "R1-all8": 5.3921,
+   "R2-all8": 5.30792
+  },
+  "mixtral-8x7b:16:6:w1": {
+   "R0": 6.07867,
+   "R1-cal": 6.0779,
+   "R2-cal": 6.07777,
+   "R1-all8": 6.07939,
+   "R2-all8": 6.07104
+  },
+  "mixtral-8x7b:16:6:w2": {
+   "R0": 6.4858,
+   "R1-cal": 6.53317,
+   "R2-cal": 6.45369,
+   "R1-all8": 6.55963,
+   "R2-all8": 6.45004
+  },
+  "mixtral-8x7b:16:7:w1": {
+   "R0": 7.08423,
+   "R1-cal": 7.08925,
+   "R2-cal": 7.08853,
+   "R1-all8": 7.09093,
+   "R2-all8": 7.08092
+  },
+  "mixtral-8x7b:16:7:w2": {
+   "R0": 7.52894,
+   "R1-cal": 7.58799,
+   "R2-cal": 7.49193,
+   "R1-all8": 7.61667,
+   "R2-all8": 7.48851
+  },
+  "mixtral-8x7b:16:8:w1": {
+   "R0": 8.10572,
+   "R1-cal": 8.07589,
+   "R2-cal": 8.06731,
+   "R1-all8": 8.07681,
+   "R2-all8": 8.06194
+  },
+  "mixtral-8x7b:16:8:w2": {
+   "R0": 8.68074,
+   "R1-cal": 8.74712,
+   "R2-cal": 8.63575,
+   "R1-all8": 8.7842,
+   "R2-all8": 8.63063
+  },
+  "mixtral-8x7b:16:9:w1": {
+   "R0": 9.11127,
+   "R1-cal": 9.12928,
+   "R2-cal": 9.13162,
+   "R1-all8": 9.13193,
+   "R2-all8": 9.12012
+  },
+  "mixtral-8x7b:16:9:w2": {
+   "R0": 9.72388,
+   "R1-cal": 9.80194,
+   "R2-cal": 9.67399,
+   "R1-all8": 9.84123,
+   "R2-all8": 9.6691
+  },
+  "mixtral-8x7b:32:1:w1": {
+   "R0": 1.00458,
+   "R1-cal": 1.00354,
+   "R2-cal": 1.00279,
+   "R1-all8": 1.00356,
+   "R2-all8": 1.00256
+  },
+  "mixtral-8x7b:32:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b:32:2:w1": {
+   "R0": 2.02458,
+   "R1-cal": 2.01776,
+   "R2-cal": 2.01768,
+   "R1-all8": 2.0181,
+   "R2-all8": 2.01612
+  },
+  "mixtral-8x7b:32:2:w2": {
+   "R0": 2.09592,
+   "R1-cal": 2.10528,
+   "R2-cal": 2.08958,
+   "R1-all8": 2.1105,
+   "R2-all8": 2.08886
+  },
+  "mixtral-8x7b:32:3:w1": {
+   "R0": 3.0638,
+   "R1-cal": 3.04305,
+   "R2-cal": 3.04827,
+   "R1-all8": 3.04418,
+   "R2-all8": 3.04375
+  },
+  "mixtral-8x7b:32:3:w2": {
+   "R0": 3.30362,
+   "R1-cal": 3.30825,
+   "R2-cal": 3.29197,
+   "R1-all8": 3.32447,
+   "R2-all8": 3.28764
+  },
+  "mixtral-8x7b:32:4:w1": {
+   "R0": 4.12468,
+   "R1-cal": 4.07952,
+   "R2-cal": 4.09675,
+   "R1-all8": 4.08202,
+   "R2-all8": 4.08728
+  },
+  "mixtral-8x7b:32:4:w2": {
+   "R0": 4.61147,
+   "R1-cal": 4.59175,
+   "R2-cal": 4.59929,
+   "R1-all8": 4.62314,
+   "R2-all8": 4.58826
+  },
+  "mixtral-8x7b:32:5:w1": {
+   "R0": 5.12966,
+   "R1-cal": 5.09034,
+   "R2-cal": 5.10685,
+   "R1-all8": 5.093,
+   "R2-all8": 5.09655
+  },
+  "mixtral-8x7b:32:5:w2": {
+   "R0": 5.65461,
+   "R1-cal": 5.64657,
+   "R2-cal": 5.63753,
+   "R1-all8": 5.68017,
+   "R2-all8": 5.62674
+  },
+  "mixtral-8x7b:32:6:w1": {
+   "R0": 6.15124,
+   "R1-cal": 6.11489,
+   "R2-cal": 6.13327,
+   "R1-all8": 6.11815,
+   "R2-all8": 6.12059
+  },
+  "mixtral-8x7b:32:6:w2": {
+   "R0": 6.80641,
+   "R1-cal": 6.8057,
+   "R2-cal": 6.78135,
+   "R1-all8": 6.8477,
+   "R2-all8": 6.76885
+  },
+  "mixtral-8x7b:32:7:w1": {
+   "R0": 7.19247,
+   "R1-cal": 7.14401,
+   "R2-cal": 7.16704,
+   "R1-all8": 7.14812,
+   "R2-all8": 7.15115
+  },
+  "mixtral-8x7b:32:7:w2": {
+   "R0": 8.0669,
+   "R1-cal": 8.05412,
+   "R2-cal": 8.03725,
+   "R1-all8": 8.10985,
+   "R2-all8": 8.01972
+  },
+  "mixtral-8x7b:32:8:w1": {
+   "R0": 8.25531,
+   "R1-cal": 8.16248,
+   "R2-cal": 8.18635,
+   "R1-all8": 8.16701,
+   "R2-all8": 8.16874
+  },
+  "mixtral-8x7b:32:8:w2": {
+   "R0": 9.42248,
+   "R1-cal": 9.37659,
+   "R2-cal": 9.39414,
+   "R1-all8": 9.44962,
+   "R2-all8": 9.36849
+  },
+  "mixtral-8x7b:32:9:w1": {
+   "R0": 9.26018,
+   "R1-cal": 9.21638,
+   "R2-cal": 9.25971,
+   "R1-all8": 9.22306,
+   "R2-all8": 9.23449
+  },
+  "mixtral-8x7b:32:9:w2": {
+   "R0": 10.46562,
+   "R1-cal": 10.43141,
+   "R2-cal": 10.43238,
+   "R1-all8": 10.50665,
+   "R2-all8": 10.40696
+  },
+  "mixtral-8x7b-tp2:1:1:w1": {
+   "R0": 1.00025,
+   "R1-cal": 0.99961,
+   "R2-cal": 0.99924,
+   "R1-all8": 0.99959,
+   "R2-all8": 0.99923
+  },
+  "mixtral-8x7b-tp2:1:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp2:1:2:w1": {
+   "R0": 2.00066,
+   "R1-cal": 2.00061,
+   "R2-cal": 2.00025,
+   "R1-all8": 2.00061,
+   "R2-all8": 2.00012
+  },
+  "mixtral-8x7b-tp2:1:2:w2": {
+   "R0": 2.00131,
+   "R1-cal": 2.00303,
+   "R2-cal": 2.00158,
+   "R1-all8": 2.003,
+   "R2-all8": 2.00155
+  },
+  "mixtral-8x7b-tp2:1:3:w1": {
+   "R0": 3.00106,
+   "R1-cal": 3.00222,
+   "R2-cal": 3.00143,
+   "R1-all8": 3.00223,
+   "R2-all8": 3.00133
+  },
+  "mixtral-8x7b-tp2:1:3:w2": {
+   "R0": 3.00265,
+   "R1-cal": 3.00615,
+   "R2-cal": 3.00321,
+   "R1-all8": 3.00609,
+   "R2-all8": 3.00315
+  },
+  "mixtral-8x7b-tp2:1:4:w1": {
+   "R0": 4.00146,
+   "R1-cal": 4.00367,
+   "R2-cal": 4.00205,
+   "R1-all8": 4.00365,
+   "R2-all8": 4.00197
+  },
+  "mixtral-8x7b-tp2:1:4:w2": {
+   "R0": 4.004,
+   "R1-cal": 4.00928,
+   "R2-cal": 4.00483,
+   "R1-all8": 4.00919,
+   "R2-all8": 4.00475
+  },
+  "mixtral-8x7b-tp2:1:5:w1": {
+   "R0": 5.00186,
+   "R1-cal": 5.00502,
+   "R2-cal": 5.00262,
+   "R1-all8": 5.00496,
+   "R2-all8": 5.00253
+  },
+  "mixtral-8x7b-tp2:1:5:w2": {
+   "R0": 5.00534,
+   "R1-cal": 5.0124,
+   "R2-cal": 5.00646,
+   "R1-all8": 5.01228,
+   "R2-all8": 5.00635
+  },
+  "mixtral-8x7b-tp2:1:6:w1": {
+   "R0": 6.00226,
+   "R1-cal": 6.0063,
+   "R2-cal": 6.00318,
+   "R1-all8": 6.00618,
+   "R2-all8": 6.00308
+  },
+  "mixtral-8x7b-tp2:1:6:w2": {
+   "R0": 6.00669,
+   "R1-cal": 6.01552,
+   "R2-cal": 6.00809,
+   "R1-all8": 6.01537,
+   "R2-all8": 6.00795
+  },
+  "mixtral-8x7b-tp2:1:7:w1": {
+   "R0": 7.00266,
+   "R1-cal": 7.00752,
+   "R2-cal": 7.00375,
+   "R1-all8": 7.00735,
+   "R2-all8": 7.00363
+  },
+  "mixtral-8x7b-tp2:1:7:w2": {
+   "R0": 7.00804,
+   "R1-cal": 7.01865,
+   "R2-cal": 7.00971,
+   "R1-all8": 7.01847,
+   "R2-all8": 7.00955
+  },
+  "mixtral-8x7b-tp2:1:8:w1": {
+   "R0": 8.00306,
+   "R1-cal": 8.00871,
+   "R2-cal": 8.00431,
+   "R1-all8": 8.00849,
+   "R2-all8": 8.00418
+  },
+  "mixtral-8x7b-tp2:1:8:w2": {
+   "R0": 8.00938,
+   "R1-cal": 8.02177,
+   "R2-cal": 8.01134,
+   "R1-all8": 8.02156,
+   "R2-all8": 8.01115
+  },
+  "mixtral-8x7b-tp2:1:9:w1": {
+   "R0": 9.00347,
+   "R1-cal": 9.00988,
+   "R2-cal": 9.00488,
+   "R1-all8": 9.00962,
+   "R2-all8": 9.00473
+  },
+  "mixtral-8x7b-tp2:1:9:w2": {
+   "R0": 9.01073,
+   "R1-cal": 9.02489,
+   "R2-cal": 9.01297,
+   "R1-all8": 9.02465,
+   "R2-all8": 9.01275
+  },
+  "mixtral-8x7b-tp2:16:1:w1": {
+   "R0": 1.00354,
+   "R1-cal": 1.00205,
+   "R2-cal": 1.00147,
+   "R1-all8": 1.00207,
+   "R2-all8": 1.0013
+  },
+  "mixtral-8x7b-tp2:16:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp2:16:2:w1": {
+   "R0": 2.02205,
+   "R1-cal": 2.01471,
+   "R2-cal": 2.01462,
+   "R1-all8": 2.015,
+   "R2-all8": 2.01323
+  },
+  "mixtral-8x7b-tp2:16:2:w2": {
+   "R0": 2.04246,
+   "R1-cal": 2.05395,
+   "R2-cal": 2.06131,
+   "R1-all8": 2.05613,
+   "R2-all8": 2.057
+  },
+  "mixtral-8x7b-tp2:16:3:w1": {
+   "R0": 3.02762,
+   "R1-cal": 3.02199,
+   "R2-cal": 3.02057,
+   "R1-all8": 3.02235,
+   "R2-all8": 3.01868
+  },
+  "mixtral-8x7b-tp2:16:3:w2": {
+   "R0": 3.06087,
+   "R1-cal": 3.08117,
+   "R2-cal": 3.08696,
+   "R1-all8": 3.08414,
+   "R2-all8": 3.08114
+  },
+  "mixtral-8x7b-tp2:16:4:w1": {
+   "R0": 4.04903,
+   "R1-cal": 4.03294,
+   "R2-cal": 4.03058,
+   "R1-all8": 4.03346,
+   "R2-all8": 4.02783
+  },
+  "mixtral-8x7b-tp2:16:4:w2": {
+   "R0": 4.12874,
+   "R1-cal": 4.16359,
+   "R2-cal": 4.18591,
+   "R1-all8": 4.1702,
+   "R2-all8": 4.17285
+  },
+  "mixtral-8x7b-tp2:16:5:w1": {
+   "R0": 5.05459,
+   "R1-cal": 5.05063,
+   "R2-cal": 5.04943,
+   "R1-all8": 5.05158,
+   "R2-all8": 5.04495
+  },
+  "mixtral-8x7b-tp2:16:5:w2": {
+   "R0": 5.14715,
+   "R1-cal": 5.19081,
+   "R2-cal": 5.21156,
+   "R1-all8": 5.19821,
+   "R2-all8": 5.19698
+  },
+  "mixtral-8x7b-tp2:16:6:w1": {
+   "R0": 6.07602,
+   "R1-cal": 6.07198,
+   "R2-cal": 6.07186,
+   "R1-all8": 6.07342,
+   "R2-all8": 6.06536
+  },
+  "mixtral-8x7b-tp2:16:6:w2": {
+   "R0": 6.21502,
+   "R1-cal": 6.27323,
+   "R2-cal": 6.31051,
+   "R1-all8": 6.28428,
+   "R2-all8": 6.28869
+  },
+  "mixtral-8x7b-tp2:16:7:w1": {
+   "R0": 7.08156,
+   "R1-cal": 7.083,
+   "R2-cal": 7.08238,
+   "R1-all8": 7.08464,
+   "R2-all8": 7.07495
+  },
+  "mixtral-8x7b-tp2:16:7:w2": {
+   "R0": 7.23343,
+   "R1-cal": 7.30045,
+   "R2-cal": 7.33616,
+   "R1-all8": 7.31228,
+   "R2-all8": 7.31283
+  },
+  "mixtral-8x7b-tp2:16:8:w1": {
+   "R0": 8.103,
+   "R1-cal": 8.0694,
+   "R2-cal": 8.06102,
+   "R1-all8": 8.07029,
+   "R2-all8": 8.05579
+  },
+  "mixtral-8x7b-tp2:16:8:w2": {
+   "R0": 8.3013,
+   "R1-cal": 8.38287,
+   "R2-cal": 8.43511,
+   "R1-all8": 8.39835,
+   "R2-all8": 8.40454
+  },
+  "mixtral-8x7b-tp2:16:9:w1": {
+   "R0": 9.10854,
+   "R1-cal": 9.12184,
+   "R2-cal": 9.12426,
+   "R1-all8": 9.12445,
+   "R2-all8": 9.11295
+  },
+  "mixtral-8x7b-tp2:16:9:w2": {
+   "R0": 9.31971,
+   "R1-cal": 9.41009,
+   "R2-cal": 9.46076,
+   "R1-all8": 9.42635,
+   "R2-all8": 9.42867
+  },
+  "mixtral-8x7b-tp2:32:1:w1": {
+   "R0": 1.00354,
+   "R1-cal": 1.00205,
+   "R2-cal": 1.00147,
+   "R1-all8": 1.00207,
+   "R2-all8": 1.0013
+  },
+  "mixtral-8x7b-tp2:32:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp2:32:2:w1": {
+   "R0": 2.02205,
+   "R1-cal": 2.01471,
+   "R2-cal": 2.01462,
+   "R1-all8": 2.015,
+   "R2-all8": 2.01323
+  },
+  "mixtral-8x7b-tp2:32:2:w2": {
+   "R0": 2.04246,
+   "R1-cal": 2.05395,
+   "R2-cal": 2.06131,
+   "R1-all8": 2.05613,
+   "R2-all8": 2.057
+  },
+  "mixtral-8x7b-tp2:32:3:w1": {
+   "R0": 3.05953,
+   "R1-cal": 3.03839,
+   "R2-cal": 3.04323,
+   "R1-all8": 3.03944,
+   "R2-all8": 3.03902
+  },
+  "mixtral-8x7b-tp2:32:3:w2": {
+   "R0": 3.13991,
+   "R1-cal": 3.16298,
+   "R2-cal": 3.20448,
+   "R1-all8": 3.17052,
+   "R2-all8": 3.18924
+  },
+  "mixtral-8x7b-tp2:32:4:w1": {
+   "R0": 4.11845,
+   "R1-cal": 4.0732,
+   "R2-cal": 4.0895,
+   "R1-all8": 4.07557,
+   "R2-all8": 4.08053
+  },
+  "mixtral-8x7b-tp2:32:4:w2": {
+   "R0": 4.29396,
+   "R1-cal": 4.32262,
+   "R2-cal": 4.43015,
+   "R1-all8": 4.33863,
+   "R2-all8": 4.3976
+  },
+  "mixtral-8x7b-tp2:32:5:w1": {
+   "R0": 5.12349,
+   "R1-cal": 5.08323,
+   "R2-cal": 5.09881,
+   "R1-all8": 5.08576,
+   "R2-all8": 5.08903
+  },
+  "mixtral-8x7b-tp2:32:5:w2": {
+   "R0": 5.31237,
+   "R1-cal": 5.34984,
+   "R2-cal": 5.4558,
+   "R1-all8": 5.36664,
+   "R2-all8": 5.42173
+  },
+  "mixtral-8x7b-tp2:32:6:w1": {
+   "R0": 6.14502,
+   "R1-cal": 6.10691,
+   "R2-cal": 6.12429,
+   "R1-all8": 6.11003,
+   "R2-all8": 6.11216
+  },
+  "mixtral-8x7b-tp2:32:6:w2": {
+   "R0": 6.38024,
+   "R1-cal": 6.43226,
+   "R2-cal": 6.55475,
+   "R1-all8": 6.4527,
+   "R2-all8": 6.51344
+  },
+  "mixtral-8x7b-tp2:32:7:w1": {
+   "R0": 7.18613,
+   "R1-cal": 7.13538,
+   "R2-cal": 7.15744,
+   "R1-all8": 7.13936,
+   "R2-all8": 7.14211
+  },
+  "mixtral-8x7b-tp2:32:7:w2": {
+   "R0": 7.50382,
+   "R1-cal": 7.56709,
+   "R2-cal": 7.73687,
+   "R1-all8": 7.59441,
+   "R2-all8": 7.68146
+  },
+  "mixtral-8x7b-tp2:32:8:w1": {
+   "R0": 8.24876,
+   "R1-cal": 8.15374,
+   "R2-cal": 8.17692,
+   "R1-all8": 8.15815,
+   "R2-all8": 8.15978
+  },
+  "mixtral-8x7b-tp2:32:8:w2": {
+   "R0": 8.68383,
+   "R1-cal": 8.75052,
+   "R2-cal": 9.00067,
+   "R1-all8": 8.78776,
+   "R2-all8": 8.92494
+  },
+  "mixtral-8x7b-tp2:32:9:w1": {
+   "R0": 9.25366,
+   "R1-cal": 9.20646,
+   "R2-cal": 9.24878,
+   "R1-all8": 9.21299,
+   "R2-all8": 9.22414
+  },
+  "mixtral-8x7b-tp2:32:9:w2": {
+   "R0": 9.70225,
+   "R1-cal": 9.77774,
+   "R2-cal": 10.02632,
+   "R1-all8": 9.81577,
+   "R2-all8": 9.94907
+  },
+  "mixtral-8x7b-tp2:64:1:w1": {
+   "R0": 1.00354,
+   "R1-cal": 1.00205,
+   "R2-cal": 1.00147,
+   "R1-all8": 1.00207,
+   "R2-all8": 1.0013
+  },
+  "mixtral-8x7b-tp2:64:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp2:64:2:w1": {
+   "R0": 2.02205,
+   "R1-cal": 2.01471,
+   "R2-cal": 2.01462,
+   "R1-all8": 2.015,
+   "R2-all8": 2.01323
+  },
+  "mixtral-8x7b-tp2:64:2:w2": {
+   "R0": 2.04246,
+   "R1-cal": 2.05395,
+   "R2-cal": 2.06131,
+   "R1-all8": 2.05613,
+   "R2-all8": 2.057
+  },
+  "mixtral-8x7b-tp2:64:3:w1": {
+   "R0": 3.05953,
+   "R1-cal": 3.03839,
+   "R2-cal": 3.04323,
+   "R1-all8": 3.03944,
+   "R2-all8": 3.03902
+  },
+  "mixtral-8x7b-tp2:64:3:w2": {
+   "R0": 3.13991,
+   "R1-cal": 3.16298,
+   "R2-cal": 3.20448,
+   "R1-all8": 3.17052,
+   "R2-all8": 3.18924
+  },
+  "mixtral-8x7b-tp2:64:4:w1": {
+   "R0": 4.11845,
+   "R1-cal": 4.0732,
+   "R2-cal": 4.0895,
+   "R1-all8": 4.07557,
+   "R2-all8": 4.08053
+  },
+  "mixtral-8x7b-tp2:64:4:w2": {
+   "R0": 4.29396,
+   "R1-cal": 4.32262,
+   "R2-cal": 4.43015,
+   "R1-all8": 4.33863,
+   "R2-all8": 4.3976
+  },
+  "mixtral-8x7b-tp2:64:5:w1": {
+   "R0": 5.20068,
+   "R1-cal": 5.11931,
+   "R2-cal": 5.15517,
+   "R1-all8": 5.12364,
+   "R2-all8": 5.1392
+  },
+  "mixtral-8x7b-tp2:64:5:w2": {
+   "R0": 5.50364,
+   "R1-cal": 5.52893,
+   "R2-cal": 5.73326,
+   "R1-all8": 5.55621,
+   "R2-all8": 5.67822
+  },
+  "mixtral-8x7b-tp2:64:6:w1": {
+   "R0": 6.30775,
+   "R1-cal": 6.1766,
+   "R2-cal": 6.24118,
+   "R1-all8": 6.18355,
+   "R2-all8": 6.21586
+  },
+  "mixtral-8x7b-tp2:64:6:w2": {
+   "R0": 6.76628,
+   "R1-cal": 6.77796,
+   "R2-cal": 7.10548,
+   "R1-all8": 6.81891,
+   "R2-all8": 7.02446
+  },
+  "mixtral-8x7b-tp2:64:7:w1": {
+   "R0": 7.4409,
+   "R1-cal": 7.24501,
+   "R2-cal": 7.34829,
+   "R1-all8": 7.25529,
+   "R2-all8": 7.31117
+  },
+  "mixtral-8x7b-tp2:64:7:w2": {
+   "R0": 8.07825,
+   "R1-cal": 8.06588,
+   "R2-cal": 8.53698,
+   "R1-all8": 8.12244,
+   "R2-all8": 8.42832
+  },
+  "mixtral-8x7b-tp2:64:8:w1": {
+   "R0": 8.60111,
+   "R1-cal": 8.32451,
+   "R2-cal": 8.47696,
+   "R1-all8": 8.33883,
+   "R2-all8": 8.42561
+  },
+  "mixtral-8x7b-tp2:64:8:w2": {
+   "R0": 9.43535,
+   "R1-cal": 9.38905,
+   "R2-cal": 10.01758,
+   "R1-all8": 9.46274,
+   "R2-all8": 9.8813
+  },
+  "mixtral-8x7b-tp2:64:9:w1": {
+   "R0": 9.60177,
+   "R1-cal": 9.37636,
+   "R2-cal": 9.55445,
+   "R1-all8": 9.39303,
+   "R2-all8": 9.49476
+  },
+  "mixtral-8x7b-tp2:64:9:w2": {
+   "R0": 10.45376,
+   "R1-cal": 10.41628,
+   "R2-cal": 11.04323,
+   "R1-all8": 10.49074,
+   "R2-all8": 10.90544
+  },
+  "mixtral-8x7b-tp4:1:1:w1": {
+   "R0": 1.00011,
+   "R1-cal": 0.99807,
+   "R2-cal": 0.99792,
+   "R1-all8": 0.99806,
+   "R2-all8": 0.99791
+  },
+  "mixtral-8x7b-tp4:1:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp4:1:2:w1": {
+   "R0": 2.00051,
+   "R1-cal": 1.99793,
+   "R2-cal": 1.99782,
+   "R1-all8": 1.99794,
+   "R2-all8": 1.99765
+  },
+  "mixtral-8x7b-tp4:1:2:w2": {
+   "R0": 2.00054,
+   "R1-cal": 2.00146,
+   "R2-cal": 2.00081,
+   "R1-all8": 2.00143,
+   "R2-all8": 2.00077
+  },
+  "mixtral-8x7b-tp4:1:3:w1": {
+   "R0": 3.0009,
+   "R1-cal": 2.99839,
+   "R2-cal": 2.99858,
+   "R1-all8": 2.99845,
+   "R2-all8": 2.99828
+  },
+  "mixtral-8x7b-tp4:1:3:w2": {
+   "R0": 3.0011,
+   "R1-cal": 3.00297,
+   "R2-cal": 3.00164,
+   "R1-all8": 3.0029,
+   "R2-all8": 3.00157
+  },
+  "mixtral-8x7b-tp4:1:4:w1": {
+   "R0": 4.0013,
+   "R1-cal": 3.99989,
+   "R2-cal": 4.00021,
+   "R1-all8": 4.00003,
+   "R2-all8": 3.9999
+  },
+  "mixtral-8x7b-tp4:1:4:w2": {
+   "R0": 4.00166,
+   "R1-cal": 4.00448,
+   "R2-cal": 4.00248,
+   "R1-all8": 4.00438,
+   "R2-all8": 4.00237
+  },
+  "mixtral-8x7b-tp4:1:5:w1": {
+   "R0": 5.0017,
+   "R1-cal": 5.00177,
+   "R2-cal": 5.00165,
+   "R1-all8": 5.00195,
+   "R2-all8": 5.00141
+  },
+  "mixtral-8x7b-tp4:1:5:w2": {
+   "R0": 5.00222,
+   "R1-cal": 5.00599,
+   "R2-cal": 5.00331,
+   "R1-all8": 5.00585,
+   "R2-all8": 5.00317
+  },
+  "mixtral-8x7b-tp4:1:6:w1": {
+   "R0": 6.0021,
+   "R1-cal": 6.00382,
+   "R2-cal": 6.0029,
+   "R1-all8": 6.004,
+   "R2-all8": 6.00273
+  },
+  "mixtral-8x7b-tp4:1:6:w2": {
+   "R0": 6.00278,
+   "R1-cal": 6.00749,
+   "R2-cal": 6.00414,
+   "R1-all8": 6.00733,
+   "R2-all8": 6.00397
+  },
+  "mixtral-8x7b-tp4:1:7:w1": {
+   "R0": 7.0025,
+   "R1-cal": 7.00541,
+   "R2-cal": 7.00351,
+   "R1-all8": 7.00555,
+   "R2-all8": 7.00337
+  },
+  "mixtral-8x7b-tp4:1:7:w2": {
+   "R0": 7.00334,
+   "R1-cal": 7.009,
+   "R2-cal": 7.00497,
+   "R1-all8": 7.0088,
+   "R2-all8": 7.00476
+  },
+  "mixtral-8x7b-tp4:1:8:w1": {
+   "R0": 8.0029,
+   "R1-cal": 8.00694,
+   "R2-cal": 8.00408,
+   "R1-all8": 8.00703,
+   "R2-all8": 8.00394
+  },
+  "mixtral-8x7b-tp4:1:8:w2": {
+   "R0": 8.0039,
+   "R1-cal": 8.01051,
+   "R2-cal": 8.00581,
+   "R1-all8": 8.01027,
+   "R2-all8": 8.00556
+  },
+  "mixtral-8x7b-tp4:1:9:w1": {
+   "R0": 9.0033,
+   "R1-cal": 9.0084,
+   "R2-cal": 9.00465,
+   "R1-all8": 9.00842,
+   "R2-all8": 9.0045
+  },
+  "mixtral-8x7b-tp4:1:9:w2": {
+   "R0": 9.00446,
+   "R1-cal": 9.01201,
+   "R2-cal": 9.00664,
+   "R1-all8": 9.01175,
+   "R2-all8": 9.00636
+  },
+  "mixtral-8x7b-tp4:16:1:w1": {
+   "R0": 1.00147,
+   "R1-cal": 0.99909,
+   "R2-cal": 0.99884,
+   "R1-all8": 0.99909,
+   "R2-all8": 0.99877
+  },
+  "mixtral-8x7b-tp4:16:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp4:16:2:w1": {
+   "R0": 2.01702,
+   "R1-cal": 2.00861,
+   "R2-cal": 2.00853,
+   "R1-all8": 2.00884,
+   "R2-all8": 2.00746
+  },
+  "mixtral-8x7b-tp4:16:2:w2": {
+   "R0": 2.01812,
+   "R1-cal": 2.02679,
+   "R2-cal": 2.03241,
+   "R1-all8": 2.02756,
+   "R2-all8": 2.02929
+  },
+  "mixtral-8x7b-tp4:16:3:w1": {
+   "R0": 3.02259,
+   "R1-cal": 3.01427,
+   "R2-cal": 3.01288,
+   "R1-all8": 3.01455,
+   "R2-all8": 3.01135
+  },
+  "mixtral-8x7b-tp4:16:3:w2": {
+   "R0": 3.02586,
+   "R1-cal": 3.0401,
+   "R2-cal": 3.04571,
+   "R1-all8": 3.04109,
+   "R2-all8": 3.04146
+  },
+  "mixtral-8x7b-tp4:16:4:w1": {
+   "R0": 4.04385,
+   "R1-cal": 4.02452,
+   "R2-cal": 4.02238,
+   "R1-all8": 4.02498,
+   "R2-all8": 4.01993
+  },
+  "mixtral-8x7b-tp4:16:4:w2": {
+   "R0": 4.05495,
+   "R1-cal": 4.08124,
+   "R2-cal": 4.09827,
+   "R1-all8": 4.08357,
+   "R2-all8": 4.08881
+  },
+  "mixtral-8x7b-tp4:16:5:w1": {
+   "R0": 5.0494,
+   "R1-cal": 5.04003,
+   "R2-cal": 5.03886,
+   "R1-all8": 5.04089,
+   "R2-all8": 5.0348
+  },
+  "mixtral-8x7b-tp4:16:5:w2": {
+   "R0": 5.06269,
+   "R1-cal": 5.09455,
+   "R2-cal": 5.11157,
+   "R1-all8": 5.0971,
+   "R2-all8": 5.10099
+  },
+  "mixtral-8x7b-tp4:16:6:w1": {
+   "R0": 6.07071,
+   "R1-cal": 6.06015,
+   "R2-cal": 6.06008,
+   "R1-all8": 6.0615,
+   "R2-all8": 6.054
+  },
+  "mixtral-8x7b-tp4:16:6:w2": {
+   "R0": 6.09178,
+   "R1-cal": 6.13569,
+   "R2-cal": 6.16414,
+   "R1-all8": 6.13959,
+   "R2-all8": 6.14834
+  },
+  "mixtral-8x7b-tp4:16:7:w1": {
+   "R0": 7.07624,
+   "R1-cal": 7.07051,
+   "R2-cal": 7.0701,
+   "R1-all8": 7.07208,
+   "R2-all8": 7.06303
+  },
+  "mixtral-8x7b-tp4:16:7:w2": {
+   "R0": 7.09952,
+   "R1-cal": 7.149,
+   "R2-cal": 7.17743,
+   "R1-all8": 7.15311,
+   "R2-all8": 7.16051
+  },
+  "mixtral-8x7b-tp4:16:8:w1": {
+   "R0": 8.09757,
+   "R1-cal": 8.05642,
+   "R2-cal": 8.04845,
+   "R1-all8": 8.05726,
+   "R2-all8": 8.0435
+  },
+  "mixtral-8x7b-tp4:16:8:w2": {
+   "R0": 8.12861,
+   "R1-cal": 8.19013,
+   "R2-cal": 8.23,
+   "R1-all8": 8.1956,
+   "R2-all8": 8.20786
+  },
+  "mixtral-8x7b-tp4:16:9:w1": {
+   "R0": 9.1031,
+   "R1-cal": 9.10696,
+   "R2-cal": 9.10955,
+   "R1-all8": 9.10949,
+   "R2-all8": 9.09862
+  },
+  "mixtral-8x7b-tp4:16:9:w2": {
+   "R0": 9.13635,
+   "R1-cal": 9.20345,
+   "R2-cal": 9.2433,
+   "R1-all8": 9.20913,
+   "R2-all8": 9.22003
+  },
+  "mixtral-8x7b-tp4:32:1:w1": {
+   "R0": 1.00147,
+   "R1-cal": 0.99909,
+   "R2-cal": 0.99884,
+   "R1-all8": 0.99909,
+   "R2-all8": 0.99877
+  },
+  "mixtral-8x7b-tp4:32:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp4:32:2:w1": {
+   "R0": 2.01702,
+   "R1-cal": 2.00861,
+   "R2-cal": 2.00853,
+   "R1-all8": 2.00884,
+   "R2-all8": 2.00746
+  },
+  "mixtral-8x7b-tp4:32:2:w2": {
+   "R0": 2.01812,
+   "R1-cal": 2.02679,
+   "R2-cal": 2.03241,
+   "R1-all8": 2.02756,
+   "R2-all8": 2.02929
+  },
+  "mixtral-8x7b-tp4:32:3:w1": {
+   "R0": 3.05102,
+   "R1-cal": 3.02909,
+   "R2-cal": 3.03319,
+   "R1-all8": 3.02998,
+   "R2-all8": 3.0296
+  },
+  "mixtral-8x7b-tp4:32:3:w2": {
+   "R0": 3.06077,
+   "R1-cal": 3.08222,
+   "R2-cal": 3.11057,
+   "R1-all8": 3.08516,
+   "R2-all8": 3.09932
+  },
+  "mixtral-8x7b-tp4:32:4:w1": {
+   "R0": 4.10604,
+   "R1-cal": 4.0606,
+   "R2-cal": 4.07508,
+   "R1-all8": 4.06272,
+   "R2-all8": 4.06708
+  },
+  "mixtral-8x7b-tp4:32:4:w2": {
+   "R0": 4.13011,
+   "R1-cal": 4.16533,
+   "R2-cal": 4.23843,
+   "R1-all8": 4.17201,
+   "R2-all8": 4.21354
+  },
+  "mixtral-8x7b-tp4:32:5:w1": {
+   "R0": 5.11119,
+   "R1-cal": 5.06907,
+   "R2-cal": 5.0828,
+   "R1-all8": 5.07133,
+   "R2-all8": 5.07403
+  },
+  "mixtral-8x7b-tp4:32:5:w2": {
+   "R0": 5.13785,
+   "R1-cal": 5.17864,
+   "R2-cal": 5.25173,
+   "R1-all8": 5.18554,
+   "R2-all8": 5.22572
+  },
+  "mixtral-8x7b-tp4:32:6:w1": {
+   "R0": 6.13264,
+   "R1-cal": 6.09099,
+   "R2-cal": 6.10639,
+   "R1-all8": 6.09382,
+   "R2-all8": 6.09536
+  },
+  "mixtral-8x7b-tp4:32:6:w2": {
+   "R0": 6.16694,
+   "R1-cal": 6.21978,
+   "R2-cal": 6.30429,
+   "R1-all8": 6.22803,
+   "R2-all8": 6.27306
+  },
+  "mixtral-8x7b-tp4:32:7:w1": {
+   "R0": 7.17348,
+   "R1-cal": 7.11817,
+   "R2-cal": 7.13828,
+   "R1-all8": 7.12185,
+   "R2-all8": 7.12406
+  },
+  "mixtral-8x7b-tp4:32:7:w2": {
+   "R0": 7.22126,
+   "R1-cal": 7.28865,
+   "R2-cal": 7.40428,
+   "R1-all8": 7.29975,
+   "R2-all8": 7.36252
+  },
+  "mixtral-8x7b-tp4:32:8:w1": {
+   "R0": 8.23568,
+   "R1-cal": 8.13629,
+   "R2-cal": 8.15809,
+   "R1-all8": 8.14047,
+   "R2-all8": 8.1419
+  },
+  "mixtral-8x7b-tp4:32:8:w2": {
+   "R0": 8.30267,
+   "R1-cal": 8.38461,
+   "R2-cal": 8.55467,
+   "R1-all8": 8.40016,
+   "R2-all8": 8.49676
+  },
+  "mixtral-8x7b-tp4:32:9:w1": {
+   "R0": 9.24064,
+   "R1-cal": 9.18664,
+   "R2-cal": 9.22699,
+   "R1-all8": 9.19287,
+   "R2-all8": 9.2035
+  },
+  "mixtral-8x7b-tp4:32:9:w2": {
+   "R0": 9.31041,
+   "R1-cal": 9.39792,
+   "R2-cal": 9.56796,
+   "R1-all8": 9.41369,
+   "R2-all8": 9.50894
+  },
+  "mixtral-8x7b-tp4:64:1:w1": {
+   "R0": 1.00147,
+   "R1-cal": 0.99909,
+   "R2-cal": 0.99884,
+   "R1-all8": 0.99909,
+   "R2-all8": 0.99877
+  },
+  "mixtral-8x7b-tp4:64:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp4:64:2:w1": {
+   "R0": 2.01702,
+   "R1-cal": 2.00861,
+   "R2-cal": 2.00853,
+   "R1-all8": 2.00884,
+   "R2-all8": 2.00746
+  },
+  "mixtral-8x7b-tp4:64:2:w2": {
+   "R0": 2.01812,
+   "R1-cal": 2.02679,
+   "R2-cal": 2.03241,
+   "R1-all8": 2.02756,
+   "R2-all8": 2.02929
+  },
+  "mixtral-8x7b-tp4:64:3:w1": {
+   "R0": 3.05102,
+   "R1-cal": 3.02909,
+   "R2-cal": 3.03319,
+   "R1-all8": 3.02998,
+   "R2-all8": 3.0296
+  },
+  "mixtral-8x7b-tp4:64:3:w2": {
+   "R0": 3.06077,
+   "R1-cal": 3.08222,
+   "R2-cal": 3.11057,
+   "R1-all8": 3.08516,
+   "R2-all8": 3.09932
+  },
+  "mixtral-8x7b-tp4:64:4:w1": {
+   "R0": 4.10604,
+   "R1-cal": 4.0606,
+   "R2-cal": 4.07508,
+   "R1-all8": 4.06272,
+   "R2-all8": 4.06708
+  },
+  "mixtral-8x7b-tp4:64:4:w2": {
+   "R0": 4.13011,
+   "R1-cal": 4.16533,
+   "R2-cal": 4.23843,
+   "R1-all8": 4.17201,
+   "R2-all8": 4.21354
+  },
+  "mixtral-8x7b-tp4:64:5:w1": {
+   "R0": 5.18401,
+   "R1-cal": 5.10344,
+   "R2-cal": 5.13612,
+   "R1-all8": 5.1074,
+   "R2-all8": 5.12153
+  },
+  "mixtral-8x7b-tp4:64:5:w2": {
+   "R0": 5.22737,
+   "R1-cal": 5.27534,
+   "R2-cal": 5.41721,
+   "R1-all8": 5.28739,
+   "R2-all8": 5.37321
+  },
+  "mixtral-8x7b-tp4:64:6:w1": {
+   "R0": 6.28647,
+   "R1-cal": 6.15738,
+   "R2-cal": 6.21718,
+   "R1-all8": 6.16384,
+   "R2-all8": 6.1937
+  },
+  "mixtral-8x7b-tp4:64:6:w2": {
+   "R0": 6.3531,
+   "R1-cal": 6.41132,
+   "R2-cal": 6.64622,
+   "R1-all8": 6.43036,
+   "R2-all8": 6.57806
+  },
+  "mixtral-8x7b-tp4:64:7:w1": {
+   "R0": 7.41468,
+   "R1-cal": 7.22239,
+   "R2-cal": 7.31903,
+   "R1-all8": 7.23203,
+   "R2-all8": 7.28427
+  },
+  "mixtral-8x7b-tp4:64:7:w2": {
+   "R0": 7.5074,
+   "R1-cal": 7.57231,
+   "R2-cal": 7.92355,
+   "R1-all8": 7.59988,
+   "R2-all8": 7.82685
+  },
+  "mixtral-8x7b-tp4:64:8:w1": {
+   "R0": 8.56968,
+   "R1-cal": 8.29844,
+   "R2-cal": 8.44223,
+   "R1-all8": 8.31198,
+   "R2-all8": 8.39376
+  },
+  "mixtral-8x7b-tp4:64:8:w2": {
+   "R0": 8.69002,
+   "R1-cal": 8.75731,
+   "R2-cal": 9.24643,
+   "R1-all8": 8.79489,
+   "R2-all8": 9.11762
+  },
+  "mixtral-8x7b-tp4:64:9:w1": {
+   "R0": 9.57085,
+   "R1-cal": 9.34709,
+   "R2-cal": 9.51509,
+   "R1-all8": 9.36287,
+   "R2-all8": 9.45869
+  },
+  "mixtral-8x7b-tp4:64:9:w2": {
+   "R0": 9.69776,
+   "R1-cal": 9.77062,
+   "R2-cal": 10.25973,
+   "R1-all8": 9.80841,
+   "R2-all8": 10.12979
+  },
+  "mixtral-8x7b-tp8:1:1:w1": {
+   "R0": 1.0,
+   "R1-cal": 0.99554,
+   "R2-cal": 0.99554,
+   "R1-all8": 0.99554,
+   "R2-all8": 0.99554
+  },
+  "mixtral-8x7b-tp8:1:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp8:1:2:w1": {
+   "R0": 2.00021,
+   "R1-cal": 1.992,
+   "R2-cal": 1.99186,
+   "R1-all8": 1.992,
+   "R2-all8": 1.9918
+  },
+  "mixtral-8x7b-tp8:1:2:w2": {
+   "R0": 2.00023,
+   "R1-cal": 2.00071,
+   "R2-cal": 2.00036,
+   "R1-all8": 2.00068,
+   "R2-all8": 2.00035
+  },
+  "mixtral-8x7b-tp8:1:3:w1": {
+   "R0": 3.0006,
+   "R1-cal": 2.99023,
+   "R2-cal": 2.99059,
+   "R1-all8": 2.99028,
+   "R2-all8": 2.99027
+  },
+  "mixtral-8x7b-tp8:1:3:w2": {
+   "R0": 3.00046,
+   "R1-cal": 3.00143,
+   "R2-cal": 3.00074,
+   "R1-all8": 3.00138,
+   "R2-all8": 3.0007
+  },
+  "mixtral-8x7b-tp8:1:4:w1": {
+   "R0": 4.001,
+   "R1-cal": 3.99035,
+   "R2-cal": 3.99241,
+   "R1-all8": 3.99055,
+   "R2-all8": 3.99166
+  },
+  "mixtral-8x7b-tp8:1:4:w2": {
+   "R0": 4.00069,
+   "R1-cal": 4.00216,
+   "R2-cal": 4.00111,
+   "R1-all8": 4.00208,
+   "R2-all8": 4.00106
+  },
+  "mixtral-8x7b-tp8:1:5:w1": {
+   "R0": 5.0014,
+   "R1-cal": 4.99,
+   "R2-cal": 4.99297,
+   "R1-all8": 4.99033,
+   "R2-all8": 4.99206
+  },
+  "mixtral-8x7b-tp8:1:5:w2": {
+   "R0": 5.00092,
+   "R1-cal": 5.00289,
+   "R2-cal": 5.00149,
+   "R1-all8": 5.00279,
+   "R2-all8": 5.00142
+  },
+  "mixtral-8x7b-tp8:1:6:w1": {
+   "R0": 6.00179,
+   "R1-cal": 5.99002,
+   "R2-cal": 5.99347,
+   "R1-all8": 5.99045,
+   "R2-all8": 5.99254
+  },
+  "mixtral-8x7b-tp8:1:6:w2": {
+   "R0": 6.00116,
+   "R1-cal": 6.00361,
+   "R2-cal": 6.00186,
+   "R1-all8": 6.00349,
+   "R2-all8": 6.00177
+  },
+  "mixtral-8x7b-tp8:1:7:w1": {
+   "R0": 7.00219,
+   "R1-cal": 6.99174,
+   "R2-cal": 6.99583,
+   "R1-all8": 6.99233,
+   "R2-all8": 6.99491
+  },
+  "mixtral-8x7b-tp8:1:7:w2": {
+   "R0": 7.00139,
+   "R1-cal": 7.00434,
+   "R2-cal": 7.00224,
+   "R1-all8": 7.00419,
+   "R2-all8": 7.00213
+  },
+  "mixtral-8x7b-tp8:1:8:w1": {
+   "R0": 8.00259,
+   "R1-cal": 7.9939,
+   "R2-cal": 7.99809,
+   "R1-all8": 7.99463,
+   "R2-all8": 7.99726
+  },
+  "mixtral-8x7b-tp8:1:8:w2": {
+   "R0": 8.00162,
+   "R1-cal": 8.00507,
+   "R2-cal": 8.00261,
+   "R1-all8": 8.00489,
+   "R2-all8": 8.00249
+  },
+  "mixtral-8x7b-tp8:1:9:w1": {
+   "R0": 9.00298,
+   "R1-cal": 8.99635,
+   "R2-cal": 9.00018,
+   "R1-all8": 8.99719,
+   "R2-all8": 8.99949
+  },
+  "mixtral-8x7b-tp8:1:9:w2": {
+   "R0": 9.00186,
+   "R1-cal": 9.00579,
+   "R2-cal": 9.00299,
+   "R1-all8": 9.00559,
+   "R2-all8": 9.00285
+  },
+  "mixtral-8x7b-tp8:8:1:w1": {
+   "R0": 1.0,
+   "R1-cal": 0.99554,
+   "R2-cal": 0.99554,
+   "R1-all8": 0.99554,
+   "R2-all8": 0.99554
+  },
+  "mixtral-8x7b-tp8:8:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp8:8:2:w1": {
+   "R0": 2.00295,
+   "R1-cal": 1.99368,
+   "R2-cal": 1.99307,
+   "R1-all8": 1.99368,
+   "R2-all8": 1.99295
+  },
+  "mixtral-8x7b-tp8:8:2:w2": {
+   "R0": 2.00318,
+   "R1-cal": 2.00636,
+   "R2-cal": 2.00593,
+   "R1-all8": 2.00638,
+   "R2-all8": 2.0054
+  },
+  "mixtral-8x7b-tp8:8:3:w1": {
+   "R0": 3.00846,
+   "R1-cal": 2.99676,
+   "R2-cal": 2.99491,
+   "R1-all8": 2.99682,
+   "R2-all8": 2.99434
+  },
+  "mixtral-8x7b-tp8:8:3:w2": {
+   "R0": 3.00641,
+   "R1-cal": 3.01282,
+   "R2-cal": 3.01196,
+   "R1-all8": 3.01286,
+   "R2-all8": 3.01088
+  },
+  "mixtral-8x7b-tp8:8:4:w1": {
+   "R0": 4.01397,
+   "R1-cal": 3.99451,
+   "R2-cal": 3.99119,
+   "R1-all8": 3.99449,
+   "R2-all8": 3.99064
+  },
+  "mixtral-8x7b-tp8:8:4:w2": {
+   "R0": 4.00964,
+   "R1-cal": 4.01928,
+   "R2-cal": 4.01799,
+   "R1-all8": 4.01934,
+   "R2-all8": 4.01636
+  },
+  "mixtral-8x7b-tp8:8:5:w1": {
+   "R0": 5.01949,
+   "R1-cal": 5.00747,
+   "R2-cal": 5.00338,
+   "R1-all8": 5.00773,
+   "R2-all8": 5.00153
+  },
+  "mixtral-8x7b-tp8:8:5:w2": {
+   "R0": 5.01288,
+   "R1-cal": 5.02574,
+   "R2-cal": 5.02401,
+   "R1-all8": 5.02582,
+   "R2-all8": 5.02185
+  },
+  "mixtral-8x7b-tp8:8:6:w1": {
+   "R0": 6.02501,
+   "R1-cal": 6.01129,
+   "R2-cal": 6.00624,
+   "R1-all8": 6.01164,
+   "R2-all8": 6.00384
+  },
+  "mixtral-8x7b-tp8:8:6:w2": {
+   "R0": 6.01611,
+   "R1-cal": 6.0322,
+   "R2-cal": 6.03004,
+   "R1-all8": 6.0323,
+   "R2-all8": 6.02733
+  },
+  "mixtral-8x7b-tp8:8:7:w1": {
+   "R0": 7.03053,
+   "R1-cal": 7.02091,
+   "R2-cal": 7.01498,
+   "R1-all8": 7.02148,
+   "R2-all8": 7.01156
+  },
+  "mixtral-8x7b-tp8:8:7:w2": {
+   "R0": 7.01934,
+   "R1-cal": 7.03866,
+   "R2-cal": 7.03607,
+   "R1-all8": 7.03878,
+   "R2-all8": 7.03282
+  },
+  "mixtral-8x7b-tp8:8:8:w1": {
+   "R0": 8.03605,
+   "R1-cal": 8.03051,
+   "R2-cal": 8.02335,
+   "R1-all8": 8.03125,
+   "R2-all8": 8.01895
+  },
+  "mixtral-8x7b-tp8:8:8:w2": {
+   "R0": 8.02257,
+   "R1-cal": 8.04512,
+   "R2-cal": 8.0421,
+   "R1-all8": 8.04526,
+   "R2-all8": 8.0383
+  },
+  "mixtral-8x7b-tp8:8:9:w1": {
+   "R0": 9.04158,
+   "R1-cal": 9.03964,
+   "R2-cal": 9.0324,
+   "R1-all8": 9.04063,
+   "R2-all8": 9.02725
+  },
+  "mixtral-8x7b-tp8:8:9:w2": {
+   "R0": 9.0258,
+   "R1-cal": 9.05158,
+   "R2-cal": 9.04813,
+   "R1-all8": 9.05174,
+   "R2-all8": 9.04378
+  },
+  "mixtral-8x7b-tp8:16:1:w1": {
+   "R0": 1.0,
+   "R1-cal": 0.99554,
+   "R2-cal": 0.99554,
+   "R1-all8": 0.99554,
+   "R2-all8": 0.99554
+  },
+  "mixtral-8x7b-tp8:16:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp8:16:2:w1": {
+   "R0": 2.00705,
+   "R1-cal": 1.99649,
+   "R2-cal": 1.99645,
+   "R1-all8": 1.99658,
+   "R2-all8": 1.99601
+  },
+  "mixtral-8x7b-tp8:16:2:w2": {
+   "R0": 2.00762,
+   "R1-cal": 2.0131,
+   "R2-cal": 2.01486,
+   "R1-all8": 2.01331,
+   "R2-all8": 2.01333
+  },
+  "mixtral-8x7b-tp8:16:3:w1": {
+   "R0": 3.01257,
+   "R1-cal": 2.99888,
+   "R2-cal": 2.99757,
+   "R1-all8": 2.999,
+   "R2-all8": 2.99675
+  },
+  "mixtral-8x7b-tp8:16:3:w2": {
+   "R0": 3.01085,
+   "R1-cal": 3.01956,
+   "R2-cal": 3.02089,
+   "R1-all8": 3.01979,
+   "R2-all8": 3.01881
+  },
+  "mixtral-8x7b-tp8:16:4:w1": {
+   "R0": 4.03355,
+   "R1-cal": 4.00773,
+   "R2-cal": 4.00605,
+   "R1-all8": 4.00808,
+   "R2-all8": 4.00419
+  },
+  "mixtral-8x7b-tp8:16:4:w2": {
+   "R0": 4.0231,
+   "R1-cal": 4.03972,
+   "R2-cal": 4.04505,
+   "R1-all8": 4.04036,
+   "R2-all8": 4.04041
+  },
+  "mixtral-8x7b-tp8:16:5:w1": {
+   "R0": 5.03907,
+   "R1-cal": 5.0189,
+   "R2-cal": 5.01781,
+   "R1-all8": 5.01958,
+   "R2-all8": 5.01456
+  },
+  "mixtral-8x7b-tp8:16:5:w2": {
+   "R0": 5.02633,
+   "R1-cal": 5.04618,
+   "R2-cal": 5.05108,
+   "R1-all8": 5.04684,
+   "R2-all8": 5.0459
+  },
+  "mixtral-8x7b-tp8:16:6:w1": {
+   "R0": 6.06013,
+   "R1-cal": 6.03655,
+   "R2-cal": 6.03659,
+   "R1-all8": 6.03773,
+   "R2-all8": 6.03135
+  },
+  "mixtral-8x7b-tp8:16:6:w2": {
+   "R0": 6.03857,
+   "R1-cal": 6.06635,
+   "R2-cal": 6.07525,
+   "R1-all8": 6.06742,
+   "R2-all8": 6.0675
+  },
+  "mixtral-8x7b-tp8:16:7:w1": {
+   "R0": 7.06563,
+   "R1-cal": 7.04559,
+   "R2-cal": 7.04559,
+   "R1-all8": 7.04701,
+   "R2-all8": 7.03923
+  },
+  "mixtral-8x7b-tp8:16:7:w2": {
+   "R0": 7.04181,
+   "R1-cal": 7.07281,
+   "R2-cal": 7.08128,
+   "R1-all8": 7.0739,
+   "R2-all8": 7.07298
+  },
+  "mixtral-8x7b-tp8:16:8:w1": {
+   "R0": 8.08673,
+   "R1-cal": 8.03051,
+   "R2-cal": 8.02335,
+   "R1-all8": 8.03125,
+   "R2-all8": 8.01895
+  },
+  "mixtral-8x7b-tp8:16:8:w2": {
+   "R0": 8.05405,
+   "R1-cal": 8.09297,
+   "R2-cal": 8.10545,
+   "R1-all8": 8.09447,
+   "R2-all8": 8.09458
+  },
+  "mixtral-8x7b-tp8:16:9:w1": {
+   "R0": 9.09222,
+   "R1-cal": 9.07726,
+   "R2-cal": 9.08018,
+   "R1-all8": 9.07963,
+   "R2-all8": 9.07001
+  },
+  "mixtral-8x7b-tp8:16:9:w2": {
+   "R0": 9.05729,
+   "R1-cal": 9.09943,
+   "R2-cal": 9.11147,
+   "R1-all8": 9.10095,
+   "R2-all8": 9.10006
+  },
+  "mixtral-8x7b-tp8:32:1:w1": {
+   "R0": 1.0,
+   "R1-cal": 0.99554,
+   "R2-cal": 0.99554,
+   "R1-all8": 0.99554,
+   "R2-all8": 0.99554
+  },
+  "mixtral-8x7b-tp8:32:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp8:32:2:w1": {
+   "R0": 2.00705,
+   "R1-cal": 1.99649,
+   "R2-cal": 1.99645,
+   "R1-all8": 1.99658,
+   "R2-all8": 1.99601
+  },
+  "mixtral-8x7b-tp8:32:2:w2": {
+   "R0": 2.00762,
+   "R1-cal": 2.0131,
+   "R2-cal": 2.01486,
+   "R1-all8": 2.01331,
+   "R2-all8": 2.01333
+  },
+  "mixtral-8x7b-tp8:32:3:w1": {
+   "R0": 3.03418,
+   "R1-cal": 3.01059,
+   "R2-cal": 3.01329,
+   "R1-all8": 3.01119,
+   "R2-all8": 3.0109
+  },
+  "mixtral-8x7b-tp8:32:3:w2": {
+   "R0": 3.02573,
+   "R1-cal": 3.04051,
+   "R2-cal": 3.05138,
+   "R1-all8": 3.04147,
+   "R2-all8": 3.04574
+  },
+  "mixtral-8x7b-tp8:32:4:w1": {
+   "R0": 4.08151,
+   "R1-cal": 4.03555,
+   "R2-cal": 4.04648,
+   "R1-all8": 4.03716,
+   "R2-all8": 4.0404
+  },
+  "mixtral-8x7b-tp8:32:4:w2": {
+   "R0": 4.05553,
+   "R1-cal": 4.0821,
+   "R2-cal": 4.11245,
+   "R1-all8": 4.08446,
+   "R2-all8": 4.09963
+  },
+  "mixtral-8x7b-tp8:32:5:w1": {
+   "R0": 5.08682,
+   "R1-cal": 5.04088,
+   "R2-cal": 5.05103,
+   "R1-all8": 5.04262,
+   "R2-all8": 5.04425
+  },
+  "mixtral-8x7b-tp8:32:5:w2": {
+   "R0": 5.05877,
+   "R1-cal": 5.08856,
+   "R2-cal": 5.11847,
+   "R1-all8": 5.09094,
+   "R2-all8": 5.10511
+  },
+  "mixtral-8x7b-tp8:32:6:w1": {
+   "R0": 6.10805,
+   "R1-cal": 6.0593,
+   "R2-cal": 6.07084,
+   "R1-all8": 6.06156,
+   "R2-all8": 6.06195
+  },
+  "mixtral-8x7b-tp8:32:6:w2": {
+   "R0": 6.07101,
+   "R1-cal": 6.10873,
+   "R2-cal": 6.14264,
+   "R1-all8": 6.11152,
+   "R2-all8": 6.12671
+  },
+  "mixtral-8x7b-tp8:32:7:w1": {
+   "R0": 7.14834,
+   "R1-cal": 7.08389,
+   "R2-cal": 7.10021,
+   "R1-all8": 7.08699,
+   "R2-all8": 7.08815
+  },
+  "mixtral-8x7b-tp8:32:7:w2": {
+   "R0": 7.09413,
+   "R1-cal": 7.14287,
+   "R2-cal": 7.18951,
+   "R1-all8": 7.14666,
+   "R2-all8": 7.16823
+  },
+  "mixtral-8x7b-tp8:32:8:w1": {
+   "R0": 8.20969,
+   "R1-cal": 8.10151,
+   "R2-cal": 8.12061,
+   "R1-all8": 8.1052,
+   "R2-all8": 8.10628
+  },
+  "mixtral-8x7b-tp8:32:8:w2": {
+   "R0": 8.12919,
+   "R1-cal": 8.191,
+   "R2-cal": 8.26158,
+   "R1-all8": 8.19649,
+   "R2-all8": 8.23176
+  },
+  "mixtral-8x7b-tp8:32:9:w1": {
+   "R0": 9.21475,
+   "R1-cal": 9.14714,
+   "R2-cal": 9.18361,
+   "R1-all8": 9.15277,
+   "R2-all8": 9.1624
+  },
+  "mixtral-8x7b-tp8:32:9:w2": {
+   "R0": 9.13242,
+   "R1-cal": 9.19746,
+   "R2-cal": 9.26761,
+   "R1-all8": 9.20297,
+   "R2-all8": 9.23724
+  },
+  "mixtral-8x7b-tp8:64:1:w1": {
+   "R0": 1.0,
+   "R1-cal": 0.99554,
+   "R2-cal": 0.99554,
+   "R1-all8": 0.99554,
+   "R2-all8": 0.99554
+  },
+  "mixtral-8x7b-tp8:64:1:w2": {
+   "R0": 1.0,
+   "R1-cal": 1.0,
+   "R2-cal": 1.0,
+   "R1-all8": 1.0,
+   "R2-all8": 1.0
+  },
+  "mixtral-8x7b-tp8:64:2:w1": {
+   "R0": 2.00705,
+   "R1-cal": 1.99649,
+   "R2-cal": 1.99645,
+   "R1-all8": 1.99658,
+   "R2-all8": 1.99601
+  },
+  "mixtral-8x7b-tp8:64:2:w2": {
+   "R0": 2.00762,
+   "R1-cal": 2.0131,
+   "R2-cal": 2.01486,
+   "R1-all8": 2.01331,
+   "R2-all8": 2.01333
+  },
+  "mixtral-8x7b-tp8:64:3:w1": {
+   "R0": 3.03418,
+   "R1-cal": 3.01059,
+   "R2-cal": 3.01329,
+   "R1-all8": 3.01119,
+   "R2-all8": 3.0109
+  },
+  "mixtral-8x7b-tp8:64:3:w2": {
+   "R0": 3.02573,
+   "R1-cal": 3.04051,
+   "R2-cal": 3.05138,
+   "R1-all8": 3.04147,
+   "R2-all8": 3.04574
+  },
+  "mixtral-8x7b-tp8:64:4:w1": {
+   "R0": 4.08151,
+   "R1-cal": 4.03555,
+   "R2-cal": 4.04648,
+   "R1-all8": 4.03716,
+   "R2-all8": 4.0404
+  },
+  "mixtral-8x7b-tp8:64:4:w2": {
+   "R0": 4.05553,
+   "R1-cal": 4.0821,
+   "R2-cal": 4.11245,
+   "R1-all8": 4.08446,
+   "R2-all8": 4.09963
+  },
+  "mixtral-8x7b-tp8:64:5:w1": {
+   "R0": 5.15105,
+   "R1-cal": 5.07189,
+   "R2-cal": 5.09839,
+   "R1-all8": 5.07512,
+   "R2-all8": 5.08651
+  },
+  "mixtral-8x7b-tp8:64:5:w2": {
+   "R0": 5.09788,
+   "R1-cal": 5.13781,
+   "R2-cal": 5.19992,
+   "R1-all8": 5.14231,
+   "R2-all8": 5.17657
+  },
+  "mixtral-8x7b-tp8:64:6:w1": {
+   "R0": 6.24441,
+   "R1-cal": 6.11918,
+   "R2-cal": 6.16965,
+   "R1-all8": 6.12466,
+   "R2-all8": 6.14978
+  },
+  "mixtral-8x7b-tp8:64:6:w2": {
+   "R0": 6.15337,
+   "R1-cal": 6.2075,
+   "R2-cal": 6.31489,
+   "R1-all8": 6.21492,
+   "R2-all8": 6.27755
+  },
+  "mixtral-8x7b-tp8:64:7:w1": {
+   "R0": 7.3629,
+   "R1-cal": 7.17741,
+   "R2-cal": 7.26112,
+   "R1-all8": 7.18581,
+   "R2-all8": 7.23095
+  },
+  "mixtral-8x7b-tp8:64:7:w2": {
+   "R0": 7.22244,
+   "R1-cal": 7.29099,
+   "R2-cal": 7.45795,
+   "R1-all8": 7.30214,
+   "R2-all8": 7.40313
+  },
+  "mixtral-8x7b-tp8:64:8:w1": {
+   "R0": 8.5076,
+   "R1-cal": 8.24661,
+   "R2-cal": 8.37348,
+   "R1-all8": 8.25862,
+   "R2-all8": 8.33065
+  },
+  "mixtral-8x7b-tp8:64:8:w2": {
+   "R0": 8.30541,
+   "R1-cal": 8.38809,
+   "R2-cal": 8.62927,
+   "R1-all8": 8.40378,
+   "R2-all8": 8.55354
+  },
+  "mixtral-8x7b-tp8:64:9:w1": {
+   "R0": 9.50969,
+   "R1-cal": 9.2889,
+   "R2-cal": 9.43719,
+   "R1-all8": 9.30292,
+   "R2-all8": 9.38723
+  },
+  "mixtral-8x7b-tp8:64:9:w2": {
+   "R0": 9.30864,
+   "R1-cal": 9.39455,
+   "R2-cal": 9.6353,
+   "R1-all8": 9.41026,
+   "R2-all8": 9.55903
+  },
+  "olmoe-1b-7b:128:1:w1": {
+   "R0": 1.0219,
+   "R1-cal": 0.98981,
+   "R2-cal": 0.99107,
+   "R1-all8": 0.9899,
+   "R2-all8": 0.99053
+  },
+  "olmoe-1b-7b:128:1:w2": {
+   "R0": 1.01638,
+   "R1-cal": 1.02353,
+   "R2-cal": 1.03516,
+   "R1-all8": 1.02426,
+   "R2-all8": 1.03083
+  },
+  "olmoe-1b-7b:128:2:w1": {
+   "R0": 2.13075,
+   "R1-cal": 1.98997,
+   "R2-cal": 2.00026,
+   "R1-all8": 1.99063,
+   "R2-all8": 1.99702
+  },
+  "olmoe-1b-7b:128:2:w2": {
+   "R0": 2.08967,
+   "R1-cal": 2.1107,
+   "R2-cal": 2.19382,
+   "R1-all8": 2.11541,
+   "R2-all8": 2.16922
+  },
+  "olmoe-1b-7b:128:3:w1": {
+   "R0": 3.16162,
+   "R1-cal": 2.98408,
+   "R2-cal": 2.99592,
+   "R1-all8": 2.98489,
+   "R2-all8": 2.99168
+  },
+  "olmoe-1b-7b:128:3:w2": {
+   "R0": 3.11106,
+   "R1-cal": 3.14141,
+   "R2-cal": 3.23971,
+   "R1-all8": 3.14707,
+   "R2-all8": 3.20947
+  },
+  "olmoe-1b-7b:128:4:w1": {
+   "R0": 4.28344,
+   "R1-cal": 3.98267,
+   "R2-cal": 4.00002,
+   "R1-all8": 3.98384,
+   "R2-all8": 3.99371
+  },
+  "olmoe-1b-7b:128:4:w2": {
+   "R0": 4.1894,
+   "R1-cal": 4.23382,
+   "R2-cal": 4.40937,
+   "R1-all8": 4.24375,
+   "R2-all8": 4.35742
+  },
+  "olmoe-1b-7b:128:5:w1": {
+   "R0": 5.31379,
+   "R1-cal": 4.98472,
+   "R2-cal": 5.00789,
+   "R1-all8": 4.98634,
+   "R2-all8": 4.99917
+  },
+  "olmoe-1b-7b:128:5:w2": {
+   "R0": 5.21078,
+   "R1-cal": 5.26453,
+   "R2-cal": 5.45526,
+   "R1-all8": 5.27541,
+   "R2-all8": 5.39766
+  },
+  "olmoe-1b-7b:128:6:w1": {
+   "R0": 6.43621,
+   "R1-cal": 5.99048,
+   "R2-cal": 6.02261,
+   "R1-all8": 5.99273,
+   "R2-all8": 6.01059
+  },
+  "olmoe-1b-7b:128:6:w2": {
+   "R0": 6.28912,
+   "R1-cal": 6.35693,
+   "R2-cal": 6.62492,
+   "R1-all8": 6.37209,
+   "R2-all8": 6.54561
+  },
+  "olmoe-1b-7b:128:7:w1": {
+   "R0": 7.46633,
+   "R1-cal": 6.98894,
+   "R2-cal": 7.02236,
+   "R1-all8": 6.99136,
+   "R2-all8": 7.00896
+  },
+  "olmoe-1b-7b:128:7:w2": {
+   "R0": 7.31051,
+   "R1-cal": 7.38764,
+   "R2-cal": 7.67081,
+   "R1-all8": 7.40376,
+   "R2-all8": 7.58586
+  },
+  "olmoe-1b-7b:128:8:w1": {
+   "R0": 8.58901,
+   "R1-cal": 7.96807,
+   "R2-cal": 7.98722,
+   "R1-all8": 7.96971,
+   "R2-all8": 7.97674
+  },
+  "olmoe-1b-7b:128:8:w2": {
+   "R0": 8.38885,
+   "R1-cal": 8.48005,
+   "R2-cal": 8.84047,
+   "R1-all8": 8.50044,
+   "R2-all8": 8.7338
+  },
+  "olmoe-1b-7b:128:9:w1": {
+   "R0": 9.61899,
+   "R1-cal": 9.00357,
+   "R2-cal": 9.05402,
+   "R1-all8": 9.00725,
+   "R2-all8": 9.03394
+  },
+  "olmoe-1b-7b:128:9:w2": {
+   "R0": 9.41024,
+   "R1-cal": 9.51076,
+   "R2-cal": 9.88636,
+   "R1-all8": 9.5321,
+   "R2-all8": 9.77405
+  },
+  "qwen2-57b-a14b:128:1:w1": {
+   "R0": 1.05757,
+   "R1-cal": 1.00249,
+   "R2-cal": 1.00574,
+   "R1-all8": 1.00278,
+   "R2-all8": 1.00457
+  },
+  "qwen2-57b-a14b:128:1:w2": {
+   "R0": 1.05722,
+   "R1-cal": 1.06735,
+   "R2-cal": 1.11169,
+   "R1-all8": 1.07042,
+   "R2-all8": 1.09897
+  },
+  "qwen2-57b-a14b:128:2:w1": {
+   "R0": 2.29453,
+   "R1-cal": 2.02252,
+   "R2-cal": 2.0421,
+   "R1-all8": 2.02403,
+   "R2-all8": 2.03677
+  },
+  "qwen2-57b-a14b:128:2:w2": {
+   "R0": 2.27141,
+   "R1-cal": 2.27799,
+   "R2-cal": 2.49661,
+   "R1-all8": 2.29256,
+   "R2-all8": 2.4465
+  },
+  "qwen2-57b-a14b:128:3:w1": {
+   "R0": 3.35664,
+   "R1-cal": 3.03156,
+   "R2-cal": 3.05474,
+   "R1-all8": 3.03348,
+   "R2-all8": 3.0476
+  },
+  "qwen2-57b-a14b:128:3:w2": {
+   "R0": 3.33731,
+   "R1-cal": 3.35556,
+   "R2-cal": 3.62526,
+   "R1-all8": 3.37367,
+   "R2-all8": 3.56051
+  },
+  "qwen2-57b-a14b:128:4:w1": {
+   "R0": 4.60802,
+   "R1-cal": 4.04767,
+   "R2-cal": 4.08066,
+   "R1-all8": 4.0504,
+   "R2-all8": 4.07033
+  },
+  "qwen2-57b-a14b:128:4:w2": {
+   "R0": 4.55916,
+   "R1-cal": 4.57273,
+   "R2-cal": 5.02314,
+   "R1-all8": 4.60274,
+   "R2-all8": 4.91991
+  },
+  "qwen2-57b-a14b:128:5:w1": {
+   "R0": 5.66879,
+   "R1-cal": 5.07121,
+   "R2-cal": 5.11564,
+   "R1-all8": 5.07501,
+   "R2-all8": 5.10129
+  },
+  "qwen2-57b-a14b:128:5:w2": {
+   "R0": 5.62507,
+   "R1-cal": 5.6503,
+   "R2-cal": 6.15179,
+   "R1-all8": 5.68385,
+   "R2-all8": 6.03391
+  },
+  "qwen2-57b-a14b:128:6:w1": {
+   "R0": 6.92156,
+   "R1-cal": 6.10026,
+   "R2-cal": 6.16128,
+   "R1-all8": 6.10547,
+   "R2-all8": 6.14163
+  },
+  "qwen2-57b-a14b:128:6:w2": {
+   "R0": 6.84692,
+   "R1-cal": 6.86747,
+   "R2-cal": 7.54967,
+   "R1-all8": 6.91292,
+   "R2-all8": 7.39331
+  },
+  "qwen2-57b-a14b:128:7:w1": {
+   "R0": 7.98175,
+   "R1-cal": 7.11761,
+   "R2-cal": 7.18287,
+   "R1-all8": 7.12342,
+   "R2-all8": 7.16053
+  },
+  "qwen2-57b-a14b:128:7:w2": {
+   "R0": 7.91282,
+   "R1-cal": 7.94504,
+   "R2-cal": 8.67832,
+   "R1-all8": 7.99403,
+   "R2-all8": 8.50731
+  },
+  "qwen2-57b-a14b:128:8:w1": {
+   "R0": 9.23512,
+   "R1-cal": 8.09965,
+   "R2-cal": 8.14108,
+   "R1-all8": 8.10407,
+   "R2-all8": 8.12273
+  },
+  "qwen2-57b-a14b:128:8:w2": {
+   "R0": 9.13467,
+   "R1-cal": 9.1622,
+   "R2-cal": 10.0762,
+   "R1-all8": 9.2231,
+   "R2-all8": 9.86671
+  },
+  "qwen2-57b-a14b:128:9:w1": {
+   "R0": 10.29497,
+   "R1-cal": 9.1815,
+   "R2-cal": 9.27809,
+   "R1-all8": 9.19019,
+   "R2-all8": 9.24512
+  },
+  "qwen2-57b-a14b:128:9:w2": {
+   "R0": 10.20058,
+   "R1-cal": 10.23977,
+   "R2-cal": 11.20484,
+   "R1-all8": 10.30421,
+   "R2-all8": 10.98071
+  }
+ }
+}

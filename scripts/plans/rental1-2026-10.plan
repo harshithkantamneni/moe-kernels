@@ -1,0 +1,30 @@
+# RENTAL 1 (registered 2026-10-01, docs/registered/README.md): one gpu_1x_gh200, three
+# registrations, run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental1-2026-10.plan --deadline <epoch s>
+# One unit a line: <model> <step> [key=value ...]. The order is the priority: when time
+# runs short the driver drops the LAST unit first (the launch-floor units, then B's, then C's).
+# Minutes: byte page wall time from the published ledgers, 55 s + 108 s per GB of routed
+# weights (8x7B 364 s, Qwen2-57B 443 s, OLMoE 140 s; tp8 ~93 s, tp4 ~131 s, tp2 ~207 s a page,
+# the same at every G), plus a census (~15 s) and the analyse; the 8x7B floor-only step took
+# 5 min on 2026-09-30; launch_floor's own dry-run estimate (~3.0 s per duty-0.25 cell).
+- prelude est=3 cap=15
+# (i) The registered tp8 floor capture, EXACTLY as registered 2026-09-30 (--steps prelude,floor
+# --floor-groups 64,8 --floor-treads 1,2,3,4,5,6,8,10), pushed before any other tp8 page is taken.
+mixtral-8x7b-tp8 floor label=floor floor-groups=64,8 floor-treads=1,2,3,4,5,6,8,10 est=8 cap=30
+# (ii) C, the A-tile k-steps ladder: the TP shards, the same-board 8x7B denominators (and the
+# G=1 board check B's tp2 w2 rule reads), then G=128 on two 64-expert models.
+mixtral-8x7b-tp8 bytes label=atile byte-groups=64,32,16,8 est=8 cap=25
+mixtral-8x7b-tp4 bytes label=atile byte-groups=64,32,16 est=8 cap=25
+mixtral-8x7b-tp2 bytes label=atile byte-groups=64,32,16 est=12 cap=35
+mixtral-8x7b bytes label=sameboard byte-groups=16,32,8,1 est=26 cap=60
+qwen2-57b-a14b bytes label=g128 byte-groups=128 est=9 cap=25
+olmoe-1b-7b bytes label=g128 byte-groups=128 est=4 cap=15
+# (iii) B's rental-1 cells: the TP shards at G = 1 and 2 (the distance block; tp2 w2 and
+# tp4 w1 decide H0 against H1). Default kernel, default metrics: no knob of B's rental 2.
+mixtral-8x7b-tp2 bytes label=l2 byte-groups=1,2 est=8 cap=25
+mixtral-8x7b-tp4 bytes label=l2 byte-groups=1,2 est=6 cap=20
+mixtral-8x7b-tp8 bytes label=l2 byte-groups=1,2 est=5 cap=15
+# (iv) A, the launch floor: ncu-free, dropped first.
+granite-3.0-3b-a800m launchfloor label=rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9 est=24 cap=50
+jetmoe-8b launchfloor label=rental1 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3 est=13 cap=30
+granite-3.0-1b-a400m launchfloor label=rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9 est=14 cap=30

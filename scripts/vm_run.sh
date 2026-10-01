@@ -3,6 +3,7 @@
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
 #   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b] [--floor-groups G,G --floor-treads n,n]
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> --plan scripts/plans/<file>.plan
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -24,7 +25,9 @@
 #           clones that commit); has the VM make its deploy key and prints
 #           nothing of it but the public half, which it adds to the repo with
 #           write access; and has the VM push the branch's first commit.
-# start     runs the driver's plan (--dry-run) on the VM as a record, then
+# start     (--plan: copies the checkout's plan file beside the driver, for the
+#           dry run before setup; after setup the driver reads the checkout's own)
+#           runs the driver's plan (--dry-run) on the VM as a record, then
 #           starts it detached: setup_vm.sh at this checkout's commit, then the
 #           session, pushing after every step. Nothing more goes over ssh.
 # watch     fetches the branch and prints the driver's ledger tail and the
@@ -68,7 +71,7 @@ MIN_DRIVER=580
 
 say()    { printf '[vm_run] %s\n' "$*"; [[ -n "${LOG:-}" ]] && printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"; return 0; }
 refuse() { say "REFUSED: $*"; exit "$EXIT_REFUSED"; }
-usage()  { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+usage()  { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
 
 SSH_OPTS=()
 ssh_opts() {
@@ -196,11 +199,23 @@ cmd_start() {
   [[ -z "${FLOOR_GROUPS_ARG:-}" ]] || { [[ "$FLOOR_GROUPS_ARG" =~ ^[0-9]+(,[0-9]+)*$ ]] || refuse "--floor-groups $FLOOR_GROUPS_ARG: a comma-separated list of integers"; model+=(--floor-groups "$FLOOR_GROUPS_ARG"); }
   [[ -z "${FLOOR_TREADS_ARG:-}" ]] || { [[ "$FLOOR_TREADS_ARG" =~ ^[0-9]+(,[0-9]+)*$ ]] || refuse "--floor-treads $FLOOR_TREADS_ARG: a comma-separated list of integers"; model+=(--floor-treads "$FLOOR_TREADS_ARG"); }
   [[ -z "${STEPS_ARG:-}" ]] || { [[ "$STEPS_ARG" =~ ^[a-z0-9]+(,[a-z0-9]+)*$ ]] || refuse "--steps $STEPS_ARG: a comma-separated list of step names"; model+=(--steps "$STEPS_ARG"); }
+  if [[ -n "${PLAN_ARG:-}" ]]; then
+    # a plan carries every unit's model, steps and overrides
+    (( ${#model[@]} == 0 )) || refuse "--plan carries every unit's model and steps: drop --model, --steps and --floor-*"
+    [[ "$PLAN_ARG" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_ARG" != /* && "$PLAN_ARG" != *..* ]] \
+      || refuse "--plan $PLAN_ARG: a path inside this checkout"
+    [[ -f "$ROOT/$PLAN_ARG" ]] || refuse "--plan $PLAN_ARG: no such file in $ROOT"
+    git -C "$ROOT" ls-files --error-unmatch "$PLAN_ARG" >/dev/null 2>&1 \
+      || refuse "--plan $PLAN_ARG is not tracked: the VM measures a commit, and the plan is part of it"
+    "$SCP" "${SSH_OPTS[@]}" "$ROOT/$PLAN_ARG" "ubuntu@$IP:" >/dev/null
+    model+=(--plan "$PLAN_ARG")
+  fi
   vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
     > "$RUN/driver-plan.txt" 2>&1 || true
   grep -q '^THE GH200 MODEL-TEST SESSION' "$RUN/driver-plan.txt" \
     || refuse "the driver's plan did not print on the VM: $RUN/driver-plan.txt"
   printf 'deadline=%s\nmodel=%s\n' "$DEADLINE" "${MODEL:-mixtral-8x7b}" >> "$RUN/run.env"
+  [[ -z "${PLAN_ARG:-}" ]] || printf 'plan=%s\n' "$PLAN_ARG" >> "$RUN/run.env"
   vm "nohup setsid bash gh200_model_session.sh --setup --commit $sha --repo https://github.com/$SLUG --deadline $DEADLINE ${model[*]+${model[*]}} >> gh200-driver.out 2>&1 < /dev/null & sleep 2; pgrep -f '[g]h200_model_session.sh --setup' >/dev/null && echo STARTED" \
     | grep -q STARTED || refuse "the driver did not start on the VM (read ~/gh200-driver.out there)"
   say "STARTED: setup_vm.sh at $sha, then the session; deadline $(date -u -r "$DEADLINE" +%FT%TZ 2>/dev/null || date -u -d "@$DEADLINE" +%FT%TZ)"
@@ -259,7 +274,7 @@ cmd_forget() {
 }
 
 sub="${1:-}"; [[ -n "$sub" ]] && shift
-IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""; FLOOR_GROUPS_ARG=""; FLOOR_TREADS_ARG=""
+IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""; FLOOR_GROUPS_ARG=""; FLOOR_TREADS_ARG=""; PLAN_ARG=""
 while (( $# )); do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
@@ -270,6 +285,7 @@ while (( $# )); do
     --steps) STEPS_ARG="${2:-}"; shift 2 ;;
     --floor-groups) FLOOR_GROUPS_ARG="${2:-}"; shift 2 ;;
     --floor-treads) FLOOR_TREADS_ARG="${2:-}"; shift 2 ;;
+    --plan) PLAN_ARG="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) refuse "unknown argument $1" ;;
   esac

@@ -332,6 +332,25 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         hf_repo="ibm-granite/granite-3.0-3b-a800m-instruct",
         verified=True,
     ),
+    "granite-3.0-1b-a400m": MoEConfig(
+        # config.json of ibm-granite/granite-3.0-1b-a400m-instruct, read
+        # 2026-10-01: hidden_size 1024, intermediate_size 512, num_local_experts
+        # 32, num_experts_per_tok 8, 24 layers. The launch-floor run's third
+        # model (docs/registered, 2026-10-01): the smallest call in the study,
+        # synthetic weights as every R3 page, so nothing is downloaded.
+        name="granite-3.0-1b-a400m",
+        hidden_size=1024,
+        intermediate_size=512,
+        num_experts=32,
+        top_k=8,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=0,
+        num_layers=24,
+        first_moe_layer=0,
+        hf_repo="ibm-granite/granite-3.0-1b-a400m-instruct",
+        verified=True,
+    ),
     "deepseek-v3": MoEConfig(
         name="deepseek-v3",
         hidden_size=7168,
@@ -429,11 +448,17 @@ def tensor_parallel_shard(base: MoEConfig, tensor_parallel: int,
 #: models with a tuned H200 config in BOTH bf16 and plain `fp8_w8a8`, so they
 #: are the only pair that can be measured tuned-against-tuned across a shard
 #: without first teaching the harness block-wise scales.
+#: mixtral at 2 and 4 (2026-10-01) are the A-tile and L2-survival runs' k-steps
+#: ladder (docs/registered, 2026-10-01): E 8, top 2, H 4096 and the tile held,
+#: w2's K 7168 and 3584 between 8x7B's 14336 and tp8's 1792. Those runs pin
+#: their own config, so a tuned vLLM entry is not what qualifies them.
 #: deepseek-v2-lite has no shard on the list because vLLM ships nothing for
 #: `E=64` at 1408 or any divisor of it on any device.
 _TENSOR_PARALLEL_SHARDS: tuple[tuple[str, int], ...] = (
     ("deepseek-v3", 4),
     ("deepseek-v3", 8),
+    ("mixtral-8x7b", 2),
+    ("mixtral-8x7b", 4),
     ("mixtral-8x7b", 8),
     ("qwen2-57b-a14b", 8),
 )

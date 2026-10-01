@@ -137,6 +137,14 @@ if tool == "locked_r3":
         time.sleep(120)
     sys.exit(SC.get("locked", {}).get(suffix, 0))
 
+if tool == "launch_floor":
+    if "--dry-run" in args:
+        print("LAUNCH FLOOR PLAN (planted)")
+        sys.exit(2)
+    out = Path(val("--out")); out.mkdir(parents=True, exist_ok=True)
+    (out / "cells.csv").write_text("mode\n")
+    sys.exit(SC.get("launchfloor", {}).get(val("--model"), 0))
+
 if tool == "calibrate_hardware":
     c = SC.get("calibrate", {})
     for line in c.get("results", ["RESULT: CLAIM not_throttled PASS from gemm_clock",
@@ -1393,3 +1401,229 @@ def test_the_reprice_threshold_scales_with_the_model(tmp_path):
     assert "64" in [val(a, "--group-m") for a in runs]
     src = DRIVER.read_text()
     assert 'reprice_s=$(( BYTE_G1_REPRICE_S * $(model_scale_pct) / 100 ))' in src
+
+
+# --------------------------------------------------------------------------
+# a plan of several models in one rental (2026-10-01)
+# --------------------------------------------------------------------------
+
+RENTAL1 = REPO / "scripts" / "plans" / "rental1-2026-10.plan"
+REGISTERED_FLOOR = ("64,8", "1,2,3,4,5,6,8,10")   # docs/registered/README.md, 2026-09-30
+
+
+def _dry(*a):
+    return subprocess.run(["bash", str(DRIVER), "--dry-run", *a], capture_output=True,
+                          text=True, timeout=60, env={**os.environ, "HOME": "/nonexistent"})
+
+
+def _units(stdout):
+    return re.findall(r"^  (\d+)\s+(\S+)\s+(\w+)\s+(\d+)\s+(\d+)  (.*)$", stdout, re.M)
+
+
+def test_the_rental1_plan_prints_every_unit_in_the_registered_order_and_fits_its_cap():
+    """(i) the tp8 floor capture exactly as registered, before any other tp8 page; then
+    C's pages, B's G = 1, 2 shard pages, and A's launch-floor units last (dropped first);
+    the estimates sum well under the guardian's 410-minute hard cap."""
+    got = _dry("--plan", str(RENTAL1))
+    assert got.returncode == exit_codes.REFUSED, got.stdout + got.stderr
+    units = _units(got.stdout)
+    assert [(m, s) for _, m, s, *_ in units][:2] == [("-", "prelude"),
+                                                     ("mixtral-8x7b-tp8", "floor")]
+    floor = units[1][5]
+    assert f"floor-groups={REGISTERED_FLOOR[0]}" in floor
+    assert f"floor-treads={REGISTERED_FLOOR[1]}" in floor
+    tp8 = [i for i, (_, m, s, *_r) in enumerate(units) if m == "mixtral-8x7b-tp8" and s == "bytes"]
+    assert tp8 and min(tp8) > 1
+    steps = [s for _, _m, s, *_r in units]
+    first_lf = steps.index("launchfloor")
+    assert all(s == "launchfloor" for s in steps[first_lf:])
+    total = sum(int(e) for _, _m, _s, e, *_r in units)
+    assert total <= 410 - 60, total
+    assert re.search(r"the last unit first.*\n\s+14 13 12", got.stdout)
+    # every page group its own directory: no two units share one
+    dirs = [u[5].split("; ")[-1] for u in units if u[2] != "prelude"]
+    assert len(set(dirs)) == len(dirs)
+
+
+@pytest.mark.parametrize("body, why", [
+    ("mixtral-8x7b-tp8 floor label=f\n", "the first unit is '- prelude'"),
+    ("- prelude\n- prelude\nolmoe-1b-7b bytes label=a\n", "only once"),
+    ("- prelude\nolmoe-1b-7b bytes byte-groups=1\n", "label=..."),
+    ("- prelude\nolmoe-1b-7b bytes label=a\nolmoe-1b-7b bytes label=a\n", "twice"),
+    ("- prelude\nolmoe-1b-7b bytes label=a colour=red\n", "no key 'colour'"),
+    ("- prelude\nolmoe-1b-7b timed label=a\n", "a plan runs prelude, bytes, floor and launchfloor"),
+    ("- prelude\nolmoe-1b-7b bytes label=a byte-groups=1;2\n", "comma-separated"),
+    ("- prelude\nolmoe-1b-7b bytes label=a est=30 cap=10\n", "under the estimate"),
+])
+def test_a_malformed_plan_is_refused_before_anything_runs(tmp_path, body, why):
+    f = tmp_path / "p.plan"
+    f.write_text(body)
+    got = _dry("--plan", str(f))
+    assert got.returncode == exit_codes.REFUSED and why in got.stderr, got.stderr
+    assert "a PLAN of" not in got.stdout
+
+
+def test_a_plan_refuses_the_single_model_flags():
+    got = _dry("--plan", str(RENTAL1), "--model", "olmoe-1b-7b")
+    assert got.returncode == exit_codes.REFUSED and "drop --model" in got.stderr
+
+
+def _plan_box(tmp_path, body, scenario=None, **kw):
+    box = Box(tmp_path, scenario or {})
+    f = tmp_path / "test.plan"
+    f.write_text(body)
+    return box, box.run("--plan", str(f), **kw)
+
+
+PLAN3 = """- prelude
+mixtral-8x7b-tp8 floor label=floor floor-groups=64,8 floor-treads=1,2,3,4,5,6,8,10 est=8 cap=30
+mixtral-8x7b-tp8 bytes label=atile byte-groups=64,32 est=8 cap=25
+mixtral-8x7b bytes label=sameboard byte-groups=16,1 est=10 cap=25
+mixtral-8x7b-tp8 bytes label=l2 byte-groups=1,2 est=5 cap=15
+jetmoe-8b launchfloor label=rental1 lf-treads=1,2,3,4 lf-trace=1,2 est=13 cap=30
+"""
+
+
+@pytest.fixture(scope="module")
+def plan_run(tmp_path_factory):
+    return _plan_box(tmp_path_factory.mktemp("plan"), PLAN3)
+
+
+def test_a_plan_runs_its_units_in_order_with_their_own_models_and_overrides(plan_run):
+    box, got = plan_run
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    starts = re.findall(r"^\S+ (\w+) START", box.ledger(), re.M)
+    assert starts == ["prelude", "floor", "bytes", "bytes", "bytes", "launchfloor"]
+    runs = [a for a in box.tool("dram_counter_route") if "--run" in a and "--census-only" not in a]
+    floors = [a for a in runs if "--floor" in a]
+    pages = [a for a in runs if "--floor" not in a]
+    # (i) the registered floor first, every capture before any tp8 byte page
+    assert runs.index(floors[-1]) < runs.index(pages[0])
+    assert [Path(val(a, "--out")).name for a in floors] == [
+        "r3f-g64.json", "r3f-g8.json", "r3f-g64-lock1710.json", "r3f-g8-lock1710.json"]
+    for a in floors:
+        assert val(a, "--model") == "mixtral-8x7b-tp8"
+        i = a.index("--floor-treads")
+        assert a[i + 1:i + 9] == ["1", "2", "3", "4", "5", "6", "8", "10"]
+        assert "-mixtral-8x7b-tp8-floor-r3-counters/" in val(a, "--out")
+    got_pages = [(val(a, "--model"), val(a, "--group-m"),
+                  Path(val(a, "--out")).parent.parent.name) for a in pages]
+    assert [(m, g) for m, g, _ in got_pages] == [
+        ("mixtral-8x7b-tp8", "64"), ("mixtral-8x7b-tp8", "32"), ("mixtral-8x7b", "16"),
+        ("mixtral-8x7b", "1"), ("mixtral-8x7b-tp8", "1"), ("mixtral-8x7b-tp8", "2")]
+    dirs = [d for _, _, d in got_pages]
+    assert dirs[0].endswith(f"-{CARD}-mixtral-8x7b-tp8-atile-r3-counters")
+    assert dirs[2].endswith(f"-{CARD}-mixtral-8x7b-sameboard-r3-counters")
+    assert dirs[4].endswith(f"-{CARD}-mixtral-8x7b-tp8-l2-r3-counters")
+    assert len(set(dirs)) == 3
+    for a in pages:   # every page at the lock: a registered list takes no base-clock control
+        assert val(a, "--page-lock-mhz") == "1710"
+    # the study's model reads the preflight's census, another model its own
+    assert val(pages[2], "--census") == str(box.session / "census.json")
+    assert val(pages[0], "--census").endswith("census-mixtral-8x7b-tp8.json")
+    analyse = [a for a in box.tool("dram_counter_route") if "--analyse" in a]
+    assert len(analyse) == 3 and all("--timed-reference" not in a for a in analyse)
+
+
+def test_a_plans_launchfloor_unit_runs_its_dry_run_then_the_lock_then_the_contract(plan_run):
+    box, _ = plan_run
+    lf = box.tool("launch_floor")
+    assert [("--dry-run" in a) for a in lf] == [True, False]
+    a = lf[1]
+    assert val(a, "--model") == "jetmoe-8b" and val(a, "--treads") == "1,2,3,4"
+    assert val(a, "--modes") == "E240,E0,E480,GR" and val(a, "--trace-treads") == "1,2"
+    assert val(a, "--group-m") == "4" and val(a, "--duty") == "0.25"
+    assert val(a, "--out").endswith(f"-{CARD}-launch-floor-rental1/jetmoe-8b")
+    calls = box.calls()
+    i = next(k for k, c in enumerate(calls) if c.get("tool") == "launch_floor" and not c["dry"])
+    locked = None
+    for c in calls[:i]:
+        if c["exe"] == "nvidia-smi" and "-lgc" in c["argv"]:
+            locked = c["argv"][c["argv"].index("-lgc") + 1]
+        if c["exe"] == "nvidia-smi" and "-rgc" in c["argv"]:
+            locked = None
+    assert locked == "1710,1710"
+    # the command line is held to the tool's own parser
+    import launch_floor as LFM
+    LFM.build_parser().parse_args(a)
+
+
+def test_a_plan_drops_its_last_units_first_when_the_deadline_is_near(tmp_path):
+    """45 minutes to the deadline less the 8-minute reserve (37 left, 44 planned): the
+    launch-floor unit (13) goes, last first; the rest still fits and runs."""
+    now = 1_900_000_000
+    box, got = _plan_box(tmp_path, PLAN3, deadline=now + 45 * 60, MOE_DRIVER_NOW=now)
+    led = box.ledger()
+    assert re.findall(r"DROPPED unit (\d+)/", led) == ["6"], led
+    starts = re.findall(r"^\S+ (\w+) START", led, re.M)
+    assert starts == ["prelude", "floor", "bytes", "bytes", "bytes"]
+    assert "SKIPPED launchfloor" in led
+    assert got.returncode == exit_codes.INVALID
+    # 28 minutes (20 left): the sameboard and l2 units go too, the first tp8 group stays
+    box, got = _plan_box(tmp_path / "b", PLAN3, deadline=now + 28 * 60, MOE_DRIVER_NOW=now)
+    led = box.ledger()
+    assert re.findall(r"DROPPED unit (\d+)/", led) == ["6", "5", "4"], led
+    assert re.findall(r"^\S+ (\w+) START", led, re.M) == ["prelude", "floor", "bytes"]
+
+
+def test_byte_groups_replaces_the_byte_list_with_no_tail_and_no_base_control(tmp_path):
+    box, got = run_box(tmp_path, {}, "--model", "mixtral-8x7b", "--steps", "prelude,bytes",
+                       "--byte-groups", "8,16,32")
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    runs = [a for a in box.tool("dram_counter_route") if "--run" in a]
+    assert [val(a, "--group-m") for a in runs] == ["8", "16", "32"]
+    assert all("--page-lock-mhz" in a for a in runs)
+    assert "registered list" in box.ledger()
+    assert "the registered G = 8 16 32" in _dry("--byte-groups", "8,16,32").stdout
+
+
+def test_no_default_plan_runs_the_launch_floor():
+    for a in ((), ("--model", "olmoe-1b-7b"), ("--from", "floor")):
+        got = _dry(*a)
+        assert "launchfloor" not in re.findall(r"^  (\w+)\s+\d+\s+\d+  ", got.stdout, re.M), a
+    got = _dry("--model", "jetmoe-8b", "--steps", "prelude,launchfloor")
+    assert re.findall(r"^  (\w+)\s+\d+\s+\d+  ", got.stdout, re.M) == ["prelude", "launchfloor"]
+
+
+def test_start_copies_a_tracked_plan_beside_the_driver_and_passes_it(tmp_path):
+    lap = Laptop(tmp_path)
+    (lap.clone / "scripts" / "plans").mkdir()
+    shutil.copy(RENTAL1, lap.clone / "scripts" / "plans" / RENTAL1.name)
+    g = ["git", "-C", str(lap.clone)]
+    subprocess.run([*g, "add", "-A"], check=True)
+    subprocess.run([*g, "commit", "-qm", "plan"], check=True)
+    subprocess.run([*g, "push", "-q", "origin", "HEAD:refs/heads/model-t"], check=True,
+                   capture_output=True)
+    lap.make_branch()
+    assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
+                   "--branch", "run-gh200-t").returncode == 0
+    rel = f"scripts/plans/{RENTAL1.name}"
+    got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                  "--plan", rel)
+    assert got.returncode == 0, got.stdout
+    start = next(c for c in lap.vm_cmds() if "nohup setsid" in c)
+    plan = next(c for c in lap.vm_cmds() if "--dry-run" in c)
+    assert f"--plan {rel}" in start and f"--plan {rel}" in plan
+    assert f"plan={rel}" in (lap.state / "r" / "run.env").read_text()
+    for bad, why in ((["--plan", "scripts/plans/none.plan"], "no such file"),
+                     (["--plan", "/etc/passwd"], "a path inside this checkout"),
+                     (["--plan", rel, "--model", "olmoe-1b-7b"], "drop --model")):
+        got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+                      *bad)
+        assert got.returncode == exit_codes.REFUSED and why in got.stdout, (bad, got.stdout)
+
+
+def test_the_driver_resolves_a_plan_from_the_checkout_then_beside_itself(tmp_path):
+    """Before setup the VM has the driver and vm_run.sh's copy of the plan in its home;
+    after setup the exec'd checkout driver reads the checkout's own copy."""
+    src = DRIVER.read_text()
+    assert 'for c in "$MOE_HOME/repo/$f" "$f" "$(dirname "$SELF")/$(basename "$f")"; do' in src
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy(DRIVER, home / DRIVER.name)
+    shutil.copy(RENTAL1, home / RENTAL1.name)
+    got = subprocess.run(["bash", str(home / DRIVER.name), "--dry-run", "--plan",
+                          f"scripts/plans/{RENTAL1.name}"], capture_output=True, text=True,
+                         timeout=60, cwd=home, env={**os.environ, "HOME": str(home),
+                                                   "MOE_HOME": str(home / "moe")})
+    assert got.returncode == exit_codes.REFUSED and "a PLAN of 14 units" in got.stdout, got.stderr

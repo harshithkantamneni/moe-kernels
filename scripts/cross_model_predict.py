@@ -36,6 +36,15 @@ tread cannot put whole tokens on every expert (`ladder_treads`), whose declarati
 vLLM's alignment kernel refuses, or whose ladder switches alignment kernel inside
 a ratio arm. The fitted parameters are indexed by GEMM name; at E = 64 w1 has
 the window and N-tiles of Mixtral's w2, which the output states beside them.
+
+A POOLED A-TILE LAW BESIDE IT (2026-10-01). `--byte-params FILE [FILE ...]`
+takes `scripts/atile_pooled_fit.py` params files (R1, R2 of
+docs/registered/2026-10-01-atile-ksteps-gh200) and adds, per PRIVATE cell, the
+q each one predicts on the target's geometry (content-keyed w1 A when the file
+says so), under the file's label, beside the registered view's q (R0), which
+is unchanged. The pooled law is fitted on PRIVATE alone, so no SHARED or NATIVE
+number comes from it. `--bytes-only` registers bytes without the timing model
+(no --timed): `predict_bytes`. `--groups` replaces the plan's G list (e.g. 128).
 """
 from __future__ import annotations
 
@@ -49,6 +58,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import atile_pooled_fit as APF  # noqa: E402
 import dram_counter_route as DCR  # noqa: E402
 import private_weight_reference as PW  # noqa: E402
 import r3_timing_model as TM  # noqa: E402
@@ -110,7 +120,75 @@ def target_geometry(geom: W.Geometry, target: str, design: Design | None = None)
     return out
 
 
-def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool = False) -> dict:
+def pooled_sources(byte_params) -> list[tuple[str, W.Params, bool, dict]]:
+    """(name, Params, content_a, doc) per pooled params file, the name its
+    file stem (so R1 / R2 files name themselves)."""
+    out = []
+    for path in byte_params or ():
+        prm, content_a, doc = APF.read_pooled(Path(path))
+        out.append((Path(path).stem, prm, content_a, doc))
+    names = [o[0] for o in out]
+    if len(set(names)) != len(names):
+        raise Refused(f"two --byte-params files share a name: {names}")
+    return out
+
+
+def pooled_q(geom_t: W.Geometry, pooled, groups, plan_n) -> dict:
+    """{name: {(G, n): {gemm: q or None}}} for PRIVATE on `geom_t`."""
+    cells = [("private", G, n, g) for g in W.GEMMS for G in groups for n in plan_n]
+    out = {}
+    for name, prm, content_a, _doc in pooled:
+        ev = dict(zip(cells, W.Model(geom_t, content_a=content_a).evaluate(prm, cells),
+                      strict=True))
+        out[name] = {(G, n): {g: W.shown(ev[("private", G, n, g)]) for g in W.GEMMS}
+                     for G in groups for n in plan_n}
+    return out
+
+
+def predict_bytes(counters: Path, target: str, byte_params=(), groups=PLAN_G) -> dict:
+    """Bytes only, no timing model: per (arm, G, n) the registered view's q of
+    SHARED and PRIVATE (NATIVE's bytes are SHARED's, as in `predict`) and, for
+    PRIVATE, each pooled file's q."""
+    card = W.load_card(counters)
+    src_cfg, tgt_cfg = MODEL_CONFIGS[card.geom.model], MODEL_CONFIGS[target]
+    same = (src_cfg.num_experts, src_cfg.top_k) == (tgt_cfg.num_experts, tgt_cfg.top_k)
+    design = None if same else target_design(target, card.geom.block_m)
+    plan_n = PLAN_N if same else tuple(n for n in design.treads if n in PLAN_N)
+    geom_t = target_geometry(card.geom, target, design)
+    res = W.analyse(card)
+    view = W.REGISTERED_VIEW
+    prm = res.params(view)
+    cells = [(a, G, n, g) for g in W.GEMMS for a in ("shared", "private")
+             for G in groups for n in plan_n]
+    ev = dict(zip(cells, W.Model(geom_t).evaluate(prm, cells), strict=True))
+    pooled = pooled_sources(byte_params)
+    pq = pooled_q(geom_t, pooled, groups, plan_n)
+    rows = []
+    for arm in ("shared", "private"):
+        for G in groups:
+            for n in plan_n:
+                row = {"arm": arm, "G": G, "n": n,
+                       "q": {g: W.shown(ev[(arm, G, n, g)]) for g in W.GEMMS},
+                       "status": {g: ev[(arm, G, n, g)]["rule"] for g in W.GEMMS}}
+                if arm == "private" and pq:
+                    row["q_pooled"] = {k: v[(G, n)] for k, v in pq.items()}
+                rows.append(row)
+    return {"tool": "scripts/cross_model_predict.py --bytes-only", "target": target,
+            "source_model": card.geom.model, "card": card.geom.card,
+            "board": DCR.board(card.geom.uuid), "byte_view": view,
+            "byte_params": {view: prm.as_json()},
+            "pooled": {name: {"label": doc.get("label"), "form": doc.get("form"),
+                              "content_a": ca, "models": doc.get("models"),
+                              "params": p.as_json()}
+                       for name, p, ca, doc in pooled},
+            "counter_pages": {str(G): str(p) for G, p in sorted(card.paths.items())},
+            "shapes": {g: {"K": dict(geom_t.K)[g], "npn": dict(geom_t.P)[g],
+                           "W_bytes": dict(geom_t.W)[g]} for g in W.GEMMS},
+            "groups": list(groups), "cells": rows}
+
+
+def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool = False,
+            byte_params=None) -> dict:
     card = W.load_card(counters)
     src_cfg, tgt_cfg = MODEL_CONFIGS[card.geom.model], MODEL_CONFIGS[target]
     same = (src_cfg.num_experts, src_cfg.top_k) == (tgt_cfg.num_experts, tgt_cfg.top_k)
@@ -124,6 +202,8 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
     cells = [(a, G, n, g) for g in W.GEMMS for a in ("shared", "private")
              for G in PLAN_G for n in plan_n]
     ev = {v: dict(zip(cells, model_t.evaluate(p, cells), strict=True)) for v, p in prm.items()}
+    pooled = pooled_sources(byte_params)
+    pq = pooled_q(geom_t, pooled, PLAN_G, plan_n)
 
     R = TM.build(TM.build_parser().parse_args([*map(str, timed), "--counters", str(counters),
                                                *(["--no-cta-fixed"] if no_cta_fixed else [])]))
@@ -148,6 +228,8 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
                            "q_views": {v: {g: W.shown(ev[v][(qa, G, n, g)]) for g in W.GEMMS}
                                        for v in ev},
                            "ms": None}
+                    if arm == "private" and pq:
+                        row["q_pooled"] = {k: v[(G, n)] for k, v in pq.items()}
                     if all(shown[g] is not None for g in W.GEMMS) and n in path:
                         reads = {g: shown[g] * bm_t[f"W_{g}"] + n * bm_t[f"operand_per_tile_{g}"]
                                  for g in W.GEMMS}
@@ -174,6 +256,9 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
             "timing_params": fit.params, "timing_pages": [p.run for p in R["use"]],
             "counter_pages": {str(G): str(p) for G, p in sorted(card.paths.items())},
             "byte_params": {v: p.as_json() for v, p in prm.items()},
+            **({"pooled": {name: {"label": doc.get("label"), "form": doc.get("form"),
+                                  "content_a": ca, "params": p.as_json()}
+                           for name, p, ca, doc in pooled}} if pooled else {}),
             "shapes": {g: {"K": dict(geom_t.K)[g], "npn": dict(geom_t.P)[g],
                            "W_bytes": dict(geom_t.W)[g]} for g in W.GEMMS},
             "window_m_rows": {g: {m: TM.window_width(fit.k_w, ctx.sms, ctx.occupancy[g])
@@ -212,15 +297,38 @@ def summary_lines(d: dict) -> list[str]:
     return L
 
 
+def bytes_lines(d: dict) -> list[str]:
+    L = [f"REGISTERED BYTE PREDICTIONS for {d['target']} on {d['card']}, from "
+         f"{d['source_model']}'s {d['byte_view']} fit (R0)"
+         + (f" and pooled {', '.join(d['pooled'])}" if d.get("pooled") else "")]
+    for r in d["cells"]:
+        if r["arm"] != "private":
+            continue
+        pooled = " ".join(f"{k} " + "/".join("--" if v[g] is None else f"{v[g]:.4f}"
+                                             for g in W.GEMMS)
+                          for k, v in (r.get("q_pooled") or {}).items())
+        r0 = "/".join("--" if r["q"][g] is None else f"{r['q'][g]:.4f}" for g in W.GEMMS)
+        L.append(f"  private G={r['G']:<3} n={r['n']} q w1/w2 R0 {r0} {pooled}")
+    return L
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--target", required=True, choices=sorted(MODEL_CONFIGS))
-    p.add_argument("--timed", nargs="+", type=Path, required=True,
-                   help="the source card's timed R3 run dirs (one lock, one card)")
+    p.add_argument("--timed", nargs="+", type=Path, default=None,
+                   help="the source card's timed R3 run dirs (one lock, one card); "
+                        "required unless --bytes-only")
     p.add_argument("--counters", type=Path, required=True,
                    help="the source card's r3c-g*.json directory (the same kernel)")
     p.add_argument("--no-cta-fixed", action="store_true",
                    help="drop the per-CTA fixed cost (r3_timing_model's --no-cta-fixed)")
+    p.add_argument("--byte-params", nargs="+", type=Path, default=None,
+                   help="scripts/atile_pooled_fit.py params files: their PRIVATE q beside "
+                        "the registered view's")
+    p.add_argument("--bytes-only", action="store_true",
+                   help="bytes only, no timing model and no --timed (predict_bytes)")
+    p.add_argument("--groups", type=lambda t: tuple(int(x) for x in t.split(",")),
+                   default=PLAN_G, help="--bytes-only: the G list (default the plan's)")
     p.add_argument("--out", type=Path, default=None)
     return p
 
@@ -228,11 +336,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        d = predict(args.timed, args.counters, args.target, args.no_cta_fixed)
+        if args.bytes_only:
+            d = predict_bytes(args.counters, args.target, args.byte_params or (), args.groups)
+        elif not args.timed:
+            raise Refused("--timed is required unless --bytes-only")
+        else:
+            d = predict(args.timed, args.counters, args.target, args.no_cta_fixed,
+                        byte_params=args.byte_params)
     except (Refused, TM.Refused, W.Refused) as exc:
         print(f"REFUSED: {exc}")
         return 2
-    print("\n".join(summary_lines(d)))
+    print("\n".join(bytes_lines(d) if args.bytes_only else summary_lines(d)))
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(d, indent=1, default=str) + "\n")
