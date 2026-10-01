@@ -88,3 +88,4 @@
 2026-10-01T21:23:27Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1 2, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 9/14 mixtral-8x7b-tp2 l2 byte-groups=1,2] (estimate 8 min, cap 25 min, 326 min left)
 2026-10-01T21:23:27Z bytes: the registered list G = 1 2 (mixtral-8x7b-tp2, l2): no tail drop, no re-price, no base-clock control
 2026-10-01T21:26:56Z bytes: G=1 page exit 3 after 207 s
+2026-10-01T21:30:25Z bytes: G=2 page exit 3 after 206 s
