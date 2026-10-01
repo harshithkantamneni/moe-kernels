@@ -115,3 +115,7 @@
 2026-10-01T21:38:23Z bytes: analyse of 2 pages exit 3 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2-r3-counters/lock1710/summary.json)
 2026-10-01T21:38:23Z bytes END: exit 0 after 3 min [unit 11/14 mixtral-8x7b-tp8 l2 byte-groups=1,2]
 2026-10-01T21:38:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-01T21:38:27Z launchfloor START: launch floor at the 1710 lock: treads 1,2,3,4,5,6,7,8,9, modes E240,E0,E480,GR, traces at 1,2,4,6,9 [unit 12/14 granite-3.0-3b-a800m rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9] (estimate 24 min, cap 50 min, 311 min left)
+2026-10-01T21:58:58Z launchfloor: granite-3.0-3b-a800m exit 0 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-launch-floor-rental1/granite-3.0-3b-a800m)
+2026-10-01T21:58:58Z launchfloor END: exit 0 after 21 min [unit 12/14 granite-3.0-3b-a800m rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9]
+2026-10-01T21:58:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
