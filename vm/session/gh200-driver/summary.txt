@@ -6,3 +6,4 @@ bytes      exit 0 after 11 min [unit 5/14 mixtral-8x7b-tp2 atile byte-groups=64,
 bytes      exit 0 after 25 min [unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1]
 bytes      exit 0 after 8 min [unit 7/14 qwen2-57b-a14b g128 byte-groups=128]
 bytes      exit 0 after 3 min [unit 8/14 olmoe-1b-7b g128 byte-groups=128]
+bytes      exit 0 after 7 min [unit 9/14 mixtral-8x7b-tp2 l2 byte-groups=1,2]
