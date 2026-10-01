@@ -65,3 +65,7 @@
 2026-10-01T21:12:29Z bytes: analyse of 4 pages exit 3 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/summary.json)
 2026-10-01T21:12:29Z bytes END: exit 0 after 25 min [unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1]
 2026-10-01T21:12:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-01T21:12:33Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 128, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 7/14 qwen2-57b-a14b g128 byte-groups=128] (estimate 9 min, cap 25 min, 337 min left)
+2026-10-01T21:12:50Z census for qwen2-57b-a14b written (/home/ubuntu/moe/session/census-qwen2-57b-a14b.json)
+2026-10-01T21:12:50Z bytes: the registered list G = 128 (qwen2-57b-a14b, g128): no tail drop, no re-price, no base-clock control
+2026-10-01T21:20:20Z bytes: G=128 page exit 1 after 447 s
