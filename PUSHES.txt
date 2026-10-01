@@ -22,3 +22,4 @@
 2026-10-01T21:12:32Z bytes (unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1): exit 0 (25 min)
 2026-10-01T21:20:21Z bytes: G=128 page exit 1
 2026-10-01T21:20:32Z bytes (unit 7/14 qwen2-57b-a14b g128 byte-groups=128): exit 0 (8 min)
+2026-10-01T21:23:15Z bytes: G=128 page exit 3

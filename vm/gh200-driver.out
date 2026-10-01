@@ -30,3 +30,5 @@
 2026-10-01T21:12:33Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 128, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 7/14 qwen2-57b-a14b g128 byte-groups=128] (estimate 9 min, cap 25 min, 337 min left)
 2026-10-01T21:20:30Z bytes END: exit 0 after 8 min [unit 7/14 qwen2-57b-a14b g128 byte-groups=128]
 2026-10-01T21:20:31Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1a705d5 to run-gh200-rental1-20261001t2017: bytes (unit 7/14 qwen2-57b-a14b g128 byte-groups=128): exit 0 (8 min)
+2026-10-01T21:20:33Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 128, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 8/14 olmoe-1b-7b g128 byte-groups=128] (estimate 4 min, cap 15 min, 329 min left)
