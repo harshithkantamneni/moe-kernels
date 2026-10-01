@@ -22,3 +22,5 @@
 2026-10-01T20:36:56Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64 32 16, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 5/14 mixtral-8x7b-tp2 atile byte-groups=64,32,16] (estimate 12 min, cap 35 min, 372 min left)
 2026-10-01T20:47:47Z bytes END: exit 0 after 11 min [unit 5/14 mixtral-8x7b-tp2 atile byte-groups=64,32,16]
 2026-10-01T20:47:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b8df533 to run-gh200-rental1-20261001t2017: bytes (unit 5/14 mixtral-8x7b-tp2 atile byte-groups=64,32,16): exit 0 (11 min)
+2026-10-01T20:47:50Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 16 32 8 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 6/14 mixtral-8x7b sameboard byte-groups=16,32,8,1] (estimate 26 min, cap 60 min, 361 min left)
