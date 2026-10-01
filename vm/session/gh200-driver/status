@@ -46,3 +46,4 @@
 2026-10-01T20:37:12Z census for mixtral-8x7b-tp2 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp2.json)
 2026-10-01T20:37:12Z bytes: the registered list G = 64 32 16 (mixtral-8x7b-tp2, atile): no tail drop, no re-price, no base-clock control
 2026-10-01T20:40:40Z bytes: G=64 page exit 3 after 206 s
+2026-10-01T20:44:09Z bytes: G=32 page exit 3 after 206 s
