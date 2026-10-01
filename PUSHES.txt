@@ -11,3 +11,4 @@
 2026-10-01T20:34:36Z bytes: G=32 page exit 3
 2026-10-01T20:36:45Z bytes: G=16 page exit 3
 2026-10-01T20:36:55Z bytes (unit 4/14 mixtral-8x7b-tp4 atile byte-groups=64,32,16): exit 0 (7 min)
+2026-10-01T20:40:42Z bytes: G=64 page exit 3
