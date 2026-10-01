@@ -1,0 +1,5 @@
+r3f-g64 exit 0
+r3f-g8 exit 0
+r3f-g64-lock1710 exit 3
+r3f-g8-lock1710 exit 3
+registered floor design: groups 64,8, treads 1,2,3,4,5,6,8,10

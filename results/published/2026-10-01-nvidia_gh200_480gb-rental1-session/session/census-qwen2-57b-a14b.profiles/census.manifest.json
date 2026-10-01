@@ -1,0 +1,84 @@
+{
+  "family": "r3-arms",
+  "kind": "census",
+  "order": [
+    [
+      "native",
+      1
+    ],
+    [
+      "native",
+      6
+    ]
+  ],
+  "calls_per_cell": 1,
+  "warmup_calls": 1,
+  "gemms_per_call": 2,
+  "launch_skip": 0,
+  "launch_count": null,
+  "tokens": {
+    "1": 256,
+    "6": 1536
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 64,
+    "shared": 576,
+    "private": 576
+  },
+  "ids_sha256": {
+    "native/1": "4594474c18a840a08c8a84c4cc41035b2bfb20f4689ab24262e30f43de9700a0",
+    "native/6": "b35fa20855d73631f6216c751259845022dadb19e813b41f9d3e90404ff47b24"
+  },
+  "sorted_ids_len": {
+    "native/1": 4032,
+    "native/6": 14272
+  },
+  "grids": {
+    "native/1": {
+      "w1": 10080,
+      "w2": 7056
+    },
+    "native/6": {
+      "w1": 35680,
+      "w2": 24976
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n1",
+    "r3/native/g64/n6"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 3523215360,
+    "weight_bytes": 31708938240,
+    "activation_bytes": 298844160,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 32605470720,
+    "device_free_bytes": 100730339328,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 1
+  },
+  "versions": {
+    "python": "3.12.14",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "35b064df-a166-0d27-d867-682c0a299866"
+  }
+}

@@ -382,6 +382,22 @@ waves (w1 n = 6, 8, 10; w2 n = 5, 6, 8, 10) within 2% of 352.2 (w1) and 379.1
 own `dram__bytes_read.sum`; the registered numbers use the launch order's own
 reads (sigma = 1).
 
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, unit 2; `results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g{64,8}.json`,
+the base-clock captures; every cell repriced with its own `dram__bytes_read.sum`, sigma 0.58
+to 1.06, which moves no co-residency number by more than 0.1%). F1 HELD: D = 156,941 (G=64) and
+155,820 (G=8) cycles against 155,193, +0.08 and +0.03 unit; the old lifetime (87,121) and
+the per-fetching-CTA form (121,171; repriced 116,675 and 121,423) are outside, plain
+throughput (158,705) is inside, as registered. F2 HELD: w1 n = 2 170,316 (+4.8%) and
+170,367 (+4.9%) against 162,474 (old lifetime -26%, per lead -13 to -15%, throughput +7.0
+to +7.2%, inside). F3 FALSIFIED: G=64 w1 n = 1 +13.4%, w2 n = 1 +8.6%, n = 2 +10.4%, n = 3
++8.3%; G=8 w1 n = 1 +14.9%, w2 n = 2 +11.1%; every other cell within 8%. F4: w1 on n = 6,
+8, 10 339.6 and 342.5 against 352.2 (-3.6%, -2.8%), FALSIFIED; w2 on n = 5, 6, 8, 10 374.3
+and 374.2 against 379.1 (-1.3%), HELD. The lock captures fail FL1 alone (w1 fitted 1671
+and 1662 MHz, w2 1655) and read the same verdicts (D 155,988 and 155,914; w1 n = 2 +3.1%,
++5.4%; F4 w1 -3.6%, -3.3%). The JSON's `primary` field names the lock captures "(FL1
+PASS)"; with FL1 failing, both texts give the base captures. The files above are unchanged.
+
 ## 2026-10-01, before any page: rental 1, three registrations on one GH200
 
 One `gpu_1x_gh200` runs `scripts/plans/rental1-2026-10.plan` through
@@ -519,6 +535,24 @@ Not in rental 1: the R0 anchors with partition metrics, num_stages, BLOCK_K,
 the 1005 MHz clock and slot padding (rental 2: `--block-k`, `--slot-pad-rows`,
 the partition metrics and per-knob directories).
 
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, units 6 and 9 to 11; every tp page fails V10 alone, the anchor passes every
+gate, V6 passes everywhere so no s is flagged). Measured s, n = 2..9: tp2 w2 0.82 0.59 0.57
+0.58 0.54 0.56 0.55 0.54; same-board 8x7B w2 0.72 0.54 0.52 0.53 0.50 0.51 0.49 0.48; tp4
+w1 0.65 0.54 0.47 0.45 0.42 0.38 0.38 0.36. H1 over H0 on tp2 w2: H1 (within 0.066 of the
+same-board curve at n = 4..9, 0.54 to 0.58, under 0.65; H0 needed >= 0.74). tp4 w1:
+INCONCLUSIVE (0.42 0.38 0.38 0.36 at n = 6..9: +0.23 to +0.27 over H1, 0.24 to 0.35 under
+H0, 0.42 over 0.40 at n = 6). The x-only law: FALSIFIED (tp2 w2 minus tp4 w1 0.10 to 0.19
+at all six of n = 4..9). Controls: tp8 w2 HELD (>= 0.973); tp8 w1 FAILED (0.82 to 0.91);
+tp4 w2 FAILED at n = 2 only (+0.087, n = 3..9 within 0.025); tp2 w1 FAILED at n = 2, 3
+(0.16, 0.10; then 0.03 to 0.06). By the rule above the law's shape failed at x <= 0.93 L2,
+so the H1 reading of tp2 w2 is not a pass of the law. PRIVATE F / Mn HELD (0.504 to 0.521,
+126 cells). Far share RECORD: 43 of 50 cells with s >= 0.1 inside [0.15, 0.45] (outside:
+tp4 w2 n = 8, 9 at 0.137; tp8 w2 n = 5..9, 0.06 to 0.115). G = 2 secondary against R0:
+PRIVATE HELD (54 of 54 within 5%, worst +0.4%); SHARED FALSIFIED (31 of 54 beyond 5%,
+worst tp4 w1 n = 8 -58.8%, R0 low on tp2 w2 and tp4 w1 from n = 4). The files above are
+unchanged.
+
 ## 2026-10-01, before any page: PRIVATE's A-tile reads at large G and short K (rental 1)
 
 The registered byte model (8x7B's MIX fit, carried by `cross_model_predict`)
@@ -606,3 +640,18 @@ V10 does not gate any score here: the tp8 and tp4 lock pages will likely fail it
 (short kernels: the JetMoE and OLMoE lock pages read 1641-1688 MHz against 1710),
 and DRAM bytes are clock-free (base-clock against lock bytes agree to 0.03% w1,
 0.8% w2 on 8x7B 09-27).
+
+**Scored 2026-10-01** on `results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`
+(board 7269a7, units 3 to 8 and the G = 1 pages of 9 to 11; every PRIVATE cell scored: the
+failing gates are V10, V7 and V6 on NATIVE/SHARED and claim gates C1, C2, C6, none on
+PRIVATE's bytes; R1 and R2 recomputed on the pages' geometry match the JSON to 0.0005%).
+T1: OLMoE HELD (worst +0.52% from R1 at n >= 2; R0 -5.4 to -7.3%); Qwen2 INCONCLUSIVE
+(nearer R1 than R0 at every n, R0 -8.5 to -11.6%, but +2.18, +2.11, +2.64% from R1 at n =
+6, 7, 9, outside the 2% pass). T2: rho42 1.199, rho84 1.184 (f: tp4 G=64 0.2963, 8x7B
+G=16 0.2472, tp2 G=64 0.5802, 8x7B G=32 0.4900), both between the R1/R0 bands and the R2
+bands: every candidate refuted (R0, R1, R2, primary and secondary). T3: tp8 PASS (q - 1
+-0.00438, R1 -0.00446), tp4 PASS (-0.00138, R1 -0.00193, outside R0's band [-0.00089,
+0.00111]); tp2 record -0.00044 (R1 -0.00039, R0 +0.00025). T4, 270 PRIVATE cells:
+FALSIFIED for every candidate: R0 rms 3.68% (24 cells of G >= 32, n >= 6 beyond 4%), R1
+2.87% (15), R2 1.55% (10: 8x7B G=32 w2 n = 7-9, tp2 G=64 w2 n = 7-9, Qwen2 G=128 w2 n =
+6-9), secondary R1 2.73% (14), R2 1.77% (10). The files above are unchanged.

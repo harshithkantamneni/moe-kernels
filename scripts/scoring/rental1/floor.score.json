@@ -1,0 +1,2031 @@
+{
+ "registration": "docs/registered/README.md 2026-09-30 tp8 floor; 2026-09-30-mixtral-8x7b-tp8-floor-gh200.json",
+ "captures": {
+  "r3f-g64": {
+   "file": "2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64.json",
+   "G": 64,
+   "clock": "base",
+   "gates": [],
+   "cells": [
+    {
+     "n": 1,
+     "gemm": "w1",
+     "cycles": 128671.245,
+     "mhz": 1355.6899549055968,
+     "dram_read": 236073472.0,
+     "sigma": 0.9961823319966815,
+     "grid": 896,
+     "waves": 0.679,
+     "reg_cores": 113853,
+     "repriced": {
+      "cores": 113440,
+      "old_lifetime": 113453,
+      "cores_per_lead": 113440,
+      "throughput": 113440
+     },
+     "dev_reg": 0.13015243340096427,
+     "dev_repriced": 0.13426663703321529
+    },
+    {
+     "n": 1,
+     "gemm": "w2",
+     "cycles": 62279.615,
+     "mhz": 1386.7032196294977,
+     "dram_read": 118380288.0,
+     "sigma": 1.000188174833887,
+     "grid": 1024,
+     "waves": 0.97,
+     "reg_cores": 57319,
+     "repriced": {
+      "cores": 57329,
+      "old_lifetime": 57329,
+      "cores_per_lead": 57329,
+      "throughput": 57329
+     },
+     "dev_reg": 0.08654399064882501,
+     "dev_repriced": 0.08634962202242469
+    },
+    {
+     "n": 2,
+     "gemm": "w1",
+     "cycles": 170316.5,
+     "mhz": 1326.783154680294,
+     "dram_read": 252400128.0,
+     "sigma": 1.0557347347861843,
+     "grid": 1344,
+     "waves": 1.358,
+     "reg_cores": 162474,
+     "repriced": {
+      "cores": 162579,
+      "old_lifetime": 230651,
+      "cores_per_lead": 200992,
+      "throughput": 159104
+     },
+     "dev_reg": 0.04826926154338551,
+     "dev_repriced": 0.04759083039016754
+    },
+    {
+     "n": 2,
+     "gemm": "w2",
+     "cycles": 95830.5,
+     "mhz": 1385.15408186864,
+     "dram_read": 119686528.0,
+     "sigma": 1.0034458705357143,
+     "grid": 1536,
+     "waves": 1.939,
+     "reg_cores": 86822,
+     "repriced": {
+      "cores": 86822,
+      "old_lifetime": 86822,
+      "cores_per_lead": 86822,
+      "throughput": 85503
+     },
+     "dev_reg": 0.10375826403446142,
+     "dev_repriced": 0.1037540123241858
+    },
+    {
+     "n": 3,
+     "gemm": "w1",
+     "cycles": 258035.93,
+     "mhz": 1350.8037209984086,
+     "dram_read": 250633216.0,
+     "sigma": 1.0392280910326086,
+     "grid": 1792,
+     "waves": 2.036,
+     "reg_cores": 249596,
+     "repriced": {
+      "cores": 249596,
+      "old_lifetime": 249596,
+      "cores_per_lead": 249596,
+      "throughput": 249596
+     },
+     "dev_reg": 0.03381436401224369,
+     "dev_repriced": 0.03381301319410568
+    },
+    {
+     "n": 3,
+     "gemm": "w2",
+     "cycles": 138900.03499999997,
+     "mhz": 1366.265688936103,
+     "dram_read": 120506112.0,
+     "sigma": 1.002604876635769,
+     "grid": 2048,
+     "waves": 2.909,
+     "reg_cores": 128205,
+     "repriced": {
+      "cores": 128205,
+      "old_lifetime": 128205,
+      "cores_per_lead": 128205,
+      "throughput": 128205
+     },
+     "dev_reg": 0.08342135642135617,
+     "dev_repriced": 0.08342324636381582
+    },
+    {
+     "n": 4,
+     "gemm": "w1",
+     "cycles": 327257.36,
+     "mhz": 1365.1194687312288,
+     "dram_read": 244855808.0,
+     "sigma": 1.0065202384159484,
+     "grid": 2240,
+     "waves": 2.715,
+     "reg_cores": 317667,
+     "repriced": {
+      "cores": 317667,
+      "old_lifetime": 317667,
+      "cores_per_lead": 317667,
+      "throughput": 317667
+     },
+     "dev_reg": 0.030189978814292973,
+     "dev_repriced": 0.030189656886644434
+    },
+    {
+     "n": 4,
+     "gemm": "w2",
+     "cycles": 179641.695,
+     "mhz": 1366.8865275748722,
+     "dram_read": 121295104.0,
+     "sigma": 1.0015240293560606,
+     "grid": 2560,
+     "waves": 3.879,
+     "reg_cores": 170939,
+     "repriced": {
+      "cores": 170939,
+      "old_lifetime": 170939,
+      "cores_per_lead": 170939,
+      "throughput": 170939
+     },
+     "dev_reg": 0.05091111449113428,
+     "dev_repriced": 0.050908684857584596
+    },
+    {
+     "n": 5,
+     "gemm": "w1",
+     "cycles": 396517.03,
+     "mhz": 1363.3135864781605,
+     "dram_read": 245909248.0,
+     "sigma": 1.0022108289930556,
+     "grid": 2688,
+     "waves": 3.394,
+     "reg_cores": 385739,
+     "repriced": {
+      "cores": 385739,
+      "old_lifetime": 385739,
+      "cores_per_lead": 385739,
+      "throughput": 385739
+     },
+     "dev_reg": 0.02794125043099105,
+     "dev_repriced": 0.027942342280208088
+    },
+    {
+     "n": 5,
+     "gemm": "w2",
+     "cycles": 221624.85,
+     "mhz": 1352.5586490577093,
+     "dram_read": 122207616.0,
+     "sigma": 1.0014716618555317,
+     "grid": 3072,
+     "waves": 4.848,
+     "reg_cores": 213674,
+     "repriced": {
+      "cores": 213674,
+      "old_lifetime": 213674,
+      "cores_per_lead": 213674,
+      "throughput": 213674
+     },
+     "dev_reg": 0.037210189353875656,
+     "dev_repriced": 0.037209048682240065
+    },
+    {
+     "n": 6,
+     "gemm": "w1",
+     "cycles": 481512.985,
+     "mhz": 1363.3488068542176,
+     "dram_read": 245545344.0,
+     "sigma": 0.9922469834149894,
+     "grid": 3136,
+     "waves": 4.073,
+     "reg_cores": 476501,
+     "repriced": {
+      "cores": 476501,
+      "old_lifetime": 476501,
+      "cores_per_lead": 476501,
+      "throughput": 476501
+     },
+     "dev_reg": 0.010518309510368251,
+     "dev_repriced": 0.010519139620599693
+    },
+    {
+     "n": 6,
+     "gemm": "w2",
+     "cycles": 262827.67000000004,
+     "mhz": 1353.6653790688094,
+     "dram_read": 123192064.0,
+     "sigma": 1.0020051805703625,
+     "grid": 3584,
+     "waves": 5.818,
+     "reg_cores": 256409,
+     "repriced": {
+      "cores": 256409,
+      "old_lifetime": 256409,
+      "cores_per_lead": 256409,
+      "throughput": 256409
+     },
+     "dev_reg": 0.02503293566138498,
+     "dev_repriced": 0.025032610413112222
+    },
+    {
+     "n": 8,
+     "gemm": "w1",
+     "cycles": 635569.4099999999,
+     "mhz": 1378.6515852219482,
+     "dram_read": 248322432.0,
+     "sigma": 0.9867446899414064,
+     "grid": 4032,
+     "waves": 5.43,
+     "reg_cores": 635334,
+     "repriced": {
+      "cores": 635334,
+      "old_lifetime": 635334,
+      "cores_per_lead": 635334,
+      "throughput": 635334
+     },
+     "dev_reg": 0.00037052951675797807,
+     "dev_repriced": 0.0003703019457215184
+    },
+    {
+     "n": 8,
+     "gemm": "w2",
+     "cycles": 345040.91000000003,
+     "mhz": 1377.2548776983015,
+     "dram_read": 125765376.0,
+     "sigma": 1.0078925124737395,
+     "grid": 4608,
+     "waves": 7.758,
+     "reg_cores": 341879,
+     "repriced": {
+      "cores": 341879,
+      "old_lifetime": 341879,
+      "cores_per_lead": 341879,
+      "throughput": 341879
+     },
+     "dev_reg": 0.009248623050845506,
+     "dev_repriced": 0.009249287117925054
+    },
+    {
+     "n": 10,
+     "gemm": "w1",
+     "cycles": 776537.13,
+     "mhz": 1381.0702471401742,
+     "dram_read": 278141696.0,
+     "sigma": 0.9752080580767464,
+     "grid": 4928,
+     "waves": 6.788,
+     "reg_cores": 771477,
+     "repriced": {
+      "cores": 771477,
+      "old_lifetime": 771477,
+      "cores_per_lead": 771477,
+      "throughput": 771477
+     },
+     "dev_reg": 0.00655901601732789,
+     "dev_repriced": 0.006558787043744907
+    },
+    {
+     "n": 10,
+     "gemm": "w2",
+     "cycles": 424741.85,
+     "mhz": 1385.0036847185265,
+     "dram_read": 141468672.0,
+     "sigma": 1.0012247796846012,
+     "grid": 5632,
+     "waves": 9.697,
+     "reg_cores": 416665,
+     "repriced": {
+      "cores": 416665,
+      "old_lifetime": 416665,
+      "cores_per_lead": 416665,
+      "throughput": 416665
+     },
+     "dev_reg": 0.019384517538070023,
+     "dev_repriced": 0.019385111825575674
+    }
+   ],
+   "F1": {
+    "D": 156940.86,
+    "D_units": 6.916588880809148,
+    "registered": {
+     "cores": 155193,
+     "old_lifetime": 87121,
+     "cores_per_lead": 121171,
+     "throughput": 158705
+    },
+    "repriced": {
+     "cores": 155088,
+     "old_lifetime": 87016,
+     "cores_per_lead": 116675,
+     "throughput": 158563
+    },
+    "dev_vs_cores": 1747.859999999986,
+    "dev_units": 0.07703047530904943,
+    "dev_vs_cores_repriced_units": 0.08165796258345942,
+    "inside": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "inside_repriced": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "verdict": "HELD"
+   },
+   "F2": {
+    "cycles": 170316.5,
+    "reg": 162474,
+    "dev": 0.04826926154338551,
+    "repriced": {
+     "cores": 162579,
+     "old_lifetime": 230651,
+     "cores_per_lead": 200992,
+     "throughput": 159104
+    },
+    "dev_repriced": 0.04759224746123425,
+    "rivals_dev": {
+     "cores": 0.04759224746123425,
+     "old_lifetime": -0.26158351795569934,
+     "cores_per_lead": -0.15262050230854962,
+     "throughput": 0.07047277252614648
+    },
+    "verdict": "HELD"
+   },
+   "F3": {
+    "outside_reg": [
+     [
+      1,
+      "w1",
+      13.02
+     ],
+     [
+      1,
+      "w2",
+      8.65
+     ],
+     [
+      2,
+      "w2",
+      10.38
+     ],
+     [
+      3,
+      "w2",
+      8.34
+     ]
+    ],
+    "outside_repriced": [
+     [
+      1,
+      "w1",
+      13.43
+     ],
+     [
+      1,
+      "w2",
+      8.63
+     ],
+     [
+      2,
+      "w2",
+      10.38
+     ],
+     [
+      3,
+      "w2",
+      8.34
+     ]
+    ],
+    "all_repriced": [
+     [
+      1,
+      "w1",
+      13.43
+     ],
+     [
+      1,
+      "w2",
+      8.63
+     ],
+     [
+      2,
+      "w2",
+      10.38
+     ],
+     [
+      3,
+      "w1",
+      3.38
+     ],
+     [
+      3,
+      "w2",
+      8.34
+     ],
+     [
+      4,
+      "w1",
+      3.02
+     ],
+     [
+      4,
+      "w2",
+      5.09
+     ],
+     [
+      5,
+      "w1",
+      2.79
+     ],
+     [
+      5,
+      "w2",
+      3.72
+     ],
+     [
+      6,
+      "w1",
+      1.05
+     ],
+     [
+      6,
+      "w2",
+      2.5
+     ],
+     [
+      8,
+      "w1",
+      0.04
+     ],
+     [
+      8,
+      "w2",
+      0.92
+     ],
+     [
+      10,
+      "w1",
+      0.66
+     ],
+     [
+      10,
+      "w2",
+      1.94
+     ]
+    ],
+    "verdict": "FALSIFIED"
+   },
+   "F4": {
+    "w1": {
+     "cells": [
+      6,
+      8,
+      10
+     ],
+     "slope": 339.55764456612707,
+     "reg": 352.2,
+     "dev": -0.03589538737612985,
+     "all_cell_slope": 340.5385464056693,
+     "verdict": "FALSIFIED"
+    },
+    "w2": {
+     "cells": [
+      5,
+      6,
+      8,
+      10
+     ],
+     "slope": 374.3152033519973,
+     "reg": 379.1,
+     "dev": -0.012621463065161542,
+     "all_cell_slope": 375.2536252564383,
+     "verdict": "HELD"
+    }
+   }
+  },
+  "r3f-g8": {
+   "file": "2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8.json",
+   "G": 8,
+   "clock": "base",
+   "gates": [],
+   "cells": [
+    {
+     "n": 1,
+     "gemm": "w1",
+     "cycles": 130267.2,
+     "mhz": 1383.2313965341489,
+     "dram_read": 235974144.0,
+     "sigma": 0.9957631879148231,
+     "grid": 896,
+     "waves": 0.679,
+     "reg_cores": 113853,
+     "repriced": {
+      "cores": 113395,
+      "old_lifetime": 113453,
+      "cores_per_lead": 113395,
+      "throughput": 113395
+     },
+     "dev_reg": 0.1441701140944902,
+     "dev_repriced": 0.14879379321192476
+    },
+    {
+     "n": 1,
+     "gemm": "w2",
+     "cycles": 60840.490000000005,
+     "mhz": 1378.2278452337805,
+     "dram_read": 118382592.0,
+     "sigma": 1.0002076411960132,
+     "grid": 1024,
+     "waves": 0.97,
+     "reg_cores": 57319,
+     "repriced": {
+      "cores": 57330,
+      "old_lifetime": 57330,
+      "cores_per_lead": 57330,
+      "throughput": 57330
+     },
+     "dev_reg": 0.061436696383398326,
+     "dev_repriced": 0.061226856221910264
+    },
+    {
+     "n": 2,
+     "gemm": "w1",
+     "cycles": 170366.90000000002,
+     "mhz": 1338.3523441427856,
+     "dram_read": 238324096.0,
+     "sigma": 0.99685776024534,
+     "grid": 1344,
+     "waves": 1.358,
+     "reg_cores": 162474,
+     "repriced": {
+      "cores": 162470,
+      "old_lifetime": 230542,
+      "cores_per_lead": 196244,
+      "throughput": 158957
+     },
+     "dev_reg": 0.04857946502209609,
+     "dev_repriced": 0.04860371983472711
+    },
+    {
+     "n": 2,
+     "gemm": "w2",
+     "cycles": 96437.08499999999,
+     "mhz": 1382.4123423165136,
+     "dram_read": 119446400.0,
+     "sigma": 1.0014326493818682,
+     "grid": 1536,
+     "waves": 1.939,
+     "reg_cores": 86822,
+     "repriced": {
+      "cores": 86822,
+      "old_lifetime": 86822,
+      "cores_per_lead": 86822,
+      "throughput": 85502
+     },
+     "dev_reg": 0.11074479970514384,
+     "dev_repriced": 0.11074639551099819
+    },
+    {
+     "n": 3,
+     "gemm": "w1",
+     "cycles": 258178.485,
+     "mhz": 1338.5446132310244,
+     "dram_read": 296375424.0,
+     "sigma": 0.9882714331566871,
+     "grid": 1792,
+     "waves": 2.036,
+     "reg_cores": 249620,
+     "repriced": {
+      "cores": 249616,
+      "old_lifetime": 249616,
+      "cores_per_lead": 249616,
+      "throughput": 249616
+     },
+     "dev_reg": 0.03428605480330105,
+     "dev_repriced": 0.0343012533395024
+    },
+    {
+     "n": 3,
+     "gemm": "w2",
+     "cycles": 138302.53,
+     "mhz": 1350.3996445867833,
+     "dram_read": 146205568.0,
+     "sigma": 0.9776160919697634,
+     "grid": 2048,
+     "waves": 2.909,
+     "reg_cores": 128217,
+     "repriced": {
+      "cores": 128214,
+      "old_lifetime": 128214,
+      "cores_per_lead": 128214,
+      "throughput": 128214
+     },
+     "dev_reg": 0.07865985009788101,
+     "dev_repriced": 0.07868591820404869
+    },
+    {
+     "n": 4,
+     "gemm": "w1",
+     "cycles": 326187.27,
+     "mhz": 1347.257756740682,
+     "dram_read": 239638400.0,
+     "sigma": 0.9850732211408946,
+     "grid": 2240,
+     "waves": 2.715,
+     "reg_cores": 317667,
+     "repriced": {
+      "cores": 317667,
+      "old_lifetime": 317667,
+      "cores_per_lead": 317667,
+      "throughput": 317667
+     },
+     "dev_reg": 0.026821388435059434,
+     "dev_repriced": 0.026821089710115986
+    },
+    {
+     "n": 4,
+     "gemm": "w2",
+     "cycles": 179051.615,
+     "mhz": 1349.2555989269351,
+     "dram_read": 121155584.0,
+     "sigma": 1.0003720238095237,
+     "grid": 2560,
+     "waves": 3.879,
+     "reg_cores": 170939,
+     "repriced": {
+      "cores": 170939,
+      "old_lifetime": 170939,
+      "cores_per_lead": 170939,
+      "throughput": 170939
+     },
+     "dev_reg": 0.04745912284499143,
+     "dev_repriced": 0.04745670189579787
+    },
+    {
+     "n": 5,
+     "gemm": "w1",
+     "cycles": 396096.64,
+     "mhz": 1349.2500545018531,
+     "dram_read": 352012416.0,
+     "sigma": 0.9702462433390535,
+     "grid": 2688,
+     "waves": 3.394,
+     "reg_cores": 385741,
+     "repriced": {
+      "cores": 385740,
+      "old_lifetime": 385740,
+      "cores_per_lead": 385740,
+      "throughput": 385740
+     },
+     "dev_reg": 0.026846096214817816,
+     "dev_repriced": 0.026848560919499054
+    },
+    {
+     "n": 5,
+     "gemm": "w2",
+     "cycles": 221078.15500000003,
+     "mhz": 1366.4344034315666,
+     "dram_read": 155661056.0,
+     "sigma": 0.8612034875815808,
+     "grid": 3072,
+     "waves": 4.848,
+     "reg_cores": 213675,
+     "repriced": {
+      "cores": 213674,
+      "old_lifetime": 213674,
+      "cores_per_lead": 213674,
+      "throughput": 213674
+     },
+     "dev_reg": 0.0346468000468001,
+     "dev_repriced": 0.034650174630898256
+    },
+    {
+     "n": 6,
+     "gemm": "w1",
+     "cycles": 480610.12,
+     "mhz": 1363.324672082785,
+     "dram_read": 348680192.0,
+     "sigma": 0.9555383441091954,
+     "grid": 3136,
+     "waves": 4.073,
+     "reg_cores": 476501,
+     "repriced": {
+      "cores": 476501,
+      "old_lifetime": 476501,
+      "cores_per_lead": 476501,
+      "throughput": 476501
+     },
+     "dev_reg": 0.008623528597001995,
+     "dev_repriced": 0.008624315037246921
+    },
+    {
+     "n": 6,
+     "gemm": "w2",
+     "cycles": 262766.165,
+     "mhz": 1361.2006060920014,
+     "dram_read": 137999232.0,
+     "sigma": 0.7596324573863636,
+     "grid": 3584,
+     "waves": 5.818,
+     "reg_cores": 256409,
+     "repriced": {
+      "cores": 256409,
+      "old_lifetime": 256409,
+      "cores_per_lead": 256409,
+      "throughput": 256409
+     },
+     "dev_reg": 0.02479306498601841,
+     "dev_repriced": 0.024792738831242778
+    },
+    {
+     "n": 8,
+     "gemm": "w1",
+     "cycles": 635887.535,
+     "mhz": 1383.856364688882,
+     "dram_read": 243427712.0,
+     "sigma": 0.9672948201497397,
+     "grid": 4032,
+     "waves": 5.43,
+     "reg_cores": 635334,
+     "repriced": {
+      "cores": 635334,
+      "old_lifetime": 635334,
+      "cores_per_lead": 635334,
+      "throughput": 635334
+     },
+     "dev_reg": 0.0008712503974288577,
+     "dev_repriced": 0.0008710227146593308
+    },
+    {
+     "n": 8,
+     "gemm": "w2",
+     "cycles": 345258.655,
+     "mhz": 1370.248027527305,
+     "dram_read": 124823168.0,
+     "sigma": 1.0003415917148109,
+     "grid": 4608,
+     "waves": 7.758,
+     "reg_cores": 341879,
+     "repriced": {
+      "cores": 341879,
+      "old_lifetime": 341879,
+      "cores_per_lead": 341879,
+      "throughput": 341879
+     },
+     "dev_reg": 0.009885529675704108,
+     "dev_repriced": 0.009886194162779915
+    },
+    {
+     "n": 10,
+     "gemm": "w1",
+     "cycles": 778218.3200000001,
+     "mhz": 1379.858861244291,
+     "dram_read": 445021312.0,
+     "sigma": 0.9068491357004541,
+     "grid": 4928,
+     "waves": 6.788,
+     "reg_cores": 771477,
+     "repriced": {
+      "cores": 771477,
+      "old_lifetime": 771477,
+      "cores_per_lead": 771477,
+      "throughput": 771477
+     },
+     "dev_reg": 0.00873819958339661,
+     "dev_repriced": 0.008737954971620665
+    },
+    {
+     "n": 10,
+     "gemm": "w2",
+     "cycles": 424126.28,
+     "mhz": 1381.4108343321695,
+     "dram_read": 140728576.0,
+     "sigma": 0.5766239678437164,
+     "grid": 5632,
+     "waves": 9.697,
+     "reg_cores": 416665,
+     "repriced": {
+      "cores": 416665,
+      "old_lifetime": 416665,
+      "cores_per_lead": 416665,
+      "throughput": 416665
+     },
+     "dev_reg": 0.017907143628574484,
+     "dev_repriced": 0.01790773703124593
+    }
+   ],
+   "F1": {
+    "D": 155820.37,
+    "D_units": 6.867207421608162,
+    "registered": {
+     "cores": 155193,
+     "old_lifetime": 87121,
+     "cores_per_lead": 121171,
+     "throughput": 158705
+    },
+    "repriced": {
+     "cores": 155197,
+     "old_lifetime": 87125,
+     "cores_per_lead": 121423,
+     "throughput": 158710
+    },
+    "dev_vs_cores": 627.3699999999953,
+    "dev_units": 0.02764901610806264,
+    "dev_vs_cores_repriced_units": 0.027472730878561308,
+    "inside": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "inside_repriced": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "verdict": "HELD"
+   },
+   "F2": {
+    "cycles": 170366.90000000002,
+    "reg": 162474,
+    "dev": 0.04857946502209609,
+    "repriced": {
+     "cores": 162470,
+     "old_lifetime": 230542,
+     "cores_per_lead": 196244,
+     "throughput": 158957
+    },
+    "dev_repriced": 0.048605280974949316,
+    "rivals_dev": {
+     "cores": 0.048605280974949316,
+     "old_lifetime": -0.26101578020490834,
+     "cores_per_lead": -0.1318618658404842,
+     "throughput": 0.0717797895028216
+    },
+    "verdict": "HELD"
+   },
+   "F3": {
+    "outside_reg": [
+     [
+      1,
+      "w1",
+      14.42
+     ],
+     [
+      2,
+      "w2",
+      11.07
+     ]
+    ],
+    "outside_repriced": [
+     [
+      1,
+      "w1",
+      14.88
+     ],
+     [
+      2,
+      "w2",
+      11.07
+     ]
+    ],
+    "all_repriced": [
+     [
+      1,
+      "w1",
+      14.88
+     ],
+     [
+      1,
+      "w2",
+      6.12
+     ],
+     [
+      2,
+      "w2",
+      11.07
+     ],
+     [
+      3,
+      "w1",
+      3.43
+     ],
+     [
+      3,
+      "w2",
+      7.87
+     ],
+     [
+      4,
+      "w1",
+      2.68
+     ],
+     [
+      4,
+      "w2",
+      4.75
+     ],
+     [
+      5,
+      "w1",
+      2.68
+     ],
+     [
+      5,
+      "w2",
+      3.47
+     ],
+     [
+      6,
+      "w1",
+      0.86
+     ],
+     [
+      6,
+      "w2",
+      2.48
+     ],
+     [
+      8,
+      "w1",
+      0.09
+     ],
+     [
+      8,
+      "w2",
+      0.99
+     ],
+     [
+      10,
+      "w1",
+      0.87
+     ],
+     [
+      10,
+      "w2",
+      1.79
+     ]
+    ],
+    "verdict": "FALSIFIED"
+   },
+   "F4": {
+    "w1": {
+     "cells": [
+      6,
+      8,
+      10
+     ],
+     "slope": 342.5317592075893,
+     "reg": 352.2,
+     "dev": -0.02745099600343759,
+     "all_cell_slope": 340.74304927003766,
+     "verdict": "FALSIFIED"
+    },
+    "w2": {
+     "cells": [
+      5,
+      6,
+      8,
+      10
+     ],
+     "slope": 374.17626941302194,
+     "reg": 379.1,
+     "dev": -0.012987946681556561,
+     "all_cell_slope": 375.65917734084684,
+     "verdict": "HELD"
+    }
+   }
+  },
+  "r3f-g64-lock1710": {
+   "file": "2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json",
+   "G": 64,
+   "clock": "none",
+   "gates": [
+    [
+     null,
+     "FAIL"
+    ]
+   ],
+   "cells": [
+    {
+     "n": 1,
+     "gemm": "w1",
+     "cycles": 141314.91999999998,
+     "mhz": 1678.8029842235312,
+     "dram_read": 235958400.0,
+     "sigma": 0.9956967514173121,
+     "grid": 896,
+     "waves": 0.679,
+     "reg_cores": 113853,
+     "repriced": {
+      "cores": 113388,
+      "old_lifetime": 113453,
+      "cores_per_lead": 113388,
+      "throughput": 113388
+     },
+     "dev_reg": 0.24120506266852848,
+     "dev_repriced": 0.24629972159377012
+    },
+    {
+     "n": 1,
+     "gemm": "w2",
+     "cycles": 70641.59,
+     "mhz": 1678.7450095057034,
+     "dram_read": 118378240.0,
+     "sigma": 1.000170871400886,
+     "grid": 1024,
+     "waves": 0.97,
+     "reg_cores": 57319,
+     "repriced": {
+      "cores": 57328,
+      "old_lifetime": 57328,
+      "cores_per_lead": 57328,
+      "throughput": 57328
+     },
+     "dev_reg": 0.23242886302971089,
+     "dev_repriced": 0.23222900154830728
+    },
+    {
+     "n": 2,
+     "gemm": "w1",
+     "cycles": 167568.39500000002,
+     "mhz": 1634.8774098501408,
+     "dram_read": 249698816.0,
+     "sigma": 1.04443573533443,
+     "grid": 1344,
+     "waves": 1.358,
+     "reg_cores": 162474,
+     "repriced": {
+      "cores": 162552,
+      "old_lifetime": 230623,
+      "cores_per_lead": 200075,
+      "throughput": 159067
+     },
+     "dev_reg": 0.03135513989930705,
+     "dev_repriced": 0.030861213711394164
+    },
+    {
+     "n": 2,
+     "gemm": "w2",
+     "cycles": 97782.16,
+     "mhz": 1681.261348005502,
+     "dram_read": 119766912.0,
+     "sigma": 1.0041198059752747,
+     "grid": 1536,
+     "waves": 1.939,
+     "reg_cores": 86822,
+     "repriced": {
+      "cores": 86822,
+      "old_lifetime": 86822,
+      "cores_per_lead": 86822,
+      "throughput": 85503
+     },
+     "dev_reg": 0.12623712883831284,
+     "dev_repriced": 0.12623076303265712
+    },
+    {
+     "n": 3,
+     "gemm": "w1",
+     "cycles": 257554.94,
+     "mhz": 1642.0670968071,
+     "dram_read": 251343488.0,
+     "sigma": 1.0421731700067935,
+     "grid": 1792,
+     "waves": 2.036,
+     "reg_cores": 249596,
+     "repriced": {
+      "cores": 249596,
+      "old_lifetime": 249596,
+      "cores_per_lead": 249596,
+      "throughput": 249596
+     },
+     "dev_reg": 0.031887289860414336,
+     "dev_repriced": 0.03188581583169503
+    },
+    {
+     "n": 3,
+     "gemm": "w2",
+     "cycles": 136762.94,
+     "mhz": 1672.4092643318334,
+     "dram_read": 120487552.0,
+     "sigma": 1.0024504583560523,
+     "grid": 2048,
+     "waves": 2.909,
+     "reg_cores": 128205,
+     "repriced": {
+      "cores": 128205,
+      "old_lifetime": 128205,
+      "cores_per_lead": 128205,
+      "throughput": 128205
+     },
+     "dev_reg": 0.06675199875199866,
+     "dev_repriced": 0.06675386363145508
+    },
+    {
+     "n": 4,
+     "gemm": "w1",
+     "cycles": 323556.86,
+     "mhz": 1643.6888360562464,
+     "dram_read": 246364928.0,
+     "sigma": 1.0127237254175647,
+     "grid": 2240,
+     "waves": 2.715,
+     "reg_cores": 317667,
+     "repriced": {
+      "cores": 317667,
+      "old_lifetime": 317667,
+      "cores_per_lead": 317667,
+      "throughput": 317667
+     },
+     "dev_reg": 0.01854098788983438,
+     "dev_repriced": 0.018540662059016944
+    },
+    {
+     "n": 4,
+     "gemm": "w2",
+     "cycles": 177585.14,
+     "mhz": 1655.3424683072335,
+     "dram_read": 121327488.0,
+     "sigma": 1.001791421469156,
+     "grid": 2560,
+     "waves": 3.879,
+     "reg_cores": 170939,
+     "repriced": {
+      "cores": 170939,
+      "old_lifetime": 170939,
+      "cores_per_lead": 170939,
+      "throughput": 170939
+     },
+     "dev_reg": 0.03888018532926951,
+     "dev_repriced": 0.038877783347019745
+    },
+    {
+     "n": 5,
+     "gemm": "w1",
+     "cycles": 395500.32999999996,
+     "mhz": 1645.1760815307819,
+     "dram_read": 246442368.0,
+     "sigma": 1.004383576221955,
+     "grid": 2688,
+     "waves": 3.394,
+     "reg_cores": 385739,
+     "repriced": {
+      "cores": 385739,
+      "old_lifetime": 385739,
+      "cores_per_lead": 385739,
+      "throughput": 385739
+     },
+     "dev_reg": 0.025305530423420874,
+     "dev_repriced": 0.02530661927335931
+    },
+    {
+     "n": 5,
+     "gemm": "w2",
+     "cycles": 223291.96500000003,
+     "mhz": 1654.5047791938355,
+     "dram_read": 122250240.0,
+     "sigma": 1.0018209586466165,
+     "grid": 3072,
+     "waves": 4.848,
+     "reg_cores": 213674,
+     "repriced": {
+      "cores": 213674,
+      "old_lifetime": 213674,
+      "cores_per_lead": 213674,
+      "throughput": 213674
+     },
+     "dev_reg": 0.04501233187004505,
+     "dev_repriced": 0.04501118260513093
+    },
+    {
+     "n": 6,
+     "gemm": "w1",
+     "cycles": 483367.35,
+     "mhz": 1651.6570649499754,
+     "dram_read": 245918208.0,
+     "sigma": 0.9937537241790254,
+     "grid": 3136,
+     "waves": 4.073,
+     "reg_cores": 476501,
+     "repriced": {
+      "cores": 476501,
+      "old_lifetime": 476501,
+      "cores_per_lead": 476501,
+      "throughput": 476501
+     },
+     "dev_reg": 0.014409938279247969,
+     "dev_repriced": 0.01441077157863635
+    },
+    {
+     "n": 6,
+     "gemm": "w2",
+     "cycles": 265218.32499999995,
+     "mhz": 1658.6096970682406,
+     "dram_read": 123320448.0,
+     "sigma": 1.0030494153118337,
+     "grid": 3584,
+     "waves": 5.818,
+     "reg_cores": 256409,
+     "repriced": {
+      "cores": 256409,
+      "old_lifetime": 256409,
+      "cores_per_lead": 256409,
+      "throughput": 256409
+     },
+     "dev_reg": 0.03435653584702547,
+     "dev_repriced": 0.03435620763629399
+    },
+    {
+     "n": 8,
+     "gemm": "w1",
+     "cycles": 636910.9450000001,
+     "mhz": 1662.0155343200704,
+     "dram_read": 247550720.0,
+     "sigma": 0.983678181966146,
+     "grid": 4032,
+     "waves": 5.43,
+     "reg_cores": 635334,
+     "repriced": {
+      "cores": 635334,
+      "old_lifetime": 635334,
+      "cores_per_lead": 635334,
+      "throughput": 635334
+     },
+     "dev_reg": 0.0024820724217500256,
+     "dev_repriced": 0.0024818443707448345
+    },
+    {
+     "n": 8,
+     "gemm": "w2",
+     "cycles": 345322.645,
+     "mhz": 1657.9094570978646,
+     "dram_read": 125601152.0,
+     "sigma": 1.0065764098608194,
+     "grid": 4608,
+     "waves": 7.758,
+     "reg_cores": 341879,
+     "repriced": {
+      "cores": 341879,
+      "old_lifetime": 341879,
+      "cores_per_lead": 341879,
+      "throughput": 341879
+     },
+     "dev_reg": 0.010072701160352082,
+     "dev_repriced": 0.010073365769826426
+    },
+    {
+     "n": 10,
+     "gemm": "w1",
+     "cycles": 778468.11,
+     "mhz": 1669.0424642379335,
+     "dram_read": 277749888.0,
+     "sigma": 0.9738343182732078,
+     "grid": 4928,
+     "waves": 6.788,
+     "reg_cores": 771477,
+     "repriced": {
+      "cores": 771477,
+      "old_lifetime": 771477,
+      "cores_per_lead": 771477,
+      "throughput": 771477
+     },
+     "dev_reg": 0.009061981108963613,
+     "dev_repriced": 0.009061751566080023
+    },
+    {
+     "n": 10,
+     "gemm": "w2",
+     "cycles": 426212.92000000004,
+     "mhz": 1660.8459068520483,
+     "dram_read": 141525632.0,
+     "sigma": 1.0016279061340445,
+     "grid": 5632,
+     "waves": 9.697,
+     "reg_cores": 416665,
+     "repriced": {
+      "cores": 416665,
+      "old_lifetime": 416665,
+      "cores_per_lead": 416665,
+      "throughput": 416665
+     },
+     "dev_reg": 0.02291509966039884,
+     "dev_repriced": 0.022915696006160946
+    }
+   ],
+   "F1": {
+    "D": 155988.46499999997,
+    "D_units": 6.874615588021417,
+    "registered": {
+     "cores": 155193,
+     "old_lifetime": 87121,
+     "cores_per_lead": 121171,
+     "throughput": 158705
+    },
+    "repriced": {
+     "cores": 155115,
+     "old_lifetime": 87044,
+     "cores_per_lead": 117592,
+     "throughput": 158600
+    },
+    "dev_vs_cores": 795.4649999999674,
+    "dev_units": 0.03505718252131806,
+    "dev_vs_cores_repriced_units": 0.038494744496594055,
+    "inside": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "inside_repriced": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "verdict": "HELD"
+   },
+   "F2": {
+    "cycles": 167568.39500000002,
+    "reg": 162474,
+    "dev": 0.03135513989930705,
+    "repriced": {
+     "cores": 162552,
+     "old_lifetime": 230623,
+     "cores_per_lead": 200075,
+     "throughput": 159067
+    },
+    "dev_repriced": 0.03086024779762786,
+    "rivals_dev": {
+     "cores": 0.03086024779762786,
+     "old_lifetime": -0.27340987238913717,
+     "cores_per_lead": -0.16247209796326367,
+     "throughput": 0.05344537207591782
+    },
+    "verdict": "HELD"
+   },
+   "F3": {
+    "outside_reg": [
+     [
+      1,
+      "w1",
+      24.12
+     ],
+     [
+      1,
+      "w2",
+      23.24
+     ],
+     [
+      2,
+      "w2",
+      12.62
+     ]
+    ],
+    "outside_repriced": [
+     [
+      1,
+      "w1",
+      24.63
+     ],
+     [
+      1,
+      "w2",
+      23.22
+     ],
+     [
+      2,
+      "w2",
+      12.62
+     ]
+    ],
+    "all_repriced": [
+     [
+      1,
+      "w1",
+      24.63
+     ],
+     [
+      1,
+      "w2",
+      23.22
+     ],
+     [
+      2,
+      "w2",
+      12.62
+     ],
+     [
+      3,
+      "w1",
+      3.19
+     ],
+     [
+      3,
+      "w2",
+      6.68
+     ],
+     [
+      4,
+      "w1",
+      1.85
+     ],
+     [
+      4,
+      "w2",
+      3.89
+     ],
+     [
+      5,
+      "w1",
+      2.53
+     ],
+     [
+      5,
+      "w2",
+      4.5
+     ],
+     [
+      6,
+      "w1",
+      1.44
+     ],
+     [
+      6,
+      "w2",
+      3.44
+     ],
+     [
+      8,
+      "w1",
+      0.25
+     ],
+     [
+      8,
+      "w2",
+      1.01
+     ],
+     [
+      10,
+      "w1",
+      0.91
+     ],
+     [
+      10,
+      "w2",
+      2.29
+     ]
+    ],
+    "verdict": "FALSIFIED"
+   },
+   "F4": {
+    "w1": {
+     "cells": [
+      6,
+      8,
+      10
+     ],
+     "slope": 339.6458244977679,
+     "reg": 352.2,
+     "dev": -0.035645018461760714,
+     "all_cell_slope": 339.05497118697093,
+     "verdict": "FALSIFIED"
+    },
+    "w2": {
+     "cells": [
+      5,
+      6,
+      8,
+      10
+     ],
+     "slope": 372.76546697658137,
+     "reg": 379.1,
+     "dev": -0.016709398637348105,
+     "all_cell_slope": 372.2888020860213,
+     "verdict": "HELD"
+    }
+   }
+  },
+  "r3f-g8-lock1710": {
+   "file": "2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8-lock1710.json",
+   "G": 8,
+   "clock": "none",
+   "gates": [
+    [
+     null,
+     "FAIL"
+    ]
+   ],
+   "cells": [
+    {
+     "n": 1,
+     "gemm": "w1",
+     "cycles": 144660.34,
+     "mhz": 1680.533689591078,
+     "dram_read": 235950976.0,
+     "sigma": 0.9956654236379979,
+     "grid": 896,
+     "waves": 0.679,
+     "reg_cores": 113853,
+     "repriced": {
+      "cores": 113384,
+      "old_lifetime": 113453,
+      "cores_per_lead": 113384,
+      "throughput": 113384
+     },
+     "dev_reg": 0.27058874162297,
+     "dev_repriced": 0.27584207498971036
+    },
+    {
+     "n": 1,
+     "gemm": "w2",
+     "cycles": 71964.83,
+     "mhz": 1682.6793396932285,
+     "dram_read": 118379264.0,
+     "sigma": 1.0001795231173864,
+     "grid": 1024,
+     "waves": 0.97,
+     "reg_cores": 57319,
+     "repriced": {
+      "cores": 57329,
+      "old_lifetime": 57329,
+      "cores_per_lead": 57329,
+      "throughput": 57329
+     },
+     "dev_reg": 0.25551440185627805,
+     "dev_repriced": 0.2553003015398905
+    },
+    {
+     "n": 2,
+     "gemm": "w1",
+     "cycles": 171271.79,
+     "mhz": 1640.53438697318,
+     "dram_read": 238204160.0,
+     "sigma": 0.9963560940926537,
+     "grid": 1344,
+     "waves": 1.358,
+     "reg_cores": 162474,
+     "repriced": {
+      "cores": 162470,
+      "old_lifetime": 230541,
+      "cores_per_lead": 196204,
+      "throughput": 158956
+     },
+     "dev_reg": 0.054148909979442994,
+     "dev_repriced": 0.05417737090071961
+    },
+    {
+     "n": 2,
+     "gemm": "w2",
+     "cycles": 95600.33499999999,
+     "mhz": 1685.0030844613646,
+     "dram_read": 119470848.0,
+     "sigma": 1.0016376201923076,
+     "grid": 1536,
+     "waves": 1.939,
+     "reg_cores": 86822,
+     "repriced": {
+      "cores": 86822,
+      "old_lifetime": 86822,
+      "cores_per_lead": 86822,
+      "throughput": 85502
+     },
+     "dev_reg": 0.101107265439635,
+     "dev_repriced": 0.10110826115621485
+    },
+    {
+     "n": 3,
+     "gemm": "w1",
+     "cycles": 257594.155,
+     "mhz": 1637.8061737029502,
+     "dram_read": 296688640.0,
+     "sigma": 0.9893158599213286,
+     "grid": 1792,
+     "waves": 2.036,
+     "reg_cores": 249620,
+     "repriced": {
+      "cores": 249617,
+      "old_lifetime": 249617,
+      "cores_per_lead": 249617,
+      "throughput": 249617
+     },
+     "dev_reg": 0.031945176668536135,
+     "dev_repriced": 0.031959084028227336
+    },
+    {
+     "n": 3,
+     "gemm": "w2",
+     "cycles": 137951.43,
+     "mhz": 1670.9233284883721,
+     "dram_read": 146390272.0,
+     "sigma": 0.9788511311349694,
+     "grid": 2048,
+     "waves": 2.909,
+     "reg_cores": 128217,
+     "repriced": {
+      "cores": 128214,
+      "old_lifetime": 128214,
+      "cores_per_lead": 128214,
+      "throughput": 128214
+     },
+     "dev_reg": 0.07592152366690841,
+     "dev_repriced": 0.0759461774963448
+    },
+    {
+     "n": 4,
+     "gemm": "w1",
+     "cycles": 327186.22,
+     "mhz": 1646.3359431607762,
+     "dram_read": 239692928.0,
+     "sigma": 0.9852973674905713,
+     "grid": 2240,
+     "waves": 2.715,
+     "reg_cores": 317667,
+     "repriced": {
+      "cores": 317667,
+      "old_lifetime": 317667,
+      "cores_per_lead": 317667,
+      "throughput": 317667
+     },
+     "dev_reg": 0.029966033613815668,
+     "dev_repriced": 0.0299657337717536
+    },
+    {
+     "n": 4,
+     "gemm": "w2",
+     "cycles": 180065.84,
+     "mhz": 1658.4313292071913,
+     "dram_read": 121152512.0,
+     "sigma": 1.0003466585497836,
+     "grid": 2560,
+     "waves": 3.879,
+     "reg_cores": 170939,
+     "repriced": {
+      "cores": 170939,
+      "old_lifetime": 170939,
+      "cores_per_lead": 170939,
+      "throughput": 170939
+     },
+     "dev_reg": 0.05339237973780109,
+     "dev_repriced": 0.05338994509078443
+    },
+    {
+     "n": 5,
+     "gemm": "w1",
+     "cycles": 394025.335,
+     "mhz": 1634.471589400677,
+     "dram_read": 352258560.0,
+     "sigma": 0.9709246861452312,
+     "grid": 2688,
+     "waves": 3.394,
+     "reg_cores": 385741,
+     "repriced": {
+      "cores": 385740,
+      "old_lifetime": 385740,
+      "cores_per_lead": 385740,
+      "throughput": 385740
+     },
+     "dev_reg": 0.021476418114745544,
+     "dev_repriced": 0.021478832056661457
+    },
+    {
+     "n": 5,
+     "gemm": "w2",
+     "cycles": 222027.31,
+     "mhz": 1651.2026267253689,
+     "dram_read": 158083200.0,
+     "sigma": 0.8746041345630892,
+     "grid": 3072,
+     "waves": 4.848,
+     "reg_cores": 213675,
+     "repriced": {
+      "cores": 213674,
+      "old_lifetime": 213674,
+      "cores_per_lead": 213674,
+      "throughput": 213674
+     },
+     "dev_reg": 0.039088849888849975,
+     "dev_repriced": 0.039092163025595594
+    },
+    {
+     "n": 6,
+     "gemm": "w1",
+     "cycles": 482226.49,
+     "mhz": 1646.9483948087432,
+     "dram_read": 349264256.0,
+     "sigma": 0.9571389384653376,
+     "grid": 3136,
+     "waves": 4.073,
+     "reg_cores": 476501,
+     "repriced": {
+      "cores": 476501,
+      "old_lifetime": 476501,
+      "cores_per_lead": 476501,
+      "throughput": 476501
+     },
+     "dev_reg": 0.01201569356622545,
+     "dev_repriced": 0.012016481671984103
+    },
+    {
+     "n": 6,
+     "gemm": "w2",
+     "cycles": 264375.525,
+     "mhz": 1657.651516101525,
+     "dram_read": 139985408.0,
+     "sigma": 0.770565588924964,
+     "grid": 3584,
+     "waves": 5.818,
+     "reg_cores": 256409,
+     "repriced": {
+      "cores": 256409,
+      "old_lifetime": 256409,
+      "cores_per_lead": 256409,
+      "throughput": 256409
+     },
+     "dev_reg": 0.031069599741038845,
+     "dev_repriced": 0.03106927132881676
+    },
+    {
+     "n": 8,
+     "gemm": "w1",
+     "cycles": 636635.55,
+     "mhz": 1664.0064350535297,
+     "dram_read": 243439616.0,
+     "sigma": 0.9673421223958334,
+     "grid": 4032,
+     "waves": 5.43,
+     "reg_cores": 635334,
+     "repriced": {
+      "cores": 635334,
+      "old_lifetime": 635334,
+      "cores_per_lead": 635334,
+      "throughput": 635334
+     },
+     "dev_reg": 0.002048607504084643,
+     "dev_repriced": 0.0020483795534795846
+    },
+    {
+     "n": 8,
+     "gemm": "w2",
+     "cycles": 347004.66500000004,
+     "mhz": 1658.8489798454953,
+     "dram_read": 124833408.0,
+     "sigma": 1.0004236557904411,
+     "grid": 4608,
+     "waves": 7.758,
+     "reg_cores": 341879,
+     "repriced": {
+      "cores": 341879,
+      "old_lifetime": 341879,
+      "cores_per_lead": 341879,
+      "throughput": 341879
+     },
+     "dev_reg": 0.0149926289710689,
+     "dev_repriced": 0.01499329681851691
+    },
+    {
+     "n": 10,
+     "gemm": "w1",
+     "cycles": 778080.79,
+     "mhz": 1658.1440730701036,
+     "dram_read": 448737664.0,
+     "sigma": 0.9144221900874733,
+     "grid": 4928,
+     "waves": 6.788,
+     "reg_cores": 771477,
+     "repriced": {
+      "cores": 771477,
+      "old_lifetime": 771477,
+      "cores_per_lead": 771477,
+      "throughput": 771477
+     },
+     "dev_reg": 0.00855993114506326,
+     "dev_repriced": 0.008559684770477416
+    },
+    {
+     "n": 10,
+     "gemm": "w2",
+     "cycles": 425960.375,
+     "mhz": 1661.6229832417926,
+     "dram_read": 145541632.0,
+     "sigma": 0.5963450758592911,
+     "grid": 5632,
+     "waves": 9.697,
+     "reg_cores": 416665,
+     "repriced": {
+      "cores": 416665,
+      "old_lifetime": 416665,
+      "cores_per_lead": 416665,
+      "throughput": 416665
+     },
+     "dev_reg": 0.022308989235956922,
+     "dev_repriced": 0.02230958518968329
+    }
+   ],
+   "F1": {
+    "D": 155914.42999999996,
+    "D_units": 6.871352768779884,
+    "registered": {
+     "cores": 155193,
+     "old_lifetime": 87121,
+     "cores_per_lead": 121171,
+     "throughput": 158705
+    },
+    "repriced": {
+     "cores": 155197,
+     "old_lifetime": 87126,
+     "cores_per_lead": 121463,
+     "throughput": 158711
+    },
+    "dev_vs_cores": 721.4299999999639,
+    "dev_units": 0.031794363279785104,
+    "dev_vs_cores_repriced_units": 0.03161807805028377,
+    "inside": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "inside_repriced": {
+     "cores": true,
+     "old_lifetime": false,
+     "cores_per_lead": false,
+     "throughput": true
+    },
+    "verdict": "HELD"
+   },
+   "F2": {
+    "cycles": 171271.79,
+    "reg": 162474,
+    "dev": 0.054148909979442994,
+    "repriced": {
+     "cores": 162470,
+     "old_lifetime": 230541,
+     "cores_per_lead": 196204,
+     "throughput": 158956
+    },
+    "dev_repriced": 0.05417486305164032,
+    "rivals_dev": {
+     "cores": 0.05417486305164032,
+     "old_lifetime": -0.2570875028736753,
+     "cores_per_lead": -0.12707289351899043,
+     "throughput": 0.0774792395379853
+    },
+    "verdict": "HELD"
+   },
+   "F3": {
+    "outside_reg": [
+     [
+      1,
+      "w1",
+      27.06
+     ],
+     [
+      1,
+      "w2",
+      25.55
+     ],
+     [
+      2,
+      "w2",
+      10.11
+     ]
+    ],
+    "outside_repriced": [
+     [
+      1,
+      "w1",
+      27.58
+     ],
+     [
+      1,
+      "w2",
+      25.53
+     ],
+     [
+      2,
+      "w2",
+      10.11
+     ]
+    ],
+    "all_repriced": [
+     [
+      1,
+      "w1",
+      27.58
+     ],
+     [
+      1,
+      "w2",
+      25.53
+     ],
+     [
+      2,
+      "w2",
+      10.11
+     ],
+     [
+      3,
+      "w1",
+      3.2
+     ],
+     [
+      3,
+      "w2",
+      7.59
+     ],
+     [
+      4,
+      "w1",
+      3.0
+     ],
+     [
+      4,
+      "w2",
+      5.34
+     ],
+     [
+      5,
+      "w1",
+      2.15
+     ],
+     [
+      5,
+      "w2",
+      3.91
+     ],
+     [
+      6,
+      "w1",
+      1.2
+     ],
+     [
+      6,
+      "w2",
+      3.11
+     ],
+     [
+      8,
+      "w1",
+      0.2
+     ],
+     [
+      8,
+      "w2",
+      1.5
+     ],
+     [
+      10,
+      "w1",
+      0.86
+     ],
+     [
+      10,
+      "w2",
+      2.23
+     ]
+    ],
+    "verdict": "FALSIFIED"
+   },
+   "F4": {
+    "w1": {
+     "cells": [
+      6,
+      8,
+      10
+     ],
+     "slope": 340.5131103515624,
+     "reg": 352.2,
+     "dev": -0.03318253733230436,
+     "all_cell_slope": 336.842776187358,
+     "verdict": "FALSIFIED"
+    },
+    "w2": {
+     "cells": [
+      5,
+      6,
+      8,
+      10
+     ],
+     "slope": 375.55333149685964,
+     "reg": 379.1,
+     "dev": -0.00935549591965279,
+     "all_cell_slope": 372.2323073163965,
+     "verdict": "HELD"
+    }
+   }
+  }
+ }
+}

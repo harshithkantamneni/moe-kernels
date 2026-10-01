@@ -1,0 +1,88 @@
+== r3f-g64 (G=64, clock base, gates [])
+  n= 1 w1 waves  0.68 cycles    128671 reg  113853 (+13.02%) sigma 0.996 repriced  113440 (+13.43%) | old 113453 lead 113440 thr 113440
+  n= 1 w2 waves  0.97 cycles     62280 reg   57319 ( +8.65%) sigma 1.000 repriced   57329 ( +8.63%) | old 57329 lead 57329 thr 57329
+  n= 2 w1 waves  1.36 cycles    170316 reg  162474 ( +4.83%) sigma 1.056 repriced  162579 ( +4.76%) | old 230651 lead 200992 thr 159104
+  n= 2 w2 waves  1.94 cycles     95830 reg   86822 (+10.38%) sigma 1.003 repriced   86822 (+10.38%) | old 86822 lead 86822 thr 85503
+  n= 3 w1 waves  2.04 cycles    258036 reg  249596 ( +3.38%) sigma 1.039 repriced  249596 ( +3.38%) | old 249596 lead 249596 thr 249596
+  n= 3 w2 waves  2.91 cycles    138900 reg  128205 ( +8.34%) sigma 1.003 repriced  128205 ( +8.34%) | old 128205 lead 128205 thr 128205
+  n= 4 w1 waves  2.71 cycles    327257 reg  317667 ( +3.02%) sigma 1.007 repriced  317667 ( +3.02%) | old 317667 lead 317667 thr 317667
+  n= 4 w2 waves  3.88 cycles    179642 reg  170939 ( +5.09%) sigma 1.002 repriced  170939 ( +5.09%) | old 170939 lead 170939 thr 170939
+  n= 5 w1 waves  3.39 cycles    396517 reg  385739 ( +2.79%) sigma 1.002 repriced  385739 ( +2.79%) | old 385739 lead 385739 thr 385739
+  n= 5 w2 waves  4.85 cycles    221625 reg  213674 ( +3.72%) sigma 1.001 repriced  213674 ( +3.72%) | old 213674 lead 213674 thr 213674
+  n= 6 w1 waves  4.07 cycles    481513 reg  476501 ( +1.05%) sigma 0.992 repriced  476501 ( +1.05%) | old 476501 lead 476501 thr 476501
+  n= 6 w2 waves  5.82 cycles    262828 reg  256409 ( +2.50%) sigma 1.002 repriced  256409 ( +2.50%) | old 256409 lead 256409 thr 256409
+  n= 8 w1 waves  5.43 cycles    635569 reg  635334 ( +0.04%) sigma 0.987 repriced  635334 ( +0.04%) | old 635334 lead 635334 thr 635334
+  n= 8 w2 waves  7.76 cycles    345041 reg  341879 ( +0.92%) sigma 1.008 repriced  341879 ( +0.92%) | old 341879 lead 341879 thr 341879
+  n=10 w1 waves  6.79 cycles    776537 reg  771477 ( +0.66%) sigma 0.975 repriced  771477 ( +0.66%) | old 771477 lead 771477 thr 771477
+  n=10 w2 waves  9.70 cycles    424742 reg  416665 ( +1.94%) sigma 1.001 repriced  416665 ( +1.94%) | old 416665 lead 416665 thr 416665
+  F1 D 156941 (6.92 u) vs 155193 dev +0.08 u -> HELD; repriced D: cores 155088, old_lifetime 87016, cores_per_lead 116675, throughput 158563; inside(reg) {'cores': True, 'old_lifetime': False, 'cores_per_lead': False, 'throughput': True}
+  F2 w1 n=2 170316 vs 162474 +4.83% (repriced cores 162579, +4.76%) -> HELD; rivals repriced cores +4.8%, old_lifetime -26.2%, cores_per_lead -15.3%, throughput +7.0%
+  F3 outside 8% (repriced): [(1, 'w1', 13.43), (1, 'w2', 8.63), (2, 'w2', 10.38), (3, 'w2', 8.34)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 13.02), (1, 'w2', 8.65), (2, 'w2', 10.38), (3, 'w2', 8.34)])
+  F4 w1 n=[6, 8, 10] slope 339.6 vs 352.2 -3.59% -> FALSIFIED (all-cell 340.5)
+  F4 w2 n=[5, 6, 8, 10] slope 374.3 vs 379.1 -1.26% -> HELD (all-cell 375.3)
+== r3f-g8 (G=8, clock base, gates [])
+  n= 1 w1 waves  0.68 cycles    130267 reg  113853 (+14.42%) sigma 0.996 repriced  113395 (+14.88%) | old 113453 lead 113395 thr 113395
+  n= 1 w2 waves  0.97 cycles     60840 reg   57319 ( +6.14%) sigma 1.000 repriced   57330 ( +6.12%) | old 57330 lead 57330 thr 57330
+  n= 2 w1 waves  1.36 cycles    170367 reg  162474 ( +4.86%) sigma 0.997 repriced  162470 ( +4.86%) | old 230542 lead 196244 thr 158957
+  n= 2 w2 waves  1.94 cycles     96437 reg   86822 (+11.07%) sigma 1.001 repriced   86822 (+11.07%) | old 86822 lead 86822 thr 85502
+  n= 3 w1 waves  2.04 cycles    258178 reg  249620 ( +3.43%) sigma 0.988 repriced  249616 ( +3.43%) | old 249616 lead 249616 thr 249616
+  n= 3 w2 waves  2.91 cycles    138303 reg  128217 ( +7.87%) sigma 0.978 repriced  128214 ( +7.87%) | old 128214 lead 128214 thr 128214
+  n= 4 w1 waves  2.71 cycles    326187 reg  317667 ( +2.68%) sigma 0.985 repriced  317667 ( +2.68%) | old 317667 lead 317667 thr 317667
+  n= 4 w2 waves  3.88 cycles    179052 reg  170939 ( +4.75%) sigma 1.000 repriced  170939 ( +4.75%) | old 170939 lead 170939 thr 170939
+  n= 5 w1 waves  3.39 cycles    396097 reg  385741 ( +2.68%) sigma 0.970 repriced  385740 ( +2.68%) | old 385740 lead 385740 thr 385740
+  n= 5 w2 waves  4.85 cycles    221078 reg  213675 ( +3.46%) sigma 0.861 repriced  213674 ( +3.47%) | old 213674 lead 213674 thr 213674
+  n= 6 w1 waves  4.07 cycles    480610 reg  476501 ( +0.86%) sigma 0.956 repriced  476501 ( +0.86%) | old 476501 lead 476501 thr 476501
+  n= 6 w2 waves  5.82 cycles    262766 reg  256409 ( +2.48%) sigma 0.760 repriced  256409 ( +2.48%) | old 256409 lead 256409 thr 256409
+  n= 8 w1 waves  5.43 cycles    635888 reg  635334 ( +0.09%) sigma 0.967 repriced  635334 ( +0.09%) | old 635334 lead 635334 thr 635334
+  n= 8 w2 waves  7.76 cycles    345259 reg  341879 ( +0.99%) sigma 1.000 repriced  341879 ( +0.99%) | old 341879 lead 341879 thr 341879
+  n=10 w1 waves  6.79 cycles    778218 reg  771477 ( +0.87%) sigma 0.907 repriced  771477 ( +0.87%) | old 771477 lead 771477 thr 771477
+  n=10 w2 waves  9.70 cycles    424126 reg  416665 ( +1.79%) sigma 0.577 repriced  416665 ( +1.79%) | old 416665 lead 416665 thr 416665
+  F1 D 155820 (6.87 u) vs 155193 dev +0.03 u -> HELD; repriced D: cores 155197, old_lifetime 87125, cores_per_lead 121423, throughput 158710; inside(reg) {'cores': True, 'old_lifetime': False, 'cores_per_lead': False, 'throughput': True}
+  F2 w1 n=2 170367 vs 162474 +4.86% (repriced cores 162470, +4.86%) -> HELD; rivals repriced cores +4.9%, old_lifetime -26.1%, cores_per_lead -13.2%, throughput +7.2%
+  F3 outside 8% (repriced): [(1, 'w1', 14.88), (2, 'w2', 11.07)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 14.42), (2, 'w2', 11.07)])
+  F4 w1 n=[6, 8, 10] slope 342.5 vs 352.2 -2.75% -> FALSIFIED (all-cell 340.7)
+  F4 w2 n=[5, 6, 8, 10] slope 374.2 vs 379.1 -1.30% -> HELD (all-cell 375.7)
+== r3f-g64-lock1710 (G=64, clock none, gates [(None, 'FAIL')])
+  n= 1 w1 waves  0.68 cycles    141315 reg  113853 (+24.12%) sigma 0.996 repriced  113388 (+24.63%) | old 113453 lead 113388 thr 113388
+  n= 1 w2 waves  0.97 cycles     70642 reg   57319 (+23.24%) sigma 1.000 repriced   57328 (+23.22%) | old 57328 lead 57328 thr 57328
+  n= 2 w1 waves  1.36 cycles    167568 reg  162474 ( +3.14%) sigma 1.044 repriced  162552 ( +3.09%) | old 230623 lead 200075 thr 159067
+  n= 2 w2 waves  1.94 cycles     97782 reg   86822 (+12.62%) sigma 1.004 repriced   86822 (+12.62%) | old 86822 lead 86822 thr 85503
+  n= 3 w1 waves  2.04 cycles    257555 reg  249596 ( +3.19%) sigma 1.042 repriced  249596 ( +3.19%) | old 249596 lead 249596 thr 249596
+  n= 3 w2 waves  2.91 cycles    136763 reg  128205 ( +6.68%) sigma 1.002 repriced  128205 ( +6.68%) | old 128205 lead 128205 thr 128205
+  n= 4 w1 waves  2.71 cycles    323557 reg  317667 ( +1.85%) sigma 1.013 repriced  317667 ( +1.85%) | old 317667 lead 317667 thr 317667
+  n= 4 w2 waves  3.88 cycles    177585 reg  170939 ( +3.89%) sigma 1.002 repriced  170939 ( +3.89%) | old 170939 lead 170939 thr 170939
+  n= 5 w1 waves  3.39 cycles    395500 reg  385739 ( +2.53%) sigma 1.004 repriced  385739 ( +2.53%) | old 385739 lead 385739 thr 385739
+  n= 5 w2 waves  4.85 cycles    223292 reg  213674 ( +4.50%) sigma 1.002 repriced  213674 ( +4.50%) | old 213674 lead 213674 thr 213674
+  n= 6 w1 waves  4.07 cycles    483367 reg  476501 ( +1.44%) sigma 0.994 repriced  476501 ( +1.44%) | old 476501 lead 476501 thr 476501
+  n= 6 w2 waves  5.82 cycles    265218 reg  256409 ( +3.44%) sigma 1.003 repriced  256409 ( +3.44%) | old 256409 lead 256409 thr 256409
+  n= 8 w1 waves  5.43 cycles    636911 reg  635334 ( +0.25%) sigma 0.984 repriced  635334 ( +0.25%) | old 635334 lead 635334 thr 635334
+  n= 8 w2 waves  7.76 cycles    345323 reg  341879 ( +1.01%) sigma 1.007 repriced  341879 ( +1.01%) | old 341879 lead 341879 thr 341879
+  n=10 w1 waves  6.79 cycles    778468 reg  771477 ( +0.91%) sigma 0.974 repriced  771477 ( +0.91%) | old 771477 lead 771477 thr 771477
+  n=10 w2 waves  9.70 cycles    426213 reg  416665 ( +2.29%) sigma 1.002 repriced  416665 ( +2.29%) | old 416665 lead 416665 thr 416665
+  F1 D 155988 (6.87 u) vs 155193 dev +0.04 u -> HELD; repriced D: cores 155115, old_lifetime 87044, cores_per_lead 117592, throughput 158600; inside(reg) {'cores': True, 'old_lifetime': False, 'cores_per_lead': False, 'throughput': True}
+  F2 w1 n=2 167568 vs 162474 +3.14% (repriced cores 162552, +3.09%) -> HELD; rivals repriced cores +3.1%, old_lifetime -27.3%, cores_per_lead -16.2%, throughput +5.3%
+  F3 outside 8% (repriced): [(1, 'w1', 24.63), (1, 'w2', 23.22), (2, 'w2', 12.62)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 24.12), (1, 'w2', 23.24), (2, 'w2', 12.62)])
+  F4 w1 n=[6, 8, 10] slope 339.6 vs 352.2 -3.56% -> FALSIFIED (all-cell 339.1)
+  F4 w2 n=[5, 6, 8, 10] slope 372.8 vs 379.1 -1.67% -> HELD (all-cell 372.3)
+== r3f-g8-lock1710 (G=8, clock none, gates [(None, 'FAIL')])
+  n= 1 w1 waves  0.68 cycles    144660 reg  113853 (+27.06%) sigma 0.996 repriced  113384 (+27.58%) | old 113453 lead 113384 thr 113384
+  n= 1 w2 waves  0.97 cycles     71965 reg   57319 (+25.55%) sigma 1.000 repriced   57329 (+25.53%) | old 57329 lead 57329 thr 57329
+  n= 2 w1 waves  1.36 cycles    171272 reg  162474 ( +5.41%) sigma 0.996 repriced  162470 ( +5.42%) | old 230541 lead 196204 thr 158956
+  n= 2 w2 waves  1.94 cycles     95600 reg   86822 (+10.11%) sigma 1.002 repriced   86822 (+10.11%) | old 86822 lead 86822 thr 85502
+  n= 3 w1 waves  2.04 cycles    257594 reg  249620 ( +3.19%) sigma 0.989 repriced  249617 ( +3.20%) | old 249617 lead 249617 thr 249617
+  n= 3 w2 waves  2.91 cycles    137951 reg  128217 ( +7.59%) sigma 0.979 repriced  128214 ( +7.59%) | old 128214 lead 128214 thr 128214
+  n= 4 w1 waves  2.71 cycles    327186 reg  317667 ( +3.00%) sigma 0.985 repriced  317667 ( +3.00%) | old 317667 lead 317667 thr 317667
+  n= 4 w2 waves  3.88 cycles    180066 reg  170939 ( +5.34%) sigma 1.000 repriced  170939 ( +5.34%) | old 170939 lead 170939 thr 170939
+  n= 5 w1 waves  3.39 cycles    394025 reg  385741 ( +2.15%) sigma 0.971 repriced  385740 ( +2.15%) | old 385740 lead 385740 thr 385740
+  n= 5 w2 waves  4.85 cycles    222027 reg  213675 ( +3.91%) sigma 0.875 repriced  213674 ( +3.91%) | old 213674 lead 213674 thr 213674
+  n= 6 w1 waves  4.07 cycles    482226 reg  476501 ( +1.20%) sigma 0.957 repriced  476501 ( +1.20%) | old 476501 lead 476501 thr 476501
+  n= 6 w2 waves  5.82 cycles    264376 reg  256409 ( +3.11%) sigma 0.771 repriced  256409 ( +3.11%) | old 256409 lead 256409 thr 256409
+  n= 8 w1 waves  5.43 cycles    636636 reg  635334 ( +0.20%) sigma 0.967 repriced  635334 ( +0.20%) | old 635334 lead 635334 thr 635334
+  n= 8 w2 waves  7.76 cycles    347005 reg  341879 ( +1.50%) sigma 1.000 repriced  341879 ( +1.50%) | old 341879 lead 341879 thr 341879
+  n=10 w1 waves  6.79 cycles    778081 reg  771477 ( +0.86%) sigma 0.914 repriced  771477 ( +0.86%) | old 771477 lead 771477 thr 771477
+  n=10 w2 waves  9.70 cycles    425960 reg  416665 ( +2.23%) sigma 0.596 repriced  416665 ( +2.23%) | old 416665 lead 416665 thr 416665
+  F1 D 155914 (6.87 u) vs 155193 dev +0.03 u -> HELD; repriced D: cores 155197, old_lifetime 87126, cores_per_lead 121463, throughput 158711; inside(reg) {'cores': True, 'old_lifetime': False, 'cores_per_lead': False, 'throughput': True}
+  F2 w1 n=2 171272 vs 162474 +5.41% (repriced cores 162470, +5.42%) -> HELD; rivals repriced cores +5.4%, old_lifetime -25.7%, cores_per_lead -12.7%, throughput +7.7%
+  F3 outside 8% (repriced): [(1, 'w1', 27.58), (1, 'w2', 25.53), (2, 'w2', 10.11)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 27.06), (1, 'w2', 25.55), (2, 'w2', 10.11)])
+  F4 w1 n=[6, 8, 10] slope 340.5 vs 352.2 -3.32% -> FALSIFIED (all-cell 336.8)
+  F4 w2 n=[5, 6, 8, 10] slope 375.6 vs 379.1 -0.94% -> HELD (all-cell 372.2)

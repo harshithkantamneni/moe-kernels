@@ -1082,6 +1082,123 @@ Granite's. Granite's first instance (2026-09-29, 16 minutes) never ran: it came
 up on the address the Qwen1.5 instance had released and its host key did not
 match the pinned one.
 
+## Rental 1 (2026-10-01): the partial wave, the launch floor, L2 survival, A-tile reads
+
+One Lambda GH200 480GB (board `7269a7`, which no earlier page used) ran
+`scripts/plans/rental1-2026-10.plan` unattended at 436e41c: 14 units, 117 minutes, none
+dropped. Four registrations were committed before any of its pages: the Mixtral 8x7B TP=8
+floor capture (2026-09-30, the partial wave's co-residency law, CORES) and the three of
+2026-10-01 (launch floor A, L2 survival B, A-tile reads C). Published at
+`results/published/2026-10-01-nvidia_gh200_480gb-rental1-session`; its README cites the
+file for every number here, and `docs/registered/README.md` carries each registration's
+scoring note.
+
+**Registered outcomes.**
+
+| registration | falsifier | verdict | numbers |
+|---|---|---|---|
+| tp8 floor (CORES) | F1 D, w1 n = 4 minus n = 2 | HELD | 156,941 / 155,820 cycles (G = 64 / 8) vs 155,193 +/- 11,345 |
+| | F2 w1 n = 2 | HELD | 170,316 / 170,367 vs 162,474 (+4.8%, +4.9%; band -3% to +8%) |
+| | F3 other cells within 8% | FALSIFIED | w1 n = 1 +13.4 / +14.9%; w2 n = 1 to 3 +8.3 to +11.1% |
+| | F4 floor, >= 4-wave cells | w1 FALSIFIED, w2 HELD | w1 339.6 / 342.5 vs 352.2 (-3.6, -2.8%); w2 374.3 / 374.2 vs 379.1 (-1.3%) |
+| A launch floor | P1 GR follows C_reg | HELD | 15 of 15 in [0.80, 1.10] x C_reg; GR n = 1 0.084 to 0.090 ms |
+| | P2 GR = E240, GPU-bound | FALSIFIED | 1 of 15 out (Granite NATIVE n = 7, -8.9 us; host-bound here) |
+| | P3 E0 - E240 from traces | FALSIFIED | 6 of 6 out; measured +45 to +65 us |
+| | P4 E480 shift and moved verdict | FALSIFIED | verdicts 0 wrong on each cell's own H (5 on the list priced at H 0.3545); shift -54 to -73 us vs -67.4, PRIVATE n = 1 outside +/-12 us |
+| | P5 C_reg + F < H | HELD | 52/53, 21/22, 27/27 |
+| | P6 max-plus MP | FALSIFIED | 55 of 57; Granite E480 SHARED, PRIVATE n = 2 at -14, -17 us |
+| | P7 | classifies | TR-G kernels 79 to 85 us at n = 1, non-GEMM 11 us |
+| | P8 Granite-1B (unseen) | FALSIFIED | GR out of band on 3 of 27 (P5's rule 27 of 27) |
+| B L2 survival | H1 vs H0, tp2 w2 | H1 | 0.54 to 0.59 at n = 3..9, within 0.066 of the same-board 8x7B w2 |
+| | H1 vs H0, tp4 w1 | INCONCLUSIVE | 0.42 0.38 0.38 0.36 at n = 6..9 (H1 0.15 to 0.12, H0 0.66 to 0.71) |
+| | x-only law | FALSIFIED | tp2 w2 minus tp4 w1 0.10 to 0.19 at 6 of 6 n |
+| | controls | 1 of 4 HELD | tp8 w2 >= 0.973; tp8 w1 0.82 to 0.91, tp4 w2 n = 2, tp2 w1 n = 2, 3 FAILED |
+| | PRIVATE F / Mn, G = 2 R0 | HELD; PRIVATE HELD, SHARED FALSIFIED | 0.504 to 0.521; SHARED 31 of 54 beyond 5% |
+| C A-tile | T1 content-keyed w1 | OLMoE HELD, Qwen2 INCONCLUSIVE | OLMoE +0.52%; Qwen2 nearer R1 everywhere, +2.1 to +2.6% at n = 6, 7, 9 |
+| | T2 duration rho | every candidate refuted | rho42 1.199, rho84 1.184: between the byte-law and R2 bands |
+| | T3 G = 1 credit | HELD (tp8, tp4) | -0.00438 vs R1 -0.00446; -0.00138 vs R1 -0.00193 |
+| | T4 every PRIVATE cell | FALSIFIED (all five) | R2 rms 1.55%, 10 cells beyond 4% (deep G >= 32 w2) |
+
+**What each test separated, and what it did not.**
+
+- The tp8 floor separated CORES from the old full-occupancy lifetime (D 87,121, F2
+  -26%) and from rho per fetching CTA (D 121,171, F2 -13 to -15%): both refuted on both G.
+  It did not separate CORES from plain throughput pricing (D 158,705, F2 +7.0 to +7.2%,
+  inside both bands), as registered: on a floor-bound partial wave the law reduces to it.
+  The F3 misses are the controls, where every law prints the same number, so they say the
+  model misses there, not which law holds. F4's w1 miss is the per-CTA floor itself.
+- A separated a host-paced eager interval from a GPU-side floor. Graph replay runs Granite
+  n = 1 in 0.084 to 0.090 ms, inside C_reg's band, against the eager 0.31 to 0.33 ms; a
+  0.25 ms GPU floor would put GR n <= 3 at 0.23 ms or more, and only PRIVATE n = 3 (0.209)
+  comes near. The flush lever moves the interval as P4 said (-54 to -73 us for -67 us of
+  flush). It did not test the numbers tied to the registered host time H = 0.3545 ms: after
+  each process's first kineto trace the host enqueued a call 0.08 to 0.09 ms slower (0.38
+  to 0.46 ms), so P4's printed list, P2's cell set (Granite NATIVE n = 7 became host-bound)
+  and P8's plateau band were priced for a host the run no longer had. P3 and P6, the
+  trace-built sums, fail at 12 us resolution, on traces whose host costs the profiler
+  inflates. No launch-floor scorer was registered: these verdicts come from one written
+  after the pages, committed as `scripts/scoring/rental1/score_launch.py` (P6's max-plus
+  model is its reading of the text).
+- B separated d from x: one x and two d differ by 0.10 to 0.19, so survival is not a
+  function of the reuse distance alone, and tp2 w2 sits on the 8x7B w2 curve (H1, not H0's
+  one-LRU 0.74 to 0.82). It did not identify s_sync(d): tp4 w1 sits between H1 and H0, and
+  three controls fail, so the registered law's shape is wrong at x <= 0.93 L2 (tp8 w1 reads
+  0.87, not 1.0, at x = 0.47).
+- C separated content-keyed w1 A tiles from R0 (T1 on OLMoE, T3 on tp8 and tp4: R0 is out
+  everywhere it can be). This is a property of R3's routing classes, not of the hardware.
+  T2 found a real rise of w2 A re-reads with k-steps (rho 3.8 and 5.4 sigma over R1) at a
+  quarter to half of R2's size; it cannot tell a duration term from a columns-in-flight
+  term, both of which move along each row (the `--block-k` separator is rental 2).
+
+**Diagnosis, not tests.** Read off the pages after scoring; nothing is fitted or adopted.
+
+- The tp8 w1 floor, 339.6 cycles per CTA k-step on 64-k-step CTAs, sits below even the
+  per-k-step constant 344.1 that the per-CTA floor 344.1 + F / S adds to. It is the first
+  GEMM the per-CTA floor misses on its 4+-wave cells since the estimator was corrected
+  (every scorable GEMM of the eight earlier models held on the base captures); w2 (28
+  k-steps) holds.
+- The n = 1 controls are clock-dependent: the lock capture reads w1 n = 1 9.8% and w2 n = 1
+  13.4% more cycles than the base capture (1671 / 1655 MHz against about 1356), while the
+  4+-wave cells move under 1%. A cell part-bound by DRAM is not clock-free in cycles, and
+  the prediction is priced at 1710 MHz.
+- The launch floor moves with the host. The cells timed before each process's first
+  kineto trace enqueue in 0.30 to 0.35 ms and reproduce the published plateau (Granite-3B
+  NATIVE n = 1 E240 0.2463 ms, published 0.2456); after the trace the host is 0.08 to 0.09
+  ms slower (presumably profiler state left on; inferred from timing, not checked), and
+  every host-bound eager cell rises with it (14 to 33% over the published Granite G = 4
+  cells) while graph replay and the GPU-bound eager cells do not move (within 0.6%). An
+  unplanned fourth lever, it moves the plateau as the flush does: E0 sits at H, E240 at H
+  less 0.08 to 0.11 ms, E480 at H less 0.15 to 0.17. C_reg + F < H with each cell's own H
+  gives every verdict on all three models but two (P5). Corrected for each mode's own H,
+  all 14 P4 shifts fall within 9 us.
+- The same-board 8x7B PRIVATE w2 reads above the 2026-09-27 board's at its deep cells:
+  +1.6 to +1.7% at G = 16 (n = 6..9), +2.2 to +5.0% at G = 32 (n = 4..9), past the 2.8%
+  board-to-board figure the C registration cites (w1 within 0.3%). Against the
+  09-27 denominators rho42 and rho84 would read 1.41 and 1.52, R2-like; the same-board
+  rule is what kept T2 from a false pass.
+- At G = 2, R0 prices SHARED far under the pages on tp2 w2, tp4 w1 and tp8 w1 from n = 4
+  (16 to 59% low, worst at even n, where R0 falls below its own value at n - 1 and the pages do not: tp4 w1 reads q 1.78,
+  1.77, 2.70, 2.61, 3.67, 3.60 at n = 3..8); PRIVATE at G = 2 holds to 0.4%.
+
+**What the paper can claim, after rental 1.** The partial-wave co-residency law over the
+old lifetime and the per-fetching-CTA form, on one unseen shape at the cell that separates
+them (not over throughput pricing). Small-n eager R3 time is host-paced: graph replay
+removes it and leaves C_reg, and the boundary is C + F < H with the host's own H, not a
+fixed number. L2 survival depends on more than the sequential reuse distance. R3's w1 A
+tiles are shared by content (a harness property). Not claimed: the per-CTA floor on every
+shape (tp8 w1 misses by 3.6%), any s_sync(d) form, R2's duration exponent, or any launch
+number priced on another host's H.
+
+**Instrument.** The launch floor's kineto traces slowed the host for the rest of their
+process (above); a later design should take its traces in a separate process. Every
+tp-shard and OLMoE byte page but tp2 atile G = 32 fails V10 (GEMM fits 1658 to 1703 MHz
+at the 1710 lock, tp2's n = 1 w2 cells up to 1783 MHz), as registered; V7 (NATIVE against
+SHARED bytes) fails on sameboard G = 16, 32 and five atile pages, V6 once (tp8 atile G = 8,
+n = 2 w2, 1.3031% against 1.3%; no survival page fails it). The tp8 floor's lock captures
+fail FL1 alone (w1 fitted 1662 and 1671, w2 1655 MHz). Sameboard G = 8 and Qwen2 G = 128
+fail claim gates only (C1, C2 on SHARED; C6 on Qwen2's PRIVATE excess, the quantity C
+scores). The recovery step had nothing to retake.
+
 ---
 
 ## The evidence base
