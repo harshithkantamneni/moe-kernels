@@ -24,3 +24,9 @@
 2026-10-01T20:26:54Z bytes: G=32 page exit 3 after 87 s
 2026-10-01T20:28:22Z bytes: G=16 page exit 3 after 87 s
 2026-10-01T20:29:51Z bytes: G=8 page exit 3 after 87 s
+2026-10-01T20:29:53Z bytes: lock block exit 0 (G=64 exit 3 20:25:25 86 s;G=32 exit 3 20:26:54 87 s;G=16 exit 3 20:28:22 87 s;G=8 exit 3 20:29:51 87 s;)
+2026-10-01T20:29:58Z bytes: no base-clock control (a registered --byte-groups list)
+2026-10-01T20:29:58Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-01T20:30:00Z bytes: analyse of 4 pages exit 3 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/summary.json)
+2026-10-01T20:30:00Z bytes END: exit 0 after 6 min [unit 3/14 mixtral-8x7b-tp8 atile byte-groups=64,32,16,8]
+2026-10-01T20:30:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
