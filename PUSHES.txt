@@ -34,3 +34,4 @@
 2026-10-01T21:38:15Z bytes: G=2 page exit 3
 2026-10-01T21:38:26Z bytes (unit 11/14 mixtral-8x7b-tp8 l2 byte-groups=1,2): exit 0 (3 min)
 2026-10-01T21:59:01Z launchfloor (unit 12/14 granite-3.0-3b-a800m rental1 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9): exit 0 (21 min)
+2026-10-01T22:08:24Z launchfloor (unit 13/14 jetmoe-8b rental1 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3): exit 0 (9 min)
