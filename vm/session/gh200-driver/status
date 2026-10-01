@@ -30,3 +30,7 @@
 2026-10-01T20:30:00Z bytes: analyse of 4 pages exit 3 (/home/ubuntu/moe/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/summary.json)
 2026-10-01T20:30:00Z bytes END: exit 0 after 6 min [unit 3/14 mixtral-8x7b-tp8 atile byte-groups=64,32,16,8]
 2026-10-01T20:30:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-01T20:30:02Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64 32 16, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 4/14 mixtral-8x7b-tp4 atile byte-groups=64,32,16] (estimate 8 min, cap 25 min, 379 min left)
+2026-10-01T20:30:18Z census for mixtral-8x7b-tp4 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp4.json)
+2026-10-01T20:30:18Z bytes: the registered list G = 64 32 16 (mixtral-8x7b-tp4, atile): no tail drop, no re-price, no base-clock control
+2026-10-01T20:32:27Z bytes: G=64 page exit 3 after 127 s
