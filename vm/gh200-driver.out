@@ -68,3 +68,5 @@
 2026-10-02T06:49:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed d0f37b4 to run-gh200-rental2-20261002t0522: launchfloor (unit 16/24 granite-3.0-3b-a800m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9): exit 0 (22 min)
 2026-10-02T06:49:44Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 17/24 mixtral-8x7b-tp2 l2bk32 byte-groups=1 block-k=32 num-stages=4] (estimate 4 min, cap 15 min, 305 min left)
+2026-10-02T06:53:22Z bytes END: exit 0 after 4 min [unit 17/24 mixtral-8x7b-tp2 l2bk32 byte-groups=1 block-k=32 num-stages=4]
+2026-10-02T06:53:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
