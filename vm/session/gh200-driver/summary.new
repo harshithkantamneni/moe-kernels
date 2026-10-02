@@ -10,3 +10,4 @@ bytes      exit 0 after 2 min [unit 9/24 mixtral-8x7b-tp4 l2s8 byte-groups=1 num
 bytes      exit 0 after 2 min [unit 10/24 mixtral-8x7b-tp8 l2s8 byte-groups=1 num-stages=8]
 bytes      exit 0 after 4 min [unit 11/24 mixtral-8x7b-tp2 l2s6 byte-groups=1 num-stages=6]
 bytes      exit 0 after 4 min [unit 12/24 mixtral-8x7b-tp2 atbk64 byte-groups=64]
+bytes      exit 0 after 4 min [unit 13/24 mixtral-8x7b-tp2 atbk32 byte-groups=64 block-k=32 num-stages=4]
