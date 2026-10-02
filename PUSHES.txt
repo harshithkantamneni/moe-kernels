@@ -24,3 +24,4 @@
 2026-10-02T06:04:24Z bytes: G=64 page exit 1
 2026-10-02T06:04:35Z bytes (unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2): exit 0 (4 min)
 2026-10-02T06:27:18Z launchfloor (unit 15/24 mixtral-8x7b-tp8 r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,3,6): exit 0 (23 min)
+2026-10-02T06:49:42Z launchfloor (unit 16/24 granite-3.0-3b-a800m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9): exit 0 (22 min)
