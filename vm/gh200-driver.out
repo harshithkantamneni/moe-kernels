@@ -58,3 +58,7 @@
 2026-10-02T06:00:56Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 2 --block-k 128 [unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2] (estimate 4 min, cap 15 min, 354 min left)
 2026-10-02T06:04:33Z bytes END: exit 0 after 4 min [unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2]
 2026-10-02T06:04:34Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9ecfe81 to run-gh200-rental2-20261002t0522: bytes (unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2): exit 0 (4 min)
+2026-10-02T06:04:36Z launchfloor START: launch floor at the 1710 lock: treads 1,2,3,4,5,6,7,8,9, modes E240,E0,E480,GR, traces at 1,2,3,6; a timed process (no profiler) then a trace process [unit 15/24 mixtral-8x7b-tp8 r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,3,6] (estimate 28 min, cap 50 min, 350 min left)
+2026-10-02T06:27:16Z launchfloor END: exit 0 after 23 min [unit 15/24 mixtral-8x7b-tp8 r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,3,6]
+2026-10-02T06:27:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
