@@ -199,3 +199,4 @@
 2026-10-02T07:38:32Z launchfloor: granite-3.0-1b-a400m exit 0 (/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-launch-floor-r2/granite-3.0-1b-a400m)
 2026-10-02T07:38:32Z launchfloor END: exit 0 after 11 min [unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9]
 2026-10-02T07:38:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-02T07:38:37Z driver end: exit 3
