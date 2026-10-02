@@ -1,0 +1,12 @@
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 4da056, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+  null kernel: torch.cuda._sleep(1000) after every call (spin_kernel, one block), in the skip and the count
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [1, 2, 6, 8, 10, 11, 12, 13, 14, 15, 16], 66 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 53 metrics asked, dropped []
+RESULT: VALIDITY FL1 FAIL every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock: off the lock: ['w1 fitted 1690 MHz', 'n=1 w1 1757 MHz', 'w2 fitted 1673
+GATE FL1 VALIDITY FAIL   every cell and GEMM ran at the nvidia-smi lock of 1710 MHz, by its own counters' clock
+              measured off the lock: ['w1 fitted 1690 MHz', 'n=1 w1 1757 MHz', 'w2 fitted 1673 MHz', 'n=6 w2 1663 MHz', 'n=8 w2 1662 MHz', 'n=10 w2 1665 MHz'] (fit: w1 1690.5 MHz + 3.9 us over 11 cells; w2 1672.6 MHz + 0.6 us over 11 cells)   gate each GEMM's duration = t0 + cycles / f over its cells, |f - 1710| <= 15 MHz (one step), 0 <= t0 <= 50 us, no cell over 3 steps off
+              a FAIL here invalidates: this file as a reading at 1710 MHz; its numbers stand only as readings at the clocks its cells name
+RESULT: VALIDITY V1 PASS every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots: 44 GEMM launches and 22 null kernels ag
+GATE V1  VALIDITY PASS   every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots
+              measured 44 GEMM launches and 22 null kernels against 22 planned   gate exact count and order (attribute_launches); launch skip 66, count 66 = 3 launches x calls
+wrote /home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
