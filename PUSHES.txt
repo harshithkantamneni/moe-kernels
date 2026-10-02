@@ -22,3 +22,4 @@
 2026-10-02T06:00:44Z bytes: G=64 page exit 3
 2026-10-02T06:00:55Z bytes (unit 13/24 mixtral-8x7b-tp2 atbk32 byte-groups=64 block-k=32 num-stages=4): exit 0 (4 min)
 2026-10-02T06:04:24Z bytes: G=64 page exit 1
+2026-10-02T06:04:35Z bytes (unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2): exit 0 (4 min)
