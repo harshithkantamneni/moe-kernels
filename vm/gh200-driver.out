@@ -30,3 +30,5 @@
 2026-10-02T05:39:53Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 --partition-metrics [unit 7/24 mixtral-8x7b-tp2 l2s8 byte-groups=1 num-stages=8 partition-metrics=1] (estimate 6 min, cap 20 min, 375 min left)
 2026-10-02T05:43:31Z bytes END: exit 0 after 4 min [unit 7/24 mixtral-8x7b-tp2 l2s8 byte-groups=1 num-stages=8 partition-metrics=1]
 2026-10-02T05:43:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f30b8b2 to run-gh200-rental2-20261002t0522: bytes (unit 7/24 mixtral-8x7b-tp2 l2s8 byte-groups=1 num-stages=8 partition-metrics=1): exit 0 (4 min)
+2026-10-02T05:43:34Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 8/24 mixtral-8x7b-tp4 l2base byte-groups=1] (estimate 3 min, cap 12 min, 371 min left)
