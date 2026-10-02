@@ -655,3 +655,103 @@ bands: every candidate refuted (R0, R1, R2, primary and secondary). T3: tp8 PASS
 FALSIFIED for every candidate: R0 rms 3.68% (24 cells of G >= 32, n >= 6 beyond 4%), R1
 2.87% (15), R2 1.55% (10: 8x7B G=32 w2 n = 7-9, tp2 G=64 w2 n = 7-9, Qwen2 G=128 w2 n =
 6-9), secondary R1 2.73% (14), R2 1.77% (10). The files above are unchanged.
+
+## 2026-10-01, before any page: rental 2, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental2-2026-10.plan` through
+`gh200_model_session.sh --plan` (`vm_run.sh start --plan`), as rental 1 did. The four
+registrations below, their scorers (`scripts/scoring/rental2/`, written and tested on
+synthetic pages before any page) and the scaffolding they need are committed in ONE
+commit before the rental. Every number in the four JSON files is written by
+`scripts/scoring/rental2/register.py` from committed files (`--check` recomputes them);
+the `.txt` beside each is rendered from its JSON. Design: the scratchpad's
+`design-r2/DESIGN.md` with every fix of `design-r2-review/REVIEW.md`.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude (also locks 1005 MHz once, read back, reset) | 1 | 3 |
+| floors: tp8 floor2, tp4, tp2 (base and 1710, shape metrics, null kernel), tp4 at 1005 | 4 | 21 |
+| B lag: tp2 l2base, l2s8 (partition metrics); tp4 l2base, l2s8; tp8 l2s8 (the negative control); tp2 l2s6 | 6 | 24 |
+| C T5: tp2 G = 64 at BLOCK_K 64/s4, 32/s4, 128/s2 | 3 | 12 |
+| launch floor: tp8, Granite-3B, each a timed and a trace process | 2 | 56 |
+| tail: tp2 l2bk32, l2bk128, l2pad7, ats8; 8x7B l2base + l2s8 (one drop-group); JetMoE, Granite-1B | 8 | 60 |
+
+176 min of units, about 178 min with setup: 2.97 h, about $6.8 at $2.29/h; the guardian's
+hard cap of 410 min is $15.6. The core (through the launch floor) is 116 min. The driver
+drops the last unit first; the 8x7B base/s8 pair goes together (`drop-group`).
+
+**Part 1, B's knobs and C's T5** (`2026-10-01-rental2-knobs-gh200.{json,txt}`). L2r: past
+the edge (x >= 0.92 L2) s_knob = s_base exp(-dd / lambda(n)), below it s_cap + (s_base -
+s_cap) exp(-dd / lambda(n)), dd the d of the knob page less the same-board base page's,
+each page's W_c read off its own occupancy. lambda(n) is SEEN (rental 1's tp2 w2 / tp4 w1
+pair) with a per-n band from +-0.03 on each s in quadrature (42% at n = 4, 33% at n = 5,
+24 to 34% at n = 6..9; n = 2, 3 printed only). Rivals NL (s_base +- 0.05) and ST (the
+registered 2026-10-01 lambda(n), CAL). tp2 w2 s8 is the primary test and the only L2r
+against ST call; tp4 w1 s8 is registered as NL against LAG (L2r and ST together), since ST's
+band lies inside L2r's there; tp2 s6 is secondary and needs all four of n = 6..9. A
+hypothesis is SELECTED on 4 of n = 4..9 in its band and no other, FALSIFIED on 4 of 6
+outside. Controls: PRIVATE F / Mn in [0.50, 0.56] demotes that page's SELECTED to
+INCONCLUSIVE, and tp2 w1 under its own L2r upper edge (replacing rental 1's fixed 0.08)
+demotes that page's L2r or LAG selection (an NL or ST one stands); the tp8 w2
+s8 negative control (s >= 0.95 at n = 4..9) demotes every part-1 SELECTED; a V6 failure
+flags the page and its verdicts read INCONCLUSIVE. T5: rho_BK = f(BK128) / f(BK32) at n = 9,
+f = (q - 9) 128 / (63 x 9) from `dram_counter_route.r3_q`, each candidate re-priced on each
+page's own geometry with its registered band half-width kept fixed: R0 and R1 1.00 [0.93,
+1.07], R2 1.67 [1.57, 1.77] (CAL), R2h 1.29 [1.23, 1.35] (SEEN, m = 0.567 from rental 1's
+rho84); a failed BK64 board check (f within 2.8% of 0.5802) turns R2h's verdict to
+INCONCLUSIVE.
+
+**Part 2, the launch-floor rerun** (`2026-10-01-rental2-launch2-gh200.{json,txt}`). The
+timed process has the profiler guarded off (`torch.profiler.profile` raises, and
+`_profiler_enabled()` is asserted False before every cell) and measures each (arm, n,
+mode)'s host time H_pre before any cell and again after the last; the traces run in a
+second process. Every prediction is priced on H_pre. tp8 is BLIND on every host-side
+prediction; its P1 is C_reg CAL with GEMM durations SEEN under ncu. P0 is an instrument
+gate (the profiler, a post/pre drift over 5%, H_cell / H_pre outside [0.93, 1.10] on over
+5% of cells, over 5% refused probes); when it fails P2, P4, P5 and P8 are printed marked
+"host drift".
+
+**Part 3, the per-GEMM constant** (`2026-10-01-rental2-const-gh200.{json,txt}`). Z is the
+intercept of SM-active cycles on q per capture and GEMM, the slope free. Re-derived that
+way on the calibration models, Z / u at the 1710 lock reads 0.23 to 0.51 (w1) and 0.26 to
+0.68 (w2), and the base-to-lock exponent reads -0.61 to 3.02 over 10 series, so it is not
+used as a band. K1: L = elapsed - active.max <= 5000 cycles on 80% of the pool. K2: the
+pooled w2 Z / u of tp4 and tp2 in [0.25, 0.69] (the full CAL w2 range, no model excluded).
+K3: Z(1005) / Z(1710) on tp4 against the two forms, f_1005 / f_1710 (nanoseconds) and 1.0
+(SM cycles), each within 2 sigma of the registered intercept noise (sigma_r / r 0.10 on
+w1, 0.13 on w2); inside both or neither is INCONCLUSIVE. K4: D_imb in [-0.2 u, 0.2 u] on
+80%, H_IMB on D_imb >= 0.3 u on over 20%; the CTA-count clause is a RECORD only.
+
+**Part 4, tp8's w1 floor** (`2026-10-01-rental2-w1floor-gh200.{json,txt}`). The tread sets
+are the review's unseen ones (tp8 w1 (13, 14, 15) -11.0%, (11, 15, 16) -0.4%, (11, 12, 13)
++3.8%; tp4 w1 (14, 15, 16) -3.6%, (11, 13, 15) +0.1%, (10, 12, 13) +3.8%; tp2 w1 (10, 11,
+12), (12, 13, 14), delta only; w2 an offset test at +3.8%). FLUID_LOW, a set-independent
+0.964 x asymptote, is the rival; H_NPN is a labelled secondary. Bands come from a
+registered noise model: sigma_cell 2.7k cycles (CAL) propagated exactly through the sets'
+weights (sigma_theta 0.28 tp8, 0.20 tp4). The theta call is at 0.5. Co-primary: per GEMM
+on the unseen cells, the rms about ceil(q) u + a against q u + a, a won by more than
+sigma_cell. The primary capture is the base clock. tp8 w1 (6, 8, 10), 339.5, is printed as
+a SEEN replication only.
+
+**The review's open scorer items, decided before any page** (each is in the named JSON):
+
+- knobs: s(n) is `scripts/l2_survival.py`'s formula, written out in `measure`; V6-flagged
+  cells are excluded from every count; W_c = sm_count x the least of the four occupancy
+  limits; P = npn; the s_cap knots per n and the linear interpolation are in the JSON; r()
+  below the edge is exp(-dd / lambda) on s_base - s_cap; a failed control demotes SELECTED to
+  INCONCLUSIVE; the partition cross-check (direct fabric hits against F - (M - Mn) within 5%)
+  is an instrument check whose failure on over 10% of a page's cells only switches that
+  page's far-share RECORD to the direct count; T5 is decided on n = 9 alone with f from
+  r3_q's PRIVATE w2 q; a failed BK64 board check makes R2h INCONCLUSIVE.
+- launch2: H_cell = host_enqueue_ms / calls_per_burst (median over repeats); the host-bound
+  fraction is over the cell's 3 repeat rows; P0's drift is the median over (arm, n, mode) of
+  |H_post / H_pre - 1|; the edge rule's F is the cell's own mode's; P3 needs 8 qualifying
+  cells and fails on more than 1 outside; P6's function is rental 1's text, copied verbatim
+  into `launch_mp.py` (a test pins the copy).
+- const: the floor-bound share is at sigma 1, never re-priced; Z by intercept; K1's pool is
+  every floor-bound cell of the three 1710 captures, both GEMMs; K2 pools tp4 and tp2 w2 (the
+  median of the two); K3 by the intercept ratio against the two forms.
+- w1floor: the primary capture is the base clock; theta and delta by unweighted OLS over
+  the sets, their noise propagated exactly through the shared cells; FLUID and FLUID_LOW
+  have their own falsification rules; when every family fails the verdict is NEITHER; the x
+  grid is the page's own launch grid, asserted equal to the registered one.

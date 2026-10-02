@@ -26,7 +26,8 @@
 #           nothing of it but the public half, which it adds to the repo with
 #           write access; and has the VM push the branch's first commit.
 # start     (--plan: copies the checkout's plan file beside the driver, for the
-#           dry run before setup; after setup the driver reads the checkout's own)
+#           dry run before setup; after setup the driver reads the checkout's own;
+#           every key of a plan line is the driver's, refused by its dry run)
 #           runs the driver's plan (--dry-run) on the VM as a record, then
 #           starts it detached: setup_vm.sh at this checkout's commit, then the
 #           session, pushing after every step. Nothing more goes over ssh.

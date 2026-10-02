@@ -1,0 +1,107 @@
+REGISTERED 2026-10-01, before any rental-2 page: rental 2 part 1, B's knobs (lag law L2r) and C's BLOCK_K separator T5
+s at G = 1 (scripts/l2_survival.py); every knob page scored against its same-board default page
+
+lambda(n), SEEN (rental 1's tp2 w2 / tp4 w1 pair), +- sigma from +-0.03 on each s in quadrature;
+the steep rival ST is the registered 2026-10-01 lambda (CAL):
+  n=2  lambda 0.212 +- 0.055 (26%)   steep 0.0714   s_cap at x 0.576 0.217   (printed only)
+  n=3  lambda 0.536 +- 0.443 (83%)   steep 0.0541   s_cap at x 0.576 0.434   (printed only)
+  n=4  lambda 0.246 +- 0.103 (42%)   steep 0.0498   s_cap at x 0.576 0.505
+  n=5  lambda 0.186 +- 0.061 (33%)   steep 0.0433   s_cap at x 0.576 0.522
+  n=6  lambda 0.184 +- 0.063 (34%)   steep 0.0420   s_cap at x 0.576 0.594
+  n=7  lambda 0.124 +- 0.030 (24%)   steep 0.0410   s_cap at x 0.576 0.612
+  n=8  lambda 0.132 +- 0.034 (26%)   steep 0.0390   s_cap at x 0.576 0.648
+  n=9  lambda 0.116 +- 0.028 (24%)   steep 0.0374   s_cap at x 0.576 0.671
+
+bands, illustrated on rental 1's measured s as s_base (SEEN; the scores use the same-board base page):
+  mixtral-8x7b-tp2 w2 s8 (W_c 264), dd 0.121
+    n=4  L2r [0.216, 0.434]  NL [0.521, 0.621]  ST [0.000, 0.082]
+    n=5  L2r [0.192, 0.385]  NL [0.529, 0.629]  ST [0.000, 0.067]
+    n=6  L2r [0.170, 0.363]  NL [0.493, 0.593]  ST [0.000, 0.062]
+    n=7  L2r [0.126, 0.287]  NL [0.512, 0.612]  ST [0.000, 0.061]
+    n=8  L2r [0.130, 0.296]  NL [0.500, 0.600]  ST [0.000, 0.057]
+    n=9  L2r [0.108, 0.264]  NL [0.492, 0.592]  ST [0.000, 0.054]
+  mixtral-8x7b-tp2 w2 s6 (W_c 396), dd 0.040
+    n=4  L2r [0.401, 0.539]  NL [0.521, 0.621]  ST [0.000, 0.285]
+    n=5  L2r [0.390, 0.522]  NL [0.529, 0.629]  ST [0.000, 0.259]
+    n=6  L2r [0.359, 0.492]  NL [0.493, 0.593]  ST [0.000, 0.239]
+    n=7  L2r [0.336, 0.463]  NL [0.512, 0.612]  ST [0.000, 0.241]
+    n=8  L2r [0.334, 0.462]  NL [0.500, 0.600]  ST [0.000, 0.227]
+    n=9  L2r [0.313, 0.440]  NL [0.492, 0.592]  ST [0.000, 0.216]
+  mixtral-8x7b-tp4 w1 s8 (W_c 264), dd 0.255
+    n=4  L2r [0.049, 0.256]  NL [0.419, 0.519]  ST [0.000, 0.033]
+    n=5  L2r [0.029, 0.189]  NL [0.396, 0.496]  ST [0.000, 0.031]
+    n=6  L2r [0.021, 0.179]  NL [0.367, 0.467]  ST [0.000, 0.031]
+    n=7  L2r [-0.005, 0.103]  NL [0.330, 0.430]  ST [0.000, 0.031]
+    n=8  L2r [-0.002, 0.112]  NL [0.331, 0.431]  ST [0.000, 0.031]
+    n=9  L2r [-0.010, 0.090]  NL [0.307, 0.407]  ST [0.000, 0.030]
+  mixtral-8x7b-tp2 w1 s8 (W_c 264), dd 0.509
+    n=4  L2r [-0.028, 0.044]  NL [0.008, 0.108]  ST [0.000, 0.030]
+    n=5  L2r [-0.029, 0.037]  NL [0.006, 0.106]  ST [0.000, 0.030]
+    n=6  L2r [-0.029, 0.036]  NL [-0.004, 0.096]  ST [0.000, 0.030]
+    n=7  L2r [-0.030, 0.031]  NL [-0.011, 0.089]  ST [0.000, 0.030]
+    n=8  L2r [-0.030, 0.032]  NL [-0.013, 0.087]  ST [0.000, 0.030]
+    n=9  L2r [-0.030, 0.031]  NL [-0.018, 0.082]  ST [0.000, 0.030]
+  mixtral-8x7b-tp2 w1 s6 (W_c 396), dd 0.226
+    n=4  L2r [-0.018, 0.061]  NL [0.008, 0.108]  ST [0.000, 0.031]
+    n=5  L2r [-0.021, 0.053]  NL [0.006, 0.106]  ST [0.000, 0.030]
+    n=6  L2r [-0.023, 0.048]  NL [-0.004, 0.096]  ST [0.000, 0.030]
+    n=7  L2r [-0.027, 0.039]  NL [-0.011, 0.089]  ST [0.000, 0.030]
+    n=8  L2r [-0.026, 0.039]  NL [-0.013, 0.087]  ST [0.000, 0.030]
+    n=9  L2r [-0.028, 0.037]  NL [-0.018, 0.082]  ST [0.000, 0.030]
+  mixtral-8x7b-tp8 w2 s8 (W_c 264), dd 0.121
+    n=4  L2r [0.970, 1.030]  NL [0.949, 1.049]  ST [0.000, 1.030]
+    n=5  L2r [0.970, 1.030]  NL [0.950, 1.050]  ST [0.000, 1.030]
+    n=6  L2r [0.970, 1.030]  NL [0.950, 1.050]  ST [0.000, 1.030]
+    n=7  L2r [0.970, 1.030]  NL [0.950, 1.050]  ST [0.000, 1.030]
+    n=8  L2r [0.970, 1.030]  NL [0.950, 1.050]  ST [0.000, 1.030]
+    n=9  L2r [0.970, 1.030]  NL [0.950, 1.050]  ST [0.000, 1.030]
+  mixtral-8x7b-tp4 w2 s8 (W_c 264), dd 0.121
+    n=4  L2r [0.740, 0.843]  NL [0.808, 0.908]  ST [0.000, 0.748]
+    n=5  L2r [0.741, 0.836]  NL [0.814, 0.914]  ST [0.000, 0.753]
+    n=6  L2r [0.764, 0.848]  NL [0.807, 0.907]  ST [0.000, 0.793]
+    n=7  L2r [0.774, 0.857]  NL [0.847, 0.947]  ST [0.000, 0.805]
+    n=8  L2r [0.791, 0.873]  NL [0.850, 0.950]  ST [0.000, 0.824]
+    n=9  L2r [0.801, 0.880]  NL [0.862, 0.962]  ST [0.000, 0.837]
+  mixtral-8x7b w2 s8 (W_c 264), dd 0.121
+    n=4  L2r [0.193, 0.399]  NL [0.472, 0.572]  ST [0.000, 0.076]
+    n=5  L2r [0.173, 0.355]  NL [0.482, 0.582]  ST [0.000, 0.062]
+    n=6  L2r [0.154, 0.337]  NL [0.451, 0.551]  ST [0.000, 0.058]
+    n=7  L2r [0.109, 0.261]  NL [0.457, 0.557]  ST [0.000, 0.056]
+    n=8  L2r [0.111, 0.266]  NL [0.440, 0.540]  ST [0.000, 0.052]
+    n=9  L2r [0.090, 0.235]  NL [0.427, 0.527]  ST [0.000, 0.049]
+
+tests:
+  tp2 w2 s8 (PRIMARY): a hypothesis is SELECTED when 4 of n = 4..9 fall in its band and in no other band; FALSIFIED when 4 of 6 fall outside its band; else INCONCLUSIVE. The L2r-vs-ST call is made here.
+  tp4 w1 s8 (PRIMARY, NL vs lag): NL against LAG, LAG's band the envelope of L2r and ST (ST's band lies inside L2r's here at dd 0.254, so the two are not told apart: the review, section 1)
+  tp2 w2 s6 (secondary, the curve's shape): SELECTED needs all four of n = 6..9 in its band and in no other (L2r's upper edge sits 0.006 to 0.05 under NL's lower edge there)
+  8x7B w2 s8 (x-invariance, tail): HELD when |s(8x7B w2 s8) - s(tp2 w2 s8)| <= 0.05 at 4 or more of n = 4..9, else FALSIFIED (an x-law puts 8x7B lower)
+  tp4 w2 s8: RECORD: below the edge L2r moves it by 0.05 to 0.08, about the noise
+  H2c BLOCK_K at G=1 (tail): per page and GEMM, centre = s_base when the page's W_c equals the base's, else the L2r central value at the page's dd; NO k-step effect (H2c FALSIFIED) when |s - centre| <= 0.05 at 4 or more of n = 4..9; H2c SELECTED when |s - centre| > 0.05 at 4 or more; else INCONCLUSIVE
+  H3 slot pad 7 (tail): H3 FALSIFIED (no address effect) when every PRIVATE per-GEMM dram_bytes_read is within 0.3% of the base page's AND |s - s_base| <= 0.03 at 4 or more of n = 4..9 on both GEMMs; H3 SELECTED when |s - s_base| > 0.03 at 4 or more on a GEMM or a PRIVATE byte count moves by more than 1%; else INCONCLUSIVE
+
+controls:
+  F_over_Mn: every PRIVATE cell of every knob and base page: F / Mn in [0.50, 0.56] a failing page's SELECTED verdicts are demoted to INCONCLUSIVE
+  tp8 w2 s8 negative control: s >= 0.95 at every n = 4..9 (below every edge: L2r's s_cap is 1 at x 0.23) a failure demotes EVERY part-1 SELECTED verdict to INCONCLUSIVE
+  tp2 w1 on s6 and s8: tp2 w1 (x 1.86, past the edge) at or under the upper edge of its own L2r band at every n = 4..9 (derived from L2r, replacing the fixed 0.08 rental 1 failed at n = 2, 3) a failure demotes that page's L2r (or LAG) SELECTED verdict to INCONCLUSIVE; an NL or ST selection stands, since the control is L2r's own prediction
+  V6: a page whose V6 gate is not PASS is FLAGGED: its cells are excluded from every count and its verdicts read INCONCLUSIVE (V6 checks the activation-cancels premise of s)
+  V10: does not gate any score here (bytes are clock-free)
+
+partition cross-check: per SHARED and PRIVATE cell n = 2..9 and GEMM: direct fabric read hits (lts__t_sectors_srcunit_ltcfabric_op_read_lookup_hit) / (F - (M - Mn)) within 1 +- 0.05; an INSTRUMENT check only: no verdict of part 1 reads the far share. When more than 10% of a page's cells fail, the far-share RECORD of that page is printed from the direct count only and the subtraction is flagged
+
+T5: C's separator: rho_BK = f(BK128 / s2) / f(BK32 / s4), PRIVATE w2, tp2 G = 64, n = 9 (n = 8 printed), one board; k-steps 56 against 224 at the same L, bytes and W_c
+  f: f = (q - n) 128 / (63 n), q = dram_counter_route.r3_q(page)['private']['w2'][n], the q wave_split_bytes.load_card(page).measured holds
+  pricing: each candidate's f on each page's OWN geometry (wave_split_bytes.page_geometry: its block_k and its W_c), W.Model(geom, content_a).evaluate(params, [('private', 64, 9, 'w2')]); rho = f(BK128 page) / f(BK32 page)
+  band: the re-priced centre +- the half-width registered here at the default W_c (2 sigma_rho, sigma_rho from sigma_q 0.0364 through sigma_f = sigma_q 128 / (63 x 9) on both f in quadrature); the widths stay FIXED when the centres are re-priced
+  rule: a candidate is FALSIFIED when the measured rho_BK lies outside its band, HELD inside; the verdict is on n = 9 alone
+  board check: f(BK64, n = 9) within 2.8% of rental 1's 0.5802 (the 09-25 / 09-27 board-to-board PRIVATE w2 reproduction); a failure turns R2h's verdict (its m is rental 1's board's) to INCONCLUSIVE; R0, R1 and R2 stand
+  R0   (CAL) f(n=9) BK32 0.3282 BK64 0.3282 BK128 0.3282  rho_BK 1.000  band [0.929, 1.071]
+  R1   (CAL) f(n=9) BK32 0.3197 BK64 0.3197 BK128 0.3197  rho_BK 1.000  band [0.927, 1.073]
+  R2   (CAL) f(n=9) BK32 0.3211 BK64 0.4613 BK128 0.5372  rho_BK 1.673  band [1.573, 1.773]
+  R2h  (SEEN) f(n=9) BK32 0.4413 BK64 0.5271 BK128 0.5699  rho_BK 1.291  band [1.231, 1.352]
+  RECORD, tp2 G=64 s8 (W_c 264) f(n=9): R0 0.352, R1 0.343, R2 0.495, R2h 0.566
+
+seen data:
+  lam(n) is fitted on rental 1's tp2 w2 and tp4 w1 G = 1 pages (SEEN)
+  s_cap = 0 at x >= 0.92 is read off rental 1's tp2 w2 (SEEN)
+  R2h's m is fitted on rental 1's rho84 = 1.184 (SEEN)
+  the illustrations use rental 1's measured s as s_base; the scores use each knob page's same-board base page

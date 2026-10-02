@@ -4268,6 +4268,65 @@ def test_the_floor_capture_end_to_end_at_the_base_clock_and_with_none(
     assert "are not pages" in capsys.readouterr().out
 
 
+def test_the_floor_capture_with_the_null_kernel_end_to_end(tmp_path, monkeypatch, capsys):
+    """Rental 2 part 3: `--floor-null-kernel` puts ATen's spin_kernel after every
+    call. ncu's filter names it, the skip and the count carry it (3 launches a call),
+    the attribution expects it at exactly its slots, each cell records it apart as
+    `null`, V1 says so, and the HMMA check reads the GEMM launches only. Shape
+    metrics this chip's list lacks are not asked and are recorded as dropped."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    out = tmp_path / "r3f-g64.json"
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+                 "--floor", "--floor-null-kernel", "--floor-shape-metrics",
+                 "--out", str(out)]) == exit_codes.DONE, capsys.readouterr().out[-2000:]
+    capture = [a for a in calls if "--counter-child" in a][-1]
+    assert capture[capture.index("-k") + 1] == DCR.R3_NULL_KERNEL_FILTER
+    assert capture[capture.index("--launch-count") + 1] == str(3 * 2 * 6)
+    assert capture[capture.index("--launch-skip") + 1] == str(3 * 2 * 6)
+    body = json.loads(out.read_text())
+    assert body["plan"]["null_kernel"] is True
+    assert all(set(c["per_gemm"]) == {"w1", "w2"} and c["null"]["calls"] == 2 for c in body["cells"])
+    v1 = [g for g in body["gates"] if g["number"] == "V1"]
+    assert v1 and v1[0]["verdict"] == "PASS" and "12 null kernels" in v1[0]["measured"]
+    listed = {DCR.metric_base(m) for m in DCR.R3_FLOOR_METRICS + DCR.R3_ALL_METRICS}
+    offered = [m for m in DCR.R3_FLOOR_SHAPE_METRICS if DCR.metric_base(m) in listed]
+    assert offered and set(offered) <= set(body["ncu"]["metrics_asked"])
+    assert body["ncu"]["shape_metrics_dropped"] == [m for m in DCR.R3_FLOOR_SHAPE_METRICS
+                                                    if m not in offered]
+    plain = tmp_path / "plain.json"
+    assert main(["--run", "--family", "r3-arms", "--group-m", "64", "--census", str(census),
+                 "--floor", "--out", str(plain)]) == exit_codes.DONE
+    assert json.loads(plain.read_text())["run_id"] != body["run_id"]
+
+
+def test_a_page_at_another_block_k_with_partition_metrics_end_to_end(tmp_path, monkeypatch,
+                                                                     capsys):
+    """Rental 2 part 1: `--block-k 32` reaches the plan, the page's design and its run id
+    (the existing kernel's config value, nothing else), and `--partition-metrics` asks
+    the fabric's own sectors only where the chip lists them, recording what it dropped."""
+    calls = _plant_the_floor(monkeypatch)
+    census = tmp_path / "census.json"
+    assert main(["--run", "--family", "r3-arms", "--census-only", "--out",
+                 str(census)]) == exit_codes.DONE
+    pages = {}
+    for name, extra in (("plain", []), ("bk32", ["--block-k", "32", "--partition-metrics"])):
+        out = tmp_path / name / "r3c-g4.json"
+        rc = main(["--run", "--family", "r3-arms", "--group-m", "4", "--census", str(census),
+                   *extra, "--out", str(out)])
+        assert rc in (exit_codes.DONE, exit_codes.CLAIM_FAIL), capsys.readouterr().out[-1500:]
+        pages[name] = json.loads(out.read_text())
+        plan_path = Path([a for a in calls if "--counter-child" in a][-1][-1])
+        pages[name + "_plan"] = json.loads(plan_path.read_text())
+    assert pages["bk32"]["design"]["block_k"] == 32 and pages["plain"]["design"]["block_k"] == 64
+    assert pages["bk32_plan"]["block_k"] == 32 and "block_k" not in pages["plain_plan"]
+    assert pages["bk32"]["run_id"] != pages["plain"]["run_id"]
+    asked = pages["bk32"]["ncu"]["metrics_asked"]
+    assert not set(DCR.R3_PARTITION_METRICS) & set(asked)    # the planted chip lists none
+
+
 def test_a_floor_capture_missing_a_decisive_reading_writes_nothing(
         tmp_path, monkeypatch, capsys):
     """A minor reading no launch returned is listed in `metrics_missing`; a

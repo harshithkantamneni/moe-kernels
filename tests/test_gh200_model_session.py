@@ -1526,14 +1526,19 @@ def test_a_plan_runs_its_units_in_order_with_their_own_models_and_overrides(plan
 
 
 def test_a_plans_launchfloor_unit_runs_its_dry_run_then_the_lock_then_the_contract(plan_run):
+    """Rental 2 (2026-10-01): two dry runs, then the timed process (no traces,
+    the profiler guarded off) and the trace process, both under the lock."""
     box, _ = plan_run
     lf = box.tool("launch_floor")
-    assert [("--dry-run" in a) for a in lf] == [True, False]
-    a = lf[1]
-    assert val(a, "--model") == "jetmoe-8b" and val(a, "--treads") == "1,2,3,4"
-    assert val(a, "--modes") == "E240,E0,E480,GR" and val(a, "--trace-treads") == "1,2"
-    assert val(a, "--group-m") == "4" and val(a, "--duty") == "0.25"
-    assert val(a, "--out").endswith(f"-{CARD}-launch-floor-rental1/jetmoe-8b")
+    assert [("--dry-run" in a) for a in lf] == [True, True, False, False]
+    assert [val(a, "--phase") for a in lf] == ["timed", "trace", "timed", "trace"]
+    a, tr = lf[2], lf[3]
+    assert "--trace-treads" not in a and val(tr, "--trace-treads") == "1,2"
+    for x in (a, tr):
+        assert val(x, "--model") == "jetmoe-8b" and val(x, "--treads") == "1,2,3,4"
+        assert val(x, "--modes") == "E240,E0,E480,GR"
+        assert val(x, "--group-m") == "4" and val(x, "--duty") == "0.25"
+        assert val(x, "--out").endswith(f"-{CARD}-launch-floor-rental1/jetmoe-8b")
     calls = box.calls()
     i = next(k for k, c in enumerate(calls) if c.get("tool") == "launch_floor" and not c["dry"])
     locked = None
@@ -1543,9 +1548,10 @@ def test_a_plans_launchfloor_unit_runs_its_dry_run_then_the_lock_then_the_contra
         if c["exe"] == "nvidia-smi" and "-rgc" in c["argv"]:
             locked = None
     assert locked == "1710,1710"
-    # the command line is held to the tool's own parser
+    # the command lines are held to the tool's own parser and its plan
     import launch_floor as LFM
-    LFM.build_parser().parse_args(a)
+    for x in (a, tr):
+        LFM.make_plan(LFM.build_parser().parse_args(x))
 
 
 def test_a_plan_drops_its_last_units_first_when_the_deadline_is_near(tmp_path):
@@ -1585,10 +1591,12 @@ def test_no_default_plan_runs_the_launch_floor():
     assert re.findall(r"^  (\w+)\s+\d+\s+\d+  ", got.stdout, re.M) == ["prelude", "launchfloor"]
 
 
-def test_start_copies_a_tracked_plan_beside_the_driver_and_passes_it(tmp_path):
+@pytest.mark.parametrize("plan_name", ["rental1-2026-10.plan", "rental2-2026-10.plan"])
+def test_start_copies_a_tracked_plan_beside_the_driver_and_passes_it(tmp_path, plan_name):
+    plan_src = REPO / "scripts" / "plans" / plan_name
     lap = Laptop(tmp_path)
     (lap.clone / "scripts" / "plans").mkdir()
-    shutil.copy(RENTAL1, lap.clone / "scripts" / "plans" / RENTAL1.name)
+    shutil.copy(plan_src, lap.clone / "scripts" / "plans" / plan_src.name)
     g = ["git", "-C", str(lap.clone)]
     subprocess.run([*g, "add", "-A"], check=True)
     subprocess.run([*g, "commit", "-qm", "plan"], check=True)
@@ -1597,7 +1605,7 @@ def test_start_copies_a_tracked_plan_beside_the_driver_and_passes_it(tmp_path):
     lap.make_branch()
     assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
                    "--branch", "run-gh200-t").returncode == 0
-    rel = f"scripts/plans/{RENTAL1.name}"
+    rel = f"scripts/plans/{plan_src.name}"
     got = lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
                   "--plan", rel)
     assert got.returncode == 0, got.stdout
@@ -1627,3 +1635,117 @@ def test_the_driver_resolves_a_plan_from_the_checkout_then_beside_itself(tmp_pat
                          timeout=60, cwd=home, env={**os.environ, "HOME": str(home),
                                                    "MOE_HOME": str(home / "moe")})
     assert got.returncode == exit_codes.REFUSED and "a PLAN of 14 units" in got.stdout, got.stderr
+
+
+# --------------------------------------------------------------------------
+# rental 2 (2026-10-01): its plan, its keys, the 1005 probe, two launch phases
+# --------------------------------------------------------------------------
+
+RENTAL2 = REPO / "scripts" / "plans" / "rental2-2026-10.plan"
+
+
+def test_the_rental2_plan_parses_in_its_registered_order_and_fits_the_cap():
+    """The dry run, parse-only: every key the plan uses is accepted, the floors run
+    first, then B (tp8 s8 among them), then T5, then the launch floor, the tail last."""
+    got = _dry("--plan", str(RENTAL2))
+    assert got.returncode == exit_codes.REFUSED, got.stdout + got.stderr
+    assert "a PLAN of 24 units" in got.stdout
+    units = _units(got.stdout)
+    steps = [s for _, _m, s, *_r in units]
+    assert steps[0] == "prelude" and steps[1:5] == ["floor"] * 4
+    assert steps[5:14] == ["bytes"] * 9 and steps[14:16] == ["launchfloor"] * 2
+    b_block = [u[5] for u in units[5:11]]
+    assert any(u.startswith("label=l2s8 byte-groups=1 num-stages=8") and "tp8" in u for u in b_block)
+    total = sum(int(e) for _, _m, _s, e, *_r in units)
+    assert total == 176 and total <= 410 - 60
+    for key in ("floor-shape-metrics=1", "floor-null-kernel=1", "floor-lock-mhz=1005", "floor-base=0",
+                "num-stages=8", "num-stages=6", "block-k=32", "block-k=128", "slot-pad-rows=7",
+                "partition-metrics=1"):
+        assert key in got.stdout, key
+    assert "probes the floor lock(s) 1005 MHz" in got.stdout
+    assert got.stdout.count("[drop-group x87pair]") == 2
+    dirs = [u[5].split("; ")[-1] for u in units if u[2] != "prelude"]
+    assert len(set(dirs)) == len(dirs)
+    # every floor unit's treads are within R3_FLOOR_MAX_TREADS, and the review's unseen sets
+    import dram_counter_route as DCRM
+    for u in units[1:5]:
+        ft = [int(x) for x in re.search(r"floor-treads=([\d,]+)", u[5]).group(1).split(",")]
+        assert ft == sorted(set(ft)) and ft[-1] <= DCRM.R3_FLOOR_MAX_TREADS
+
+
+@pytest.mark.parametrize("body, why", [
+    ("- prelude\nmixtral-8x7b-tp2 floor label=f floor-groups=64 num-stages=8\n", "belongs to a bytes unit"),
+    ("- prelude\nmixtral-8x7b-tp2 bytes label=b floor-base=0\n", "belongs to a floor unit"),
+    ("- prelude\nmixtral-8x7b-tp2 floor label=f floor-lock-mhz=1005\n", "registered floor design"),
+    ("- prelude\nmixtral-8x7b-tp2 bytes label=b partition-metrics=2\n", "0 or 1"),
+    ("- prelude\nmixtral-8x7b-tp2 bytes label=b block-k=abc\n", "a whole number"),
+    ("- prelude\nmixtral-8x7b-tp2 bytes label=b drop-group=Bad_Name\n", "drop-group"),
+])
+def test_rental2_keys_are_refused_off_their_step(tmp_path, body, why):
+    f = tmp_path / "p.plan"
+    f.write_text(body)
+    got = _dry("--plan", str(f))
+    assert got.returncode == exit_codes.REFUSED and why in got.stderr, got.stderr
+
+
+PLAN_R2 = """- prelude
+mixtral-8x7b-tp4 floor label=floor1005 floor-groups=64 floor-treads=2,4,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=3 cap=12
+mixtral-8x7b-tp8 floor label=floor2 floor-groups=64 floor-treads=1,2,11 floor-shape-metrics=1 floor-null-kernel=1 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=atbk32 byte-groups=64 block-k=32 num-stages=4 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=l2s8 byte-groups=1 num-stages=8 partition-metrics=1 est=4 cap=15
+"""
+
+
+def test_rental2_units_reach_their_tools_with_their_knobs(tmp_path):
+    import dram_counter_route as DCRM
+    box, got = _plan_box(tmp_path, PLAN_R2)
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    led = box.ledger()
+    assert "lock probe: 1005 MHz held" in led, led
+    env = (box.session / "gh200-driver" / "locks.env").read_text()
+    assert "LOCK_PROBE_1005=held" in env
+    runs = [a for a in box.tool("dram_counter_route") if "--run" in a and "--census-only" not in a]
+    floors = [a for a in runs if "--floor" in a]
+    names = [Path(val(a, "--out")).name for a in floors]
+    # floor1005: no base capture, the 1005 lock only; floor2: base, then 1710
+    assert names == ["r3f-g64-lock1005.json", "r3f-g64.json", "r3f-g64-lock1710.json"]
+    assert val(floors[0], "--floor-lock-mhz") == "1005" and val(floors[2], "--floor-lock-mhz") == "1710"
+    for a in floors:
+        assert "--floor-shape-metrics" in a and "--floor-null-kernel" in a
+    pages = [a for a in runs if "--floor" not in a]
+    assert [val(a, "--block-k") if "--block-k" in a else None for a in pages] == ["32", None]
+    assert [val(a, "--num-stages") for a in pages] == ["4", "8"]
+    assert "--partition-metrics" in pages[1] and "--partition-metrics" not in pages[0]
+    for a in runs:   # held to the tool's own parser and its flag rules
+        DCRM.build_parser().parse_args(a)
+    # the 1005 lock was set before its capture and the card reset after
+    smi = box.smi()
+    assert ["-lgc", "1005,1005"] in [s[:2] for s in smi]
+
+
+def test_a_floor_lock_the_card_does_not_list_refuses_its_unit_in_no_time(tmp_path):
+    clocks = [c for c in range(1980, 344, -15) if c != 1005]
+    box, got = _plan_box(tmp_path, PLAN_R2, {"clocks": clocks})
+    led = box.ledger()
+    assert "lock probe: 1005 MHz unsupported" in led
+    assert "floor REFUSED: the prelude's probe of the 1005 MHz lock reads unsupported" in led, led
+    floors = [a for a in box.tool("dram_counter_route") if "--floor" in a]
+    assert all("lock1005" not in val(a, "--out") for a in floors)
+    assert got.returncode == exit_codes.INVALID
+
+
+def test_a_drop_group_is_dropped_together(tmp_path):
+    body = """- prelude
+olmoe-1b-7b bytes label=a byte-groups=1 est=10 cap=20
+mixtral-8x7b bytes label=l2base byte-groups=1 drop-group=pair est=7 cap=20
+mixtral-8x7b bytes label=l2s8 byte-groups=1 num-stages=8 drop-group=pair est=7 cap=20
+olmoe-1b-7b bytes label=b byte-groups=2 est=1 cap=5
+"""
+    now = 1_900_000_000
+    # 30 min left less the 8-minute reserve: 22 against 28 planned. Dropping unit 5 (1) is
+    # not enough, so unit 4 goes, and its group takes unit 3 with it
+    box, got = _plan_box(tmp_path, body, deadline=now + 30 * 60, MOE_DRIVER_NOW=now)
+    led = box.ledger()
+    assert re.findall(r"DROPPED unit (\d+)/", led) == ["5", "4", "3"], led
+    assert "drop-group pair goes with unit 4" in led
+    assert re.findall(r"^\S+ (\w+) START", led, re.M) == ["prelude", "bytes"]

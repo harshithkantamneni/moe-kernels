@@ -1,0 +1,51 @@
+# RENTAL 2 (registered 2026-10-01, docs/registered/README.md): one gpu_1x_gh200, four
+# registrations (2026-10-01-rental2-{knobs,launch2,const,w1floor}-gh200), run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental2-2026-10.plan --deadline <epoch s>
+# One unit a line: <model> <step> [key=value ...]. The order is the priority: when time runs short
+# the driver drops the LAST unit first (a drop-group goes together).
+# KEYS NEW IN RENTAL 2: num-stages, block-k, slot-pad-rows, partition-metrics (bytes);
+# floor-lock-mhz, floor-base, floor-shape-metrics, floor-null-kernel (floor); drop-group (any).
+# A floor lock other than 1710 is probed by the prelude (lock, read back, reset), so a lock this
+# card refuses costs 0 minutes. launchfloor always runs its timed phase (the profiler guarded off,
+# the host probe before and after) and its trace phase as two processes under one lock.
+# Minutes, from the published ledgers: rental 1 (2026-10-01) floor unit 2 = 4 captures of 8 treads
+# in 2.5 min, scaled by treads, GEMM length and ~1.3x passes for the shape metrics; tp2 byte page
+# 3.5-3.7 min, tp4 2.3-2.5, tp8 1.5, 8x7B 6.2 (rental 1 units 3-11), x1.4 with the partition
+# metrics; launch floor: launch_floor.py's own dry-run minutes for the two phases (tp8 and
+# Granite-3B 22.8 + 6.2-6.6, JetMoE 11.8 + 5.8, Granite-1B 12.9 + 5.0), scaled by rental 1's
+# 21/24 measured-to-estimated ratio. The review's corrections (design-r2-review/REVIEW.md
+# section 7) are in: the unseen floor treads, tp8 s8 in the B block, 1005 probed in the prelude,
+# and the 8x7B base/s8 pair dropped together.
+- prelude est=3 cap=15
+# ---- (parts 3 and 4) floor captures: NATIVE, G = 64, base clock then the 1710 lock, shape
+# metrics and the null kernel on every one; tp8's 6, 8, 10 a SEEN replication, every tread >= 11
+# (tp8) or >= 10 (tp4, tp2) on no published page.
+mixtral-8x7b-tp8 floor label=floor2 floor-groups=64 floor-treads=1,2,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1 est=5 cap=15
+mixtral-8x7b-tp4 floor label=floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1 est=6 cap=20
+mixtral-8x7b-tp2 floor label=floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1 est=7 cap=20
+# (part 3, K3) the clock lever: the tp4 capture at a 1005 MHz lock only (no base capture)
+mixtral-8x7b-tp4 floor label=floor1005 floor-groups=64 floor-treads=2,4,6,8,12,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=3 cap=12
+# ---- (part 1, B) the lag lever: same-board defaults first, then num_stages 8 and 6; tp8 s8 is
+# the below-edge negative control every SELECTED verdict depends on
+mixtral-8x7b-tp2 bytes label=l2base byte-groups=1 partition-metrics=1 est=6 cap=20
+mixtral-8x7b-tp2 bytes label=l2s8 byte-groups=1 num-stages=8 partition-metrics=1 est=6 cap=20
+mixtral-8x7b-tp4 bytes label=l2base byte-groups=1 est=3 cap=12
+mixtral-8x7b-tp4 bytes label=l2s8 byte-groups=1 num-stages=8 est=3 cap=12
+mixtral-8x7b-tp8 bytes label=l2s8 byte-groups=1 num-stages=8 est=2 cap=10
+mixtral-8x7b-tp2 bytes label=l2s6 byte-groups=1 num-stages=6 est=4 cap=15
+# ---- (part 1, T5) k-steps at fixed L, bytes and W_c: BLOCK_K 32/s4 and 128/s2 against 64/s4
+mixtral-8x7b-tp2 bytes label=atbk64 byte-groups=64 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=atbk32 byte-groups=64 block-k=32 num-stages=4 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=atbk128 byte-groups=64 block-k=128 num-stages=2 est=4 cap=15
+# ---- (part 2) the launch floor rerun: tp8 blind on the host side, Granite-3B the rerun
+mixtral-8x7b-tp8 launchfloor label=r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,3,6 est=28 cap=50
+granite-3.0-3b-a800m launchfloor label=r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9 est=28 cap=50
+# ---- lower priority (dropped first, from the bottom)
+mixtral-8x7b-tp2 bytes label=l2bk32 byte-groups=1 block-k=32 num-stages=4 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=l2bk128 byte-groups=1 block-k=128 num-stages=2 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=l2pad7 byte-groups=1 slot-pad-rows=7 est=4 cap=15
+mixtral-8x7b-tp2 bytes label=ats8 byte-groups=64 num-stages=8 est=4 cap=15
+mixtral-8x7b bytes label=l2base byte-groups=1 drop-group=x87pair est=7 cap=20
+mixtral-8x7b bytes label=l2s8 byte-groups=1 num-stages=8 drop-group=x87pair est=7 cap=20
+jetmoe-8b launchfloor label=r2 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3 est=15 cap=30
+granite-3.0-1b-a400m launchfloor label=r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9 est=15 cap=30

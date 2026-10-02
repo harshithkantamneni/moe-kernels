@@ -2786,7 +2786,8 @@ def build_counter_payload(args, *, ridge: float, ridge_source: str, anchors: dic
     payload = {
         "device": args.card, "model": args.model, "dtype": args.dtype,
         "group_m": args.group_m, "block_n": args.block_n,
-        "block_k": SWEEP_FIXED["BLOCK_SIZE_K"], "num_warps": SWEEP_FIXED["num_warps"],
+        "block_k": getattr(args, "block_k", None) or SWEEP_FIXED["BLOCK_SIZE_K"],
+        "num_warps": SWEEP_FIXED["num_warps"],
         "num_stages": args.num_stages, "block_m": args.block_m,
         "cache_control": args.cache_control,
         "ridge": ridge, "ridge_source": ridge_source,
@@ -3021,6 +3022,19 @@ def run_id_for(mode: str, args, card: str) -> str:
                  "block_n": args.block_n, "block_m": args.block_m,
                  "num_stages": args.num_stages, "tiles": list(args.tiles),
                  "calls": R3_CALLS_PER_CELL, "warmups": R3_WARMUP_CALLS}
+        # Rental 2's knobs (2026-10-01), each a knob only when it is not the
+        # default, so no published page's or census's id moves.
+        bk = getattr(args, "block_k", None)
+        if bk is not None and int(bk) != int(SWEEP_FIXED["BLOCK_SIZE_K"]):
+            knobs["block_k"] = int(bk)
+        if getattr(args, "slot_pad_rows", 0):
+            knobs["slot_pad_rows"] = int(args.slot_pad_rows)
+        if mode == "r3-run" and getattr(args, "partition_metrics", False):
+            knobs["partition_metrics"] = list(R3_PARTITION_METRICS)
+        if mode == "r3-floor" and getattr(args, "floor_shape_metrics", False):
+            knobs["shape_metrics"] = list(R3_FLOOR_SHAPE_METRICS)
+        if mode == "r3-floor" and getattr(args, "floor_null_kernel", False):
+            knobs["null_kernel"] = NULL_KERNEL_NAME
         if mode == "r3-floor":
             # The floor capture's own treads, calls, ask, clock and lock, so a
             # floor file and a page at the same G, or two clocks or two locks
@@ -3592,7 +3606,8 @@ def do_dry_run(args) -> int:
     print(COUNTER_SCHEMA_TEXT.format(
         device=card, model=args.model, dtype=args.dtype, group_m=args.group_m,
         block_n=args.block_n, block_m=bm, cache=args.cache_control,
-        block_k=SWEEP_FIXED["BLOCK_SIZE_K"], num_warps=SWEEP_FIXED["num_warps"],
+        block_k=getattr(args, "block_k", None) or SWEEP_FIXED["BLOCK_SIZE_K"],
+        num_warps=SWEEP_FIXED["num_warps"],
         num_stages=args.num_stages, marker=args.call_marker,
         ridge=f"{ridge:.2f}" if ridge else "null",
         anchors=json.dumps({k: round(v, 4) for k, v in anchors.items()}),
@@ -4598,6 +4613,50 @@ def _floor_unit(metric: str) -> tuple[str, dict[str, float]]:
 
 NCU_METRIC_UNITS.update({m: _floor_unit(m) for m in R3_FLOOR_METRICS})
 
+#: RENTAL 2's L2 PARTITION METRICS (`--partition-metrics`, a page's; 2026-10-01).
+#: The far share of SHARED's extra hits was, until rental 1, a SUBTRACTION:
+#: fabric sectors F less the fabric misses (M - Mn). These count the fabric's
+#: own reads, hits and misses DIRECTLY, so the subtraction can be checked
+#: against them (scripts/l2_survival.py, score_knobs.py's partition cross-
+#: check). RECORDED, never gated, parsed SOFT, asked only where this chip's
+#: metric list offers them (one name ncu does not know aborts a capture);
+#: each name is on the GH200's list (rental 1's session/ncu-query-metrics.txt).
+R3_PARTITION_METRICS: tuple[str, ...] = (
+    "lts__t_sectors_srcunit_ltcfabric_op_read.sum",
+    "lts__t_sectors_srcunit_ltcfabric_op_read_lookup_hit.sum",
+    "lts__t_sectors_srcunit_ltcfabric_op_read_lookup_miss.sum",
+    "lts__t_sectors_srcunit_tex_op_read_lookup_miss.sum",
+)
+NCU_METRIC_UNITS.update({m: ("sector", {"sector": 1.0, "Ksector": 1e3, "Msector": 1e6,
+                                        "Gsector": 1e9}) for m in R3_PARTITION_METRICS})
+
+#: RENTAL 2's FLOOR SHAPE METRICS (`--floor-shape-metrics`, a floor capture's;
+#: part 3). The spread of SM-active and elapsed time over the SMs, the CTAs
+#: each SM launched and held, and the GPC clock: they split the per-GEMM
+#: constant into launch/drain (elapsed - active.max), dispatch imbalance
+#: (active.max - active.avg) and a transient inside SM-active time. All SOFT,
+#: asked only where this chip's list offers them, scored by
+#: scripts/scoring/rental2/score_const.py and never by a gate here.
+R3_FLOOR_SHAPE_METRICS: tuple[str, ...] = (
+    "sm__cycles_active.max", "sm__cycles_active.min",
+    "sm__cycles_elapsed.max", "sm__cycles_elapsed.min",
+    "sm__ctas_launched.sum", "sm__ctas_launched.max", "sm__ctas_launched.min",
+    "sm__ctas_active.sum", "sm__warps_launched.sum",
+    "smsp__cycles_active.avg", "gpc__cycles_elapsed.max",
+)
+
+
+def _shape_unit(metric: str) -> tuple[str, dict[str, float]]:
+    """cycles for the clocks, blocks for the CTA counts, warps for the warps."""
+    if "__cycles_" in metric:
+        return "cycle", {"cycle": 1.0, "Kcycle": 1e3, "Mcycle": 1e6, "Gcycle": 1e9}
+    if "__warps_" in metric:
+        return "warp", {"warp": 1.0, "Kwarp": 1e3, "Mwarp": 1e6, "Gwarp": 1e9}
+    return "block", {"block": 1.0, "Kblock": 1e3, "Mblock": 1e6, "Gblock": 1e9}
+
+
+NCU_METRIC_UNITS.update({m: _shape_unit(m) for m in R3_FLOOR_SHAPE_METRICS})
+
 #: The page field each summed or averaged metric lands in. `launch__grid_size`
 #: lands in `grid_size`, per GEMM, and the recorded ones in `recorded`.
 R3_FIELDS: dict[str, str] = {
@@ -4648,6 +4707,15 @@ R3_WARMUP_CALLS = 2
 
 #: ncu's kernel filter: the fused MoE GEMM only, by function name.
 R3_KERNEL_FILTER = "regex:^fused_moe_kernel$"
+#: A floor capture with the null kernel (`--floor-null-kernel`, rental 2 part 3)
+#: profiles ATen's `spin_kernel` too, the one `torch.cuda._sleep` launches;
+#: nothing else in the child's calls is named that, and the attribution
+#: (`attribute_launches`) expects it at exactly the planned slots.
+R3_NULL_KERNEL_FILTER = "regex:^(fused_moe_kernel|spin_kernel)$"
+#: The attribution's name for the null kernel's slot in a call, and the kernel
+#: (`private_weight_reference.NULL_KERNEL_NAME`, which a test pins to this).
+NULL_SLOT = "null"
+NULL_KERNEL_NAME = "spin_kernel"
 
 #: The script whose `--counter-child` mode ncu runs.
 R3_CHILD = REPO / "scripts" / "private_weight_reference.py"
@@ -5230,7 +5298,7 @@ def r3_floor_metrics(names) -> tuple[tuple[str, ...], list[str], str]:
 def r3_floor_plan(group_m: int, *, profile_dir: Path, model: str = "mixtral-8x7b",
                   dtype: str = "bf16", block_m: int | None = None,
                   block_n: int | None = None, num_stages: int | None = None,
-                  treads=None) -> dict:
+                  treads=None, null_kernel: bool = False) -> dict:
     """The floor capture's plan: NATIVE only, the model's floor treads
     (`r3_floor_treads`, or `treads`, `--floor-treads`), K = `R3_FLOOR_CALLS`,
     R3's warmups skipped by ncu. A `measure` plan, so R3 validates and
@@ -5246,7 +5314,8 @@ def r3_floor_plan(group_m: int, *, profile_dir: Path, model: str = "mixtral-8x7b
                    num_stages=num_stages or fixed["num_stages"], group_m=group_m,
                    treads=treads, kind="measure", arms=(r3.NATIVE,),
                    calls=R3_FLOOR_CALLS, warmups=R3_WARMUP_CALLS,
-                   profile_dir=profile_dir, stem=f"g{group_m}.floor")
+                   profile_dir=profile_dir, stem=f"g{group_m}.floor",
+                   null_kernel=null_kernel)
 
 
 def r3_floor_treads_for(args) -> tuple[int, ...]:
@@ -5499,7 +5568,8 @@ def r3_byte_model(cfg, dtype: str, block_m: int) -> dict:
 
 def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: int,
             group_m: int, treads, kind: str, arms, calls: int, warmups: int,
-            profile_dir: Path, stem: str) -> dict:
+            profile_dir: Path, stem: str, block_k: int | None = None,
+            slot_pad_rows: int = 0, null_kernel: bool = False) -> dict:
     """The plan the child runs, validated by R3 before anything touches a box.
 
     The declaration is R3's own (`counter_declaration`, over R3's whole ladder
@@ -5520,6 +5590,14 @@ def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: i
             "gemms_per_call": r3.GEMMS_PER_CALL, "seed": 0,
             "manifest": str(Path(profile_dir) / f"{stem}.manifest.json"),
             "triton_cache": str(Path(profile_dir) / f"{stem}.triton-cache")}
+    # Rental 2's knobs (2026-10-01) ride in the plan ONLY when set, so every
+    # plan, page and run id written before them is unchanged.
+    if block_k is not None and int(block_k) != int(r3.SWEEP.FIXED["BLOCK_SIZE_K"]):
+        plan["block_k"] = int(block_k)
+    if slot_pad_rows:
+        plan["slot_pad_rows"] = int(slot_pad_rows)
+    if null_kernel:
+        plan["null_kernel"] = True
     r3.validate_counter_plan(plan)
     r3.counter_schedule(plan)
     return plan
@@ -5530,9 +5608,15 @@ def r3_design(plan: dict) -> dict:
     r3 = _r3()
     cfg = MODEL_CONFIGS[plan["model"]]
     sched = r3.counter_schedule(plan)
-    pinned = r3.pinned_config(plan["block_n"], plan["group_m"], plan["num_stages"])
+    pinned = r3.pinned_config(plan["block_n"], plan["group_m"], plan["num_stages"],
+                              **r3.block_k_kw(r3.plan_block_k(plan)))
     copies = int(plan["copies_declared"])
-    return {"model": plan["model"], "dtype": plan["dtype"],
+    extra = {}
+    if plan.get("slot_pad_rows"):
+        extra["slot_pad_rows"] = int(plan["slot_pad_rows"])
+    if plan.get("null_kernel"):
+        extra["null_kernel"] = True
+    return {**extra, "model": plan["model"], "dtype": plan["dtype"],
             "block_m": int(plan["block_m"]), "block_n": pinned["BLOCK_SIZE_N"],
             "block_k": pinned["BLOCK_SIZE_K"], "num_warps": pinned["num_warps"],
             "num_stages": pinned["num_stages"], "group_m": pinned["GROUP_SIZE_M"],
@@ -5550,7 +5634,8 @@ def r3_design(plan: dict) -> dict:
 def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
                 launch_skip: int, launch_count: int | None,
                 python: str | None = None, child: Path = R3_CHILD,
-                clock_control: str = "base") -> list[str]:
+                clock_control: str = "base",
+                kernel_filter: str = R3_KERNEL_FILTER) -> list[str]:
     """ncu over R3's child: the arm GEMMs only, at a cold L2, a base clock,
     and exactly the planned launch window.
 
@@ -5584,7 +5669,7 @@ def r3_ncu_argv(binary: str, plan_path: Path, report_path: Path, metrics, *,
     from the vLLM venv.
     """
     argv = [binary, "--target-processes", "all", *ncu_common_flags("all"),
-            "--clock-control", clock_control, "--nvtx", "-k", R3_KERNEL_FILTER,
+            "--clock-control", clock_control, "--nvtx", "-k", kernel_filter,
             "--kernel-name-base", "function", "--launch-skip", str(launch_skip)]
     if launch_count is not None:
         argv += ["--launch-count", str(launch_count)]
@@ -5617,14 +5702,17 @@ def r3_launch_sequence(manifest: dict) -> list[tuple[str, int, str, bool]]:
             f"the manifest says {manifest['gemms_per_call']} GEMMs per call and the "
             f"attribution knows {len(gemms)}")
     order = [(str(a), int(n)) for a, n in manifest["order"]]
+    # A floor plan with the null kernel (rental 2): each call is its GEMMs,
+    # then one spin_kernel, in the slot NULL_SLOT.
+    slots = tuple(gemms) + ((NULL_SLOT,) if manifest.get("null_kernel") else ())
     seq: list[tuple[str, int, str, bool]] = []
     if manifest.get("launch_count") is None:
         for a, n in order:
             for u in range(int(manifest["warmup_calls"])):
-                seq += [(f"{a}/{n}", u, g, True) for g in gemms]
+                seq += [(f"{a}/{n}", u, g, True) for g in slots]
     for a, n in order:
         for k in range(int(manifest["calls_per_cell"])):
-            seq += [(f"{a}/{n}", k, g, False) for g in gemms]
+            seq += [(f"{a}/{n}", k, g, False) for g in slots]
     return seq
 
 
@@ -5649,15 +5737,32 @@ def attribute_launches(launches: list[Launch], manifest: dict) -> list[dict]:
     """
     seq = r3_launch_sequence(manifest)
     ordered = _launch_order(launches)
+    null = bool(manifest.get("null_kernel"))
     if len(ordered) != len(seq):
         raise CounterRunRefused(
             f"the profile holds {len(ordered)} fused_moe_kernel launches and the "
             f"manifest planned EXACTLY {len(seq)} ({len(manifest['order'])} cells x "
             f"{manifest['calls_per_cell']} calls x {manifest['gemms_per_call']} "
-            "GEMMs); an extra or a missing launch shifts every attribution after "
+            "GEMMs" + (" + 1 null kernel" if null else "")
+            + "); an extra or a missing launch shifts every attribution after "
             "it, so nothing may be divided")
     out = []
     for i, (ln, (key, call, gemm, warm)) in enumerate(zip(ordered, seq, strict=True)):
+        if gemm == NULL_SLOT:
+            # The null kernel's slot: ATen's spin_kernel, one block, and nothing else.
+            grid = ln.metrics.get("launch__grid_size")
+            if NULL_KERNEL_NAME not in ln.kernel or GEMM_MARKER in ln.kernel:
+                raise CounterRunRefused(
+                    f"launch {i} (ID {ln.launch_id}) is {ln.kernel!r} in {key} call {call}'s "
+                    f"null-kernel slot, where the plan put {NULL_KERNEL_NAME}; the launch "
+                    "order and the manifest disagree")
+            if grid is None or int(round(grid)) != 1:
+                raise CounterRunRefused(
+                    f"launch {i} (ID {ln.launch_id}) is {NULL_KERNEL_NAME} with a grid of "
+                    f"{grid}, not torch.cuda._sleep's one block")
+            out.append({"key": key, "call": call, "gemm": gemm, "warmup": warm,
+                        "launch": ln})
+            continue
         if GEMM_MARKER not in ln.kernel:
             raise CounterRunRefused(
                 f"launch {i} (ID {ln.launch_id}) is {ln.kernel!r}, not {GEMM_MARKER}; "
@@ -5698,7 +5803,7 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
     asked = set(metrics_asked)
     by_key: dict[str, dict[int, dict[str, Launch]]] = {}
     for rec in attributed:
-        if rec["warmup"]:
+        if rec["warmup"] or rec["gemm"] == NULL_SLOT:
             continue
         by_key.setdefault(rec["key"], {}).setdefault(rec["call"], {})[rec["gemm"]] = \
             rec["launch"]
@@ -5729,7 +5834,7 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
             rec = {}
             # The page's clock counter rides here too, and only a page taken
             # under a lock asks it (`R3_PAGE_CLOCK_METRIC`, V10).
-            for metric in R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,):
+            for metric in R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,) + R3_PARTITION_METRICS:
                 xs = [ln.metrics[metric] for ln in runs if metric in ln.metrics]
                 if len(xs) == k:
                     rec[metric] = statistics.fmean(xs)
@@ -7113,13 +7218,16 @@ def do_dry_run_r3(args) -> int:
                             group_m=g, treads=treads, kind="measure", arms=r3.ARMS,
                             calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
                             profile_dir=Path("$R") / f"r3c-g{g}.profiles",
-                            stem=f"g{g}") for g in groups}
+                            stem=f"g{g}", block_k=getattr(args, "block_k", None),
+                            slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0))
+                 for g in groups}
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
         return exit_codes.REFUSED
     first = plans[groups[0]]
     byte = r3_byte_model(cfg, args.dtype, bm)
-    pinned = r3.pinned_config(args.block_n, groups[0], args.num_stages)
+    pinned = r3.pinned_config(args.block_n, groups[0], args.num_stages,
+                              **r3.block_k_kw(getattr(args, "block_k", None)))
     e = cfg.num_experts
     a = byte["operand_per_tile_w1"] + byte["operand_per_tile_w2"]
     print(f"DRAM COUNTER RUN -- PLAN  family {R3_FAMILY}: R3's three arms under the "
@@ -7150,7 +7258,11 @@ def do_dry_run_r3(args) -> int:
                          tokens_for_rows(cfg, max(treads) * bm), None,
                          "decided on the box",
                          flush=(0, "the counter child times nothing, so no flush buffer"),
-                         copies_read=max(treads))
+                         copies_read=max(treads),
+                         pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0))
+    if getattr(args, "slot_pad_rows", 0):
+        print(f"  slot padding    {args.slot_pad_rows} rows per expert slot (an address "
+              "control: the bytes read are unchanged)")
     print(f"  memory          R3's memory_plan, no flush buffer: predicted peak "
           f"{mem.predicted_peak_bytes / 1e9:.1f} GB ({mem.copies} copies at "
           f"{mem.per_copy_bytes / 1e9:.4f} GB); fits a card with at least "
@@ -7414,23 +7526,38 @@ def r3_floor_cells(attributed: list[dict], manifest: dict) -> list[dict]:
         if not rec["warmup"]:
             runs.setdefault(rec["key"], {}).setdefault(rec["gemm"], []).append(
                 rec["launch"])
+
+    def reduce(lns: list[Launch]) -> dict:
+        # rental 2's shape metrics enter only where a launch returned them, so a
+        # floor file without them is the file every earlier capture wrote
+        shape = [m for m in R3_FLOOR_SHAPE_METRICS if any(m in ln.metrics for ln in lns)]
+        vals: dict = {}
+        for m in R3_STRICT_METRICS + R3_FLOOR_METRICS + tuple(shape):
+            xs = [ln.metrics.get(m) for ln in lns]
+            vals[m] = (statistics.fmean(xs) if xs and all(x is not None for x in xs)
+                       else None)
+        cyc, ns = vals["sm__cycles_elapsed.avg"], vals["gpu__time_duration.sum"]
+        vals["sm_clock_mhz"] = 1e3 * cyc / ns if cyc and ns else None
+        vals["unreadable"] = sorted({m for ln in lns for m in ln.unreadable})
+        return vals
+
     cells = []
     for arm, n in manifest["order"]:
         key = f"{arm}/{n}"
         per_gemm: dict[str, dict] = {}
+        null = None
         for gemm, lns in runs.get(key, {}).items():
-            vals: dict = {}
-            for m in R3_STRICT_METRICS + R3_FLOOR_METRICS:
-                xs = [ln.metrics.get(m) for ln in lns]
-                vals[m] = (statistics.fmean(xs) if xs and all(x is not None for x in xs)
-                           else None)
-            cyc, ns = vals["sm__cycles_elapsed.avg"], vals["gpu__time_duration.sum"]
-            vals["sm_clock_mhz"] = 1e3 * cyc / ns if cyc and ns else None
-            vals["unreadable"] = sorted({m for ln in lns for m in ln.unreadable})
-            per_gemm[gemm] = vals
-        cells.append({"arm": str(arm), "n": int(n),
-                      "calls": int(manifest["calls_per_cell"]),
-                      "grid": dict(manifest["grids"][key]), "per_gemm": per_gemm})
+            if gemm == NULL_SLOT:
+                null = dict(reduce(lns), calls=len(lns),
+                            cycles_asked=manifest.get("null_kernel_cycles"))
+                continue
+            per_gemm[gemm] = reduce(lns)
+        cell = {"arm": str(arm), "n": int(n),
+                "calls": int(manifest["calls_per_cell"]),
+                "grid": dict(manifest["grids"][key]), "per_gemm": per_gemm}
+        if null is not None:
+            cell["null"] = null
+        cells.append(cell)
     return cells
 
 
@@ -7486,12 +7613,19 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
         print(f"REFUSE: {refusal}. Nothing was captured (the probe's one kernel ran; "
               "the floor's did not).")
         return exit_codes.REFUSED
+    shape_dropped: list[str] = []
+    if getattr(args, "floor_shape_metrics", False):
+        # rental 2 part 3: asked where the chip lists them, SOFT either way
+        offered = [m for m in R3_FLOOR_SHAPE_METRICS if metric_base(m) in names]
+        shape_dropped = [m for m in R3_FLOOR_SHAPE_METRICS if m not in offered]
+        asked = tuple(asked) + tuple(m for m in offered if m not in asked)
+    null_kernel = bool(getattr(args, "floor_null_kernel", False))
     r3 = _r3()
     try:
         plan = r3_floor_plan(args.group_m, profile_dir=profiles, model=args.model,
                              dtype=args.dtype, block_m=args.block_m,
                              block_n=args.block_n, num_stages=args.num_stages,
-                             treads=r3_floor_treads_for(args))
+                             treads=r3_floor_treads_for(args), null_kernel=null_kernel)
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
         return exit_codes.REFUSED
@@ -7504,8 +7638,14 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     capture_path = profiles / f"{stem}.capture.json"
     argv = r3_ncu_argv(ncu["binary"], plan_path, report, asked,
                        launch_skip=sched.launch_skip, launch_count=sched.launch_count,
-                       clock_control=clock)
+                       clock_control=clock,
+                       kernel_filter=R3_NULL_KERNEL_FILTER if null_kernel else R3_KERNEL_FILTER)
     print(card_line(card))
+    if null_kernel:
+        print(f"  null kernel: torch.cuda._sleep({r3.NULL_KERNEL_CYCLES}) after every call "
+              f"({NULL_KERNEL_NAME}, one block), in the skip and the count")
+    if shape_dropped:
+        print(f"  shape metrics this chip does not list, not asked: {shape_dropped}")
     print(f"R3 FLOOR CAPTURE  G={args.group_m}  NATIVE at treads {plan['treads']}, "
           f"{sched.launch_count} profiled launches at --clock-control {clock}"
           + (f" under an nvidia-smi lock of {lock:g} MHz" if lock else "")
@@ -7516,6 +7656,7 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     smi_after = floor_smi_reading()
     capture = {"argv": argv, "binary": ncu.get("binary"), "version": ncu.get("version"),
                "returncode": rc, "metrics_asked": list(asked), "metrics_dropped": dropped,
+               "shape_metrics_dropped": shape_dropped, "null_kernel": null_kernel,
                "metrics_query": query, "clock_control": clock, "lock_mhz": lock,
                "probe_clock_control": r3_probe_clock_control(args),
                "smi_before": smi_before, "smi_after": smi_after,
@@ -7536,12 +7677,15 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
             f"the child ran on {board((manifest.get('device') or {}).get('uuid'))} and "
             f"this floor capture's card is {board(card['uuid'])}; {kept}")
     launches = parse_ncu_csv(_r3_reduce(ncu["binary"], report, csv_path),
-                             soft=frozenset(R3_FLOOR_METRICS))
+                             soft=frozenset(R3_FLOOR_METRICS + R3_FLOOR_SHAPE_METRICS))
     attributed = attribute_launches(launches, manifest)
     cells = r3_floor_cells(attributed, manifest)
-    measured = [rec["launch"] for rec in attributed if not rec["warmup"]]
+    # the GEMM launches: the null kernel retires no HMMA and decides no group
+    measured = [rec["launch"] for rec in attributed
+                if not rec["warmup"] and rec["gemm"] != NULL_SLOT]
     returned = {m for ln in measured for m in ln.metrics}
-    missing = [m for m in asked if m in R3_FLOOR_METRICS and m not in returned]
+    missing = [m for m in asked if (m in R3_FLOOR_METRICS or m in R3_FLOOR_SHAPE_METRICS)
+               and m not in returned]
     lost = [" or ".join(g) for g in R3_FLOOR_DECISIVE if not set(g) & returned]
     if lost:
         raise CounterRunRefused(
@@ -7584,6 +7728,19 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
         f"{R3_CLOCK_OFFSET_MAX_NS / 1e3:g} us, no cell over {R3_CLOCK_CELL_STEPS:g} steps off",
         f"this file as a reading at {lock:g} MHz; its numbers stand only as readings "
         "at the clocks its cells name")] if lock else []
+    if null_kernel:
+        # V1 for a floor with the null kernel (rental 2): the attribution above is
+        # EXACT and raised on any other count or slot, so a written file states it
+        nulls = sum(1 for rec in attributed if rec["gemm"] == NULL_SLOT and not rec["warmup"])
+        planned = int(manifest["calls_per_cell"]) * len(manifest["order"])
+        gates.append(Gate(
+            "V1", "VALIDITY", "every launch attributed: each call's GEMMs, then its null "
+            "kernel (spin_kernel, one block), at exactly the planned slots",
+            PASS if nulls == planned else FAIL,
+            f"{len(measured)} GEMM launches and {nulls} null kernels against {planned} planned",
+            f"exact count and order (attribute_launches); launch skip {sched.launch_skip}, "
+            f"count {sched.launch_count} = {r3.launches_per_call(plan)} launches x calls",
+            "the floor file: a launch in the wrong slot shifts every cycle count after it"))
     body = {"family": R3_FAMILY, "kind": "floor", "card": card, "stack": stack,
             "commit": commit, "plan": plan, "cells": cells,
             "clock": {"control": clock, "lock_mhz": lock,
@@ -7601,7 +7758,10 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
                     "cache_control": "all", "clock_control": clock,
                     "probe_clock_control": capture["probe_clock_control"],
                     "metrics_asked": list(asked), "metrics_dropped": dropped,
-                    "metrics_missing": missing, "metrics_query": query}}
+                    "metrics_missing": missing, "metrics_query": query,
+                    **({"shape_metrics_dropped": shape_dropped}
+                       if getattr(args, "floor_shape_metrics", False) else {}),
+                    **({"kernel_filter": R3_NULL_KERNEL_FILTER} if null_kernel else {})}}
     out.write_text(json.dumps(stamped(body, mode="r3-floor", args=args,
                                       card=card["name"],
                                       instrument=R3_FLOOR_INSTRUMENT.format(clock=clock)),
@@ -7780,13 +7940,26 @@ def do_run_r3(args) -> int:
                   "whole capture")
             return exit_codes.REFUSED
         metrics += tuple(m for m in (R3_PAGE_CLOCK_METRIC,) if m not in metrics)
+    partition_dropped: list[str] = []
+    if getattr(args, "partition_metrics", False):
+        names, query = query_metric_names(ncu["binary"])
+        if names is None:
+            print(f"REFUSE: --partition-metrics asks names this box's metric list could "
+                  f"not be read for ({query}); one name ncu does not know aborts the whole "
+                  "capture, so nothing was captured")
+            return exit_codes.REFUSED
+        offered = [m for m in R3_PARTITION_METRICS if metric_base(m) in names]
+        partition_dropped = [m for m in R3_PARTITION_METRICS if m not in offered]
+        metrics += tuple(m for m in offered if m not in metrics)
     g_m, stem = args.group_m, f"g{args.group_m}"
     try:
         plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
                        block_n=args.block_n, num_stages=args.num_stages, group_m=g_m,
                        treads=args.tiles, kind="measure", arms=r3.ARMS,
                        calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
-                       profile_dir=profiles, stem=stem)
+                       profile_dir=profiles, stem=stem,
+                       block_k=getattr(args, "block_k", None),
+                       slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0))
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
         return exit_codes.REFUSED
@@ -7804,6 +7977,8 @@ def do_run_r3(args) -> int:
           f"{r3_clock_word(clock, lock)}")
     print(f"  ncu        {ncu.get('binary')}  [{ncu.get('version', '')}]")
     print(f"  metrics    {len(metrics)} asked: {', '.join(metrics)}")
+    if partition_dropped:
+        print(f"  partition metrics this chip does not list, not asked: {partition_dropped}")
     print(f"  profiles   {profiles}")
     manifest_path = Path(plan["manifest"])
     capture_path = profiles / f"{stem}.capture.json"
@@ -7827,6 +8002,8 @@ def do_run_r3(args) -> int:
                "probe_clock_control": r3_probe_clock_control(args),
                **({"smi_before": smi_before, "smi_after": smi_after}
                   if clock != "base" else {}),
+               **({"partition_metrics_dropped": partition_dropped}
+                  if getattr(args, "partition_metrics", False) else {}),
                "card": card, "stack": stack, "commit": commit}
     capture_path.write_text(json.dumps(capture, indent=2))
     csv_text = _r3_reduce(ncu["binary"], report, csv_path)
@@ -7850,7 +8027,8 @@ def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census
     # record written before 2026-09-26 names none and was taken at base.
     clock, lock = capture.get("clock_control") or "base", capture.get("lock_mhz")
     launches = parse_ncu_csv(csv_text,
-                             soft=frozenset(R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,)))
+                             soft=frozenset(R3_RECORDED_METRICS + (R3_PAGE_CLOCK_METRIC,)
+                                            + R3_PARTITION_METRICS))
     cells = r3_reduce_cells(attribute_launches(launches, manifest), manifest, metrics)
     layout, _header = ncu_csv_layout(csv_text)
     page = build_r3_page(
@@ -8328,7 +8506,9 @@ def planted_r3_manifest(plan: dict, *, device_uuid: str) -> dict:
                       "verdict": PASS, "tread": max(int(n) for n in plan["treads"]),
                       "synthetic": True},
             "memory_plan": None, "versions": {"planted": True},
-            "device": {"name": "planted", "uuid": device_uuid}}
+            "device": {"name": "planted", "uuid": device_uuid},
+            **({"null_kernel": True, "null_kernel_name": NULL_KERNEL_NAME,
+                "null_kernel_cycles": r3.NULL_KERNEL_CYCLES} if plan.get("null_kernel") else {})}
 
 
 def r3_world_launch(world: str, cfg, *, block_m: int, group_m: int, arm: str, n: int,
@@ -8397,10 +8577,22 @@ def canned_r3_csv(manifest: dict, world: str, *, model: str = "mixtral-8x7b",
     launches = []
     for key, call, gemm, _warm in seq:
         arm, n = key.split("/")
+        if gemm == NULL_SLOT:
+            # the null kernel's slot (rental 2): ATen's spin_kernel, one block
+            launches.append((key, dict({m: 0.0 for m in R3_ALL_METRICS},
+                                       **{"launch__grid_size": 1.0, "gpu__time_duration.sum": 600.0,
+                                          "launch__occupancy_limit_blocks": 32.0,
+                                          "launch__occupancy_limit_registers": 64.0,
+                                          "launch__occupancy_limit_shared_mem": 32.0,
+                                          "launch__occupancy_limit_warps": 64.0,
+                                          "launch__registers_per_thread": 16.0}),
+                             NULL_KERNEL_NAME))
+            continue
         launches.append((key, r3_world_launch(
             world, cfg, block_m=block_m, group_m=group_m, arm=arm, n=int(n), gemm=gemm,
             call=call, calls=k, grid=int(manifest["grids"][key][gemm]),
-            block_n=int((manifest.get("pinned") or {}).get("BLOCK_SIZE_N") or 0) or None)))
+            block_n=int((manifest.get("pinned") or {}).get("BLOCK_SIZE_N") or 0) or None),
+            GEMM_MARKER))
     if swap_grid_at is not None:
         i = swap_grid_at
         a, b = launches[i][1], launches[i + 1][1]
@@ -8418,17 +8610,17 @@ def canned_r3_csv(manifest: dict, world: str, *, model: str = "mixtral-8x7b",
                  "Context", "Stream", "Block Size", "Grid Size", "Device", "CC"]
         rows = [",".join(f'"{c}"' for c in fixed + list(R3_ALL_METRICS)),
                 ",".join(['""'] * len(fixed) + [f'"{units[m]}"' for m in R3_ALL_METRICS])]
-        for i, (_key, vals) in enumerate(launches):
-            lead = [str(i), "1", "python", "127.0.0.1", GEMM_MARKER, "1", "7",
+        for i, (_key, vals, kname) in enumerate(launches):
+            lead = [str(i), "1", "python", "127.0.0.1", kname, "1", "7",
                     "(256, 1, 1)", f"({int(vals['launch__grid_size'])}, 1, 1)", "0", "9.0"]
             rows.append(",".join(f'"{c}"' for c in lead)
                         + "," + ",".join(f'"{vals[m]!r}"' for m in R3_ALL_METRICS))
         return "\n".join(head + rows) + "\n"
     rows = ['"ID","Process ID","Process Name","Kernel Name","Metric Name",'
             '"Metric Unit","Metric Value"']
-    for i, (_key, vals) in enumerate(launches):
+    for i, (_key, vals, kname) in enumerate(launches):
         for m in R3_ALL_METRICS:
-            rows.append(f'"{i}","1","python","{GEMM_MARKER}","{m}","{units[m]}",'
+            rows.append(f'"{i}","1","python","{kname}","{m}","{units[m]}",'
                         f'"{vals[m]!r}"')
     return "\n".join(head + rows) + "\n"
 
@@ -8624,6 +8816,32 @@ def build_parser() -> argparse.ArgumentParser:
                          "more than one 15 MHz step from F. Recorded on the page and "
                          "in its run id; --analyse refuses to join pages of two clock "
                          "regimes")
+    ap.add_argument("--block-k", type=int, default=None, metavar="BK",
+                    help="with --run or --dry-run --family r3-arms, a page (rental 2): "
+                         "BLOCK_SIZE_K handed to the existing fused_moe kernel as a "
+                         "config value. Refused where Triton or the k-step count would "
+                         "not take it (private_weight_reference.config_refusal). In the "
+                         "page's design and run id only when not the default 64")
+    ap.add_argument("--slot-pad-rows", type=int, default=0, metavar="P",
+                    help="with --run or --dry-run --family r3-arms, a page (rental 2's "
+                         "address control): P extra rows allocated per expert slot; the "
+                         "bytes read are unchanged and stride(0) moves. In the run id "
+                         "only when not 0")
+    ap.add_argument("--partition-metrics", action="store_true",
+                    help="with --run --family r3-arms, a page (rental 2): also ask the "
+                         "L2 fabric's own read, hit and miss sectors "
+                         "(R3_PARTITION_METRICS), where this chip lists them; recorded "
+                         "SOFT, never gated")
+    ap.add_argument("--floor-shape-metrics", action="store_true",
+                    help="with --floor (rental 2 part 3): also ask the per-SM spread "
+                         "of active and elapsed cycles, CTA and warp counts and the GPC "
+                         "clock (R3_FLOOR_SHAPE_METRICS), where this chip lists them; "
+                         "SOFT, never gated")
+    ap.add_argument("--floor-null-kernel", action="store_true",
+                    help="with --run --floor (rental 2 part 3): the child launches "
+                         "torch.cuda._sleep(1000) (ATen's spin_kernel, one block) after "
+                         "every call; ncu's filter, the launch skip, the count and the "
+                         "attribution all carry it, and each cell records it as 'null'")
     ap.add_argument("--chip", default="",
                     help="with --dry-run --family r3-arms --floor: check the names "
                          "against this chip's metric list (gh100) instead of the "
@@ -8780,6 +8998,27 @@ def main(argv=None) -> int:
     if args.page_lock_mhz is not None and not args.page_lock_mhz > 0:
         print("REFUSE: --page-lock-mhz is the locked SM clock in MHz and must be above "
               "zero")
+        return exit_codes.REFUSED
+    bk = args.block_k
+    if (bk is not None and bk != SWEEP_FIXED["BLOCK_SIZE_K"]) or args.slot_pad_rows:
+        if not (args.family == R3_FAMILY and (args.run or args.dry_run) and not args.floor
+                and not args.census_only and not args.reduce_only):
+            print("REFUSE: --block-k and --slot-pad-rows belong to a page: --run or "
+                  "--dry-run --family r3-arms, not --floor, --census-only or "
+                  "--reduce-only (the ladder family's sweep has no such knob, and a "
+                  "census or floor runs R3's default tile)")
+            return exit_codes.REFUSED
+    if args.slot_pad_rows < 0:
+        print(f"REFUSE: --slot-pad-rows {args.slot_pad_rows}: a slot cannot be shorter "
+              "than its weights")
+        return exit_codes.REFUSED
+    if args.partition_metrics and not (args.run and args.family == R3_FAMILY
+                                       and not args.floor and not args.census_only
+                                       and not args.reduce_only):
+        print("REFUSE: --partition-metrics belongs to --run --family r3-arms, a page")
+        return exit_codes.REFUSED
+    if (args.floor_shape_metrics or args.floor_null_kernel) and not args.floor:
+        print("REFUSE: --floor-shape-metrics and --floor-null-kernel belong to --floor")
         return exit_codes.REFUSED
     if args.chip and not (args.floor and args.dry_run):
         print("REFUSE: --chip belongs to --dry-run --floor, the name check; a capture "

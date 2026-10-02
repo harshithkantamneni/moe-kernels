@@ -1189,6 +1189,27 @@ tiles are shared by content (a harness property). Not claimed: the per-CTA floor
 shape (tp8 w1 misses by 3.6%), any s_sync(d) form, R2's duration exponent, or any launch
 number priced on another host's H.
 
+**Correction (2026-10-01, before rental 2): what F4's tp8 w1 miss says.** The registered
+verdict stands as registered: F4 compared the measured slope over w1 n = 6, 8, 10 with
+352.2 and the slope missed by 3.6%, so F4 is FALSIFIED. Three lines above read that miss
+as a property of the floor, and they are withdrawn: "F4's w1 miss is the per-CTA floor
+itself", the diagnosis that "339.6 ... sits below even the per-k-step constant 344.1",
+and "Not claimed: the per-CTA floor on every shape (tp8 w1 misses by 3.6%)". The reason:
+352.2 is not a number the model predicts for that tread set. The registered per-cell
+predictions for tp8 G = 64 are exactly ceil(N_live / 132) x u at n = 6, 8, 10 (21, 28 and
+34 units: last waves 0.36, 0.15 and 0.94 full), and F4's own estimator, the slope of
+cycles over grid x S / 132 on those three cells, gives 339.5 when fed the model's numbers:
+the model itself misses 352.2 by -3.61%. Measured, the base captures read 339.6 (G = 64,
++0.02% against the model through the estimator) and 342.5 (G = 8, +0.9%); w2 on n = 5, 6,
+8, 10 reads 374.3 and 374.2 against the model's 375.1. Against the slope the model implies,
+the other eight models' scored GEMMs read -2.3% to +1.2% and tp8 w1 is among the closest.
+So the miss is the estimator's ceil quantisation on a three-cell set, not evidence that
+the per-CTA floor fails on tp8 w1; it is also not evidence that it holds, because the
+cells were seen before this reading. Rental 2's part 4 (docs/registered
+2026-10-01-rental2-w1floor-gh200) tests the reading blind, on tread sets no published page
+holds. Reproduced by `scripts/scoring/rental2/f4_implied.py`, which replaces the design
+copy that printed `nan` for tp8 (its session match found no rental-1 capture).
+
 **Instrument.** The launch floor's kineto traces slowed the host for the rest of their
 process (above); a later design should take its traces in a separate process. Every
 tp-shard and OLMoE byte page but tp2 atile G = 32 fails V10 (GEMM fits 1658 to 1703 MHz

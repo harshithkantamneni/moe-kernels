@@ -1,0 +1,45 @@
+REGISTERED 2026-10-01, before any rental-2 page: rental 2 part 2, the launch-floor rerun (two processes per model)
+tool: scripts/launch_floor.py --phase timed, then --phase trace (two processes, one lock); scorer scripts/scoring/rental2/score_launch.py
+
+  mixtral-8x7b-tp8: BLIND on every host-side prediction (no timed page of it exists); P1's GR is C_reg CAL with its GEMM durations SEEN under ncu (rental-1 r3c gpu_time_ns at G = 1, 2, 8)
+  granite-3.0-3b-a800m: SEEN: the rerun of rental 1's confounded P2, P4 and P8
+  jetmoe-8b: tail unit, scored by the same rules
+  granite-3.0-1b-a400m: tail unit, scored by the same rules
+
+C_reg (ms, G = 4), mixtral-8x7b-tp8, from cross_model_predict on 8x7B's 2026-09-27 pages (CAL):
+  native   0.1580 0.2053 0.2821 0.3285 0.3949 0.4746 0.5410 0.6207 0.6809
+  shared   0.1460 0.1933 0.2701 0.3365 0.4030 0.4827 0.5491 0.6288 0.6890
+  private  0.1460 0.2590 0.3493 0.4510 0.5527 0.6545 0.7562 0.8581 0.9597
+
+F: E240 0.0676 ms, E480 0.1351 ms (bytes over the 3.7261 TB/s ruler: 251.7 MB (E240) and 480 MiB (E480))
+
+definitions:
+  I: a cell's median over its repeats of ms_p50
+  H_cell: the median over the cell's repeats of host_enqueue_ms / calls_per_burst (cells.csv)
+  H_pre: hostprobe.csv H_pre_ms of the cell's (arm, n, mode): its own host time measured in the same process before any GPU cell
+  host_bound_fraction: the fraction of the cell's repeat rows (3) whose host_bound is True
+  measured_host_bound: host_bound_fraction >= 0.8; measured GPU-bound: host_bound_fraction == 0
+  rule_host_bound: C_reg + F_mode < H_pre (F_mode the cell's own mode's F)
+  edge: |C_reg + F_mode - H_pre| <= 0.020 ms (by rule), or host_bound_fraction in [0.2, 0.8] (measured); edge cells are out of P2, P4, P5 and P8
+
+P0 fails if: the timed process's manifest is not phase 'timed', has profiler_enabled_ever True, or made no profiler check; the median over (arm, n, mode) of |H_post / H_pre - 1| exceeds 0.05; H_cell / H_pre lies outside [0.93, 1.10] on more than 5% of the probed cells; more than 5% of the probe rows are REFUSED (a synchronising body or a GPU not held). P2, P4, P5 and P8 are still printed, marked 'host drift'.
+P1: cells GR: tp8 every (arm, n <= 9), 27 cells; Granite n <= 5, 15 cells; GR in [0.80, 1.10] x C_reg; FALSIFIED when more than 1 cell per model lies outside, or an increment is short: Granite I_GR(5) - I_GR(1) >= 0.10 ms for SHARED and PRIVATE; tp8 I_GR(9) - I_GR(1) >= 0.8 x (C_reg(9) - C_reg(1)) per arm
+P2: cells E240 cells GPU-bound by rule with margin (C_reg + F240 > H_pre + 0.020 ms) AND measured GPU-bound (host_bound_fraction 0); 0 <= E240 - GR <= max(2% of E240, 9 us); FALSIFIED when more than 1 per model lies outside [band SEEN (rental 1: 3.8 to 6.0 us on 13 cells)]
+P3: cells n = 1, 2, every arm, both models: measured host-bound and non-edge at both E0 and E240, with both TR-E E240 and TR-G E0/E240 traces; E0 - E240 in [F_tr - h_flush + dD - 12 us, F_tr - h_flush + 12 us], h_flush = hostprobe.csv h_flush_ms of the E240 row (the PROBE's, not the trace's), F_tr = TR-E E240 median flush_us, dD = min(0, TR-G(E0) kernel_sum - TR-G(E240) kernel_sum); FALSIFIED when more than 1 qualifying cell lies outside; NOT TESTED when fewer than 8 qualify
+P4: cells measured host-bound and non-edge at both E240 and E480; the shift (E480 - E240) - (H_cell,480 - H_cell,240) = -(F480_tr - F240_tr) +- 12 us, F_tr from TR-E traces (median over the n = 1, 2 cells of both); the E480 verdict by rule (C_reg + F480 < H_pre at E480) against measured on non-edge E480 cells; FALSIFIED when a shift lies outside the band on more than 1 cell, or the verdict is wrong on more than 2 cells per model
+P5: cells every non-edge E240, E0 and E480 cell; measured host-bound iff C_reg + F_mode < H_pre; FALSIFIED under 95% agreement per model
+P6: cells E240, E0 and E480 at the trace treads, each with its own mode's TR-E and TR-G; MP within max(5%, 12 us) of I; FALSIFIED when more than 1 per model lies outside
+P7: cells tp8 and Granite n = 1; classifies only: TR-G kernel sum, non-GEMM time, launch-API share
+P8: cells non-edge E240 cells host-bound by rule; plateau I_E240 in [H_cell - 0.12, H_cell - 0.08] ms; FALSIFIED when more than 10% lie outside per model [Phi band SEEN (Granite); tp8 BLIND]
+
+predicted host-bound tp8 cells (printed estimates; the scores use each cell's H_pre):
+  H_0.30 E240: native n [1, 2]; shared n [1, 2]; private n [1]
+  H_0.30 E480: native n [1]; shared n [1]; private n [1]
+  H_0.30 E0: native n [1, 2, 3]; shared n [1, 2, 3]; private n [1, 2]
+  H_0.35 E240: native n [1, 2, 3]; shared n [1, 2, 3]; private n [1, 2]
+  H_0.35 E480: native n [1, 2]; shared n [1, 2]; private n [1]
+  H_0.35 E0: native n [1, 2, 3, 4]; shared n [1, 2, 3, 4]; private n [1, 2, 3]
+
+seen data:
+  Granite's P1 and P2 bands and the Phi plateau are SEEN (rental 1 and the 09-30 pages)
+  tp8's GEMM gpu_time_ns at G = 1, 2, 8 is on rental-1 r3c pages (SEEN); its host and graph timing are not

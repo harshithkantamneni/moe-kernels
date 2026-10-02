@@ -1304,9 +1304,9 @@ def memory_plan(cfg, dtype: str, b: int, copies: int, tokens_max: int,
                 allowance: float = ACTIVATION_ALLOWANCE,
                 headroom: float = MEMORY_HEADROOM,
                 flush: tuple[int, str] | None = None,
-                copies_read: int | None = None) -> MemoryPlan:
+                copies_read: int | None = None, pad_rows: int = 0) -> MemoryPlan:
     per_copy = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
-    weights = weight_bytes_total(cfg, dtype, copies)
+    weights = padded_weight_bytes(cfg, dtype, copies, pad_rows)
     act = activation_working_set(cfg, tokens_max, b)
     flush_bytes, flush_source = flush if flush is not None else flush_buffer_bytes()
     return MemoryPlan(
@@ -7499,8 +7499,14 @@ def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
 # --------------------------------------------------------------------------
 
 def build_private_weights(cfg, dtype: str, copies: int, seed: int,
-                          device: str = "cuda"):
+                          device: str = "cuda", pad_rows: int = 0):
     """`(w1, w2, allocated_bytes)` with `copies` BITWISE IDENTICAL copies resident.
+
+    `pad_rows` (rental 2's address control, `--slot-pad-rows`): each expert
+    slot is allocated with `pad_rows` extra rows, w1 [2F + p, H] and w2
+    [H + p, F], and the weights are the views `[:, :2F]` and `[:, :H]`. The
+    bytes read are unchanged; only stride(0), the distance between slots,
+    moves. The pad rows are zero and never read.
 
     ONE ALLOCATION AT THE DEEPEST TREAD, passed WHOLE to every call at every
     tread. That is not a saving, it is the design: the memory environment --
@@ -7536,8 +7542,15 @@ def build_private_weights(cfg, dtype: str, copies: int, seed: int,
     total = expert_space(e, copies)
     cuda = device.startswith("cuda")
     before = torch.cuda.memory_allocated() if cuda else None
-    w1 = torch.empty((total, 2 * f, h), dtype=dt, device=device)
-    w2 = torch.empty((total, h, f), dtype=dt, device=device)
+    if pad_rows < 0:
+        raise PrivateWeightRefusal(f"pad_rows {pad_rows}: a slot cannot be shorter "
+                                   "than its weights")
+    if pad_rows:
+        w1 = torch.zeros((total, 2 * f + pad_rows, h), dtype=dt, device=device)[:, :2 * f]
+        w2 = torch.zeros((total, h + pad_rows, f), dtype=dt, device=device)[:, :h]
+    else:
+        w1 = torch.empty((total, 2 * f, h), dtype=dt, device=device)
+        w2 = torch.empty((total, h, f), dtype=dt, device=device)
     g = torch.Generator(device=device).manual_seed(seed)
     # Fan-in scaling, the same shape `moe.reference.torch_ref.make_inputs`
     # uses, so the numerics sit where every other arm's do. Drawn into copy 0
@@ -7624,7 +7637,8 @@ def _sync(t) -> None:
 
 def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
                            dtype: str, private_ids,
-                           copies_declared: int | None = None) -> BufferProof:
+                           copies_declared: int | None = None,
+                           pad_rows: int = 0) -> BufferProof:
     """Run the five-part proof. Returns the parts and their evidence.
 
     `call_for(arm)` returns a zero-argument callable producing that arm's
@@ -7688,7 +7702,9 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
                and native2.stride(0) == copies * w2.stride(0)
                and native1.shape[0] == e and native1.stride(-1) == 1)
     span = w1.shape[0] * (w1.stride(0) + w2.stride(0)) * item
-    want = weight_bytes_total(cfg, dtype, copies)
+    # With slot padding (`pad_rows`) the slots sit stride(0) apart, which
+    # counts the pad rows: the span is then the padded allocation's.
+    want = padded_weight_bytes(cfg, dtype, copies, pad_rows)
     parts["addresses"] = ok and view_ok and span == want
     detail["addresses"] = (
         f"{copies} copies x {e} experts span {span} bytes against {want} "
@@ -7784,8 +7800,14 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
 # study come to measure two different calls under one name.
 # --------------------------------------------------------------------------
 
-def pinned_config(block_n: int, group_m: int, num_stages: int) -> dict:
+def pinned_config(block_n: int, group_m: int, num_stages: int,
+                  block_k: int | None = None) -> dict:
     """The tile knobs every arm compiles at, BLOCK_SIZE_M aside.
+
+    `block_k` (rental 2, 2026-10-01): BLOCK_SIZE_K as a config value handed
+    to the existing kernel, None for the sweep's FIXED 64. Nothing about the
+    kernel changes; `config_refusal` says beforehand where Triton or the
+    k-step count would not take the value.
 
     The sweep's FIXED values (BLOCK_SIZE_K and num_warps among them) with the
     three knobs this arm exposes put over them. `_main` pins the timed ladder
@@ -7799,8 +7821,69 @@ def pinned_config(block_n: int, group_m: int, num_stages: int) -> dict:
     the counter page's design (`dram_counter_route.timed_reference_mismatch`).
     Until 2026-09-24 this said the plan was refused, and no code did either.
     """
-    return dict(SWEEP.FIXED, num_stages=num_stages, GROUP_SIZE_M=group_m,
-                BLOCK_SIZE_N=block_n)
+    out = dict(SWEEP.FIXED, num_stages=num_stages, GROUP_SIZE_M=group_m,
+               BLOCK_SIZE_N=block_n)
+    if block_k is not None:
+        out["BLOCK_SIZE_K"] = int(block_k)
+    return out
+
+
+#: THE CONFIGS RENTAL 2 PASSES THE EXISTING KERNEL (2026-10-01). BLOCK_SIZE_K
+#: and num_stages are config values of vLLM's `fused_moe_kernel`; no kernel is
+#: written or changed here. What Triton or the study cannot take is refused
+#: before any launch, with the reason, instead of a compile error on the box:
+#:   - BLOCK_SIZE_K a power of two of at least 16 (`tl.dot` needs K >= 16 and
+#:     `tl.arange` a power of two);
+#:   - K % BLOCK_SIZE_K == 0 on both GEMMs, so a CTA runs exactly K / BLOCK_K
+#:     k-steps and no masked tail step enters a k-step count;
+#:   - num_stages >= 1;
+#:   - the software pipeline's shared memory, num_stages x (BLOCK_M x BLOCK_K +
+#:     BLOCK_K x BLOCK_N) x element bytes, within the sm_90 per-block opt-in
+#:     limit (Triton raises OutOfResources past it).
+SMEM_LIMIT_BYTES_SM90 = 227 * 1024
+BLOCK_K_MIN = 16
+
+
+def pipeline_smem_bytes(block_m: int, block_n: int, block_k: int, num_stages: int,
+                        elem_bytes: int = 2) -> int:
+    """The A and B stage buffers of one CTA's software pipeline, in bytes."""
+    return int(num_stages) * (int(block_m) * int(block_k)
+                              + int(block_k) * int(block_n)) * int(elem_bytes)
+
+
+def config_refusal(cfg, *, block_m: int, block_n: int, block_k: int, num_stages: int,
+                   elem_bytes: int = 2) -> str:
+    """"" when the existing kernel can run this config and the k-steps are
+    exact, else the reason it is refused (see the table above)."""
+    bk, st = int(block_k), int(num_stages)
+    if bk < BLOCK_K_MIN or bk & (bk - 1):
+        return (f"BLOCK_SIZE_K {bk} is not a power of two of at least {BLOCK_K_MIN}: "
+                "Triton's tl.dot and tl.arange would reject it")
+    if st < 1:
+        return f"num_stages {st}: Triton's software pipeline needs at least 1 stage"
+    for gemm, k in (("w1", cfg.hidden_size), ("w2", cfg.intermediate_size)):
+        if k % bk:
+            return (f"{gemm} K = {k} is not a multiple of BLOCK_SIZE_K {bk}: the last "
+                    "k-step would be a masked partial one and the k-step count "
+                    "K / BLOCK_K would not be exact")
+    smem = pipeline_smem_bytes(block_m, block_n, bk, st, elem_bytes)
+    if smem > SMEM_LIMIT_BYTES_SM90:
+        return (f"num_stages {st} x (BLOCK_M {block_m} x BLOCK_K {bk} + BLOCK_K {bk} x "
+                f"BLOCK_N {block_n}) x {elem_bytes} B = {smem} B of shared memory, over "
+                f"the sm_90 per-block limit of {SMEM_LIMIT_BYTES_SM90} B: Triton would "
+                "raise OutOfResources at compile time")
+    return ""
+
+
+def padded_weight_bytes(cfg, dtype: str, copies: int, pad_rows: int) -> int:
+    """Bytes ALLOCATED for `copies` copies when every expert slot carries
+    `pad_rows` extra rows (`build_private_weights(pad_rows=...)`): w1 [2F + p,
+    H] and w2 [H + p, F] per slot. With pad_rows 0 it is `weight_bytes_total`."""
+    if not pad_rows:
+        return weight_bytes_total(cfg, dtype, copies)
+    e, h, f = cfg.num_experts, cfg.hidden_size, cfg.intermediate_size
+    slots = expert_space(e, copies)
+    return slots * ((2 * f + pad_rows) * h + (h + pad_rows) * f) * dtype_bytes(dtype)
 
 
 def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
@@ -7894,6 +7977,44 @@ COUNTER_PLAN_KEYS: tuple[str, ...] = (
     "family", "kind", "model", "dtype", "block_m", "block_n", "num_stages",
     "group_m", "treads", "arms", "cells", "copies_declared", "calls_per_cell",
     "warmup_calls", "gemms_per_call", "seed", "manifest", "triton_cache")
+
+#: OPTIONAL plan keys (rental 2, 2026-10-01), each defaulted so every plan
+#: written before them reads as it did: `block_k` (BLOCK_SIZE_K handed to the
+#: existing kernel as a config value), `slot_pad_rows` (`build_private_weights`'
+#: pad_rows) and `null_kernel` (the floor capture's launch-cost probe below).
+COUNTER_PLAN_OPTIONAL: dict = {"block_k": None, "slot_pad_rows": 0, "null_kernel": False}
+
+#: THE NULL KERNEL (rental 2, part 3). Not a kernel of this repo: it is
+#: `torch.cuda._sleep(cycles)`, which launches ATen's own one-thread
+#: `spin_kernel` (aten/src/ATen/cuda/Sleep.cu), the same one-block launch every
+#: time. A NATIVE-only floor plan with `null_kernel` makes one after each call
+#: (warmups included), so a call is GEMMS_PER_CALL GEMM launches then this one;
+#: ncu's filter gains its name and the attribution expects it at exactly those
+#: slots. Its elapsed cycles less `NULL_KERNEL_CYCLES` read a one-CTA
+#: launch-and-drain floor, a LOWER BOUND on a 132-SM grid's.
+NULL_KERNEL_NAME = "spin_kernel"
+NULL_KERNEL_CYCLES = 1000
+
+
+def plan_block_k(plan: dict) -> int:
+    """The plan's BLOCK_SIZE_K: its own when given, else the sweep's FIXED."""
+    v = plan.get("block_k")
+    return int(v) if v is not None else int(SWEEP.FIXED["BLOCK_SIZE_K"])
+
+
+def block_k_kw(block_k) -> dict:
+    """`pinned_config`'s block_k keyword, empty at the default: every call made
+    before rental 2 keeps its exact shape (a test spies on it)."""
+    if block_k is None or int(block_k) == int(SWEEP.FIXED["BLOCK_SIZE_K"]):
+        return {}
+    return {"block_k": int(block_k)}
+
+
+def launches_per_call(plan: dict) -> int:
+    """Profiled launches each call makes: its GEMMs, plus the null kernel when
+    the plan asks for it."""
+    gpc = int(plan.get("gemms_per_call", GEMMS_PER_CALL))
+    return gpc + (1 if plan.get("null_kernel") else 0)
 
 #: The NVTX range each measured call runs inside, for a human reading the
 #: .ncu-rep. Nothing filters on it: attribution is by launch order and grid.
@@ -8015,6 +8136,22 @@ def validate_counter_plan(plan: dict):
             f"gemms_per_call {plan['gemms_per_call']} is not the cited "
             f"{GEMMS_PER_CALL}; the census measures it and the plan may not "
             "restate it")
+    why = config_refusal(cfg, block_m=block_m, block_n=int(plan["block_n"]),
+                         block_k=plan_block_k(plan), num_stages=int(plan["num_stages"]),
+                         elem_bytes=dtype_bytes(plan["dtype"]))
+    if why:
+        raise CounterPlanRefused(f"the pinned config cannot run: {why}")
+    pad = plan.get("slot_pad_rows") or 0
+    if not isinstance(pad, int) or isinstance(pad, bool) or pad < 0:
+        raise CounterPlanRefused(f"slot_pad_rows {pad!r} is not a whole number of rows >= 0")
+    if plan.get("null_kernel"):
+        if not native:
+            raise CounterPlanRefused(
+                "null_kernel rides on a NATIVE-only floor plan only: a page's V1 and "
+                "attribution count GEMM launches alone")
+        if plan["kind"] != "measure":
+            raise CounterPlanRefused("null_kernel is a measure plan's; a census counts "
+                                     "GEMM launches alone")
     return cfg
 
 
@@ -8070,8 +8207,11 @@ def counter_schedule(plan: dict) -> CounterSchedule:
     measured = tuple((a, n, i) for a, n in cells for i in range(k))
     if kind == "census":
         return CounterSchedule(warmups, measured, 0, None)
-    return CounterSchedule(warmups, measured, gpc * u * len(cells),
-                           gpc * k * len(cells))
+    # With the null kernel each call is gpc GEMM launches then one spin_kernel,
+    # warmups included, so the skip and the count both carry it.
+    per = gpc + (1 if plan.get("null_kernel") else 0)
+    return CounterSchedule(warmups, measured, per * u * len(cells),
+                           per * k * len(cells))
 
 
 def fused_moe_grid(em: int, a_rows: int, top_k: int, block_m: int,
@@ -8138,6 +8278,9 @@ class CounterStack:
     device_free: object
     versions: dict
     device_identity: dict
+    #: `torch.cuda._sleep` on the box; a recorder in the suite. Called with
+    #: NULL_KERNEL_CYCLES after every call of a `null_kernel` plan.
+    null_kernel: object = None
 
 
 def counter_child(plan: dict, stack: CounterStack) -> dict:
@@ -8169,16 +8312,28 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
                       flush=(0, "the counter child times nothing, so no "
                                 "flush buffer"),
                       copies_read=(1 if native_only(plan["arms"])
-                                   else max(treads)))
+                                   else max(treads)),
+                      pad_rows=int(plan.get("slot_pad_rows") or 0))
     if mem.fits is False:
         raise CounterPlanRefused(
             f"the weight copies do not fit: predicted peak "
             f"{mem.predicted_peak_bytes / 1e9:.2f} GB against {mem.headroom:.0%} "
             f"of {mem.device_free_bytes / 1e9:.2f} GB ({mem.device_source})")
     conf = dict(pinned_config(int(plan["block_n"]), int(plan["group_m"]),
-                              int(plan["num_stages"])), BLOCK_SIZE_M=block_m)
+                              int(plan["num_stages"]), **block_k_kw(plan_block_k(plan))),
+                BLOCK_SIZE_M=block_m)
+    pad = int(plan.get("slot_pad_rows") or 0)
     w1, w2, _delta = build_private_weights(cfg, dtype, copies, int(plan["seed"]),
-                                           device=stack.device)
+                                           device=stack.device, pad_rows=pad)
+    null = bool(plan.get("null_kernel"))
+    if null and stack.null_kernel is None:
+        raise CounterPlanRefused("the plan asks for the null kernel and this stack has "
+                                 "no torch.cuda._sleep")
+
+    def after_call():
+        if null:
+            stack.null_kernel(NULL_KERNEL_CYCLES)
+            stack.synchronize()
     native_w1, native_w2 = w1[::copies], w2[::copies]
     declared_by_arm = {arm: declared_experts(arm, cfg.num_experts, copies)
                        for arm in ARMS}
@@ -8204,12 +8359,14 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
         with stack.override_config(conf):
             calls[_cell_key(arm, n)]()
         stack.synchronize()
+        after_call()
     ranges = []
     for arm, n, _i in sched.measured:
         name = NVTX_FORMAT.format(arm=arm, group_m=plan["group_m"], n=n)
         with stack.nvtx_range(name), stack.override_config(conf):
             calls[_cell_key(arm, n)]()
             stack.synchronize()
+        after_call()
         ranges.append(name)
     proof = None
     deepest = max(treads)
@@ -8222,7 +8379,7 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
                                      native_w1, native_w2, declared_by_arm, x,
                                      ids_by_arm, weights, kw),
                 w1, w2, cfg=cfg, copies_read=deepest, dtype=dtype,
-                private_ids=ids_by_arm[PRIVATE], copies_declared=copies)
+                private_ids=ids_by_arm[PRIVATE], copies_declared=copies, pad_rows=pad)
         proof = {"parts": dict(got.parts), "detail": dict(got.detail),
                  "verdict": got.verdict, "tread": deepest}
     return {
@@ -8239,6 +8396,11 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
         "nvtx_ranges": ranges, "pinned": conf, "proof": proof,
         "memory_plan": asdict(mem), "versions": dict(stack.versions),
         "device": dict(stack.device_identity),
+        # rental 2's knobs, recorded only when set, so a default manifest is the
+        # manifest every earlier page was reduced from
+        **({"slot_pad_rows": pad} if pad else {}),
+        **({"null_kernel": True, "null_kernel_name": NULL_KERNEL_NAME,
+            "null_kernel_cycles": NULL_KERNEL_CYCLES} if null else {}),
     }
 
 
@@ -8335,7 +8497,8 @@ def _counter_child_mode(args) -> int:
         synchronize=torch.cuda.synchronize, nvtx_range=torch.cuda.nvtx.range,
         device_free=device_free, versions=_package_versions(),
         device_identity={"name": torch.cuda.get_device_name(0),
-                         "uuid": device_identity()})
+                         "uuid": device_identity()},
+        null_kernel=torch.cuda._sleep)
     try:
         manifest = counter_child(plan, stack)
     except CounterPlanRefused as exc:
@@ -8437,8 +8600,9 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
               "V8 and carry every other gate's number beside it.")
 
     torch.cuda.reset_peak_memory_stats()
+    pad = int(getattr(args, "slot_pad_rows", 0) or 0)
     w1, w2, weight_delta = build_private_weights(cfg, dtype, copies_declared,
-                                                 args.seed)
+                                                 args.seed, pad_rows=pad)
     native_w1, native_w2 = w1[::copies_declared], w2[::copies_declared]
     print(f"private weights: {copies_declared} copies declared ({deepest} read "
           f"at the deepest tread), {weight_delta / 1e9:.4f} GB allocated and "
@@ -8549,7 +8713,8 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
         proof = prove_distinct_buffers(
             lambda arm: call_for(arm, x, ids_by_arm, weights, kw),
             w1, w2, cfg=cfg, copies_read=deepest, dtype=dtype,
-            private_ids=ids_by_arm[PRIVATE], copies_declared=copies_declared)
+            private_ids=ids_by_arm[PRIVATE], copies_declared=copies_declared,
+            pad_rows=pad)
     return (samples, proof, weight_delta, torch.cuda.max_memory_allocated(),
             probe)
 
@@ -8749,6 +8914,12 @@ def default_run_id(args, card: str) -> str:
         # rather than append wider rows under it, and --read still re-reads
         # its report.json.
         **({"duty": args.duty} if args.duty != 1.0 else {}),
+        # Rental 2's config values, the duty's way: in the key only when not
+        # the default, so no run id written before them moves.
+        **({"bk": args.block_k}
+           if getattr(args, "block_k", SWEEP.FIXED["BLOCK_SIZE_K"])
+           != SWEEP.FIXED["BLOCK_SIZE_K"] else {}),
+        **({"pad": args.slot_pad_rows} if getattr(args, "slot_pad_rows", 0) else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
     return prefix + PV.run_id(card=card, **swept)
@@ -8783,6 +8954,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--block-n", type=int, default=SWEEP.FIXED["BLOCK_SIZE_N"])
     ap.add_argument("--group-m", type=int, default=SWEEP.FIXED["GROUP_SIZE_M"])
     ap.add_argument("--num-stages", type=int, default=SWEEP.FIXED["num_stages"])
+    ap.add_argument("--block-k", type=int, default=SWEEP.FIXED["BLOCK_SIZE_K"],
+                    help="BLOCK_SIZE_K handed to the existing kernel as a config "
+                         "value (rental 2). Refused where Triton or the k-step count "
+                         "would not take it (config_refusal); in the run id only "
+                         "when it is not the default 64")
+    ap.add_argument("--slot-pad-rows", type=int, default=0,
+                    help="extra rows allocated per expert slot (rental 2's address "
+                         "control): the bytes read are unchanged, stride(0) moves; "
+                         "in the run id only when not 0")
     ap.add_argument("--warmup", type=float, default=300.0,
                     help="MILLISECONDS of delivered GPU load, not a call count")
     ap.add_argument("--cell-budget-ms", type=float, default=200.0)
@@ -8992,6 +9172,16 @@ def _main(argv=None) -> int:
     if gap:
         print(f"REFUSED: the OUTCOMES partition is broken: {gap}")
         return exit_codes.REFUSED
+    # RENTAL 2'S CONFIG VALUES, refused before anything else (2026-10-01).
+    why = config_refusal(cfg, block_m=block_m, block_n=args.block_n,
+                         block_k=args.block_k, num_stages=args.num_stages, elem_bytes=b)
+    if why:
+        print(f"REFUSED: --block-k {args.block_k} --num-stages {args.num_stages}: {why}")
+        return exit_codes.REFUSED
+    if args.slot_pad_rows < 0:
+        print(f"REFUSED: --slot-pad-rows {args.slot_pad_rows}: a slot cannot be shorter "
+              "than its weights")
+        return exit_codes.REFUSED
 
     # THE CONTROL IS PART OF THE DESIGN, SO ITS FEASIBILITY IS A PLAN-TIME
     # REFUSAL. V6 reads the n=1 tread and a model that cannot form one has no
@@ -9114,10 +9304,12 @@ def _main(argv=None) -> int:
     census = path_census(cfg, treads, block_m, declared_by_arm)
     free_bytes, mem_source = _device_memory(args)
     mem = memory_plan(cfg, args.dtype, b, copies_declared, tokens[treads[-1]],
-                      free_bytes, mem_source, copies_read=treads[-1])
+                      free_bytes, mem_source, copies_read=treads[-1],
+                      pad_rows=args.slot_pad_rows)
 
     card = detect_card_slug()
-    pinned = pinned_config(args.block_n, args.group_m, args.num_stages)
+    pinned = pinned_config(args.block_n, args.group_m, args.num_stages,
+                           **block_k_kw(args.block_k))
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or SWEEP.results_root()) / "private_weight_reference" / run_id
     csv_path = out_dir / "cells.csv"

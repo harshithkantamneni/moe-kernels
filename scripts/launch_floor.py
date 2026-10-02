@@ -51,9 +51,36 @@ verdict, ms_p50/min/stdev, clocks and power), traces/*.json.gz,
 traces/parsed.json, and manifest.json (versions, device, commit, the plan,
 lscpu and the cpufreq governor, graph-capture findings).
 
+THE TWO PROCESSES (rental 2, 2026-10-01; docs/registered rental2-launch2).
+Rental 1 ran the traces in the timed process, and its host time drifted with
+the profiler's state. `--phase` now splits the run:
+  timed   every timed cell and the HOST PROBE, in a process where the profiler
+          is GUARDED OFF: `import torch` loads torch.profiler, so "never
+          imports" cannot hold; instead `torch.profiler.profile.__init__` and
+          `torch.autograd.profiler.profile.__init__` are patched to raise
+          (`install_profiler_guard`), and `torch.autograd._profiler_enabled()`
+          is asserted False before every probe and every cell. `--trace-treads`
+          is refused here. The host probe (`host_probe`) measures, for every
+          (arm, n, mode) BEFORE any timed cell and again AFTER the last,
+          H_pre: the host wall time per iteration of the timed body (flush
+          launch, start record, call, end record), 64 iterations, 3 repeats,
+          median, with the GPU held busy by a preceding `torch.cuda._sleep`
+          sized to outlast the loop, so no backpressure enters it; and
+          h_flush, h_event, h_call alone the same way. A probe whose slowest
+          iteration exceeds 10 x its median (something in the body
+          synchronised), or whose sleep ended before its loop (the GPU was not
+          held), is retried once and then written REFUSED. Files:
+          hostprobe.csv, cells.csv, hostprobe-post.csv, manifest.json (phase,
+          pid, profiler guard, profiler_enabled_ever).
+  trace   the traces only (TR-E, TR-G), traces/*.json.gz, traces/parsed.json
+          and manifest-trace.json; no timed cell.
+  both    rental 1's single process, kept so its record reads as it ran.
+The driver runs `timed` and then `trace` as two processes under one lock.
+
 EXIT CODES (moe/bench/exit_codes.py): 0 every cell and trace ran; 2 refused
 (bad arguments, no CUDA or no vLLM; and --dry-run, which prints the plan and
-its minutes); 3 some cells, modes or traces failed and the files are written.
+its minutes); 3 some cells, modes, probes or traces failed and the files are
+written; 4 the profiler was found on in the timed process.
 """
 from __future__ import annotations
 
@@ -97,6 +124,22 @@ TRACE_CALLS = 32
 SEC_PER_CELL = 3.0
 SEC_PER_TRACE = 4.0
 SETUP_MIN = 3.0
+#: the host probe (rental 2): four parts x 3 repeats of 64 iterations, each
+#: behind a sleep sized to outlast its loop, about 1 s per (arm, n, mode), once
+#: before the cells and once after
+SEC_PER_PROBE = 1.0
+PHASES = ("both", "timed", "trace")
+PROBE_ITERS = 64
+PROBE_REPEATS = 3
+#: a probe iteration this many times its median says the body synchronised
+PROBE_MAX_OVER_MEDIAN = 10.0
+#: the probe's hold: the sleep lasts this many loop times plus a margin
+PROBE_HOLD_FACTOR = 2.0
+PROBE_HOLD_MARGIN_MS = 5.0
+PROBE_COLUMNS = (
+    "model", "when", "mode", "arm", "tiles", "flush_mb", "status", "H_pre_ms",
+    "h_flush_ms", "h_event_ms", "h_call_ms", "iters", "repeats", "max_over_median",
+    "held", "sleep_cycles", "detail")
 GEMM_KERNEL = "fused_moe_kernel"
 CSV_COLUMNS = (
     "model", "mode", "arm", "tiles", "repeat", "group_m", "block_m", "tokens",
@@ -109,6 +152,10 @@ CSV_COLUMNS = (
 
 class Refused(Exception):
     """A precondition failed before anything was timed. Exits REFUSED."""
+
+
+class ProfilerForbidden(RuntimeError):
+    """The profiler was asked for, or found on, in the timed process."""
 
 
 # --------------------------------------------------------------------------
@@ -147,6 +194,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--phase", choices=PHASES, default="both",
+                   help="timed: the cells and the host probe, the profiler guarded "
+                        "off; trace: the traces alone; both: rental 1's one process")
     p.add_argument("--dry-run", action="store_true")
     return p
 
@@ -174,7 +224,18 @@ def make_plan(args) -> dict:
     bad_tr = [n for n in args.trace_treads if n not in args.treads]
     if bad_tr:
         raise Refused(f"--trace-treads {bad_tr} are not timed treads {args.treads}")
-    cells = len(args.treads) * len(args.arms) * len(args.modes) * args.repeats
+    phase = getattr(args, "phase", "both")
+    if phase == "timed" and args.trace_treads:
+        raise Refused("--phase timed takes no --trace-treads: the traces run in the "
+                      "trace phase's own process, so the timed process never starts the "
+                      "profiler")
+    if phase == "trace" and not args.trace_treads:
+        raise Refused("--phase trace needs --trace-treads: it writes traces and nothing "
+                      "else")
+    cells = (0 if phase == "trace" else
+             len(args.treads) * len(args.arms) * len(args.modes) * args.repeats)
+    probes = (2 * len(args.treads) * len(args.arms) * len(args.modes)
+              if phase == "timed" else 0)
     traces = []
     for n in args.trace_treads:
         for arm in args.arms:
@@ -183,8 +244,10 @@ def make_plan(args) -> dict:
                 traces.append({"arm": arm, "n": n, "flush": fm, "kind": "TR-E"})
                 if "GR" in args.modes:
                     traces.append({"arm": arm, "n": n, "flush": fm, "kind": "TR-G"})
-    minutes = cells * SEC_PER_CELL / 60 + len(traces) * SEC_PER_TRACE / 60 + SETUP_MIN
-    return {"model": args.model, "treads": list(args.treads), "modes": list(args.modes),
+    minutes = (cells * SEC_PER_CELL / 60 + len(traces) * SEC_PER_TRACE / 60
+               + probes * SEC_PER_PROBE / 60 + SETUP_MIN)
+    return {"model": args.model, "phase": phase, "probes": probes,
+            "treads": list(args.treads), "modes": list(args.modes),
             "arms": list(args.arms), "group_m": args.group_m, "duty": args.duty,
             "repeats": args.repeats, "seed": args.seed, "block_m": BLOCK_M,
             "copies_declared": copies, "declaration": why,
@@ -204,8 +267,10 @@ def plan_lines(plan: dict) -> list[str]:
         f"  declaration: {plan['copies_declared']} copies ({plan['declaration']}); "
         f"declared {plan['declared_by_arm']}",
         f"  pinned config: {plan['pinned']}",
-        f"  {plan['timed_cells']} timed cells at ~{SEC_PER_CELL:.1f} s, {len(plan['traces'])} "
-        f"profiled bursts at ~{SEC_PER_TRACE:.0f} s, {SETUP_MIN:.0f} min weights and compile",
+        f"  phase {plan.get('phase', 'both')}: {plan['timed_cells']} timed cells at "
+        f"~{SEC_PER_CELL:.1f} s, {len(plan['traces'])} "
+        f"profiled bursts at ~{SEC_PER_TRACE:.0f} s, {plan.get('probes', 0)} host probes at "
+        f"~{SEC_PER_PROBE:.0f} s, {SETUP_MIN:.0f} min weights and compile",
         f"  estimated {plan['minutes']:.1f} min",
         "  E240 = R3 as published (240 MiB flush); E0 no flush; E480 480 MiB flush; "
         "GR CUDA-graph replay under E240's flush",
@@ -435,6 +500,168 @@ def parse_trace(trace) -> dict:
 
 
 # --------------------------------------------------------------------------
+# rental 2: the profiler guard and the host probe
+# --------------------------------------------------------------------------
+
+def install_profiler_guard(torch_mod) -> list[str]:
+    """Make every profiler entry point raise in this process; returns what was
+    patched. `import torch` already loads torch.profiler (torch 2.13: both
+    `torch.profiler` and `torch.autograd.profiler` are in sys.modules right
+    after it), so the invariant is not "never imported" but "never started"."""
+    def refuse(self, *a, **k):
+        raise ProfilerForbidden("the profiler was started in the timed process; the "
+                                "traces belong to --phase trace")
+    patched = []
+    for owner, label in ((getattr(torch_mod, "profiler", None), "torch.profiler.profile"),
+                         (getattr(getattr(torch_mod, "autograd", None), "profiler", None),
+                          "torch.autograd.profiler.profile")):
+        cls = getattr(owner, "profile", None) if owner is not None else None
+        if cls is not None:
+            cls.__init__ = refuse
+            patched.append(label)
+    return patched
+
+
+def assert_profiler_off(torch_mod) -> None:
+    """Raises ProfilerForbidden when autograd's profiler reads on."""
+    if torch_mod.autograd._profiler_enabled():
+        raise ProfilerForbidden("torch.autograd._profiler_enabled() is True in the timed "
+                                "process")
+
+
+class ProbeGPU:
+    """What the probe needs of the device: a sleep that holds it, a test of
+    whether the sleep is still running, and a synchronise. The suite plants
+    one; on the box it is torch's."""
+
+    def __init__(self, torch_mod):
+        self.torch = torch_mod
+
+    def cycles_per_ms(self, cycles: int = 2_000_000) -> float:
+        t = self.torch
+        a, b = t.cuda.Event(enable_timing=True), t.cuda.Event(enable_timing=True)
+        t.cuda.synchronize()
+        a.record()
+        t.cuda._sleep(int(cycles))
+        b.record()
+        t.cuda.synchronize()
+        return cycles / max(a.elapsed_time(b), 1e-3)
+
+    def hold(self, cycles: int):
+        self.torch.cuda._sleep(int(cycles))
+        ev = self.torch.cuda.Event()
+        ev.record()
+        return ev
+
+    def still_busy(self, ev) -> bool:
+        return not ev.query()
+
+    def body_event(self):
+        """An event of the timed loop's own kind (start and end records), for the
+        probe's copy of that body. The probe times the HOST, never with these."""
+        return self.torch.cuda.Event(enable_timing=True)
+
+    def sync(self) -> None:
+        self.torch.cuda.synchronize()
+
+
+def _loop_ns(fn, iters: int, clock) -> list[int]:
+    out = []
+    t = clock()
+    for _ in range(iters):
+        fn()
+        u = clock()
+        out.append(u - t)
+        t = u
+    return out
+
+
+def probe_part(fn, gpu, *, iters: int = PROBE_ITERS, repeats: int = PROBE_REPEATS,
+               cycles_per_ms: float, clock=time.perf_counter_ns) -> dict:
+    """One part of the host probe: `repeats` loops of `iters` calls of `fn`,
+    each loop behind a sleep sized to outlast it. Returns the median per-call
+    host ms over the repeats' medians, the worst max/median, whether every
+    loop finished while the sleep still ran, and the sleep it used. A repeat
+    whose sleep ended first, or whose max/median exceeds PROBE_MAX_OVER_MEDIAN,
+    is retried once with twice the sleep; after that the part is REFUSED."""
+    gpu.sync()
+    dry = _loop_ns(fn, iters, clock)          # sizes the hold; never reported
+    gpu.sync()
+    loop_ms = sum(dry) / 1e6
+    cycles = int((PROBE_HOLD_FACTOR * loop_ms + PROBE_HOLD_MARGIN_MS) * cycles_per_ms)
+    meds, worst, held_all, why = [], 0.0, True, ""
+    for _r in range(repeats):
+        for attempt in (0, 1):
+            ev = gpu.hold(cycles)
+            ns = _loop_ns(fn, iters, clock)
+            held = gpu.still_busy(ev)
+            gpu.sync()
+            med = statistics.median(ns)
+            ratio = max(ns) / med if med > 0 else float("inf")
+            if held and ratio <= PROBE_MAX_OVER_MEDIAN:
+                break
+            if attempt == 0:
+                cycles *= 2
+        meds.append(med / 1e6)
+        worst = max(worst, ratio)
+        if not held:
+            held_all = False
+            why = "the sleep ended before the loop: the GPU was not held"
+        elif ratio > PROBE_MAX_OVER_MEDIAN:
+            why = (f"an iteration took {ratio:.1f} x the median: something in the body "
+                   "synchronised")
+    ok = held_all and worst <= PROBE_MAX_OVER_MEDIAN
+    return {"ms": statistics.median(meds) if ok else None, "max_over_median": worst,
+            "held": held_all, "sleep_cycles": cycles, "status": "ok" if ok else "refused",
+            "detail": why}
+
+
+def host_probe(parts: dict, gpu, *, iters: int = PROBE_ITERS,
+               repeats: int = PROBE_REPEATS, cycles_per_ms: float,
+               clock=time.perf_counter_ns) -> dict:
+    """The host probe for one (arm, n, mode). `parts` maps "body" (one whole
+    iteration of the timed loop: flush launch, start record, call, end
+    record), "flush" (None when the mode flushes nothing), "event" and "call"
+    to zero-argument callables. Returns H_pre and h_flush, h_event, h_call in
+    ms, and the probe's own checks; status "refused" when any part was."""
+    out, status, detail, worst, held = {}, "ok", [], 0.0, True
+    cycles_used = 0
+    for key, name in (("body", "H_pre_ms"), ("flush", "h_flush_ms"),
+                      ("event", "h_event_ms"), ("call", "h_call_ms")):
+        fn = parts.get(key)
+        if fn is None:
+            out[name] = 0.0 if key == "flush" else None
+            continue
+        r = probe_part(fn, gpu, iters=iters, repeats=repeats, cycles_per_ms=cycles_per_ms,
+                       clock=clock)
+        out[name] = r["ms"]
+        worst = max(worst, r["max_over_median"])
+        held = held and r["held"]
+        cycles_used = max(cycles_used, r["sleep_cycles"])
+        if r["status"] != "ok":
+            status = "refused"
+            detail.append(f"{key}: {r['detail']}")
+    out.update(status=status, iters=iters, repeats=repeats, max_over_median=worst,
+               held=held, sleep_cycles=cycles_used, detail="; ".join(detail))
+    return out
+
+
+def probe_parts(fn, flusher, event_factory) -> dict:
+    """The timed loop's body and its parts, as `mirror_time_cell`'s duty timer
+    runs them (flush, start event, call, end event)."""
+    start, end = event_factory(), event_factory()
+
+    def body():
+        if flusher is not None:
+            flusher.flush()
+        start.record()
+        fn()
+        end.record()
+    return {"body": body, "flush": (flusher.flush if flusher is not None else None),
+            "event": start.record, "call": fn}
+
+
+# --------------------------------------------------------------------------
 # the run
 # --------------------------------------------------------------------------
 
@@ -473,10 +700,12 @@ def run(args, plan: dict) -> int:
     import torch
 
     from moe.bench import timing as T
+    phase = plan.get("phase", "both")
     out = Path(args.out)
     (out / "traces").mkdir(parents=True, exist_ok=True)
     cfg = MODEL_CONFIGS[args.model]
     os.environ.setdefault("TRITON_CACHE_DIR", str(out / "triton-cache"))
+    guard = install_profiler_guard(torch) if phase == "timed" else []
     override_config, where = SWEEP.find_override()
     from vllm.model_executor.layers.fused_moe import fused_experts
     reference_clock, clock_source = SWEEP.reference_clock_mhz()
@@ -488,7 +717,10 @@ def run(args, plan: dict) -> int:
                 "E480": T.L2Flusher(480)}
     w1, w2, delta = PW.build_private_weights(cfg, "bf16", copies, args.seed)
     nw1, nw2 = w1[::copies], w2[::copies]
-    manifest = {"tool": "scripts/launch_floor.py", "plan": plan, "override_hook": where,
+    manifest = {"tool": "scripts/launch_floor.py", "plan": plan, "phase": phase,
+                "pid": os.getpid(), "profiler_guard": guard,
+                "profiler_enabled_ever": False, "profiler_checks": 0,
+                "override_hook": where,
                 "reference_clock_mhz": reference_clock, "reference_clock_source": clock_source,
                 "flush_mb": {m: (int(f.megabytes) if f is not None else 0)
                              for m, f in flushers.items()},
@@ -496,35 +728,86 @@ def run(args, plan: dict) -> int:
                 "device": {"name": torch.cuda.get_device_name(0),
                            "uuid": PW.device_identity()},
                 "host": host_record(), "findings": [], "started": time.time()}
-    csv_path = out / "cells.csv"
     failed = 0
-    fh = open(csv_path, "w", newline="")
-    writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
-    writer.writeheader()
     parsed = {}
-    try:
+
+    def check_profiler():
+        if phase != "timed":
+            return
+        manifest["profiler_checks"] += 1
+        try:
+            assert_profiler_off(torch)
+        except ProfilerForbidden:
+            manifest["profiler_enabled_ever"] = True
+            raise
+
+    def calls_for(n):
+        tokens, x, ids_by_arm, weights, kw = PW.arm_inputs(
+            cfg, n, BLOCK_M, copies, args.seed, "bf16", w1.dtype)
+        return tokens, {arm: PW.arm_call(fused_experts, arm, w1, w2, nw1, nw2, declared, x,
+                                         ids_by_arm, weights, kw) for arm in args.arms}
+
+    def capture(call, arm, n, rep):
+        try:
+            return graph_call(call, override_config=override_config, conf=conf), ""
+        except Exception as exc:                                  # noqa: BLE001
+            why = f"{type(exc).__name__}: {exc}"
+            manifest["findings"].append({"arm": arm, "n": n, "repeat": rep, "graph": why})
+            return None, why
+
+    def probe_all(when: str, path: Path) -> int:
+        """The host probe for every (arm, n, mode), written to `path`."""
+        bad = 0
+        gpu = ProbeGPU(torch)
+        cpm = gpu.cycles_per_ms()
+        manifest.setdefault("probe_cycles_per_ms", {})[when] = cpm
+        with open(path, "w", newline="") as ph:
+            pw = csv.DictWriter(ph, fieldnames=PROBE_COLUMNS)
+            pw.writeheader()
+            for n in args.treads:
+                _tokens, calls = calls_for(n)
+                for arm in args.arms:
+                    replay = None
+                    if "GR" in args.modes:
+                        replay, _why = capture(calls[arm], arm, n, -1)
+                    for mode in args.modes:
+                        fl = flushers[mode]
+                        row = {k: "" for k in PROBE_COLUMNS}
+                        row.update(model=args.model, when=when, mode=mode, arm=arm, tiles=n,
+                                   flush_mb=int(fl.megabytes) if fl is not None else 0)
+                        fn = replay if mode == "GR" else calls[arm]
+                        if fn is None:
+                            row.update(status="refused", detail="GR NOT CAPTURED")
+                            bad += 1
+                        else:
+                            check_profiler()
+                            with override_config(conf):
+                                fn()
+                                torch.cuda.synchronize()
+                                r = host_probe(probe_parts(fn, fl, gpu.body_event),
+                                               gpu, cycles_per_ms=cpm)
+                            row.update({k: r[k] for k in r if k in row})
+                            bad += r["status"] != "ok"
+                        pw.writerow(row)
+                        ph.flush()
+                    replay = None
+        return bad
+
+    def time_cells(writer, fh) -> int:
+        bad = 0
         for rep in range(args.repeats):
             treads = args.treads if rep % 2 == 0 else list(reversed(args.treads))
             for n in treads:
-                tokens, x, ids_by_arm, weights, kw = PW.arm_inputs(
-                    cfg, n, BLOCK_M, copies, args.seed, "bf16", w1.dtype)
+                tokens, calls = calls_for(n)
                 order = [args.arms[(i + rep) % len(args.arms)] for i in range(len(args.arms))]
                 for arm in order:
-                    call = PW.arm_call(fused_experts, arm, w1, w2, nw1, nw2, declared, x,
-                                       ids_by_arm, weights, kw)
+                    call = calls[arm]
                     ident = dict(model=args.model, arm=arm, tiles=n, repeat=rep,
                                  group_m=args.group_m, block_m=BLOCK_M, tokens=tokens,
                                  copies=PW.copies_read(arm, n),
                                  experts_declared=declared[arm], duty=args.duty)
-                    replay, why = None, ""
-                    if "GR" in args.modes:
-                        try:
-                            replay = graph_call(call, override_config=override_config,
-                                                conf=conf)
-                        except Exception as exc:                  # noqa: BLE001
-                            why = f"{type(exc).__name__}: {exc}"
-                            manifest["findings"].append(
-                                {"arm": arm, "n": n, "repeat": rep, "graph": why})
+                    replay, why = (capture(call, arm, n, rep) if "GR" in args.modes
+                                   else (None, ""))
                     for mode in args.modes:
                         fl = flushers[mode]
                         fn = replay if mode == "GR" else call
@@ -533,8 +816,9 @@ def run(args, plan: dict) -> int:
                         if mode == "GR" and replay is None:
                             writer.writerow(row_from(None, None, **row_id, status="failed",
                                                      detail=f"GR NOT CAPTURED: {why}"))
-                            failed += 1
+                            bad += 1
                             continue
+                        check_profiler()
                         try:
                             with override_config(conf):
                                 fn()
@@ -548,32 +832,70 @@ def run(args, plan: dict) -> int:
                         except Exception as exc:                  # noqa: BLE001
                             writer.writerow(row_from(None, None, **row_id, status="failed",
                                                      detail=f"{type(exc).__name__}: {exc}"))
-                            failed += 1
+                            bad += 1
                         fh.flush()
                         print(f"  rep{rep} {mode:4s} {arm:8s} n={n}", flush=True)
-                    if rep == 0 and n in args.trace_treads:
-                        for tr in [t for t in plan["traces"] if t["arm"] == arm and t["n"] == n]:
-                            name = f"{tr['kind']}-{tr['flush']}-{arm}-n{n}.json.gz"
-                            fn = call if tr["kind"] == "TR-E" else replay
-                            if fn is None:
-                                failed += 1
-                                continue
-                            try:
-                                with override_config(conf):
-                                    trace_burst(fn, flushers[tr["flush"]], out / "traces" / name)
-                                with gzip.open(out / "traces" / name, "rt") as f:
-                                    parsed[name] = parse_trace(json.load(f))
-                            except Exception as exc:              # noqa: BLE001
-                                manifest["findings"].append({"trace": name, "error": str(exc)})
-                                failed += 1
+                    if phase == "both" and rep == 0 and n in args.trace_treads:
+                        bad += trace_cell(arm, n, call, replay)
                     replay = None
+        return bad
+
+    def trace_cell(arm, n, call, replay) -> int:
+        bad = 0
+        for tr in [t for t in plan["traces"] if t["arm"] == arm and t["n"] == n]:
+            name = f"{tr['kind']}-{tr['flush']}-{arm}-n{n}.json.gz"
+            fn = call if tr["kind"] == "TR-E" else replay
+            if fn is None:
+                bad += 1
+                continue
+            try:
+                with override_config(conf):
+                    trace_burst(fn, flushers[tr["flush"]], out / "traces" / name)
+                with gzip.open(out / "traces" / name, "rt") as f:
+                    parsed[name] = parse_trace(json.load(f))
+            except Exception as exc:                              # noqa: BLE001
+                manifest["findings"].append({"trace": name, "error": str(exc)})
+                bad += 1
+        return bad
+
+    manifest_name = "manifest-trace.json" if phase == "trace" else "manifest.json"
+    fh = None
+    try:
+        if phase == "trace":
+            for n in args.trace_treads:
+                _tokens, calls = calls_for(n)
+                for arm in args.arms:
+                    replay = (capture(calls[arm], arm, n, 0)[0] if "GR" in args.modes
+                              else None)
+                    failed += trace_cell(arm, n, calls[arm], replay)
+        else:
+            if phase == "timed":
+                failed += probe_all("pre", out / "hostprobe.csv")
+            fh = open(out / "cells.csv", "w", newline="")
+            writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
+            writer.writeheader()
+            failed += time_cells(writer, fh)
+            fh.close()
+            fh = None
+            if phase == "timed":
+                failed += probe_all("post", out / "hostprobe-post.csv")
+    except ProfilerForbidden as exc:
+        manifest["findings"].append({"profiler": str(exc)})
+        manifest["profiler_enabled_ever"] = True
+        print(f"PROFILER ON IN THE TIMED PROCESS: {exc}")
+        failed = -1
     finally:
-        fh.close()
+        if fh is not None:
+            fh.close()
         manifest["ended"] = time.time()
         manifest["failed"] = failed
-        (out / "traces" / "parsed.json").write_text(json.dumps(parsed, indent=1))
-        (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str))
-    print(f"LAUNCH FLOOR {args.model}: {plan['timed_cells']} cells, {failed} failed; {out}")
+        if phase != "timed":
+            (out / "traces" / "parsed.json").write_text(json.dumps(parsed, indent=1))
+        (out / manifest_name).write_text(json.dumps(manifest, indent=1, default=str))
+    if failed < 0:
+        return exit_codes.ERROR
+    print(f"LAUNCH FLOOR {args.model} phase {phase}: {plan['timed_cells']} cells, "
+          f"{len(plan['traces']) if phase != 'timed' else 0} traces, {failed} failed; {out}")
     return exit_codes.INVALID if failed else exit_codes.DONE
 
 

@@ -42,7 +42,10 @@
 # A PLAN OF SEVERAL MODELS (2026-10-01, `--plan FILE`): one rental runs units in the
 # file's order, one per line, `<model> <step> [key=value ...]` (keys: label,
 # byte-groups, floor-groups, floor-treads, lf-treads, lf-modes, lf-trace, est, cap;
-# `#` comments). The first unit is `- prelude`. Each unit's step runs with that
+# rental 2's bytes keys num-stages, block-k, slot-pad-rows, partition-metrics=1 and
+# floor keys floor-lock-mhz, floor-base=0, floor-shape-metrics=1, floor-null-kernel=1,
+# each refused on a unit of another step; drop-group=NAME, units the deadline drops
+# together; `#` comments). The first unit is `- prelude`. Each unit's step runs with that
 # model and those overrides in the environment (MOE_DRIVER_*), its pages in a
 # directory of its own (`<date>-<card>-<model>-<label>-r3-counters`, or
 # `-launch-floor-<label>/<model>` for launchfloor), so no two page groups mix in one
@@ -150,6 +153,22 @@ BYTE_GROUPS="${MOE_DRIVER_BYTE_GROUPS:-}"
 #: A plan unit's own name for its pages' directory (see A PLAN OF SEVERAL MODELS).
 #: Empty: the session's one counters directory, as before.
 OUT_LABEL="${MOE_DRIVER_OUT_LABEL:-}"
+#: RENTAL 2's knobs (2026-10-01; docs/registered/README.md, rental 2). A bytes
+#: unit's config values for the existing kernel and its partition metrics; a floor
+#: unit's lock (a lock other than 1710 is the one the prelude probed), whether its
+#: base-clock captures run, its shape metrics and its null kernel. Empty: as before.
+NUM_STAGES="${MOE_DRIVER_NUM_STAGES:-}"
+BLOCK_K="${MOE_DRIVER_BLOCK_K:-}"
+SLOT_PAD_ROWS="${MOE_DRIVER_SLOT_PAD_ROWS:-}"
+PARTITION_METRICS="${MOE_DRIVER_PARTITION_METRICS:-}"
+FLOOR_LOCK_MHZ="${MOE_DRIVER_FLOOR_LOCK_MHZ:-}"
+FLOOR_BASE="${MOE_DRIVER_FLOOR_BASE:-1}"
+FLOOR_SHAPE="${MOE_DRIVER_FLOOR_SHAPE:-}"
+FLOOR_NULL="${MOE_DRIVER_FLOOR_NULL:-}"
+#: Locks besides 1710 that a plan's floor units name: the prelude locks each one
+#: once and records whether it held (locks.env LOCK_PROBE_<F>), so a lock this card
+#: refuses costs no unit's minutes (rental 2's review, section 6).
+PROBE_LOCKS="${MOE_DRIVER_PROBE_LOCKS:-}"
 #: launchfloor's design (scripts/launch_floor.py; docs/registered 2026-10-01).
 LF_TREADS="${MOE_DRIVER_LF_TREADS:-1,2,3,4,5,6,7,8,9}"
 LF_MODES="${MOE_DRIVER_LF_MODES:-E240,E0,E480,GR}"
@@ -242,17 +261,41 @@ census_for() {
 step_what() {
   case "$1" in
     prelude)   echo "3c.1 supported clocks, persistence, ${POWER_LIMIT_W} W" ;;
-    bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control"
-               else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control"; fi ;;
+    bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control$(knob_text)"
+               else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control$(knob_text)"; fi ;;
     calibrate) echo "3c.3 calibrate (the ruler), no lock in force" ;;
     timed)     echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5" ;;
     eta)       echo "3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1" ;;
-    floor)     if [[ -n "$FLOOR_GROUPS" ]]; then echo "3c.5 registered floor design: NATIVE at G = ${FLOOR_GROUPS//,/ }, treads ${FLOOR_TREADS:-default}, base clock and the ${LOCK_TIMED} lock"
+    floor)     if [[ -n "$FLOOR_GROUPS" ]]; then echo "3c.5 registered floor design: NATIVE at G = ${FLOOR_GROUPS//,/ }, treads ${FLOOR_TREADS:-default}, $([[ "$FLOOR_BASE" == 0 ]] && echo "no base-clock capture" || echo "base clock") and the ${FLOOR_LOCK_MHZ:-$LOCK_TIMED} lock$(floor_knob_text)"
                else echo "3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at ${LOCK_TIMED}: P6"; fi ;;
     deep)      echo "3c.6 timed R3 at ${LOCK_TIMED} to tread 9, G=4 then G=2: P3, P4" ;;
     r1lock)    echo "3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent" ;;
-    launchfloor) echo "launch floor at the ${LOCK_TIMED} lock: treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE" ;;
+    launchfloor) echo "launch floor at the ${LOCK_TIMED} lock: treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE; a timed process (no profiler) then a trace process" ;;
   esac
+}
+#: Rental 2's bytes knobs as dram_counter_route.py's flags, and as text.
+knob_args() {
+  [[ -n "$NUM_STAGES" ]] && printf '%s\n' --num-stages "$NUM_STAGES"
+  [[ -n "$BLOCK_K" ]] && printf '%s\n' --block-k "$BLOCK_K"
+  [[ -n "$SLOT_PAD_ROWS" ]] && printf '%s\n' --slot-pad-rows "$SLOT_PAD_ROWS"
+  [[ "$PARTITION_METRICS" == 1 ]] && printf '%s\n' --partition-metrics
+  return 0
+}
+knob_text() {
+  local t; t="$(knob_args | tr '\n' ' ')"
+  [[ -n "$t" ]] && echo "; knobs ${t% }"
+  return 0
+}
+#: Rental 2's floor knobs as flags, and as text.
+floor_knob_args() {
+  [[ "$FLOOR_SHAPE" == 1 ]] && printf '%s\n' --floor-shape-metrics
+  [[ "$FLOOR_NULL" == 1 ]] && printf '%s\n' --floor-null-kernel
+  return 0
+}
+floor_knob_text() {
+  local t; t="$(floor_knob_args | tr '\n' ' ')"
+  [[ -n "$t" ]] && echo "; ${t% }"
+  return 0
 }
 #: What the deadline drops, in the draft's order, with the minutes each saves.
 DROPS=(r1_g1 r1_g4 eta_1605 bytes_tail)
@@ -389,12 +432,13 @@ step_prelude() {
   # steps take: 1710 or nothing; 1605, else its registered 1590; 1410 and 1500,
   # else the nearest supported clock one 15 MHz step away, labelled.
   if ! python3 - "$S/supported-clocks.txt" "$LOCK_TIMED" "${P1_LOCKS[@]}" "$P1_FALLBACK_1605" \
-      > "$S/lock-plan.txt" <<'PY'
+      ${PROBE_LOCKS//,/ } > "$S/lock-plan.txt" <<'PY'
 import re, sys
 g = sorted({int(x) for x in re.findall(r"Graphics\s*:\s*(\d+)\s*MHz", open(sys.argv[1]).read())})
 if not g:
     sys.exit("no graphics clock read: look at supported-clocks.txt")
 timed, a, b, c, c_fb = map(int, sys.argv[2:7])
+probe = [int(x) for x in sys.argv[7:]]
 print(f"# {len(g)} graphics clocks, {g[0]} to {g[-1]} MHz")
 for f in (timed, c, c_fb, b, a):
     print(f"# {f} " + ("supported" if f in g else
@@ -420,6 +464,9 @@ elif near(c):
 else:
     out["LOCK_ETA_C"], note = "none", f"{c}, {c_fb} and every clock within 15 MHz unsupported: dropped"
 print(f"# LOCK_ETA_C {out['LOCK_ETA_C']} ({note})")
+for f in probe:
+    out[f"LOCK_PROBE_{f}"] = "supported" if f in g else "unsupported"
+    print(f"# LOCK_PROBE_{f} {out[f'LOCK_PROBE_{f}']} (a plan's floor lock; probed below)")
 for k, v in out.items():
     print(f"{k}={v}")
 PY
@@ -447,6 +494,19 @@ PY
   if ! awk -v p="$pl" -v w="$POWER_LIMIT_W" 'BEGIN { exit !(p + 0 > w - 1 && p + 0 < w + 1) }'; then
     ledger "prelude REFUSED: power.limit reads '$pl' W, not $POWER_LIMIT_W"; return "$EXIT_REFUSED"
   fi
+  # A plan's floor locks besides 1710: lock each once, read it back, reset. A lock
+  # that does not hold is recorded, and its floor units refuse in 0 minutes.
+  local pf res
+  for pf in ${PROBE_LOCKS//,/ }; do
+    if grep -qx "LOCK_PROBE_$pf=supported" "$D/locks.env"; then
+      if lock_and_check "$pf"; then res=held; else res=refused; fi
+      sudo -n nvidia-smi -rgc >/dev/null || { ledger "prelude REFUSED: the reset after probing $pf MHz failed"; return "$EXIT_REFUSED"; }
+    else
+      res=unsupported
+    fi
+    echo "LOCK_PROBE_$pf=$res" >> "$D/locks.env"
+    ledger "lock probe: $pf MHz $res"
+  done
   ledger "prelude: persistence Enabled, power.limit $pl W, base tag $B"
   return "$EXIT_DONE"
 }
@@ -471,7 +531,10 @@ step_bytes() {
   C="$(census_for)" || return "$EXIT_REFUSED"
   mkdir -p "$L"
   [[ -s "$C" ]] || { ledger "bytes REFUSED: no census at $C (the preflight's PF6 writes it)"; return "$EXIT_REFUSED"; }
-  local gs=() override=0
+  local gs=() override=0 knobs=() x
+  # a read loop, not mapfile: a laptop's /bin/bash is 3.2 (the tests run there)
+  while IFS= read -r x; do [[ -n "$x" ]] && knobs+=("$x"); done < <(knob_args)
+  (( ${#knobs[@]} )) && ledger "bytes: rental 2 knobs ${knobs[*]} on every page of this unit"
   if [[ -n "$BYTE_GROUPS" ]]; then
     override=1
     for G in ${BYTE_GROUPS//,/ }; do gs+=("$G"); done
@@ -502,7 +565,7 @@ step_bytes() {
       t0=$(date +%s)
       moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m "$G" \
         --model "$MODEL" --tiles "$TREADS" --census "$C" --page-clock none --page-lock-mhz "$F" \
-        --out "$L/r3c-g$G.json" 2>&1 | tee "$LOG"
+        ${knobs[@]+"${knobs[@]}"} --out "$L/r3c-g$G.json" 2>&1 | tee "$LOG"
       rc=${PIPESTATUS[0]}
       secs=$(( $(date +%s) - t0 ))
       echo "G=$G exit $rc $(date -u +%T) ${secs} s" | tee -a "$S/logs/lock$F-pages.status"
@@ -540,8 +603,8 @@ step_bytes() {
   sleep 5
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks_event_reasons.active,persistence_mode \
     --format=csv | tee "$S/clocks-after-lock-pages.txt"
-  if (( override )); then
-    ledger "bytes: no base-clock control (a registered --byte-groups list)"
+  if (( override )) || (( ${#knobs[@]} )); then
+    ledger "bytes: no base-clock control (a registered --byte-groups list, or a knob unit)"
   elif (( ! tail_dropped )) && [[ "$MODEL" != "$DEFAULT_MODEL" ]]; then
     ledger "bytes: no base-clock control (it compares clock regimes on $DEFAULT_MODEL; no $MODEL prediction reads it)"
   elif (( ! tail_dropped )); then
@@ -740,7 +803,20 @@ step_eta() {
 # 3c.5 floor counters (P6)
 # ==========================================================================
 step_floor() {
-  local R C F=$LOCK_TIMED; R="$(counters_dir)"
+  local R C F=$LOCK_TIMED fk=() x; R="$(counters_dir)"
+  if [[ -n "$FLOOR_GROUPS" && -n "$FLOOR_LOCK_MHZ" ]]; then
+    F="$FLOOR_LOCK_MHZ"
+    if [[ "$F" != "$LOCK_TIMED" ]]; then
+      local probe=""; probe="$(sed -n "s/^LOCK_PROBE_$F=//p" "$D/locks.env" 2>/dev/null | tail -1)"
+      if [[ "$probe" != held ]]; then
+        ledger "floor REFUSED: the prelude's probe of the $F MHz lock reads ${probe:-nothing (never probed)} (locks.env LOCK_PROBE_$F), not held"
+        return "$EXIT_REFUSED"
+      fi
+    fi
+  fi
+  if [[ -n "$FLOOR_GROUPS" ]]; then
+    while IFS= read -r x; do [[ -n "$x" ]] && fk+=("$x"); done < <(floor_knob_args)
+  fi
   C="$(census_for)" || return "$EXIT_REFUSED"
   [[ -s "$C" ]] || { ledger "floor REFUSED: no census at $C"; return "$EXIT_REFUSED"; }
   : > "$D/floor-results"
@@ -765,16 +841,21 @@ step_floor() {
     }
     if [ -n "$FLOOR_GROUPS" ]; then
       ft=(); [ -n "$FLOOR_TREADS" ] && ft=(--floor-treads ${FLOOR_TREADS//,/ })
-      for g in ${FLOOR_GROUPS//,/ }; do
-        capture "r3f-g$g" --group-m "$g" --census "$C" --floor "${ft[@]}" --out "$R/r3f-g$g.json"
-      done
+      if [ "$FLOOR_BASE" != 0 ]; then
+        for g in ${FLOOR_GROUPS//,/ }; do
+          capture "r3f-g$g" --group-m "$g" --census "$C" --floor "${ft[@]}" ${fk[@]+"${fk[@]}"} \
+            --out "$R/r3f-g$g.json"
+        done
+      else
+        echo "no base-clock capture: floor-base=0 (the registered design takes the $F MHz lock only)" >> "$D/floor-results"
+      fi
       moe_counter ncu --clock-control reset
       MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
       [ "$F" -le "$MAX" ] || { echo "F=$F MHz is above this card's maximum, $MAX MHz"; exit 2; }
       lock_and_check "$F" || exit 2
       for g in ${FLOOR_GROUPS//,/ }; do
         capture "r3f-g$g-lock$F" --group-m "$g" --census "$C" --floor "${ft[@]}" --floor-clock none \
-          --floor-lock-mhz "$F" --out "$R/r3f-g$g-lock$F.json"
+          --floor-lock-mhz "$F" ${fk[@]+"${fk[@]}"} --out "$R/r3f-g$g-lock$F.json"
       done
       echo "registered floor design: groups $FLOOR_GROUPS, treads ${FLOOR_TREADS:-default}" >> "$D/floor-results"
       exit "$worst"
@@ -936,17 +1017,25 @@ launch_dir() {
 
 step_launchfloor() {
   local R; R="$(launch_dir)"
-  local LF=(--model "$MODEL" --treads "$LF_TREADS" --modes "$LF_MODES" --trace-treads "$LF_TRACE"
+  # TWO PROCESSES (rental 2, 2026-10-01): the timed phase, whose process has the
+  # profiler guarded off and measures the host first, then the trace phase. Rental 1
+  # ran both in one process and its traces' profiler state confounded the timing.
+  local LF=(--model "$MODEL" --treads "$LF_TREADS" --modes "$LF_MODES"
             --arms native,shared,private --group-m 4 --duty 0.25 --repeats 3 --seed 0 --out "$R")
+  local TIMED=("${LF[@]}" --phase timed) TRACE=("${LF[@]}" --phase trace --trace-treads "$LF_TRACE")
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "launchfloor REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
-  # its own dry run first: 2 is a plan printed, anything else is a refusal
-  "$PY_VLLM" scripts/launch_floor.py "${LF[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-dry.log" 2>&1
-  local drc=$?
-  if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$S/logs/launchfloor-$MODEL-dry.log"; then
-    ledger "launchfloor REFUSED for $MODEL: its dry run exited $drc ($(grep -m1 '^REFUSED:' "$S/logs/launchfloor-$MODEL-dry.log" | cut -c1-160))"
-    return "$EXIT_REFUSED"
-  fi
+  # each phase's own dry run first: 2 is a plan printed, anything else is a refusal
+  local ph drc
+  for ph in timed trace; do
+    if [[ "$ph" == timed ]]; then "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1
+    else "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1; fi
+    drc=$?
+    if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$S/logs/launchfloor-$MODEL-$ph-dry.log"; then
+      ledger "launchfloor REFUSED for $MODEL: its $ph dry run exited $drc ($(grep -m1 '^REFUSED:' "$S/logs/launchfloor-$MODEL-$ph-dry.log" | cut -c1-160))"
+      return "$EXIT_REFUSED"
+    fi
+  done
   mkdir -p "$R"
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
@@ -955,7 +1044,14 @@ step_launchfloor() {
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
     [ "$LOCK_TIMED" -le "$MAX" ] || { echo "F=$LOCK_TIMED MHz is above this card's maximum, $MAX MHz"; exit 2; }
     lock_and_check "$LOCK_TIMED" || exit 2
-    "$PY_VLLM" scripts/launch_floor.py "${LF[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL.log" )
+    "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-timed.log"
+    rt=${PIPESTATUS[0]}
+    echo "timed phase exit $rt" >> "$S/logs/launchfloor-$MODEL.phases"
+    (( rt >= 4 )) && exit "$rt"
+    "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-trace.log"
+    rr=${PIPESTATUS[0]}
+    echo "trace phase exit $rr" >> "$S/logs/launchfloor-$MODEL.phases"
+    exit $(( rt > rr ? rt : rr )) )
   local rc=$?
   sleep 5
   nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active --format=csv \
@@ -1088,7 +1184,7 @@ print_plan() {
 }
 
 # ---- a plan of several models (--plan FILE) ------------------------------
-U_MODEL=(); U_STEP=(); U_OPTS=(); U_EST=(); U_CAP=(); U_LABEL=()
+U_MODEL=(); U_STEP=(); U_OPTS=(); U_EST=(); U_CAP=(); U_LABEL=(); U_GROUP=()
 #: The plan file: the checkout's copy once setup has run (the commit measured is
 #: the authority), else the path as given, else the copy vm_run.sh put beside
 #: this driver for the dry run before setup.
@@ -1101,13 +1197,13 @@ resolve_plan() {
 }
 plan_refuse() { echo "--plan: line $1: $2" >&2; return 1; }
 load_plan() {   # FILE
-  local f="$1" line ln=0 kv k v model step est cap label opts seen="" key
+  local f="$1" line ln=0 kv k v model step est cap label opts seen="" key group
   local -a w
   while IFS= read -r line || [[ -n "$line" ]]; do
     ln=$(( ln + 1 )); line="${line%%#*}"
     read -r -a w <<< "$line"
     (( ${#w[@]} )) || continue
-    model="${w[0]}"; step="${w[1]:-}"; est=""; cap=""; label=""; opts=""
+    model="${w[0]}"; step="${w[1]:-}"; est=""; cap=""; label=""; opts=""; group=""
     is_step "$step" || { plan_refuse "$ln" "no step '$step' (${STEPS[*]})"; return 1; }
     if [[ "$step" == prelude ]]; then
       [[ "$model" == - && ${#U_STEP[@]} -eq 0 ]] \
@@ -1121,13 +1217,35 @@ load_plan() {   # FILE
       [[ "$kv" == *=* && -n "$v" ]] || { plan_refuse "$ln" "'$kv' is not key=value"; return 1; }
       case "$k" in
         label) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "label $v"; return 1; }; label="$v" ;;
+        drop-group) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "drop-group $v"; return 1; }; group="$v" ;;
         est|cap) [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: minutes"; return 1; }
                  [[ "$k" == est ]] && est="$v" || cap="$v" ;;
         byte-groups|floor-groups|floor-treads|lf-treads|lf-trace)
           [[ "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { plan_refuse "$ln" "$k $v: a comma-separated list of integers"; return 1; }
           opts+=" $k=$v" ;;
         lf-modes) [[ "$v" =~ ^[A-Z0-9]+(,[A-Z0-9]+)*$ ]] || { plan_refuse "$ln" "lf-modes $v"; return 1; }; opts+=" $k=$v" ;;
-        *) plan_refuse "$ln" "no key '$k' (label est cap byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace)"; return 1 ;;
+        num-stages|block-k|slot-pad-rows|floor-lock-mhz)
+          [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: a whole number"; return 1; }
+          opts+=" $k=$v" ;;
+        partition-metrics|floor-base|floor-shape-metrics|floor-null-kernel)
+          [[ "$v" =~ ^[01]$ ]] || { plan_refuse "$ln" "$k $v: 0 or 1"; return 1; }
+          opts+=" $k=$v" ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel)"; return 1 ;;
+      esac
+    done
+    # rental 2's keys belong to one step each; a floor key needs a registered design
+    for kv in ${opts}; do
+      k="${kv%%=*}"
+      case "$k" in
+        num-stages|block-k|slot-pad-rows|partition-metrics)
+          [[ "$step" == bytes ]] || { plan_refuse "$ln" "$k belongs to a bytes unit, not $step"; return 1; } ;;
+        floor-lock-mhz|floor-base|floor-shape-metrics|floor-null-kernel)
+          [[ "$step" == floor ]] || { plan_refuse "$ln" "$k belongs to a floor unit, not $step"; return 1; }
+          [[ " $opts " == *" floor-groups="* ]] || { plan_refuse "$ln" "$k needs a registered floor design (floor-groups=...)"; return 1; }
+          if [[ "$k" == floor-lock-mhz ]]; then
+            v="${kv#*=}"
+            [[ "$v" == "$LOCK_TIMED" || ",$PROBE_LOCKS," == *",$v,"* ]] || PROBE_LOCKS="${PROBE_LOCKS:+$PROBE_LOCKS,}$v"
+          fi ;;
       esac
     done
     case "$step" in
@@ -1145,7 +1263,7 @@ load_plan() {   # FILE
       MODEL="$keep"
     fi
     (( cap >= est )) || { plan_refuse "$ln" "cap $cap is under the estimate $est"; return 1; }
-    U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label")
+    U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label"); U_GROUP+=("$group")
   done < "$f"
   (( ${#U_STEP[@]} >= 2 )) || { echo "--plan: $f holds no unit after the prelude" >&2; return 1; }
 }
@@ -1156,13 +1274,23 @@ apply_unit() {   # INDEX
   MODEL="${U_MODEL[$i]}"; [[ "$MODEL" == - ]] && MODEL="$DEFAULT_MODEL"
   FLOOR_GROUPS=""; FLOOR_TREADS=""; BYTE_GROUPS=""; OUT_LABEL="${U_LABEL[$i]}"
   LF_TREADS=1,2,3,4,5,6,7,8,9; LF_MODES=E240,E0,E480,GR; LF_TRACE=1,2
+  NUM_STAGES=""; BLOCK_K=""; SLOT_PAD_ROWS=""; PARTITION_METRICS=""
+  FLOOR_LOCK_MHZ=""; FLOOR_BASE=1; FLOOR_SHAPE=""; FLOOR_NULL=""
   for kv in ${U_OPTS[$i]}; do
     k="${kv%%=*}"; v="${kv#*=}"
     case "$k" in
       byte-groups) BYTE_GROUPS="$v" ;; floor-groups) FLOOR_GROUPS="$v" ;; floor-treads) FLOOR_TREADS="$v" ;;
       lf-treads) LF_TREADS="$v" ;; lf-modes) LF_MODES="$v" ;; lf-trace) LF_TRACE="$v" ;;
+      num-stages) NUM_STAGES="$v" ;; block-k) BLOCK_K="$v" ;; slot-pad-rows) SLOT_PAD_ROWS="$v" ;;
+      partition-metrics) [[ "$v" == 1 ]] && PARTITION_METRICS=1 ;;
+      floor-lock-mhz) FLOOR_LOCK_MHZ="$v" ;; floor-base) FLOOR_BASE="$v" ;;
+      floor-shape-metrics) [[ "$v" == 1 ]] && FLOOR_SHAPE=1 ;;
+      floor-null-kernel) [[ "$v" == 1 ]] && FLOOR_NULL=1 ;;
     esac
   done
+  export MOE_DRIVER_NUM_STAGES="$NUM_STAGES" MOE_DRIVER_BLOCK_K="$BLOCK_K" MOE_DRIVER_SLOT_PAD_ROWS="$SLOT_PAD_ROWS"
+  export MOE_DRIVER_PARTITION_METRICS="$PARTITION_METRICS" MOE_DRIVER_FLOOR_LOCK_MHZ="$FLOOR_LOCK_MHZ"
+  export MOE_DRIVER_FLOOR_BASE="$FLOOR_BASE" MOE_DRIVER_FLOOR_SHAPE="$FLOOR_SHAPE" MOE_DRIVER_FLOOR_NULL="$FLOOR_NULL"
   export MOE_DRIVER_MODEL="$MODEL" MOE_DRIVER_FLOOR_GROUPS="$FLOOR_GROUPS" MOE_DRIVER_FLOOR_TREADS="$FLOOR_TREADS"
   export MOE_DRIVER_BYTE_GROUPS="$BYTE_GROUPS" MOE_DRIVER_OUT_LABEL="$OUT_LABEL"
   export MOE_DRIVER_LF_TREADS="$LF_TREADS" MOE_DRIVER_LF_MODES="$LF_MODES" MOE_DRIVER_LF_TRACE="$LF_TRACE"
@@ -1183,6 +1311,16 @@ unit_budget() {   # INDEX
       unit_dropped "$j" && continue
       echo "$j" >> "$D/plan-drops"
       ledger "DROPPED $(unit_text "$j") ${U_STEP[$j]}: ${need} min of units left, ${left} min to the deadline"
+      # a drop-group goes together: a base page without its knob page is wasted minutes
+      local k
+      if [[ -n "${U_GROUP[$j]}" ]]; then
+        for (( k = i; k < ${#U_STEP[@]}; k++ )); do
+          [[ "$k" != "$j" && "${U_GROUP[$k]}" == "${U_GROUP[$j]}" ]] || continue
+          unit_dropped "$k" && continue
+          echo "$k" >> "$D/plan-drops"
+          ledger "DROPPED $(unit_text "$k") ${U_STEP[$k]}: drop-group ${U_GROUP[$j]} goes with unit $(( j + 1 ))"
+        done
+      fi
       continue 2
     done
     return 0
@@ -1205,7 +1343,7 @@ print_units() {
   for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
     apply_unit "$i"
     printf '  %-3s %-24s %-11s %4s %4s  %s\n' "$(( i + 1 ))" "${U_MODEL[$i]}" "${U_STEP[$i]}" \
-      "${U_EST[$i]}" "${U_CAP[$i]}" "${U_LABEL[$i]:+label=${U_LABEL[$i]} }${U_OPTS[$i]:-}${U_OPTS[$i]:+; }$(unit_dir "$i")"
+      "${U_EST[$i]}" "${U_CAP[$i]}" "${U_LABEL[$i]:+label=${U_LABEL[$i]} }${U_OPTS[$i]:-}${U_OPTS[$i]:+; }$(unit_dir "$i")${U_GROUP[$i]:+ [drop-group ${U_GROUP[$i]}]}"
     echo "        $(step_what "${U_STEP[$i]}")"
     total=$(( total + U_EST[i] ))
   done
@@ -1216,6 +1354,7 @@ print_units() {
   local order=""; for (( i = ${#U_STEP[@]} - 1; i >= 1; i-- )); do order+=" $(( i + 1 ))"; done
   echo "   ${order}"
   echo "  pushes: after every unit and every byte page, to the run's branch (scripts/vm_results_push.sh)$( (( NO_PUSH )) && echo ': OFF (--no-push)')"
+  [[ -z "$PROBE_LOCKS" ]] || echo "  the prelude also probes the floor lock(s) ${PROBE_LOCKS//,/ } MHz (lock, read back, reset)"
 }
 
 usage() { sed -n '2,9p' "$SELF" | sed 's/^# \{0,1\}//'; }
@@ -1294,6 +1433,8 @@ if [[ -n "$PLAN_FILE" ]]; then
   done
   PLAN_PATH="$(resolve_plan "$PLAN_FILE")" || { echo "--plan $PLAN_FILE: no such file (looked in \$MOE_HOME/repo, as given, and beside this driver)" >&2; exit "$EXIT_REFUSED"; }
   load_plan "$PLAN_PATH" || exit "$EXIT_REFUSED"
+  # the prelude probes every floor lock the plan names besides 1710
+  export MOE_DRIVER_PROBE_LOCKS="$PROBE_LOCKS"
 fi
 
 if (( DRY )) && [[ -n "$PLAN_FILE" ]]; then
