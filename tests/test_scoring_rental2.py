@@ -638,3 +638,219 @@ def test_no_page_of_another_block_k_reaches_the_timing_model(tmp_path):
             TM.load_counter_pages(p.parent)
     finally:
         TM.set_model(old)
+
+
+# --------------------------------------------------------------------------
+# the gate addendum (docs/registered/2026-10-02-rental2-addendum-gates.json),
+# on synthetic pages only
+# --------------------------------------------------------------------------
+
+ADD = CM.addendum(REPO)
+LOCKED = (("mixtral-8x7b-tp8", "floor2"), ("mixtral-8x7b-tp4", "floor"), ("mixtral-8x7b-tp2", "floor"))
+
+
+def gated(page, *, lock=None, **verdicts):
+    """`page` carrying the named VALIDITY gates (FL1="FAIL", V1="PASS", ...) and,
+    for a lock capture, its clock block."""
+    page["gates"] = [{"number": k, "kind": "VALIDITY", "verdict": v} for k, v in verdicts.items()]
+    if lock is not None:
+        page["clock"] = {"control": "none", "lock_mhz": float(lock), "band_mhz": 15.0}
+    return page
+
+
+def cell_of(page, n, g):
+    return next(c for c in page["cells"] if c["n"] == n)["per_gemm"][g]
+
+
+def with_null_clock(page, mhz):
+    """`page` whose every cell's null kernel reads `mhz` (None: no null clock)."""
+    if mhz is not None:
+        for c in page["cells"]:
+            c["null"]["sm_clock_mhz"] = float(mhz)
+    return page
+
+
+def gated_const_tree(tmp_path, *, fl1=("PASS", "PASS", "PASS"), v1_1005="PASS", zu_tp2=0.4,
+                     mutate=None, null=(None, None, None), null_1005=None):
+    """const_tree's world, each 1710 capture carrying FL1 and V1 as given and its
+    null kernel's clock `null` (None: a capture without one)."""
+    tree = tmp_path / "tree"
+    for (m, lab), f, nk in zip(LOCKED, fl1, null, strict=True):
+        put_floor(tree, m, lab, "r3f-g64", gated(floor_file(m, mhz=1360.0), V1="PASS"))
+        page = gated(floor_file(m, mhz=1690.0, Zu=zu_tp2 if m.endswith("tp2") else 0.4),
+                     lock=1710, FL1=f, V1="PASS")
+        with_null_clock(page, nk)
+        if mutate:
+            mutate(m, page)
+        put_floor(tree, m, lab, "r3f-g64-lock1710", page)
+    put_floor(tree, "mixtral-8x7b-tp4", "floor1005", "r3f-g64-lock1005",
+              with_null_clock(gated(floor_file("mixtral-8x7b-tp4", mhz=1005.0, z_scale=1005 / 1690),
+                                    lock=1005, FL1="PASS", V1=v1_1005), null_1005))
+    return tree
+
+
+def test_the_addendum_leaves_the_four_registrations_byte_identical():
+    for stem, h in ADD["amends"].items():
+        for ext, digest in h.items():
+            path = REPO / "docs" / "registered" / f"{stem}.{ext}"
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, path.name
+    assert set(ADD["amends"]) == {CM.NAMES[p] for p in ("knobs", "launch2", "const", "w1floor")}
+    assert ADD["constants"] == {"step_mhz": 15.0, "unusable_gates": ["V1"], "lock_check_tol": 0.03,
+                                "lock_gate_set_aside": "FL1"}
+    assert ADD["per_part"]["knobs"]["gates_not_gating"] == ["V6", "V10"]
+    txt = (REPO / "docs" / "registered" / f"{CM.ADDENDUM}.txt").read_text()
+    assert "before any rental-2 score" in txt and "\u2014" not in txt
+
+
+def test_combine_verdict_agreement_disagreement_and_clean_empty():
+    assert CM.combine_verdict("HOLDS", "HOLDS") == "HOLDS"
+    assert CM.combine_verdict("FALSIFIED", "HOLDS") == "INCONCLUSIVE (ALL FALSIFIED; CLEAN HOLDS)"
+    v = CM.combine_verdict("HOLDS", "NOT SCORED: no L readable")
+    assert v.startswith("NOT SCORED") and v.endswith("reading only gate-failed pages: HOLDS")
+    assert CM.combine_verdict("NOT SCORED: x", None) == "NOT SCORED: x"
+    assert CM.failed_gates({"gates": [{"number": "V7", "kind": "VALIDITY", "verdict": "REFUSE"},
+                                      {"number": "C6", "kind": "CLAIM", "verdict": "FAIL"},
+                                      {"number": "V1", "kind": "VALIDITY", "verdict": "PASS"}]}) == ["V7"]
+
+
+def test_a_cell_above_its_lock_by_more_than_one_step_is_dropped_and_recorded(tmp_path):
+    def mutate(m, page):
+        if m == "mixtral-8x7b-tp4":
+            cell_of(page, 1, "w2")["sm_clock_mhz"] = 1785.0     # rental 2's tp4 n=1 w2
+            cell_of(page, 4, "w2")["sm_clock_mhz"] = 1725.5     # just over one step
+            cell_of(page, 6, "w2")["sm_clock_mhz"] = 1725.0     # exactly one step: kept
+    res = SC.score(REPO, gated_const_tree(tmp_path, mutate=mutate))
+    pages = res["addendum"]["pages"]
+    tp4 = next(v for k, v in pages.items() if "tp4-floor-r3" in k and k.endswith("lock1710.json"))
+    assert tp4["failed_gates"] == [] and tp4["ALL"] == tp4["CLEAN"] == "counted"
+    assert [d.split(" MHz")[0] for d in tp4["dropped_above_lock"]] == ["n=1 w2 1785.0", "n=4 w2 1725.5"]
+    rows = res["captures"]["mixtral-8x7b-tp4 lock1710"]["w2"]["rows"]
+    assert 4 not in {r["n"] for r in rows} and 6 in {r["n"] for r in rows}
+    k5 = res["K"]["K5"]["cells"]
+    assert "mixtral-8x7b-tp4 lock1710 n=1 w2" not in k5 and "mixtral-8x7b-tp4 lock1710 n=1 w1" in k5
+    # a base capture carries no lock and drops nothing
+    base = next(v for k, v in pages.items() if "tp4-floor-r3" in k and k.endswith("r3f-g64.json"))
+    assert base["dropped_above_lock"] == []
+    assert any("dropped n=1 w2 1785.0 MHz" in ln for ln in SC.lines(res))
+
+
+def test_all_and_clean_agree_and_the_common_verdict_is_registered(tmp_path):
+    """tp2's 1710 capture fails FL1 and reads like the others: K1, K2 and K4 agree."""
+    res = SC.score(REPO, gated_const_tree(tmp_path, fl1=("PASS", "PASS", "FAIL")))
+    assert res["K"]["K1"]["verdict"] == "HOLDS" and res["K"]["K2"]["verdict"] == "HOLDS"
+    assert res["identification"] == "H_ZT"
+    clean = res["addendum"]["CLEAN"]
+    assert clean["captures"]["mixtral-8x7b-tp2 lock1710"] == {"verdict": "missing"}
+    assert res["K"]["K2"]["values"] == [pytest.approx(0.4), pytest.approx(0.4)]   # ALL's numbers
+    assert clean["K"]["K2"]["values"] == [pytest.approx(0.4)]
+
+
+def test_all_and_clean_disagree_and_the_verdict_is_inconclusive(tmp_path):
+    """tp2's FL1-failed capture alone carries a w2 Z / u outside K2's band: the
+    median of the two (ALL) falls outside, tp4 alone (CLEAN) inside."""
+    res = SC.score(REPO, gated_const_tree(tmp_path, fl1=("PASS", "PASS", "FAIL"), zu_tp2=1.2))
+    k2 = res["K"]["K2"]["verdict"]
+    assert k2 == "INCONCLUSIVE (ALL FALSIFIED; CLEAN HOLDS)"
+    row = next(r for r in res["addendum"]["verdicts"] if r["path"] == "K / K2 / verdict")
+    assert (row["ALL"], row["CLEAN"]) == ("FALSIFIED", "HOLDS")
+    assert any("K / K2 / verdict: ALL FALSIFIED | CLEAN HOLDS" in ln for ln in SC.lines(res))
+
+
+def test_clean_empty_reads_not_scored_with_alls_verdict_labelled(tmp_path):
+    """Rental 2's known outcome: every 1710 capture fails FL1, so CLEAN holds none."""
+    res = SC.score(REPO, gated_const_tree(tmp_path, fl1=("FAIL", "FAIL", "FAIL")))
+    for k in ("K1", "K2", "K3", "K4"):
+        v = res["K"][k]["verdict"]
+        assert v.startswith("NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: "), (k, v)
+    assert res["K"]["K1"]["verdict"].endswith(": HOLDS")
+    assert res["K"]["K3"]["verdict"].endswith("ns form HOLDS, cycle form FALSIFIED")
+    assert res["identification"].endswith("gate-failed pages: H_ZT")
+    assert res["K"]["K5"]["verdict"] == "RECORD"
+    # no null kernel on these captures: CLEAN fell back to FL1
+    p = next(v for k, v in res["addendum"]["pages"].items() if "tp8-floor2" in k and "lock1710" in k)
+    assert p["lock_check"]["ok"] is None and "falls back to FL1" in p["lock_check"]["why"]
+    assert p["clean_failed"] == ["FL1"] and p["CLEAN"] == "excluded"
+
+
+def test_a_held_lock_by_the_null_kernel_keeps_an_fl1_failed_capture_in_clean(tmp_path):
+    """Rental 2's medians: 1684 / 1687 / 1688 MHz at 1710 and 991 at 1005 (-1.4%) pass the
+    3% check, so CLEAN keeps every capture FL1 failed and the views agree."""
+    res = SC.score(REPO, gated_const_tree(tmp_path, fl1=("FAIL", "FAIL", "FAIL"),
+                                          null=(1684.0, 1687.0, 1688.0), null_1005=991.0))
+    for k in ("K1", "K2", "K4"):
+        assert res["K"][k]["verdict"] == "HOLDS", (k, res["K"][k]["verdict"])
+    assert res["K"]["K3"]["verdict"] == "ns form HOLDS, cycle form FALSIFIED"
+    assert res["identification"] == "H_ZT"
+    p = next(v for k, v in res["addendum"]["pages"].items() if "tp8-floor2" in k and "lock1710" in k)
+    assert p["failed_gates"] == ["FL1"] and p["clean_failed"] == [] and p["CLEAN"] == "counted"
+    assert p["lock_check"]["ok"] is True and p["lock_check"]["null_median_mhz"] == pytest.approx(1684.0)
+    assert any("lock check: null kernel median 1684.0 MHz" in ln for ln in SC.lines(res))
+
+
+def test_a_lock_not_in_force_by_the_null_kernel_is_out_of_clean(tmp_path):
+    """tp2's null kernel reads +5.6% (the 8x22B floor's lock not in force): out of CLEAN
+    even though its FL1 passed; its own w2 Z / u then splits K2."""
+    res = SC.score(REPO, gated_const_tree(tmp_path, fl1=("FAIL", "FAIL", "PASS"), zu_tp2=1.2,
+                                          null=(1684.0, 1687.0, 1710.0 * 1.056)))
+    p = next(v for k, v in res["addendum"]["pages"].items() if "tp2-floor" in k and "lock1710" in k)
+    assert p["failed_gates"] == [] and p["lock_check"]["ok"] is False
+    assert p["clean_failed"] == ["lock not in force (null kernel)"]
+    assert (p["ALL"], p["CLEAN"]) == ("counted", "excluded")
+    assert res["K"]["K2"]["verdict"] == "INCONCLUSIVE (ALL FALSIFIED; CLEAN HOLDS)"
+    def at(mhz):
+        return CM.lock_check({"clock": {"lock_mhz": 1710.0}, "cells": [{"null": {"sm_clock_mhz": mhz}}]},
+                             0.03)["ok"]
+    assert at(1710 * 0.971) is True and at(1710 * 0.969) is False and at(1710 * 1.029) is True
+
+
+def test_a_v1_failure_makes_the_page_unusable_in_both_views(tmp_path):
+    res = SC.score(REPO, gated_const_tree(tmp_path, v1_1005="FAIL"))
+    p = next(v for k, v in res["addendum"]["pages"].items() if "floor1005" in k)
+    assert p["failed_gates"] == ["V1"] and p["ALL"].startswith("unusable") and p["CLEAN"].startswith("unusable")
+    assert res["K"]["K3"]["verdict"] == "NOT SCORED: a tp4 capture is missing"
+    assert res["K"]["K1"]["verdict"] == "HOLDS"
+
+
+def test_w1floor_primary_agrees_while_its_lock_view_reads_not_scored(tmp_path):
+    tree = w1_tree(tmp_path, "H_EST")
+    for m, lab in LOCKED:
+        put_floor(tree, m, lab, "r3f-g64-lock1710",
+                  gated(w1_file(m, "H_EST"), lock=1710, FL1="FAIL", V1="PASS"))
+    res = SW.score(REPO, tree)
+    assert res["base (PRIMARY)"]["families"]["verdict"] == "H_EST"
+    lock = res["lock1710 (printed)"]["families"]
+    assert lock["verdict"] == "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: H_EST"
+    assert lock["co_primary"].endswith("gate-failed pages: H_EST supported")
+
+
+def test_w1floor_v1_failure_on_the_primary_scores_nothing_from_that_page(tmp_path):
+    tree = w1_tree(tmp_path, "H_EST")
+    put_floor(tree, "mixtral-8x7b-tp8", "floor2", "r3f-g64",
+              gated(w1_file("mixtral-8x7b-tp8", "H_EST"), V1="FAIL"))
+    res = SW.score(REPO, tree)
+    assert res["base (PRIMARY)"]["families"]["verdict"] == "NOT SCORED: a w1 GEMM lacks its three sets"
+    assert res["base (PRIMARY)"]["gemms"]["mixtral-8x7b-tp8 w1"] == {"verdict": "NOT SCORED: capture missing"}
+
+
+@pytest.mark.parametrize("gate, want", [("V10", "L2r"), ("V7", "NOT SCORED"), ("V1", "NOT SCORED: a page")])
+def test_knobs_gates_v10_not_at_all_others_by_the_two_views(tmp_path, gate, want):
+    """V10 gates no part-1 score (as registered); a V7 failure goes through ALL and
+    CLEAN; a V1 failure makes the page unusable in both."""
+    tree = tp2_tree(tmp_path, "L2r")
+    s = {g: knob_s("mixtral-8x7b-tp2", g, "L2r", 264, S_BASE) for g in ("w1", "w2")}
+    page = r3c_page("mixtral-8x7b-tp2", s=s, ctas={"w1": 2, "w2": 2}, num_stages=8)
+    page["gates"].append({"number": gate, "kind": "VALIDITY", "verdict": "FAIL"})
+    put_page(tree, "mixtral-8x7b-tp2", "l2s8", page)
+    v = SK.score(REPO, tree)["tests"][PRIMARY]["verdict"]
+    assert v.startswith(want), v
+    if gate == "V7":
+        assert v.endswith("reading only gate-failed pages: L2r")
+
+
+def test_score_mains_print_the_addendum(tmp_path):
+    tree = gated_const_tree(tmp_path, fl1=("FAIL", "FAIL", "FAIL"))
+    out = tmp_path / "out"
+    assert SC.main([str(REPO), str(tree), str(out)]) == 0
+    res = json.loads((out / "const.score.json").read_text())
+    assert res["addendum"]["registration"] == CM.ADDENDUM
+    assert f"addendum {CM.ADDENDUM}" in (out / "const.score.txt").read_text()

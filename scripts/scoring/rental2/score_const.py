@@ -25,9 +25,13 @@ PART = "const"
 SMS = 132
 
 
-def find_floor(tree: Path, model: str, label: str, stem: str) -> dict | None:
+def find_floor(tree: Path, model: str, label: str, stem: str, view=None) -> dict | None:
+    """The one floor file as `view` counts it (the addendum's ALL or CLEAN; read
+    as it stands when no view is given), None when missing."""
     hits = sorted(Path(tree).rglob(f"*-{CM.CARD}-{model}-{label}-r3-counters/{stem}.json"))
-    return json.loads(hits[0].read_text()) if len(hits) == 1 else None
+    if len(hits) != 1:
+        return None
+    return view.load(hits[0]) if view is not None else json.loads(hits[0].read_text())
 
 
 def capture_rows(reg: dict, model: str, page: dict, gemm: str, ns=None) -> list[dict]:
@@ -40,7 +44,9 @@ def capture_rows(reg: dict, model: str, page: dict, gemm: str, ns=None) -> list[
     for (n, g), rc in sorted(reg_cells.items()):
         if g != gemm or not rc["floor_bound"] or (ns is not None and n not in ns) or n not in by_n:
             continue
-        pg = by_n[n]["per_gemm"][g]
+        pg = by_n[n]["per_gemm"].get(g)
+        if pg is None:          # dropped by the addendum's rule 2
+            continue
         q, u, ce = rc["q"], rc["u"], rc["ceil"]
         ac, el = pg.get("sm__cycles_active.avg"), pg.get("sm__cycles_elapsed.avg")
         amax = pg.get("sm__cycles_active.max")
@@ -70,7 +76,11 @@ def z_intercept(rows: list[dict]):
     return z, slope
 
 
-def score(repo: Path, tree: Path) -> dict:
+def score_view(repo: Path, tree: Path, view) -> dict:
+    """Every verdict on the pages `view` counts. Each capture's clock is the median
+    of its own cells' measured sm_clock_mhz (the addendum's rule 1), never a lock;
+    it enters a verdict only in K3's ratio f_1005 / f_1710, where that reading's
+    uniform bias (about -1.4%) cancels. K1, K2 and K4 are in SM cycles."""
     reg = CM.registration(repo, PART)
     caps = reg["captures"]
     res = {"registration": CM.NAMES[PART], "captures": {}, "K": {}}
@@ -81,7 +91,7 @@ def score(repo: Path, tree: Path) -> dict:
         model = key.split(" ")[0]
         for clk in spec["clocks"]:
             stem = "r3f-g64" if clk == "base" else f"r3f-g64-{clk}"
-            pages[(model, clk)] = find_floor(tree, model, spec["label"], stem)
+            pages[(model, clk)] = find_floor(tree, model, spec["label"], stem, view)
     for (model, clk), page in pages.items():
         if page is None:
             res["captures"][f"{model} {clk}"] = {"verdict": "missing"}
@@ -172,7 +182,9 @@ def score(repo: Path, tree: Path) -> dict:
         for c in page["cells"]:
             if int(c["n"]) in (1, 2):
                 for g in ("w1", "w2"):
-                    pg = c["per_gemm"][g]
+                    pg = c["per_gemm"].get(g)
+                    if pg is None:      # dropped by the addendum's rule 2
+                        continue
                     rec[f"{model} {clk} n={c['n']} {g}"] = {
                         "L": (None if pg.get("sm__cycles_active.max") is None
                               else pg["sm__cycles_elapsed.avg"] - pg["sm__cycles_active.max"]),
@@ -180,7 +192,9 @@ def score(repo: Path, tree: Path) -> dict:
     res["K"]["K5"] = {"verdict": "RECORD", "cells": rec}
     k1, k2 = res["K"]["K1"].get("verdict"), res["K"]["K2"].get("verdict")
     k3, k4 = res["K"]["K3"].get("verdict", ""), res["K"]["K4"].get("verdict")
-    if k1 == "FALSIFIED":
+    if all(CM.no_data(res["K"][k].get("verdict")) for k in ("K1", "K2", "K3", "K4")):
+        ident = "NOT SCORED: no K1 to K4 verdict"
+    elif k1 == "FALSIFIED":
         ident = "H_LD"
     elif k4 and k4.startswith("FALSIFIED"):
         ident = "H_IMB"
@@ -190,6 +204,12 @@ def score(repo: Path, tree: Path) -> dict:
         ident = "INCONCLUSIVE"
     res["identification"] = ident
     return res
+
+
+def score(repo: Path, tree: Path) -> dict:
+    """The registered verdicts: each computed on ALL and on CLEAN pages and
+    combined by the addendum's rule (common.two_views)."""
+    return CM.two_views(lambda v: score_view(repo, tree, v), repo, PART)
 
 
 def lines(res: dict) -> list[str]:
@@ -204,7 +224,7 @@ def lines(res: dict) -> list[str]:
                 f"{g} Z_f/u {e[g]['Z_f_over_u']:.3f} clock {e[g]['clock_mhz']}" for g in ("w1", "w2")
                 if e[g]["Z_f_over_u"] is not None))
     out.append(f"  identification: {res['identification']}")
-    return out
+    return out + CM.addendum_lines(res)
 
 
 def main(argv=None) -> int:

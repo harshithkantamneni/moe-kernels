@@ -25,9 +25,13 @@ PART = "w1floor"
 LABELS = {"mixtral-8x7b-tp8": "floor2", "mixtral-8x7b-tp4": "floor", "mixtral-8x7b-tp2": "floor"}
 
 
-def find_floor(tree: Path, model: str, stem: str) -> dict | None:
+def find_floor(tree: Path, model: str, stem: str, view=None) -> dict | None:
+    """The one floor file of `model` at `stem` as `view` counts it (the addendum's
+    ALL or CLEAN; read as it stands when no view is given), None when missing."""
     hits = sorted(Path(tree).rglob(f"*-{CM.CARD}-{model}-{LABELS[model]}-r3-counters/{stem}.json"))
-    return json.loads(hits[0].read_text()) if len(hits) == 1 else None
+    if len(hits) != 1:
+        return None
+    return view.load(hits[0]) if view is not None else json.loads(hits[0].read_text())
 
 
 def check_registration(reg: dict, cregs: dict) -> list[str]:
@@ -51,6 +55,8 @@ def measured(page: dict, g: str, reg_cells: list[dict]) -> dict:
     out = {}
     for c in page["cells"]:
         n = int(c["n"])
+        if g not in c["per_gemm"]:      # dropped by the addendum's rule 2
+            continue
         grid = int((c.get("grid") or {}).get(g) or c["per_gemm"][g].get("launch__grid_size"))
         if n in want and grid != want[n]:
             raise ValueError(f"n={n} {g}: the page's grid {grid} is not the registered {want[n]}")
@@ -139,22 +145,30 @@ def score_capture(reg: dict, cregs: dict, pages: dict) -> dict:
     else:
         fam["verdict"] = "NOT SCORED: a w1 GEMM lacks its three sets"
     pc = {k: G.get(k, {}).get("per_cell", {}).get("winner") for k in ("mixtral-8x7b-tp8 w1", "mixtral-8x7b-tp4 w1")}
-    fam["co_primary"] = ("H_EST supported" if all(v == "CEIL" for v in pc.values()) else
+    fam["co_primary"] = ("NOT SCORED: no per-cell test" if all(v is None for v in pc.values()) else
+                         "H_EST supported" if all(v == "CEIL" for v in pc.values()) else
                          "FLUID supported" if all(v == "FLUID" for v in pc.values()) else "INCONCLUSIVE")
     fam["co_primary_winners"] = pc
     out["families"] = fam
     return out
 
 
-def score(repo: Path, tree: Path) -> dict:
+def score_view(repo: Path, tree: Path, view) -> dict:
+    """Every verdict on the pages `view` counts."""
     reg = CM.registration(repo, PART)
     creg = CM.registration(repo, "const")["cells_registered"]
     bad = check_registration(reg, creg)
     res = {"registration": CM.NAMES[PART], "H_EST_recomputed": "agree" if not bad else bad}
     for clock, stem in (("base (PRIMARY)", "r3f-g64"), ("lock1710 (printed)", "r3f-g64-lock1710")):
-        pages = {m: find_floor(tree, m, stem) for m in LABELS}
+        pages = {m: find_floor(tree, m, stem, view) for m in LABELS}
         res[clock] = score_capture(reg, creg, pages)
     return res
+
+
+def score(repo: Path, tree: Path) -> dict:
+    """The registered verdicts: each computed on ALL and on CLEAN pages and
+    combined by the addendum's rule (common.two_views)."""
+    return CM.two_views(lambda v: score_view(repo, tree, v), repo, PART)
 
 
 def lines(res: dict) -> list[str]:
@@ -170,7 +184,7 @@ def lines(res: dict) -> list[str]:
             s = " ".join(f"{n} {v['slope']:.1f}" for n, v in e["sets"].items() if v)
             extra = "".join(f" {x} {e[x]:+.4f}" for x in ("theta", "delta", "delta_H", "delta_F") if x in e)
             out.append(f"    {k}: slopes {s}{extra}")
-    return out
+    return out + CM.addendum_lines(res)
 
 
 def main(argv=None) -> int:

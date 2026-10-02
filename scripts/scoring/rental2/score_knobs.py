@@ -133,7 +133,8 @@ def score_t5(reg: dict, pages: dict, *, price=None) -> dict:
             "candidates": per}
 
 
-def score(repo: Path, tree: Path) -> dict:
+def score_view(repo: Path, tree: Path, view) -> dict:
+    """Every verdict on the pages `view` counts (the addendum's ALL or CLEAN)."""
     import l2_survival as L
     reg = CM.registration(repo, PART)
     G = int(reg["pages"]["G"])
@@ -143,7 +144,7 @@ def score(repo: Path, tree: Path) -> dict:
         key = (model, label)
         if key not in cache:
             p = find_page(tree, model, label, G)
-            page = load(p)
+            page = view.load(p)
             cache[key] = (L.survival(page), page, str(p) if p else None) if page else (None, None, None)
         return cache[key][0]
     res = {"registration": CM.NAMES[PART], "tests": {}, "controls": {}, "pages": {}}
@@ -275,14 +276,21 @@ def score(repo: Path, tree: Path) -> dict:
     t5p = {}
     for k2, (m, lab) in reg["T5"]["pages"].items():
         if k2.startswith("BK"):
-            t5p[k2] = load(find_page(tree, m, lab, int(reg["T5"]["G"])))
+            t5p[k2] = view.load(find_page(tree, m, lab, int(reg["T5"]["G"])))
     res["T5"] = score_t5(reg, t5p)
-    s8 = load(find_page(tree, *reg["T5"]["pages"]["s8 RECORD"], int(reg["T5"]["G"])))
+    s8 = view.load(find_page(tree, *reg["T5"]["pages"]["s8 RECORD"], int(reg["T5"]["G"])))
     if s8 is not None:
         import dram_counter_route as DCR
         res["T5"]["s8_record_f9"] = CM.f_of_q(DCR.r3_q(s8)["private"]["w2"][9], 9)
     res["pages"] = {f"{m} {lab}": v[2] for (m, lab), v in cache.items()}
     return res
+
+
+def score(repo: Path, tree: Path) -> dict:
+    """The registered verdicts: each computed on ALL and on CLEAN pages and
+    combined by the addendum's rule (common.two_views). V6 and V10 keep the
+    handling this part registered and gate neither view."""
+    return CM.two_views(lambda v: score_view(repo, tree, v), repo, PART)
 
 
 def lines(res: dict) -> list[str]:
@@ -310,7 +318,7 @@ def lines(res: dict) -> list[str]:
             out.append(f"    {k}: centre {v['centre']:.3f} band [{v['band'][0]:.3f}, {v['band'][1]:.3f}] {v['verdict']}")
     else:
         out.append(f"  T5: {t5['verdict']}")
-    return out
+    return out + CM.addendum_lines(res)
 
 
 def main(argv=None) -> int:

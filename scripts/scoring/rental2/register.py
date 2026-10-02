@@ -7,8 +7,11 @@ Every number is computed here from committed files: the calibration models'
 published pages (CAL), rental 1's published pages and scores where a number is
 SEEN (labelled), and the registered 2026-09-30 / 2026-10-01 files. Nothing is
 typed in. `--check` recomputes and compares with the committed JSON (exit 1 on
-any difference) instead of writing. About a minute on a laptop CPU (the CORES
-model is built from the 2026-09-27 pages once).
+any difference) instead of writing. The 2026-10-02 gate addendum
+(docs/registered/2026-10-02-rental2-addendum-gates.{json,txt}) is a rule, not a
+computed number, and is not written here; it pins these files' sha256.
+About a minute on a laptop CPU (the CORES model is built from the 2026-09-27
+pages once).
 """
 from __future__ import annotations
 

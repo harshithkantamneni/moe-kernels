@@ -271,7 +271,10 @@ def score_model(reg: dict, model: str, d: Path) -> dict:
     return res
 
 
-def score(repo: Path, tree: Path) -> dict:
+def score_view(repo: Path, tree: Path, view=None) -> dict:
+    """Every verdict of part 2. A launch-floor directory (cells.csv, the probes, the
+    manifests, the traces) records no validity gate, so the addendum's ALL and
+    CLEAN views read the same cells here; P0 keeps its registered handling."""
     reg = CM.registration(repo, PART)
     out = {"registration": CM.NAMES[PART], "models": {}}
     for model in reg["C_reg_ms"]:
@@ -287,6 +290,12 @@ def score(repo: Path, tree: Path) -> dict:
     return out
 
 
+def score(repo: Path, tree: Path) -> dict:
+    """The registered verdicts, through the addendum's two views (common.two_views),
+    which agree by construction on this part's directories."""
+    return CM.two_views(lambda v: score_view(repo, tree, v), repo, PART)
+
+
 def lines(res: dict) -> list[str]:
     out = [f"RENTAL 2 PART 2 (launch floor rerun), {res['registration']}"]
     for m, r in res["models"].items():
@@ -297,7 +306,7 @@ def lines(res: dict) -> list[str]:
         if r["P"]["P0"]["why"]:
             out.append(f"    P0: {r['P']['P0']['why']}")
     out.append(f"  P3 (both models together): {res['P3_pooled']['verdict']} on {res['P3_pooled']['cells']} cells")
-    return out
+    return out + CM.addendum_lines(res)
 
 
 def main(argv=None) -> int:

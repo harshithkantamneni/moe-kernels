@@ -755,3 +755,23 @@ a SEEN replication only.
   the sets, their noise propagated exactly through the shared cells; FLUID and FLUID_LOW
   have their own falsification rules; when every family fails the verdict is NEITHER; the x
   grid is the page's own launch grid, asserted equal to the registered one.
+
+## 2026-10-02, after the gate results and before any score: rental 2's gate addendum
+
+`2026-10-02-rental2-addendum-gates.{json,txt}`. None of rental 2's four registrations said
+how a page that fails a validity gate is counted, and the 1710 MHz floor captures failed
+FL1 (tp8 on a degenerate fit, w1 1690.5 MHz + 3.9 us / w2 1672.6 + 0.6 us, with no evidence of
+an off-lock run; tp4 1707.3 / 1695.6 MHz with n=1 w2 at 1785; tp2 1710.4 / 1703.2 MHz with
+n=1 w2 at 1773); the base captures and tp4 at
+1005 passed. The rule was fixed when those gate results were seen and before any score:
+every page counts at its own cells' measured clock, and sm_clock_mhz (about 1.4% low,
+uniformly, by the null kernel) enters a verdict only as a ratio (K3's f_1005 / f_1710); a floor cell over its capture's lock by
+more than one 15 MHz step is dropped and recorded; every verdict is computed on ALL pages
+and on CLEAN pages (gate-failed ones excluded) and registered as the common verdict,
+INCONCLUSIVE when they differ, NOT SCORED (ALL's verdict printed, labelled) when CLEAN has
+no data; a V1 failure makes a page unusable in both views; part 1's registered V6 and V10
+handling stands. For a floor capture under a lock, CLEAN uses V1 and a null-kernel lock check
+(the capture's median null-kernel sm_clock_mhz within 3% of the lock) in place of FL1, FL1
+where there is no null kernel; chosen after the null-kernel medians were seen (1684, 1687,
+1688 MHz at 1710; 991 at 1005) and before any score, because the gate audit shows FL1's low
+fits are a degenerate f / t0 fit. The four 2026-10-01 files are unchanged (sha256 pinned in the addendum).
