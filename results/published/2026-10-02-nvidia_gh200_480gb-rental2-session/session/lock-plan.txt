@@ -1,0 +1,15 @@
+# 110 graphics clocks, 345 to 1980 MHz
+# 1710 supported
+# 1605 supported
+# 1590 supported
+# 1500 supported
+# 1410 supported
+# LOCK_ETA_A 1410 (registered)
+# LOCK_ETA_B 1500 (registered)
+# LOCK_ETA_C 1605 (registered)
+# LOCK_PROBE_1005 supported (a plan's floor lock; probed below)
+LOCK_TIMED_OK=1
+LOCK_ETA_A=1410
+LOCK_ETA_B=1500
+LOCK_ETA_C=1605
+LOCK_PROBE_1005=supported

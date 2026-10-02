@@ -1,0 +1,43 @@
+2026-10-02T05:24:27Z the branch's first commit: the VM can push
+2026-10-02T05:26:08Z setup_vm.sh: READY
+2026-10-02T05:26:13Z prelude (unit 1/24 -): exit 0 (0 min)
+2026-10-02T05:28:17Z floor (unit 2/24 mixtral-8x7b-tp8 floor2 floor-groups=64 floor-treads=1,2,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (2 min)
+2026-10-02T05:31:05Z floor (unit 3/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (3 min)
+2026-10-02T05:35:07Z floor (unit 4/24 mixtral-8x7b-tp2 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (4 min)
+2026-10-02T05:36:12Z floor (unit 5/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,12,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-02T05:39:43Z bytes: G=1 page exit 3
+2026-10-02T05:39:53Z bytes (unit 6/24 mixtral-8x7b-tp2 l2base byte-groups=1 partition-metrics=1): exit 0 (4 min)
+2026-10-02T05:43:23Z bytes: G=1 page exit 0
+2026-10-02T05:43:33Z bytes (unit 7/24 mixtral-8x7b-tp2 l2s8 byte-groups=1 num-stages=8 partition-metrics=1): exit 0 (4 min)
+2026-10-02T05:45:43Z bytes: G=1 page exit 3
+2026-10-02T05:45:53Z bytes (unit 8/24 mixtral-8x7b-tp4 l2base byte-groups=1): exit 0 (2 min)
+2026-10-02T05:48:03Z bytes: G=1 page exit 3
+2026-10-02T05:48:13Z bytes (unit 9/24 mixtral-8x7b-tp4 l2s8 byte-groups=1 num-stages=8): exit 0 (2 min)
+2026-10-02T05:49:44Z bytes: G=1 page exit 3
+2026-10-02T05:49:54Z bytes (unit 10/24 mixtral-8x7b-tp8 l2s8 byte-groups=1 num-stages=8): exit 0 (2 min)
+2026-10-02T05:53:24Z bytes: G=1 page exit 3
+2026-10-02T05:53:35Z bytes (unit 11/24 mixtral-8x7b-tp2 l2s6 byte-groups=1 num-stages=6): exit 0 (4 min)
+2026-10-02T05:57:04Z bytes: G=64 page exit 3
+2026-10-02T05:57:14Z bytes (unit 12/24 mixtral-8x7b-tp2 atbk64 byte-groups=64): exit 0 (4 min)
+2026-10-02T06:00:44Z bytes: G=64 page exit 3
+2026-10-02T06:00:55Z bytes (unit 13/24 mixtral-8x7b-tp2 atbk32 byte-groups=64 block-k=32 num-stages=4): exit 0 (4 min)
+2026-10-02T06:04:24Z bytes: G=64 page exit 1
+2026-10-02T06:04:35Z bytes (unit 14/24 mixtral-8x7b-tp2 atbk128 byte-groups=64 block-k=128 num-stages=2): exit 0 (4 min)
+2026-10-02T06:27:18Z launchfloor (unit 15/24 mixtral-8x7b-tp8 r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,3,6): exit 0 (23 min)
+2026-10-02T06:49:42Z launchfloor (unit 16/24 granite-3.0-3b-a800m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,E0,E480,GR lf-trace=1,2,4,6,9): exit 0 (22 min)
+2026-10-02T06:53:13Z bytes: G=1 page exit 3
+2026-10-02T06:53:24Z bytes (unit 17/24 mixtral-8x7b-tp2 l2bk32 byte-groups=1 block-k=32 num-stages=4): exit 0 (4 min)
+2026-10-02T06:56:55Z bytes: G=1 page exit 3
+2026-10-02T06:57:06Z bytes (unit 18/24 mixtral-8x7b-tp2 l2bk128 byte-groups=1 block-k=128 num-stages=2): exit 0 (4 min)
+2026-10-02T07:00:37Z bytes: G=1 page exit 3
+2026-10-02T07:00:48Z bytes (unit 19/24 mixtral-8x7b-tp2 l2pad7 byte-groups=1 slot-pad-rows=7): exit 0 (4 min)
+2026-10-02T07:04:19Z bytes: G=64 page exit 3
+2026-10-02T07:04:30Z bytes (unit 20/24 mixtral-8x7b-tp2 ats8 byte-groups=64 num-stages=8): exit 0 (4 min)
+2026-10-02T07:10:39Z bytes: G=1 page exit 0
+2026-10-02T07:10:50Z bytes (unit 21/24 mixtral-8x7b l2base byte-groups=1): exit 0 (6 min)
+2026-10-02T07:16:58Z bytes: G=1 page exit 3
+2026-10-02T07:17:10Z bytes (unit 22/24 mixtral-8x7b l2s8 byte-groups=1 num-stages=8): exit 0 (6 min)
+2026-10-02T07:27:26Z launchfloor (unit 23/24 jetmoe-8b r2 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3): exit 0 (10 min)
+2026-10-02T07:38:35Z launchfloor (unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9): exit 0 (11 min)
+2026-10-02T07:38:39Z the session ended: driver exit 3
+2026-10-02T07:40:10Z recovery: END

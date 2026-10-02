@@ -58,3 +58,11 @@ pages' gate results were seen and before any score; the four registrations are u
 `addendum`: the page record (gates failed, cells dropped, what each view did), every
 verdict path with its ALL, CLEAN and registered reading, and the CLEAN tree. The `.txt`
 ends with the pages a gate or the clock rule touched and every verdict that differs.
+
+## Scored 2026-10-02
+
+Run unchanged on `results/published/2026-10-02-nvidia_gh200_480gb-rental2-session`; the
+outputs are `{knobs,launch,const,w1floor}.score.{json,txt}` in this directory and
+`SCORES.md` tabulates every registered prediction (ALL, CLEAN, registered verdict, key
+numbers). No scorer crashed or failed to read a page, and none was edited after the pages:
+there is no post-page fix. `SCORES.md` ends with two readings left to the owner.

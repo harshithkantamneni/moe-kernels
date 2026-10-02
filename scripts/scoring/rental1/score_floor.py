@@ -37,7 +37,7 @@ d = TREE / "vm/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-c
 for name in ["r3f-g64", "r3f-g8", "r3f-g64-lock1710", "r3f-g8-lock1710"]:
     j = json.loads((d / f"{name}.json").read_text())
     G = j["plan"]["group_m"]
-    gates = [(x.get("id") or x.get("name"), x.get("verdict") or x.get("status")) for x in j.get("gates", [])]
+    gates = [(x.get("number") or x.get("id") or x.get("name"), x.get("verdict") or x.get("status")) for x in j.get("gates", [])]
     cap = {"file": f"{d.name}/{name}.json", "G": G, "clock": j["clock"]["control"], "gates": gates, "cells": []}
     meas = {}
     for cl in j["cells"]:

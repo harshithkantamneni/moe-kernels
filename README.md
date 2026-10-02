@@ -231,20 +231,22 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 5793 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 5796 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Nineteen further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twelve Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and thirteen Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
 JetMoE-8B and Granite-3.0-3B-A800M, and two floor-only sessions of
 2026-09-30 for JetMoE-8B and Mixtral 8x7B, and rental 1 of 2026-10-01: the
 Mixtral 8x7B TP=8 floor capture, the A-tile and L2-survival byte pages and the
-launch floor, 14 units on one GH200), kept so every verdict they printed can be
+launch floor, 14 units on one GH200, and rental 2 of 2026-10-02: the TP-shard floor
+captures at unseen treads and 1005 MHz, the num_stages / BLOCK_K / slot-pad knob pages and
+the two-process launch-floor rerun, 24 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
 sessions rather than arms.
 

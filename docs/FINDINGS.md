@@ -734,7 +734,9 @@ held.** They divided each cell's counted cycles by ncu's duration, which
 carries a fixed overhead the cycle count does not: 15 to 24 us a GEMM (on the
 G=1 page, duration = 22.7 us + cycles / 1705 MHz over 54 GEMMs). Fixed in
 f97df00 (`r3_lock_fit`, COUNTERS.md 6.12 and 6.13); re-scored, the G=1, 3, 4, 8
-and 16 lock pages pass every validity gate and the floor's FL1 passes.
+and 16 lock pages pass every validity gate and the floor's FL1 passes. CORRECTED 2026-10-02:
+the page files still store the old FAIL, which two tools print, and G = 2 fails by 1 MHz
+(w2 1694.0) (Rental 2, Corrections, item 5.)
 
 **Both gaps, closed in part the same day.** The G=3 miss was the timing
 model's hard max: a CTA whose DRAM time sits near its floor runs slower than
@@ -954,7 +956,8 @@ condition, the dead CTA, the per-CTA fixed cost.
 FL1 alone: the clock fit reads w1 at 1686 to 1689 MHz and w2 at 1662 to 1668 on
 every page, a constant gap between two GEMMs of one call that one clock cannot
 make, on GEMMs tens of microseconds long. Bytes do not depend on it; every timed
-cell held 1710 MHz by NVML.
+cell held 1710 MHz by NVML. CORRECTED 2026-10-02: the gap is in the clock fit, not the clock;
+the floor's cell-matched lock / base ratio puts both GEMMs on the lock (Rental 2, Corrections, item 2.)
 
 ## The 2026-09-29/30 held-out queue: four models
 
@@ -993,7 +996,9 @@ the capture. The floors above are the base-clock captures; the lock captures
 read within 0.3% of them, except Granite's w2, 0.8% lower (456.1, -2.22%
 against the registration, on a capture that fails FL1). PRIVATE bytes, the byte model's one scored quantity, held on seven
 of eight GEMMs; Phi's w2 misses only at its deepest G=64 cells (-5.1 to -8.0%),
-on the byte page that also fails V10 and C2.
+on the byte page that also fails V10 and C2. CORRECTED 2026-10-02: that V10 fail is two
+n = 1 cells of the clock fit, so the miss needs no instrument caveat; and Granite's w2 lock
+capture held its lock (Rental 2, Corrections, item 1, 4.)
 
 **Diagnosis, not tests.** Everything below was read off these pages after
 they were scored; nothing is fitted or adopted.
@@ -1058,7 +1063,9 @@ they were scored; nothing is fitted or adopted.
   every GEMM the corrected estimator can score across eight models, 8 to 256
   k-steps a CTA, on the base-clock captures (Granite's w2 lock capture, which
   fails FL1, reads -2.22%); the per-CTA constant is measured on four of them and
-  predicted on the other four.
+  predicted on the other four. CORRECTED 2026-10-02: on the lock captures, which held the
+lock, JetMoE's w2 reads +2.61% and Granite's -2.22%: within 2% on the base captures, 2.6% on
+either (Rental 2, Corrections, item 1.)
 
 **What the paper can claim, after eight tests.** From one card's 8x7B fit,
 with nothing fitted on the target, time from a model's own bytes to 2% on two
@@ -1075,7 +1082,8 @@ seen.
 captures FL1 on three, a gap between a call's two GEMMs' fitted clocks as on
 OLMoE (Granite's w1 fits 1623 to 1628 MHz with a negative offset); byte and
 cycle counts do not depend on the clock, and every scored timed cell held the
-1710 lock by NVML (Phi's G=3 page's worst cell 1695 MHz, inside one step). JetMoE's deep G=2 slipped
+1710 lock by NVML (Phi's G=3 page's worst cell 1695 MHz, inside one step). CORRECTED
+2026-10-02: those fitted clocks are the fit's, not the card's (Rental 2, Corrections, item 2.) JetMoE's deep G=2 slipped
 at 1710 twice and was taken at 1605, which is not scored. The power cap (0x4)
 was in 15 to 21% of Phi's timed samples, 1 to 7% of the others', none of
 Granite's. Granite's first instance (2026-09-29, 16 minutes) never ran: it came
@@ -1208,7 +1216,8 @@ the per-CTA floor fails on tp8 w1; it is also not evidence that it holds, becaus
 cells were seen before this reading. Rental 2's part 4 (docs/registered
 2026-10-01-rental2-w1floor-gh200) tests the reading blind, on tread sets no published page
 holds. Reproduced by `scripts/scoring/rental2/f4_implied.py`, which replaces the design
-copy that printed `nan` for tp8 (its session match found no rental-1 capture).
+copy that printed `nan` for tp8 (its session match found no rental-1 capture). Tested
+2026-10-02: NEITHER family held (Rental 2, Corrections, item 7.)
 
 **Instrument.** The launch floor's kineto traces slowed the host for the rest of their
 process (above); a later design should take its traces in a separate process. Every
@@ -1216,9 +1225,171 @@ tp-shard and OLMoE byte page but tp2 atile G = 32 fails V10 (GEMM fits 1658 to 1
 at the 1710 lock, tp2's n = 1 w2 cells up to 1783 MHz), as registered; V7 (NATIVE against
 SHARED bytes) fails on sameboard G = 16, 32 and five atile pages, V6 once (tp8 atile G = 8,
 n = 2 w2, 1.3031% against 1.3%; no survival page fails it). The tp8 floor's lock captures
-fail FL1 alone (w1 fitted 1662 and 1671, w2 1655 MHz). Sameboard G = 8 and Qwen2 G = 128
+fail FL1 alone (w1 fitted 1662 and 1671, w2 1655 MHz). CORRECTED 2026-10-02: the fitted
+clocks above are a degenerate fit, the lock held, and the tp8 lock captures were the
+registration's primary; read on them every F verdict is unchanged (Rental 2, Corrections, item 2, 3.) Sameboard G = 8 and Qwen2 G = 128
 fail claim gates only (C1, C2 on SHARED; C6 on Qwen2's PRIVATE excess, the quantity C
 scores). The recovery step had nothing to retake.
+
+## Rental 2 (2026-10-02): the floor's unseen tread sets, the per-GEMM constant, the knobs, the launch rerun
+
+One Lambda GH200 480GB (board `4da056`, which no earlier page used; instance launched
+05:22:58Z, terminated 07:41:41Z, 2 h 19 min, about $5.30) ran
+`scripts/plans/rental2-2026-10.plan` unattended at 2bf6fe3: 24 units in 132 minutes, none
+dropped, 21 exit 0. The three 1710 MHz floor captures exit 3 on FL1 alone; the recovery step
+had nothing to retake. Four registrations and their scorers were committed before any page
+(2bf6fe3); the gate addendum (38898b4) was fixed after the gate results and before any score.
+Published at `results/published/2026-10-02-nvidia_gh200_480gb-rental2-session`; every verdict
+is the committed scorers' output, unchanged, in `scripts/scoring/rental2/` (`SCORES.md` has
+each prediction's ALL, CLEAN and registered reading).
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| part 4, w1 floor (base captures) | families | NEITHER: H_EST, FLUID, FLUID_LOW, H_NPN all FALSIFIED | theta tp8 +0.54 (sigma 0.28), tp4 +0.80 (0.20); delta_H tp4 -1.29%, tp2 -1.75% (2 sigma 1.08, 0.62%) |
+| | co-primary per cell | INCONCLUSIVE | tp8 w1 rms 4248 / 4104, tp4 w1 4028 / 4423 cycles (sigma_cell 2678) |
+| | w2 offset | H_EST HOLDS on all three; FLUID HOLDS tp8, tp4, FALSIFIED tp2 | +1.81, +2.61, +3.89% against +3.8% |
+| part 3, the constant | K1, K2, K4 | HOLD | L > 5000 on 11.7%; pooled w2 Z / u 0.254 in [0.25, 0.69]; D_imb within 0.2 u on 95% |
+| | K3 | cycle form HOLDS, ns form FALSIFIED | Z_1005 / Z_1710 0.936 (w1), 0.907 (w2), pooled 0.921 +- 0.075; f ratio 0.597 |
+| | identification | INCONCLUSIVE | H_ZT needs the ns form |
+| part 2, launch rerun | P0 | HELD tp8, JetMoE; FAILED both Granites | GR cells only: H_cell / H_pre 1.6 to 3.4 at n = 1 to 6 |
+| | P1 | HELD tp8 (27/27), Granite-3B (15/15); FALSIFIED Granite-1B; NOT SCORED JetMoE | Granite-1B 0.764 to 0.767 x C_reg on 3 cells; JetMoE's registered n = 5 was never planned, its 12 measured cells 0.862 to 0.987 x C_reg |
+| | P2, P4, P5 | HELD on all four (host drift on the Granites) | E240 - GR 3.6 to 6.7 us; P5 77/77, 72/72, 31/32, 26/26 |
+| | P3 (pooled) | FALSIFIED | 10 of 15 out; E0 - E240 33 to 61 us against about 50 to 75 |
+| | P6 | FALSIFIED tp8 (5 of 24); HELD the other three | tp8 n = 1 E240 / E480 7 to 9% over MP |
+| | P8 | FALSIFIED tp8, JetMoE, Granite-1B; HELD Granite-3B (host drift) | H - I 75 to 79 us on the tp8 and JetMoE misses |
+| part 1, knobs | tp2 w2 s8 (primary) | INCONCLUSIVE: L2r, NL, ST each FALSIFIED | s 0.86 to 0.76 at n = 4..9, base 0.58 to 0.53 |
+| | tp4 w1 s8 (primary) | INCONCLUSIVE: LAG and NL FALSIFIED | s 0.56 to 0.42, above NL at 5 of 6 |
+| | tp2 w2 s6 | NL | 0.58 to 0.52, the base level |
+| | 8x7B w2 s8 | NOT SCORED (knob page fails V7); ALL: HELD | 5 of 6 within 0.05 of tp2 |
+| | H2c, H3 | l2bk128 SELECTED (w1, w2); l2bk32 INCONCLUSIVE (V6); H3 FALSIFIED | l2bk128 w2 at the base W_c +0.13 to +0.27; PRIVATE bytes within 0.02% under pad 7 |
+| | T5 | NOT SCORED (BK32 page fails V7); ALL: R0, R1, R2 FALSIFIED, R2h INCONCLUSIVE | rho_BK 0.357: f 0.206 at BLOCK_K 128, 0.577 at 32; board check f(BK64) 0.480, -17% |
+
+Two post-page scorer fixes, made after the pages and recorded here because each changed a
+printed verdict. (1) `score_knobs.py`'s H2c branch did not apply the registered V6 rule ("a
+page whose V6 gate is not PASS is FLAGGED: its cells are excluded from every count and its
+verdicts read INCONCLUSIVE") to tp2 l2bk32, which fails V6; it printed w1 FALSIFIED and w2
+SELECTED, and now prints INCONCLUSIVE (FLAGGED V6) for both, as the registration says.
+(2) `score_launch.py` counted JetMoE's n = 5 graph-replay cells, which the registered plan
+never ran (`lf-treads=1,2,3,4`), as P1's three "outside" cells and printed FALSIFIED. P1's
+registered cell set and its n = 5 increment rule cannot be read on a 4-tread unit, so P1 now
+reads NOT SCORED wherever a registered tread is absent from the plan; JetMoE's 12 measured
+cells all sit at 0.862 to 0.987 x C_reg. Neither fix touches a band, cell set or estimator.
+
+**What each test separated, and what it did not.**
+
+- Part 4 did not select a floor law. On the base captures the per-set slopes follow the
+  estimator's bias the way H_EST says (tp8 333.3 / 348.8 / 363.3 against 313.4 / 350.7 /
+  365.6), which is the reading the 2026-10-01 F4 correction gave, but H_EST misses its level
+  on tp4 and tp2 w1 by -1.3 and -1.75%, beyond its 2 sigma. The lock captures, whose cells
+  sit within 0.6% of the base cells, read tp8 flat (352.7 / 350.0 / 350.8, theta -0.04): a
+  three-tread slope turns 0.6% of cell scatter into 6% of slope, and tp8's theta bands
+  overlap, as the registration's power section said. w2 sits at +1.8 to +3.9%, on H_EST's
+  offset.
+- Part 3 put the per-GEMM constant in SM cycles: between 1005 and 1710 MHz its intercept
+  moves 6 to 9%, where a constant in nanoseconds would move 40%. It is not launch or drain
+  (K1) and not dispatch imbalance (K4); Z / u reads 0.19 to 0.46 at 1710 and 0.28 at 1005.
+  The registration names no hypothesis for a cycle-form constant, so the identification is
+  INCONCLUSIVE.
+- Part 2's timed process ran with the profiler guarded off throughout, and its host time per
+  call held 0.33 to 0.36 ms (post / pre drift 1.1 to 3.2%), the level rental 1 measured before
+  its first trace; that supports rental 1's reading that its later 0.38 to 0.46 ms came from
+  the trace. Graph replay follows C_reg on tp8 (blind) and Granite-3B, not on Granite-1B (23%
+  fast at n = 1, 2). P0's failures are all graph-replay cells, whose enqueue time per call is
+  1.6 to 3.4 times the probe's 0.029 ms; the eager cells it was written for drift under 5%.
+  P3 and P8 fail again: E0 - E240 reads 3 to 17 us under its trace-built band on 10 of 15
+  cells, and P8's misses sit 1 to 5 us under the plateau band.
+- Part 1 refuted the lag law. num_stages 8 (W_c 528 to 264) raised G = 1 survival by 0.17 to
+  0.28 on tp2 w2 and by 0.05 to 0.19 on tp4 w1, where L2r predicted a fall and NL no change;
+  num_stages 6 (W_c 396) left tp2 w2 at its base level. BLOCK_K 128 raised w2 survival at an
+  unchanged W_c (+0.13 to +0.27). At G = 64, BLOCK_K 128 re-reads PRIVATE w2's A tiles 0.36x as
+  much as BLOCK_K 32 (rho_BK 0.357), below no-effect's 1.0 and opposite to R2's 1.67 and R2h's
+  1.29; T5 is NOT SCORED because the BK32 page fails V7 (NATIVE against SHARED bytes, a gate on
+  arms T5 does not read). The base pages reproduce rental 1's s within 0.03 on another board.
+
+**Diagnosis, not tests.**
+
+- The 1005 MHz capture settles what FL1's offset is. Its fit reads 1005.0 MHz + 0.3 us on both
+  GEMMs, and its cells' cycles over duration read 1003.2 to 1004.9 MHz. The same tp4 cells at
+  1710 fit with 9.9 and 4.7 us of offset and read 1619 to 1696 MHz cell by cell. A fixed ncu
+  overhead would not shrink from 5 to 10 us to 0.3 us between two clocks on the same cells: the "t0" of the lock
+  fit is a clock-dependent shortfall of `sm__cycles_elapsed.avg`, as the gate audit found from
+  the L2 clock. The null kernel reads 1684 to 1688 MHz at 1710 and 991 at 1005, -1.4% at both.
+- The board-to-board spread of PRIVATE w2 at G = 64 is larger than T5's board check allowed:
+  q at n = 9 reads 11.13 against rental 1's 11.57 (-3.8%), which the re-read fraction f
+  amplifies to -17%.
+- The partition cross-check fails on 75 to 81% of cells (direct fabric hits over F - Fm 0.14
+  to 0.94), while the far share by subtraction and by direct count agree to 0.04 on the base
+  page: the absolute counts disagree, their SHARED - PRIVATE differences mostly do not.
+- BLOCK_K 128's G = 64 page (unit 14) is the only knob page that passes every validity gate;
+  its analyse exit 1 is CLAIM_FAIL (C1 REFUSE: SHARED's weight-only bracket edges disagree at
+  n = 4..9; C2, C6 FAIL), the designed outcome at G >= E n, which every G = 64 tp2 page of both
+  rentals shares.
+
+**Corrections (2026-10-02, the gate audit and rental 2).** Registered verdicts stand as
+registered. Each item says what the published numbers support.
+
+1. *"Within 2% on every GEMM the corrected estimator can score" holds on the base captures
+   only* (2026-09-29/30 section above). The lock captures held the lock (cell-matched lock /
+   base ratio, L2-clock fit; scratchpad `gate-audit/AUDIT.md`), and on them two scorable GEMMs
+   are outside 2%: JetMoE-8B w2 (n = 9, 10, 11) +2.61% and Granite-3.0-3B w2 (n = 3, 4, 6)
+   -2.22%; Mixtral 8x7B w2 reads +0.06%. Base and lock slopes of one GEMM differ by -0.8 to +1.6
+   points. The supported statement is within 2% on the base captures and within 2.6% on either;
+   c = 344.1 was itself measured on lock pages, and the base choice was made at scoring time.
+2. *FL1 and V10 fails are a degenerate t0 / f fit, not off-lock runs.* Every fail from
+   2026-09-28 on except the 8x22B floor (lock not in force, nvidia-smi 1980 MHz) is the
+   estimator: whenever the fitted t0 is under about 5 us the fitted f reads 1 to 5% low, and an
+   n = 1 cell's t0-corrected clock reads above the lock. The OLMoE note ("a constant gap
+   between two GEMMs of one call that one clock cannot make"), the held-out queue's
+   instrument note, rental 1's "GEMM fits 1658 to 1703 MHz" and its "1671 / 1655 MHz against
+   about 1356" for the n = 1 controls read the fit's f as a clock; it is not one. The gap is in
+   the fit; the clock held. Bytes and cycles were never affected, and no scorer excluded a page
+   on these gates. Rental 2's 1005 capture (above) is the direct evidence.
+3. *Rental 1's tp8 floor was registered on the lock captures.* The JSON's `primary` names the
+   lock captures; they were set aside on the FL1 fail and the base captures scored. Read on the
+   lock captures the verdicts do not move: F1 HELD (D 155,988 and 155,914), F2 HELD (+3.14,
+   +5.41%), F3 FALSIFIED, F4 w1 FALSIFIED (-3.56, -3.32%), F4 w2 HELD (-1.67, -0.94%).
+4. *Phi-3.5-MoE's PRIVATE w2 miss needs no instrument caveat.* Its G = 64 byte page fails V10
+   on two n = 1 w2 cells at 1762 and 1763 MHz on the t0-corrected clock (fits 1708.9 / 1709.1
+   MHz), the n = 1 artefact of item 2. "On the byte page that also fails V10" is void; the
+   FALSIFIED verdict stands on the bytes. Rental 1's tp2 atile G = 16 and G = 64 V10 fails are
+   the same.
+5. *The 2026-09-27 pages still store the old V10 / FL1 FAIL.* Re-run with `r3_lock_fit`, G = 1,
+   3, 4, 8, 16, 32, 64 and the floor pass and G = 2 fails by 1 MHz (w2 1694.0); G = 32 and 64
+   still fail V7. `r3_timing_model.py` and `wave_split_bytes.py` print the stored verdict, so
+   they print FAIL for pages that pass.
+6. *`scripts/scoring/rental1/score_floor.py` l.40 read the wrong field.* Floor gates are keyed
+   `number`, so `floor.score.txt` printed `gates [(None, 'FAIL')]`. Fixed to read `number`
+   first and the outputs regenerated: the two gate labels now read FL1; no number or verdict
+   changed (a print-only bug).
+7. *Rental 1's F4 correction is only partly borne out.* It read the tp8 w1 miss as the
+   estimator's ceil quantisation; rental 2's unseen sets show the set-dependence it predicts
+   (theta 0.54 and 0.80 on the base captures) but falsify the model's level on tp4 and tp2 w1
+   (item above): the per-CTA floor through the estimator is not confirmed either.
+8. *The addendum's "sm_clock_mhz reads about 1.4% low, uniformly" holds for the null kernel
+   only.* GEMM cells read on the lock at 1005 MHz (1003 to 1005) and 0.5 to 5.5% under it at
+   1710. K3's f_1005 / f_1710 of median GEMM-cell clocks is therefore 1.2% above 1005 / 1710;
+   K3 sits 4.3 sigma from the ns form either way, and no other verdict reads a clock.
+9. *T5's design premises.* The BK32 page's w2 window is 660, not the BK64 / BK128 528 the
+   design assumed equal (the scorer re-prices each centre on the page's own geometry, R0 1.038),
+   and the 2.8% board-to-board figure behind the BK64 check is too tight for f (item above).
+
+**What the paper can claim, after rental 2.** The per-GEMM constant of the floor-bound GEMMs
+is a constant in SM cycles, 0.2 to 0.46 of a unit, not launch, drain or dispatch imbalance
+(one board, two clocks). More pipeline stages and a larger BLOCK_K raise G = 1 L2 survival
+and lower PRIVATE's A-tile re-reads; the registered lag law L2r is refuted on its primary
+test. Graph replay follows C_reg on an unseen TP shard; the host-bound boundary C + F < H
+holds on 206 of 207 eager cells of four models. Not claimed: any per-CTA floor law (NEITHER),
+the per-GEMM constant's mechanism, any T5 candidate (NOT SCORED), the eager launch-floor
+offsets P3 and P8.
+
+**Instrument.** The three 1710 floor captures fail FL1 alone (tp8 w1 1690.5 MHz + 3.9 us,
+w2 1672.6 + 0.6; tp4 and tp2 fits on the lock, each failed by one n = 1 w2 cell at 1785 and
+1773 MHz t0-corrected); the null-kernel lock check passes all three (-1.3 to -1.5%) and no
+cell reads above its lock, so CLEAN keeps them. V10 fails on seven G = 1 pages and atbk64 (not
+gating in part 1), V7 on four pages (8x7B l2s8, atbk32, atbk64, ats8; CLEAN drops them), V6 on tp2
+l2bk32. Every page carries its card's UUID, as every published session does.
 
 ---
 

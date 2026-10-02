@@ -19,3 +19,8 @@ committed at 436e41c and the published pages; nothing in them is fitted on the p
 All four were written after the pages existed; the registrations fixed the numbers and the
 bands, the scorers only apply them. A scorer registered before its pages is the rule from
 rental 2 on.
+
+**Fixed 2026-10-02 (print only).** `score_floor.py` l.40 read a gate's `id` or `name`; the
+floor captures key their gates `number`, so `floor.score.txt` printed `gates [(None,
+'FAIL')]`. It now reads `number` first; `floor.score.{json,txt}` were regenerated and differ
+only in those two labels (now `FL1`). No number or verdict changed.

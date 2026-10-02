@@ -1,0 +1,2112 @@
+{
+ "registration": "2026-10-01-rental2-knobs-gh200",
+ "tests": {
+  "tp2 w2 s8 (PRIMARY)": {
+   "per_hypothesis": {
+    "L2r": {
+     "exclusive": [],
+     "outside": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    },
+    "NL": {
+     "exclusive": [],
+     "outside": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    },
+    "ST": {
+     "exclusive": [],
+     "outside": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    }
+   },
+   "verdict": "INCONCLUSIVE",
+   "measured": {
+    "4": 0.8546120779854911,
+    "5": 0.7583050500778926,
+    "6": 0.7526667640322731,
+    "7": 0.7592524573916482,
+    "8": 0.7576246715727307,
+    "9": 0.7551703453063965
+   },
+   "bands": {
+    "4": {
+     "L2r": [
+      0.2171351720604428,
+      0.43710879762504695
+     ],
+     "NL": [
+      0.5252074226500496,
+      0.6252074226500497
+     ],
+     "ST": [
+      0.0,
+      0.08211382537344375
+     ]
+    },
+    "5": {
+     "L2r": [
+      0.19320513164849,
+      0.3875696760453582
+     ],
+     "NL": [
+      0.5332334245954241,
+      0.6332334245954242
+     ],
+     "ST": [
+      0.0,
+      0.06727034568381636
+     ]
+    },
+    "6": {
+     "L2r": [
+      0.17075892755015254,
+      0.3641707115839634
+     ],
+     "NL": [
+      0.49467497326078874,
+      0.5946749732607888
+     ],
+     "ST": [
+      0.0,
+      0.0624308893903361
+     ]
+    },
+    "7": {
+     "L2r": [
+      0.12587876184770408,
+      0.2872662886965327
+     ],
+     "NL": [
+      0.5113025180877201,
+      0.6113025180877202
+     ],
+     "ST": [
+      0.0,
+      0.06129902531991113
+     ]
+    },
+    "8": {
+     "L2r": [
+      0.12840314276641715,
+      0.2932596829728692
+     ],
+     "NL": [
+      0.49370244344075515,
+      0.5937024434407552
+     ],
+     "ST": [
+      0.0,
+      0.05654650085805395
+     ]
+    },
+    "9": {
+     "L2r": [
+      0.1053867458600202,
+      0.2592641667514941
+     ],
+     "NL": [
+      0.48073276792253766,
+      0.5807327679225377
+     ],
+     "ST": [
+      0.0,
+      0.053106929130656566
+     ]
+    }
+   },
+   "W_c": {
+    "base": 528,
+    "knob": 264
+   },
+   "dd": 0.12121212121212122,
+   "x": 0.91875,
+   "demoted_by": []
+  },
+  "tp4 w1 s8 (PRIMARY, NL vs lag)": {
+   "per_hypothesis": {
+    "LAG": {
+     "exclusive": [],
+     "outside": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    },
+    "NL": {
+     "exclusive": [
+      8
+     ],
+     "outside": [
+      4,
+      5,
+      6,
+      7,
+      9
+     ],
+     "status": "FALSIFIED"
+    }
+   },
+   "verdict": "INCONCLUSIVE",
+   "measured": {
+    "4": 0.5614346095493862,
+    "5": 0.5141245524088541,
+    "6": 0.4915002732049851,
+    "7": 0.5619061485169426,
+    "8": 0.42353864916327855,
+    "9": 0.46349877402895984
+   },
+   "bands": {
+    "4": {
+     "LAG": [
+      0.0,
+      0.2587036002080664
+     ],
+     "NL": [
+      0.4239356268019903,
+      0.5239356268019904
+     ]
+    },
+    "5": {
+     "LAG": [
+      0.0,
+      0.1800884296466291
+     ],
+     "NL": [
+      0.37115156991141196,
+      0.47115156991141194
+     ]
+    },
+    "6": {
+     "LAG": [
+      0.0,
+      0.17983441875223224
+     ],
+     "NL": [
+      0.37019987560453865,
+      0.47019987560453863
+     ]
+    },
+    "7": {
+     "LAG": [
+      -0.005259895604144159,
+      0.10170331756440472
+     ],
+     "NL": [
+      0.3226880815294055,
+      0.42268808152940546
+     ]
+    },
+    "8": {
+     "LAG": [
+      -0.0024910788061008014,
+      0.1109541368338713
+     ],
+     "NL": [
+      0.32490764280565737,
+      0.42490764280565735
+     ]
+    },
+    "9": {
+     "LAG": [
+      -0.010503683216858899,
+      0.08986428475400327
+     ],
+     "NL": [
+      0.3033862204778761,
+      0.4033862204778761
+     ]
+    }
+   },
+   "W_c": {
+    "base": 660,
+    "knob": 264
+   },
+   "dd": 0.2545454545454545,
+   "x": 0.925,
+   "demoted_by": []
+  },
+  "tp2 w2 s6 (secondary, the curve's shape)": {
+   "per_hypothesis": {
+    "L2r": {
+     "exclusive": [],
+     "outside": [
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    },
+    "NL": {
+     "exclusive": [
+      6,
+      7,
+      8,
+      9
+     ],
+     "outside": [],
+     "status": "SELECTED"
+    },
+    "ST": {
+     "exclusive": [],
+     "outside": [
+      6,
+      7,
+      8,
+      9
+     ],
+     "status": "FALSIFIED"
+    }
+   },
+   "verdict": "NL",
+   "measured": {
+    "6": 0.5791625613257998,
+    "7": 0.5691308218335348,
+    "8": 0.5439287042942177,
+    "9": 0.51636993317377
+   },
+   "bands": {
+    "6": {
+     "L2r": [
+      0.36025100180417313,
+      0.4927613506732129
+     ],
+     "NL": [
+      0.49467497326078874,
+      0.5946749732607888
+     ],
+     "ST": [
+      0.0,
+      0.239469368409063
+     ]
+    },
+    "7": {
+     "L2r": [
+      0.33571808744137943,
+      0.4626045564733757
+     ],
+     "NL": [
+      0.5113025180877201,
+      0.6113025180877202
+     ],
+     "ST": [
+      0.0,
+      0.2409085840260936
+     ]
+    },
+    "8": {
+     "L2r": [
+      0.32996030412808475,
+      0.4567902515662461
+     ],
+     "NL": [
+      0.49370244344075515,
+      0.5937024434407552
+     ],
+     "ST": [
+      0.0,
+      0.22446256104630907
+     ]
+    },
+    "9": {
+     "L2r": [
+      0.30597654669654817,
+      0.4309872926635824
+     ],
+     "NL": [
+      0.48073276792253766,
+      0.5807327679225377
+     ],
+     "ST": [
+      0.0,
+      0.2117859810104238
+     ]
+    }
+   },
+   "W_c": {
+    "base": 528,
+    "knob": 396
+   },
+   "dd": 0.040404040404040414,
+   "x": 0.91875,
+   "demoted_by": []
+  },
+  "8x7B w2 s8 (x-invariance, tail)": {
+   "diff": {
+    "4": -0.009690844823443845,
+    "5": -0.009092807769775724,
+    "6": -0.015425436837332551,
+    "7": -0.029119521852523644,
+    "8": -0.04894312384988175,
+    "9": -0.05188209669930599
+   },
+   "within_0.05": 5,
+   "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HELD"
+  },
+  "tp4 w2 s8": {
+   "verdict": "RECORD",
+   "s": {
+    "2": 0.9065944126674107,
+    "3": 0.7883865719749814,
+    "4": 0.8882990034799728,
+    "5": 0.8170816330682664,
+    "6": 0.8408030918666295,
+    "7": 0.8690893385145398,
+    "8": 0.8851315245336416,
+    "9": 0.9030275798979259
+   },
+   "s_base": {
+    "2": 0.9038659958612352,
+    "3": 0.846636999221075,
+    "4": 0.8751676044766864,
+    "5": 0.8832949683779763,
+    "6": 0.8822166079566591,
+    "7": 0.9161863781156994,
+    "8": 0.9239652464989903,
+    "9": 0.9297333671933128
+   }
+  },
+  "H2c BLOCK_K at G=1 (tail)": {
+   "l2bk32 w1": {
+    "W_c_same": true,
+    "deviation": {
+     "4": -0.028423581804548168,
+     "5": -0.023423376537504474,
+     "6": -0.01932919820149733,
+     "7": -0.01978697095598493,
+     "8": -0.020553030935274552,
+     "9": -0.017673685437156954
+    },
+    "within_0.05": 6,
+    "verdict": "INCONCLUSIVE (FLAGGED V6)",
+    "verdict_before_controls": "H2c FALSIFIED (no k-step effect)",
+    "demoted_by": [
+     "V6 FAIL (FLAGGED)"
+    ]
+   },
+   "l2bk32 w2": {
+    "W_c_same": false,
+    "deviation": {
+     "4": -0.06600636605494892,
+     "5": -0.0731909630298585,
+     "6": -0.07766154834512884,
+     "7": -0.11306062907401859,
+     "8": -0.10411338243620438,
+     "9": -0.11082578229647089
+    },
+    "within_0.05": 0,
+    "verdict": "INCONCLUSIVE (FLAGGED V6)",
+    "verdict_before_controls": "H2c SELECTED",
+    "demoted_by": [
+     "V6 FAIL (FLAGGED)"
+    ]
+   },
+   "l2bk128 w1": {
+    "W_c_same": false,
+    "deviation": {
+     "4": 0.37797946671996613,
+     "5": 0.4349214105020082,
+     "6": 0.4213871069091549,
+     "7": 0.5681645572589895,
+     "8": 0.44079680970568624,
+     "9": 0.3765658693837594
+    },
+    "within_0.05": 0,
+    "verdict": "H2c SELECTED"
+   },
+   "l2bk128 w2": {
+    "W_c_same": true,
+    "deviation": {
+     "4": 0.2691432407924106,
+     "5": 0.14957704998198018,
+     "6": 0.1470118931361606,
+     "7": 0.1300462692502945,
+     "8": 0.22335688273111987,
+     "9": 0.18552001317342137
+    },
+    "within_0.05": 0,
+    "verdict": "H2c SELECTED"
+   }
+  },
+  "H3 slot pad 7 (tail)": {
+   "private_bytes_rel": {
+    "1/w1": -7.343959226335794e-05,
+    "1/w2": -8.664579361705727e-05,
+    "2/w1": -8.031766110616623e-05,
+    "2/w2": -4.439699159508592e-05,
+    "3/w1": -0.00010657746605757801,
+    "3/w2": -1.2127373685832943e-05,
+    "4/w1": -0.00020042538822429012,
+    "4/w2": -5.141642804407098e-05,
+    "5/w1": -0.00010861092604164124,
+    "5/w2": -2.3127541800560536e-05,
+    "6/w1": -1.7892226018001445e-05,
+    "6/w2": 9.066770248011835e-05,
+    "7/w1": -8.751391072570058e-05,
+    "7/w2": -4.343909698345527e-05,
+    "8/w1": -7.974864116155889e-05,
+    "8/w2": -4.091202610689848e-05,
+    "9/w1": -6.456727133541396e-05,
+    "9/w2": 2.9221695940329084e-05
+   },
+   "s_deviation": {
+    "w1": {
+     "4": -0.02211604042658742,
+     "5": -0.011166095733642571,
+     "6": -0.011201150076729914,
+     "7": -0.014321872166224887,
+     "8": -0.013864387460306292,
+     "9": -0.010378394808088026
+    },
+    "w2": {
+     "4": -0.00010662987118692513,
+     "5": -0.000757126581101164,
+     "6": 0.0003517514183407622,
+     "7": 0.0007928212483724328,
+     "8": 0.0009351976874735213,
+     "9": -0.003494921184721389
+    }
+   },
+   "verdict": "H3 FALSIFIED (no address effect)"
+  }
+ },
+ "controls": {
+  "tp8 w2 s8": {
+   "ok": true,
+   "below_0.95": []
+  },
+  "tp2 w1 on l2s8": {
+   "ok": true,
+   "detail": ""
+  },
+  "tp2 w1 on l2s6": {
+   "ok": false,
+   "detail": "tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"
+  },
+  "page_flags": {
+   "mixtral-8x7b-tp2 l2s8": [],
+   "mixtral-8x7b-tp2 l2base": [],
+   "mixtral-8x7b-tp4 l2s8": [],
+   "mixtral-8x7b-tp4 l2base": [],
+   "mixtral-8x7b-tp2 l2s6": [
+    "L2R-ONLY tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"
+   ],
+   "mixtral-8x7b l2s8": [],
+   "mixtral-8x7b-tp2 l2bk32": [
+    "V6 FAIL (FLAGGED)"
+   ],
+   "mixtral-8x7b-tp2 l2bk128": [],
+   "mixtral-8x7b-tp2 l2pad7": [],
+   "mixtral-8x7b-tp8 l2s8": []
+  }
+ },
+ "pages": {
+  "mixtral-8x7b-tp2 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s8-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp2 l2base": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp4 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2s8-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp4 l2base": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2base-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp2 l2s6": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s6-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-l2s8-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp2 l2bk32": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk32-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp2 l2bk128": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk128-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp2 l2pad7": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2pad7-r3-counters/lock1710/r3c-g1.json",
+  "mixtral-8x7b-tp8 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2s8-r3-counters/lock1710/r3c-g1.json"
+ },
+ "partition_cross_check": {
+  "mixtral-8x7b-tp2 l2base": {
+   "cells": 32,
+   "outside": [
+    [
+     "w1",
+     "shared/2",
+     0.8032
+    ],
+    [
+     "w1",
+     "private/2",
+     0.1976
+    ],
+    [
+     "w1",
+     "private/3",
+     0.181
+    ],
+    [
+     "w1",
+     "shared/4",
+     0.7845
+    ],
+    [
+     "w1",
+     "private/4",
+     0.2063
+    ],
+    [
+     "w1",
+     "shared/5",
+     0.7616
+    ],
+    [
+     "w1",
+     "private/5",
+     0.2163
+    ],
+    [
+     "w1",
+     "shared/6",
+     0.7118
+    ],
+    [
+     "w1",
+     "private/6",
+     0.1662
+    ],
+    [
+     "w1",
+     "shared/7",
+     0.67
+    ],
+    [
+     "w1",
+     "private/7",
+     0.1726
+    ],
+    [
+     "w1",
+     "shared/8",
+     0.6976
+    ],
+    [
+     "w1",
+     "private/8",
+     0.1601
+    ],
+    [
+     "w1",
+     "shared/9",
+     0.7691
+    ],
+    [
+     "w1",
+     "private/9",
+     0.2386
+    ],
+    [
+     "w2",
+     "shared/2",
+     0.8497
+    ],
+    [
+     "w2",
+     "private/2",
+     0.3767
+    ],
+    [
+     "w2",
+     "shared/3",
+     0.9307
+    ],
+    [
+     "w2",
+     "private/3",
+     0.4438
+    ],
+    [
+     "w2",
+     "private/4",
+     0.4686
+    ],
+    [
+     "w2",
+     "private/5",
+     0.3872
+    ],
+    [
+     "w2",
+     "private/6",
+     0.4411
+    ],
+    [
+     "w2",
+     "private/7",
+     0.4335
+    ],
+    [
+     "w2",
+     "private/8",
+     0.5001
+    ],
+    [
+     "w2",
+     "shared/9",
+     0.9389
+    ],
+    [
+     "w2",
+     "private/9",
+     0.3943
+    ]
+   ],
+   "fraction_outside": 0.8125,
+   "verdict": "DISAGREE: far share printed from the direct count only",
+   "far": {
+    "w1": {
+     "2": 0.26349141466749904,
+     "3": 0.1862066250365814,
+     "4": 0.20703605141224268,
+     "5": 0.22201874335640642,
+     "6": 0.22647471218058765,
+     "7": 0.21389699987517233,
+     "8": 0.2043464164454602,
+     "9": 0.21284046283238842
+    },
+    "w2": {
+     "2": 0.42259078012692786,
+     "3": 0.3163452208946618,
+     "4": 0.2816840013175047,
+     "5": 0.2655507898936393,
+     "6": 0.2486805203954336,
+     "7": 0.25350931143288546,
+     "8": 0.25954551185064617,
+     "9": 0.26850018165822687
+    }
+   },
+   "far_direct": {
+    "w1": {
+     "2": 0.24771096931515502,
+     "3": 0.22366681596691046,
+     "4": 0.20821075927480853,
+     "5": 0.21596563565301277,
+     "6": 0.22403508779109624,
+     "7": 0.20546653124035155,
+     "8": 0.21440863202619986,
+     "9": 0.21226123458730978
+    },
+    "w2": {
+     "2": 0.39258290894832726,
+     "3": 0.3100426192369592,
+     "4": 0.27967207598994703,
+     "5": 0.26917858046461035,
+     "6": 0.2544410768573098,
+     "7": 0.2638553207204599,
+     "8": 0.26082283733349554,
+     "9": 0.26661482696467026
+    }
+   }
+  },
+  "mixtral-8x7b-tp2 l2s8": {
+   "cells": 32,
+   "outside": [
+    [
+     "w1",
+     "shared/2",
+     0.4576
+    ],
+    [
+     "w1",
+     "private/2",
+     0.1737
+    ],
+    [
+     "w1",
+     "shared/3",
+     0.5799
+    ],
+    [
+     "w1",
+     "private/3",
+     0.1908
+    ],
+    [
+     "w1",
+     "shared/4",
+     0.3365
+    ],
+    [
+     "w1",
+     "private/4",
+     0.1376
+    ],
+    [
+     "w1",
+     "shared/5",
+     0.3746
+    ],
+    [
+     "w1",
+     "private/5",
+     0.1723
+    ],
+    [
+     "w1",
+     "shared/6",
+     0.4936
+    ],
+    [
+     "w1",
+     "private/6",
+     0.198
+    ],
+    [
+     "w1",
+     "shared/7",
+     0.3031
+    ],
+    [
+     "w1",
+     "private/7",
+     0.1934
+    ],
+    [
+     "w1",
+     "shared/8",
+     0.4023
+    ],
+    [
+     "w1",
+     "private/8",
+     0.1966
+    ],
+    [
+     "w1",
+     "shared/9",
+     0.3542
+    ],
+    [
+     "w1",
+     "private/9",
+     0.2531
+    ],
+    [
+     "w2",
+     "private/2",
+     0.3775
+    ],
+    [
+     "w2",
+     "private/3",
+     0.4266
+    ],
+    [
+     "w2",
+     "private/4",
+     0.885
+    ],
+    [
+     "w2",
+     "private/5",
+     0.5647
+    ],
+    [
+     "w2",
+     "private/6",
+     0.5846
+    ],
+    [
+     "w2",
+     "private/7",
+     0.2842
+    ],
+    [
+     "w2",
+     "private/8",
+     0.3895
+    ],
+    [
+     "w2",
+     "private/9",
+     0.5117
+    ]
+   ],
+   "fraction_outside": 0.75,
+   "verdict": "DISAGREE: far share printed from the direct count only",
+   "far": {
+    "w1": {
+     "2": 0.4491716876606091,
+     "3": 0.440352323766004,
+     "4": 0.32792555522944716,
+     "5": 0.5183416097042483,
+     "6": 0.22860513119141876,
+     "7": 0.5685039764877458,
+     "8": 0.24003314965381709,
+     "9": 0.507464337235536
+    },
+    "w2": {
+     "2": 0.25250185773149264,
+     "3": 0.18585393441242004,
+     "4": 0.15713951925183745,
+     "5": 0.16761473063270724,
+     "6": 0.15500505931926598,
+     "7": 0.14245968629597125,
+     "8": 0.13978049192793782,
+     "9": 0.1512401875810248
+    }
+   },
+   "far_direct": {
+    "w1": {
+     "2": 0.5026125851080457,
+     "3": 0.47204961950601193,
+     "4": 0.30735047579232017,
+     "5": 0.4598212641765123,
+     "6": 0.3609814362622251,
+     "7": 0.37403368163603007,
+     "8": 0.29376209630666866,
+     "9": 0.3377848966195138
+    },
+    "w2": {
+     "2": 0.2609609640413837,
+     "3": 0.1914470300252202,
+     "4": 0.1536086375673973,
+     "5": 0.1664213681638361,
+     "6": 0.15728280423145413,
+     "7": 0.15623570558504118,
+     "8": 0.1522503973064358,
+     "9": 0.1549100041786584
+    }
+   }
+  }
+ },
+ "T5": {
+  "f": {
+   "BK64": {
+    "8": 0.5129195694119661,
+    "9": 0.4802300429238055
+   },
+   "BK32": {
+    "8": 0.6266762293024847,
+    "9": 0.5773382221329891
+   },
+   "BK128": {
+    "8": 0.22346446988083407,
+    "9": 0.20583517212826521
+   }
+  },
+  "rho_BK": 0.3565244153899988,
+  "rho_BK_n8_printed": 0.35658679782630154,
+  "board_check": {
+   "f": 0.4802300429238055,
+   "rel": -0.17230258027610224,
+   "ok": false
+  },
+  "candidates": {
+   "R0": {
+    "centre": 1.0379117121448556,
+    "band": [
+     0.9670687121448556,
+     1.1087547121448555
+    ],
+    "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   "R1": {
+    "centre": 1.0376505115335264,
+    "band": [
+     0.9649325115335263,
+     1.1103685115335264
+    ],
+    "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   "R2": {
+    "centre": 1.7367947907832597,
+    "band": [
+     1.6369837907832596,
+     1.8366057907832598
+    ],
+    "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   "R2h": {
+    "centre": 1.3403349426781628,
+    "band": [
+     1.2794879426781627,
+     1.4011819426781629
+    ],
+    "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE (board check failed; measured FALSIFIED)"
+   }
+  },
+  "s8_record_f9": 0.4780451411853324
+ },
+ "addendum": {
+  "registration": "2026-10-02-rental2-addendum-gates",
+  "gates_not_gating": [
+   "V6",
+   "V10"
+  ],
+  "pages": {
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-l2s8-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [
+     "V7"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [
+     "V7"
+    ],
+    "ALL": "counted",
+    "CLEAN": "excluded"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-atbk128-r3-counters/lock1710/r3c-g64.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-atbk32-r3-counters/lock1710/r3c-g64.json": {
+    "failed_gates": [
+     "V7"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [
+     "V7"
+    ],
+    "ALL": "counted",
+    "CLEAN": "excluded"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-atbk64-r3-counters/lock1710/r3c-g64.json": {
+    "failed_gates": [
+     "V7"
+    ],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [
+     "V7"
+    ],
+    "ALL": "counted",
+    "CLEAN": "excluded"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-ats8-r3-counters/lock1710/r3c-g64.json": {
+    "failed_gates": [
+     "V7"
+    ],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [
+     "V7"
+    ],
+    "ALL": "counted",
+    "CLEAN": "excluded"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk128-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk32-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V6"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2pad7-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s6-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s8-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2base-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2s8-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   },
+   "2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2s8-r3-counters/lock1710/r3c-g1.json": {
+    "failed_gates": [],
+    "failed_but_not_gating": [
+     "V10"
+    ],
+    "dropped_above_lock": [],
+    "lock_check": null,
+    "clean_failed": [],
+    "ALL": "counted",
+    "CLEAN": "counted"
+   }
+  },
+  "verdicts": [
+   {
+    "path": "tests / tp2 w2 s8 (PRIMARY) / verdict",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "tests / tp4 w1 s8 (PRIMARY, NL vs lag) / verdict",
+    "ALL": "INCONCLUSIVE",
+    "CLEAN": "INCONCLUSIVE",
+    "registered": "INCONCLUSIVE"
+   },
+   {
+    "path": "tests / tp2 w2 s6 (secondary, the curve's shape) / verdict",
+    "ALL": "NL",
+    "CLEAN": "NL",
+    "registered": "NL"
+   },
+   {
+    "path": "tests / 8x7B w2 s8 (x-invariance, tail) / verdict",
+    "ALL": "HELD",
+    "CLEAN": "NOT SCORED: a page is missing",
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HELD"
+   },
+   {
+    "path": "tests / tp4 w2 s8 / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   },
+   {
+    "path": "tests / H2c BLOCK_K at G=1 (tail) / l2bk32 w1 / verdict",
+    "ALL": "INCONCLUSIVE (FLAGGED V6)",
+    "CLEAN": "INCONCLUSIVE (FLAGGED V6)",
+    "registered": "INCONCLUSIVE (FLAGGED V6)"
+   },
+   {
+    "path": "tests / H2c BLOCK_K at G=1 (tail) / l2bk32 w2 / verdict",
+    "ALL": "INCONCLUSIVE (FLAGGED V6)",
+    "CLEAN": "INCONCLUSIVE (FLAGGED V6)",
+    "registered": "INCONCLUSIVE (FLAGGED V6)"
+   },
+   {
+    "path": "tests / H2c BLOCK_K at G=1 (tail) / l2bk128 w1 / verdict",
+    "ALL": "H2c SELECTED",
+    "CLEAN": "H2c SELECTED",
+    "registered": "H2c SELECTED"
+   },
+   {
+    "path": "tests / H2c BLOCK_K at G=1 (tail) / l2bk128 w2 / verdict",
+    "ALL": "H2c SELECTED",
+    "CLEAN": "H2c SELECTED",
+    "registered": "H2c SELECTED"
+   },
+   {
+    "path": "tests / H3 slot pad 7 (tail) / verdict",
+    "ALL": "H3 FALSIFIED (no address effect)",
+    "CLEAN": "H3 FALSIFIED (no address effect)",
+    "registered": "H3 FALSIFIED (no address effect)"
+   },
+   {
+    "path": "partition_cross_check / mixtral-8x7b-tp2 l2base / verdict",
+    "ALL": "DISAGREE: far share printed from the direct count only",
+    "CLEAN": "DISAGREE: far share printed from the direct count only",
+    "registered": "DISAGREE: far share printed from the direct count only"
+   },
+   {
+    "path": "partition_cross_check / mixtral-8x7b-tp2 l2s8 / verdict",
+    "ALL": "DISAGREE: far share printed from the direct count only",
+    "CLEAN": "DISAGREE: far share printed from the direct count only",
+    "registered": "DISAGREE: far share printed from the direct count only"
+   },
+   {
+    "path": "T5 / candidates / R0 / verdict",
+    "ALL": "FALSIFIED",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   {
+    "path": "T5 / candidates / R1 / verdict",
+    "ALL": "FALSIFIED",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   {
+    "path": "T5 / candidates / R2 / verdict",
+    "ALL": "FALSIFIED",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED"
+   },
+   {
+    "path": "T5 / candidates / R2h / verdict",
+    "ALL": "INCONCLUSIVE (board check failed; measured FALSIFIED)",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE (board check failed; measured FALSIFIED)"
+   },
+   {
+    "path": "T5 / verdict",
+    "ALL": null,
+    "CLEAN": "NOT SCORED: a BK32 or BK128 page is missing",
+    "registered": "NOT SCORED: a BK32 or BK128 page is missing"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-01-rental2-knobs-gh200",
+   "tests": {
+    "tp2 w2 s8 (PRIMARY)": {
+     "per_hypothesis": {
+      "L2r": {
+       "exclusive": [],
+       "outside": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      },
+      "NL": {
+       "exclusive": [],
+       "outside": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      },
+      "ST": {
+       "exclusive": [],
+       "outside": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      }
+     },
+     "verdict": "INCONCLUSIVE",
+     "measured": {
+      "4": 0.8546120779854911,
+      "5": 0.7583050500778926,
+      "6": 0.7526667640322731,
+      "7": 0.7592524573916482,
+      "8": 0.7576246715727307,
+      "9": 0.7551703453063965
+     },
+     "bands": {
+      "4": {
+       "L2r": [
+        0.2171351720604428,
+        0.43710879762504695
+       ],
+       "NL": [
+        0.5252074226500496,
+        0.6252074226500497
+       ],
+       "ST": [
+        0.0,
+        0.08211382537344375
+       ]
+      },
+      "5": {
+       "L2r": [
+        0.19320513164849,
+        0.3875696760453582
+       ],
+       "NL": [
+        0.5332334245954241,
+        0.6332334245954242
+       ],
+       "ST": [
+        0.0,
+        0.06727034568381636
+       ]
+      },
+      "6": {
+       "L2r": [
+        0.17075892755015254,
+        0.3641707115839634
+       ],
+       "NL": [
+        0.49467497326078874,
+        0.5946749732607888
+       ],
+       "ST": [
+        0.0,
+        0.0624308893903361
+       ]
+      },
+      "7": {
+       "L2r": [
+        0.12587876184770408,
+        0.2872662886965327
+       ],
+       "NL": [
+        0.5113025180877201,
+        0.6113025180877202
+       ],
+       "ST": [
+        0.0,
+        0.06129902531991113
+       ]
+      },
+      "8": {
+       "L2r": [
+        0.12840314276641715,
+        0.2932596829728692
+       ],
+       "NL": [
+        0.49370244344075515,
+        0.5937024434407552
+       ],
+       "ST": [
+        0.0,
+        0.05654650085805395
+       ]
+      },
+      "9": {
+       "L2r": [
+        0.1053867458600202,
+        0.2592641667514941
+       ],
+       "NL": [
+        0.48073276792253766,
+        0.5807327679225377
+       ],
+       "ST": [
+        0.0,
+        0.053106929130656566
+       ]
+      }
+     },
+     "W_c": {
+      "base": 528,
+      "knob": 264
+     },
+     "dd": 0.12121212121212122,
+     "x": 0.91875,
+     "demoted_by": []
+    },
+    "tp4 w1 s8 (PRIMARY, NL vs lag)": {
+     "per_hypothesis": {
+      "LAG": {
+       "exclusive": [],
+       "outside": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      },
+      "NL": {
+       "exclusive": [
+        8
+       ],
+       "outside": [
+        4,
+        5,
+        6,
+        7,
+        9
+       ],
+       "status": "FALSIFIED"
+      }
+     },
+     "verdict": "INCONCLUSIVE",
+     "measured": {
+      "4": 0.5614346095493862,
+      "5": 0.5141245524088541,
+      "6": 0.4915002732049851,
+      "7": 0.5619061485169426,
+      "8": 0.42353864916327855,
+      "9": 0.46349877402895984
+     },
+     "bands": {
+      "4": {
+       "LAG": [
+        0.0,
+        0.2587036002080664
+       ],
+       "NL": [
+        0.4239356268019903,
+        0.5239356268019904
+       ]
+      },
+      "5": {
+       "LAG": [
+        0.0,
+        0.1800884296466291
+       ],
+       "NL": [
+        0.37115156991141196,
+        0.47115156991141194
+       ]
+      },
+      "6": {
+       "LAG": [
+        0.0,
+        0.17983441875223224
+       ],
+       "NL": [
+        0.37019987560453865,
+        0.47019987560453863
+       ]
+      },
+      "7": {
+       "LAG": [
+        -0.005259895604144159,
+        0.10170331756440472
+       ],
+       "NL": [
+        0.3226880815294055,
+        0.42268808152940546
+       ]
+      },
+      "8": {
+       "LAG": [
+        -0.0024910788061008014,
+        0.1109541368338713
+       ],
+       "NL": [
+        0.32490764280565737,
+        0.42490764280565735
+       ]
+      },
+      "9": {
+       "LAG": [
+        -0.010503683216858899,
+        0.08986428475400327
+       ],
+       "NL": [
+        0.3033862204778761,
+        0.4033862204778761
+       ]
+      }
+     },
+     "W_c": {
+      "base": 660,
+      "knob": 264
+     },
+     "dd": 0.2545454545454545,
+     "x": 0.925,
+     "demoted_by": []
+    },
+    "tp2 w2 s6 (secondary, the curve's shape)": {
+     "per_hypothesis": {
+      "L2r": {
+       "exclusive": [],
+       "outside": [
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      },
+      "NL": {
+       "exclusive": [
+        6,
+        7,
+        8,
+        9
+       ],
+       "outside": [],
+       "status": "SELECTED"
+      },
+      "ST": {
+       "exclusive": [],
+       "outside": [
+        6,
+        7,
+        8,
+        9
+       ],
+       "status": "FALSIFIED"
+      }
+     },
+     "verdict": "NL",
+     "measured": {
+      "6": 0.5791625613257998,
+      "7": 0.5691308218335348,
+      "8": 0.5439287042942177,
+      "9": 0.51636993317377
+     },
+     "bands": {
+      "6": {
+       "L2r": [
+        0.36025100180417313,
+        0.4927613506732129
+       ],
+       "NL": [
+        0.49467497326078874,
+        0.5946749732607888
+       ],
+       "ST": [
+        0.0,
+        0.239469368409063
+       ]
+      },
+      "7": {
+       "L2r": [
+        0.33571808744137943,
+        0.4626045564733757
+       ],
+       "NL": [
+        0.5113025180877201,
+        0.6113025180877202
+       ],
+       "ST": [
+        0.0,
+        0.2409085840260936
+       ]
+      },
+      "8": {
+       "L2r": [
+        0.32996030412808475,
+        0.4567902515662461
+       ],
+       "NL": [
+        0.49370244344075515,
+        0.5937024434407552
+       ],
+       "ST": [
+        0.0,
+        0.22446256104630907
+       ]
+      },
+      "9": {
+       "L2r": [
+        0.30597654669654817,
+        0.4309872926635824
+       ],
+       "NL": [
+        0.48073276792253766,
+        0.5807327679225377
+       ],
+       "ST": [
+        0.0,
+        0.2117859810104238
+       ]
+      }
+     },
+     "W_c": {
+      "base": 528,
+      "knob": 396
+     },
+     "dd": 0.040404040404040414,
+     "x": 0.91875,
+     "demoted_by": []
+    },
+    "8x7B w2 s8 (x-invariance, tail)": {
+     "verdict": "NOT SCORED: a page is missing"
+    },
+    "tp4 w2 s8": {
+     "verdict": "RECORD",
+     "s": {
+      "2": 0.9065944126674107,
+      "3": 0.7883865719749814,
+      "4": 0.8882990034799728,
+      "5": 0.8170816330682664,
+      "6": 0.8408030918666295,
+      "7": 0.8690893385145398,
+      "8": 0.8851315245336416,
+      "9": 0.9030275798979259
+     },
+     "s_base": {
+      "2": 0.9038659958612352,
+      "3": 0.846636999221075,
+      "4": 0.8751676044766864,
+      "5": 0.8832949683779763,
+      "6": 0.8822166079566591,
+      "7": 0.9161863781156994,
+      "8": 0.9239652464989903,
+      "9": 0.9297333671933128
+     }
+    },
+    "H2c BLOCK_K at G=1 (tail)": {
+     "l2bk32 w1": {
+      "W_c_same": true,
+      "deviation": {
+       "4": -0.028423581804548168,
+       "5": -0.023423376537504474,
+       "6": -0.01932919820149733,
+       "7": -0.01978697095598493,
+       "8": -0.020553030935274552,
+       "9": -0.017673685437156954
+      },
+      "within_0.05": 6,
+      "verdict": "INCONCLUSIVE (FLAGGED V6)",
+      "verdict_before_controls": "H2c FALSIFIED (no k-step effect)",
+      "demoted_by": [
+       "V6 FAIL (FLAGGED)"
+      ]
+     },
+     "l2bk32 w2": {
+      "W_c_same": false,
+      "deviation": {
+       "4": -0.06600636605494892,
+       "5": -0.0731909630298585,
+       "6": -0.07766154834512884,
+       "7": -0.11306062907401859,
+       "8": -0.10411338243620438,
+       "9": -0.11082578229647089
+      },
+      "within_0.05": 0,
+      "verdict": "INCONCLUSIVE (FLAGGED V6)",
+      "verdict_before_controls": "H2c SELECTED",
+      "demoted_by": [
+       "V6 FAIL (FLAGGED)"
+      ]
+     },
+     "l2bk128 w1": {
+      "W_c_same": false,
+      "deviation": {
+       "4": 0.37797946671996613,
+       "5": 0.4349214105020082,
+       "6": 0.4213871069091549,
+       "7": 0.5681645572589895,
+       "8": 0.44079680970568624,
+       "9": 0.3765658693837594
+      },
+      "within_0.05": 0,
+      "verdict": "H2c SELECTED"
+     },
+     "l2bk128 w2": {
+      "W_c_same": true,
+      "deviation": {
+       "4": 0.2691432407924106,
+       "5": 0.14957704998198018,
+       "6": 0.1470118931361606,
+       "7": 0.1300462692502945,
+       "8": 0.22335688273111987,
+       "9": 0.18552001317342137
+      },
+      "within_0.05": 0,
+      "verdict": "H2c SELECTED"
+     }
+    },
+    "H3 slot pad 7 (tail)": {
+     "private_bytes_rel": {
+      "1/w1": -7.343959226335794e-05,
+      "1/w2": -8.664579361705727e-05,
+      "2/w1": -8.031766110616623e-05,
+      "2/w2": -4.439699159508592e-05,
+      "3/w1": -0.00010657746605757801,
+      "3/w2": -1.2127373685832943e-05,
+      "4/w1": -0.00020042538822429012,
+      "4/w2": -5.141642804407098e-05,
+      "5/w1": -0.00010861092604164124,
+      "5/w2": -2.3127541800560536e-05,
+      "6/w1": -1.7892226018001445e-05,
+      "6/w2": 9.066770248011835e-05,
+      "7/w1": -8.751391072570058e-05,
+      "7/w2": -4.343909698345527e-05,
+      "8/w1": -7.974864116155889e-05,
+      "8/w2": -4.091202610689848e-05,
+      "9/w1": -6.456727133541396e-05,
+      "9/w2": 2.9221695940329084e-05
+     },
+     "s_deviation": {
+      "w1": {
+       "4": -0.02211604042658742,
+       "5": -0.011166095733642571,
+       "6": -0.011201150076729914,
+       "7": -0.014321872166224887,
+       "8": -0.013864387460306292,
+       "9": -0.010378394808088026
+      },
+      "w2": {
+       "4": -0.00010662987118692513,
+       "5": -0.000757126581101164,
+       "6": 0.0003517514183407622,
+       "7": 0.0007928212483724328,
+       "8": 0.0009351976874735213,
+       "9": -0.003494921184721389
+      }
+     },
+     "verdict": "H3 FALSIFIED (no address effect)"
+    }
+   },
+   "controls": {
+    "tp8 w2 s8": {
+     "ok": true,
+     "below_0.95": []
+    },
+    "tp2 w1 on l2s8": {
+     "ok": true,
+     "detail": ""
+    },
+    "tp2 w1 on l2s6": {
+     "ok": false,
+     "detail": "tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"
+    },
+    "page_flags": {
+     "mixtral-8x7b-tp2 l2s8": [],
+     "mixtral-8x7b-tp2 l2base": [],
+     "mixtral-8x7b-tp4 l2s8": [],
+     "mixtral-8x7b-tp4 l2base": [],
+     "mixtral-8x7b-tp2 l2s6": [
+      "L2R-ONLY tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"
+     ],
+     "mixtral-8x7b-tp2 l2bk32": [
+      "V6 FAIL (FLAGGED)"
+     ],
+     "mixtral-8x7b-tp2 l2bk128": [],
+     "mixtral-8x7b-tp2 l2pad7": [],
+     "mixtral-8x7b-tp8 l2s8": []
+    }
+   },
+   "pages": {
+    "mixtral-8x7b-tp2 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s8-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp2 l2base": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp4 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2s8-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp4 l2base": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2base-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp2 l2s6": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s6-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b l2s8": null,
+    "mixtral-8x7b-tp2 l2bk32": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk32-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp2 l2bk128": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk128-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp2 l2pad7": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2pad7-r3-counters/lock1710/r3c-g1.json",
+    "mixtral-8x7b-tp8 l2s8": "results/published/2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2s8-r3-counters/lock1710/r3c-g1.json"
+   },
+   "partition_cross_check": {
+    "mixtral-8x7b-tp2 l2base": {
+     "cells": 32,
+     "outside": [
+      [
+       "w1",
+       "shared/2",
+       0.8032
+      ],
+      [
+       "w1",
+       "private/2",
+       0.1976
+      ],
+      [
+       "w1",
+       "private/3",
+       0.181
+      ],
+      [
+       "w1",
+       "shared/4",
+       0.7845
+      ],
+      [
+       "w1",
+       "private/4",
+       0.2063
+      ],
+      [
+       "w1",
+       "shared/5",
+       0.7616
+      ],
+      [
+       "w1",
+       "private/5",
+       0.2163
+      ],
+      [
+       "w1",
+       "shared/6",
+       0.7118
+      ],
+      [
+       "w1",
+       "private/6",
+       0.1662
+      ],
+      [
+       "w1",
+       "shared/7",
+       0.67
+      ],
+      [
+       "w1",
+       "private/7",
+       0.1726
+      ],
+      [
+       "w1",
+       "shared/8",
+       0.6976
+      ],
+      [
+       "w1",
+       "private/8",
+       0.1601
+      ],
+      [
+       "w1",
+       "shared/9",
+       0.7691
+      ],
+      [
+       "w1",
+       "private/9",
+       0.2386
+      ],
+      [
+       "w2",
+       "shared/2",
+       0.8497
+      ],
+      [
+       "w2",
+       "private/2",
+       0.3767
+      ],
+      [
+       "w2",
+       "shared/3",
+       0.9307
+      ],
+      [
+       "w2",
+       "private/3",
+       0.4438
+      ],
+      [
+       "w2",
+       "private/4",
+       0.4686
+      ],
+      [
+       "w2",
+       "private/5",
+       0.3872
+      ],
+      [
+       "w2",
+       "private/6",
+       0.4411
+      ],
+      [
+       "w2",
+       "private/7",
+       0.4335
+      ],
+      [
+       "w2",
+       "private/8",
+       0.5001
+      ],
+      [
+       "w2",
+       "shared/9",
+       0.9389
+      ],
+      [
+       "w2",
+       "private/9",
+       0.3943
+      ]
+     ],
+     "fraction_outside": 0.8125,
+     "verdict": "DISAGREE: far share printed from the direct count only",
+     "far": {
+      "w1": {
+       "2": 0.26349141466749904,
+       "3": 0.1862066250365814,
+       "4": 0.20703605141224268,
+       "5": 0.22201874335640642,
+       "6": 0.22647471218058765,
+       "7": 0.21389699987517233,
+       "8": 0.2043464164454602,
+       "9": 0.21284046283238842
+      },
+      "w2": {
+       "2": 0.42259078012692786,
+       "3": 0.3163452208946618,
+       "4": 0.2816840013175047,
+       "5": 0.2655507898936393,
+       "6": 0.2486805203954336,
+       "7": 0.25350931143288546,
+       "8": 0.25954551185064617,
+       "9": 0.26850018165822687
+      }
+     },
+     "far_direct": {
+      "w1": {
+       "2": 0.24771096931515502,
+       "3": 0.22366681596691046,
+       "4": 0.20821075927480853,
+       "5": 0.21596563565301277,
+       "6": 0.22403508779109624,
+       "7": 0.20546653124035155,
+       "8": 0.21440863202619986,
+       "9": 0.21226123458730978
+      },
+      "w2": {
+       "2": 0.39258290894832726,
+       "3": 0.3100426192369592,
+       "4": 0.27967207598994703,
+       "5": 0.26917858046461035,
+       "6": 0.2544410768573098,
+       "7": 0.2638553207204599,
+       "8": 0.26082283733349554,
+       "9": 0.26661482696467026
+      }
+     }
+    },
+    "mixtral-8x7b-tp2 l2s8": {
+     "cells": 32,
+     "outside": [
+      [
+       "w1",
+       "shared/2",
+       0.4576
+      ],
+      [
+       "w1",
+       "private/2",
+       0.1737
+      ],
+      [
+       "w1",
+       "shared/3",
+       0.5799
+      ],
+      [
+       "w1",
+       "private/3",
+       0.1908
+      ],
+      [
+       "w1",
+       "shared/4",
+       0.3365
+      ],
+      [
+       "w1",
+       "private/4",
+       0.1376
+      ],
+      [
+       "w1",
+       "shared/5",
+       0.3746
+      ],
+      [
+       "w1",
+       "private/5",
+       0.1723
+      ],
+      [
+       "w1",
+       "shared/6",
+       0.4936
+      ],
+      [
+       "w1",
+       "private/6",
+       0.198
+      ],
+      [
+       "w1",
+       "shared/7",
+       0.3031
+      ],
+      [
+       "w1",
+       "private/7",
+       0.1934
+      ],
+      [
+       "w1",
+       "shared/8",
+       0.4023
+      ],
+      [
+       "w1",
+       "private/8",
+       0.1966
+      ],
+      [
+       "w1",
+       "shared/9",
+       0.3542
+      ],
+      [
+       "w1",
+       "private/9",
+       0.2531
+      ],
+      [
+       "w2",
+       "private/2",
+       0.3775
+      ],
+      [
+       "w2",
+       "private/3",
+       0.4266
+      ],
+      [
+       "w2",
+       "private/4",
+       0.885
+      ],
+      [
+       "w2",
+       "private/5",
+       0.5647
+      ],
+      [
+       "w2",
+       "private/6",
+       0.5846
+      ],
+      [
+       "w2",
+       "private/7",
+       0.2842
+      ],
+      [
+       "w2",
+       "private/8",
+       0.3895
+      ],
+      [
+       "w2",
+       "private/9",
+       0.5117
+      ]
+     ],
+     "fraction_outside": 0.75,
+     "verdict": "DISAGREE: far share printed from the direct count only",
+     "far": {
+      "w1": {
+       "2": 0.4491716876606091,
+       "3": 0.440352323766004,
+       "4": 0.32792555522944716,
+       "5": 0.5183416097042483,
+       "6": 0.22860513119141876,
+       "7": 0.5685039764877458,
+       "8": 0.24003314965381709,
+       "9": 0.507464337235536
+      },
+      "w2": {
+       "2": 0.25250185773149264,
+       "3": 0.18585393441242004,
+       "4": 0.15713951925183745,
+       "5": 0.16761473063270724,
+       "6": 0.15500505931926598,
+       "7": 0.14245968629597125,
+       "8": 0.13978049192793782,
+       "9": 0.1512401875810248
+      }
+     },
+     "far_direct": {
+      "w1": {
+       "2": 0.5026125851080457,
+       "3": 0.47204961950601193,
+       "4": 0.30735047579232017,
+       "5": 0.4598212641765123,
+       "6": 0.3609814362622251,
+       "7": 0.37403368163603007,
+       "8": 0.29376209630666866,
+       "9": 0.3377848966195138
+      },
+      "w2": {
+       "2": 0.2609609640413837,
+       "3": 0.1914470300252202,
+       "4": 0.1536086375673973,
+       "5": 0.1664213681638361,
+       "6": 0.15728280423145413,
+       "7": 0.15623570558504118,
+       "8": 0.1522503973064358,
+       "9": 0.1549100041786584
+      }
+     }
+    }
+   },
+   "T5": {
+    "verdict": "NOT SCORED: a BK32 or BK128 page is missing"
+   }
+  }
+ }
+}

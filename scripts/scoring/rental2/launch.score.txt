@@ -1,0 +1,10 @@
+RENTAL 2 PART 2 (launch floor rerun), 2026-10-01-rental2-launch2-gh200
+  mixtral-8x7b-tp8: P0 HELD; P1 HELD; P2 HELD; P3 pooled across models (see P3_pooled); P4 HELD; P5 HELD; P6 FALSIFIED; P7 CLASSIFIES; P8 FALSIFIED
+  granite-3.0-3b-a800m: P0 FAILED; P1 HELD; P2 HELD (host drift); P3 pooled across models (see P3_pooled); P4 HELD (host drift); P5 HELD (host drift); P6 HELD; P7 CLASSIFIES; P8 HELD (host drift)
+    P0: ['H_cell/H_pre outside [0.93, 1.10] on 8 of 108 cells']
+  jetmoe-8b: P0 HELD; P1 NOT SCORED: registered treads [5] are not on the plan; P2 HELD; P3 pooled across models (see P3_pooled); P4 HELD; P5 HELD; P6 HELD; P7 CLASSIFIES; P8 FALSIFIED
+  granite-3.0-1b-a400m: P0 FAILED; P1 FALSIFIED; P2 HELD (host drift); P3 pooled across models (see P3_pooled); P4 HELD (host drift); P5 HELD (host drift); P6 HELD; P7 CLASSIFIES; P8 FALSIFIED (host drift)
+    P0: ['H_cell/H_pre outside [0.93, 1.10] on 15 of 54 cells']
+  P3 (both models together): FALSIFIED on 15 cells
+  addendum 2026-10-02-rental2-addendum-gates: verdicts computed on ALL and CLEAN pages
+    0 of 37 verdicts differ between ALL and CLEAN

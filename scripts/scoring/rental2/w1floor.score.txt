@@ -1,0 +1,23 @@
+RENTAL 2 PART 4 (tp8's w1 floor), 2026-10-01-rental2-w1floor-gh200; H_EST recomputed: agree
+  base (PRIMARY): families {"theta_call": {"mixtral-8x7b-tp8": "H_EST", "mixtral-8x7b-tp4": "H_EST"}, "H_EST": "FALSIFIED", "FLUID": "FALSIFIED", "FLUID_LOW": "FALSIFIED", "H_NPN (secondary)": "FALSIFIED", "verdict": "NEITHER", "co_primary": "INCONCLUSIVE", "co_primary_winners": {"mixtral-8x7b-tp8 w1": "INCONCLUSIVE", "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"}}
+    mixtral-8x7b-tp8 w1: slopes A 333.3 B 348.8 C 363.3 theta +0.5442 delta +0.0032 delta_H +0.0148 delta_F -0.0106
+    mixtral-8x7b-tp8 w2: slopes W2a 385.4 W2b 386.6
+    mixtral-8x7b-tp4 w1: slopes A 336.3 B 350.6 C 357.1 theta +0.7972 delta -0.0127 delta_H -0.0129 delta_F -0.0119
+    mixtral-8x7b-tp4 w2: slopes W2a 371.0 W2b 371.0
+    mixtral-8x7b-tp2 w1: slopes D1 354.4 D2 351.4 delta_H -0.0175 delta_F +0.0020
+    mixtral-8x7b-tp2 w2: slopes W2a 363.7 W2b 369.4
+  lock1710 (printed): families {"theta_call": {"mixtral-8x7b-tp8": "FLUID", "mixtral-8x7b-tp4": "H_EST"}, "H_EST": "FALSIFIED", "FLUID": "FALSIFIED", "FLUID_LOW": "FALSIFIED", "H_NPN (secondary)": "FALSIFIED", "verdict": "NEITHER", "co_primary": "INCONCLUSIVE", "co_primary_winners": {"mixtral-8x7b-tp8 w1": "FLUID", "mixtral-8x7b-tp4 w1": "INCONCLUSIVE"}}
+    mixtral-8x7b-tp8 w1: slopes A 352.7 B 350.0 C 350.8 theta -0.0430 delta -0.0039 delta_H +0.0226 delta_F -0.0028
+    mixtral-8x7b-tp8 w2: slopes W2a 383.5 W2b 380.7
+    mixtral-8x7b-tp4 w1: slopes A 343.5 B 349.7 C 357.8 theta +0.5469 delta -0.0059 delta_H -0.0064 delta_F -0.0053
+    mixtral-8x7b-tp4 w2: slopes W2a 369.4 W2b 364.0
+    mixtral-8x7b-tp2 w1: slopes D1 350.4 D2 351.3 delta_H -0.0234 delta_F -0.0039
+    mixtral-8x7b-tp2 w2: slopes W2a 368.0 W2b 366.7
+  addendum 2026-10-02-rental2-addendum-gates: verdicts computed on ALL and CLEAN pages
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-floor-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1687.9 MHz, -1.29% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1687.5 MHz, -1.32% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json: failed ['FL1']; ALL counted, CLEAN counted
+      lock check: null kernel median 1684.4 MHz, -1.50% of the 1710 MHz lock (within 3%: True); CLEAN reads no failure
+    0 of 36 verdicts differ between ALL and CLEAN

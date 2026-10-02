@@ -323,8 +323,9 @@ not yet measured.
 (board 594c0f; each README has the cells), the base-clock captures: JetMoE-8B w1
 360.8 (+0.12%) and w2 on n = 9 to 11 361.7 (+1.84%), HELD; Mixtral 8x7B w1 349.9
 (-0.66%) and w2 on n = 6 to 8 354.2 (+1.65%; unlocked -0.33%, lock +0.06%),
-HELD. The lock captures fail FL1 alone (JetMoE's w2 reads +2.61% there). The
-files above are unchanged.
+HELD. The lock captures fail FL1 alone (JetMoE's w2 reads +2.61% there). CORRECTED
+2026-10-02: those lock captures held the lock (docs/FINDINGS.md, rental 2, Corrections 1, 2).
+The files above are unchanged.
 
 ## 2026-09-30, before any page: the partial wave's co-residency law, Mixtral 8x7B at TP=8 (floor capture)
 
@@ -396,7 +397,10 @@ to +7.2%, inside). F3 FALSIFIED: G=64 w1 n = 1 +13.4%, w2 n = 1 +8.6%, n = 2 +10
 and 374.2 against 379.1 (-1.3%), HELD. The lock captures fail FL1 alone (w1 fitted 1671
 and 1662 MHz, w2 1655) and read the same verdicts (D 155,988 and 155,914; w1 n = 2 +3.1%,
 +5.4%; F4 w1 -3.6%, -3.3%). The JSON's `primary` field names the lock captures "(FL1
-PASS)"; with FL1 failing, both texts give the base captures. The files above are unchanged.
+PASS)"; with FL1 failing, both texts give the base captures. CORRECTED 2026-10-02: that
+FL1 fail is a degenerate clock fit and the lock held (docs/FINDINGS.md, rental 2, Corrections
+3), so the JSON's primary was set aside on a false fail; its verdicts are the same. The files
+above are unchanged.
 
 ## 2026-10-01, before any page: rental 1, three registrations on one GH200
 
@@ -775,3 +779,22 @@ handling stands. For a floor capture under a lock, CLEAN uses V1 and a null-kern
 where there is no null kernel; chosen after the null-kernel medians were seen (1684, 1687,
 1688 MHz at 1710; 991 at 1005) and before any score, because the gate audit shows FL1's low
 fits are a degenerate f / t0 fit. The four 2026-10-01 files are unchanged (sha256 pinned in the addendum).
+
+**Scored 2026-10-02** on `results/published/2026-10-02-nvidia_gh200_480gb-rental2-session`
+(board 4da056, 24 units; the four scorers run unchanged, outputs and the per-prediction ALL /
+CLEAN table in `scripts/scoring/rental2/` and `SCORES.md`). CLEAN keeps every floor capture
+(null-kernel medians -1.29 to -1.50% of 1710) and drops the four byte pages that fail V7
+(8x7B l2s8, tp2 atbk32, atbk64, ats8); no floor cell is above its lock. Part 4: NEITHER
+(H_EST, FLUID, FLUID_LOW and H_NPN FALSIFIED; theta +0.54 tp8, +0.80 tp4; delta_H -1.29% tp4,
+-1.75% tp2), co-primary INCONCLUSIVE, w2 offset H_EST HOLDS on all three. Part 3: K1, K2
+(0.254), K4 HOLD; K3 cycle form HOLDS, ns form FALSIFIED (r 0.921, f ratio 0.597);
+identification INCONCLUSIVE. Part 2: tp8 P0 to P5 HELD, P6 and P8 FALSIFIED; Granite-3B P0
+FAILED (graph-replay cells), P1 and P6 HELD; JetMoE P1 FALSIFIED as scored, P8 FALSIFIED;
+Granite-1B P0 FAILED, P1 and P8 FALSIFIED; P3 pooled FALSIFIED. Part 1: both primaries
+INCONCLUSIVE with every hypothesis FALSIFIED (s rose under num_stages 8); s6 NL; 8x7B
+x-invariance and T5 NOT SCORED (ALL: HELD; R0, R1, R2 FALSIFIED at rho_BK 0.357, R2h
+INCONCLUSIVE, board check -17%); H2c l2bk128 SELECTED; H3 FALSIFIED. Two scorer readings are
+left to the owner (`SCORES.md`, end): H2c does not apply the V6 rule to l2bk32, and P1 counts
+JetMoE's never-run n = 5 cells as outside. Seen on the pages: the 1005 capture's GEMM cells
+read 1003 to 1005 MHz, so the "about 1.4% low, uniformly" above holds for the null kernel
+only (GEMM cells read 0.5 to 5.5% low at 1710). The files above are unchanged.

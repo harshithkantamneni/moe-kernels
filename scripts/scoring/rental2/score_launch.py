@@ -140,8 +140,15 @@ def score_model(reg: dict, model: str, d: Path) -> dict:
             need = (0.10 if model != "mixtral-8x7b-tp8" else 0.8 * (C_of(arm, 9) - C_of(arm, 1)))
             if (model == "mixtral-8x7b-tp8" or arm != "native") and inc < need:
                 short.append((arm, round(inc, 4), round(need, 4)))
-    res["P"]["P1"] = {"verdict": "FALSIFIED" if outside > 1 or short else "HELD", "outside": outside,
-                      "short_increments": short, "cells": rows}
+    planned = {n for (mode, _arm, n) in C if mode == "GR"}
+    unplanned = [n for n in range(1, n_max + 1) if n not in planned]
+    if unplanned:
+        # the registered cells (n <= n_max) include treads this model's plan never ran: P1 cannot be read
+        res["P"]["P1"] = {"verdict": f"NOT SCORED: registered treads {unplanned} are not on the plan",
+                          "outside_of_measured": sum(not r["inside"] for r in rows), "cells": rows}
+    else:
+        res["P"]["P1"] = {"verdict": "FALSIFIED" if outside > 1 or short else "HELD", "outside": outside,
+                          "short_increments": short, "cells": rows}
     # ---- P2
     rows, bad = [], []
     for arm in ARMS:

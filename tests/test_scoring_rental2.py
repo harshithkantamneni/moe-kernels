@@ -317,6 +317,29 @@ def test_intercept_and_its_sigma_and_form_rms():
 # --------------------------------------------------------------------------
 
 HF = 0.004          # the probe's h_flush, ms
+H2C = "H2c BLOCK_K at G=1 (tail)"
+
+
+@pytest.mark.parametrize("v6", ["PASS", "FAIL"])
+def test_h2c_applies_the_registered_v6_rule(tmp_path, v6):
+    """Post-page fix (2026-10-02): the H2c branch reads the page flags, so a V6-failing
+    BLOCK_K page reads INCONCLUSIVE, as the registration's V6 control says."""
+    tree = tmp_path / "tree"
+    put_page(tree, "mixtral-8x7b-tp2", "l2base", r3c_page("mixtral-8x7b-tp2", s=S_BASE))
+    put_page(tree, "mixtral-8x7b-tp2", "l2bk32",
+             r3c_page("mixtral-8x7b-tp2", s=S_BASE, block_k=32, v6=v6))
+    t = SK.score(REPO, tree)["tests"][H2C]
+    for g in ("w1", "w2"):
+        r = t[f"l2bk32 {g}"]
+        if v6 == "FAIL":
+            assert r["verdict"] == "INCONCLUSIVE (FLAGGED V6)", r
+            assert r["verdict_before_controls"] == "H2c FALSIFIED (no k-step effect)"
+            assert any("V6" in d for d in r["demoted_by"])
+        else:
+            assert r["verdict"] == "H2c FALSIFIED (no k-step effect)", r
+            assert "demoted_by" not in r
+
+
 PHI = 0.03          # host time not inside the interval, ms
 CPB = 100
 
@@ -390,6 +413,21 @@ def test_the_toy_host_gpu_model_passes_p0_to_p5_and_p8(tmp_path):
         assert P["P2"]["cells"] and P["P5"]["of"] > 0
     assert res["P3_pooled"]["cells"] >= 8 and res["P3_pooled"]["verdict"] == "HELD"
     assert res["models"]["jetmoe-8b"]["verdict"].startswith("NOT RUN")
+
+
+def test_p1_is_not_scored_when_a_registered_tread_was_never_planned(tmp_path):
+    """Post-page fix (2026-10-02): a unit planned at n = 1..4 cannot be read by P1's
+    n <= 5 cell set and increment, so P1 reads NOT SCORED rather than counting the
+    absent n = 5 cells as outside."""
+    def four_treads(m, rows, probe):
+        if m != "granite-3.0-3b-a800m":
+            return rows, probe, {}
+        return ([r for r in rows if r["tiles"] <= 4], [p for p in probe if p["tiles"] <= 4], {})
+    P = SL.score(REPO, toy_tree(tmp_path, four_treads))["models"]
+    p1 = P["granite-3.0-3b-a800m"]["P"]["P1"]
+    assert p1["verdict"] == "NOT SCORED: registered treads [5] are not on the plan", p1
+    assert p1["outside_of_measured"] == 0 and len(p1["cells"]) == 12
+    assert P["mixtral-8x7b-tp8"]["P"]["P1"]["verdict"] == "HELD"
 
 
 def test_a_host_step_after_half_the_cells_fails_p0(tmp_path):

@@ -42,7 +42,7 @@
   F3 outside 8% (repriced): [(1, 'w1', 14.88), (2, 'w2', 11.07)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 14.42), (2, 'w2', 11.07)])
   F4 w1 n=[6, 8, 10] slope 342.5 vs 352.2 -2.75% -> FALSIFIED (all-cell 340.7)
   F4 w2 n=[5, 6, 8, 10] slope 374.2 vs 379.1 -1.30% -> HELD (all-cell 375.7)
-== r3f-g64-lock1710 (G=64, clock none, gates [(None, 'FAIL')])
+== r3f-g64-lock1710 (G=64, clock none, gates [('FL1', 'FAIL')])
   n= 1 w1 waves  0.68 cycles    141315 reg  113853 (+24.12%) sigma 0.996 repriced  113388 (+24.63%) | old 113453 lead 113388 thr 113388
   n= 1 w2 waves  0.97 cycles     70642 reg   57319 (+23.24%) sigma 1.000 repriced   57328 (+23.22%) | old 57328 lead 57328 thr 57328
   n= 2 w1 waves  1.36 cycles    167568 reg  162474 ( +3.14%) sigma 1.044 repriced  162552 ( +3.09%) | old 230623 lead 200075 thr 159067
@@ -64,7 +64,7 @@
   F3 outside 8% (repriced): [(1, 'w1', 24.63), (1, 'w2', 23.22), (2, 'w2', 12.62)] -> FALSIFIED; (registered sigma=1: [(1, 'w1', 24.12), (1, 'w2', 23.24), (2, 'w2', 12.62)])
   F4 w1 n=[6, 8, 10] slope 339.6 vs 352.2 -3.56% -> FALSIFIED (all-cell 339.1)
   F4 w2 n=[5, 6, 8, 10] slope 372.8 vs 379.1 -1.67% -> HELD (all-cell 372.3)
-== r3f-g8-lock1710 (G=8, clock none, gates [(None, 'FAIL')])
+== r3f-g8-lock1710 (G=8, clock none, gates [('FL1', 'FAIL')])
   n= 1 w1 waves  0.68 cycles    144660 reg  113853 (+27.06%) sigma 0.996 repriced  113384 (+27.58%) | old 113453 lead 113384 thr 113384
   n= 1 w2 waves  0.97 cycles     71965 reg   57319 (+25.55%) sigma 1.000 repriced   57329 (+25.53%) | old 57329 lead 57329 thr 57329
   n= 2 w1 waves  1.36 cycles    171272 reg  162474 ( +5.41%) sigma 0.996 repriced  162470 ( +5.42%) | old 230541 lead 196204 thr 158956

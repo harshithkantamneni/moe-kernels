@@ -227,8 +227,15 @@ def score_view(repo: Path, tree: Path, view) -> dict:
                     inn = sum(abs(v) <= 0.05 for v in dev.values())
                     v = ("H2c FALSIFIED (no k-step effect)" if inn >= 4 else
                          "H2c SELECTED" if 6 - inn >= 4 else "INCONCLUSIVE")
+                    # the registered V6 rule: a page whose V6 gate is not PASS reads INCONCLUSIVE
+                    v6 = [d for d in flags.get((m, lab), []) + flags.get(("mixtral-8x7b-tp2", spec["base"]), [])
+                          if "V6" in d]
+                    before = v
+                    if v6:
+                        v = "INCONCLUSIVE (FLAGGED V6)"
                     out[f"{lab} {g}"] = {"W_c_same": same, "deviation": {str(n): x for n, x in dev.items()},
-                                         "within_0.05": inn, "verdict": v}
+                                         "within_0.05": inn, "verdict": v,
+                                         **({"verdict_before_controls": before, "demoted_by": v6} if v6 else {})}
             res["tests"][name] = out
         elif name.startswith("H3"):
             b, k = surv("mixtral-8x7b-tp2", spec["base"]), surv(*spec["page"])

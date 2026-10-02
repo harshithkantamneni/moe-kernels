@@ -1,0 +1,50 @@
+RENTAL 2 PART 1 (knobs), 2026-10-01-rental2-knobs-gh200
+  tp2 w2 s8 (PRIMARY): INCONCLUSIVE
+    s n4 0.855 n5 0.758 n6 0.753 n7 0.759 n8 0.758 n9 0.755  dd 0.121 W_c {'base': 528, 'knob': 264}
+    L2r: FALSIFIED (exclusive n [], outside n [4, 5, 6, 7, 8, 9])
+    NL: FALSIFIED (exclusive n [], outside n [4, 5, 6, 7, 8, 9])
+    ST: FALSIFIED (exclusive n [], outside n [4, 5, 6, 7, 8, 9])
+  tp4 w1 s8 (PRIMARY, NL vs lag): INCONCLUSIVE
+    s n4 0.561 n5 0.514 n6 0.492 n7 0.562 n8 0.424 n9 0.463  dd 0.255 W_c {'base': 660, 'knob': 264}
+    LAG: FALSIFIED (exclusive n [], outside n [4, 5, 6, 7, 8, 9])
+    NL: FALSIFIED (exclusive n [8], outside n [4, 5, 6, 7, 9])
+  tp2 w2 s6 (secondary, the curve's shape): NL
+    s n6 0.579 n7 0.569 n8 0.544 n9 0.516  dd 0.040 W_c {'base': 528, 'knob': 396}
+    L2r: FALSIFIED (exclusive n [], outside n [6, 7, 8, 9])
+    NL: SELECTED (exclusive n [6, 7, 8, 9], outside n [])
+    ST: FALSIFIED (exclusive n [], outside n [6, 7, 8, 9])
+  8x7B w2 s8 (x-invariance, tail): NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HELD
+  tp4 w2 s8: RECORD
+  H2c BLOCK_K at G=1 (tail): 
+    l2bk32 w1: INCONCLUSIVE (FLAGGED V6)
+    l2bk32 w2: INCONCLUSIVE (FLAGGED V6)
+    l2bk128 w1: H2c SELECTED
+    l2bk128 w2: H2c SELECTED
+  H3 slot pad 7 (tail): H3 FALSIFIED (no address effect)
+  controls: {"tp8 w2 s8": {"ok": true, "below_0.95": []}, "tp2 w1 on l2s8": {"ok": true, "detail": ""}, "tp2 w1 on l2s6": {"ok": false, "detail": "tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"}, "page_flags": {"mixtral-8x7b-tp2 l2s8": [], "mixtral-8x7b-tp2 l2base": [], "mixtral-8x7b-tp4 l2s8": [], "mixtral-8x7b-tp4 l2base": [], "mixtral-8x7b-tp2 l2s6": ["L2R-ONLY tp2 w1 above its L2r upper edge at [(4, 0.1, 0.075), (5, 0.087, 0.059), (6, 0.065, 0.055), (7, 0.057, 0.043), (8, 0.046, 0.044), (9, 0.046, 0.04)]"], "mixtral-8x7b l2s8": [], "mixtral-8x7b-tp2 l2bk32": ["V6 FAIL (FLAGGED)"], "mixtral-8x7b-tp2 l2bk128": [], "mixtral-8x7b-tp2 l2pad7": [], "mixtral-8x7b-tp8 l2s8": []}}
+  partition mixtral-8x7b-tp2 l2base: DISAGREE: far share printed from the direct count only
+  partition mixtral-8x7b-tp2 l2s8: DISAGREE: far share printed from the direct count only
+  T5 rho_BK 0.357 (n = 8 printed 0.35658679782630154); board {'f': 0.4802300429238055, 'rel': -0.17230258027610224, 'ok': False}
+    R0: centre 1.038 band [0.967, 1.109] NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    R1: centre 1.038 band [0.965, 1.110] NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    R2: centre 1.737 band [1.637, 1.837] NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    R2h: centre 1.340 band [1.279, 1.401] NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE (board check failed; measured FALSIFIED)
+  addendum 2026-10-02-rental2-addendum-gates: verdicts computed on ALL and CLEAN pages; not gating here (as registered): ['V6', 'V10']
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-l2s8-r3-counters/lock1710/r3c-g1.json: failed ['V7']; ALL counted, CLEAN excluded
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-atbk32-r3-counters/lock1710/r3c-g64.json: failed ['V7']; ALL counted, CLEAN excluded
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-atbk64-r3-counters/lock1710/r3c-g64.json: failed ['V7'] (not gating ['V10']); ALL counted, CLEAN excluded
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-ats8-r3-counters/lock1710/r3c-g64.json: failed ['V7']; ALL counted, CLEAN excluded
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk128-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2bk32-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V6']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2pad7-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2s6-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2base-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2s8-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    page 2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2s8-r3-counters/lock1710/r3c-g1.json: failed [] (not gating ['V10']); ALL counted, CLEAN counted
+    5 of 17 verdicts differ between ALL and CLEAN
+    tests / 8x7B w2 s8 (x-invariance, tail) / verdict: ALL HELD | CLEAN NOT SCORED: a page is missing -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HELD
+    T5 / candidates / R0 / verdict: ALL FALSIFIED | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    T5 / candidates / R1 / verdict: ALL FALSIFIED | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    T5 / candidates / R2 / verdict: ALL FALSIFIED | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: FALSIFIED
+    T5 / candidates / R2h / verdict: ALL INCONCLUSIVE (board check failed; measured FALSIFIED) | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: INCONCLUSIVE (board check failed; measured FALSIFIED)
