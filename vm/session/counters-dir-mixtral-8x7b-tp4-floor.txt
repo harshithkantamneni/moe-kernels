@@ -1,0 +1,1 @@
+/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters

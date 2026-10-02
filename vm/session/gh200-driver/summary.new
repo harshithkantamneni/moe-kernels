@@ -1,2 +1,3 @@
 prelude    exit 0 after 0 min [unit 1/24 -]
 floor      exit 3 after 2 min [unit 2/24 mixtral-8x7b-tp8 floor2 floor-groups=64 floor-treads=1,2,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1]
+floor      exit 3 after 3 min [unit 3/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1]
