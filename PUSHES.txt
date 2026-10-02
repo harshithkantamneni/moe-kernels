@@ -40,3 +40,4 @@
 2026-10-02T07:27:26Z launchfloor (unit 23/24 jetmoe-8b r2 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3): exit 0 (10 min)
 2026-10-02T07:38:35Z launchfloor (unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9): exit 0 (11 min)
 2026-10-02T07:38:39Z the session ended: driver exit 3
+2026-10-02T07:40:10Z recovery: END
