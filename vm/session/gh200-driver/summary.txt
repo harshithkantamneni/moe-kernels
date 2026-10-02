@@ -21,3 +21,4 @@ bytes      exit 0 after 4 min [unit 20/24 mixtral-8x7b-tp2 ats8 byte-groups=64 n
 bytes      exit 0 after 6 min [unit 21/24 mixtral-8x7b l2base byte-groups=1]
 bytes      exit 0 after 6 min [unit 22/24 mixtral-8x7b l2s8 byte-groups=1 num-stages=8]
 launchfloor exit 0 after 10 min [unit 23/24 jetmoe-8b r2 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3]
+launchfloor exit 0 after 11 min [unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9]

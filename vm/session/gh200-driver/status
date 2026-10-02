@@ -195,3 +195,7 @@
 2026-10-02T07:27:23Z launchfloor: jetmoe-8b exit 0 (/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-launch-floor-r2/jetmoe-8b)
 2026-10-02T07:27:23Z launchfloor END: exit 0 after 10 min [unit 23/24 jetmoe-8b r2 lf-treads=1,2,3,4 lf-modes=E240,E0,E480,GR lf-trace=1,2,3]
 2026-10-02T07:27:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-02T07:27:27Z launchfloor START: launch floor at the 1710 lock: treads 1,2,3,4,5,6,7,8,9, modes E240,GR, traces at 1,6,9; a timed process (no profiler) then a trace process [unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9] (estimate 15 min, cap 30 min, 267 min left)
+2026-10-02T07:38:32Z launchfloor: granite-3.0-1b-a400m exit 0 (/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-launch-floor-r2/granite-3.0-1b-a400m)
+2026-10-02T07:38:32Z launchfloor END: exit 0 after 11 min [unit 24/24 granite-3.0-1b-a400m r2 lf-treads=1,2,3,4,5,6,7,8,9 lf-modes=E240,GR lf-trace=1,6,9]
+2026-10-02T07:38:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
