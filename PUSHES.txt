@@ -3,3 +3,4 @@
 2026-10-02T05:26:13Z prelude (unit 1/24 -): exit 0 (0 min)
 2026-10-02T05:28:17Z floor (unit 2/24 mixtral-8x7b-tp8 floor2 floor-groups=64 floor-treads=1,2,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (2 min)
 2026-10-02T05:31:05Z floor (unit 3/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (3 min)
+2026-10-02T05:35:07Z floor (unit 4/24 mixtral-8x7b-tp2 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (4 min)
