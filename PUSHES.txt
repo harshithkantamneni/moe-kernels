@@ -6,3 +6,4 @@
 2026-10-02T05:35:07Z floor (unit 4/24 mixtral-8x7b-tp2 floor floor-groups=64 floor-treads=1,2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 3 (4 min)
 2026-10-02T05:36:12Z floor (unit 5/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,12,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
 2026-10-02T05:39:43Z bytes: G=1 page exit 3
+2026-10-02T05:39:53Z bytes (unit 6/24 mixtral-8x7b-tp2 l2base byte-groups=1 partition-metrics=1): exit 0 (4 min)
