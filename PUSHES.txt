@@ -16,3 +16,4 @@
 2026-10-02T05:49:44Z bytes: G=1 page exit 3
 2026-10-02T05:49:54Z bytes (unit 10/24 mixtral-8x7b-tp8 l2s8 byte-groups=1 num-stages=8): exit 0 (2 min)
 2026-10-02T05:53:24Z bytes: G=1 page exit 3
+2026-10-02T05:53:35Z bytes (unit 11/24 mixtral-8x7b-tp2 l2s6 byte-groups=1 num-stages=6): exit 0 (4 min)
