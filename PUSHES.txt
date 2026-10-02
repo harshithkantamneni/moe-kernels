@@ -33,3 +33,4 @@
 2026-10-02T07:00:48Z bytes (unit 19/24 mixtral-8x7b-tp2 l2pad7 byte-groups=1 slot-pad-rows=7): exit 0 (4 min)
 2026-10-02T07:04:19Z bytes: G=64 page exit 3
 2026-10-02T07:04:30Z bytes (unit 20/24 mixtral-8x7b-tp2 ats8 byte-groups=64 num-stages=8): exit 0 (4 min)
+2026-10-02T07:10:39Z bytes: G=1 page exit 0
