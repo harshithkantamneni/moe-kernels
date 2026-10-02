@@ -80,3 +80,5 @@
 2026-10-02T07:00:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed 42e5c3d to run-gh200-rental2-20261002t0522: bytes (unit 19/24 mixtral-8x7b-tp2 l2pad7 byte-groups=1 slot-pad-rows=7): exit 0 (4 min)
 2026-10-02T07:00:49Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 [unit 20/24 mixtral-8x7b-tp2 ats8 byte-groups=64 num-stages=8] (estimate 4 min, cap 15 min, 294 min left)
+2026-10-02T07:04:27Z bytes END: exit 0 after 4 min [unit 20/24 mixtral-8x7b-tp2 ats8 byte-groups=64 num-stages=8]
+2026-10-02T07:04:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
