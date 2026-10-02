@@ -177,3 +177,8 @@
 2026-10-02T07:04:31Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 21/24 mixtral-8x7b l2base byte-groups=1] (estimate 7 min, cap 20 min, 290 min left)
 2026-10-02T07:04:31Z bytes: the registered list G = 1 (mixtral-8x7b, l2base): no tail drop, no re-price, no base-clock control
 2026-10-02T07:10:37Z bytes: G=1 page exit 0 after 363 s
+2026-10-02T07:10:41Z bytes: lock block exit 0 (G=1 exit 3 05:39:42 206 s;G=1 exit 0 05:43:22 206 s;G=1 exit 3 05:45:42 126 s;G=1 exit 3 05:48:02 125 s;G=1 exit 3 05:49:43 86 s;G=1 exit 3 05:53:23 205 s;G=64 exit 3 05:57:03 205 s;G=64 exit 3 06:00:43 205 s;G=64 exit 1 06:04:23 204 s;G=1 exit 3 06:53:12 206 s;G=1 exit 3 06:56:53 205 s;G=1 exit 3 07:00:35 205 s;G=64 exit 3 07:04:17 205 s;G=1 exit 0 07:10:37 363 s;)
+2026-10-02T07:10:46Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-02T07:10:47Z bytes: analyse of 1 pages exit 0 (/home/ubuntu/moe/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-l2base-r3-counters/lock1710/summary.json)
+2026-10-02T07:10:47Z bytes END: exit 0 after 6 min [unit 21/24 mixtral-8x7b l2base byte-groups=1]
+2026-10-02T07:10:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
