@@ -38,3 +38,7 @@
 2026-10-02T05:36:10Z floor: registered floor design: groups 64, treads 2,4,6,8,12,16
 2026-10-02T05:36:10Z floor END: exit 0 after 1 min [unit 5/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,12,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
 2026-10-02T05:36:11Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-02T05:36:14Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --partition-metrics [unit 6/24 mixtral-8x7b-tp2 l2base byte-groups=1 partition-metrics=1] (estimate 6 min, cap 20 min, 378 min left)
+2026-10-02T05:36:14Z bytes: rental 2 knobs --partition-metrics on every page of this unit
+2026-10-02T05:36:14Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, l2base): no tail drop, no re-price, no base-clock control
+2026-10-02T05:39:42Z bytes: G=1 page exit 3 after 206 s
