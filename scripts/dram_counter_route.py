@@ -184,6 +184,7 @@ from moe.bench import provenance as PV  # noqa: E402
 # against, so if they move, this file's predictions move with them and
 # tests/test_dram_counter_route.py pins the numbers so the move is visible.
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402  (after sys.path insert)
+from scripts import lock_gate as LG  # noqa: E402
 from scripts.block_m_crossing_sweep import FIXED as SWEEP_FIXED  # noqa: E402
 from scripts.block_m_crossing_sweep import (  # noqa: E402
     activation_bytes_per_row,
@@ -4572,11 +4573,13 @@ R3_FLOOR_DECISIVE: tuple[tuple[str, ...], ...] = (
 #: on both. The GH200's ledger blames the power cap, but no file settles the
 #: cause: its SW power-capping and SW thermal-slowdown counters both grew while
 #: its cells drew about 300 W against a 700 W limit.
-R3_FLOOR_LOCK_STEP_MHZ = 15.0
+R3_FLOOR_LOCK_STEP_MHZ = LG.LOCK_STEP_MHZ
 #: What the floor file records of the card either side of its capture
-#: (`floor_smi_reading`). RECORDED, never gated: these are idle readings
-#: between runs, not readings under a launch, and the lock's gate is the
-#: counters' clock above. `clocks_event_reasons.active` is the mask that names
+#: (`floor_smi_reading`). Until 2026-10-05 RECORDED, never gated; since then
+#: `clocks.sm` is one of the lock check's readings (`lock_gate.check_lock`):
+#: an idle bracket either side of the capture, not a reading under a launch,
+#: which sees a lock not in force (the 8x22B floor read 1980 at a 1710 lock)
+#: and cannot see a sag under load. `clocks_event_reasons.active` is the mask that names
 #: why a clock moved (0x4 is the software power cap), and a lock set with
 #: persistence mode off can be dropped when the driver's last client exits.
 R3_FLOOR_SMI_FIELDS: tuple[str, ...] = (
@@ -4589,11 +4592,12 @@ R3_FLOOR_SMI_FIELDS: tuple[str, ...] = (
 #: that held at every G on both Hoppers; see `R3_FLOOR_LOCK_STEP_MHZ`), so a
 #: page at ncu's base clock compared bytes and time taken at two clocks. Under a
 #: lock a page also asks this metric, parsed SOFT and recorded per cell and
-#: GEMM beside the occupancy (`r3_reduce_cells`), and V10 holds every cell's
-#: clock, these cycles over `gpu__time_duration.sum`, within one
-#: `R3_FLOOR_LOCK_STEP_MHZ` of F, as FL1 holds the floor's: a lock is read
-#: back, never assumed. It is not asked at the base clock, where a page asks
-#: what it always asked. Its unit table is the floor's (`_floor_unit`).
+#: GEMM beside the occupancy (`r3_reduce_cells`), and V10 reads the lock
+#: back, never assuming it, by `lock_gate.check_lock` as FL1 does the floor's
+#: (since 2026-10-05; these cycles feed its printed fit diagnostic and a base
+#: twin's cell-matched ratio, not the verdict on their own). It is not asked
+#: at the base clock, where a page asks what it always asked. Its unit table
+#: is the floor's (`_floor_unit`).
 R3_PAGE_CLOCK_METRIC = "sm__cycles_elapsed.avg"
 
 
@@ -4923,11 +4927,13 @@ R3_SCHEMA_TEXT = """\
   THE CLOCK. `ncu.clock_control` is `base` (ncu holds the base clock, the
   default) or `none` (`--page-clock none`: the clock the card picks, or an
   nvidia-smi lock). Under a lock, `ncu.lock_mhz` is F, every cell's
-  `recorded` carries `sm__cycles_elapsed.avg`, and V10 holds each cell and
-  GEMM's clock, those cycles over `gpu_time_ns`, within one 15 MHz step of
-  F. `ncu.probe_clock_control` is what the probe run before the capture
-  passed: `none` beside a `none` capture, so the probe sets no clock inside
-  the lock either, and null (ncu's default) at the base clock. Pages written
+  `recorded` carries `sm__cycles_elapsed.avg`, and V10 reads the lock back
+  by `lock_gate.check_lock` (nvidia-smi either side, a base twin's
+  cell-matched ratio where one is passed; those cycles over `gpu_time_ns`
+  feed the printed fit diagnostic, not the verdict).
+  `ncu.probe_clock_control` is what the probe run before the capture passed:
+  `none` beside a `none` capture, so the probe sets no clock inside the lock
+  either, and null (ncu's default) at the base clock. Pages written
   before 2026-09-26 carry neither `lock_mhz` nor `probe_clock_control` and
   read as base.
 """
@@ -5422,56 +5428,24 @@ def r3_clock_word(control: str, lock: float | None) -> str:
     return f"the clock the card chose, no lock (ncu --clock-control {control})"
 
 
-#: THE CLOCK A LOCKED CAPTURE RAN AT IS FITTED, NOT DIVIDED (2026-09-27). Each
-#: GEMM's cells are fitted as duration = t0 + cycles / f, and f is held to the
-#: lock. Until then V10 and FL1 held each cell's own cycles / duration to it,
-#: and ncu's duration carries a fixed overhead its cycle count does not: on
-#: the Lambda GH200 (2026-09-27, eight pages at a 1710 MHz lock) every GEMM
-#: fitted f = 1694 to 1712 MHz with t0 = 15 to 24 us, while the per-cell ratio
-#: read 1624 to 1697 MHz, lowest on the shortest kernels (1632 at 0.28 ms,
-#: 1697 at 4.8 ms). Every page failed a lock that held. A slip still shows:
-#: it moves f (the GH200's 1965 lock of 2026-09-25 sagged by 135 MHz or more),
-#: or leaves its cells off the line. t0 must be an overhead (0 to 50 us), and
-#: no cell may sit more than R3_CLOCK_CELL_STEPS steps of its own duration off
-#: the lock's line through t0: the eight GH200 pages' worst was 2.4 steps, on
-#: the 0.28 ms n=1 w2 kernels, so 3 is this card's scatter plus a margin, set
-#: from the data it first passed and labelled so. A GEMM with fewer than three
-#: distinct cycle counts cannot be fitted, and each of its cells is held to the
-#: lock by its own ratio, as before.
-R3_CLOCK_OFFSET_MAX_NS = 50_000.0
+#: THE CLOCK A LOCKED CAPTURE RAN AT IS FITTED, NOT DIVIDED (2026-09-27), AND
+#: SINCE 2026-10-05 THE FIT IS A DIAGNOSTIC, NOT A GATE. Each GEMM's cells are
+#: fitted as duration = t0 + cycles / f (`lock_gate.lock_fit`, re-exported here
+#: as `r3_lock_fit`). Until 2026-09-27 V10 and FL1 held each cell's own
+#: cycles / duration to the lock and failed the Lambda GH200's eight 1710 MHz
+#: pages that held it; from then to 2026-10-05 they held the fitted f to one
+#: step, t0 to [-1, 50] us and each cell to 3 steps of the lock's line. That fit
+#: is degenerate: whenever t0 comes out small, f comes out low, so it failed
+#: small-shard captures whose lock held, and n = 1 cells whose duration is
+#: mostly the part that does not scale with work (scratchpad gate-audit/AUDIT.md).
+#: V10 and FL1 now read independent clocks (`lock_gate.check_lock`: nvidia-smi
+#: either side, the null kernel where the capture ran one, the base twin's
+#: cell-matched ratio where one is published) and print the fit beside them.
+R3_CLOCK_OFFSET_MAX_NS = LG.FIT_OFFSET_MAX_NS
 #: A fit through a zero-overhead capture lands a hair either side of 0 ns.
-R3_CLOCK_OFFSET_MIN_NS = -1_000.0
-R3_CLOCK_CELL_STEPS = 3.0
-
-
-def r3_lock_fit(points: list[tuple[str, float | None, float | None]], gemm: str,
-                lock: float) -> tuple[list[str], str]:
-    """One GEMM's cells held to `lock`: `points` are (label, cycles, ns). Returns
-    the off-lock entries (empty when the lock held) and the fit, as printed."""
-    step = R3_FLOOR_LOCK_STEP_MHZ
-    off = [f"{label} no clock" for label, cyc, ns in points if not (cyc and ns)]
-    pts = [(label, float(cyc), float(ns)) for label, cyc, ns in points if cyc and ns]
-    if len({c for _, c, _ in pts}) < 3:
-        off += [f"{label} {1e3 * c / t:.0f} MHz" for label, c, t in pts
-                if abs(1e3 * c / t - lock) > step]
-        return off, f"{gemm} per cell (too few cells to fit)"
-    mx = statistics.fmean(c for _, c, _ in pts)
-    my = statistics.fmean(t for _, _, t in pts)
-    b = (sum((c - mx) * (t - my) for _, c, t in pts)
-         / sum((c - mx) ** 2 for _, c, _ in pts))
-    t0 = my - b * mx
-    f = 1e3 / b if b > 0 else float("nan")
-    fit = f"{gemm} {f:.1f} MHz + {t0 / 1e3:.1f} us over {len(pts)} cells"
-    if not abs(f - lock) <= step:
-        off.append(f"{gemm} fitted {f:.0f} MHz")
-    if not R3_CLOCK_OFFSET_MIN_NS <= t0 <= R3_CLOCK_OFFSET_MAX_NS:
-        off.append(f"{gemm} offset {t0 / 1e3:.1f} us")
-    for label, c, t in pts:
-        cell_step = 1e3 * c / (lock - step) - 1e3 * c / lock
-        if abs(t - (t0 + 1e3 * c / lock)) > R3_CLOCK_CELL_STEPS * cell_step:
-            mhz = 1e3 * c / (t - t0) if t > t0 else float("nan")
-            off.append(f"{label} {mhz:.0f} MHz")
-    return off, fit
+R3_CLOCK_OFFSET_MIN_NS = LG.FIT_OFFSET_MIN_NS
+R3_CLOCK_CELL_STEPS = LG.FIT_CELL_STEPS
+r3_lock_fit = LG.lock_fit
 
 
 def r3_cell_clock_mhz(cell: dict, gemm: str) -> float | None:
@@ -6286,7 +6260,8 @@ def _worst(items) -> str:
 
 
 def score_r3_page(payload: dict, *, timed: dict | None = None,
-                  pool: tuple[str, ...] = R3_BRACKET_POOL) -> tuple[list[Gate], dict]:
+                  pool: tuple[str, ...] = R3_BRACKET_POOL,
+                  lock_twin: dict | None = None) -> tuple[list[Gate], dict]:
     """Score one r3-arms page. Pure over the payload, recomputing every number
     from its cells; nothing stored under `estimates` is trusted.
 
@@ -6301,6 +6276,9 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
     on SHARED's own calls, and `summary["shared_alone"]` holds every gate that
     reads otherwise there, `{number: [pooled, shared alone]}`. It changes no
     verdict: the pooled gates are the page's.
+
+    `lock_twin` is the same page's base-clock twin, where one is published
+    (`lock_gate.load_twin`); V10 then reads their cell-matched ratio too.
     """
     for key in ("family", "design", "cells"):
         if key not in payload:
@@ -6738,34 +6716,28 @@ def score_r3_page(payload: dict, *, timed: dict | None = None,
                       g9.consequence, list(g9.lines)))
 
     # V10 THE LOCK, asked only of a page taken under one (`--page-lock-mhz F`,
-    # 2026-09-26, `R3_PAGE_CLOCK_METRIC`): every cell and GEMM's clock, its own
-    # counters' cycles over its duration, within one supported-clock step of F,
-    # as FL1 holds the floor's. A page at ncu's base clock, or at the card's own
-    # clock with no lock, has no F to hold and no V10.
+    # 2026-09-26): was the lock in force while ncu counted. Since 2026-10-05 it
+    # reads independent clocks (`lock_gate.check_lock`): nvidia-smi either side
+    # of the capture and, where `lock_twin` passes the same cells at ncu's base
+    # clock, their cell-matched ratio. The t0 + cycles / f fit is printed and
+    # decides nothing (`lock_gate` module docstring). A page at ncu's base
+    # clock, or at the card's own clock with no lock, has no F and no V10.
     control, lock = r3_page_clock(payload)
     if lock is not None:
-        off10, fits10 = [], []
-        for g in gemms:
-            pts = [(f"{a}/{n} {g}",
-                    ((c.get("recorded") or {}).get(g) or {}).get(R3_PAGE_CLOCK_METRIC),
-                    ((c.get("per_gemm") or {}).get(g) or {}).get("gpu_time_ns"))
-                   for (a, n), c in sorted(cells.items())]
-            o, fit = r3_lock_fit(pts, g, lock)
-            off10 += o
-            fits10.append(fit)
+        ncu_rec = payload.get("ncu") or {}
+        tp = LG.page_points(lock_twin) if lock_twin else None
+        if tp is not None and not any(c for c, _ in tp.values()):
+            tp = None
+        chk = LG.check_lock(lock, points=LG.page_points(payload),
+                            smi_before=ncu_rec.get("smi_before"),
+                            smi_after=ncu_rec.get("smi_after"), twin_points=tp)
         gates.append(Gate(
             "V10", "VALIDITY",
-            f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
-            "counters' clock", FAIL if off10 else PASS,
-            (f"off the lock: {_worst(off10)}" if off10 else
-             f"all {len(cells) * len(gemms)} within the band") + f" (fit: {'; '.join(fits10)})",
-            f"each GEMM's duration = t0 + {R3_PAGE_CLOCK_METRIC} / f over its cells, "
-            f"|f - {lock:g}| <= {R3_FLOOR_LOCK_STEP_MHZ:g} MHz (one step), 0 <= t0 <= "
-            f"{R3_CLOCK_OFFSET_MAX_NS / 1e3:g} us, and no cell over {R3_CLOCK_CELL_STEPS:g} "
-            "steps off the lock's line",
+            f"the nvidia-smi lock of {lock:g} MHz was in force while ncu counted, by "
+            "independent clock readings", chk.verdict, chk.measured(), LG.THRESHOLD,
             f"every byte on the page as a reading at {lock:g} MHz, the clock the timed "
-            "pages it is compared with ran at; its bytes stand only as readings at the "
-            "clocks its cells name"))
+            "pages it is compared with ran at"))
+        summary["lock_check"] = chk.as_dict()
 
     # C1 GROUP ARITHMETIC ON w1, C2 AND C3: SCORED ON BOTH EDGES of SHARED's
     # weight-only bracket (`r3_weight_bracket`, the K calls' extremes). A verdict only
@@ -7070,7 +7042,7 @@ def r3_page_lines(payload: dict, gates: list[Gate], summary: dict) -> list[str]:
            f"{d['copies_declared']} copies ({d['declared_by_arm']})"]
     control, lock = r3_page_clock(payload)
     out.append(f"  counted at {r3_clock_word(control, lock)}"
-               + ("; V10 reads each cell's clock back off its own counters"
+               + ("; V10 reads the lock back by independent clocks (lock_gate)"
                   if lock is not None else ""))
     est = summary.get("estimates")
     gm = summary.get("group_model")
@@ -7333,8 +7305,7 @@ def do_dry_run_r3(args) -> int:
           f"{R3_DECLARATION_FLOOR:.0%} apart;")
     print(f"  V8 DRAM bytes = 32 x L2 fill sectors within {R3_COUNTER_TOL:.0%}, asked only "
           "if proven; V9 R3's five-part buffer proof; V10, only on a page taken under")
-    print(f"  --page-lock-mhz F, every cell's clock ({R3_PAGE_CLOCK_METRIC} over its "
-          f"duration) within {R3_FLOOR_LOCK_STEP_MHZ:g} MHz of F.")
+    print(f"  --page-lock-mhz F, the lock in force by independent clocks: {LG.THRESHOLD}.")
     print("  The ladder family's monotone and affine gates are NOT applied to SHARED.")
     print(f"CLAIMS, a failure is a result: C1 w1 within {R3_GROUP_TOL:.0%} of the group "
           "model at every n for G >= 2; at G=1 q_S,w1(n) >= "
@@ -7602,10 +7573,12 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
     `metrics_missing` names every asked floor metric no measured launch
     returned (absent, or a unit the parser has not been shown). LAST,
     `--floor-lock-mhz F`: the file IS written, with gate FL1, and it is
-    INVALID when any cell's `sm_clock_mhz` sits more than one
-    `R3_FLOOR_LOCK_STEP_MHZ` from F, or could not be read, because its
-    numbers are then real readings at the clocks its cells name, and not at
-    F."""
+    INVALID when the lock check (`lock_gate.check_lock`, since 2026-10-05)
+    finds a reading a held lock cannot produce: nvidia-smi either side off F
+    by more than a step, the null kernel's median clock off F by more than
+    3%, or a base twin's cell-matched ratio off the held reference or
+    drifting across cells; its numbers are then not readings at F. The old
+    t0 + cycles / f fit is printed in the gate's text and decides nothing."""
     clock, lock = args.floor_clock, args.floor_lock_mhz
     names, query = query_metric_names(ncu["binary"])
     asked, dropped, refusal = r3_floor_metrics(names)
@@ -7706,26 +7679,24 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
                             "nothing"] if unread else []))
             + f". The tensor readings cannot then say whether that pipe sets the "
             f"floor; {kept}")
-    off: list[str] = []
-    fits: list[str] = []
+    # FL1 (since 2026-10-05, `lock_gate.check_lock`): nvidia-smi either side,
+    # the null kernel's clock where this capture ran one, and the cell-matched
+    # ratio to the base twin where one is already written beside `out`
+    # (`lock_gate.twin_path`). The t0 + cycles / f fit is printed, not gated.
+    chk = None
     if lock:
-        for gemm in sorted({g for c in cells for g in c["per_gemm"]}):
-            pts = [(f"n={c['n']} {gemm}", c["per_gemm"][gemm].get("sm__cycles_elapsed.avg"),
-                    c["per_gemm"][gemm].get("gpu__time_duration.sum"))
-                   for c in cells if gemm in c["per_gemm"]]
-            o, fit = r3_lock_fit(pts, gemm, lock)
-            off += o
-            fits.append(fit)
+        fl_page = {"kind": "floor", "cells": cells, "clock": {"lock_mhz": lock}}
+        twin = LG.load_twin(out, fl_page)
+        chk = LG.check_lock(lock, points=LG.page_points(fl_page), smi_before=smi_before,
+                            smi_after=smi_after, nulls=LG.null_clocks(fl_page),
+                            twin_points=LG.page_points(twin) if twin else None,
+                            label=lambda k: f"n={k[1]} {k[2]}")
+    off = chk.off if chk else []
+    fits = chk.fit if chk else []
     gates = [Gate(
         "FL1", "VALIDITY",
-        f"every cell and GEMM ran at the nvidia-smi lock of {lock:g} MHz, by its own "
-        "counters' clock", FAIL if off else PASS,
-        (f"off the lock: {off}" if off else
-         f"all {sum(len(c['per_gemm']) for c in cells)} within the band")
-        + f" (fit: {'; '.join(fits)})",
-        f"each GEMM's duration = t0 + cycles / f over its cells, |f - {lock:g}| <= "
-        f"{R3_FLOOR_LOCK_STEP_MHZ:g} MHz (one step), 0 <= t0 <= "
-        f"{R3_CLOCK_OFFSET_MAX_NS / 1e3:g} us, no cell over {R3_CLOCK_CELL_STEPS:g} steps off",
+        f"the nvidia-smi lock of {lock:g} MHz was in force while ncu counted, by "
+        "independent clock readings", chk.verdict, chk.measured(), LG.THRESHOLD,
         f"this file as a reading at {lock:g} MHz; its numbers stand only as readings "
         "at the clocks its cells name")] if lock else []
     if null_kernel:
@@ -7745,10 +7716,12 @@ def r3_floor(args, ncu: dict, card: dict, stack: dict, commit: str, out: Path,
             "commit": commit, "plan": plan, "cells": cells,
             "clock": {"control": clock, "lock_mhz": lock,
                       "band_mhz": R3_FLOOR_LOCK_STEP_MHZ if lock else None,
-                      "held": (not off) if lock else None, "off_lock": off,
-                      "basis": "each GEMM's gpu__time_duration.sum = t0 + "
-                               "sm__cycles_elapsed.avg / f fitted over its cells, each the "
-                               "mean over its calls (r3_lock_fit)", "fit": fits,
+                      "held": (chk.verdict == PASS) if lock else None, "off_lock": off,
+                      "basis": "lock_gate.check_lock: nvidia-smi either side, the null "
+                               "kernel where run, the base twin's cell-matched ratio "
+                               "where published; `fit` (duration = t0 + cycles / f per "
+                               "GEMM) is a printed diagnostic", "fit": fits,
+                      **({"lock_check": chk.as_dict()} if chk else {}),
                       "smi_before": smi_before, "smi_after": smi_after},
             "gates": [asdict(g) for g in gates],
             "ncu": {"binary": ncu.get("binary"), "version": ncu.get("version"),
@@ -7843,7 +7816,7 @@ def do_run_r3(args) -> int:
     capture (`floor_smi_reading`). `--page-lock-mhz F` names that lock: the
     page then asks `R3_PAGE_CLOCK_METRIC` too, REFUSED before the capture when
     this chip's metric list does not offer it (one name ncu does not know
-    aborts the whole capture), and V10 holds every cell's clock to F. The
+    aborts the whole capture), and V10 reads the lock back (`lock_gate`). The
     census takes the flags for its own capture and records them; it measures
     launches and grids, which no clock moves, so it gates no clock and a
     census at either clock licenses a page at either. The probe that runs
@@ -7931,8 +7904,8 @@ def do_run_r3(args) -> int:
     if lock is not None:
         names, query = query_metric_names(ncu["binary"])
         if names is None or metric_base(R3_PAGE_CLOCK_METRIC) not in names:
-            print(f"REFUSE: --page-lock-mhz {lock:g} is gated (V10) on each cell's own "
-                  f"{R3_PAGE_CLOCK_METRIC}, and "
+            print(f"REFUSE: --page-lock-mhz {lock:g} asks each cell's own "
+                  f"{R3_PAGE_CLOCK_METRIC} (V10's fit diagnostic and base-twin ratio), and "
                   + (f"this box's metric list could not be read ({query}), so ncu is "
                      "not shown to know it" if names is None else
                      "this chip's metric list does not offer it")
@@ -8798,8 +8771,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="with --run --floor --floor-clock none: the SM clock an "
                          "nvidia-smi lock (-lgc F,F) holds during the capture. It is "
                          "written into the file, and the file is INVALID (gate FL1) "
-                         "when any cell's clock, read off its own counters, is more "
-                         "than one 15 MHz step from F. Refused under --floor-clock "
+                         "when the lock check (scripts/lock_gate.py: nvidia-smi either "
+                         "side, the null kernel, a base twin's ratio) finds the lock "
+                         "not in force. Refused under --floor-clock "
                          "base, where ncu sets the clock itself")
     ap.add_argument("--page-clock", default="base", choices=("base", "none"),
                     help="with --run --family r3-arms, a page or the census: ncu "
@@ -8812,8 +8786,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="with --run --family r3-arms --page-clock none: the SM clock "
                          "an nvidia-smi lock (-lgc F,F) holds during the capture. The "
                          "page also asks sm__cycles_elapsed.avg and is INVALID (gate "
-                         "V10) when any cell's clock, read off its own counters, is "
-                         "more than one 15 MHz step from F. Recorded on the page and "
+                         "V10) when the lock check (scripts/lock_gate.py) finds the "
+                         "lock not in force. Recorded on the page and "
                          "in its run id; --analyse refuses to join pages of two clock "
                          "regimes")
     ap.add_argument("--block-k", type=int, default=None, metavar="BK",

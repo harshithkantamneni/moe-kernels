@@ -242,6 +242,7 @@ sys.path.insert(0, str(HERE))
 import scripts.dram_counter_route as DCR  # noqa: E402
 from moe.bench import exit_codes  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+from scripts import lock_gate as LG  # noqa: E402
 
 MIB = 2 ** 20
 GEMMS = ("w1", "w2")
@@ -1954,11 +1955,11 @@ def card_lines(res: CardResult, sc: dict) -> list[str]:
     tag = f"[{res.label}]"
     out = [f"=== CARD {res.label} ({geom.name}, sm_{geom.capability}, {geom.sm_count} SMs, "
            f"L2 {geom.l2_bytes / MIB:.1f} MiB): its own fit, nothing pooled with another card",
-           f"{tag} PAGES (stored gate verdicts that are not PASS; every page is fitted, as the "
-           "judge's reproduction fitted them)"]
+           f"{tag} PAGES (stored gate verdicts that are not PASS, the lock gate V10 recomputed "
+           "on read beside its stale stored verdict; every page is fitted, as the judge's "
+           "reproduction fitted them)"]
     for G, page in sorted(card.pages.items()):
-        bad = [f"{g.get('number', g.get('name'))} {g.get('verdict')}"
-               for g in page.get("gates", []) if g.get("verdict") != "PASS"]
+        bad = LG.reader_gate_entries(page, card.paths.get(G))
         out.append(f"  G={G:<3} {page.get('run_id')}  {', '.join(bad) or 'all PASS'}")
     out.append(f"{tag} GEOMETRY (every value read off the pages)")
     for g in GEMMS:

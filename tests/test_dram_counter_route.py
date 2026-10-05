@@ -4561,17 +4561,19 @@ def test_a_floor_whose_hmma_count_is_not_above_zero_writes_nothing(
         assert ("read it at zero" in text) is (reading == "0"), reading
 
 
-def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock(
+def test_the_floor_lock_is_written_into_the_file_and_gated_on_independent_clocks(
         tmp_path, monkeypatch, capsys):
-    """`--floor-lock-mhz F` goes into the file, and every cell's clock read off
-    its own counters must sit within one 15 MHz step of F, or the file is
-    written with gate FL1 FAIL and exits INVALID. The planted counters run at
-    1601 MHz: a lock of 1601 holds, 1710 does not, and the band's two edges
-    are pinned just inside and just outside (1601 +/- 15 exactly rounds
-    either way in floating point), so a band of two or five steps fails
-    here (second review). Each lock, and no lock, is its own run id. The
-    flag belongs to a capture at --floor-clock none, and a lock must be
-    above zero."""
+    """`--floor-lock-mhz F` goes into the file, and FL1 is the lock check
+    (`lock_gate.check_lock`, 2026-10-05): here, with no null kernel and no
+    base twin, nvidia-smi either side of the capture must read within one
+    15 MHz step of F, or the file is written with FL1 FAIL and exits INVALID.
+    The planted box's nvidia-smi and its counters both read 1601 MHz: a lock
+    of 1601 holds, 1710 does not, and the step's two edges are pinned just
+    inside and just outside. The old t0 + cycles / f fit is still computed
+    and stored (`clock.fit`, `lock_check.fit_off`) as a diagnostic: at 1710 it
+    names what the old gate named, and decides nothing. Each lock, and no
+    lock, is its own run id. The flag belongs to a capture at --floor-clock
+    none, and a lock must be above zero."""
     def at_1601(metric, row):
         if metric != "sm__cycles_elapsed.avg":
             return None
@@ -4596,8 +4598,11 @@ def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock
         assert fl1.verdict == (PASS if clock["held"] else FAIL), lock
         assert clock["smi_before"]["rows"][0]["clocks.sm"] == "1601"
         ids.append(body["run_id"])
-    assert clock["off_lock"] == [e for g in ("w1", "w2") for e in (
+    assert clock["off_lock"] == ["before 1601, after 1601 MHz"]
+    assert clock["lock_check"]["fallback"].startswith("fallback: no null kernel and no base twin")
+    assert clock["lock_check"]["fit_off"] == [e for g in ("w1", "w2") for e in (
         [f"{g} fitted 1601 MHz"] + [f"n={n} {g} 1601 MHz" for n in body["plan"]["treads"]])]
+    assert clock["fit"][0].startswith("w1 1601.0 MHz + ")
     unlocked = tmp_path / "r3f-g64-none.json"
     assert main(_floor_argv(census, unlocked, "--floor-clock", "none")) == exit_codes.DONE
     ids.append(json.loads(unlocked.read_text())["run_id"])
@@ -4612,12 +4617,15 @@ def test_the_floor_lock_is_written_into_the_file_and_gated_on_the_counters_clock
                  "--floor-lock-mhz", "1710"]) == exit_codes.REFUSED
 
 
-def test_a_cell_whose_counters_name_no_clock_fails_the_lock(tmp_path, monkeypatch, capsys):
+def test_a_cell_whose_counters_name_no_clock_is_named_and_leaves_the_lock_check_standing(
+        tmp_path, monkeypatch, capsys):
     """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the
     capture goes on, and the other launches return it, so its decisive group
-    is met; but that cell's mean, and so its clock, is None. Under a lock
-    that cell is not shown to have run at F, and FL1 names it 'no clock'
-    (second review: the None branch was never exercised)."""
+    is met; but that cell's mean, and so its counter clock, is None. Since
+    2026-10-05 the counters' clock decides nothing (`lock_gate`): FL1 reads
+    nvidia-smi, which held, so it PASSES, and the cell is named 'no clock' in
+    the printed fit diagnostic and among the cells left out of any per-cell
+    check (second review: the None branch stays exercised)."""
     def at_1601_but_one(metric, row):
         if metric != "sm__cycles_elapsed.avg":
             return None
@@ -4629,12 +4637,15 @@ def test_a_cell_whose_counters_name_no_clock_fails_the_lock(tmp_path, monkeypatc
     out = tmp_path / "r3f-g64-lock.json"
     capsys.readouterr()
     assert main(_floor_argv(census, out, "--floor-clock", "none",
-                            "--floor-lock-mhz", "1601")) == exit_codes.INVALID
+                            "--floor-lock-mhz", "1601")) == exit_codes.DONE
     fl1 = next(r for r in exit_codes.parse_result_lines(capsys.readouterr().out)
                if r.name == "FL1")
     body = json.loads(out.read_text())
-    assert fl1.verdict == FAIL and body["clock"]["off_lock"][0] == "n=2 w1 no clock"
-    assert not [e for e in body["clock"]["off_lock"] if "no clock" not in e and "w1" in e]
+    check = body["clock"]["lock_check"]
+    assert fl1.verdict == PASS and body["clock"]["off_lock"] == []
+    assert check["fit_off"][0] == "n=2 w1 no clock"
+    assert not [e for e in check["fit_off"] if "no clock" not in e and "w1" in e]
+    assert "native/2 w1 no clock" in check["excluded"]
     w1 = body["cells"][0]["per_gemm"]["w1"]
     assert w1["sm_clock_mhz"] is None and "sm__cycles_elapsed.avg" in w1["unreadable"]
 
@@ -4680,10 +4691,10 @@ def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
     none --page-lock-mhz F` passes `none` to the census's and the page's ncu,
     writes the clock control and F into the page, its capture record and its
     run id, asks the page's `sm__cycles_elapsed.avg` (never the census's), and
-    V10 holds every cell's clock, those cycles over its duration, within one
-    15 MHz step of F. The planted counters run at 1601 MHz: 1601 and 1615.9
-    hold, 1616.1 and 1710 do not (INVALID, the page written, its off cells
-    named). The base page asks no clock and has no V10, and every clock and
+    V10 reads the lock back (`lock_gate.check_lock`; here nvidia-smi either
+    side, one 15 MHz step). The planted box reads 1601 MHz: 1601 and 1615.9
+    hold, 1616.1 and 1710 do not (INVALID, the page written, the reading named,
+    the old fit printed beside it). The base page asks no clock and has no V10, and every clock and
     lock is its own run id. `--reduce-only` rebuilds a locked page at the
     CAPTURE's clock and lock, run id included."""
     calls = _plant_a_locked_page(monkeypatch)
@@ -4718,8 +4729,10 @@ def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
         assert f"counted at an nvidia-smi lock of {float(lock):g} MHz" in text
         ids.append(page["run_id"])
     v10 = next(g for g in page["gates"] if g["number"] == "V10")
-    assert v10["measured"].startswith("off the lock: w1 fitted 1601 MHz; native/1 w1 1601 MHz")
-    assert "(fit: w1 1601.0 MHz + 0.0 us over 15 cells; w2 1601.0 MHz" in v10["measured"]
+    assert v10["measured"].startswith("off the lock: smi before 1601, after 1601 MHz OUT")
+    assert ("old fit, diagnostic only: w1 1601.0 MHz + 0.0 us over 15 cells; w2 1601.0 MHz"
+            in v10["measured"])
+    assert "would read FAIL (w1 fitted 1601 MHz; native/1 w1 1601 MHz" in v10["measured"]
     base = tmp_path / "r3c-g4-base.json"
     assert main(_page_argv(census, base)) == exit_codes.DONE
     body = json.loads(base.read_text())
@@ -4741,9 +4754,11 @@ def test_a_page_under_an_nvidia_smi_lock_records_it_and_v10_reads_it_back(
     assert {g["number"]: g["verdict"] for g in again["gates"]}["V10"] == PASS
 
 
-def test_a_locked_cell_whose_counters_name_no_clock_fails_v10(tmp_path, monkeypatch, capsys):
+def test_a_locked_cell_whose_counters_name_no_clock_is_named_by_v10(
+        tmp_path, monkeypatch, capsys):
     """One launch's `sm__cycles_elapsed.avg` reads n/a. It is soft, so the page
-    is written, but that cell's clock is not shown: V10 names it `no clock`.
+    is written, and that cell's counter clock is not shown: V10's printed fit
+    diagnostic names it `no clock`, and V10 itself, on nvidia-smi, PASSES.
     A page at the card's own clock (`--page-clock none`, no lock) has no F and
     no V10, and still records nvidia-smi either side of its capture."""
     _plant_a_locked_page(monkeypatch, clock=lambda row: None if row["ID"] == "0" else 1601.0)
@@ -4751,10 +4766,12 @@ def test_a_locked_cell_whose_counters_name_no_clock_fails_v10(tmp_path, monkeypa
     out = tmp_path / "r3c-g4.json"
     capsys.readouterr()
     assert main(_page_argv(census, out, "--page-clock", "none", "--page-lock-mhz",
-                           "1601")) == exit_codes.INVALID
+                           "1601")) == exit_codes.DONE
     v10 = next(g for g in json.loads(out.read_text())["gates"] if g["number"] == "V10")
-    assert v10["verdict"] == FAIL
-    assert v10["measured"].startswith("off the lock: native/1 w1 no clock (fit: w1 1601.0 MHz")
+    assert v10["verdict"] == PASS
+    assert v10["measured"].startswith("lock in force: smi before 1601, after 1601 MHz")
+    assert "native/1 w1 no clock" in v10["measured"]
+    assert "old fit, diagnostic only: w1 1601.0 MHz" in v10["measured"]
     free = tmp_path / "r3c-g4-none.json"
     assert main(_page_argv(census, free, "--page-clock", "none")) == exit_codes.DONE
     body = json.loads(free.read_text())
@@ -4880,8 +4897,13 @@ def test_the_page_clock_flags_are_refused_where_they_mean_nothing(capsys):
 
 def _at_lock(page: dict, mhz: float | None) -> dict:
     """`page` as one captured under an nvidia-smi lock of `mhz` (None: at the
-    card's own clock), its cells' recorded cycles at that clock."""
+    card's own clock), its cells' recorded cycles at that clock, and the
+    nvidia-smi reading either side that every locked capture records (V10's
+    lock check reads it, `lock_gate.check_lock`)."""
     page["ncu"].update(clock_control="none", lock_mhz=mhz)
+    if mhz is not None:
+        smi = {"returncode": 0, "rows": [{"clocks.sm": f"{mhz:g}"}]}
+        page["ncu"].update(smi_before=smi, smi_after=smi)
     for cell in page["cells"]:
         for g in ("w1", "w2"):
             cell["recorded"][g][DCR.R3_PAGE_CLOCK_METRIC] = \

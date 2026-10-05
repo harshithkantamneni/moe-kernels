@@ -1391,6 +1391,27 @@ cell reads above its lock, so CLEAN keeps them. V10 fails on seven G = 1 pages a
 gating in part 1), V7 on four pages (8x7B l2s8, atbk32, atbk64, ats8; CLEAN drops them), V6 on tp2
 l2bk32. Every page carries its card's UUID, as every published session does.
 
+**Gate replacement (2026-10-05): FL1 and V10 read the lock, not the fit.** Both gates now ask
+`scripts/lock_gate.py` whether the lock was in force, from clock readings already on the page:
+nvidia-smi `clocks.sm` before and after (within one 15 MHz step), the null kernel's median
+`sm_clock_mhz` (within 3% of the lock, each cell within 2.5% of that median), and, where a base
+twin is published, the cell-matched lock / base ratio R (median within 3% of the held
+reference 1.2198 at 1710, each readable cell within 4.5% of the capture's median). Each
+tolerance is twice the largest deviation of the published held-lock captures (held: nvidia-smi
+read the lock both sides), rounded up to 0.5%: null level 1.50%, null spread 1.05%, ratio level
+1.39%, ratio spread 2.24%; all 232 held nvidia-smi readings equal the lock. A cell is left out
+of every per-cell check when more than 0.30 of its duration does not scale with its treads; on
+the held floors every n >= 2 cell reads 0.21 or less and every n = 1 cell 0.36 to 0.50. A page
+with no null kernel and no twin carrying cycles, which is every published byte page, is judged
+on nvidia-smi alone and says so. The t0 + cycles / f fit is printed beside each verdict and
+decides nothing. Re-gated on read over the 117 published lock pages (no JSON rewritten;
+`python scripts/lock_gate.py`, pinned in `tests/test_lock_gate.py`), 116 pass, 78 of them
+stored as FAIL, and the 2026-09-28 8x22B floor fails on two readings at once: nvidia-smi 1980
+before and after, and R 1.2866, +5.48% of the reference (implied 1804 MHz). That settles
+correction 5: `r3_timing_model.py` and `wave_split_bytes.py` now print the recomputed verdict,
+the stored one labelled stale. The rental-2 scorers keep their registered addendum rule 5
+unchanged.
+
 ---
 
 ## The evidence base

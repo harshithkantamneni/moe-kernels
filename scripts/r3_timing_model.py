@@ -103,8 +103,11 @@ INPUTS.
   counter pages `r3c-g{G}.json` under --counters (default: found under the
                 positional dirs): per GEMM `dram_bytes_read` and `grid_size`,
                 the recorded occupancy limits, `card.sm_count`. The page's
-                own stored gates are printed, not re-scored: this tool reads
-                only bytes, grid and occupancy.
+                own stored gates are printed, not re-scored, except V10,
+                the lock gate, which is recomputed on read (scripts/
+                lock_gate.py; the stored verdict is printed beside it,
+                labelled stale): this tool reads only bytes, grid and
+                occupancy.
   --bytes       `counted` (default, the card's own counter pages), `groupmodel`
                 (sigma = 1: the schedule's own derived bytes) or
                 `borrowed:DIR` (another card's counter pages). The source is
@@ -247,6 +250,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 
 import dram_counter_route as DCR  # noqa: E402
+import lock_gate as LG  # noqa: E402
 import per_tile_model_fit as PTF  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
@@ -1045,9 +1049,12 @@ def recorded_occupancy(pages: dict[int, dict]) -> dict[str, int]:
 
 
 def stored_validity(page: dict) -> list[str]:
-    """The page's own VALIDITY gates that are not PASS, as stored."""
-    return [f"{g.get('tag') or g.get('number')} {g.get('verdict')}" for g in page.get("gates") or []
-            if g.get("kind") == "VALIDITY" and g.get("verdict") != "PASS"]
+    """The page's own VALIDITY gates that are not PASS, as stored, except the
+    lock gate (V10, FL1): its stored verdict came from the degenerate
+    t0 + cycles / f fit, so it is recomputed on read (`lock_gate`) and printed
+    with the stored one labelled stale."""
+    path = page.get("_path")
+    return LG.reader_gate_entries(page, Path(path) if path else None, kind="VALIDITY")
 
 
 @dataclass
@@ -2055,7 +2062,8 @@ def lines_of(R: dict) -> list[str]:
     for p in R["all_pages"]:
         L.append(f"  {p.describe()}  {'FITTED' if p in R['use'] else 'EXCLUDED'}")
     if R["source"].pages:
-        L.append("COUNTER PAGES (bytes, grid and occupancy read; gates as stored, not re-scored)")
+        L.append("COUNTER PAGES (bytes, grid and occupancy read; gates as stored, not re-scored, "
+                 "except the lock gate, recomputed on read)")
         for G, page in sorted(R["source"].pages.items()):
             bad = stored_validity(page)
             L.append(f"  G={G} {page['_path']}" + (f"  stored VALIDITY not PASS: {', '.join(bad)}"
