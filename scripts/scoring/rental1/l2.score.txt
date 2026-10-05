@@ -50,15 +50,3 @@ secondary G=2 (R0 / measured - 1, %):
   tp8 shared  w2 meas 1.000 1.001 1.013 1.000 1.004 1.001 1.002 1.001 1.003 | err -0.0 +5.2 +7.9 +9.1 +9.9 +10.5 +10.3 +10.8 +11.4
   tp8 private w1 meas 0.996 1.995 2.993 3.995 5.001 5.989 7.005 8.011 9.015 | err +0.4 +0.3 +0.3 +0.2 +0.0 +0.3 +0.0 -0.1 -0.1
   tp8 private w2 meas 1.000 2.002 3.004 4.004 5.005 6.005 7.005 8.005 9.005 | err -0.0 -0.1 -0.1 -0.1 -0.0 -0.0 -0.0 -0.0 -0.0
-far-share RECORD (cells with s >= 0.1; band [0.15, 0.45]):
-  tp2 w1: 2 cells, range 0.17..0.23, outside []
-  tp2 w2: 8 cells, range 0.28..0.37, outside []
-  tp4 w1: 8 cells, range 0.19..0.25, outside []
-  tp4 w2: 8 cells, range 0.14..0.39, outside [(8, 0.137), (9, 0.137)]
-  tp8 w1: 8 cells, range 0.15..0.39, outside []
-  tp8 w2: 8 cells, range 0.06..0.39, outside [(5, 0.115), (6, 0.097), (7, 0.081), (8, 0.062), (9, 0.062)]
-  sameboard 8x7B w2: 8 cells, range 0.31..0.44, outside []
-  total 50 cells, 7 outside the band
-secondary G=2 shared: 54 cells, 31 beyond 5%, worst -58.8%
-secondary G=2 private: 54 cells, 0 beyond 5%, worst +0.4%
-V6 passes on every scored page: no s flagged. V10 fails on all six tp pages (does not gate survival); C1 CLAIM fails on tp4 and tp8 G=2 (the group_reads claim, not scored here). Same-board anchor page passes every gate.

@@ -5003,12 +5003,14 @@ def test_the_runbooks_lock_block_runs_flags_the_family_accepts(tmp_path, monkeyp
         assert "planted: a closed route" in capsys.readouterr().out, argv
 
 
-def test_a_lock_that_held_under_ncus_fixed_duration_overhead_passes_and_a_slip_does_not():
-    """The Lambda GH200 of 2026-09-27 held its 1710 MHz lock, but ncu's
-    duration carried about 23 us its cycle count did not: every cell's own
-    cycles / duration read 1624 to 1697 MHz, lowest on the shortest kernels,
-    and V10 and FL1 failed a lock that held (time = 22.7 us + cycles / 1705 MHz
-    over the 54 GEMMs of its G=1 page). The fit reads through the overhead.
+def test_the_lock_fit_passes_a_planted_constant_offset_and_a_slip_does_not():
+    """The Lambda GH200 of 2026-09-27 held its 1710 MHz lock, and its cells'
+    own cycles / duration read 1624 to 1697 MHz, lowest on the shortest kernels,
+    so the per-cell V10 and FL1 failed a lock that held (time = 22.7 us + cycles
+    / 1705 MHz over the 54 GEMMs of its G=1 page). This plants a CONSTANT 22.7 us
+    offset and checks the fit reads through it. The real offset is not constant
+    (CORRECTED 2026-10-05: 0.3 us at 1005 MHz on rental 2's tp4 cells; see
+    scripts/lock_gate.py), which is why the fit is now a diagnostic, not a gate.
     A real slip still fails: a clock that sagged to 1650 MHz moves the fitted
     f, one cell that slipped sits off the line, and an overhead past 50 us or
     below zero is not an overhead."""

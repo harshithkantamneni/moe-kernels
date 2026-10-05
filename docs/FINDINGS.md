@@ -736,7 +736,10 @@ G=1 page, duration = 22.7 us + cycles / 1705 MHz over 54 GEMMs). Fixed in
 f97df00 (`r3_lock_fit`, COUNTERS.md 6.12 and 6.13); re-scored, the G=1, 3, 4, 8
 and 16 lock pages pass every validity gate and the floor's FL1 passes. CORRECTED 2026-10-02:
 the page files still store the old FAIL, which two tools print, and G = 2 fails by 1 MHz
-(w2 1694.0) (Rental 2, Corrections, item 5.)
+(w2 1694.0) (Rental 2, Corrections, item 5.) CORRECTED 2026-10-05: the fitted t0 is not a fixed ncu overhead: on rental 2's tp4 cells the same fit reads 1005.0 MHz + 0.3 us at a 1005 MHz lock and 9.9 and 4.7 us at 1710, and the L2-clock fit gives t0 0.4 to 2.1 us on every floor capture. t0 is a clock-dependent shortfall of `sm__cycles_elapsed.avg` against the duration, and the t0 / f fit is degenerate
+(Rental 2, Diagnosis; `scripts/lock_gate.py` module docstring). Since 2026-10-05 FL1 and V10
+read the lock from nvidia-smi, the null kernel and the base-twin ratio, not from this fit
+(Rental 2, Gate replacement.)
 
 **Both gaps, closed in part the same day.** The G=3 miss was the timing
 model's hard max: a CTA whose DRAM time sits near its floor runs slower than
@@ -773,7 +776,9 @@ changed (w1 K 6144 x 512 N-tiles, w2 K 16384 x 96), nothing was fitted on
 
 **Time held.** At the registered 1710 MHz lock, 40 SHARED and PRIVATE cells
 (G=3, 8, 32, treads 1 to 8) read rms 1.71%, worst -4.73%, none beyond 5%
-(registered: at or under 2%, none beyond 5%). The G >= 8 SHARED slope read
+(registered: at or under 2%, none beyond 5%). These times are priced from the byte model's
+PREDICTED bytes (`scripts/cross_model_predict.py`, the registered JSON's T), so this is the one
+time test in the study that held end to end, from predicted bytes to predicted time. The G >= 8 SHARED slope read
 0.9155 and 0.9141 ms per tread (band 0.908 to 0.946), G=3's period-3 ripple
 and G=2's zig-zag kept their phase. The miss sat at tread 1 (-3.9 to -4.7%):
 8x22B's w2 at n=1 is 768 CTAs, 1.45 waves of 528, and the model priced the
@@ -845,7 +850,9 @@ inside the registered 340 to 365; the G >= 8 SHARED slope reads 0.6962 and
 0.6953 ms per tread against 0.6837 (band 0.670 to 0.697). The floor is a
 property of the tile at three shapes and two expert counts.
 
-**Time is falsified by a uniform bias.** The 58 SHARED and PRIVATE cells of the
+**Time is falsified by a uniform bias.** Priced, as 8x22B's were, from the byte model's predicted
+bytes (the registered JSON's T, scored 2026-09-28; `cross_model_score.py`, which prices from
+counted bytes, was first committed after, at 7d9a1a1 on 2026-09-29), the 58 SHARED and PRIVATE cells of the
 four VALID pages at 1710 read rms 2.71% (registered at or under 2%), worst
 -5.00%, the prediction 2.3 to 2.7% fast at every G and at tread 1. A uniform
 miss is a missing per-tread cost, not the knee, the schedule or the bytes
@@ -872,7 +879,7 @@ phase but its amplitude is a fifth of the prediction: the same G=2 byte
 over-prediction, seen in time.
 
 **What the paper can claim.** Transfer to an unseen shape at the same expert
-count is supported by a pre-registered test (8x22B: time 1.71% rms). Transfer
+count is supported by a pre-registered test (8x22B: time 1.71% rms, from predicted bytes). Transfer
 across expert counts is not: the floor and the floor-bound slope carry, the
 per-tread time and the byte model's capacity rules do not. Any model changed
 on these pages is fitted on them, so a claim across expert counts needs a new
@@ -944,10 +951,10 @@ it must be tested on a model it has not seen.
 
 **What the paper can claim, after four tests.** From one card's 8x7B fit, with
 nothing fitted on the target: an unseen shape at the same expert count to 1.7%
-in time and 1.0 to 3.5% in weight-set bytes by set, 5 of 240 cells beyond 5%
+in time from predicted bytes and 1.0 to 3.5% in weight-set bytes by set, 5 of 240 cells beyond 5%
 (8x22B, pre-registered); PRIVATE's bytes on every target (0.3 to 2.0% rms); the floor-bound slope to 2% where CTAs run
 40 or more k-steps. Not claimed: time across expert counts and depths (Qwen2-57B
-2.71%, OLMoE 3.53%, both pre-registered failures with the mechanism
+2.71% from predicted bytes, OLMoE 3.53% from its own counted bytes, both pre-registered failures with the mechanism
 identified), and SHARED bytes where an expert fits in the L2. Each falsified
 registration named a rule the Mixtral data could not test: the capacity
 condition, the dead CTA, the per-CTA fixed cost.
@@ -973,10 +980,16 @@ a w2 CTA) on a seventh (`board 1310e2`, tree a156392, which carries the
 corrected floor estimator below). Published at
 `results/published/2026-09-29-nvidia_gh200_480gb-{qwen1.5,phi3.5,jetmoe}-session`
 and `results/published/2026-09-30-nvidia_gh200_480gb-granite-session`; each
-session README cites the file for every number here.
+session README cites the file for every number here. CORRECTED 2026-10-05: `board 1310e2` is not
+a seventh board. It is the 2026-09-25 card, whose pages carry the same board hash (sha256[:6] of
+the bare UUID, `dram_counter_route.board`). Counted by board hash over every published GH200 page,
+the 13 GH200 sessions ran on nine distinct boards: 1310e2 (2026-09-25 and Granite), 9b6d01
+(2026-09-27), 435984 (8x22B), 50e61f (Qwen2-57B), d663f7 (OLMoE), d67185 (Qwen1.5, Phi-3.5,
+JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (rental 1) and
+4da056 (rental 2).
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
-each model's own counted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
+each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
 rms at or under 2%, no cell beyond 5%); the floor in cycles per CTA k-step
 within 2%; the G >= 8 SHARED slope over treads 2 to 6 within 2%; PRIVATE bytes
 within 5% on every cell.
@@ -1069,7 +1082,13 @@ either (Rental 2, Corrections, item 1.)
 
 **What the paper can claim, after eight tests.** From one card's 8x7B fit,
 with nothing fitted on the target, time from a model's own bytes to 2% on two
-of four held-out models (Qwen1.5 1.87%, Phi 0.57%); PRIVATE bytes to 5% on
+of four held-out models (Qwen1.5 1.87%, Phi 0.57%). That is a test of the timing model
+alone: only Mixtral 8x22B was timed from predicted bytes and held (1.71%), Qwen2-57B was
+timed from predicted bytes and failed (2.71%), and every other held-out model (OLMoE and
+these four) was timed from its own counted bytes, with time from predicted bytes printed
+only. The end-to-end claim, predicted bytes to predicted time, rests on one unseen model.
+Rental 3's end-to-end test on `qwen2-57b-a14b-tp8` is planned; it is not yet registered.
+Also from 8x7B's fit: PRIVATE bytes to 5% on
 seven of the four models' eight GEMMs; the per-CTA floor on six of seven
 scorable GEMMs, down to an 8-k-step CTA. Not claimed: time where the call sits near its
 0.24 to 0.29 ms floor (Granite to n = 5, possibly JetMoE at n = 1) or where a
@@ -1122,7 +1141,7 @@ scoring note.
 | | x-only law | FALSIFIED | tp2 w2 minus tp4 w1 0.10 to 0.19 at 6 of 6 n |
 | | controls | 1 of 4 HELD | tp8 w2 >= 0.973; tp8 w1 0.82 to 0.91, tp4 w2 n = 2, tp2 w1 n = 2, 3 FAILED |
 | | PRIVATE F / Mn, G = 2 R0 | HELD; PRIVATE HELD, SHARED FALSIFIED | 0.504 to 0.521; SHARED 31 of 54 beyond 5% |
-| C A-tile | T1 content-keyed w1 | OLMoE HELD, Qwen2 INCONCLUSIVE | OLMoE +0.52%; Qwen2 nearer R1 everywhere, +2.1 to +2.6% at n = 6, 7, 9 |
+| C A-tile | T1 content-keyed w1 | OLMoE HELD, Qwen2 NOT HELD | OLMoE +0.52%; Qwen2 nearer R1 everywhere, +2.1 to +2.6% at n = 6, 7, 9: inside neither the pass nor the falsifier (`atile.score.json`; the registration defines no INCONCLUSIVE for T1) |
 | | T2 duration rho | every candidate refuted | rho42 1.199, rho84 1.184: between the byte-law and R2 bands |
 | | T3 G = 1 credit | HELD (tp8, tp4) | -0.00438 vs R1 -0.00446; -0.00138 vs R1 -0.00193 |
 | | T4 every PRIVATE cell | FALSIFIED (all five) | R2 rms 1.55%, 10 cells beyond 4% (deep G >= 32 w2) |
@@ -1557,7 +1576,7 @@ routing, `vllm_fused_experts`:
 | deepseek-v3 | 3010 | | . | . | . | . | X | X |
 
 `.` memory-bound, `X` compute-bound. **At a few thousand tokens per forward,
-three of four models are compute-bound.** Chunked prefill routinely puts that many
+three of four models are compute-bound.** Chunked prefill routinely puts a few thousand
 tokens in one pass, prefill is compute-bound on its own, and with expert
 parallelism rows-per-expert is `T_aggregate k / E` regardless of sharding, so a
 DP144+EP144 decode deployment is deliberately engineered to be on the compute side.
@@ -1994,8 +2013,8 @@ null or excludes both; `tests/test_c5_cross_card.py` pins all of it.)
 ### Defect 2: the crossings have no error bars, and they are wide
 
 Times reproduce to 0.2%. Crossings do not. The crossing is interpolated between
-two slopes with leverage `1/(s1 - s0)`, which is small on a flat curve, so the
-detector amplifies timing noise about 10x. Measured directly: at A100 qwen2
+two slopes, so a timing error enters it multiplied by `1/(s1 - s0)`; the slope
+difference `s1 - s0` is small on a flat curve, so the detector amplifies timing noise about 10x. Measured directly: at A100 qwen2
 T=512 the retired throttle flag (RETRACTIONS (f)) dropped one of two replicate
 rows, moving that single point 6%, and the crossing moved from 593 to 824.
 
@@ -2112,7 +2131,7 @@ In order, cheapest first. Steps 1 and 2 are prerequisites, not options.
 
 ## The five-stage over one-stage separation: 0.563, and it is probably an artefact
 
-**DOWNGRADED 2026-09-01, from "the most robust number in the study".** Read the
+**DOWNGRADED 2026-09-01, from its earlier billing as the study's least noise-sensitive number.** Read the
 staircase section below before quoting any figure here.
 
 THE DETECTOR RETURNS THE FIRST UPCROSSING OF 0.5, AND 8 OF 16 CANONICAL UNIFORM
@@ -2334,7 +2353,7 @@ worth stating that the conclusion survived both corrections.)
 
 THE ROUTER SHARE ABOVE IS UNAFFECTED BY EITHER CORRECTION. It is
 `(pipeline - fused) / pipeline` within one run, so no calibration ceiling enters
-it, and it is routing-robust: 30.1 / 38.3 / 47.9 / 34.0 pooled against
+it, and routing does not move it: 30.1 / 38.3 / 47.9 / 34.0 pooled against
 30.3 / 38.3 / 47.9 / 34.2 uniform. It is the one result this arm contributes that
 does not depend on the ridge it is not entitled to quote.
 
@@ -2501,7 +2520,7 @@ found in TEMPO, RaMP, Yun or Sieve:
    need not. So the detector is not the problem; an estimator that structurally
    cannot see a staircase does not fit these curves.
  - the crossing as a FIXED POINT on a staircase, and therefore the possibility of
-   several crossings or none.
+   two or more crossings, or none.
  - the step-position law in GLOBAL batch, `T = n BM E/k`, validated across an 8x
    spread in `E/k`. TEMPO and RaMP both stay in tokens-per-expert.
 
@@ -2613,7 +2632,7 @@ cells, RETRACTIONS (i). There is no knife edge to measure.)
 
     AI(R) = ridge   =>   R = ridge b Q(R) / 2,   with Q a STEP function of R
 
-A step function on both sides can have several solutions, or none inside a step.
+A step function on both sides can have two or more solutions, or none inside a step.
 So the multiple crossings recorded above are not a detector artefact; they are a
 property of the equation. Solving it:
 
@@ -2735,8 +2754,8 @@ of the read ceiling have footprints 20 to 1000x L2.
 
 **The only cells where the weights fit are the cells that do not need the
 bandwidth.** That is structural, not a sampling accident: saturating HBM needs
-many waves, many waves needs many active experts, and many active experts is
-hundreds of MiB. The two regimes cannot be occupied at once, which retires
+the CTA waves of a large active-expert set, and the 83 rows at 100.3% of the read ceiling
+carry weight footprints of 20 to 1000x L2. The two regimes cannot be occupied at once, which retires
 hot-expert L2 caching with a mechanism rather than a null result.
 
 ### One expert can never hold most of the rows
@@ -2758,8 +2777,8 @@ is arithmetically impossible above `k = 2`. And it is doubly wrong, because cost
 tracks ACTIVE EXPERTS rather than rows: a cold expert holding one row still costs
 a full weight read, so row share is the wrong ranking regardless.
 
-This bounds the whole family of skew-exploiting designs, including several
-proposed and discarded in this project.
+This bounds the whole family of skew-exploiting designs, including the ones
+this project proposed and discarded.
 
 ---
 

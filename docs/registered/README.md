@@ -789,12 +789,12 @@ CLEAN table in `scripts/scoring/rental2/` and `SCORES.md`). CLEAN keeps every fl
 -1.75% tp2), co-primary INCONCLUSIVE, w2 offset H_EST HOLDS on all three. Part 3: K1, K2
 (0.254), K4 HOLD; K3 cycle form HOLDS, ns form FALSIFIED (r 0.921, f ratio 0.597);
 identification INCONCLUSIVE. Part 2: tp8 P0 to P5 HELD, P6 and P8 FALSIFIED; Granite-3B P0
-FAILED (graph-replay cells), P1 and P6 HELD; JetMoE P1 FALSIFIED as scored, P8 FALSIFIED;
+FAILED (graph-replay cells), P1 and P6 HELD; JetMoE P1 NOT SCORED (registered n = 5 not on the plan), P8 FALSIFIED;
 Granite-1B P0 FAILED, P1 and P8 FALSIFIED; P3 pooled FALSIFIED. Part 1: both primaries
 INCONCLUSIVE with every hypothesis FALSIFIED (s rose under num_stages 8); s6 NL; 8x7B
 x-invariance and T5 NOT SCORED (ALL: HELD; R0, R1, R2 FALSIFIED at rho_BK 0.357, R2h
-INCONCLUSIVE, board check -17%); H2c l2bk128 SELECTED; H3 FALSIFIED. Two scorer readings are
-left to the owner (`SCORES.md`, end): H2c does not apply the V6 rule to l2bk32, and P1 counts
-JetMoE's never-run n = 5 cells as outside. Seen on the pages: the 1005 capture's GEMM cells
+INCONCLUSIVE, board check -17%); H2c l2bk128 SELECTED, l2bk32 INCONCLUSIVE (FLAGGED V6); H3 FALSIFIED. Two post-page scorer
+fixes, in 9e04d99 (`SCORES.md`, end): H2c now applies the registered V6 rule to l2bk32, and P1
+reads NOT SCORED where a registered tread was never planned (JetMoE n = 5). Seen on the pages: the 1005 capture's GEMM cells
 read 1003 to 1005 MHz, so the "about 1.4% low, uniformly" above holds for the null kernel
 only (GEMM cells read 0.5 to 5.5% low at 1710). The files above are unchanged.

@@ -1002,7 +1002,10 @@ noisy GEMM cannot hide a declaration effect; V8 DRAM bytes agree with 32 x
 the L2 fill sectors within 2% (asked
 only if proven); V9 R3's five-part buffer proof; V10, only on a page taken
 under `--page-lock-mhz F`, each GEMM's clock, fitted over its cells through
-ncu's fixed duration overhead, within one 15 MHz step of F (6.13).
+ncu's fixed duration overhead, within one 15 MHz step of F (6.13). CORRECTED 2026-10-05:
+the fitted t0 is not a fixed ncu overhead: on rental 2's tp4 cells the same fit reads 1005.0 MHz + 0.3 us at a 1005 MHz lock and 9.9 and 4.7 us at 1710, and the L2-clock fit gives t0 0.4 to 2.1 us on every floor capture. t0 is a clock-dependent shortfall of `sm__cycles_elapsed.avg` against the duration, and the t0 / f fit is degenerate (`scripts/lock_gate.py` module docstring; docs/FINDINGS.md, Rental 2,
+Diagnosis). V10 now reads the lock from nvidia-smi and the page's independent clocks
+(`lock_gate.check_lock`; docs/FINDINGS.md, Rental 2, Gate replacement) and prints the fit only.
 
 V6 AND THE L2 REQUEST COALESCER (2026-09-25). The arms issue identical loads
 (one kernel binary per GEMM: registers and occupancy limits are equal across
@@ -1301,7 +1304,12 @@ the shortest kernels (1632 at 0.28 ms, 1697 at 4.8 ms), while the fit read
 failed every one of those captures on a lock that held. The per-cell scatter
 round the fit reached 2.4 steps, on the 0.28 ms n=1 w2 kernels, which is what
 the 3-step bound was set from; a slip still moves the fitted f or leaves its
-cells off the line.
+cells off the line. CORRECTED 2026-10-05: the offset is not fixed. The fitted t0 is not a fixed ncu overhead: on rental 2's tp4 cells the same fit reads 1005.0 MHz + 0.3 us at a 1005 MHz lock and 9.9 and 4.7 us at 1710, and the L2-clock fit gives t0 0.4 to 2.1 us on every floor capture. t0 is a clock-dependent shortfall of `sm__cycles_elapsed.avg` against the duration, and the t0 / f fit is degenerate:
+whenever t0 comes out small, f comes out low, so FL1 failed small-shard captures whose lock
+held (`scripts/lock_gate.py` module docstring; docs/FINDINGS.md, Rental 2, Diagnosis and
+Corrections, item 2). FL1 and V10 as this paragraph describes them were replaced on
+2026-10-05 by `lock_gate.check_lock` (nvidia-smi either side, the null kernel, the base twin's
+cell-matched ratio); the fit is printed beside the verdict and decides nothing.
 
 ```bash
 python scripts/dram_counter_route.py --dry-run --family r3-arms --floor --chip gh100

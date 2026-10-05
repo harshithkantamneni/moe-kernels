@@ -24,3 +24,10 @@ rental 2 on.
 floor captures key their gates `number`, so `floor.score.txt` printed `gates [(None,
 'FAIL')]`. It now reads `number` first; `floor.score.{json,txt}` were regenerated and differ
 only in those two labels (now `FL1`). No number or verdict changed.
+
+**Moved 2026-10-05 (no output changed).** `atile.score.txt` carried 17 hand-written verdict
+lines at its top and `l2.score.txt` 12 at its end, which no rerun prints. They are now in
+`NOTES.md` beside this file, unchanged, and both `.score.txt` files are the scorers' own output
+again (a rerun reproduces all eight committed outputs byte for byte). T1 on Qwen2-57B is the
+scorer's NOT HELD; the hand note's "Neither pass nor fail" says the same, and the registration
+defines no INCONCLUSIVE for T1.

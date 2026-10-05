@@ -65,4 +65,13 @@ Run unchanged on `results/published/2026-10-02-nvidia_gh200_480gb-rental2-sessio
 outputs are `{knobs,launch,const,w1floor}.score.{json,txt}` in this directory and
 `SCORES.md` tabulates every registered prediction (ALL, CLEAN, registered verdict, key
 numbers). No scorer crashed or failed to read a page, and none was edited after the pages:
-there is no post-page fix. `SCORES.md` ends with two readings left to the owner.
+there is no post-page fix. CORRECTED 2026-10-05: two scorers were edited after the pages, in
+the publishing commit 9e04d99 (`git diff 38898b4 9e04d99 -- score_knobs.py score_launch.py`),
+and both fixes are recorded at the end of `SCORES.md` and in docs/FINDINGS.md (Rental 2):
+(1) `score_knobs.py`'s H2c branch now applies the registered V6 flag, so both tp2 l2bk32
+verdicts read INCONCLUSIVE (FLAGGED V6), the earlier reading kept as
+`verdict_before_controls`; (2) `score_launch.py`'s P1 reads NOT SCORED where a registered
+tread is not on the plan (JetMoE n = 5), where it had counted the missing cells as outside.
+Each changed a printed verdict to what the registration's text says; neither touches a band,
+cell set or estimator. The committed outputs are the post-fix ones. `SCORES.md` ends with
+two readings left to the owner.

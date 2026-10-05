@@ -191,7 +191,9 @@ def drop_above_lock(page: dict, step: float) -> tuple[dict, list[str]]:
     """Rule 2: a copy of `page` without every (cell, GEMM) whose own measured clock
     (`sm_clock_mhz`, its counters' cycles over its duration) sits more than `step`
     above the capture's lock, and the list of what was dropped. A clock above the
-    lock cannot be run; it is the fixed ncu duration offset on a short GEMM. The
+    lock cannot be run; it is the counter shortfall on a short GEMM (registered as "the
+    fixed ncu duration offset"; CORRECTED 2026-10-05: the offset is not fixed, it falls to
+    0.3 us at 1005 MHz, see scripts/lock_gate.py's module docstring). The rule is unchanged. The
     reading's known bias is downward (about -1.4%), so this can leave such a cell
     in but never drops one that ran at the lock."""
     import copy

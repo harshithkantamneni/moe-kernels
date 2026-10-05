@@ -248,7 +248,12 @@ launch floor, 14 units on one GH200, and rental 2 of 2026-10-02: the TP-shard fl
 captures at unseen treads and 1005 MHz, the num_stages / BLOCK_K / slot-pad knob pages and
 the two-process launch-floor rerun, 24 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms.
+sessions rather than arms. The 13 GH200 sessions ran on nine distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, only
+Mixtral 8x22B's was tested end to end, from predicted bytes to predicted time, and held
+(1.71% rms); Qwen2-57B's predicted-bytes test failed, and every other held-out model was
+timed from its own counted bytes, which tests the timing model alone (docs/FINDINGS.md, the
+2026-09-29/30 held-out queue). Rental 3's end-to-end test is planned, not yet registered.
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile
