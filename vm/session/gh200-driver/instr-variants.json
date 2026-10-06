@@ -1,0 +1,11 @@
+[
+ {"id": "u8-stf", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [2,4,6], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=cta"},
+ {"id": "u9-stk64s4", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [64], "treads": [4,6], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=iter,every=1,marks=64"},
+ {"id": "u10-stk32s4", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [64], "treads": [4,6], "arms": ["native"], "block_k": 32, "num_stages": 4, "spec": "stamps=iter,every=1,marks=64"},
+ {"id": "u11-stk128s4", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [64], "treads": [4,6], "arms": ["native"], "block_k": 128, "num_stages": 4, "spec": "stamps=iter,every=1,marks=64"},
+ {"id": "u12-stk64s8", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [64], "treads": [4,6], "arms": ["native"], "block_k": 64, "num_stages": 8, "spec": "stamps=iter,every=1,marks=64"},
+ {"id": "u13-sttail", "kind": "stamps", "model": "mixtral-8x22b", "groups": [8], "treads": [1], "arms": ["native", "private"], "block_k": 64, "num_stages": 4, "spec": "stamps=iter,every=1,marks=112"},
+ {"id": "u14-sttail", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [1,2], "arms": ["native"], "block_k": 64, "num_stages": 4, "spec": "stamps=iter,every=1,marks=112"},
+ {"id": "u15-stdead4", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 4, "spec": "stamps=cta"},
+ {"id": "u16-stdead2", "kind": "stamps", "model": "olmoe-1b-7b", "groups": [8], "treads": [2,4], "arms": ["native", "shared"], "block_k": 64, "num_stages": 8, "spec": "stamps=cta"}
+]

@@ -5,7 +5,7 @@ pushed by `scripts/vm_results_push.sh` after each step of
 `scripts/gh200_model_session.sh` (docs/LAMBDA.md section 3c). Nothing here is
 curated: this branch is the raw record the publish step reads from.
 
-- measured commit: `unknown` (`vm/session/commit.txt`)
+- measured commit: `85ef38cddc0f76f03f9b0d0cf17bae2e121e7c3d` (`vm/session/commit.txt`)
 - `vm/results/` is `~/moe/results`, `vm/session/` is `~/moe/session`
 - `SHA256SUMS`: the manifest of every file under `vm/` as this push committed
   it (the VM's files, copied with `cp -p` between two steps, when nothing is

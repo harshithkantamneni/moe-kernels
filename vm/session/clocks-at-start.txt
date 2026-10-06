@@ -1,0 +1,2 @@
+persistence_mode, clocks.current.sm [MHz], clocks.max.sm [MHz], power.limit [W], power.default_limit [W], clocks_event_reasons.active
+Enabled, 420 MHz, 1980 MHz, 700.00 W, 900.00 W, 0x0000000000000001
