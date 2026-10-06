@@ -1,1 +1,2 @@
 prelude    exit 0 after 0 min [unit 1/24 -]
+floor      exit 0 after 2 min [unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1]
