@@ -3,3 +3,4 @@
 2026-10-06T22:49:01Z prelude (unit 1/25 -): exit 0 (0 min)
 2026-10-06T22:49:28Z calibrate (unit 2/25 mixtral-8x7b r4): exit 0 (0 min)
 2026-10-06T22:49:40Z rulers (unit 3/25 - r4): exit 0 (0 min)
+2026-10-06T22:59:29Z gpubench (unit 4/25 - r4): exit 0 (10 min)

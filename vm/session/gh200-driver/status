@@ -23,3 +23,7 @@
 2026-10-06T22:49:39Z rulers: exit 0 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-rulers-r4/rulers.json)
 2026-10-06T22:49:39Z rulers END: exit 0 after 0 min [unit 3/25 - r4]
 2026-10-06T22:49:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:49:40Z gpubench START: THIRD-PARTY RRZE-HPC/gpu-benches (GPL-3.0) at the 1710 lock: latency, stream, l2-cache; fetched into $MOE_HOME/ext, never the repo [unit 4/25 - r4] (estimate 8 min, cap 20 min, 387 min left)
+2026-10-06T22:59:29Z gpubench: exit 0 (third-party GPL-3.0 code at its pin, outside the checkout; /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/constants.json)
+2026-10-06T22:59:29Z gpubench END: exit 0 after 10 min [unit 4/25 - r4]
+2026-10-06T22:59:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
