@@ -3,3 +3,4 @@
 2026-10-06T06:58:56Z prelude (unit 1/24 -): exit 0 (0 min)
 2026-10-06T07:01:21Z floor (unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
 2026-10-06T07:02:48Z floor (unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:03:14Z calibrate (unit 4/24 qwen2-57b-a14b-tp8 e2e): exit 0 (0 min)
