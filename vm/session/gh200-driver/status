@@ -44,3 +44,6 @@
 2026-10-06T07:38:59Z timed: 2026-10-06T07:38:54Z G=3 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=216 worst=1710.0 MHz, 851 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modelqwen2_57b_a14b-5989ba0c
 2026-10-06T07:38:59Z timed END: exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
 2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:39:02Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 3 8 32, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32] (estimate 9 min, cap 30 min, 348 min left)
+2026-10-06T07:39:02Z bytes: the registered list G = 3 8 32 (qwen2-57b-a14b-tp8, e2e): no tail drop, no re-price, no base-clock control
+2026-10-06T07:40:48Z bytes: G=3 page exit 3 after 104 s
