@@ -9,3 +9,4 @@ stamps     exit 2 after 0 min [unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-t
 stamps     exit 2 after 0 min [unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64]
 stamps     exit 2 after 0 min [unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4]
 stamps     exit 2 after 0 min [unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128]
+stamps     exit 2 after 0 min [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8]
