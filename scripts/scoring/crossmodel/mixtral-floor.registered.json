@@ -1,0 +1,78 @@
+{
+ "tool": "scripts/paper/score_registered.py",
+ "case": "mixtral-floor",
+ "model": "mixtral-8x7b",
+ "registration": "docs/registered/README.md (2026-09-30 floor-only sessions)",
+ "session": "results/published/2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session",
+ "ledger_rows": [
+  43
+ ],
+ "ksteps": {
+  "w1": 64,
+  "w2": 224
+ },
+ "floor": {
+  "r3f-g64.json": {
+   "w1": {
+    "treads": [
+     2,
+     3,
+     4,
+     6,
+     7,
+     8
+    ],
+    "slope": 349.86773260934007,
+    "all_cell_slope": 349.86773260934007,
+    "registered": 352.2,
+    "band": null,
+    "rel": -0.006621997134184876,
+    "verdict": "HELD"
+   },
+   "w2": {
+    "treads": [
+     6,
+     7,
+     8
+    ],
+    "slope": 354.2475073242189,
+    "all_cell_slope": 357.94178780691965,
+    "registered": 348.5,
+    "band": null,
+    "rel": 0.01649213005514749,
+    "verdict": "HELD"
+   }
+  },
+  "r3f-g64-lock1710.json": {
+   "w1": {
+    "treads": [
+     2,
+     3,
+     4,
+     6,
+     7,
+     8
+    ],
+    "slope": 350.08659556797573,
+    "all_cell_slope": 350.08659556797573,
+    "registered": 352.2,
+    "band": null,
+    "rel": -0.006000580442999004,
+    "verdict": "HELD"
+   },
+   "w2": {
+    "treads": [
+     6,
+     7,
+     8
+    ],
+    "slope": 348.71069327218174,
+    "all_cell_slope": 356.53970091527816,
+    "registered": 348.5,
+    "band": null,
+    "rel": 0.0006045717996605582,
+    "verdict": "HELD"
+   }
+  }
+ }
+}

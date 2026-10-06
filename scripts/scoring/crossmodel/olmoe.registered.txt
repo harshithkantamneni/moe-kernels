@@ -1,0 +1,15 @@
+olmoe: olmoe-1b-7b, docs/registered/2026-09-29-olmoe-1b-7b-gh200.json, results/published/2026-09-29-nvidia_gh200_480gb-olmoe-session (ledger rows [21, 22, 23])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 360.5 band [340.0, 365.0] all-cell 360.5 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 401.6 printed all-cell 401.6 printed
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 359.4 band [340.0, 365.0] all-cell 359.4 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 401.7 printed all-cell 401.7 printed
+  time from predicted bytes (printed): 76 cells rms 3.83% worst -5.81% beyond 5% 16
+  G>=8 SHARED slope n=2..6: G=8 0.1705, G=32 0.1707 (registered 0.1597, band [0.1565, 0.1629])
+  bytes w1 all arms                                       208 cells rms 8.03% worst 19.06% beyond 5% 92
+  bytes w1 shared+private                                 140 cells rms 7.00% worst 19.04% beyond 5% 46
+  bytes private w1                                         72 cells rms 1.97% worst 4.32% beyond 5% 0
+  bytes private w2                                         72 cells rms 0.30% worst -1.53% beyond 5% 0
+  bytes shared w1                                          68 cells rms 9.83% worst 19.04% beyond 5% 46
+  bytes shared w2                                          68 cells rms 2.92% worst 7.80% beyond 5% 4
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 1.77% worst 3.41% beyond 5% 0
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  236 cells rms 5.42% worst 19.04% beyond 5% 46

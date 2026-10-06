@@ -1078,7 +1078,11 @@ they were scored; nothing is fitted or adopted.
   fails FL1, reads -2.22%); the per-CTA constant is measured on four of them and
   predicted on the other four. CORRECTED 2026-10-02: on the lock captures, which held the
 lock, JetMoE's w2 reads +2.61% and Granite's -2.22%: within 2% on the base captures, 2.6% on
-either (Rental 2, Corrections, item 1.)
+either (Rental 2, Corrections, item 1.) CORRECTED 2026-10-05: "holds within 2% on every GEMM" counts
+registered floor predictions that held, each scored as registered; it is not a claim that 344.1 + F / S
+is the floor's law. Rental 1's tp8 F4 w1 is FALSIFIED (-3.6%) and rental 2's part 4, the law's test on
+unseen tread sets, selected NEITHER family, so no per-CTA floor law is claimed (Rental 2, What the
+paper can claim).
 
 **What the paper can claim, after eight tests.** From one card's 8x7B fit,
 with nothing fitted on the target, time from a model's own bytes to 2% on two
@@ -1090,7 +1094,9 @@ only. The end-to-end claim, predicted bytes to predicted time, rests on one unse
 Rental 3's end-to-end test on `qwen2-57b-a14b-tp8` is planned; it is not yet registered.
 Also from 8x7B's fit: PRIVATE bytes to 5% on
 seven of the four models' eight GEMMs; the per-CTA floor on six of seven
-scorable GEMMs, down to an 8-k-step CTA. Not claimed: time where the call sits near its
+scorable GEMMs, down to an 8-k-step CTA (registered predictions that held on the base captures;
+CORRECTED 2026-10-05: not a floor law, which rental 2 did not select, Rental 2, What the paper can
+claim). Not claimed: time where the call sits near its
 0.24 to 0.29 ms floor (Granite to n = 5, possibly JetMoE at n = 1) or where a
 GEMM runs one to one and a half waves (JetMoE at n = 3); the G >= 8 slope
 wherever those cells are in its window. Each of the two regimes is named here

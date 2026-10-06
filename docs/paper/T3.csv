@@ -1,0 +1,13 @@
+commit,term,commit date,subject,first registration carrying it
+f97df00,r3_lock_fit (lock gate fit),2026-09-27T04:58:44-05:00,dram_counter_route: V10 and FL1 fit each GEMM's clock through ncu's fixed duration overhea,
+8900699,knee P_KNEE = 14,2026-09-27T13:14:38-05:00,"r3_timing_model: the knee, a soft max (f^p + m^p)^(1/p) at p = 14, in place of the hard ma",2026-09-27-mixtral-8x22b
+e5eced6,MIX byte view,2026-09-27T13:31:35-05:00,"wave_split_bytes: the mix view (w1's activation reuse in fill, w2's in the column-pass wor",2026-09-27-mixtral-8x22b
+5474743,TAIL partial-wave lifetime,2026-09-28T00:40:40-05:00,r3_timing_model: a partial last wave costs at least one CTA lifetime (S c occ); no paramet,2026-09-28-qwen2-57b-a14b
+fb440c5,stage 3 A law,2026-09-28T01:01:46-05:00,"wave_split_bytes: stage 3 gives SHARED/NATIVE w2 their own A law (C_A2, beta_A2), MIX view",2026-09-28-qwen2-57b-a14b
+b994aa0,lock read-back,2026-09-28T00:13:43-05:00,gh200_model_session: every nvidia-smi lock is read back before a capture (the 8x22B floor',
+ea2c77c,dead-CTA term,2026-09-29T00:29:08-05:00,r3_timing_model: the grid's dead CTAs cost DEAD_CTA_NS = 1.333 ns each past one effective ,2026-09-29-olmoe-1b-7b
+15a9533,LATER_MISS capacity rule,2026-09-29T00:56:05-05:00,wave_split_bytes: a later cross-group slab re-read is a certain miss only when its LRU reu,2026-09-29-olmoe-1b-7b
+0f77622,per-CTA fixed cost F,2026-09-29T12:24:11-05:00,"r3_timing_model: a CTA's floor is S c + F, the per-CTA fixed cost F measured on the counte",2026-09-29 four held-out
+a156392,4+-wave floor estimator,2026-09-29T18:56:33-05:00,"Registration, before any Granite page: the floor falsifier counts only cells of at least 4",2026-09-29 Granite estimator note
+79c5034,floor-only sessions,2026-09-29T23:07:36-05:00,"Floor capture treads per model so every GEMM has 3+ cells of 4+ waves (r3_floor_treads, NA",2026-09-30 floor-only sessions
+CORES,co-residency law (2026-09-30),2026-09-30,CORES in scripts/r3_timing_model.py,2026-09-30-mixtral-8x7b-tp8-floor

@@ -1,0 +1,15 @@
+granite: granite-3.0-3b-a800m, docs/registered/2026-09-29-granite-3.0-3b-a800m-gh200.json, results/published/2026-09-30-nvidia_gh200_480gb-granite-session (ledger rows [37, 38, 39, 40])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 374.2 registered 365.8 (+2.29%) all-cell 374.2 NOT SCORABLE
+  floor r3f-g64.json             w2 n=[3, 4, 6] 459.8 registered 466.5 (-1.43%) all-cell 449.5 HELD
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 373.5 registered 365.8 (+2.09%) all-cell 373.5 NOT SCORABLE
+  floor r3f-g64-lock1710.json    w2 n=[3, 4, 6] 456.1 registered 466.5 (-2.22%) all-cell 443.1 FALSIFIED
+  time from predicted bytes (printed): 0 cells rms n/a worst n/a beyond 5% 0
+  G>=8 SHARED slope n=2..6:  (registered 0.044, band None)
+  bytes w1 all arms                                       212 cells rms 15.80% worst 35.20% beyond 5% 122
+  bytes w1 shared+private                                 142 cells rms 13.73% worst 35.20% beyond 5% 61
+  bytes private w1                                         72 cells rms 3.02% worst 4.60% beyond 5% 0
+  bytes private w2                                         72 cells rms 0.17% worst 0.54% beyond 5% 0
+  bytes shared w1                                          70 cells rms 19.32% worst 35.20% beyond 5% 61
+  bytes shared w2                                          68 cells rms 3.94% worst 7.59% beyond 5% 14
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 2.62% worst 4.29% beyond 5% 0
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  238 cells rms 10.64% worst 35.20% beyond 5% 61

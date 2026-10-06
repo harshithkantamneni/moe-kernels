@@ -1,0 +1,15 @@
+jetmoe: jetmoe-8b, docs/registered/2026-09-29-jetmoe-8b-gh200.json, results/published/2026-09-29-nvidia_gh200_480gb-jetmoe-session (ledger rows [34, 35, 36])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 360.3 registered 360.4 (-0.02%) all-cell 360.3 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 368.0 registered 355.2 (+3.60%) all-cell 368.0 FALSIFIED
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 359.8 registered 360.4 (-0.16%) all-cell 359.8 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 368.6 registered 355.2 (+3.78%) all-cell 368.6 FALSIFIED
+  time from predicted bytes (printed): 58 cells rms 7.16% worst -20.37% beyond 5% 12
+  G>=8 SHARED slope n=2..6: G=8 0.1135, G=32 0.1105 (registered 0.1076, band None)
+  bytes w1 all arms                                       210 cells rms 16.32% worst -62.16% beyond 5% 44
+  bytes w1 shared+private                                 141 cells rms 14.08% worst -62.10% beyond 5% 22
+  bytes private w1                                         72 cells rms 0.19% worst 0.58% beyond 5% 0
+  bytes private w2                                         72 cells rms 0.59% worst -2.69% beyond 5% 0
+  bytes shared w1                                          69 cells rms 20.13% worst -62.10% beyond 5% 22
+  bytes shared w2                                          68 cells rms 11.03% worst -24.76% beyond 5% 42
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 8.92% worst -15.55% beyond 5% 26
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  237 cells rms 11.23% worst -62.10% beyond 5% 35

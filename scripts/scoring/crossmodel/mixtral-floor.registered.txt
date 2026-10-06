@@ -1,0 +1,5 @@
+mixtral-floor: mixtral-8x7b, docs/registered/README.md (2026-09-30 floor-only sessions), results/published/2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session (ledger rows [43])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6, 7, 8] 349.9 registered 352.2 (-0.66%) all-cell 349.9 HELD
+  floor r3f-g64.json             w2 n=[6, 7, 8] 354.2 registered 348.5 (+1.65%) all-cell 357.9 HELD
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6, 7, 8] 350.1 registered 352.2 (-0.60%) all-cell 350.1 HELD
+  floor r3f-g64-lock1710.json    w2 n=[6, 7, 8] 348.7 registered 348.5 (+0.06%) all-cell 356.5 HELD

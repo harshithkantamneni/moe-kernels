@@ -1,0 +1,5659 @@
+[
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1703.9215630031192,
+    "t0": 18.762602808972822,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 549.184
+   },
+   {
+    "g": "w2",
+    "f": 1695.1154206316025,
+    "t0": 18.427447637144244,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1747,
+      281.0,
+      -2.4
+     ],
+     [
+      "shared/1",
+      1744,
+      283.1,
+      -2.2
+     ],
+     [
+      "private/1",
+      1739,
+      281.3,
+      -1.9
+     ]
+    ],
+    "minlen": 280.98133333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.2958215041683,
+    "t0": 21.27783922383096,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 552.4266666666666
+   },
+   {
+    "g": "w2",
+    "f": 1703.3732354236156,
+    "t0": 16.527135832136498,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1733,
+      278.9,
+      -1.5
+     ],
+     [
+      "shared/1",
+      1731,
+      280.0,
+      -1.4
+     ],
+     [
+      "private/1",
+      1734,
+      279.8,
+      -1.5
+     ]
+    ],
+    "minlen": 278.8906666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1703.6206056650008,
+    "t0": 24.541509251483717,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1732,
+      556.6,
+      -1.4
+     ],
+     [
+      "shared/1",
+      1735,
+      555.8,
+      -1.6
+     ],
+     [
+      "private/1",
+      1737,
+      558.6,
+      -1.7
+     ]
+    ],
+    "minlen": 555.7973333333334
+   },
+   {
+    "g": "w2",
+    "f": 1694.0273237897925,
+    "t0": 15.968901733029867,
+    "off": [
+     "fitted 1694"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1729,
+      277.1,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1728,
+      277.7,
+      -1.2
+     ],
+     [
+      "private/1",
+      1725,
+      278.4,
+      -1.0
+     ]
+    ],
+    "minlen": 277.1306666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.074988200669,
+    "t0": 23.243227319100406,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1729,
+      559.0,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1727,
+      557.7,
+      -1.1
+     ],
+     [
+      "private/1",
+      1728,
+      557.1,
+      -1.2
+     ]
+    ],
+    "minlen": 557.12
+   },
+   {
+    "g": "w2",
+    "f": 1697.7821252621868,
+    "t0": 16.090121607642153,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      275.6,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1729,
+      274.4,
+      -1.2
+     ],
+     [
+      "private/1",
+      1725,
+      277.7,
+      -1.0
+     ]
+    ],
+    "minlen": 274.3893333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.6923711925335,
+    "t0": 21.288071582367177,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 552.736
+   },
+   {
+    "g": "w2",
+    "f": 1705.6833418512765,
+    "t0": 18.107027135001264,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1737,
+      281.1,
+      -1.8
+     ],
+     [
+      "shared/1",
+      1741,
+      278.1,
+      -2.0
+     ],
+     [
+      "private/1",
+      1740,
+      279.1,
+      -2.0
+     ]
+    ],
+    "minlen": 278.08
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.6971534745278,
+    "t0": 20.478282537956257,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "shared/1",
+      1725,
+      562.2,
+      -1.0
+     ]
+    ],
+    "minlen": 560.896
+   },
+   {
+    "g": "w2",
+    "f": 1697.941102620166,
+    "t0": 15.20821833490883,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1725,
+      276.7,
+      -1.0
+     ]
+    ],
+    "minlen": 275.296
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.4464432697946,
+    "t0": 20.49260538744461,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 549.5786666666667
+   },
+   {
+    "g": "w2",
+    "f": 1701.770689959474,
+    "t0": 17.788252600002103,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1743,
+      277.4,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1741,
+      281.4,
+      -2.0
+     ],
+     [
+      "private/1",
+      1733,
+      279.8,
+      -1.5
+     ]
+    ],
+    "minlen": 277.4186666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1703.8831516600012,
+    "t0": 19.502283837420865,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 555.4773333333334
+   },
+   {
+    "g": "w2",
+    "f": 1700.9589384278022,
+    "t0": 15.681503326243488,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 274.048
+   }
+  ]
+ },
+ {
+  "file": "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1717.2334417775996,
+    "t0": 28.518092789517016,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 750.192
+   },
+   {
+    "g": "w2",
+    "f": 1701.2304383550886,
+    "t0": 18.815186971879566,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 404.992
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.5312897196384,
+    "t0": 26.12116027584765,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 920.1173333333334
+   },
+   {
+    "g": "w2",
+    "f": 1699.1774234314144,
+    "t0": 20.282959933163134,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 528.192
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1708.7401442732962,
+    "t0": 30.093899693467655,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 927.4346666666667
+   },
+   {
+    "g": "w2",
+    "f": 1705.7782571062935,
+    "t0": 22.73633582243696,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1726,
+      529.1,
+      -1.1
+     ],
+     [
+      "shared/1",
+      1726,
+      524.6,
+      -1.1
+     ],
+     [
+      "private/1",
+      1729,
+      497.7,
+      -1.3
+     ]
+    ],
+    "minlen": 497.7493333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1704.6669971595466,
+    "t0": 34.28637974832114,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      922.2,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1736,
+      921.4,
+      -1.7
+     ],
+     [
+      "private/1",
+      1736,
+      922.1,
+      -1.7
+     ]
+    ],
+    "minlen": 921.376
+   },
+   {
+    "g": "w2",
+    "f": 1698.397666705093,
+    "t0": 23.477393834914082,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1729,
+      511.6,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1726,
+      534.6,
+      -1.0
+     ],
+     [
+      "private/1",
+      1727,
+      535.5,
+      -1.1
+     ]
+    ],
+    "minlen": 511.6053333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.9304641784006,
+    "t0": 36.48308300345903,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1737,
+      921.8,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1737,
+      922.2,
+      -1.7
+     ],
+     [
+      "private/1",
+      1733,
+      920.9,
+      -1.5
+     ]
+    ],
+    "minlen": 920.9066666666666
+   },
+   {
+    "g": "w2",
+    "f": 1701.7066005777292,
+    "t0": 23.636864244857104,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1730,
+      499.7,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1731,
+      500.0,
+      -1.4
+     ],
+     [
+      "private/1",
+      1727,
+      513.0,
+      -1.1
+     ]
+    ],
+    "minlen": 499.712
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.081702979024,
+    "t0": 28.39498921552254,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 927.328
+   },
+   {
+    "g": "w2",
+    "f": 1706.0652140543946,
+    "t0": 24.55510115668201,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1728,
+      509.5,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1730,
+      500.4,
+      -1.3
+     ],
+     [
+      "private/1",
+      1732,
+      509.4,
+      -1.5
+     ]
+    ],
+    "minlen": 500.4053333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.0413901293982,
+    "t0": 30.726622678952292,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "private/1",
+      1726,
+      922.5,
+      -1.1
+     ]
+    ],
+    "minlen": 922.4853333333334
+   },
+   {
+    "g": "w2",
+    "f": 1701.2914167531094,
+    "t0": 20.739737585754366,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 512.6293333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1709.174013580083,
+    "t0": 29.16792193546705,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "private/1",
+      1725,
+      926.9,
+      -1.0
+     ]
+    ],
+    "minlen": 926.9333333333334
+   },
+   {
+    "g": "w2",
+    "f": 1706.021013393037,
+    "t0": 25.58220827055746,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1739,
+      497.2,
+      -1.9
+     ],
+     [
+      "shared/1",
+      1737,
+      513.4,
+      -1.8
+     ],
+     [
+      "private/1",
+      1735,
+      505.8,
+      -1.7
+     ]
+    ],
+    "minlen": 497.248
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.555236640937,
+    "t0": 26.548793027735314,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 926.9546666666666
+   },
+   {
+    "g": "w2",
+    "f": 1703.0565981837763,
+    "t0": 20.29680838885112,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 513.3546666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1800.7874904835955,
+    "t0": 41.296443409049886,
+    "off": [
+     "fitted 1801",
+     "n=2 1801(-5.7st)",
+     "n=3 1798(-5.5st)",
+     "n=4 1804(-5.9st)",
+     "n=6 1800(-5.7st)"
+    ],
+    "ncells": 4,
+    "above": [
+     [
+      "n=2",
+      1801,
+      1209.1,
+      -5.7
+     ],
+     [
+      "n=3",
+      1798,
+      1783.4,
+      -5.5
+     ],
+     [
+      "n=4",
+      1804,
+      2350.7,
+      -5.9
+     ],
+     [
+      "n=6",
+      1800,
+      3507.9,
+      -5.7
+     ]
+    ],
+    "minlen": 1209.072
+   },
+   {
+    "g": "w2",
+    "f": 1783.0224394316162,
+    "t0": 19.904962062670382,
+    "off": [
+     "fitted 1783",
+     "n=2 1780(-4.5st)",
+     "n=3 1781(-4.5st)",
+     "n=4 1788(-4.9st)",
+     "n=6 1781(-4.5st)"
+    ],
+    "ncells": 4,
+    "above": [
+     [
+      "n=2",
+      1780,
+      641.9,
+      -4.5
+     ],
+     [
+      "n=3",
+      1781,
+      939.9,
+      -4.5
+     ],
+     [
+      "n=4",
+      1788,
+      1232.9,
+      -4.9
+     ],
+     [
+      "n=6",
+      1781,
+      1800.6,
+      -4.5
+     ]
+    ],
+    "minlen": 641.936
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.760370084187,
+    "t0": 23.030359621488024,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1728,
+      680.3,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1731,
+      700.1,
+      -1.4
+     ],
+     [
+      "private/1",
+      1728,
+      700.4,
+      -1.2
+     ]
+    ],
+    "minlen": 680.3413333333334
+   },
+   {
+    "g": "w2",
+    "f": 1705.3091697009143,
+    "t0": 13.742574937555473,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 346.0693333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.7282291503636,
+    "t0": 18.03602167794388,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 684.0746666666666
+   },
+   {
+    "g": "w2",
+    "f": 1703.703359932064,
+    "t0": 13.103204898867057,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 349.81333333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1705.5423795100608,
+    "t0": 23.203673114104195,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1726,
+      678.9,
+      -1.0
+     ],
+     [
+      "shared/1",
+      1725,
+      699.9,
+      -1.0
+     ]
+    ],
+    "minlen": 678.88
+   },
+   {
+    "g": "w2",
+    "f": 1703.7222317879155,
+    "t0": 13.294944311399012,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 345.0133333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1704.2164447655302,
+    "t0": 21.40541564317094,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "shared/1",
+      1726,
+      701.7,
+      -1.1
+     ]
+    ],
+    "minlen": 680.928
+   },
+   {
+    "g": "w2",
+    "f": 1703.3116326047957,
+    "t0": 13.070032808712218,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 345.7493333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.8604067752158,
+    "t0": 19.670463057614864,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 683.552
+   },
+   {
+    "g": "w2",
+    "f": 1705.2603330333252,
+    "t0": 14.402001974346815,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 358.2506666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1705.1050286886866,
+    "t0": 19.48398737113271,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 681.1306666666667
+   },
+   {
+    "g": "w2",
+    "f": 1704.6123902532818,
+    "t0": 13.134011208663463,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 345.8986666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.5324474082267,
+    "t0": 17.320896251857747,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 685.8666666666667
+   },
+   {
+    "g": "w2",
+    "f": 1707.0244252768616,
+    "t0": 15.053925473218785,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 376.5333333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.9972364058835,
+    "t0": 20.31561694715917,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 682.9546666666666
+   },
+   {
+    "g": "w2",
+    "f": 1706.6289679118634,
+    "t0": 15.186244575242512,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 347.8293333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1713.248511029868,
+    "t0": 27.106838725375013,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 932.816
+   },
+   {
+    "g": "w2",
+    "f": 1717.2915354765705,
+    "t0": 21.86116358585749,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 502.064
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1677.680753750146,
+    "t0": 8.213123702938319,
+    "off": [
+     "fitted 1678",
+     "native/1 1757(-3.0st)",
+     "native/4 1664(+3.1st)",
+     "native/5 1657(+3.6st)",
+     "native/6 1664(+3.1st)",
+     "native/7 1661(+3.3st)",
+     "shared/1 1765(-3.5st)",
+     "shared/4 1660(+3.4st)",
+     "shared/5 1658(+3.6st)",
+     "shared/6 1661(+3.3st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1757,
+      125.4,
+      -3.0
+     ],
+     [
+      "shared/1",
+      1765,
+      125.6,
+      -3.5
+     ],
+     [
+      "private/1",
+      1756,
+      125.3,
+      -3.0
+     ]
+    ],
+    "minlen": 125.25866666666667
+   },
+   {
+    "g": "w2",
+    "f": 1647.1817933680593,
+    "t0": 0.536548772737704,
+    "off": [
+     "fitted 1647",
+     "native/2 1656(+3.7st)",
+     "native/3 1634(+5.3st)",
+     "native/4 1634(+5.3st)",
+     "native/5 1638(+5.0st)",
+     "native/6 1644(+4.5st)",
+     "native/7 1646(+4.4st)",
+     "native/8 1651(+4.1st)",
+     "native/9 1655(+3.7st)",
+     "shared/2 1649(+4.2st)",
+     "shared/3 1640(+4.8st)",
+     "shared/4 1637(+5.0st)",
+     "shared/5 1638(+5.0st)",
+     "shared/6 1642(+4.7st)",
+     "shared/7 1650(+4.1st)",
+     "shared/8 1644(+4.5st)",
+     "shared/9 1653(+3.9st)",
+     "private/2 1658(+3.6st)",
+     "private/3 1645(+4.4st)",
+     "private/4 1631(+5.5st)",
+     "private/5 1642(+4.7st)",
+     "private/6 1640(+4.9st)",
+     "private/7 1644(+4.5st)",
+     "private/8 1646(+4.4st)",
+     "private/9 1656(+3.7st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 66.4
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1687.6972894460273,
+    "t0": 7.209473066859413,
+    "off": [
+     "fitted 1688"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1753,
+      119.6,
+      -2.7
+     ],
+     [
+      "shared/1",
+      1743,
+      118.6,
+      -2.1
+     ],
+     [
+      "private/1",
+      1740,
+      121.2,
+      -2.0
+     ]
+    ],
+    "minlen": 118.57066666666667
+   },
+   {
+    "g": "w2",
+    "f": 1649.2317089623025,
+    "t0": 0.5229696131534002,
+    "off": [
+     "fitted 1649",
+     "native/2 1661(+3.4st)",
+     "native/3 1643(+4.6st)",
+     "native/4 1645(+4.4st)",
+     "native/5 1643(+4.6st)",
+     "native/6 1649(+4.2st)",
+     "native/7 1650(+4.1st)",
+     "native/8 1651(+4.0st)",
+     "native/9 1657(+3.6st)",
+     "shared/2 1666(+3.0st)",
+     "shared/3 1646(+4.4st)",
+     "shared/4 1644(+4.5st)",
+     "shared/5 1633(+5.3st)",
+     "shared/6 1642(+4.7st)",
+     "shared/7 1645(+4.5st)",
+     "shared/8 1656(+3.7st)",
+     "shared/9 1655(+3.8st)",
+     "private/2 1652(+4.0st)",
+     "private/3 1634(+5.3st)",
+     "private/4 1634(+5.3st)",
+     "private/5 1637(+5.0st)",
+     "private/6 1633(+5.3st)",
+     "private/7 1652(+3.9st)",
+     "private/8 1652(+4.0st)",
+     "private/9 1655(+3.7st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 65.36533333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1676.4263632881332,
+    "t0": 7.380331088196719,
+    "off": [
+     "fitted 1676",
+     "native/5 1660(+3.4st)",
+     "native/7 1666(+3.0st)",
+     "native/9 1665(+3.1st)",
+     "shared/3 1655(+3.8st)",
+     "shared/5 1657(+3.6st)",
+     "shared/6 1664(+3.1st)",
+     "shared/7 1660(+3.4st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1751,
+      124.4,
+      -2.6
+     ],
+     [
+      "shared/1",
+      1745,
+      125.2,
+      -2.2
+     ],
+     [
+      "private/1",
+      1746,
+      125.7,
+      -2.4
+     ]
+    ],
+    "minlen": 124.416
+   },
+   {
+    "g": "w2",
+    "f": 1648.1508105402295,
+    "t0": 0.5619790003543312,
+    "off": [
+     "fitted 1648",
+     "native/2 1664(+3.1st)",
+     "native/3 1635(+5.2st)",
+     "native/4 1648(+4.2st)",
+     "native/5 1636(+5.1st)",
+     "native/6 1646(+4.4st)",
+     "native/7 1642(+4.7st)",
+     "native/8 1649(+4.2st)",
+     "native/9 1659(+3.5st)",
+     "shared/2 1665(+3.0st)",
+     "shared/3 1642(+4.7st)",
+     "shared/4 1639(+4.9st)",
+     "shared/5 1638(+5.0st)",
+     "shared/6 1650(+4.1st)",
+     "shared/7 1647(+4.3st)",
+     "shared/8 1656(+3.6st)",
+     "shared/9 1650(+4.1st)",
+     "private/2 1652(+4.0st)",
+     "private/3 1639(+4.9st)",
+     "private/4 1629(+5.6st)",
+     "private/5 1635(+5.1st)",
+     "private/6 1633(+5.3st)",
+     "private/7 1645(+4.5st)",
+     "private/8 1650(+4.1st)",
+     "private/9 1658(+3.6st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 65.94133333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1683.2661145122584,
+    "t0": 7.775635342424502,
+    "off": [
+     "fitted 1683",
+     "shared/4 1664(+3.1st)",
+     "shared/5 1664(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1744,
+      127.6,
+      -2.2
+     ],
+     [
+      "shared/1",
+      1755,
+      124.9,
+      -2.9
+     ],
+     [
+      "private/1",
+      1756,
+      126.8,
+      -2.9
+     ]
+    ],
+    "minlen": 124.85333333333332
+   },
+   {
+    "g": "w2",
+    "f": 1645.2801878792018,
+    "t0": 0.38722245639647007,
+    "off": [
+     "fitted 1645",
+     "native/2 1657(+3.6st)",
+     "native/3 1645(+4.5st)",
+     "native/4 1633(+5.4st)",
+     "native/5 1634(+5.2st)",
+     "native/6 1643(+4.6st)",
+     "native/7 1645(+4.5st)",
+     "native/8 1652(+4.0st)",
+     "native/9 1656(+3.7st)",
+     "shared/2 1653(+3.9st)",
+     "shared/3 1643(+4.6st)",
+     "shared/4 1633(+5.4st)",
+     "shared/5 1639(+4.9st)",
+     "shared/6 1644(+4.5st)",
+     "shared/7 1648(+4.3st)",
+     "shared/8 1647(+4.3st)",
+     "shared/9 1651(+4.0st)",
+     "private/2 1644(+4.6st)",
+     "private/3 1634(+5.3st)",
+     "private/4 1624(+6.0st)",
+     "private/5 1632(+5.4st)",
+     "private/6 1637(+5.0st)",
+     "private/7 1644(+4.5st)",
+     "private/8 1644(+4.5st)",
+     "private/9 1651(+4.1st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 65.78133333333332
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1688.0668519924793,
+    "t0": 6.893313524248253,
+    "off": [
+     "fitted 1688"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1747,
+      119.6,
+      -2.4
+     ],
+     [
+      "shared/1",
+      1741,
+      121.3,
+      -2.0
+     ],
+     [
+      "private/1",
+      1747,
+      120.1,
+      -2.4
+     ]
+    ],
+    "minlen": 119.59466666666667
+   },
+   {
+    "g": "w2",
+    "f": 1653.8435514991038,
+    "t0": 1.081290202259319,
+    "off": [
+     "fitted 1654",
+     "native/3 1649(+4.2st)",
+     "native/4 1657(+3.6st)",
+     "native/5 1647(+4.3st)",
+     "native/6 1652(+4.0st)",
+     "native/7 1647(+4.3st)",
+     "native/8 1653(+3.9st)",
+     "native/9 1654(+3.8st)",
+     "shared/2 1662(+3.3st)",
+     "shared/3 1646(+4.4st)",
+     "shared/4 1649(+4.2st)",
+     "shared/5 1643(+4.6st)",
+     "shared/6 1646(+4.4st)",
+     "shared/7 1651(+4.0st)",
+     "shared/8 1663(+3.2st)",
+     "shared/9 1657(+3.6st)",
+     "private/2 1663(+3.2st)",
+     "private/3 1641(+4.7st)",
+     "private/4 1639(+4.9st)",
+     "private/5 1647(+4.3st)",
+     "private/6 1643(+4.6st)",
+     "private/7 1652(+4.0st)",
+     "private/8 1662(+3.3st)",
+     "private/9 1660(+3.4st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 82.272
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1682.8544802612223,
+    "t0": 7.319759901540354,
+    "off": [
+     "fitted 1683",
+     "native/5 1664(+3.1st)",
+     "shared/5 1661(+3.3st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1752,
+      123.0,
+      -2.7
+     ],
+     [
+      "shared/1",
+      1742,
+      125.0,
+      -2.1
+     ],
+     [
+      "private/1",
+      1754,
+      123.9,
+      -2.8
+     ]
+    ],
+    "minlen": 122.98666666666666
+   },
+   {
+    "g": "w2",
+    "f": 1648.9845984051701,
+    "t0": 0.589250500117807,
+    "off": [
+     "fitted 1649",
+     "native/2 1656(+3.7st)",
+     "native/3 1639(+4.9st)",
+     "native/4 1647(+4.3st)",
+     "native/5 1642(+4.7st)",
+     "native/6 1639(+4.9st)",
+     "native/7 1641(+4.8st)",
+     "native/8 1651(+4.0st)",
+     "native/9 1655(+3.8st)",
+     "shared/2 1664(+3.1st)",
+     "shared/3 1649(+4.2st)",
+     "shared/4 1653(+3.9st)",
+     "shared/5 1646(+4.4st)",
+     "shared/6 1639(+4.9st)",
+     "shared/7 1639(+4.9st)",
+     "shared/8 1657(+3.6st)",
+     "shared/9 1657(+3.6st)",
+     "private/2 1653(+3.9st)",
+     "private/3 1637(+5.0st)",
+     "private/4 1629(+5.6st)",
+     "private/5 1640(+4.8st)",
+     "private/6 1644(+4.6st)",
+     "private/7 1649(+4.2st)",
+     "private/8 1646(+4.4st)",
+     "private/9 1660(+3.4st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 66.15466666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1687.9022319456317,
+    "t0": 6.954021658596175,
+    "off": [
+     "fitted 1688"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1743,
+      121.3,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1735,
+      122.8,
+      -1.7
+     ],
+     [
+      "private/1",
+      1746,
+      119.0,
+      -2.3
+     ]
+    ],
+    "minlen": 119.008
+   },
+   {
+    "g": "w2",
+    "f": 1662.4790440020565,
+    "t0": 2.2139973936695316,
+    "off": [
+     "fitted 1662",
+     "native/3 1659(+3.5st)",
+     "native/4 1662(+3.2st)",
+     "native/5 1649(+4.2st)",
+     "native/6 1650(+4.1st)",
+     "native/7 1651(+4.0st)",
+     "native/8 1662(+3.3st)",
+     "native/9 1662(+3.2st)",
+     "shared/3 1662(+3.3st)",
+     "shared/4 1662(+3.3st)",
+     "shared/5 1650(+4.1st)",
+     "shared/6 1650(+4.1st)",
+     "shared/7 1650(+4.1st)",
+     "shared/8 1658(+3.5st)",
+     "shared/9 1660(+3.4st)",
+     "private/3 1648(+4.2st)",
+     "private/4 1652(+4.0st)",
+     "private/5 1658(+3.5st)",
+     "private/6 1652(+3.9st)",
+     "private/7 1664(+3.1st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 82.48533333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1684.5443892569785,
+    "t0": 6.895831961478805,
+    "off": [
+     "fitted 1685"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1743,
+      118.3,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1747,
+      118.7,
+      -2.4
+     ],
+     [
+      "private/1",
+      1741,
+      119.1,
+      -2.0
+     ]
+    ],
+    "minlen": 118.32533333333333
+   },
+   {
+    "g": "w2",
+    "f": 1648.3566842436849,
+    "t0": 0.45514026022245524,
+    "off": [
+     "fitted 1648",
+     "native/2 1661(+3.3st)",
+     "native/3 1642(+4.7st)",
+     "native/4 1644(+4.5st)",
+     "native/5 1631(+5.4st)",
+     "native/6 1642(+4.7st)",
+     "native/7 1644(+4.5st)",
+     "native/8 1659(+3.5st)",
+     "native/9 1648(+4.2st)",
+     "shared/2 1655(+3.7st)",
+     "shared/3 1635(+5.2st)",
+     "shared/4 1647(+4.3st)",
+     "shared/5 1640(+4.8st)",
+     "shared/6 1643(+4.6st)",
+     "shared/7 1644(+4.5st)",
+     "shared/8 1661(+3.3st)",
+     "shared/9 1655(+3.8st)",
+     "private/2 1652(+4.0st)",
+     "private/3 1636(+5.1st)",
+     "private/4 1635(+5.2st)",
+     "private/5 1643(+4.6st)",
+     "private/6 1642(+4.7st)",
+     "private/7 1648(+4.3st)",
+     "private/8 1646(+4.4st)",
+     "private/9 1655(+3.8st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 66.10133333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1683.33247681238,
+    "t0": 6.944889882275602,
+    "off": [
+     "fitted 1683"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 162.416
+   },
+   {
+    "g": "w2",
+    "f": 1641.2605285469567,
+    "t0": -0.09173188523837598,
+    "off": [
+     "fitted 1641",
+     "n=2 1652(+4.0st)",
+     "n=3 1634(+5.2st)",
+     "n=4 1639(+4.9st)",
+     "n=6 1643(+4.6st)"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 84.016
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1688.16479087979,
+    "t0": 10.800385059494758,
+    "off": [
+     "fitted 1688"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1739,
+      161.6,
+      -1.9
+     ],
+     [
+      "shared/1",
+      1736,
+      167.7,
+      -1.7
+     ],
+     [
+      "private/1",
+      1725,
+      168.1,
+      -1.0
+     ]
+    ],
+    "minlen": 161.62133333333335
+   },
+   {
+    "g": "w2",
+    "f": 1668.132999758174,
+    "t0": 4.1584794984121105,
+    "off": [
+     "fitted 1668",
+     "native/3 1658(+3.5st)",
+     "native/4 1662(+3.2st)",
+     "native/5 1665(+3.0st)",
+     "shared/3 1664(+3.1st)",
+     "shared/4 1660(+3.4st)",
+     "private/2 1659(+3.5st)",
+     "private/3 1648(+4.2st)",
+     "private/4 1645(+4.5st)",
+     "private/5 1646(+4.4st)",
+     "private/6 1654(+3.8st)",
+     "private/7 1659(+3.5st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      88.4,
+      -1.7
+     ]
+    ],
+    "minlen": 88.352
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1687.31887953119,
+    "t0": 10.21121708734904,
+    "off": [
+     "fitted 1687"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1735,
+      161.2,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1732,
+      169.5,
+      -1.4
+     ],
+     [
+      "private/1",
+      1731,
+      169.5,
+      -1.3
+     ]
+    ],
+    "minlen": 161.22666666666666
+   },
+   {
+    "g": "w2",
+    "f": 1665.9420412092345,
+    "t0": 3.805774609027023,
+    "off": [
+     "fitted 1666",
+     "native/3 1665(+3.0st)",
+     "native/4 1658(+3.6st)",
+     "native/5 1661(+3.3st)",
+     "shared/3 1663(+3.2st)",
+     "shared/4 1659(+3.5st)",
+     "shared/5 1662(+3.3st)",
+     "shared/6 1665(+3.1st)",
+     "private/2 1648(+4.2st)",
+     "private/3 1651(+4.0st)",
+     "private/4 1645(+4.5st)",
+     "private/5 1645(+4.5st)",
+     "private/6 1653(+3.9st)",
+     "private/7 1662(+3.3st)",
+     "private/8 1662(+3.3st)",
+     "private/9 1665(+3.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 88.04266666666668
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1686.657517602782,
+    "t0": 9.948190677528851,
+    "off": [
+     "fitted 1687"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1727,
+      162.2,
+      -1.1
+     ],
+     [
+      "private/1",
+      1727,
+      168.9,
+      -1.1
+     ]
+    ],
+    "minlen": 162.15466666666666
+   },
+   {
+    "g": "w2",
+    "f": 1665.3657107729757,
+    "t0": 3.7006741484928645,
+    "off": [
+     "fitted 1665",
+     "native/3 1663(+3.2st)",
+     "native/4 1661(+3.3st)",
+     "native/5 1664(+3.1st)",
+     "native/6 1660(+3.4st)",
+     "shared/3 1656(+3.7st)",
+     "shared/4 1653(+3.9st)",
+     "shared/5 1660(+3.4st)",
+     "shared/6 1661(+3.3st)",
+     "private/2 1661(+3.4st)",
+     "private/3 1648(+4.2st)",
+     "private/4 1645(+4.4st)",
+     "private/5 1650(+4.1st)",
+     "private/6 1656(+3.7st)",
+     "private/7 1656(+3.7st)",
+     "private/9 1663(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 87.72266666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1685.7131781155113,
+    "t0": 9.512490308122942,
+    "off": [
+     "fitted 1686"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "shared/1",
+      1726,
+      168.0,
+      -1.0
+     ]
+    ],
+    "minlen": 163.76533333333333
+   },
+   {
+    "g": "w2",
+    "f": 1666.5761677241182,
+    "t0": 3.7113149844547153,
+    "off": [
+     "fitted 1667",
+     "native/3 1657(+3.6st)",
+     "native/4 1659(+3.5st)",
+     "native/5 1657(+3.6st)",
+     "shared/2 1665(+3.1st)",
+     "shared/3 1660(+3.4st)",
+     "shared/4 1658(+3.5st)",
+     "shared/5 1661(+3.3st)",
+     "private/2 1657(+3.6st)",
+     "private/3 1644(+4.5st)",
+     "private/4 1652(+4.0st)",
+     "private/5 1649(+4.1st)",
+     "private/6 1657(+3.6st)",
+     "private/7 1658(+3.6st)",
+     "private/8 1658(+3.5st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 88.34133333333332
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1687.9395856968345,
+    "t0": 10.086688261670526,
+    "off": [
+     "fitted 1688"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1734,
+      162.2,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1726,
+      170.9,
+      -1.1
+     ]
+    ],
+    "minlen": 162.22933333333333
+   },
+   {
+    "g": "w2",
+    "f": 1662.2004819336785,
+    "t0": 3.3263039492419337,
+    "off": [
+     "fitted 1662",
+     "native/3 1653(+3.9st)",
+     "native/4 1661(+3.3st)",
+     "native/5 1656(+3.7st)",
+     "shared/2 1665(+3.1st)",
+     "shared/3 1649(+4.1st)",
+     "shared/4 1655(+3.7st)",
+     "shared/5 1663(+3.2st)",
+     "private/2 1656(+3.7st)",
+     "private/3 1641(+4.7st)",
+     "private/4 1638(+5.0st)",
+     "private/5 1640(+4.8st)",
+     "private/6 1654(+3.9st)",
+     "private/7 1655(+3.8st)",
+     "private/8 1655(+3.8st)",
+     "private/9 1659(+3.5st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 88.46933333333332
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1684.468971310992,
+    "t0": 9.412069960846216,
+    "off": [
+     "fitted 1684",
+     "private/3 1663(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 164.74666666666667
+   },
+   {
+    "g": "w2",
+    "f": 1665.0079074771065,
+    "t0": 3.4531560612130563,
+    "off": [
+     "fitted 1665",
+     "native/3 1660(+3.4st)",
+     "native/4 1655(+3.8st)",
+     "native/5 1661(+3.4st)",
+     "shared/2 1661(+3.3st)",
+     "shared/3 1656(+3.7st)",
+     "shared/4 1660(+3.4st)",
+     "shared/5 1662(+3.2st)",
+     "private/2 1659(+3.5st)",
+     "private/3 1649(+4.2st)",
+     "private/4 1640(+4.8st)",
+     "private/5 1646(+4.4st)",
+     "private/6 1653(+3.9st)",
+     "private/7 1657(+3.6st)",
+     "private/8 1659(+3.5st)",
+     "private/9 1661(+3.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 88.58666666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1689.424447430067,
+    "t0": 10.600277157206554,
+    "off": [
+     "fitted 1689"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1735,
+      165.2,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1737,
+      172.6,
+      -1.7
+     ],
+     [
+      "private/1",
+      1735,
+      172.8,
+      -1.6
+     ]
+    ],
+    "minlen": 165.248
+   },
+   {
+    "g": "w2",
+    "f": 1668.1915509486457,
+    "t0": 4.047657018506259,
+    "off": [
+     "fitted 1668",
+     "native/3 1662(+3.3st)",
+     "native/4 1665(+3.1st)",
+     "native/5 1664(+3.1st)",
+     "shared/3 1663(+3.2st)",
+     "shared/4 1664(+3.1st)",
+     "shared/5 1664(+3.1st)",
+     "shared/6 1665(+3.0st)",
+     "private/2 1661(+3.4st)",
+     "private/3 1646(+4.4st)",
+     "private/4 1647(+4.3st)",
+     "private/5 1656(+3.7st)",
+     "private/6 1654(+3.8st)",
+     "private/7 1662(+3.3st)",
+     "private/8 1666(+3.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 89.92
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1687.2900896364831,
+    "t0": 9.975865824905574,
+    "off": [
+     "fitted 1687"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1730,
+      161.5,
+      -1.3
+     ],
+     [
+      "private/1",
+      1727,
+      168.5,
+      -1.1
+     ]
+    ],
+    "minlen": 161.536
+   },
+   {
+    "g": "w2",
+    "f": 1665.834270384067,
+    "t0": 3.749611548725341,
+    "off": [
+     "fitted 1666",
+     "native/3 1653(+3.9st)",
+     "native/4 1662(+3.3st)",
+     "native/5 1664(+3.1st)",
+     "native/6 1665(+3.0st)",
+     "shared/3 1662(+3.3st)",
+     "shared/4 1661(+3.3st)",
+     "shared/5 1661(+3.3st)",
+     "private/2 1666(+3.0st)",
+     "private/3 1643(+4.6st)",
+     "private/4 1641(+4.7st)",
+     "private/5 1648(+4.2st)",
+     "private/6 1649(+4.2st)",
+     "private/7 1656(+3.7st)",
+     "private/8 1664(+3.1st)",
+     "private/9 1661(+3.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 87.69066666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1701.7037369215852,
+    "t0": 13.836244867069762,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 232.288
+   },
+   {
+    "g": "w2",
+    "f": 1665.6765129051776,
+    "t0": 4.383112315877923,
+    "off": [
+     "fitted 1666",
+     "n=3 1664(+3.1st)",
+     "n=4 1657(+3.6st)"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 130.704
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1704.7610201007426,
+    "t0": 16.62290952410782,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 489.06666666666666
+   },
+   {
+    "g": "w2",
+    "f": 1694.7954823238306,
+    "t0": 15.954715730540688,
+    "off": [
+     "fitted 1695"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1742,
+      245.7,
+      -2.0
+     ],
+     [
+      "shared/1",
+      1743,
+      245.7,
+      -2.1
+     ],
+     [
+      "private/1",
+      1746,
+      244.7,
+      -2.3
+     ]
+    ],
+    "minlen": 244.69333333333336
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.0959023831804,
+    "t0": 18.943851316547022,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 499.5093333333333
+   },
+   {
+    "g": "w2",
+    "f": 1703.2567364149495,
+    "t0": 13.657156003962271,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1730,
+      251.0,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1726,
+      249.3,
+      -1.0
+     ],
+     [
+      "private/1",
+      1726,
+      249.8,
+      -1.0
+     ]
+    ],
+    "minlen": 249.33333333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1700.5586529336172,
+    "t0": 20.516085224675713,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1733,
+      487.9,
+      -1.5
+     ],
+     [
+      "shared/1",
+      1732,
+      489.2,
+      -1.4
+     ]
+    ],
+    "minlen": 485.184
+   },
+   {
+    "g": "w2",
+    "f": 1697.1887968463147,
+    "t0": 15.60606140165159,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1735,
+      245.6,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1743,
+      246.3,
+      -2.1
+     ],
+     [
+      "private/1",
+      1749,
+      245.3,
+      -2.5
+     ]
+    ],
+    "minlen": 245.344
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1705.3318483490107,
+    "t0": 21.966913910117235,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1729,
+      494.5,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1731,
+      491.4,
+      -1.4
+     ],
+     [
+      "private/1",
+      1730,
+      492.3,
+      -1.3
+     ]
+    ],
+    "minlen": 491.43466666666666
+   },
+   {
+    "g": "w2",
+    "f": 1700.8831889259498,
+    "t0": 15.186294108773698,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1735,
+      245.9,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1743,
+      246.6,
+      -2.1
+     ],
+     [
+      "private/1",
+      1739,
+      246.0,
+      -1.9
+     ]
+    ],
+    "minlen": 245.92
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.1398178940874,
+    "t0": 18.60794995834143,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 498.1226666666667
+   },
+   {
+    "g": "w2",
+    "f": 1705.3036308645976,
+    "t0": 15.154603425419074,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      250.6,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1731,
+      250.2,
+      -1.4
+     ],
+     [
+      "private/1",
+      1735,
+      250.6,
+      -1.6
+     ]
+    ],
+    "minlen": 250.208
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1704.729518767173,
+    "t0": 19.58930298771593,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1727,
+      490.0,
+      -1.1
+     ]
+    ],
+    "minlen": 488.2453333333333
+   },
+   {
+    "g": "w2",
+    "f": 1699.8469334472697,
+    "t0": 13.995607083115027,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1726,
+      246.8,
+      -1.0
+     ],
+     [
+      "shared/1",
+      1726,
+      246.3,
+      -1.1
+     ]
+    ],
+    "minlen": 246.09066666666666
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1708.8550851918992,
+    "t0": 19.86704046248598,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 498.22933333333333
+   },
+   {
+    "g": "w2",
+    "f": 1709.0551087135495,
+    "t0": 18.568412494741498,
+    "off": [
+     "native/1 1763(-3.4st)",
+     "private/1 1762(-3.3st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1763,
+      250.4,
+      -3.4
+     ],
+     [
+      "shared/1",
+      1756,
+      251.2,
+      -3.0
+     ],
+     [
+      "private/1",
+      1762,
+      250.7,
+      -3.3
+     ]
+    ],
+    "minlen": 250.35733333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1707.1910098565431,
+    "t0": 19.5807518897485,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 491.4986666666667
+   },
+   {
+    "g": "w2",
+    "f": 1703.797811442105,
+    "t0": 14.363813198588788,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1732,
+      249.7,
+      -1.5
+     ],
+     [
+      "shared/1",
+      1729,
+      249.3,
+      -1.2
+     ],
+     [
+      "private/1",
+      1734,
+      248.5,
+      -1.6
+     ]
+    ],
+    "minlen": 248.544
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1716.8875997967261,
+    "t0": 28.14796986730979,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 674.768
+   },
+   {
+    "g": "w2",
+    "f": 1704.4309213267197,
+    "t0": 19.99535409895412,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 363.648
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.9423481822428,
+    "t0": 12.993419425888918,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1740,
+      204.5,
+      -1.9
+     ],
+     [
+      "shared/1",
+      1734,
+      213.1,
+      -1.5
+     ],
+     [
+      "private/1",
+      1733,
+      213.1,
+      -1.5
+     ]
+    ],
+    "minlen": 204.53333333333333
+   },
+   {
+    "g": "w2",
+    "f": 1685.7289238124106,
+    "t0": 5.931686332046869,
+    "off": [
+     "fitted 1686"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1743,
+      111.1,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1735,
+      118.0,
+      -1.7
+     ],
+     [
+      "private/1",
+      1732,
+      118.3,
+      -1.5
+     ]
+    ],
+    "minlen": 111.09333333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1701.1553971688536,
+    "t0": 12.149273872588296,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1731,
+      206.0,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1732,
+      214.5,
+      -1.5
+     ],
+     [
+      "private/1",
+      1730,
+      215.0,
+      -1.3
+     ]
+    ],
+    "minlen": 206.00533333333334
+   },
+   {
+    "g": "w2",
+    "f": 1687.0203869960455,
+    "t0": 6.010156542088662,
+    "off": [
+     "fitted 1687",
+     "private/3 1666(+3.0st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1741,
+      111.6,
+      -2.0
+     ],
+     [
+      "shared/1",
+      1730,
+      119.3,
+      -1.3
+     ],
+     [
+      "private/1",
+      1733,
+      119.3,
+      -1.5
+     ]
+    ],
+    "minlen": 111.616
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1698.9758207522123,
+    "t0": 11.258947420820478,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 204.064
+   },
+   {
+    "g": "w2",
+    "f": 1686.6541168740957,
+    "t0": 5.978863886714855,
+    "off": [
+     "fitted 1687"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1742,
+      111.0,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1728,
+      119.0,
+      -1.2
+     ],
+     [
+      "private/1",
+      1731,
+      118.8,
+      -1.4
+     ]
+    ],
+    "minlen": 111.01866666666668
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1701.9978834822261,
+    "t0": 12.02906870746438,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1734,
+      207.1,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1725,
+      215.1,
+      -1.0
+     ]
+    ],
+    "minlen": 207.11466666666666
+   },
+   {
+    "g": "w2",
+    "f": 1686.0509147367884,
+    "t0": 5.778858707190259,
+    "off": [
+     "fitted 1686"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      111.4,
+      -1.7
+     ],
+     [
+      "private/1",
+      1731,
+      119.1,
+      -1.4
+     ]
+    ],
+    "minlen": 111.392
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1701.5779755558547,
+    "t0": 12.115182897177291,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1734,
+      206.2,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1730,
+      215.3,
+      -1.3
+     ],
+     [
+      "private/1",
+      1728,
+      215.2,
+      -1.2
+     ]
+    ],
+    "minlen": 206.208
+   },
+   {
+    "g": "w2",
+    "f": 1689.996345789689,
+    "t0": 6.649862721875892,
+    "off": [
+     "fitted 1690"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1749,
+      113.3,
+      -2.5
+     ],
+     [
+      "shared/1",
+      1738,
+      120.5,
+      -1.8
+     ],
+     [
+      "private/1",
+      1741,
+      120.6,
+      -2.0
+     ]
+    ],
+    "minlen": 113.25866666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.293799649111,
+    "t0": 12.046721210263087,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1729,
+      205.5,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1733,
+      214.6,
+      -1.5
+     ],
+     [
+      "private/1",
+      1726,
+      214.6,
+      -1.0
+     ]
+    ],
+    "minlen": 205.472
+   },
+   {
+    "g": "w2",
+    "f": 1685.9616439095719,
+    "t0": 5.835260873735184,
+    "off": [
+     "fitted 1686"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1738,
+      111.3,
+      -1.8
+     ],
+     [
+      "shared/1",
+      1733,
+      119.0,
+      -1.5
+     ],
+     [
+      "private/1",
+      1727,
+      119.1,
+      -1.1
+     ]
+    ],
+    "minlen": 111.33866666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.4058518516267,
+    "t0": 12.329493353977334,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1737,
+      208.4,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1733,
+      216.4,
+      -1.5
+     ]
+    ],
+    "minlen": 208.36266666666666
+   },
+   {
+    "g": "w2",
+    "f": 1689.7842201964368,
+    "t0": 6.435623415397597,
+    "off": [
+     "fitted 1690"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1742,
+      115.7,
+      -2.1
+     ],
+     [
+      "shared/1",
+      1740,
+      122.6,
+      -1.9
+     ],
+     [
+      "private/1",
+      1732,
+      123.2,
+      -1.5
+     ]
+    ],
+    "minlen": 115.69066666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.0145165748124,
+    "t0": 12.512893828815548,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      206.1,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1732,
+      214.9,
+      -1.4
+     ],
+     [
+      "private/1",
+      1730,
+      215.0,
+      -1.3
+     ]
+    ],
+    "minlen": 206.12266666666665
+   },
+   {
+    "g": "w2",
+    "f": 1686.924822823411,
+    "t0": 6.02269828135235,
+    "off": [
+     "fitted 1687"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1738,
+      112.6,
+      -1.8
+     ],
+     [
+      "shared/1",
+      1735,
+      119.2,
+      -1.6
+     ],
+     [
+      "private/1",
+      1731,
+      119.3,
+      -1.4
+     ]
+    ],
+    "minlen": 112.576
+   }
+  ]
+ },
+ {
+  "file": "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1714.3953790722185,
+    "t0": 16.517534199304528,
+    "off": [],
+    "ncells": 4,
+    "above": [],
+    "minlen": 292.64
+   },
+   {
+    "g": "w2",
+    "f": 1680.403502255789,
+    "t0": 6.332826841822942,
+    "off": [
+     "fitted 1680"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 161.712
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1626.4797239937539,
+    "t0": -1.2991960646748193,
+    "off": [
+     "fitted 1626",
+     "offset -1.3us",
+     "native/1 1635(+5.2st)",
+     "native/2 1641(+4.7st)",
+     "native/3 1624(+6.0st)",
+     "native/4 1623(+6.1st)",
+     "native/5 1627(+5.8st)",
+     "native/6 1632(+5.4st)",
+     "native/7 1630(+5.6st)",
+     "native/8 1634(+5.3st)",
+     "native/9 1637(+5.0st)",
+     "shared/1 1631(+5.5st)",
+     "shared/2 1641(+4.7st)",
+     "shared/3 1624(+6.0st)",
+     "shared/4 1618(+6.4st)",
+     "shared/5 1623(+6.0st)",
+     "shared/6 1626(+5.8st)",
+     "shared/7 1634(+5.2st)",
+     "shared/8 1632(+5.4st)",
+     "shared/9 1635(+5.2st)",
+     "private/1 1631(+5.5st)",
+     "private/2 1628(+5.7st)",
+     "private/3 1621(+6.2st)",
+     "private/4 1614(+6.8st)",
+     "private/5 1614(+6.7st)",
+     "private/6 1611(+7.0st)",
+     "private/7 1619(+6.4st)",
+     "private/8 1623(+6.0st)",
+     "private/9 1629(+5.6st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.50933333333334
+   },
+   {
+    "g": "w2",
+    "f": 1634.990634822042,
+    "t0": -1.2596354038272548,
+    "off": [
+     "fitted 1635",
+     "offset -1.3us",
+     "native/1 1589(+8.6st)",
+     "native/2 1613(+6.8st)",
+     "native/3 1639(+4.9st)",
+     "native/4 1650(+4.1st)",
+     "native/5 1648(+4.2st)",
+     "native/6 1642(+4.7st)",
+     "native/7 1642(+4.7st)",
+     "native/8 1644(+4.5st)",
+     "native/9 1647(+4.3st)",
+     "shared/1 1605(+7.4st)",
+     "shared/2 1627(+5.7st)",
+     "shared/3 1646(+4.4st)",
+     "shared/4 1646(+4.4st)",
+     "shared/5 1637(+5.1st)",
+     "shared/6 1641(+4.8st)",
+     "shared/7 1641(+4.8st)",
+     "shared/8 1644(+4.5st)",
+     "shared/9 1646(+4.4st)",
+     "private/1 1603(+7.6st)",
+     "private/2 1639(+4.9st)",
+     "private/3 1648(+4.3st)",
+     "private/4 1632(+5.4st)",
+     "private/5 1625(+5.9st)",
+     "private/6 1624(+6.0st)",
+     "private/7 1621(+6.2st)",
+     "private/8 1622(+6.1st)",
+     "private/9 1620(+6.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 26.912
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1627.3665639741248,
+    "t0": -1.4348812800095474,
+    "off": [
+     "fitted 1627",
+     "offset -1.4us",
+     "native/1 1629(+5.6st)",
+     "native/2 1639(+4.9st)",
+     "native/3 1627(+5.8st)",
+     "native/4 1625(+5.9st)",
+     "native/5 1630(+5.5st)",
+     "native/6 1629(+5.6st)",
+     "native/7 1630(+5.5st)",
+     "native/8 1632(+5.4st)",
+     "native/9 1637(+5.0st)",
+     "shared/1 1626(+5.8st)",
+     "shared/2 1639(+4.9st)",
+     "shared/3 1622(+6.1st)",
+     "shared/4 1621(+6.2st)",
+     "shared/5 1628(+5.7st)",
+     "shared/6 1629(+5.6st)",
+     "shared/7 1631(+5.5st)",
+     "shared/8 1633(+5.3st)",
+     "shared/9 1634(+5.3st)",
+     "private/1 1627(+5.8st)",
+     "private/2 1636(+5.1st)",
+     "private/3 1625(+5.9st)",
+     "private/4 1615(+6.6st)",
+     "private/5 1609(+7.1st)",
+     "private/6 1618(+6.4st)",
+     "private/7 1624(+6.0st)",
+     "private/8 1625(+5.9st)",
+     "private/9 1628(+5.7st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 44.02133333333334
+   },
+   {
+    "g": "w2",
+    "f": 1631.9044483276682,
+    "t0": -1.400998606436784,
+    "off": [
+     "fitted 1632",
+     "offset -1.4us",
+     "native/1 1582(+9.1st)",
+     "native/2 1610(+7.0st)",
+     "native/3 1635(+5.2st)",
+     "native/4 1644(+4.5st)",
+     "native/5 1635(+5.2st)",
+     "native/6 1635(+5.2st)",
+     "native/7 1637(+5.0st)",
+     "native/8 1646(+4.4st)",
+     "native/9 1644(+4.5st)",
+     "shared/1 1598(+7.9st)",
+     "shared/2 1623(+6.1st)",
+     "shared/3 1638(+5.0st)",
+     "shared/4 1649(+4.2st)",
+     "shared/5 1637(+5.0st)",
+     "shared/6 1641(+4.8st)",
+     "shared/7 1641(+4.7st)",
+     "shared/8 1644(+4.5st)",
+     "shared/9 1642(+4.7st)",
+     "private/1 1602(+7.6st)",
+     "private/2 1640(+4.8st)",
+     "private/3 1645(+4.5st)",
+     "private/4 1632(+5.4st)",
+     "private/5 1626(+5.9st)",
+     "private/6 1621(+6.2st)",
+     "private/7 1617(+6.5st)",
+     "private/8 1615(+6.7st)",
+     "private/9 1616(+6.6st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 27.168
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1625.976806235045,
+    "t0": -1.4568272172814176,
+    "off": [
+     "fitted 1626",
+     "offset -1.5us",
+     "native/1 1632(+5.4st)",
+     "native/2 1634(+5.2st)",
+     "native/3 1626(+5.8st)",
+     "native/4 1625(+5.9st)",
+     "native/5 1624(+6.0st)",
+     "native/6 1627(+5.8st)",
+     "native/7 1629(+5.6st)",
+     "native/8 1634(+5.2st)",
+     "native/9 1640(+4.8st)",
+     "shared/1 1625(+5.9st)",
+     "shared/2 1641(+4.8st)",
+     "shared/3 1617(+6.5st)",
+     "shared/4 1616(+6.6st)",
+     "shared/5 1621(+6.2st)",
+     "shared/6 1630(+5.5st)",
+     "shared/7 1628(+5.7st)",
+     "shared/8 1635(+5.2st)",
+     "shared/9 1637(+5.1st)",
+     "private/1 1625(+5.9st)",
+     "private/2 1633(+5.3st)",
+     "private/3 1621(+6.2st)",
+     "private/4 1618(+6.4st)",
+     "private/5 1615(+6.7st)",
+     "private/6 1611(+6.9st)",
+     "private/7 1620(+6.3st)",
+     "private/8 1625(+5.9st)",
+     "private/9 1621(+6.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.562666666666665
+   },
+   {
+    "g": "w2",
+    "f": 1634.3737583299987,
+    "t0": -1.2986006106955756,
+    "off": [
+     "fitted 1634",
+     "offset -1.3us",
+     "native/1 1594(+8.2st)",
+     "native/2 1611(+7.0st)",
+     "native/3 1640(+4.8st)",
+     "native/4 1643(+4.6st)",
+     "native/5 1642(+4.7st)",
+     "native/6 1637(+5.1st)",
+     "native/7 1645(+4.5st)",
+     "native/8 1640(+4.8st)",
+     "native/9 1641(+4.8st)",
+     "shared/1 1607(+7.3st)",
+     "shared/2 1623(+6.0st)",
+     "shared/3 1646(+4.4st)",
+     "shared/4 1643(+4.6st)",
+     "shared/5 1642(+4.7st)",
+     "shared/6 1636(+5.1st)",
+     "shared/7 1642(+4.7st)",
+     "shared/8 1650(+4.1st)",
+     "shared/9 1647(+4.3st)",
+     "private/1 1605(+7.4st)",
+     "private/2 1643(+4.6st)",
+     "private/3 1647(+4.3st)",
+     "private/4 1635(+5.2st)",
+     "private/5 1621(+6.2st)",
+     "private/6 1627(+5.8st)",
+     "private/7 1623(+6.1st)",
+     "private/8 1623(+6.1st)",
+     "private/9 1618(+6.4st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 26.592
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g3.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1623.1362469386818,
+    "t0": -1.6017149457072373,
+    "off": [
+     "fitted 1623",
+     "offset -1.6us",
+     "native/1 1625(+5.9st)",
+     "native/2 1636(+5.1st)",
+     "native/3 1625(+5.9st)",
+     "native/4 1618(+6.4st)",
+     "native/5 1629(+5.6st)",
+     "native/6 1622(+6.1st)",
+     "native/7 1622(+6.1st)",
+     "native/8 1630(+5.5st)",
+     "native/9 1632(+5.4st)",
+     "shared/1 1620(+6.2st)",
+     "shared/2 1636(+5.1st)",
+     "shared/3 1624(+6.0st)",
+     "shared/4 1618(+6.5st)",
+     "shared/5 1622(+6.1st)",
+     "shared/6 1623(+6.1st)",
+     "shared/7 1623(+6.0st)",
+     "shared/8 1632(+5.4st)",
+     "shared/9 1637(+5.1st)",
+     "private/1 1617(+6.5st)",
+     "private/2 1632(+5.4st)",
+     "private/3 1616(+6.5st)",
+     "private/4 1612(+6.8st)",
+     "private/5 1613(+6.8st)",
+     "private/6 1613(+6.8st)",
+     "private/7 1614(+6.7st)",
+     "private/8 1615(+6.6st)",
+     "private/9 1627(+5.8st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.690666666666665
+   },
+   {
+    "g": "w2",
+    "f": 1629.5241362682925,
+    "t0": -1.4800858705728168,
+    "off": [
+     "fitted 1630",
+     "offset -1.5us",
+     "native/1 1574(+9.8st)",
+     "native/2 1605(+7.4st)",
+     "native/3 1634(+5.3st)",
+     "native/4 1643(+4.6st)",
+     "native/5 1644(+4.5st)",
+     "native/6 1641(+4.8st)",
+     "native/7 1638(+5.0st)",
+     "native/8 1637(+5.0st)",
+     "native/9 1639(+4.9st)",
+     "shared/1 1597(+8.0st)",
+     "shared/2 1622(+6.1st)",
+     "shared/3 1637(+5.1st)",
+     "shared/4 1643(+4.6st)",
+     "shared/5 1635(+5.2st)",
+     "shared/6 1637(+5.0st)",
+     "shared/7 1634(+5.2st)",
+     "shared/8 1638(+4.9st)",
+     "shared/9 1643(+4.6st)",
+     "private/1 1600(+7.7st)",
+     "private/2 1639(+4.9st)",
+     "private/3 1638(+5.0st)",
+     "private/4 1623(+6.1st)",
+     "private/5 1624(+6.0st)",
+     "private/6 1619(+6.4st)",
+     "private/7 1616(+6.6st)",
+     "private/8 1613(+6.8st)",
+     "private/9 1615(+6.6st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 26.645333333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1627.1452290223035,
+    "t0": -1.4476759544285305,
+    "off": [
+     "fitted 1627",
+     "offset -1.4us",
+     "native/1 1629(+5.6st)",
+     "native/2 1637(+5.0st)",
+     "native/3 1623(+6.1st)",
+     "native/4 1621(+6.2st)",
+     "native/5 1623(+6.1st)",
+     "native/6 1632(+5.4st)",
+     "native/7 1635(+5.1st)",
+     "native/8 1635(+5.2st)",
+     "native/9 1643(+4.6st)",
+     "shared/1 1629(+5.6st)",
+     "shared/2 1634(+5.2st)",
+     "shared/3 1622(+6.1st)",
+     "shared/4 1621(+6.2st)",
+     "shared/5 1627(+5.8st)",
+     "shared/6 1635(+5.2st)",
+     "shared/7 1636(+5.1st)",
+     "shared/8 1634(+5.3st)",
+     "shared/9 1638(+4.9st)",
+     "private/1 1631(+5.4st)",
+     "private/2 1628(+5.7st)",
+     "private/3 1615(+6.6st)",
+     "private/4 1613(+6.8st)",
+     "private/5 1616(+6.6st)",
+     "private/6 1618(+6.5st)",
+     "private/7 1615(+6.6st)",
+     "private/8 1623(+6.1st)",
+     "private/9 1624(+6.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.989333333333335
+   },
+   {
+    "g": "w2",
+    "f": 1633.5212894577387,
+    "t0": -1.3266716180814255,
+    "off": [
+     "fitted 1634",
+     "offset -1.3us",
+     "native/1 1586(+8.8st)",
+     "native/2 1611(+6.9st)",
+     "native/3 1639(+4.9st)",
+     "native/4 1641(+4.7st)",
+     "native/5 1644(+4.5st)",
+     "native/6 1642(+4.7st)",
+     "native/7 1639(+4.9st)",
+     "native/8 1642(+4.7st)",
+     "native/9 1650(+4.1st)",
+     "shared/1 1607(+7.2st)",
+     "shared/2 1624(+6.0st)",
+     "shared/3 1642(+4.6st)",
+     "shared/4 1642(+4.7st)",
+     "shared/5 1641(+4.7st)",
+     "shared/6 1641(+4.8st)",
+     "shared/7 1640(+4.8st)",
+     "shared/8 1642(+4.7st)",
+     "shared/9 1646(+4.4st)",
+     "private/1 1605(+7.4st)",
+     "private/2 1640(+4.8st)",
+     "private/3 1643(+4.6st)",
+     "private/4 1631(+5.5st)",
+     "private/5 1631(+5.5st)",
+     "private/6 1620(+6.3st)",
+     "private/7 1616(+6.6st)",
+     "private/8 1614(+6.7st)",
+     "private/9 1622(+6.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 27.17866666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g4.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1623.7771932839194,
+    "t0": -1.5983719625980883,
+    "off": [
+     "fitted 1624",
+     "offset -1.6us",
+     "native/1 1619(+6.4st)",
+     "native/2 1631(+5.5st)",
+     "native/3 1618(+6.5st)",
+     "native/4 1619(+6.4st)",
+     "native/5 1624(+6.0st)",
+     "native/6 1623(+6.1st)",
+     "native/7 1632(+5.4st)",
+     "native/8 1636(+5.1st)",
+     "native/9 1637(+5.0st)",
+     "shared/1 1619(+6.4st)",
+     "shared/2 1635(+5.2st)",
+     "shared/3 1619(+6.3st)",
+     "shared/4 1618(+6.4st)",
+     "shared/5 1624(+6.0st)",
+     "shared/6 1628(+5.7st)",
+     "shared/7 1625(+5.9st)",
+     "shared/8 1636(+5.1st)",
+     "shared/9 1640(+4.8st)",
+     "private/1 1625(+5.9st)",
+     "private/2 1626(+5.8st)",
+     "private/3 1613(+6.8st)",
+     "private/4 1614(+6.7st)",
+     "private/5 1613(+6.8st)",
+     "private/6 1615(+6.7st)",
+     "private/7 1614(+6.7st)",
+     "private/8 1614(+6.7st)",
+     "private/9 1620(+6.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.328
+   },
+   {
+    "g": "w2",
+    "f": 1630.3627418831188,
+    "t0": -1.4612259859099286,
+    "off": [
+     "fitted 1630",
+     "offset -1.5us",
+     "native/1 1577(+9.5st)",
+     "native/2 1604(+7.5st)",
+     "native/3 1632(+5.4st)",
+     "native/4 1639(+4.9st)",
+     "native/5 1635(+5.2st)",
+     "native/6 1640(+4.8st)",
+     "native/7 1641(+4.8st)",
+     "native/8 1642(+4.7st)",
+     "native/9 1640(+4.8st)",
+     "shared/1 1596(+8.0st)",
+     "shared/2 1617(+6.5st)",
+     "shared/3 1640(+4.8st)",
+     "shared/4 1647(+4.3st)",
+     "shared/5 1640(+4.9st)",
+     "shared/6 1637(+5.0st)",
+     "shared/7 1638(+5.0st)",
+     "shared/8 1646(+4.4st)",
+     "shared/9 1640(+4.8st)",
+     "private/1 1597(+8.0st)",
+     "private/2 1635(+5.2st)",
+     "private/3 1639(+4.9st)",
+     "private/4 1630(+5.6st)",
+     "private/5 1632(+5.4st)",
+     "private/6 1618(+6.4st)",
+     "private/7 1616(+6.6st)",
+     "private/8 1613(+6.8st)",
+     "private/9 1611(+7.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 26.805333333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1628.1067775826564,
+    "t0": -1.3162430439200834,
+    "off": [
+     "fitted 1628",
+     "offset -1.3us",
+     "native/1 1633(+5.3st)",
+     "native/2 1636(+5.1st)",
+     "native/3 1626(+5.8st)",
+     "native/4 1628(+5.7st)",
+     "native/5 1629(+5.6st)",
+     "native/6 1634(+5.2st)",
+     "native/7 1630(+5.5st)",
+     "native/8 1634(+5.2st)",
+     "native/9 1632(+5.4st)",
+     "shared/1 1632(+5.4st)",
+     "shared/2 1638(+5.0st)",
+     "shared/3 1626(+5.8st)",
+     "shared/4 1626(+5.8st)",
+     "shared/5 1629(+5.6st)",
+     "shared/6 1626(+5.8st)",
+     "shared/7 1636(+5.1st)",
+     "shared/8 1633(+5.3st)",
+     "shared/9 1635(+5.2st)",
+     "private/1 1631(+5.5st)",
+     "private/2 1636(+5.1st)",
+     "private/3 1620(+6.2st)",
+     "private/4 1616(+6.6st)",
+     "private/5 1614(+6.8st)",
+     "private/6 1616(+6.6st)",
+     "private/7 1618(+6.5st)",
+     "private/8 1627(+5.8st)",
+     "private/9 1634(+5.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.456
+   },
+   {
+    "g": "w2",
+    "f": 1629.9072784094772,
+    "t0": -1.5292773960733175,
+    "off": [
+     "fitted 1630",
+     "offset -1.5us",
+     "native/1 1576(+9.6st)",
+     "native/2 1606(+7.3st)",
+     "native/3 1636(+5.1st)",
+     "native/4 1647(+4.3st)",
+     "native/5 1639(+4.9st)",
+     "native/6 1634(+5.3st)",
+     "native/7 1636(+5.1st)",
+     "native/8 1638(+4.9st)",
+     "native/9 1643(+4.6st)",
+     "shared/1 1596(+8.1st)",
+     "shared/2 1612(+6.9st)",
+     "shared/3 1642(+4.7st)",
+     "shared/4 1645(+4.4st)",
+     "shared/5 1641(+4.7st)",
+     "shared/6 1641(+4.8st)",
+     "shared/7 1645(+4.4st)",
+     "shared/8 1637(+5.0st)",
+     "shared/9 1639(+4.9st)",
+     "private/1 1594(+8.2st)",
+     "private/2 1636(+5.1st)",
+     "private/3 1637(+5.0st)",
+     "private/4 1630(+5.5st)",
+     "private/5 1617(+6.5st)",
+     "private/6 1617(+6.5st)",
+     "private/7 1617(+6.5st)",
+     "private/8 1619(+6.4st)",
+     "private/9 1612(+6.9st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 27.029333333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1628.1581226642072,
+    "t0": -1.3323656932939776,
+    "off": [
+     "fitted 1628",
+     "offset -1.3us",
+     "native/1 1633(+5.3st)",
+     "native/2 1639(+4.9st)",
+     "native/3 1629(+5.6st)",
+     "native/4 1624(+6.0st)",
+     "native/5 1633(+5.3st)",
+     "native/6 1627(+5.7st)",
+     "native/7 1632(+5.4st)",
+     "native/8 1638(+5.0st)",
+     "native/9 1639(+4.9st)",
+     "shared/1 1630(+5.5st)",
+     "shared/2 1637(+5.0st)",
+     "shared/3 1625(+5.9st)",
+     "shared/4 1622(+6.2st)",
+     "shared/5 1630(+5.6st)",
+     "shared/6 1625(+5.9st)",
+     "shared/7 1627(+5.8st)",
+     "shared/8 1634(+5.3st)",
+     "shared/9 1636(+5.1st)",
+     "private/1 1630(+5.6st)",
+     "private/2 1635(+5.2st)",
+     "private/3 1622(+6.1st)",
+     "private/4 1618(+6.4st)",
+     "private/5 1616(+6.6st)",
+     "private/6 1615(+6.6st)",
+     "private/7 1624(+6.0st)",
+     "private/8 1625(+5.9st)",
+     "private/9 1628(+5.7st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 43.477333333333334
+   },
+   {
+    "g": "w2",
+    "f": 1633.643121150291,
+    "t0": -1.3144034541715373,
+    "off": [
+     "fitted 1634",
+     "offset -1.3us",
+     "native/1 1588(+8.7st)",
+     "native/2 1609(+7.1st)",
+     "native/3 1639(+4.9st)",
+     "native/4 1646(+4.4st)",
+     "native/5 1642(+4.7st)",
+     "native/6 1641(+4.7st)",
+     "native/7 1637(+5.1st)",
+     "native/8 1645(+4.4st)",
+     "native/9 1644(+4.5st)",
+     "shared/1 1603(+7.6st)",
+     "shared/2 1625(+5.9st)",
+     "shared/3 1643(+4.6st)",
+     "shared/4 1647(+4.3st)",
+     "shared/5 1643(+4.6st)",
+     "shared/6 1640(+4.8st)",
+     "shared/7 1637(+5.1st)",
+     "shared/8 1644(+4.5st)",
+     "shared/9 1645(+4.4st)",
+     "private/1 1603(+7.5st)",
+     "private/2 1642(+4.7st)",
+     "private/3 1642(+4.7st)",
+     "private/4 1632(+5.4st)",
+     "private/5 1622(+6.1st)",
+     "private/6 1626(+5.9st)",
+     "private/7 1623(+6.1st)",
+     "private/8 1619(+6.3st)",
+     "private/9 1618(+6.4st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 26.869333333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1618.8107558303093,
+    "t0": -2.1633531330074183,
+    "off": [
+     "fitted 1619",
+     "offset -2.2us",
+     "n=2 1622(+6.2st)",
+     "n=3 1616(+6.6st)",
+     "n=4 1619(+6.3st)",
+     "n=6 1619(+6.3st)"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 58.048
+   },
+   {
+    "g": "w2",
+    "f": 1656.7946075879818,
+    "t0": -0.5648010093531484,
+    "off": [
+     "fitted 1657",
+     "n=2 1645(+4.5st)",
+     "n=3 1666(+3.0st)",
+     "n=4 1660(+3.4st)",
+     "n=6 1655(+3.8st)"
+    ],
+    "ncells": 4,
+    "above": [],
+    "minlen": 39.264
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1695.453130727289,
+    "t0": 8.431443310706877,
+    "off": [],
+    "ncells": 7,
+    "above": [],
+    "minlen": 162.096
+   },
+   {
+    "g": "w2",
+    "f": 1669.1381829829133,
+    "t0": 2.5492709562367235,
+    "off": [
+     "fitted 1669",
+     "n=4 1659(+3.4st)",
+     "n=6 1662(+3.3st)",
+     "n=9 1662(+3.3st)"
+    ],
+    "ncells": 7,
+    "above": [],
+    "minlen": 86.128
+   }
+  ]
+ },
+ {
+  "file": "2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1712.457308069488,
+    "t0": 28.183610943704377,
+    "off": [],
+    "ncells": 6,
+    "above": [],
+    "minlen": 750.384
+   },
+   {
+    "g": "w2",
+    "f": 1691.3869754844313,
+    "t0": 14.743245590019738,
+    "off": [
+     "fitted 1691"
+    ],
+    "ncells": 6,
+    "above": [],
+    "minlen": 406.704
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1704.6591725772,
+    "t0": 15.541210323479957,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 551.5626666666666
+   },
+   {
+    "g": "w2",
+    "f": 1698.525612644332,
+    "t0": 17.675413643605776,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1748,
+      273.9,
+      -2.4
+     ],
+     [
+      "shared/1",
+      1753,
+      275.9,
+      -2.8
+     ],
+     [
+      "private/1",
+      1746,
+      275.8,
+      -2.3
+     ]
+    ],
+    "minlen": 273.8773333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1709.1861730561948,
+    "t0": 20.316221221682614,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1726,
+      560.2,
+      -1.0
+     ]
+    ],
+    "minlen": 558.5493333333334
+   },
+   {
+    "g": "w2",
+    "f": 1705.0679882137265,
+    "t0": 15.374344109857223,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1732,
+      280.4,
+      -1.4
+     ],
+     [
+      "shared/1",
+      1729,
+      280.4,
+      -1.2
+     ],
+     [
+      "private/1",
+      1731,
+      281.9,
+      -1.3
+     ]
+    ],
+    "minlen": 280.384
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.9827539431608,
+    "t0": 18.57987284304574,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 546.8586666666666
+   },
+   {
+    "g": "w2",
+    "f": 1705.7245108952968,
+    "t0": 16.258341061679182,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1741,
+      277.9,
+      -2.0
+     ],
+     [
+      "shared/1",
+      1742,
+      276.0,
+      -2.1
+     ],
+     [
+      "private/1",
+      1738,
+      277.5,
+      -1.8
+     ]
+    ],
+    "minlen": 275.968
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-sameboard-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.346729394247,
+    "t0": 18.1909609828135,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 557.3866666666667
+   },
+   {
+    "g": "w2",
+    "f": 1701.448358388206,
+    "t0": 14.17177891456522,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "private/1",
+      1727,
+      282.8,
+      -1.1
+     ]
+    ],
+    "minlen": 282.4746666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1702.922894775168,
+    "t0": 12.686026435363805,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 281.344
+   },
+   {
+    "g": "w2",
+    "f": 1695.1015222386645,
+    "t0": 8.679185382133932,
+    "off": [
+     "private/1 1757(-3.0st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1745,
+      141.0,
+      -2.3
+     ],
+     [
+      "shared/1",
+      1748,
+      140.3,
+      -2.5
+     ],
+     [
+      "private/1",
+      1757,
+      141.1,
+      -3.0
+     ]
+    ],
+    "minlen": 140.256
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.317037341552,
+    "t0": 14.175260317968204,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1727,
+      283.2,
+      -1.1
+     ],
+     [
+      "shared/1",
+      1726,
+      284.4,
+      -1.0
+     ],
+     [
+      "private/1",
+      1725,
+      283.5,
+      -1.0
+     ]
+    ],
+    "minlen": 283.1893333333333
+   },
+   {
+    "g": "w2",
+    "f": 1696.8830232330276,
+    "t0": 9.165509421722032,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1756,
+      142.7,
+      -2.9
+     ],
+     [
+      "shared/1",
+      1757,
+      143.1,
+      -3.0
+     ],
+     [
+      "private/1",
+      1755,
+      142.9,
+      -2.9
+     ]
+    ],
+    "minlen": 142.72
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-atile-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.4008775778875,
+    "t0": 14.650448228811612,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1728,
+      282.8,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1728,
+      285.5,
+      -1.2
+     ],
+     [
+      "private/1",
+      1725,
+      284.6,
+      -1.0
+     ]
+    ],
+    "minlen": 282.816
+   },
+   {
+    "g": "w2",
+    "f": 1700.1108621864887,
+    "t0": 11.299957563839852,
+    "off": [
+     "native/1 1783(-4.6st)",
+     "shared/1 1776(-4.2st)",
+     "private/1 1783(-4.6st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1783,
+      142.0,
+      -4.6
+     ],
+     [
+      "shared/1",
+      1776,
+      144.1,
+      -4.2
+     ],
+     [
+      "private/1",
+      1783,
+      142.5,
+      -4.6
+     ]
+    ],
+    "minlen": 141.99466666666666
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1699.3077952316728,
+    "t0": 12.850584959404776,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 277.5466666666667
+   },
+   {
+    "g": "w2",
+    "f": 1682.9404570782997,
+    "t0": 9.480367758761277,
+    "off": [
+     "fitted 1683",
+     "native/1 1761(-3.3st)",
+     "shared/1 1759(-3.1st)",
+     "private/1 1760(-3.2st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1761,
+      141.9,
+      -3.3
+     ],
+     [
+      "shared/1",
+      1759,
+      141.7,
+      -3.1
+     ],
+     [
+      "private/1",
+      1760,
+      141.2,
+      -3.2
+     ]
+    ],
+    "minlen": 141.184
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1695.3304884528563,
+    "t0": 14.852153638964053,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1733,
+      277.1,
+      -1.5
+     ],
+     [
+      "shared/1",
+      1730,
+      278.6,
+      -1.3
+     ],
+     [
+      "private/1",
+      1732,
+      277.6,
+      -1.4
+     ]
+    ],
+    "minlen": 277.088
+   },
+   {
+    "g": "w2",
+    "f": 1685.0216195686728,
+    "t0": 8.94013309196406,
+    "off": [
+     "fitted 1685"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1756,
+      139.3,
+      -3.0
+     ],
+     [
+      "shared/1",
+      1755,
+      140.2,
+      -2.9
+     ],
+     [
+      "private/1",
+      1751,
+      140.6,
+      -2.7
+     ]
+    ],
+    "minlen": 139.28533333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp4-atile-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1691.7130427583602,
+    "t0": 8.141846203489113,
+    "off": [
+     "fitted 1692"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "private/1",
+      1726,
+      165.8,
+      -1.1
+     ]
+    ],
+    "minlen": 165.81333333333333
+   },
+   {
+    "g": "w2",
+    "f": 1662.8192239061154,
+    "t0": 1.5673852957022028,
+    "off": [
+     "fitted 1663",
+     "native/2 1663(+3.2st)",
+     "native/3 1654(+3.8st)",
+     "native/4 1656(+3.7st)",
+     "native/5 1661(+3.3st)",
+     "native/6 1659(+3.4st)",
+     "native/7 1664(+3.1st)",
+     "native/9 1665(+3.0st)",
+     "shared/3 1657(+3.6st)",
+     "shared/4 1660(+3.4st)",
+     "shared/5 1652(+4.0st)",
+     "shared/6 1659(+3.4st)",
+     "shared/7 1663(+3.2st)",
+     "private/2 1658(+3.6st)",
+     "private/3 1646(+4.4st)",
+     "private/4 1650(+4.1st)",
+     "private/5 1650(+4.1st)",
+     "private/6 1652(+3.9st)",
+     "private/7 1662(+3.3st)",
+     "private/9 1664(+3.1st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 75.34933333333333
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp4-atile-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1695.3907688538743,
+    "t0": 8.822513953541637,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1737,
+      166.8,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1734,
+      166.3,
+      -1.6
+     ],
+     [
+      "private/1",
+      1737,
+      163.3,
+      -1.8
+     ]
+    ],
+    "minlen": 163.34933333333333
+   },
+   {
+    "g": "w2",
+    "f": 1666.2067261279954,
+    "t0": 2.0862117327300367,
+    "off": [
+     "fitted 1666",
+     "native/4 1661(+3.3st)",
+     "native/5 1658(+3.6st)",
+     "native/6 1660(+3.4st)",
+     "native/7 1663(+3.2st)",
+     "shared/3 1665(+3.0st)",
+     "shared/4 1664(+3.1st)",
+     "shared/5 1659(+3.5st)",
+     "shared/6 1664(+3.1st)",
+     "shared/7 1660(+3.4st)",
+     "private/2 1655(+3.8st)",
+     "private/3 1653(+3.9st)",
+     "private/4 1652(+3.9st)",
+     "private/5 1652(+3.9st)",
+     "private/6 1659(+3.4st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "shared/1",
+      1727,
+      75.8,
+      -1.1
+     ],
+     [
+      "private/1",
+      1730,
+      74.6,
+      -1.3
+     ]
+    ],
+    "minlen": 74.57066666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp4-atile-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1695.0595910113827,
+    "t0": 8.198867260112195,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1730,
+      168.3,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1734,
+      159.8,
+      -1.6
+     ]
+    ],
+    "minlen": 159.82933333333335
+   },
+   {
+    "g": "w2",
+    "f": 1675.9432380291273,
+    "t0": 2.7725312349117592,
+    "off": [
+     "fitted 1676",
+     "private/3 1663(+3.2st)",
+     "private/4 1660(+3.4st)",
+     "private/5 1659(+3.5st)",
+     "private/6 1665(+3.0st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1747,
+      75.5,
+      -2.4
+     ],
+     [
+      "shared/1",
+      1745,
+      76.9,
+      -2.3
+     ],
+     [
+      "private/1",
+      1743,
+      77.1,
+      -2.2
+     ]
+    ],
+    "minlen": 75.488
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1684.5404927759525,
+    "t0": 10.509765611415496,
+    "off": [
+     "fitted 1685"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1754,
+      171.1,
+      -2.9
+     ],
+     [
+      "shared/1",
+      1744,
+      172.6,
+      -2.2
+     ],
+     [
+      "private/1",
+      1750,
+      171.5,
+      -2.6
+     ]
+    ],
+    "minlen": 171.136
+   },
+   {
+    "g": "w2",
+    "f": 1662.3481207017605,
+    "t0": 2.1719287913494627,
+    "off": [
+     "fitted 1662",
+     "native/3 1652(+3.9st)",
+     "native/4 1654(+3.8st)",
+     "native/5 1652(+3.9st)",
+     "native/6 1652(+3.9st)",
+     "native/7 1664(+3.1st)",
+     "shared/2 1658(+3.6st)",
+     "shared/3 1655(+3.7st)",
+     "shared/4 1648(+4.2st)",
+     "shared/5 1652(+3.9st)",
+     "shared/6 1657(+3.6st)",
+     "shared/7 1658(+3.6st)",
+     "shared/8 1663(+3.2st)",
+     "private/3 1659(+3.5st)",
+     "private/4 1650(+4.1st)",
+     "private/5 1652(+4.0st)",
+     "private/6 1653(+3.9st)",
+     "private/7 1660(+3.4st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1731,
+      74.3,
+      -1.3
+     ],
+     [
+      "shared/1",
+      1726,
+      74.8,
+      -1.1
+     ],
+     [
+      "private/1",
+      1727,
+      74.1,
+      -1.1
+     ]
+    ],
+    "minlen": 74.12266666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1684.5737845930873,
+    "t0": 9.21534041674051,
+    "off": [
+     "fitted 1685"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1738,
+      171.1,
+      -1.8
+     ],
+     [
+      "shared/1",
+      1740,
+      169.8,
+      -1.9
+     ],
+     [
+      "private/1",
+      1739,
+      170.4,
+      -1.9
+     ]
+    ],
+    "minlen": 169.78133333333335
+   },
+   {
+    "g": "w2",
+    "f": 1665.8641068241086,
+    "t0": 2.1560908164969295,
+    "off": [
+     "fitted 1666",
+     "native/3 1657(+3.6st)",
+     "native/4 1661(+3.3st)",
+     "native/5 1653(+3.9st)",
+     "native/6 1661(+3.4st)",
+     "native/7 1662(+3.3st)",
+     "shared/3 1656(+3.7st)",
+     "shared/4 1659(+3.5st)",
+     "shared/5 1660(+3.4st)",
+     "shared/6 1655(+3.7st)",
+     "private/3 1652(+4.0st)",
+     "private/4 1652(+4.0st)",
+     "private/5 1648(+4.3st)",
+     "private/6 1658(+3.6st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1728,
+      74.1,
+      -1.2
+     ],
+     [
+      "shared/1",
+      1730,
+      73.7,
+      -1.3
+     ],
+     [
+      "private/1",
+      1727,
+      73.7,
+      -1.1
+     ]
+    ],
+    "minlen": 73.67466666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/r3c-g16.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1667.447385505145,
+    "t0": 2.148801854629302,
+    "off": [
+     "fitted 1667",
+     "native/3 1654(+3.8st)",
+     "native/4 1662(+3.3st)",
+     "native/5 1650(+4.1st)",
+     "native/6 1658(+3.5st)",
+     "native/7 1665(+3.1st)",
+     "native/8 1665(+3.0st)",
+     "shared/4 1660(+3.4st)",
+     "shared/5 1655(+3.7st)",
+     "shared/6 1661(+3.3st)",
+     "shared/7 1664(+3.1st)",
+     "private/3 1657(+3.6st)",
+     "private/4 1659(+3.5st)",
+     "private/5 1661(+3.3st)",
+     "private/6 1662(+3.3st)",
+     "private/7 1666(+3.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 83.968
+   },
+   {
+    "g": "w2",
+    "f": 1639.867871073992,
+    "t0": -1.2441042047622906,
+    "off": [
+     "fitted 1640",
+     "offset -1.2us",
+     "native/1 1634(+5.2st)",
+     "native/2 1649(+4.1st)",
+     "native/3 1643(+4.6st)",
+     "native/4 1635(+5.2st)",
+     "native/5 1634(+5.3st)",
+     "native/6 1641(+4.8st)",
+     "native/7 1647(+4.3st)",
+     "native/8 1648(+4.2st)",
+     "native/9 1649(+4.2st)",
+     "shared/1 1631(+5.5st)",
+     "shared/2 1646(+4.4st)",
+     "shared/3 1644(+4.5st)",
+     "shared/4 1633(+5.4st)",
+     "shared/5 1635(+5.2st)",
+     "shared/6 1635(+5.2st)",
+     "shared/7 1652(+4.0st)",
+     "shared/8 1654(+3.8st)",
+     "shared/9 1647(+4.3st)",
+     "private/1 1634(+5.2st)",
+     "private/2 1654(+3.8st)",
+     "private/3 1630(+5.6st)",
+     "private/4 1636(+5.1st)",
+     "private/5 1631(+5.5st)",
+     "private/6 1627(+5.8st)",
+     "private/7 1632(+5.4st)",
+     "private/8 1634(+5.3st)",
+     "private/9 1638(+4.9st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 40.821333333333335
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/r3c-g32.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1669.5582762781505,
+    "t0": 2.4728102315984435,
+    "off": [
+     "fitted 1670",
+     "native/3 1662(+3.3st)",
+     "native/4 1660(+3.4st)",
+     "native/6 1663(+3.2st)",
+     "shared/3 1663(+3.2st)",
+     "shared/5 1656(+3.7st)",
+     "shared/6 1663(+3.2st)",
+     "private/3 1651(+4.0st)",
+     "private/4 1659(+3.5st)",
+     "private/5 1660(+3.4st)",
+     "private/6 1661(+3.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 85.23733333333332
+   },
+   {
+    "g": "w2",
+    "f": 1638.6109504767962,
+    "t0": -1.3500693944918167,
+    "off": [
+     "fitted 1639",
+     "offset -1.4us",
+     "native/1 1626(+5.8st)",
+     "native/2 1644(+4.6st)",
+     "native/3 1638(+5.0st)",
+     "native/4 1633(+5.3st)",
+     "native/5 1634(+5.2st)",
+     "native/6 1643(+4.6st)",
+     "native/7 1646(+4.4st)",
+     "native/8 1648(+4.3st)",
+     "native/9 1650(+4.1st)",
+     "shared/1 1630(+5.6st)",
+     "shared/2 1641(+4.7st)",
+     "shared/3 1645(+4.5st)",
+     "shared/4 1636(+5.1st)",
+     "shared/5 1636(+5.1st)",
+     "shared/6 1643(+4.6st)",
+     "shared/7 1645(+4.5st)",
+     "shared/8 1647(+4.3st)",
+     "shared/9 1646(+4.4st)",
+     "private/1 1629(+5.6st)",
+     "private/2 1649(+4.2st)",
+     "private/3 1630(+5.5st)",
+     "private/4 1629(+5.6st)",
+     "private/5 1628(+5.7st)",
+     "private/6 1631(+5.5st)",
+     "private/7 1631(+5.4st)",
+     "private/8 1635(+5.2st)",
+     "private/9 1633(+5.3st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 41.19466666666666
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/r3c-g64.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1672.7802291296314,
+    "t0": 2.6450582800334668,
+    "off": [
+     "fitted 1673",
+     "native/5 1656(+3.7st)",
+     "shared/4 1663(+3.2st)",
+     "private/3 1661(+3.3st)",
+     "private/4 1659(+3.5st)",
+     "private/5 1664(+3.1st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1726,
+      85.1,
+      -1.0
+     ],
+     [
+      "shared/1",
+      1730,
+      83.5,
+      -1.3
+     ],
+     [
+      "private/1",
+      1727,
+      84.6,
+      -1.1
+     ]
+    ],
+    "minlen": 83.456
+   },
+   {
+    "g": "w2",
+    "f": 1642.8766501452158,
+    "t0": -1.2356431888803199,
+    "off": [
+     "fitted 1643",
+     "offset -1.2us",
+     "native/1 1636(+5.1st)",
+     "native/2 1650(+4.1st)",
+     "native/3 1649(+4.1st)",
+     "native/4 1634(+5.2st)",
+     "native/5 1634(+5.3st)",
+     "native/6 1646(+4.4st)",
+     "native/7 1652(+4.0st)",
+     "native/8 1651(+4.0st)",
+     "native/9 1651(+4.0st)",
+     "shared/1 1641(+4.7st)",
+     "shared/2 1647(+4.3st)",
+     "shared/3 1647(+4.3st)",
+     "shared/4 1639(+4.9st)",
+     "shared/5 1639(+4.9st)",
+     "shared/6 1645(+4.4st)",
+     "shared/7 1650(+4.1st)",
+     "shared/8 1655(+3.8st)",
+     "shared/9 1655(+3.8st)",
+     "private/1 1634(+5.2st)",
+     "private/2 1654(+3.8st)",
+     "private/3 1629(+5.6st)",
+     "private/4 1635(+5.2st)",
+     "private/5 1630(+5.5st)",
+     "private/6 1637(+5.1st)",
+     "private/7 1633(+5.3st)",
+     "private/8 1637(+5.0st)",
+     "private/9 1641(+4.7st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 40.768
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-atile-r3-counters/lock1710/r3c-g8.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1662.128880085207,
+    "t0": 1.824783460268285,
+    "off": [
+     "fitted 1662",
+     "native/3 1660(+3.4st)",
+     "native/4 1656(+3.7st)",
+     "native/5 1646(+4.4st)",
+     "native/6 1655(+3.8st)",
+     "native/7 1656(+3.7st)",
+     "native/9 1665(+3.0st)",
+     "shared/3 1654(+3.8st)",
+     "shared/4 1664(+3.1st)",
+     "shared/5 1654(+3.8st)",
+     "shared/6 1657(+3.6st)",
+     "shared/7 1660(+3.4st)",
+     "shared/9 1660(+3.4st)",
+     "private/2 1663(+3.2st)",
+     "private/3 1651(+4.0st)",
+     "private/4 1650(+4.1st)",
+     "private/5 1653(+3.9st)",
+     "private/6 1650(+4.1st)",
+     "private/7 1663(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 87.60533333333333
+   },
+   {
+    "g": "w2",
+    "f": 1638.09812403751,
+    "t0": -1.3434339361838648,
+    "off": [
+     "fitted 1638",
+     "offset -1.3us",
+     "native/1 1631(+5.4st)",
+     "native/2 1641(+4.8st)",
+     "native/3 1640(+4.9st)",
+     "native/4 1636(+5.1st)",
+     "native/5 1633(+5.3st)",
+     "native/6 1639(+4.9st)",
+     "native/7 1643(+4.6st)",
+     "native/8 1649(+4.2st)",
+     "native/9 1646(+4.4st)",
+     "shared/1 1631(+5.5st)",
+     "shared/2 1642(+4.7st)",
+     "shared/3 1642(+4.7st)",
+     "shared/4 1636(+5.1st)",
+     "shared/5 1633(+5.3st)",
+     "shared/6 1642(+4.6st)",
+     "shared/7 1645(+4.5st)",
+     "shared/8 1646(+4.4st)",
+     "shared/9 1645(+4.5st)",
+     "private/1 1629(+5.6st)",
+     "private/2 1649(+4.2st)",
+     "private/3 1627(+5.8st)",
+     "private/4 1629(+5.6st)",
+     "private/5 1636(+5.1st)",
+     "private/6 1631(+5.5st)",
+     "private/7 1629(+5.6st)",
+     "private/8 1633(+5.3st)",
+     "private/9 1635(+5.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 41.152
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1671.4035881220102,
+    "t0": 2.2406952435426066,
+    "off": [
+     "fitted 1671",
+     "n=4 1663(+3.2st)",
+     "n=5 1661(+3.4st)",
+     "n=6 1664(+3.1st)"
+    ],
+    "ncells": 8,
+    "above": [],
+    "minlen": 84.176
+   },
+   {
+    "g": "w2",
+    "f": 1654.5234019732816,
+    "t0": -0.536673479248886,
+    "off": [
+     "fitted 1655",
+     "n=1 1658(+3.6st)",
+     "n=3 1662(+3.3st)",
+     "n=4 1647(+4.3st)",
+     "n=5 1648(+4.3st)",
+     "n=6 1653(+3.9st)",
+     "n=8 1654(+3.9st)",
+     "n=10 1657(+3.6st)"
+    ],
+    "ncells": 8,
+    "above": [],
+    "minlen": 42.08
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g8-lock1710.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1662.1342072866767,
+    "t0": 1.4971972709617984,
+    "off": [
+     "fitted 1662",
+     "n=2 1664(+3.1st)",
+     "n=3 1654(+3.9st)",
+     "n=4 1659(+3.5st)",
+     "n=5 1645(+4.5st)",
+     "n=6 1655(+3.7st)",
+     "n=10 1663(+3.2st)"
+    ],
+    "ncells": 8,
+    "above": [],
+    "minlen": 86.08
+   },
+   {
+    "g": "w2",
+    "f": 1654.58052978181,
+    "t0": -0.5612425088692399,
+    "off": [
+     "fitted 1655",
+     "n=1 1661(+3.3st)",
+     "n=3 1660(+3.4st)",
+     "n=4 1650(+4.1st)",
+     "n=5 1644(+4.5st)",
+     "n=6 1652(+4.0st)",
+     "n=8 1654(+3.8st)",
+     "n=10 1658(+3.5st)"
+    ],
+    "ncells": 8,
+    "above": [],
+    "minlen": 42.768
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2-r3-counters/lock1710/r3c-g1.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1664.886857428847,
+    "t0": 2.6418257608884015,
+    "off": [
+     "fitted 1665",
+     "native/3 1661(+3.3st)",
+     "native/4 1660(+3.4st)",
+     "native/5 1643(+4.6st)",
+     "native/6 1658(+3.6st)",
+     "native/7 1658(+3.6st)",
+     "native/8 1662(+3.3st)",
+     "native/9 1661(+3.3st)",
+     "shared/3 1658(+3.5st)",
+     "shared/4 1651(+4.0st)",
+     "shared/5 1649(+4.2st)",
+     "shared/6 1660(+3.4st)",
+     "shared/7 1655(+3.8st)",
+     "shared/8 1663(+3.2st)",
+     "private/3 1659(+3.5st)",
+     "private/4 1657(+3.6st)",
+     "private/5 1661(+3.3st)",
+     "private/6 1664(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1736,
+      82.7,
+      -1.7
+     ],
+     [
+      "shared/1",
+      1735,
+      82.6,
+      -1.6
+     ],
+     [
+      "private/1",
+      1728,
+      82.9,
+      -1.2
+     ]
+    ],
+    "minlen": 82.592
+   },
+   {
+    "g": "w2",
+    "f": 1641.3066938546688,
+    "t0": -1.2601489345250885,
+    "off": [
+     "fitted 1641",
+     "offset -1.3us",
+     "native/1 1637(+5.0st)",
+     "native/2 1651(+4.1st)",
+     "native/3 1643(+4.6st)",
+     "native/4 1637(+5.1st)",
+     "native/5 1639(+4.9st)",
+     "native/6 1645(+4.5st)",
+     "native/7 1650(+4.1st)",
+     "native/8 1651(+4.0st)",
+     "native/9 1652(+4.0st)",
+     "shared/1 1636(+5.1st)",
+     "shared/2 1648(+4.2st)",
+     "shared/3 1645(+4.5st)",
+     "shared/4 1633(+5.3st)",
+     "shared/5 1637(+5.0st)",
+     "shared/6 1639(+4.9st)",
+     "shared/7 1644(+4.6st)",
+     "shared/8 1649(+4.2st)",
+     "shared/9 1653(+3.9st)",
+     "private/1 1634(+5.2st)",
+     "private/2 1648(+4.3st)",
+     "private/3 1641(+4.8st)",
+     "private/4 1631(+5.5st)",
+     "private/5 1634(+5.3st)",
+     "private/6 1629(+5.6st)",
+     "private/7 1634(+5.3st)",
+     "private/8 1637(+5.0st)",
+     "private/9 1637(+5.0st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 40.78933333333334
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2-r3-counters/lock1710/r3c-g2.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1657.9699586037475,
+    "t0": 1.669577268436493,
+    "off": [
+     "fitted 1658",
+     "native/3 1653(+3.9st)",
+     "native/4 1651(+4.1st)",
+     "native/5 1647(+4.4st)",
+     "native/6 1652(+4.0st)",
+     "native/7 1651(+4.0st)",
+     "native/8 1665(+3.0st)",
+     "native/9 1661(+3.4st)",
+     "shared/2 1665(+3.1st)",
+     "shared/3 1648(+4.3st)",
+     "shared/4 1650(+4.1st)",
+     "shared/5 1647(+4.3st)",
+     "shared/6 1652(+4.0st)",
+     "shared/7 1649(+4.2st)",
+     "shared/8 1661(+3.4st)",
+     "shared/9 1665(+3.1st)",
+     "private/2 1661(+3.3st)",
+     "private/3 1657(+3.6st)",
+     "private/4 1645(+4.5st)",
+     "private/5 1653(+3.9st)",
+     "private/6 1649(+4.2st)",
+     "private/7 1657(+3.6st)",
+     "private/8 1664(+3.1st)",
+     "private/9 1663(+3.2st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 84.87466666666667
+   },
+   {
+    "g": "w2",
+    "f": 1635.7053539676392,
+    "t0": -1.470406951164623,
+    "off": [
+     "fitted 1636",
+     "offset -1.5us",
+     "native/1 1626(+5.8st)",
+     "native/2 1639(+4.9st)",
+     "native/3 1640(+4.8st)",
+     "native/4 1633(+5.3st)",
+     "native/5 1634(+5.2st)",
+     "native/6 1641(+4.7st)",
+     "native/7 1641(+4.7st)",
+     "native/8 1645(+4.5st)",
+     "native/9 1652(+4.0st)",
+     "shared/1 1623(+6.1st)",
+     "shared/2 1640(+4.8st)",
+     "shared/3 1635(+5.2st)",
+     "shared/4 1633(+5.3st)",
+     "shared/5 1637(+5.0st)",
+     "shared/6 1636(+5.1st)",
+     "shared/7 1642(+4.7st)",
+     "shared/8 1640(+4.8st)",
+     "shared/9 1646(+4.4st)",
+     "private/1 1621(+6.2st)",
+     "private/2 1648(+4.3st)",
+     "private/3 1628(+5.7st)",
+     "private/4 1629(+5.6st)",
+     "private/5 1626(+5.8st)",
+     "private/6 1623(+6.1st)",
+     "private/7 1627(+5.7st)",
+     "private/8 1632(+5.4st)",
+     "private/9 1629(+5.6st)"
+    ],
+    "ncells": 27,
+    "above": [],
+    "minlen": 40.81066666666666
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-olmoe-1b-7b-g128-r3-counters/lock1710/r3c-g128.json",
+  "lock": 1710.0,
+  "stored": [
+   "FAIL"
+  ],
+  "refit_pass": false,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1698.140930840811,
+    "t0": 9.153226497412659,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1734,
+      168.4,
+      -1.6
+     ],
+     [
+      "shared/1",
+      1737,
+      170.0,
+      -1.8
+     ],
+     [
+      "private/1",
+      1734,
+      169.9,
+      -1.6
+     ]
+    ],
+    "minlen": 168.36266666666666
+   },
+   {
+    "g": "w2",
+    "f": 1686.1042662140117,
+    "t0": 4.4352135772578185,
+    "off": [
+     "fitted 1686"
+    ],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1748,
+      90.9,
+      -2.5
+     ],
+     [
+      "shared/1",
+      1735,
+      101.5,
+      -1.6
+     ],
+     [
+      "private/1",
+      1732,
+      101.7,
+      -1.5
+     ]
+    ],
+    "minlen": 90.92266666666667
+   }
+  ]
+ },
+ {
+  "file": "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-qwen2-57b-a14b-g128-r3-counters/lock1710/r3c-g128.json",
+  "lock": 1710.0,
+  "stored": [
+   "PASS"
+  ],
+  "refit_pass": true,
+  "gemms": [
+   {
+    "g": "w1",
+    "f": 1706.8463790971196,
+    "t0": 17.627664729050828,
+    "off": [],
+    "ncells": 27,
+    "above": [],
+    "minlen": 687.7973333333334
+   },
+   {
+    "g": "w2",
+    "f": 1708.0871370005977,
+    "t0": 16.593872860632835,
+    "off": [],
+    "ncells": 27,
+    "above": [
+     [
+      "native/1",
+      1725,
+      377.7,
+      -1.0
+     ]
+    ],
+    "minlen": 377.67466666666667
+   }
+  ]
+ }
+]

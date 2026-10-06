@@ -1,0 +1,15 @@
+qwen2: qwen2-57b-a14b, docs/registered/2026-09-28-qwen2-57b-a14b-gh200.json, results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session (ledger rows [15, 16, 17, 18, 19])
+  floor r3f-g64.json             w1 n=[2, 3, 4, 6] 353.3 band [340.0, 365.0] all-cell 353.3 HELD
+  floor r3f-g64.json             w2 n=[2, 3, 4, 6] 369.6 printed all-cell 369.6 printed
+  floor r3f-g64-lock1710.json    w1 n=[2, 3, 4, 6] 353.7 band [340.0, 365.0] all-cell 353.7 HELD
+  floor r3f-g64-lock1710.json    w2 n=[2, 3, 4, 6] 369.0 printed all-cell 369.0 printed
+  time from predicted bytes (scored): 58 cells rms 2.71% worst -5.00% beyond 5% 0
+  G>=8 SHARED slope n=2..6: G=8 0.6962, G=32 0.6953 (registered 0.6837, band [0.67, 0.697])
+  bytes w1 all arms                                       208 cells rms 16.38% worst 93.73% beyond 5% 70
+  bytes w1 shared+private                                 140 cells rms 14.25% worst 93.73% beyond 5% 39
+  bytes private w1                                         72 cells rms 2.42% worst 6.81% beyond 5% 8
+  bytes private w2                                         72 cells rms 1.89% worst -5.77% beyond 5% 7
+  bytes shared w1                                          68 cells rms 20.30% worst 93.73% beyond 5% 31
+  bytes shared w2                                          68 cells rms 95.97% worst 381.82% beyond 5% 37
+  bytes shared+native w2 G<=16 n<=4                        48 cells rms 32.99% worst 97.38% beyond 5% 14
+  bytes named set (w1 S+P, PRIVATE w2, SHARED w2 G<=16 n<=4)  236 cells rms 15.24% worst 97.37% beyond 5% 53

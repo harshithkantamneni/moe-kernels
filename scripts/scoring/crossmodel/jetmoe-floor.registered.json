@@ -1,0 +1,80 @@
+{
+ "tool": "scripts/paper/score_registered.py",
+ "case": "jetmoe-floor",
+ "model": "jetmoe-8b",
+ "registration": "docs/registered/README.md (2026-09-30 floor-only sessions)",
+ "session": "results/published/2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session",
+ "ledger_rows": [
+  42
+ ],
+ "ksteps": {
+  "w1": 32,
+  "w2": 88
+ },
+ "floor": {
+  "r3f-g64.json": {
+   "w1": {
+    "treads": [
+     2,
+     3,
+     4,
+     6,
+     9,
+     10,
+     11
+    ],
+    "slope": 360.83573927037844,
+    "all_cell_slope": 360.83573927037844,
+    "registered": 360.4,
+    "band": null,
+    "rel": 0.0012090434805174244,
+    "verdict": "HELD"
+   },
+   "w2": {
+    "treads": [
+     9,
+     10,
+     11
+    ],
+    "slope": 361.7329394531256,
+    "all_cell_slope": 367.2451048548082,
+    "registered": 355.2,
+    "band": null,
+    "rel": 0.01839228449641217,
+    "verdict": "HELD"
+   }
+  },
+  "r3f-g64-lock1710.json": {
+   "w1": {
+    "treads": [
+     2,
+     3,
+     4,
+     6,
+     9,
+     10,
+     11
+    ],
+    "slope": 361.9334717694451,
+    "all_cell_slope": 361.9334717694451,
+    "registered": 360.4,
+    "band": null,
+    "rel": 0.004254916119436958,
+    "verdict": "HELD"
+   },
+   "w2": {
+    "treads": [
+     9,
+     10,
+     11
+    ],
+    "slope": 364.48076660156295,
+    "all_cell_slope": 367.7946330171473,
+    "registered": 355.2,
+    "band": null,
+    "rel": 0.026128284351247144,
+    "verdict": "FALSIFIED"
+   }
+  }
+ }
+}

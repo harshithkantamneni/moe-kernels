@@ -1,0 +1,18 @@
+phi-3.5-moe timed with mixtral-8x7b's fit and its own counted bytes (nothing fitted on it), 1710 MHz: SHARED+PRIVATE 76 cells, rms 0.57%, worst -1.27%, 0 beyond 5%
+  arm=native    38 cells rms 0.64% worst -1.32%
+  arm=private   38 cells rms 0.59% worst -1.27%
+  arm=shared    38 cells rms 0.55% worst +1.08%
+  G=2           27 cells rms 0.71% worst -1.10%
+  G=3           24 cells rms 0.47% worst -1.05%
+  G=4           27 cells rms 0.50% worst -1.07%
+  G=8           18 cells rms 0.56% worst -1.03%
+  G=32          18 cells rms 0.70% worst -1.32%
+  n=1           15 cells rms 0.65% worst +1.07%
+  n=2           15 cells rms 0.76% worst -1.32%
+  n=3           15 cells rms 0.50% worst +0.94%
+  n=4           15 cells rms 0.42% worst -1.11%
+  n=5           15 cells rms 0.63% worst -1.27%
+  n=6           15 cells rms 0.52% worst -1.06%
+  n=7            9 cells rms 0.63% worst +0.96%
+  n=8            9 cells rms 0.50% worst -0.67%
+  n=9            6 cells rms 0.68% worst +0.96%

@@ -1,0 +1,46 @@
+"""scripts/paper/noise_floors.py: the committed table regenerates byte for byte
+from the published pages, and its key numbers are pinned."""
+import csv
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts" / "paper"))
+
+import noise_floors as NF  # noqa: E402
+
+
+def test_committed_table_regenerates(tmp_path):
+    NF.write(NF.build(), tmp_path)
+    for name in ("noise_floors.csv", "noise_floors.md"):
+        assert (tmp_path / name).read_text() == (ROOT / "docs/paper" / name).read_text(), name
+
+
+def test_every_row_has_a_floor_or_says_none():
+    rows = list(csv.DictReader((ROOT / "docs/paper/noise_floors.csv").open()))
+    assert rows
+    for r in rows:
+        assert r["noise_floor"].strip(), r["metric"]
+        if r["method"] == "none":
+            assert r["noise_floor"] == NF.NONE
+
+
+def test_key_numbers():
+    tb = NF.time_board()
+    assert tb["cells"] == 24
+    assert abs(tb["rms_diff"] - 0.0026) < 0.0005
+    t2 = {r[0]: r for r in NF.t2_metric()["rows"]}
+    assert abs(t2["tp2 G=64"][4] - 0.5802) < 1e-3  # D/README.md rental 1 T2 f(tp2 G=64)
+    assert abs(t2["8x7B G=16"][5] - 0.2472) < 1e-3 and abs(t2["8x7B G=32"][5] - 0.4900) < 1e-3
+    d = NF.tp8_D()
+    assert round(d["r3f-g64.json"]) == 156941 and round(d["r3f-g8.json"]) == 155820
+    p4 = NF.part4_cells()
+    assert 2000 < p4["sigma_single"] < 3500  # the registered sigma_cell is 2678
+
+
+def test_cli_runs(tmp_path):
+    p = subprocess.run([sys.executable, str(ROOT / "scripts/paper/noise_floors.py"),
+                        "--out-dir", str(tmp_path)], capture_output=True, text=True, cwd=ROOT)
+    assert p.returncode == 0, p.stderr
+    assert (tmp_path / "noise_floors.csv").exists()

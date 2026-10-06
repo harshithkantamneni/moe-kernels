@@ -75,11 +75,18 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
      per arm on one model's pages, so no single-card fit sees it; at 64 experts
      x 9 copies it is 56 us a SHARED or PRIVATE call (2026-09-29).
 
-Five parameters are fitted per card, never pooled across cards: T0 (ms), c
-(ns per CTA k-step per SM), bw (GB/s), s_small and s_block (ms). k_w = 1/2 is
-a study-level FITTED constant (the rms optimum sits at 0.40 to 0.50 on all
-three cards, the judge's scan); the k_w = 1 fit, the window the occupancy
-limit derives, is always printed beside it and is worse on every card so far.
+Five parameters are fitted per card by this tool, never pooled across cards:
+T0 (ms), c (ns per CTA k-step per SM), bw (GB/s), s_small and s_block (ms).
+They are not the model's only fitted numbers. k_w = 1/2 is a study-level FITTED
+constant (the rms optimum sits at 0.40 to 0.50 on all three cards, the judge's
+scan); the k_w = 1 fit, the window the occupancy limit derives, is always
+printed beside it and is worse on every card so far. P_KNEE, DEAD_CTA_NS,
+CTA_FIXED_KSTEPS (from c 344.1, F_w1 and F_w2) and CORES_RHO_GBPS are fitted on
+counter or timed pages too (each one's comment below): seven study-level
+fitted numbers beside the five. The byte model that supplies predicted bytes
+fits ten more per card (scripts/wave_split_bytes.py, MIX view). Every one, its
+value and its pages: docs/paper/T2_parameters.md
+(`python scripts/paper/t2_parameters.py`).
 
 WHAT IS DERIVED AND WHAT IS NOT. The schedule (steps 1 to 4) is derived from
 the kernel's pid mapping and is card-free: its lead count equals

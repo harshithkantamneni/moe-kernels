@@ -1,0 +1,45 @@
+capture,test,law,predicted,measured,result
+r3f-g64,F1 D,cores,155193,156941,inside
+r3f-g64,F1 D,old_lifetime,87121,156941,outside
+r3f-g64,F1 D,cores_per_lead,121171,156941,outside
+r3f-g64,F1 D,throughput,158705,156941,inside
+r3f-g64,F2 w1 n=2,cores,162579,170316,+4.76%
+r3f-g64,F2 w1 n=2,old_lifetime,230651,170316,-26.16%
+r3f-g64,F2 w1 n=2,cores_per_lead,200992,170316,-15.26%
+r3f-g64,F2 w1 n=2,throughput,159104,170316,+7.05%
+r3f-g64,F3,cores,,,"FALSIFIED: n=1 w1 +13.02%, n=1 w2 +8.65%, n=2 w2 +10.38%, n=3 w2 +8.34%"
+r3f-g64,F4 w1,cores,352.2,339.558,FALSIFIED (-3.59%)
+r3f-g64,F4 w2,cores,379.1,374.315,HELD (-1.26%)
+r3f-g8,F1 D,cores,155193,155820,inside
+r3f-g8,F1 D,old_lifetime,87121,155820,outside
+r3f-g8,F1 D,cores_per_lead,121171,155820,outside
+r3f-g8,F1 D,throughput,158705,155820,inside
+r3f-g8,F2 w1 n=2,cores,162470,170367,+4.86%
+r3f-g8,F2 w1 n=2,old_lifetime,230542,170367,-26.10%
+r3f-g8,F2 w1 n=2,cores_per_lead,196244,170367,-13.19%
+r3f-g8,F2 w1 n=2,throughput,158957,170367,+7.18%
+r3f-g8,F3,cores,,,"FALSIFIED: n=1 w1 +14.42%, n=2 w2 +11.07%"
+r3f-g8,F4 w1,cores,352.2,342.532,FALSIFIED (-2.75%)
+r3f-g8,F4 w2,cores,379.1,374.176,HELD (-1.30%)
+r3f-g64-lock1710,F1 D,cores,155193,155988,inside
+r3f-g64-lock1710,F1 D,old_lifetime,87121,155988,outside
+r3f-g64-lock1710,F1 D,cores_per_lead,121171,155988,outside
+r3f-g64-lock1710,F1 D,throughput,158705,155988,inside
+r3f-g64-lock1710,F2 w1 n=2,cores,162552,167568,+3.09%
+r3f-g64-lock1710,F2 w1 n=2,old_lifetime,230623,167568,-27.34%
+r3f-g64-lock1710,F2 w1 n=2,cores_per_lead,200075,167568,-16.25%
+r3f-g64-lock1710,F2 w1 n=2,throughput,159067,167568,+5.34%
+r3f-g64-lock1710,F3,cores,,,"FALSIFIED: n=1 w1 +24.12%, n=1 w2 +23.24%, n=2 w2 +12.62%"
+r3f-g64-lock1710,F4 w1,cores,352.2,339.646,FALSIFIED (-3.56%)
+r3f-g64-lock1710,F4 w2,cores,379.1,372.765,HELD (-1.67%)
+r3f-g8-lock1710,F1 D,cores,155193,155914,inside
+r3f-g8-lock1710,F1 D,old_lifetime,87121,155914,outside
+r3f-g8-lock1710,F1 D,cores_per_lead,121171,155914,outside
+r3f-g8-lock1710,F1 D,throughput,158705,155914,inside
+r3f-g8-lock1710,F2 w1 n=2,cores,162470,171272,+5.42%
+r3f-g8-lock1710,F2 w1 n=2,old_lifetime,230541,171272,-25.71%
+r3f-g8-lock1710,F2 w1 n=2,cores_per_lead,196204,171272,-12.71%
+r3f-g8-lock1710,F2 w1 n=2,throughput,158956,171272,+7.75%
+r3f-g8-lock1710,F3,cores,,,"FALSIFIED: n=1 w1 +27.06%, n=1 w2 +25.55%, n=2 w2 +10.11%"
+r3f-g8-lock1710,F4 w1,cores,352.2,340.513,FALSIFIED (-3.32%)
+r3f-g8-lock1710,F4 w2,cores,379.1,375.553,HELD (-0.94%)
