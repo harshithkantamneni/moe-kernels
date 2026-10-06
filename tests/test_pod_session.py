@@ -37,10 +37,23 @@ from moe.bench.schema import COLUMNS, SCHEMA_VERSION  # noqa: E402
 from moe.bench.timing import TIMING_BASIS  # noqa: E402
 
 
+#: P9 probes the ignore rules by writing nine files and removing them. Run in
+#: this checkout, those files show in a `git status` that another test (under
+#: pytest -n) takes in that window. Every run here points the probe at a
+#: scratch work tree under the test's tmp_path instead.
+PROBE_ROOT = "MOE_PREFLIGHT_PROBE_ROOT"
+
+
+@pytest.fixture(autouse=True)
+def _probe_off_the_checkout(tmp_path, monkeypatch):
+    monkeypatch.setenv(PROBE_ROOT, str(tmp_path / "preflight-probe"))
+
+
 def sh(*args: str, env: dict | None = None):
     base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", "/tmp"),
-            "MOE_PYTHON": PY}
+            "MOE_PYTHON": PY,
+            PROBE_ROOT: os.environ[PROBE_ROOT]}
     base.update(env or {})
     return subprocess.run(["bash", str(POD), *args], cwd=REPO, text=True,
                           capture_output=True, env=base)
@@ -342,13 +355,15 @@ def test_s6d_refuses_an_empty_sweep_rather_than_scoring_nothing(tmp_path):
 # --------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def dry_run() -> str:
+def dry_run(tmp_path_factory) -> str:
+    probe = tmp_path_factory.mktemp("preflight-probe")
     r = subprocess.run(
         ["bash", str(POD), "--dry-run", "--skip-tests", "--no-download",
          "--session-dir", "/tmp/moe-test-pod-session-predictions"],
         cwd=REPO, text=True, capture_output=True,
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-             "HOME": os.environ.get("HOME", "/tmp"), "MOE_PYTHON": PY})
+             "HOME": os.environ.get("HOME", "/tmp"), "MOE_PYTHON": PY,
+             PROBE_ROOT: str(probe)})
     return r.stdout
 
 

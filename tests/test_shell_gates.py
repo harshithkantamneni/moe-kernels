@@ -33,10 +33,26 @@ PUBLISH = REPO / "scripts" / "publish_results.sh"
 PY = sys.executable
 
 
+#: pod_session.sh's P9 probes the ignore rules by writing nine files under
+#: results/published/ and traces/ and removing them. In this checkout those
+#: files show in a `git status` that another test takes in that window under
+#: pytest -n. A run whose cwd is the checkout points the probe at a scratch
+#: work tree under the test's tmp_path; a run in a farm keeps the default and
+#: so still exercises the in-tree probe, where nothing else is looking.
+PROBE_ROOT = "MOE_PREFLIGHT_PROBE_ROOT"
+
+
+@pytest.fixture(autouse=True)
+def _probe_off_the_checkout(tmp_path, monkeypatch):
+    monkeypatch.setenv(PROBE_ROOT, str(tmp_path / "preflight-probe"))
+
+
 def sh(script: Path, *args: str, env: dict | None = None, cwd: Path = REPO):
     base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", "/tmp"),
             "MOE_PYTHON": PY}
+    if Path(cwd) == REPO:
+        base[PROBE_ROOT] = os.environ[PROBE_ROOT]
     base.update(env or {})
     return subprocess.run(["bash", str(script), *args], cwd=cwd, text=True,
                           capture_output=True, env=base)
@@ -207,6 +223,43 @@ def test_the_pod_dry_run_writes_nothing_when_its_test_step_runs_too(tmp_path):
                            capture_output=True, text=True).stdout
     assert dirty == "", f"the dry run wrote into the checkout:\n{dirty}"
     assert tree_state() == before_repo, "and it wrote into the real one"
+
+
+def test_p9_answers_the_same_in_a_scratch_work_tree_as_in_the_checkout(tmp_path):
+    """MOE_PREFLIGHT_PROBE_ROOT moves P9's nine files off the checkout. That
+    is only worth having if the verdict does not change: a scratch tree that
+    lost the checkout's ignore rules would PASS every time. A farm carrying the
+    unanchored `plots/` rule P9 exists to catch is probed both ways, and both
+    must FAIL on the same rule; neither may leave the farm dirty."""
+    root = _stand_in_farm(tmp_path)
+    (root / "results" / "published" / ".gitignore").write_text("plots/\n")
+    for args in (["add", "-A"], ["commit", "-qm", "the unanchored rule"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
+    lines = {}
+    for mode, extra in (("in-tree", {}),
+                        ("scratch", {PROBE_ROOT: str(tmp_path / "scratch")})):
+        r = sh(root / "scripts" / "pod_session.sh", "--dry-run", "--skip-tests",
+               "--no-download", "--session-dir", str(tmp_path / f"s-{mode}"),
+               cwd=root, env={"PYTHONPATH": str(REPO), **extra})
+        hit = [ln for ln in r.stdout.splitlines() if ln.startswith("P9")]
+        assert hit, r.stdout
+        lines[mode] = hit[0]
+        dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                               capture_output=True, text=True).stdout
+        assert dirty == "", f"{mode}: the probe was left in the farm:\n{dirty}"
+    assert "FAIL" in lines["in-tree"] and "plots/" in lines["in-tree"], lines
+    assert lines["scratch"] == lines["in-tree"], lines
+    assert not (tmp_path / "scratch" / "p9-worktree").exists()
+
+
+def test_p9_passes_on_the_checkouts_own_rules_from_a_scratch_work_tree(tmp_path):
+    """The other direction: this repository's .gitignore re-includes every
+    exfil path, and the scratch probe must say so."""
+    r = sh(POD, "--dry-run", "--skip-tests", "--no-download",
+           "--session-dir", str(tmp_path / "session"))
+    line = [ln for ln in r.stdout.splitlines() if ln.startswith("P9")]
+    assert line and "PASS" in line[0] and "0 of 9 ignored" in line[0], r.stdout
 
 
 def _setup_farm(tmp_path: Path) -> tuple[Path, Path, Path]:

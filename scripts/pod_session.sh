@@ -1039,7 +1039,30 @@ PYEOF
   # arms. The rule is now `/plots/`, but `*.ptx`, `*.so`, `*.nsys-rep` and
   # `*.qdrep` still match at any depth ON PURPOSE, which is why step 5's dumps
   # leave as a tarball. This probes the real paths rather than trusting either.
+  #
+  # WHERE THE PROBE IS WRITTEN. By default into this checkout, as it always was.
+  # The nine files exist only for the length of this block, but a test running
+  # in parallel that asks `git status` of the checkout in that window sees them.
+  # MOE_PREFLIGHT_PROBE_ROOT names a scratch directory instead: a fresh work
+  # tree is built there carrying this checkout's ignore rules (every
+  # .gitignore git sees, .git/info/exclude, a local core.excludesFile; the
+  # global one applies anyway) and the same nine paths are written and probed
+  # in it, so the checkout is never touched and the answer is the same.
   local probe_dir="results/published/_preflight_probe" ignored=0 ig_report=""
+  local probe_top=""
+  if [[ -n "${MOE_PREFLIGHT_PROBE_ROOT:-}" ]]; then
+    probe_top="$MOE_PREFLIGHT_PROBE_ROOT/p9-worktree"
+    rm -rf "$probe_top" && mkdir -p "$probe_top" && git init -q "$probe_top"
+    local g ex
+    while IFS= read -r -d '' g; do
+      mkdir -p "$probe_top/$(dirname "$g")" && cp "$g" "$probe_top/$g"
+    done < <(git ls-files -z --cached --others --exclude-standard -- ':(glob)**/.gitignore')
+    ex="$(git rev-parse --git-path info/exclude 2>/dev/null)"
+    [[ -f "$ex" ]] && mkdir -p "$probe_top/.git/info" && cp "$ex" "$probe_top/.git/info/exclude"
+    ex="$(git config --local core.excludesFile 2>/dev/null)"
+    [[ -n "$ex" ]] && git -C "$probe_top" config core.excludesFile "$ex"
+    pushd "$probe_top" >/dev/null || return 3
+  fi
   mkdir -p "$probe_dir/plots" "$probe_dir/ptx"
   : > "$probe_dir/plots/probe.png"
   : > "$probe_dir/ISA_CENSUS.txt"
@@ -1067,6 +1090,10 @@ PYEOF
     fi
   done
   rm -rf "$probe_dir" traces/_probe.npz
+  if [[ -n "$probe_top" ]]; then
+    popd >/dev/null || return 3
+    rm -rf "$probe_top"
+  fi
   [[ "$ignored" == "0" ]]; verdict P9 "exfil paths are committable" $? \
     "$ignored of 9 ignored${ig_report:+ --$ig_report}" "== 0" fatal \
     "Anything ignored here is lost at teardown even after a successful publish, and the loss is silent: git add reports nothing. Fix the rule or change the exfil filename before spending an hour producing the artefact."
