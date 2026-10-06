@@ -1,2 +1,4 @@
 == 2026-10-06T23:32:48Z step stamps: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate
 2026-10-06T23:32:48Z stamps REFUSED: the perturbation gate for u8-stf reads 'FAIL median=0.016840566892701192 worst=0.022218209391939414' (instr-gate.env): an instrumented unit runs only on a PASS
+== 2026-10-06T23:32:51Z step stamps: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=64), G=64 treads 4 6 arms native, BK 64 s4; runs only on a PASS gate
+2026-10-06T23:32:51Z stamps REFUSED: the perturbation gate for u9-stk64s4 reads 'FAIL median=0.07274465299527444 worst=0.0905522850061461' (instr-gate.env): an instrumented unit runs only on a PASS
