@@ -4,3 +4,4 @@
 2026-10-06T22:49:28Z calibrate (unit 2/25 mixtral-8x7b r4): exit 0 (0 min)
 2026-10-06T22:49:40Z rulers (unit 3/25 - r4): exit 0 (0 min)
 2026-10-06T22:59:29Z gpubench (unit 4/25 - r4): exit 0 (10 min)
+2026-10-06T23:15:40Z timed (unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)

@@ -27,3 +27,11 @@
 2026-10-06T22:59:29Z gpubench: exit 0 (third-party GPL-3.0 code at its pin, outside the checkout; /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/constants.json)
 2026-10-06T22:59:29Z gpubench END: exit 0 after 10 min [unit 4/25 - r4]
 2026-10-06T22:59:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T22:59:30Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 377 min left)
+2026-10-06T22:59:30Z timed: declared-copies 9 on every page of this unit
+2026-10-06T22:59:31Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-06T23:15:39Z timed: P2 locked_r3 exit 0
+2026-10-06T23:15:39Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-06T23:15:39Z timed: 2026-10-06T23:15:34Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-94e2fecb
+2026-10-06T23:15:39Z timed END: exit 0 after 16 min [unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-06T23:15:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
