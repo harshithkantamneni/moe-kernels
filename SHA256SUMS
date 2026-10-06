@@ -1,5 +1,5 @@
 6bd98460f98f1143e920bac5b9ea72d9244ab1903409fa85275bb7dde2e0db55  vm/driver580.log
-ee59abbee3f6f37b97516216945c4451aed592de166d3ca5aacf133f96b14404  vm/gh200-driver.out
+9e9be57d6582f9b63d70bada6753bab580a2b24eb65963398569919f4fdda206  vm/gh200-driver.out
 f3ebe659cfcd187563821189d7adf9902054c2639fd2647c498810f3a708e1ee  vm/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/constants.json
 f3e9319f9dc8d6bd3a9da06fa5c25a187a60b761049c7b0132a40706c9171f68  vm/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/gpu-l2-cache.txt
 6253bb2dd44348d09814b95969b0111749e891cedf7558bed3d036b12bc146c2  vm/results/2026-10-06-nvidia_gh200_480gb-gpubench-r4/gpu-latency.txt
@@ -104,6 +104,7 @@ e573e46d826cb3c8edf921b2ee06123ee24240bfc17dbd81822329e3dc5f4b8b  vm/results/202
 71638585529004e8a64c9cf3cfe3f42e99922297a9b07565045826948ae7b4e8  vm/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s6-r3-counters/lock1710/r3c-g64.profiles/g64.triton-cache/WSFYXD274AJGW5A6Z2NXTVTSAKKIYQKUJAFCPAO5ZAGIHXKSTXEQ/fused_moe_kernel.source
 5548cbfffe1abf87cdbdde3e3eb0f96718a77a076c2beb31392d523b75917862  vm/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s6-r3-counters/lock1710/r3c-g64.profiles/g64.triton-cache/WSFYXD274AJGW5A6Z2NXTVTSAKKIYQKUJAFCPAO5ZAGIHXKSTXEQ/fused_moe_kernel.ttgir
 396bbe22ca9e9a3544c18fc4051f79898491f650f942f5c12bf224c568071dc5  vm/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s6-r3-counters/lock1710/r3c-g64.profiles/g64.triton-cache/WSFYXD274AJGW5A6Z2NXTVTSAKKIYQKUJAFCPAO5ZAGIHXKSTXEQ/fused_moe_kernel.ttir
+6818517cb8e1a267fd3328468b5961dd5bcd3adff601ce5b27c2f05c5e642555  vm/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s6-r3-counters/lock1710/summary.json
 6a98b80ddd7864d32797ef9e50c75185bb7720e9fcc175159d61be811fcd0d84  vm/results/2026-10-06-nvidia_gh200_480gb-perturb-pt/gate.env
 d0f490a3ede723329d2796255432686187d8047faadbde7f5f91118414b0dcc2  vm/results/2026-10-06-nvidia_gh200_480gb-perturb-pt/perturb.json
 824ce827893fb02b0090a7748a669063f53488ae326848ae5a51389ff4def11f  vm/results/2026-10-06-nvidia_gh200_480gb-perturb-pt/sass/u10_stk32s4/copy-32-64-32-64-4-8-False-8.sass
@@ -621,9 +622,9 @@ fcfbd72a0f90ffd94446a565e766686050e086b33a15d825f0068f6c0d8f2338  vm/session/cou
 305401d20e513330dfc87a1790d5411f37c6b705bc12bab4294231976c52a493  vm/session/gh200-driver/instr-variants.json
 d8f0a3d833621a416064a1c276e64f237dc2ccc220dff8afc706da93bc0b516b  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-a1444b482ba2a008ac4470b29c2fca06260cb46b378ef2e45845821ee756a844  vm/session/gh200-driver/status
-c24c0815e188524696c5d3ad3457cbabb6821d21c825146b79f4d0accb1e801a  vm/session/gh200-driver/summary.new
-c24c0815e188524696c5d3ad3457cbabb6821d21c825146b79f4d0accb1e801a  vm/session/gh200-driver/summary.txt
+0fdfab3c983032a1f271ecb95ce4a538baebf4c6e1ede635de9a8ac5609a77ec  vm/session/gh200-driver/status
+8440a09856fd011e0de161246e97806e42df945363792491b9f6f9f8b7215d9c  vm/session/gh200-driver/summary.new
+8440a09856fd011e0de161246e97806e42df945363792491b9f6f9f8b7215d9c  vm/session/gh200-driver/summary.txt
 38ec05321e60d25eaa502ad8add0391a7d72367980dfb4eec88a1e5b3b4e853c  vm/session/gh200-driver/tags-used
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/gh200-driver/timed-results
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt
@@ -637,10 +638,10 @@ ab49a41871a8afdbefb04108b296d14502212016f2e7cc89785268e339718169  vm/session/loc
 d030b8f20c6e0a77fff95aa2c4e2da04810999f37ed808d56f89c036b16a1a1a  vm/session/locked-r3/gh200-20261006T224900Z-p2b/smi.csv
 1433a1cfbfd3a66cdb9ea1c2512397cb1faee3ddba9f10a92b4632988b956249  vm/session/locked-r3/gh200-20261006T224900Z-p2b/status
 5588908d6da7f6dedda89a245a5f32975b907b0d332c26425047db83b00d7ce4  vm/session/locked-r3/gh200-20261006T224900Z-p2b/summary.json
-027edc3792d279e2045a94701112b603a0563e314847fb0348237dfb82a062ba  vm/session/logs/analyse-lock1710.log
+83e533be45515abdde510f5c85038a7ccbcd7f7d4a77d12518e355b8ea70750c  vm/session/logs/analyse-lock1710.log
 7966cca90e0c61ca56fe14b170ad11e1363994262a859fe2b0d6af3381b4afc3  vm/session/logs/calibrate.log
 c76c397b3149cfe26f20fd5dcd6d68a862cf05b69eaa48211ac45906d366cdb3  vm/session/logs/census-olmoe-1b-7b.log
-75e919f27a58c6188d2ac8a4c068919fc942d1973a09d52e861456f3b181adc5  vm/session/logs/driver-bytes.log
+da84072072c76ab3afc9903270fe36452838fb1799fb7c5ccf9bc2069a8d47be  vm/session/logs/driver-bytes.log
 0bd49cb3fb2104ec2d22ef0f76c378eabfd3f3ebc39b235e74a99156dd447fa7  vm/session/logs/driver-calibrate.log
 1e9b1dfcf53d16fd8204e5079b80f0a51b2d4f4ec1f187308faa02cc3b4512a6  vm/session/logs/driver-gpubench.log
 9a3e7a7c85d4e40ba8e1afe3472fd7508b616bbf19f8e6bbe7df98b71e92947b  vm/session/logs/driver-perturb.log
