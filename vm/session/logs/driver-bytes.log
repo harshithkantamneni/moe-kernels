@@ -109,3 +109,112 @@ git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/resu
 G=3 exit 3 07:40:48 104 s
 G=3 INVALID on V5 : the page is written, go on (re-scored later)
 2026-10-06T07:40:48Z bytes: G=3 page exit 3 after 104 s
+[push] pushed bd60b1f to run-gh200-rental3-20261006t0655: bytes: G=3 page exit 3
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 COUNTER RUN  G=8  27 cells, 162 profiled launches after 108 skipped, at an nvidia-smi lock of 1710 MHz (ncu --clock-control none)
+  ncu        /usr/local/cuda-13.0/bin/ncu  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  metrics    17 asked: dram__bytes_read.sum, dram__bytes_write.sum, lts__t_sectors_srcunit_tex_op_read.sum, launch__grid_size, gpu__time_duration.sum, lts__d_sectors_fill_device.sum, lts__t_sectors_op_read_lookup_miss.sum, lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum, lts__t_sector_op_read_hit_rate.pct, launch__occupancy_limit_blocks, launch__occupancy_limit_registers, launch__occupancy_limit_shared_mem, launch__occupancy_limit_warps, launch__registers_per_thread, launch__waves_per_multiprocessor, lts__t_sectors_srcunit_ltcfabric.sum, sm__cycles_elapsed.avg
+  profiles   /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.profiles
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 ARMS UNDER A DRAM COUNTER  G=8  qwen2-57b-a14b-tp8 bf16 BLOCK_M=32 BLOCK_N=64 BLOCK_K=64 num_warps=8 num_stages=4
+  arms ['native', 'shared', 'private'] x treads [1, 2, 3, 4, 5, 6, 7, 8, 9]; 3 measured calls per cell after 2 warmups; 162 profiled launches; declared 9 copies ({'native': 64, 'shared': 576, 'private': 576})
+  counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none); V10 reads the lock back by independent clocks (lock_gate)
+
+  q(n) = (R(n) - n x operand) / W, one weight set per unit, the group model beside it;
+  e = q_P - n at PRIVATE's highest call is its excess, its activation re-read; SHARED's weight-only q runs from the lowest call of SHARED or NATIVE, less e, to the highest (q_S_bracket on the page)
+    n   model      q_S   q_S,w1   q_S,w2      q_N      q_P   q_P,w1   q_P,w2     e_w1     e_w2
+    1  1.0000   0.9714   0.9570   1.0003   0.9714   0.9714   0.9570   1.0003   0.0000   0.0003
+    2  1.0000   0.9441   0.9159   1.0004   0.9440   1.9438   1.9155   2.0004   0.0000   0.0004
+    3  1.2500   0.9271   0.8904   1.0005   0.9273   2.9159   2.8735   3.0006   0.0000   0.0006
+    4  1.0000   0.8845   0.8264   1.0007   0.8845   3.8892   3.8334   4.0007   0.0000   0.0007
+    5  1.5000   0.8594   0.7887   1.0008   0.8595   4.8627   4.7935   5.0009   0.0000   0.0012
+    6  1.5000   0.8283   0.7420   1.0009   0.8282   5.8378   5.7563   6.0009   0.0000   0.0009
+    7  1.7500   0.7982   0.6967   1.0010   0.7982   6.8109   6.7159   7.0011   0.0000   0.0011
+    8  1.0000   0.7675   0.6506   1.0012   0.7674   7.7874   7.6806   8.0011   0.0000   0.0011
+    9  2.0000   0.7390   0.6078   1.0013   0.7390   8.7704   8.6549   9.0015   0.0000   0.0016
+
+  alpha(G=8) in [-0.0296, -0.0295] (w1 [-0.0445, -0.0444], w2 [-0.0001, 0.0002]): the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call
+  SHARED's own calls alone, NATIVE not pooled: alpha in [-0.0296, -0.0295] (w1 [-0.0445, -0.0444], w2 [-0.0001, 0.0002]); every gate reads the same on it. The pooled bracket above is the page's; this line changes no verdict
+  the OLS slope of q_S's K-call means, every activation re-read counted as a weight re-read: -0.0296 (w1 -0.0444, w2 0.0001), max relative residual 1.11%: a scalar summary; meaningful where the ladder is affine
+  alpha_ratio slope(R_S)/slope(R_P) = 0.0067 (its K calls allow [0.0066, 0.0067]); alpha_diff 1 - (slope_P - slope_S)/W = -0.0040, q_S - (q_P - n) on the means; none uses a bandwidth, a ridge, an intercept or a calibration
+
+  ACTIVATION RE-READS, named in advance (r3_exposure): one column pass of the fullest group, MiB, A + slabs = working set, against this card's 60 MiB L2 (30 per partition)
+  n=1  w1 S 1.8+3.5=5.2 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.3=0.5 held  w2 P 0.2+0.3=0.5 held
+  n=2  w1 S 1.8+1.8=3.5 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.2=0.3 held  w2 P 0.2+0.3=0.5 held
+  n=3  w1 S 1.8+1.8=3.5 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.2=0.3 held  w2 P 0.2+0.3=0.5 held
+  n=4  w1 S 1.8+0.9=2.6 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.1=0.2 held  w2 P 0.2+0.3=0.5 held
+  n=5  w1 S 1.8+1.3=3.1 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.1=0.3 held  w2 P 0.2+0.3=0.5 held
+  n=6  w1 S 1.8+0.9=2.6 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.1=0.2 held  w2 P 0.2+0.3=0.5 held
+  n=7  w1 S 1.8+0.9=2.6 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.1=0.2 held  w2 P 0.2+0.3=0.5 held
+  n=8  w1 S 1.8+0.4=2.2 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.0=0.2 held  w2 P 0.2+0.3=0.5 held
+  n=9  w1 S 1.8+0.9=2.6 held  w1 P 1.8+3.5=5.2 held  w2 S 0.2+0.1=0.2 held  w2 P 0.2+0.3=0.5 held
+
+RESULT: VALIDITY V0 PASS the page names the live card it was measured on: CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THI
+GATE V0  VALIDITY PASS   the page names the live card it was measured on
+              measured CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.   gate a card block with ['name', 'uuid', 'sm_count', 'l2_bytes', 'capability', 'driver']
+RESULT: VALIDITY V1 PASS every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL: 162 launches over 27 cells, every grid matc
+GATE V1  VALIDITY PASS   every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL
+              measured 162 launches over 27 cells, every grid matched   gate exact count; grids equal; census GEMMS_PER_CALL = 2
+RESULT: VALIDITY V2 PASS every STRICT metric is a number on every launch: 5 fields x 54 GEMM cells
+GATE V2  VALIDITY PASS   every STRICT metric is a number on every launch
+              measured 5 fields x 54 GEMM cells   gate no missing value, never a 0.0 default
+RESULT: VALIDITY V3 PASS at n=1 each cell's K calls read the same bytes: worst gated (max - min) / median 0.0161%
+GATE V3  VALIDITY PASS   at n=1 each cell's K calls read the same bytes
+              measured worst gated (max - min) / median 0.0161%   gate <= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list
+              deeper treads, not gated, spread up to 0.1481% (shared/3): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls
+RESULT: VALIDITY V4 PASS at n=1 the arms are one call and each reads one weight set: |R_S(1)/R_P(1) - 1| = 0.0012% against 0.5000%; q(1) native 0.9714, shared 0.9714, private 0.9714
+GATE V4  VALIDITY PASS   at n=1 the arms are one call and each reads one weight set
+              measured |R_S(1)/R_P(1) - 1| = 0.0012% against 0.5000%; q(1) native 0.9714, shared 0.9714, private 0.9714   gate <= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]
+              at n=1 SHARED and PRIVATE route every tile to copy 0: they are the same call, so their bytes must agree
+RESULT: VALIDITY V5 FAIL the PRIVATE arm re-reads the whole weight set per tile: n=1 w1 q_P 0.9570; n=2 w1 q_P 1.9155; n=3 w1 q_P 2.8735; n=4 w1 q_P 3.8334; and 5 more
+GATE V5  VALIDITY FAIL   the PRIVATE arm re-reads the whole weight set per tile
+              measured n=1 w1 q_P 0.9570; n=2 w1 q_P 1.9155; n=3 w1 q_P 2.8735; n=4 w1 q_P 3.8334; and 5 more   gate 0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]
+              a FAIL here invalidates: the apparatus. Below the floor, weight bytes are MISSING, which is impossible for an arm whose every tile reads its own copy: the counter, the attribution or the relabelling is broken (V9 should agree). Above 1.5 n is a per-call or double-count error
+              PRIVATE's excess over n is activation re-read, and a full thrash adds at most 0.4500 of W_w1, 0.4911 of W_w2 per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell a thrash from a sound page, and C6 reads it
+RESULT: VALIDITY V6 PASS the arms request the same L2 read sectors: 20 comparisons held; nearest its tolerance 0.2521% of 0.5% at n=1 w2 (SHARED against PRIVATE)
+GATE V6  VALIDITY PASS   the arms request the same L2 read sectors
+              measured 20 comparisons held; nearest its tolerance 0.2521% of 0.5% at n=1 w2 (SHARED against PRIVATE)   gate max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread
+              compute capability 9.0, at or above Hopper's 9.0: an L2 Request Coalescer can merge reads of one sector before the L2 counts them, most likely what put this count below the loads on the GH200 and the H100 (no counter on this page sits before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, one call (both route every tile to copy 0), within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live tile SHARED's pid, the same tiles under another declaration, within 1.3% at every tread
+              not held: PRIVATE at n >= 2 (its tiles read their own copies); their loads there rest on V5, V7 and V9 until a page carries a load count taken before the coalescer (docs/COUNTERS.md 6.8)
+              not gated: over the three arms at every tread the widest gap is 16.9416% at n=2 w1
+RESULT: VALIDITY V7 PASS NATIVE and SHARED read the same DRAM bytes: every (n, GEMM) within tolerance
+GATE V7  VALIDITY PASS   NATIVE and SHARED read the same DRAM bytes
+              measured every (n, GEMM) within tolerance   gate |R_N/R_S - 1| <= max(1%, 3 x that GEMM's own repeat spread in either cell), and the two arms' calls no more than 1% apart where the page lists them
+RESULT: VALIDITY V8 PASS the DRAM counter and the L2 counters agree: every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors
+GATE V8  VALIDITY PASS   the DRAM counter and the L2 counters agree
+              measured every GEMM cell's DRAM bytes within tolerance of 32 x fill sectors   gate |dram_bytes_read / (32 x lts__d_sectors_fill_device) - 1| <= 2%
+RESULT: VALIDITY V9 PASS the private arm allocated and READ distinct weight copies: 5 of 5 parts
+GATE V9  VALIDITY PASS   the private arm allocated and READ distinct weight copies
+              measured 5 of 5 parts   gate all 5 parts of the proof
+              PASS     addresses: the n copies occupy disjoint contiguous address ranges spanning exactly n x the weight set, in both w1 and w2
+                       9 copies x 64 experts span 3963617280 bytes against 3963617280 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True
+              PASS     sentinels: a distinct value written into each copy reads back from that copy and from no other, and the original bytes are restored before anything else reads them
+                       wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True
+              PASS     kernel_read: zeroing ONE copy c at a time, for every c >= 1, changes EXACTLY the private output rows of the tokens routed to copy c and no others, so every tile reads its own copy and no tile reads another's
+                       every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=2: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=3: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=4: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=5: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=6: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=7: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True; c=8: 256 rows changed, 256 routed, exact=True, shared unchanged=True, restored=True
+              PASS     shared_blind: each of those zeroings leaves the shared arm's output bitwise unchanged, and restoring the copy restores the private output bitwise, so the changes above are the private mapping and not a corruption
+                       the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output
+              PASS     same_layer: with nothing zeroed, the private arm's output is bitwise equal to the shared arm's, so the relabelling computes the same layer
+                       private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)
+RESULT: VALIDITY V10 PASS the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings: lock in force: smi before 1710, after 1710 MHz | fallback: no nul
+GATE V10 VALIDITY PASS   the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings
+              measured lock in force: smi before 1710, after 1710 MHz | fallback: no null kernel and no base twin, judged on the nvidia-smi bracket alone; drift within the capture not tested | too short to read, left out: native/1 w1 share 0.39, private/1 w2 share 0.46, private/2 w2 share 0.31, shared/1 w1 share 0.38, shared/1 w2 share 0.50, shared/2 w2 share 0.31 | old fit, diagnostic only: w1 1672.7 MHz + 4.5 us over 27 cells; w2 1661.9 MHz + 0.9 us over 27 cells -> would read FAIL (w1 fitted 1673 MHz; native/5 w1 1660 MHz; native/6 w1 1663 MHz; and 21 more)   gate nvidia-smi clocks.sm before and after within 15 MHz of the lock; null-kernel median within 3% and every cell's within 2.5% of that median; base-twin ratio median within 3% of the held reference and every readable cell's within 4.5% of the capture's median; cells whose offset share exceeds 0.3 left out; tolerances 2 x the published held-lock maxima (scripts/lock_gate.py); the old t0 + cycles / f fit printed, not gated
+RESULT: CLAIM C1 FAIL SHARED's w1 weight reads are what the group model counts: n=1 [0.9569, 0.9571]/1.0000, n=2 [0.9158, 0.9159]/1.0000, n=3 [0.8898, 0.8913]/1.2500, n=4 [0.8264, 0.
+GATE C1  CLAIM    FAIL   SHARED's w1 weight reads are what the group model counts
+              measured n=1 [0.9569, 0.9571]/1.0000, n=2 [0.9158, 0.9159]/1.0000, n=3 [0.8898, 0.8913]/1.2500, n=4 [0.8264, 0.8265]/1.0000, n=5 [0.7885, 0.7890]/1.5000, n=6 [0.7418, 0.7421]/1.5000, n=7 [0.6967, 0.6970]/1.7500, n=8 [0.6505, 0.6507]/1.0000, n=9 [0.6077, 0.6079]/2.0000   gate |q_S,w1(n) - group_reads| <= 5% x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree
+              a FAIL here invalidates: the pid-order reuse model: w1 has 2F/BN N-tiles per M-row, far more than the CTAs in flight, so nothing is shared across groups
+              w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
+RESULT: CLAIM C2 PASS SHARED's w2 weight reads never exceed the group model's count: n=1 [1.0000, 1.0003]/1.0000, n=2 [1.0000, 1.0004]/1.0000, n=3 [0.9999, 1.0005]/1.2500, n=4 [0.999
+GATE C2  CLAIM    PASS   SHARED's w2 weight reads never exceed the group model's count
+              measured n=1 [1.0000, 1.0003]/1.0000, n=2 [1.0000, 1.0004]/1.0000, n=3 [0.9999, 1.0005]/1.2500, n=4 [0.9999, 1.0007]/1.0000, n=5 [0.9995, 1.0010]/1.5000, n=6 [0.9999, 1.0010]/1.5000, n=7 [0.9998, 1.0013]/1.7500, n=8 [0.9999, 1.0014]/1.0000, n=9 [0.9996, 1.0014]/2.0000   gate q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree
+              w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
+RESULT: CLAIM C6 PASS PRIVATE reads no more than one weight set per tile: n=1 -0.0286, n=2 -0.0281, n=3 -0.0280, n=4 -0.0277, n=5 -0.0275, n=6 -0.0270, n=7 -0.0270, n=8 -0.0266, n=9
+GATE C6  CLAIM    PASS   PRIVATE reads no more than one weight set per tile
+              measured n=1 -0.0286, n=2 -0.0281, n=3 -0.0280, n=4 -0.0277, n=5 -0.0275, n=6 -0.0270, n=7 -0.0270, n=8 -0.0266, n=9 -0.0255  (q_P/n - 1; w1 -0.0430, -0.0423, -0.0422, -0.0416, -0.0413, -0.0406, -0.0406, -0.0399, -0.0383; w2 +0.0003, +0.0002, +0.0002, +0.0002, +0.0002, +0.0002, +0.0002, +0.0001, +0.0002)   gate q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it
+              w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
+              w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
+wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.json' is outside repository at '/home/ubuntu/moe/repo')
+G=8 exit 3 07:42:34 104 s
+G=8 INVALID on V5 : the page is written, go on (re-scored later)
+2026-10-06T07:42:34Z bytes: G=8 page exit 3 after 104 s
