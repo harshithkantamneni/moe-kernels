@@ -10,3 +10,4 @@
 2026-10-06T07:44:20Z bytes: G=32 page exit 3
 2026-10-06T07:44:30Z bytes (unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32): exit 0 (5 min)
 2026-10-06T07:46:02Z floor (unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:46:55Z floor (unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
