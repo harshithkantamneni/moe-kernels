@@ -18,3 +18,7 @@
 2026-10-06T07:02:49Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 4/24 qwen2-57b-a14b-tp8 e2e] (estimate 2 min, cap 30 min, 385 min left)
 2026-10-06T07:03:13Z calibrate END: exit 0 after 0 min [unit 4/24 qwen2-57b-a14b-tp8 e2e]
 2026-10-06T07:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8c042a2 to run-gh200-rental3-20261006t0655: calibrate (unit 4/24 qwen2-57b-a14b-tp8 e2e): exit 0 (0 min)
+2026-10-06T07:03:15Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 [unit 5/24 qwen2-57b-a14b-tp8 e2e] (estimate 38 min, cap 90 min, 384 min left)
+2026-10-06T07:38:59Z timed END: exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

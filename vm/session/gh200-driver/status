@@ -36,3 +36,11 @@
 2026-10-06T07:03:13Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-10-06T07:03:13Z calibrate END: exit 0 after 0 min [unit 4/24 qwen2-57b-a14b-tp8 e2e]
 2026-10-06T07:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T07:03:15Z timed START: 3c.3 timed R3 at 1710: G=8, 32 (treads 6), G=3 (treads 8): P2, P5 [unit 5/24 qwen2-57b-a14b-tp8 e2e] (estimate 38 min, cap 90 min, 384 min left)
+2026-10-06T07:38:59Z timed: P2 locked_r3 exit 0
+2026-10-06T07:38:59Z timed: P5 locked_r3 exit 0
+2026-10-06T07:38:59Z timed: 2026-10-06T07:14:01Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-3908df9d
+2026-10-06T07:38:59Z timed: 2026-10-06T07:24:42Z G=32 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 641 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g32-l2flushtrue-modelqwen2_57b_a14b-f037a06b
+2026-10-06T07:38:59Z timed: 2026-10-06T07:38:54Z G=3 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=216 worst=1710.0 MHz, 851 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g3-l2flushtrue-modelqwen2_57b_a14b-5989ba0c
+2026-10-06T07:38:59Z timed END: exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
