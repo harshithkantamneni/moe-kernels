@@ -749,7 +749,10 @@ fits p = 13.9, 13.9 and 12.6 on the three Hopper boards, so it is one study
 constant, `P_KNEE` = 14 (8900699): rms 0.53 -> 0.28% on this board (G=3 0.95 ->
 0.26%), 0.43 -> 0.41% on the 2026-09-25 GH200, 1.51 -> 1.33% on the H100,
 leave-one-G-out better on all three, c and bw unmoved; the old board's G=1
-worsens (0.44 -> 0.51%). The w2 miss is the activation term, not the slabs:
+worsens (0.44 -> 0.51%). CORRECTED 2026-10-05: p = 14 is a constant of this study's 8x7B fits, not
+a card-stable or Hopper constant: 8x22B's own pages want p about 23 and exclude 14, and the
+2026-09-25 board prefers an additive overlap (the 2026-09-28 cross-model test below, "The knee is
+not a Hopper constant"). The w2 miss is the activation term, not the slabs:
 it sits where no slab is re-read across groups, and w2's A misses at fixed G
 stay flat in n, as the column-pass working set gives and the fill distance
 does not, while w1 follows the fill. The byte model's registered view is now
@@ -789,7 +792,11 @@ cells to +1.3%, and fits 8x7B itself better (0.275 -> 0.256%).
 
 **The floor is the tile's.** 346 to 348 cycles per CTA k-step on w1 and w2
 (registered: w1 inside 340 to 365), against 350 to 352 on 8x7B's w1: the
-k-step's cost does not depend on K, only on the tile.
+k-step's cost does not depend on K, only on the tile. CORRECTED 2026-10-05: the floor per CTA k-step
+is not a constant of the tile; it rises as a CTA's k-steps S fall, a fixed cost per CTA spread over
+its k-steps (OLMoE-1B-7B below, "What the floor says"; the per-CTA F of 0f77622). The two numbers
+here sit close because both CTAs are long (S = 96 and 64), where 344.1 + 520 / S reads 349.5 and
+352.2.
 
 **Bytes: five of 240 registered cells missed.** Of the SHARED and PRIVATE
 cells the falsifiers name, five read more than 5% off: PRIVATE w1 G=64 n=9
@@ -848,7 +855,8 @@ fitted on Qwen2-57B.
 CTA k-step on 56 k-steps a CTA (8x7B 350 to 352 on 64, 8x22B 346 to 348 on 96),
 inside the registered 340 to 365; the G >= 8 SHARED slope reads 0.6962 and
 0.6953 ms per tread against 0.6837 (band 0.670 to 0.697). The floor is a
-property of the tile at three shapes and two expert counts.
+property of the tile at three shapes and two expert counts. CORRECTED 2026-10-05: not of the tile
+alone: it depends on the CTA's k-steps (the CORRECTED note under "The floor is the tile's" above).
 
 **Time is falsified by a uniform bias.** Priced, as 8x22B's were, from the byte model's predicted
 bytes (the registered JSON's T, scored 2026-09-28; `cross_model_score.py`, which prices from
@@ -874,7 +882,11 @@ small.
   w1 cells miss by 14% rms; the 64-expert signature (w1 SHARED at G=1 levelling
   at 1.16 to 1.23 weight sets) failed, the card reading 1.23, 1.52, 1.71, 1.91.
   This is the risk the registration named before the pages.
-PRIVATE w2 held (1.89% rms, misses only at G=64). G=2's time zig-zag kept its
+PRIVATE w2 held (1.89% rms, misses only at G=64). CORRECTED 2026-10-05: not held as registered.
+The registration asks every PRIVATE cell within 5% (`docs/registered/README.md`, Qwen2-57B,
+"Bytes"), and 7 PRIVATE w2 cells, G=64 n = 3 to 9 at -5.0 to -5.8%, lie beyond it
+(`scripts/scoring/crossmodel/qwen2.registered.json`), so the byte test is FALSIFIED on PRIVATE w2
+as well as on w1 and SHARED w2. G=2's time zig-zag kept its
 phase but its amplitude is a fifth of the prediction: the same G=2 byte
 over-prediction, seen in time.
 
@@ -953,7 +965,12 @@ it must be tested on a model it has not seen.
 nothing fitted on the target: an unseen shape at the same expert count to 1.7%
 in time from predicted bytes and 1.0 to 3.5% in weight-set bytes by set, 5 of 240 cells beyond 5%
 (8x22B, pre-registered); PRIVATE's bytes on every target (0.3 to 2.0% rms); the floor-bound slope to 2% where CTAs run
-40 or more k-steps. Not claimed: time across expert counts and depths (Qwen2-57B
+40 or more k-steps. CORRECTED 2026-10-05: PRIVATE's bytes did not hold as registered on 8x22B or
+Qwen2-57B, whose falsifiers name every PRIVATE cell: 8x22B misses PRIVATE w1 G=64 n=9 and PRIVATE
+w2 G=64 n=5, and Qwen2-57B's PRIVATE w1 reads 2.42% rms with 8 cells beyond 5% and its PRIVATE w2
+7 cells beyond 5% (`scripts/scoring/crossmodel/8x22b.registered.json`,
+`scripts/scoring/crossmodel/qwen2.registered.json`). PRIVATE held as registered on OLMoE (w1 1.97%,
+w2 0.30%). Not claimed: time across expert counts and depths (Qwen2-57B
 2.71% from predicted bytes, OLMoE 3.53% from its own counted bytes, both pre-registered failures with the mechanism
 identified), and SHARED bytes where an expert fits in the L2. Each falsified
 registration named a rule the Mixtral data could not test: the capacity
@@ -1086,7 +1103,11 @@ paper can claim).
 
 **What the paper can claim, after eight tests.** From one card's 8x7B fit,
 with nothing fitted on the target, time from a model's own bytes to 2% on two
-of four held-out models (Qwen1.5 1.87%, Phi 0.57%). That is a test of the timing model
+of four held-out models (Qwen1.5 1.87%, Phi 0.57%). CORRECTED 2026-10-05: the timing fit (T0, c,
+bw) is 8x7B's alone, but the per-CTA floor terms these four carry, c 344.1 and F 520 and 979
+cycles, were measured on the counters of the four calibration models, 8x7B, 8x22B, Qwen2-57B and
+OLMoE (0f77622; `docs/registered/README.md`, four held-out models); the same holds for the floor
+sentence below. That is a test of the timing model
 alone: only Mixtral 8x22B was timed from predicted bytes and held (1.71%), Qwen2-57B was
 timed from predicted bytes and failed (2.71%), and every other held-out model (OLMoE and
 these four) was timed from its own counted bytes, with time from predicted bytes printed
@@ -1321,7 +1342,9 @@ cells all sit at 0.862 to 0.987 x C_reg. Neither fix touches a band, cell set or
   call held 0.33 to 0.36 ms (post / pre drift 1.1 to 3.2%), the level rental 1 measured before
   its first trace; that supports rental 1's reading that its later 0.38 to 0.46 ms came from
   the trace. Graph replay follows C_reg on tp8 (blind) and Granite-3B, not on Granite-1B (23%
-  fast at n = 1, 2). P0's failures are all graph-replay cells, whose enqueue time per call is
+  fast at n = 1, 2). CORRECTED 2026-10-05: tp8's graph replay is not blind. The registration keeps
+  P1 apart from the BLIND host-side predictions: its C_reg is CAL and tp8's GEMM durations were SEEN
+  under ncu on the rental-1 pages (`docs/registered/2026-10-01-rental2-launch2-gh200.txt`, line 4). P0's failures are all graph-replay cells, whose enqueue time per call is
   1.6 to 3.4 times the probe's 0.029 ms; the eager cells it was written for drift under 5%.
   P3 and P8 fail again: E0 - E240 reads 3 to 17 us under its trace-built band on 10 of 15
   cells, and P8's misses sit 1 to 5 us under the plateau band.
@@ -1459,7 +1482,9 @@ study's card. Session 4 has a dated section here for its calibration (the
 2026-09-21 section above); sessions 5 and 6 and the counter run have none
 yet, and each directory's README records what it ran and found. None of the six contributes a row to the
 pools any crossing here is computed from. The tree holds twenty published
-directories.
+directories. CORRECTED 2026-10-05: those twenty are the 14 arms below and these six sessions;
+`results/published` holds 34 directories, the other 14 being the 2026-09-25 H100 session and the 13
+GH200 sessions read in the GH200 sections (`ls -d results/published/*/`).
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|
