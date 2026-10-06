@@ -48,3 +48,4 @@
 2026-10-06T07:39:02Z bytes: the registered list G = 3 8 32 (qwen2-57b-a14b-tp8, e2e): no tail drop, no re-price, no base-clock control
 2026-10-06T07:40:48Z bytes: G=3 page exit 3 after 104 s
 2026-10-06T07:42:34Z bytes: G=8 page exit 3 after 104 s
+2026-10-06T07:44:19Z bytes: G=32 page exit 3 after 103 s

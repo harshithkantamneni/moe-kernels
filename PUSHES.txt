@@ -7,3 +7,4 @@
 2026-10-06T07:39:01Z timed (unit 5/24 qwen2-57b-a14b-tp8 e2e): exit 0 (36 min)
 2026-10-06T07:40:49Z bytes: G=3 page exit 3
 2026-10-06T07:42:35Z bytes: G=8 page exit 3
+2026-10-06T07:44:20Z bytes: G=32 page exit 3
