@@ -21,3 +21,4 @@ bytes      exit 0 after 4 min [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 n
 bytes      exit 0 after 4 min [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3]
 timed      exit 0 after 11 min [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6]
 deep       exit 0 after 32 min [unit 23/24 qwen2-57b-a14b-tp8 e2e]
+launchfloor exit 0 after 8 min [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1]
