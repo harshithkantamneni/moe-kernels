@@ -22,3 +22,4 @@
 2026-10-06T23:38:40Z bytes (unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (3 min)
 2026-10-06T23:41:05Z bytes: G=64 page exit 1
 2026-10-06T23:41:16Z bytes (unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128): exit 0 (3 min)
+2026-10-06T23:43:41Z bytes: G=64 page exit 1
