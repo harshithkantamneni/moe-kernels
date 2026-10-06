@@ -1,0 +1,31 @@
+LOCKED R3: the timed R3 arm under an nvidia-smi SM clock lock, top lock first
+session tag gh200-20261006T065851Z-t32b; each lock's pages carry gh200-20261006T065851Z-t32b-lock<F>
+locks       1710 MHz, top down; a slip (a timed cell more than 15 MHz under the lock) stops that lock, steps down one and restarts at G=32; a cell more than 15 MHz over it means the lock is not in force and stops the ladder
+groups      G = 32, in this order at every lock
+R3          /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model rental3 --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --treads 6 --group-m G --session-tag <tag>-lock<F>
+results     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference/<run id>: each attempt's directory is the one its own R3 names (the plan's `session` and `WRITES TO` lines) under its own tag, created after the attempt started; never found by time
+lock        sudo -n nvidia-smi -lgc F,F, after `nvidia-smi -q -d SUPPORTED_CLOCKS` (every lock must be a supported graphics clock) and only once `nvidia-smi --query-compute-apps` lists no process on the card
+reset       sudo -n nvidia-smi -rgc on every exit: a return, an exception, SIGTERM, SIGHUP, Ctrl-C. SIGKILL cannot be caught: after one, reset by hand (sudo -n nvidia-smi -rgc)
+ledger      /home/ubuntu/moe/session/locked-r3/gh200-20261006T065851Z-t32b/status (one UTC line per event), summary.json, r3-g<G>-lock<F>.log per attempt, smi.csv every 500 ms
+caps        one R3 run 3600 s, the whole ladder 14400 s, a busy GPU 300 s; polled every 10 s
+attempts    at most 1, in this order until one lock holds at every G:
+    1  lock 1710  G=32  /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model rental3 --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --treads 6 --group-m 32 --session-tag gh200-20261006T065851Z-t32b-lock1710
+2026-10-06T09:16:51Z locked_r3 start: tag gh200-20261006T065851Z-t32b, locks [1710], G [32], R3 args --model rental3 --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --treads 6, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb/private_weight_reference
+2026-10-06T09:16:51Z card: NVIDIA GH200 480GB, GPU-00827a0f-81e7-0fe3-caef-3114182a12bc, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-06T09:16:51Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-06T09:16:51Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-10-06T09:16:51Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 89.68 W, 700.00 W
+2026-10-06T09:16:51Z G=32 start at lock 1710: pid 170030, tag gh200-20261006T065851Z-t32b-lock1710, log r3-g32-lock1710.log
+2026-10-06T09:17:01Z G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run directory; its log ends: private_weight_reference.py: error: argument --model: invalid choice: 'rental3' (choose from deepseek-v2-lite, deepseek-v3, deepseek-v3-tp4, deepseek-v3-tp8, granite-3.0-1b-a400m, granite-3.0-3b-a800m
+2026-10-06T09:17:01Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-10-06T09:17:01Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 114.23 W, 700.00 W
+2026-10-06T09:17:01Z REFUSED, nothing measured: R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run directory; its log ends: private_weight_reference.py: error: argument --model: invalid choice: 'rental3' (choose from deepseek-v2-lite, deepseek-v3, deepseek-v3-tp4, deepseek-v3-tp8, granite-3.0-1b-a400m, granite-3.0-3b-a800m
+==============================================================================
+LOCKED R3, session tag gh200-20261006T065851Z-t32b: REFUSED, nothing measured: R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run directory; its log ends: private_weight_reference.py: error: argument --model: invalid choice: 'rental3' (choose from deepseek-v2-lite, deepseek-v3, deepseek-v3-tp4, deepseek-v3-tp8, granite-3.0-1b-a400m, granite-3.0-3b-a800m
+   lock   G  state              cells worst MHz  R3 exit            s  run directory
+   1710  32  no-page                0         -  2 REFUSED         10  -
+SM clock reset: `sudo -n nvidia-smi -rgc` exited 0
+exit 2 REFUSED: nothing measured; a precondition was not met (free)
+ledger /home/ubuntu/moe/session/locked-r3/gh200-20261006T065851Z-t32b/status; summary /home/ubuntu/moe/session/locked-r3/gh200-20261006T065851Z-t32b/summary.json
+==============================================================================
+2026-10-06T09:17:01Z locked_r3 end: exit 2, 2 REFUSED: nothing measured; a precondition was not met (free)

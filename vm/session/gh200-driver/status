@@ -194,3 +194,6 @@
 2026-10-06T09:15:51Z launchfloor END: exit 0 after 8 min [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1]
 2026-10-06T09:15:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 2026-10-06T09:15:56Z driver end: exit 3
+2026-10-06T09:16:50Z RECOVERY start: timed G to retake [32 ], deep G to retake []
+2026-10-06T09:17:01Z RECOVERY timed G=32 retake exit 2: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run dire
+REFUSED, nothing measured: R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- 

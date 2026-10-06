@@ -1,0 +1,132 @@
+{
+ "schema": 1,
+ "utc_start": "2026-10-06T09:16:51Z",
+ "utc_end": "2026-10-06T09:17:01Z",
+ "session_tag": "gh200-20261006T065851Z-t32b",
+ "locks_asked": [
+  1710
+ ],
+ "groups": [
+  32
+ ],
+ "r3_args": [
+  "--model",
+  "rental3",
+  "--block-m",
+  "32",
+  "--repeats",
+  "9",
+  "--duty",
+  "0.25",
+  "--seed",
+  "0",
+  "--declared-copies",
+  "9",
+  "--treads",
+  "6"
+ ],
+ "python": "/home/ubuntu/moe/venvs/vllm/bin/python",
+ "results_dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb",
+ "card": "NVIDIA GH200 480GB, GPU-00827a0f-81e7-0fe3-caef-3114182a12bc, Enabled, 700.00 W, 1980 MHz",
+ "attempts": [
+  {
+   "lock": 1710,
+   "G": 32,
+   "tag": "gh200-20261006T065851Z-t32b-lock1710",
+   "state": "no-page",
+   "rc": 2,
+   "cells": 0,
+   "worst_mhz": null,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": null,
+   "why": "R3 exited 2 before naming its run directory; its log ends: private_weight_reference.py: error: argument --model: invalid choice: 'rental3' (choose from deepseek-v2-lite, deepseek-v3, deepseek-v3-tp4, deepseek-v3-tp8, granite-3.0-1b-a400m, granite-3.0-3b-a800m",
+   "utc_start": "2026-10-06T09:16:51Z",
+   "seconds": 10.0,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20261006T065851Z-t32b/r3-g32-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "/home/ubuntu/moe/repo/scripts/private_weight_reference.py",
+    "--model",
+    "rental3",
+    "--block-m",
+    "32",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "9",
+    "--treads",
+    "6",
+    "--group-m",
+    "32",
+    "--session-tag",
+    "gh200-20261006T065851Z-t32b-lock1710"
+   ]
+  }
+ ],
+ "lock": null,
+ "pages": [],
+ "outcome": {
+  "held": null,
+  "all_slipped": false,
+  "stopped": "",
+  "refused": "R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run directory; its log ends: private_weight_reference.py: error: argument --model: invalid choice: 'rental3' (choose from deepseek-v2-lite, deepseek-v3, deepseek-v3-tp4, deepseek-v3-tp8, granite-3.0-1b-a400m, granite-3.0-3b-a800m"
+ },
+ "stopped_by": "",
+ "gates": [],
+ "exit": 2,
+ "reset": {
+  "command": "sudo -n nvidia-smi -rgc",
+  "rc": 0,
+  "output": "All done.",
+  "held": 1710
+ },
+ "smi_log": [
+  {
+   "utc": "2026-10-06T09:16:51Z",
+   "command": "nvidia-smi --query-gpu=name,uuid,persistence_mode,power.limit,clocks.max.sm --format=csv,noheader",
+   "rc": 0,
+   "output": "NVIDIA GH200 480GB, GPU-00827a0f-81e7-0fe3-caef-3114182a12bc, Enabled, 700.00 W, 1980 MHz"
+  },
+  {
+   "utc": "2026-10-06T09:16:51Z",
+   "command": "nvidia-smi -q -d SUPPORTED_CLOCKS",
+   "rc": 0,
+   "output": "phics                      : 450 MHz\n            Graphics                      : 435 MHz\n            Graphics                      : 420 MHz\n            Graphics                      : 405 MHz\n            Graphics                      : 390 MHz\n            Graphics                      : 375 MHz\n            Graphics                      : 360 MHz\n            Graphics                      : 345 MHz"
+  },
+  {
+   "utc": "2026-10-06T09:16:51Z",
+   "command": "nvidia-smi --query-compute-apps=pid --format=csv,noheader",
+   "rc": 0,
+   "output": ""
+  },
+  {
+   "utc": "2026-10-06T09:16:51Z",
+   "command": "sudo -n nvidia-smi -lgc 1710,1710",
+   "rc": 0,
+   "output": "GPU clocks set to \"(gpuClkMin 1710, gpuClkMax 1710)\" for GPU 00000000:DD:00.0\nAll done."
+  },
+  {
+   "utc": "2026-10-06T09:16:51Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "1980 MHz, 1980 MHz, 0x0000000000000000, 89.68 W, 700.00 W"
+  },
+  {
+   "utc": "2026-10-06T09:17:01Z",
+   "command": "sudo -n nvidia-smi -rgc",
+   "rc": 0,
+   "output": "All done."
+  },
+  {
+   "utc": "2026-10-06T09:17:01Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "345 MHz, 1980 MHz, 0x0000000000000001, 114.23 W, 700.00 W"
+  }
+ ]
+}
