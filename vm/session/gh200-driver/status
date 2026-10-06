@@ -91,3 +91,7 @@
 2026-10-06T23:33:12Z stamps REFUSED: the perturbation gate for u16-stdead2 reads 'FAIL median=0.021444182073370566 worst=0.05636746732690201' (instr-gate.env): an instrumented unit runs only on a PASS
 2026-10-06T23:33:12Z stamps END: exit 2 after 0 min [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8]
 2026-10-06T23:33:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:15Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64] (estimate 4 min, cap 20 min, 344 min left)
+2026-10-06T23:33:30Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-06T23:33:30Z bytes: the registered list G = 64 (olmoe-1b-7b, k64s4): no tail drop, no re-price, no base-clock control
+2026-10-06T23:35:53Z bytes: G=64 page exit 1 after 140 s
