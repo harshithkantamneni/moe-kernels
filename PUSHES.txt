@@ -6,3 +6,4 @@
 2026-10-06T22:59:29Z gpubench (unit 4/25 - r4): exit 0 (10 min)
 2026-10-06T23:15:40Z timed (unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)
 2026-10-06T23:31:51Z timed (unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15): exit 0 (16 min)
+2026-10-06T23:32:46Z perturb (unit 7/25 - pt): exit 1 (1 min)

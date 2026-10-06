@@ -43,3 +43,15 @@
 2026-10-06T23:31:50Z timed: 2026-10-06T23:31:45Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-7f595452
 2026-10-06T23:31:50Z timed END: exit 0 after 16 min [unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15]
 2026-10-06T23:31:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:31:52Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 7/25 - pt] (estimate 10 min, cap 25 min, 345 min left)
+2026-10-06T23:32:44Z perturb: GATE_u8_stf=FAIL median=0.016840566892701192 worst=0.022218209391939414
+2026-10-06T23:32:44Z perturb: GATE_u9_stk64s4=FAIL median=0.07274465299527444 worst=0.0905522850061461
+2026-10-06T23:32:44Z perturb: GATE_u10_stk32s4=FAIL median=0.08101718174886718 worst=0.08619869910208533
+2026-10-06T23:32:44Z perturb: GATE_u11_stk128s4=FAIL median=0.07285111295094443 worst=0.07837896952008427
+2026-10-06T23:32:44Z perturb: GATE_u12_stk64s8=FAIL median=0.09510375148566308 worst=0.097600832498965
+2026-10-06T23:32:44Z perturb: GATE_u13_sttail=FAIL median=0.07526497609799226 worst=0.16675163224599054
+2026-10-06T23:32:44Z perturb: GATE_u14_sttail=FAIL median=0.058963939633133566 worst=0.14645017231508917
+2026-10-06T23:32:44Z perturb: GATE_u15_stdead4=FAIL median=0.014500143448019032 worst=0.035777535396228854
+2026-10-06T23:32:44Z perturb: GATE_u16_stdead2=FAIL median=0.021444182073370566 worst=0.05636746732690201
+2026-10-06T23:32:44Z perturb END: exit 1 after 1 min [unit 7/25 - pt]
+2026-10-06T23:32:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
