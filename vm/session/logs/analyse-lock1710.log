@@ -1,25 +1,25 @@
 CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
-R3 ARMS UNDER A DRAM COUNTER  G=1  mixtral-8x7b-tp2 bf16 BLOCK_M=32 BLOCK_N=64 BLOCK_K=64 num_warps=8 num_stages=4
+R3 ARMS UNDER A DRAM COUNTER  G=1  mixtral-8x7b-tp2 bf16 BLOCK_M=32 BLOCK_N=64 BLOCK_K=32 num_warps=8 num_stages=8
   arms ['native', 'shared', 'private'] x treads [1, 2, 3, 4, 5, 6, 7, 8, 9]; 3 measured calls per cell after 2 warmups; 162 profiled launches; declared 9 copies ({'native': 8, 'shared': 72, 'private': 72})
   counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none); V10 reads the lock back by independent clocks (lock_gate)
 
   q(n) = (R(n) - n x operand) / W, one weight set per unit, the group model beside it;
   e = q_P - n at PRIVATE's highest call is its excess, its activation re-read; SHARED's weight-only q runs from the lowest call of SHARED or NATIVE, less e, to the highest (q_S_bracket on the page)
     n   model      q_S   q_S,w1   q_S,w2      q_N      q_P   q_P,w1   q_P,w2     e_w1     e_w2
-    1  1.0000   0.9999   0.9995   1.0006   0.9999   0.9999   0.9996   1.0005   0.0000   0.0005
-    2  2.0000   1.6021   1.7850   1.2365   1.6189   2.0007   2.0004   2.0013   0.0004   0.0014
-    3  3.0000   2.4102   2.7090   1.8125   2.3975   3.0020   3.0018   3.0022   0.0019   0.0024
-    4  4.0000   3.2641   3.7553   2.2817   3.2583   4.0025   4.0021   4.0034   0.0022   0.0035
-    5  5.0000   4.0386   4.7198   2.6760   4.0364   5.0026   5.0023   5.0034   0.0026   0.0035
-    6  6.0000   4.8804   5.6836   3.2739   4.8532   6.0029   6.0024   6.0040   0.0025   0.0041
-    7  7.0000   5.6573   6.6769   3.6181   5.6608   7.0028   7.0020   7.0045   0.0023   0.0052
-    8  8.0000   6.4802   7.6480   4.1447   6.4757   8.0033   8.0023   8.0054   0.0025   0.0057
-    9  9.0000   7.3022   8.6060   4.6946   7.3117   9.0031   9.0021   9.0050   0.0026   0.0055
+    1  1.0000   1.0017   0.9999   1.0052   1.0013   1.0015   0.9999   1.0046   0.0000   0.0050
+    2  2.0000   1.7148   1.9116   1.3213   1.7173   2.0032   2.0004   2.0088   0.0006   0.0098
+    3  3.0000   2.5261   2.8823   1.8136   2.5187   3.0049   3.0014   3.0119   0.0015   0.0131
+    4  4.0000   3.3573   3.8756   2.3207   3.3600   4.0052   4.0020   4.0117   0.0023   0.0130
+    5  5.0000   4.1415   4.8817   2.6612   4.1370   5.0064   5.0012   5.0168   0.0016   0.0204
+    6  6.0000   5.0120   5.8715   3.2930   5.0151   6.0077   6.0014   6.0201   0.0016   0.0212
+    7  7.0000   5.7956   6.8763   3.6341   5.7984   7.0077   7.0014   7.0204   0.0016   0.0226
+    8  8.0000   6.6381   7.8574   4.1996   6.6496   8.0073   8.0017   8.0185   0.0019   0.0199
+    9  9.0000   7.5372   8.8573   4.8970   7.5088   9.0092   9.0016   9.0243   0.0018   0.0281
 
-  alpha(G=1) in [0.7917, 0.8042] (w1 [0.9545, 0.9718], w2 [0.4655, 0.4719]): the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call
-  SHARED's own calls alone, NATIVE not pooled: alpha in [0.7942, 0.8026] (w1 [0.9582, 0.9694], w2 [0.4656, 0.4703]); every gate reads the same on it. The pooled bracket above is the page's; this line changes no verdict
-  the OLS slope of q_S's K-call means, every activation re-read counted as a weight re-read: 0.7992 (w1 0.9646, w2 0.4684), max relative residual 12.63%: a scalar summary; meaningful where the ladder is affine
-  alpha_ratio slope(R_S)/slope(R_P) = 0.7997 (its K calls allow [0.7953, 0.8030]); alpha_diff 1 - (slope_P - slope_S)/W = 0.7989, q_S - (q_P - n) on the means; none uses a bandwidth, a ridge, an intercept or a calibration
+  alpha(G=1) in [0.8115, 0.8213] (w1 [0.9853, 0.9908], w2 [0.4608, 0.4867]): the least and greatest OLS slope over SHARED's weight-only q, from the lowest single call of SHARED or NATIVE, less e, to the highest; e PRIVATE's excess over n at its highest call
+  SHARED's own calls alone, NATIVE not pooled: alpha in [0.8151, 0.8206] (w1 [0.9858, 0.9890], w2 [0.4733, 0.4839]); every gate reads the same on it. The pooled bracket above is the page's; this line changes no verdict
+  the OLS slope of q_S's K-call means, every activation re-read counted as a weight re-read: 0.8184 (w1 0.9875, w2 0.4802), max relative residual 8.36%: a scalar summary; meaningful where the ladder is affine
+  alpha_ratio slope(R_S)/slope(R_P) = 0.8185 (its K calls allow [0.8165, 0.8202]); alpha_diff 1 - (slope_P - slope_S)/W = 0.8176, q_S - (q_P - n) on the means; none uses a bandwidth, a ridge, an intercept or a calibration
 
   ACTIVATION RE-READS, named in advance (r3_exposure): one column pass of the fullest group, MiB, A + slabs = working set, against this card's 60 MiB L2 (30 per partition)
   n=1  w1 S 0.2+0.5=0.8 held  w1 P 0.2+0.5=0.8 held  w2 S 0.4+0.9=1.3 held  w2 P 0.4+0.9=1.3 held
@@ -42,24 +42,24 @@ GATE V1  VALIDITY PASS   every launch is attributed: exact count, every grid equ
 RESULT: VALIDITY V2 PASS every STRICT metric is a number on every launch: 5 fields x 54 GEMM cells
 GATE V2  VALIDITY PASS   every STRICT metric is a number on every launch
               measured 5 fields x 54 GEMM cells   gate no missing value, never a 0.0 default
-RESULT: VALIDITY V3 PASS at n=1 each cell's K calls read the same bytes: worst gated (max - min) / median 0.0323%
+RESULT: VALIDITY V3 PASS at n=1 each cell's K calls read the same bytes: worst gated (max - min) / median 0.1084%
 GATE V3  VALIDITY PASS   at n=1 each cell's K calls read the same bytes
-              measured worst gated (max - min) / median 0.0323%   gate <= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list
-              deeper treads, not gated, spread up to 2.6265% (shared/2): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls
-RESULT: VALIDITY V4 PASS at n=1 the arms are one call and each reads one weight set: |R_S(1)/R_P(1) - 1| = 0.0003% against 0.5000%; q(1) native 0.9999, shared 0.9999, private 0.9999
+              measured worst gated (max - min) / median 0.1084%   gate <= 1% per call and per GEMM in every n=1 cell, and in every cell whose page carries no per-GEMM call list
+              deeper treads, not gated, spread up to 3.0251% (native/9): re-reads L2 catches or misses with the order tiles run in, carried into SHARED's bracket as its farthest calls
+RESULT: VALIDITY V4 PASS at n=1 the arms are one call and each reads one weight set: |R_S(1)/R_P(1) - 1| = 0.0193% against 0.5000%; q(1) native 1.0013, shared 1.0017, private 1.0015
 GATE V4  VALIDITY PASS   at n=1 the arms are one call and each reads one weight set
-              measured |R_S(1)/R_P(1) - 1| = 0.0003% against 0.5000%; q(1) native 0.9999, shared 0.9999, private 0.9999   gate <= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]
+              measured |R_S(1)/R_P(1) - 1| = 0.0193% against 0.5000%; q(1) native 1.0013, shared 1.0017, private 1.0015   gate <= max(0.5%, 3 x the repeat spread); q(1) in [0.97, 1.03]
               at n=1 SHARED and PRIVATE route every tile to copy 0: they are the same call, so their bytes must agree
-RESULT: VALIDITY V5 PASS the PRIVATE arm re-reads the whole weight set per tile: every q_P(n)/n in [0.97, 1.5]; slope 1.0004
+RESULT: VALIDITY V5 PASS the PRIVATE arm re-reads the whole weight set per tile: every q_P(n)/n in [0.97, 1.5]; slope 1.0009
 GATE V5  VALIDITY PASS   the PRIVATE arm re-reads the whole weight set per tile
-              measured every q_P(n)/n in [0.97, 1.5]; slope 1.0004   gate 0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]
+              measured every q_P(n)/n in [0.97, 1.5]; slope 1.0009   gate 0.97 n <= q_P(n) <= 1.5 n per GEMM; slope of q_P,total in [0.97, 1.5]
               PRIVATE's excess over n is activation re-read, and a full thrash adds at most 0.4978 of W_w1, 0.4922 of W_w2 per tread ((BM/BN)(1 - 1/num_pid_n)), inside the ceiling: V5 cannot tell a thrash from a sound page, and C6 reads it
-RESULT: VALIDITY V6 PASS the arms request the same L2 read sectors: 20 comparisons held; nearest its tolerance 0.2171% of 0.5% at n=1 w1 (SHARED against PRIVATE)
+RESULT: VALIDITY V6 PASS the arms request the same L2 read sectors: 20 comparisons held; nearest its tolerance 0.0871% of 0.5% at n=1 w1 (SHARED against PRIVATE)
 GATE V6  VALIDITY PASS   the arms request the same L2 read sectors
-              measured 20 comparisons held; nearest its tolerance 0.2171% of 0.5% at n=1 w1 (SHARED against PRIVATE)   gate max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread
+              measured 20 comparisons held; nearest its tolerance 0.0871% of 0.5% at n=1 w1 (SHARED against PRIVATE)   gate max/min - 1 <= 0.5% over the three arms at every (n, GEMM) on a card that counts every load; on one that coalesces L2 reads (compute capability 9.0 and up) SHARED against PRIVATE at n=1 within 0.5%, and NATIVE against SHARED where their live pids agree within 1.3% at every tread
               compute capability 9.0, at or above Hopper's 9.0: an L2 Request Coalescer can merge reads of one sector before the L2 counts them, most likely what put this count below the loads on the GH200 and the H100 (no counter on this page sits before it), so V6 holds two pairs: SHARED against PRIVATE at n=1, one call (both route every tile to copy 0), within 0.5%, and NATIVE against SHARED where NATIVE's grid gives every live tile SHARED's pid, the same tiles under another declaration, within 1.3% at every tread
               not held: PRIVATE at n >= 2 (its tiles read their own copies); their loads there rest on V5, V7 and V9 until a page carries a load count taken before the coalescer (docs/COUNTERS.md 6.8)
-              not gated: over the three arms at every tread the widest gap is 2.4069% at n=9 w2
+              not gated: over the three arms at every tread the widest gap is 2.4340% at n=2 w2
 RESULT: VALIDITY V7 PASS NATIVE and SHARED read the same DRAM bytes: every (n, GEMM) within tolerance
 GATE V7  VALIDITY PASS   NATIVE and SHARED read the same DRAM bytes
               measured every (n, GEMM) within tolerance   gate |R_N/R_S - 1| <= max(1%, 3 x that GEMM's own repeat spread in either cell), and the two arms' calls no more than 1% apart where the page lists them
@@ -81,18 +81,18 @@ GATE V9  VALIDITY PASS   the private arm allocated and READ distinct weight copi
                        private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)
 RESULT: VALIDITY V10 PASS the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings: lock in force: smi before 1710, after 1710 MHz | fallback: no nul
 GATE V10 VALIDITY PASS   the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings
-              measured lock in force: smi before 1710, after 1710 MHz | fallback: no null kernel and no base twin, judged on the nvidia-smi bracket alone; drift within the capture not tested | too short to read, left out: native/1 w2 share 0.36, shared/1 w2 share 0.36 | old fit, diagnostic only: w1 1693.7 MHz + 12.5 us over 27 cells; w2 1674.7 MHz + 9.2 us over 27 cells -> would read FAIL (w1 fitted 1694 MHz; w2 fitted 1675 MHz; native/4 w2 1656 MHz; and 6 more)   gate nvidia-smi clocks.sm before and after within 15 MHz of the lock; null-kernel median within 3% and every cell's within 2.5% of that median; base-twin ratio median within 3% of the held reference and every readable cell's within 4.5% of the capture's median; cells whose offset share exceeds 0.3 left out; tolerances 2 x the published held-lock maxima (scripts/lock_gate.py); the old t0 + cycles / f fit printed, not gated
-RESULT: CLAIM C2 PASS SHARED's w2 weight reads never exceed the group model's count: n=1 [0.9999, 1.0007]/1.0000, n=2 [1.2318, 1.2393]/2.0000, n=3 [1.8016, 1.8177]/3.0000, n=4 [2.277
+              measured lock in force: smi before 1710, after 1710 MHz | fallback: no null kernel and no base twin, judged on the nvidia-smi bracket alone; drift within the capture not tested | too short to read, left out: native/1 w2 share 0.45, shared/1 w2 share 0.46 | old fit, diagnostic only: w1 1702.5 MHz + 10.4 us over 27 cells; w2 1696.9 MHz + 11.2 us over 27 cells -> would read PASS   gate nvidia-smi clocks.sm before and after within 15 MHz of the lock; null-kernel median within 3% and every cell's within 2.5% of that median; base-twin ratio median within 3% of the held reference and every readable cell's within 4.5% of the capture's median; cells whose offset share exceeds 0.3 left out; tolerances 2 x the published held-lock maxima (scripts/lock_gate.py); the old t0 + cycles / f fit printed, not gated
+RESULT: CLAIM C2 PASS SHARED's w2 weight reads never exceed the group model's count: n=1 [0.9988, 1.0057]/1.0000, n=2 [1.3082, 1.3232]/2.0000, n=3 [1.7968, 1.8160]/3.0000, n=4 [2.306
 GATE C2  CLAIM    PASS   SHARED's w2 weight reads never exceed the group model's count
-              measured n=1 [0.9999, 1.0007]/1.0000, n=2 [1.2318, 1.2393]/2.0000, n=3 [1.8016, 1.8177]/3.0000, n=4 [2.2771, 2.2840]/4.0000, n=5 [2.6717, 2.6799]/5.0000, n=6 [3.2677, 3.2836]/6.0000, n=7 [3.6101, 3.6240]/7.0000, n=8 [4.1333, 4.1768]/8.0000, n=9 [4.6709, 4.7062]/9.0000   gate q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree
+              measured n=1 [0.9988, 1.0057]/1.0000, n=2 [1.3082, 1.3232]/2.0000, n=3 [1.7968, 1.8160]/3.0000, n=4 [2.3067, 2.3291]/4.0000, n=5 [2.6382, 2.6699]/5.0000, n=6 [3.2713, 3.3063]/6.0000, n=7 [3.6030, 3.6805]/7.0000, n=8 [4.1378, 4.2463]/8.0000, n=9 [4.6774, 4.9038]/9.0000   gate q_S,w2(n) <= 1.05 x group_reads at every n, scored on both edges of SHARED's weight-only bracket, its lowest call (NATIVE pooled) less e to its highest, e PRIVATE's excess over n; UNKNOWN where the edges disagree
               w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
-RESULT: CLAIM C3 PASS at G=1, w2 is re-read less than w1: alpha_w2 [0.4655, 0.4719] against alpha_w1 [0.9545, 0.9718]
+RESULT: CLAIM C3 PASS at G=1, w2 is re-read less than w1: alpha_w2 [0.4608, 0.4867] against alpha_w1 [0.9853, 0.9908]
 GATE C3  CLAIM    PASS   at G=1, w2 is re-read less than w1
-              measured alpha_w2 [0.4655, 0.4719] against alpha_w1 [0.9545, 0.9718]   gate alpha_w2 < alpha_w1 on every slope the two weight-only brackets allow; UNKNOWN where the brackets overlap
-RESULT: CLAIM C6 PASS PRIVATE reads no more than one weight set per tile: n=1 -0.0001, n=2 +0.0003, n=3 +0.0007, n=4 +0.0006, n=5 +0.0005, n=6 +0.0005, n=7 +0.0004, n=8 +0.0004, n=9
+              measured alpha_w2 [0.4608, 0.4867] against alpha_w1 [0.9853, 0.9908]   gate alpha_w2 < alpha_w1 on every slope the two weight-only brackets allow; UNKNOWN where the brackets overlap
+RESULT: CLAIM C6 PASS PRIVATE reads no more than one weight set per tile: n=1 +0.0015, n=2 +0.0016, n=3 +0.0016, n=4 +0.0013, n=5 +0.0013, n=6 +0.0013, n=7 +0.0011, n=8 +0.0009, n=9
 GATE C6  CLAIM    PASS   PRIVATE reads no more than one weight set per tile
-              measured n=1 -0.0001, n=2 +0.0003, n=3 +0.0007, n=4 +0.0006, n=5 +0.0005, n=6 +0.0005, n=7 +0.0004, n=8 +0.0004, n=9 +0.0003  (q_P/n - 1; w1 -0.0004, +0.0002, +0.0006, +0.0005, +0.0005, +0.0004, +0.0003, +0.0003, +0.0002; w2 +0.0005, +0.0007, +0.0007, +0.0009, +0.0007, +0.0007, +0.0006, +0.0007, +0.0006)   gate q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it
+              measured n=1 +0.0015, n=2 +0.0016, n=3 +0.0016, n=4 +0.0013, n=5 +0.0013, n=6 +0.0013, n=7 +0.0011, n=8 +0.0009, n=9 +0.0010  (q_P/n - 1; w1 -0.0001, +0.0002, +0.0005, +0.0005, +0.0002, +0.0002, +0.0002, +0.0002, +0.0002; w2 +0.0046, +0.0044, +0.0040, +0.0029, +0.0034, +0.0033, +0.0029, +0.0023, +0.0027)   gate q_P,total(n) <= 1.03 n at every n, on PRIVATE's lowest and highest call; UNKNOWN where they straddle it
               w1 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
               w2 column passes not held by this card's 60 MiB L2: SHARED at n=none, PRIVATE at n=none (r3_exposure; a floor on the reuse distance, so a cell not named is not thereby safe)
-wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/summary.json
-git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/summary.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/summary.json' is outside repository at '/home/ubuntu/moe/repo')
+wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/summary.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/summary.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/summary.json' is outside repository at '/home/ubuntu/moe/repo')
