@@ -197,3 +197,4 @@
 2026-10-06T09:16:50Z RECOVERY start: timed G to retake [32 ], deep G to retake []
 2026-10-06T09:17:01Z RECOVERY timed G=32 retake exit 2: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- MHz, 10 s, dir (none named); R3 exited 2 before naming its run dire
 REFUSED, nothing measured: R3 refused before its first timed cell: G=32 no-page at lock 1710: R3 exit 2 REFUSED, cells=0 worst=- 
+2026-10-06T09:17:05Z RECOVERY END
