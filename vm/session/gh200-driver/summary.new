@@ -4,3 +4,4 @@ floor      exit 0 after 1 min [unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-grou
 calibrate  exit 0 after 0 min [unit 4/24 qwen2-57b-a14b-tp8 e2e]
 timed      exit 0 after 36 min [unit 5/24 qwen2-57b-a14b-tp8 e2e]
 bytes      exit 0 after 5 min [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32]
+floor      exit 0 after 1 min [unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1]

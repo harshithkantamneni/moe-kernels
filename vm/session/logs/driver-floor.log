@@ -45,3 +45,31 @@ clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clock
 2026-10-06T07:02:46Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1005 MHz lock only)
 2026-10-06T07:02:46Z floor: r3f-g64-lock1005 exit 0
 2026-10-06T07:02:46Z floor: registered floor design: groups 64, treads 2,3,4,5,6,8,10,12,13,14,16
+== 2026-10-06T07:44:31Z step floor: 3c.5 registered floor design: NATIVE at G = 64, treads 3,4,5,6,8,10,12,14,16, base clock and the 1710 lock; --floor-shape-metrics --floor-null-kernel
+2026-10-06T07:44:45Z census for granite-3.0-1b-a400m written (/home/ubuntu/moe/session/census-granite-3.0-1b-a400m.json)
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+  null kernel: torch.cuda._sleep(1000) after every call (spin_kernel, one block), in the skip and the count
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [3, 4, 5, 6, 8, 10, 12, 14, 16], 54 profiled launches at --clock-control base; 53 metrics asked, dropped []
+RESULT: VALIDITY V1 PASS every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots: 36 GEMM launches and 18 null kernels ag
+GATE V1  VALIDITY PASS   every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots
+              measured 36 GEMM launches and 18 null kernels against 18 planned   gate exact count and order (attribute_launches); launch skip 54, count 54 = 3 launches x calls
+wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64.json' is outside repository at '/home/ubuntu/moe/repo')
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+  null kernel: torch.cuda._sleep(1000) after every call (spin_kernel, one block), in the skip and the count
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [3, 4, 5, 6, 8, 10, 12, 14, 16], 54 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 53 metrics asked, dropped []
+RESULT: VALIDITY FL1 PASS the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings: lock in force: smi before 1710, after 1710 MHz; null median 1686.
+GATE FL1 VALIDITY PASS   the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings
+              measured lock in force: smi before 1710, after 1710 MHz; null median 1686.3 MHz (-1.39%) over 9 cells; null spread worst n=10 1675.4 MHz (-0.64%); ratio median R 1.2119 vs held 1.2198 (-0.65%, implied 1699 MHz) over 18 cells; ratio spread worst n=4 w1 R 1.2285 (+1.37% of the median) | old fit, diagnostic only: w1 1650.5 MHz + -0.7 us over 9 cells; w2 1666.3 MHz + -0.3 us over 9 cells -> would read FAIL (w1 fitted 1651 MHz; n=3 w1 1645 MHz; n=5 w1 1658 MHz; and 11 more)   gate nvidia-smi clocks.sm before and after within 15 MHz of the lock; null-kernel median within 3% and every cell's within 2.5% of that median; base-twin ratio median within 3% of the held reference and every readable cell's within 4.5% of the capture's median; cells whose offset share exceeds 0.3 left out; tolerances 2 x the published held-lock maxima (scripts/lock_gate.py); the old t0 + cycles / f fit printed, not gated
+RESULT: VALIDITY V1 PASS every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots: 36 GEMM launches and 18 null kernels ag
+GATE V1  VALIDITY PASS   every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots
+              measured 36 GEMM launches and 18 null kernels against 18 planned   gate exact count and order (attribute_launches); launch skip 54, count 54 = 3 launches x calls
+wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001
+2026-10-06T07:46:00Z floor: r3f-g64 exit 0
+2026-10-06T07:46:00Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:46:00Z floor: registered floor design: groups 64, treads 3,4,5,6,8,10,12,14,16
