@@ -10,3 +10,4 @@ floor      exit 0 after 3 min [unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 
 floor      exit 0 after 1 min [unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1]
 floor      exit 0 after 2 min [unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
 floor      exit 0 after 1 min [unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1]
+launchfloor exit 3 after 5 min [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0]

@@ -1,5 +1,5 @@
 f3d0080566cf3c64cc16aaf150da78c0fa55700a86814275e2d71b0efce06d2f  vm/driver580.log
-4d9b7ecb6ec85c4dcccbef8790e620f210578e2a59d1c3b6ca80ff0ad07f842f  vm/gh200-driver.out
+13261c3ead35176e13ed34094366aa9bb8719b2d72f01bda0aef4b22c0c5ea26  vm/gh200-driver.out
 d619b3b68070863932d8e80927be4c84fd9cf848beea54d06d2e3ad7cdffdcea  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json
 bf498d842799f4a7ad85563371e5ab34dad7efe429e3cc6ce3859227a2e76e84  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.profiles/g64.floor.capture.json
 72bfdcd20b9e59e1607426717ad03149f36a17e8b859198c6a10a391396a5da1  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.profiles/g64.floor.csv
@@ -72,6 +72,10 @@ b8382adc89d7c5da5b76c3e2568713463646c4605dfed634ab6d9dbb13a294b5  vm/results/202
 71638585529004e8a64c9cf3cfe3f42e99922297a9b07565045826948ae7b4e8  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters/r3f-g64-lock1005.profiles/g64.floor.triton-cache/WJAUVWYNZ2R4P4SHJLIGB5XTHABYREHDXP2LNGDM56GDDGH2ZOBQ/fused_moe_kernel.source
 de4d595afb44fc9c07293aa3da5e74772d81bde544efa6b288b33b3537125a6b  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters/r3f-g64-lock1005.profiles/g64.floor.triton-cache/WJAUVWYNZ2R4P4SHJLIGB5XTHABYREHDXP2LNGDM56GDDGH2ZOBQ/fused_moe_kernel.ttgir
 396bbe22ca9e9a3544c18fc4051f79898491f650f942f5c12bf224c568071dc5  vm/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters/r3f-g64-lock1005.profiles/g64.floor.triton-cache/WJAUVWYNZ2R4P4SHJLIGB5XTHABYREHDXP2LNGDM56GDDGH2ZOBQ/fused_moe_kernel.ttir
+d4a327a0b4835e7af2466d93ba63d3ebc231f9cfb5e11f46576c8b36aa6fd855  vm/results/2026-10-06-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/cells.csv
+d770ed9288c97cb0d74b3c5ba4dd37e3be2ab578348cc951b61eae2183347ea3  vm/results/2026-10-06-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/hostprobe-post.csv
+1368847230f2b85d94505ab64f1b07dce41fdf9bf2b43ef7ecbbbc71676eaaff  vm/results/2026-10-06-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/hostprobe.csv
+72eec84ef00820f098c71785a1074c9e78ae5b7a8eefd4cc32f76c00b88b6b21  vm/results/2026-10-06-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/manifest.json
 049ee11c9ef69c1c5e61b9d61dc8524087dece687c6abc90b753e41ee253ca81  vm/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json
 64a31ef637927d7feb532bae0d62d4a4aeade962e0830451a977e88a5aa12023  vm/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.profiles/g64.floor.capture.json
 4fa0eaa5507a54c1592729d3823f92704097be1db5ba1ecfda932688ae50559b  vm/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.profiles/g64.floor.csv
@@ -498,6 +502,7 @@ ec74e4afc8cbdce7ff79bb1c1b5fe921b7ad5bbfec33a5d5ed160f41451a4add  vm/session/cen
 dd805626b52149770e88cc7f23a25d7880da745a2efba56aa2df338a89734611  vm/session/census.profiles/census.triton-cache/UWSNRLZKSJWHURNQRZV5BQZNAOYV2VLXJ354CWNMREKCWVUI6U2Q/fused_moe_kernel.ttgir
 cb17e283a2cf29cb05ae048402b642ebcfaa76f0925ee26ed89cc91c54ffc0b1  vm/session/census.profiles/census.triton-cache/UWSNRLZKSJWHURNQRZV5BQZNAOYV2VLXJ354CWNMREKCWVUI6U2Q/fused_moe_kernel.ttir
 ece00d48b787fdbe19135e7ee32e7ecd9c2d46524d9e053202e4245af05b7d85  vm/session/clocks-after-floor.txt
+657118418bbf0470dc67ad8c8266df2d7089807a5aa0f9f7886287d9752a46bd  vm/session/clocks-after-launchfloor-mixtral-8x7b-tp4.txt
 19bf08646fcad064de1e6877bfacaac7a6dc85039100d3329bbc6016a42db298  vm/session/clocks-after-lock-pages.txt
 b11fd8c1c106ce6be6b3581872edf4f3b0b74ff64e19789d346ce7108d4fa63c  vm/session/clocks-after-timed.txt
 b498ad46774850d0290faf6a9dd6fc415dd1f792d9f98e3b6ee671d0f58a1ac2  vm/session/clocks-at-start.txt
@@ -514,13 +519,14 @@ af8060de1b83f2d6f53472691f6dddca967ee8133cd406a6a7ec0d251ce842c5  vm/session/cou
 765fe9d167ffb1eaa9911a053ca79d1c7f0d198caa59b711bf9ff0f5e7d9378a  vm/session/gh200-driver/floor-results
 057211f3c1d56ae7e6af3b2fff69690269fc094567cc684c1b404b0c0feef21c  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-1bd742bdb7eb7ff3eff608bffa1694fc733fc7dfbdfd8a88eed9f564a646e6a2  vm/session/gh200-driver/status
-b7386f88b4db81cadddf75f6198f822688bf098158c6ab8d2b2477106202c668  vm/session/gh200-driver/summary.new
-b7386f88b4db81cadddf75f6198f822688bf098158c6ab8d2b2477106202c668  vm/session/gh200-driver/summary.txt
+aa34fc16d5aca92df10a5c97d49d46667577218b50b078aacd83a3603e21f513  vm/session/gh200-driver/status
+f879f6e60db0bcbbdfd4e388cbd282aa63976f766aede0a4900f242a5ef7934d  vm/session/gh200-driver/summary.new
+f879f6e60db0bcbbdfd4e388cbd282aa63976f766aede0a4900f242a5ef7934d  vm/session/gh200-driver/summary.txt
 d3bc30319183af0ad3f8bc3dde4a77aea0ceacf3b1f67dfbb6ed89da0a1b02e1  vm/session/gh200-driver/tags-used
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/gh200-driver/timed-results
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/git-at-start.txt
+2a51e97426ae9caffea0d3813cee1d46ed541463a75a90757fa4943ca986ede6  vm/session/launch-dir-wall.txt
 a932105553a92f1fd5594bbaad0c0cbd416e1f11a10e2b7ffe34263ac38ea9a1  vm/session/lock-plan.txt
 dd884c266295883c243f7ddc46f3a82e4d04b50c72e9733b34097c3db20482b0  vm/session/locked-r3/gh200-20261006T065851Z-p2/r3-g32-lock1710.log
 09adac874d90c737ad8c8e36fbee0ec998d821061bf07f4bb14fb2663f424a30  vm/session/locked-r3/gh200-20261006T065851Z-p2/r3-g8-lock1710.log
@@ -539,8 +545,12 @@ ba8bd056cd84a029d15c4652c846d87ac024c854bed99508b418dde7dfb59900  vm/session/log
 0e3827f22a75fd18188d42df27198110e512a5079472fe86c1a119dc4aa7bfd2  vm/session/logs/driver-bytes.log
 59c728c1f6d8b3e72aef6b4418d3c1bb5dcb24f4675f7836733d5467653a1b94  vm/session/logs/driver-calibrate.log
 663811f6bb13e2120e48113b18f23e9126f68a1d4a10c5161c2784bc8d74d017  vm/session/logs/driver-floor.log
+ace90b8262ab289a7b106c1ea0a38b617a2a0846e15a9d83b9dc8569492c263e  vm/session/logs/driver-launchfloor.log
 aceed6d3ffd907e440ab5739d30e25d6ed66e6f273143d0441f3ac40cfec67b2  vm/session/logs/driver-prelude.log
 4f047fa3daf90e67676370d44d0e91740c94bc112cc687fd42064933dce37704  vm/session/logs/driver-timed.log
+1ae32bd727e51b084962cbcdc66caab1e65eaff7ad2ba6e1f9c4834b581ed0af  vm/session/logs/launchfloor-mixtral-8x7b-tp4-timed-dry.log
+49e6796b6cd5f1093e3456b652e09e7e2b67a4d8d7fea6318fc5b8c724682120  vm/session/logs/launchfloor-mixtral-8x7b-tp4-timed.log
+6dd3b5645a005fcf95f7a16f416519cf61b9b157f100bf7cddbb69b21febaf45  vm/session/logs/launchfloor-mixtral-8x7b-tp4.phases
 7d43e404dec7394a732e3ad4a1dedaf5e4e934ea30faf794c12e97ad5b022361  vm/session/logs/lock1710-pages.status
 9595562f6e2aefdd958906aa422b0f50148dd97b80f566a650dc27c213a2fdc1  vm/session/logs/locked_r3-gh200-20261006T065851Z-p2.log
 71795a6ddf0773719e4aba0ec45be67844a70b22b725b874197cd038ad9ddd3a  vm/session/logs/locked_r3-gh200-20261006T065851Z-p5.log
