@@ -24,3 +24,5 @@
 2026-10-06T07:39:00Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed d002c33 to run-gh200-rental3-20261006t0655: timed (unit 5/24 qwen2-57b-a14b-tp8 e2e): exit 0 (36 min)
 2026-10-06T07:39:02Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 3 8 32, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32] (estimate 9 min, cap 30 min, 348 min left)
+2026-10-06T07:44:28Z bytes END: exit 0 after 5 min [unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32]
+2026-10-06T07:44:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
