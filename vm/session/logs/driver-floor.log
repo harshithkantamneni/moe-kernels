@@ -120,3 +120,22 @@ clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clock
 2026-10-06T07:49:32Z floor: r3f-g64 exit 0
 2026-10-06T07:49:32Z floor: r3f-g64-lock1710 exit 0
 2026-10-06T07:49:32Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
+== 2026-10-06T07:49:35Z step floor: 3c.5 registered floor design: NATIVE at G = 64, treads 2,4,6,8,10,11,12,13,14,15,16, no base-clock capture and the 1710 lock; --floor-shape-metrics --floor-null-kernel
+==PROF== Resetting GPU clocks on device 0.
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board bb7a34, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+  null kernel: torch.cuda._sleep(1000) after every call (spin_kernel, one block), in the skip and the count
+R3 FLOOR CAPTURE  G=64  NATIVE at treads [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16], 66 profiled launches at --clock-control none under an nvidia-smi lock of 1710 MHz; 53 metrics asked, dropped []
+RESULT: VALIDITY FL1 PASS the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings: lock in force: smi before 1710, after 1710 MHz; null median 1684.
+GATE FL1 VALIDITY PASS   the nvidia-smi lock of 1710 MHz was in force while ncu counted, by independent clock readings
+              measured lock in force: smi before 1710, after 1710 MHz; null median 1684.2 MHz (-1.51%) over 11 cells; null spread worst n=10 1672.8 MHz (-0.68%) | old fit, diagnostic only: w1 1705.2 MHz + 13.4 us over 11 cells; w2 1687.9 MHz + 5.8 us over 11 cells -> would read FAIL (w2 fitted 1688 MHz)   gate nvidia-smi clocks.sm before and after within 15 MHz of the lock; null-kernel median within 3% and every cell's within 2.5% of that median; base-twin ratio median within 3% of the held reference and every readable cell's within 4.5% of the capture's median; cells whose offset share exceeds 0.3 left out; tolerances 2 x the published held-lock maxima (scripts/lock_gate.py); the old t0 + cycles / f fit printed, not gated
+RESULT: VALIDITY V1 PASS every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots: 44 GEMM launches and 22 null kernels ag
+GATE V1  VALIDITY PASS   every launch attributed: each call's GEMMs, then its null kernel (spin_kernel, one block), at exactly the planned slots
+              measured 44 GEMM launches and 22 null kernels against 22 planned   gate exact count and order (attribute_launches); launch skip 66, count 66 = 3 launches x calls
+wrote /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json: '/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json' is outside repository at '/home/ubuntu/moe/repo')
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001
+2026-10-06T07:50:50Z floor: no base-clock capture: floor-base=0 (the registered design takes the 1710 MHz lock only)
+2026-10-06T07:50:50Z floor: r3f-g64-lock1710 exit 0
+2026-10-06T07:50:50Z floor: registered floor design: groups 64, treads 2,4,6,8,10,11,12,13,14,15,16
