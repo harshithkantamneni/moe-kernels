@@ -16,3 +16,4 @@ floor      exit 0 after 2 min [unit 15/24 mixtral-8x7b-tp2 floor1005 floor-group
 bytes      exit 0 after 4 min [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1]
 bytes      exit 0 after 4 min [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8]
 bytes      exit 0 after 4 min [unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4]
+bytes      exit 0 after 4 min [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3]

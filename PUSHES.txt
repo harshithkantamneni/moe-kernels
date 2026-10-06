@@ -25,3 +25,4 @@
 2026-10-06T08:13:47Z bytes: G=1 page exit 0
 2026-10-06T08:13:58Z bytes (unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4): exit 0 (4 min)
 2026-10-06T08:17:27Z bytes: G=1 page exit 0
+2026-10-06T08:17:38Z bytes (unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3): exit 0 (4 min)
