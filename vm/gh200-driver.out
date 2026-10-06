@@ -98,3 +98,5 @@
 2026-10-06T09:08:09Z launchfloor START: launch floor at the 1710 lock: arms native,shared,private, G=4, treads 1,2,3, modes E0,E240,E360,E480, traces at 1; a timed process (no profiler) then a trace process [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1] (estimate 14 min, cap 35 min, 259 min left)
 2026-10-06T09:15:51Z launchfloor END: exit 0 after 8 min [unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1]
 2026-10-06T09:15:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5fd6c9c to run-gh200-rental3-20261006t0655: launchfloor (unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1): exit 0 (8 min)
+2026-10-06T09:15:56Z driver end: exit 3
