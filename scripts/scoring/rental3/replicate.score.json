@@ -1,0 +1,421 @@
+{
+ "registration": "2026-10-05-rental3-replicate-gh200",
+ "R": {
+  "cells": [
+   {
+    "cell": "shared G=8 n=3",
+    "rep8_ms": 0.3872640132904053,
+    "e2e_ms": 0.38790398836135864,
+    "rel": -0.001649828540451037
+   },
+   {
+    "cell": "shared G=8 n=4",
+    "rep8_ms": 0.49462398886680603,
+    "e2e_ms": 0.4954240024089813,
+    "rel": -0.0016148057790604797
+   },
+   {
+    "cell": "shared G=8 n=5",
+    "rep8_ms": 0.6023359894752502,
+    "e2e_ms": 0.6031039953231812,
+    "rel": -0.0012734219204092456
+   },
+   {
+    "cell": "shared G=8 n=6",
+    "rep8_ms": 0.7109439969062805,
+    "e2e_ms": 0.7112320065498352,
+    "rel": -0.00040494471691709943
+   },
+   {
+    "cell": "private G=8 n=2",
+    "rep8_ms": 0.3388479948043823,
+    "e2e_ms": 0.33932799100875854,
+    "rel": -0.0014145493949653254
+   },
+   {
+    "cell": "private G=8 n=3",
+    "rep8_ms": 0.47727999091148376,
+    "e2e_ms": 0.4790079891681671,
+    "rel": -0.003607451849987231
+   },
+   {
+    "cell": "private G=8 n=4",
+    "rep8_ms": 0.6151679754257202,
+    "e2e_ms": 0.6160640120506287,
+    "rel": -0.0014544537700326154
+   },
+   {
+    "cell": "private G=8 n=5",
+    "rep8_ms": 0.7548640072345734,
+    "e2e_ms": 0.7531840205192566,
+    "rel": 0.002230512955065933
+   },
+   {
+    "cell": "private G=8 n=6",
+    "rep8_ms": 0.8920959830284119,
+    "e2e_ms": 0.8920639753341675,
+    "rel": 3.588049190339504e-05
+   }
+  ],
+  "sigma_page": 0.001801902870438887,
+  "verdict": "RECORD"
+ },
+ "RK": {
+  "per_gemm": {
+   "w1": {
+    "cells": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "sigma_L": 3887.9362085317293,
+    "sigma_D_imb": 4306.94482021759
+   },
+   "w2": {
+    "cells": [
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "sigma_L": 1455.5130913066491,
+    "sigma_D_imb": 470.85892236555924
+   }
+  },
+  "rental3_tp4_K1": {
+   "cells": 42,
+   "ambiguous": 27,
+   "verdict_as_measured": "HOLDS",
+   "extremes": [
+    "HOLDS",
+    "FALSIFIED"
+   ],
+   "verdict": "UNRESOLVED"
+  },
+  "rental3_tp4_K4": {
+   "cells": 42,
+   "verdict_as_measured": "HOLDS",
+   "extremes": [
+    "HOLDS",
+    "FALSIFIED (H_IMB)"
+   ],
+   "verdict": "UNRESOLVED"
+  },
+  "rental2_K1_SEEN": {
+   "cells": 60,
+   "ambiguous": 38,
+   "verdict_as_measured": "HOLDS",
+   "extremes": [
+    "HOLDS",
+    "FALSIFIED"
+   ],
+   "verdict": "UNRESOLVED"
+  },
+  "rental2_K4_SEEN": {
+   "cells": 60,
+   "verdict_as_measured": "HOLDS",
+   "extremes": [
+    "HOLDS",
+    "FALSIFIED (H_IMB)"
+   ],
+   "verdict": "UNRESOLVED"
+  },
+  "verdict": "RECORD"
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1685.4343971631206,
+      "l2_mhz": 1697.7927613687423,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1685.4 MHz (-1.44% of 1710: True); L2 clock 1697.8 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1685.4343971631206,
+      "l2_mhz": 1697.7927613687423,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1685.4 MHz (-1.44% of 1710: True); L2 clock 1697.8 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1684.1546762589928,
+      "l2_mhz": 1697.1990171349953,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1684.2 MHz (-1.51% of 1710: True); L2 clock 1697.2 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "lock_check": {
+      "ok": true,
+      "null_median_mhz": 1684.1546762589928,
+      "l2_mhz": 1697.1990171349953,
+      "smi": [
+       1710.0,
+       1710.0
+      ],
+      "why": "null kernel 1684.2 MHz (-1.51% of 1710: True); L2 clock 1697.2 MHz in [1690.0, 1715.0]: True; nvidia-smi before 1710.0, after 1710.0 (within 15 MHz of the lock: True)"
+     },
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "rep8/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-ef2ea3e8": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T065851Z-p2b-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T065851Z-p2b-lock1710",
+     "use": "counted"
+    }
+   },
+   "e2e/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-3908df9d": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T065851Z-p2-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261006T065851Z-p2-lock1710",
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "R / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   },
+   {
+    "path": "RK / rental3_tp4_K1 / verdict",
+    "ALL": "UNRESOLVED",
+    "CLEAN": "UNRESOLVED",
+    "registered": "UNRESOLVED"
+   },
+   {
+    "path": "RK / rental3_tp4_K4 / verdict",
+    "ALL": "UNRESOLVED",
+    "CLEAN": "UNRESOLVED",
+    "registered": "UNRESOLVED"
+   },
+   {
+    "path": "RK / rental2_K1_SEEN / verdict",
+    "ALL": "UNRESOLVED",
+    "CLEAN": "UNRESOLVED",
+    "registered": "UNRESOLVED"
+   },
+   {
+    "path": "RK / rental2_K4_SEEN / verdict",
+    "ALL": "UNRESOLVED",
+    "CLEAN": "UNRESOLVED",
+    "registered": "UNRESOLVED"
+   },
+   {
+    "path": "RK / verdict",
+    "ALL": "RECORD",
+    "CLEAN": "RECORD",
+    "registered": "RECORD"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-05-rental3-replicate-gh200",
+   "R": {
+    "cells": [
+     {
+      "cell": "shared G=8 n=3",
+      "rep8_ms": 0.3872640132904053,
+      "e2e_ms": 0.38790398836135864,
+      "rel": -0.001649828540451037
+     },
+     {
+      "cell": "shared G=8 n=4",
+      "rep8_ms": 0.49462398886680603,
+      "e2e_ms": 0.4954240024089813,
+      "rel": -0.0016148057790604797
+     },
+     {
+      "cell": "shared G=8 n=5",
+      "rep8_ms": 0.6023359894752502,
+      "e2e_ms": 0.6031039953231812,
+      "rel": -0.0012734219204092456
+     },
+     {
+      "cell": "shared G=8 n=6",
+      "rep8_ms": 0.7109439969062805,
+      "e2e_ms": 0.7112320065498352,
+      "rel": -0.00040494471691709943
+     },
+     {
+      "cell": "private G=8 n=2",
+      "rep8_ms": 0.3388479948043823,
+      "e2e_ms": 0.33932799100875854,
+      "rel": -0.0014145493949653254
+     },
+     {
+      "cell": "private G=8 n=3",
+      "rep8_ms": 0.47727999091148376,
+      "e2e_ms": 0.4790079891681671,
+      "rel": -0.003607451849987231
+     },
+     {
+      "cell": "private G=8 n=4",
+      "rep8_ms": 0.6151679754257202,
+      "e2e_ms": 0.6160640120506287,
+      "rel": -0.0014544537700326154
+     },
+     {
+      "cell": "private G=8 n=5",
+      "rep8_ms": 0.7548640072345734,
+      "e2e_ms": 0.7531840205192566,
+      "rel": 0.002230512955065933
+     },
+     {
+      "cell": "private G=8 n=6",
+      "rep8_ms": 0.8920959830284119,
+      "e2e_ms": 0.8920639753341675,
+      "rel": 3.588049190339504e-05
+     }
+    ],
+    "sigma_page": 0.001801902870438887,
+    "verdict": "RECORD"
+   },
+   "RK": {
+    "per_gemm": {
+     "w1": {
+      "cells": [
+       2,
+       4,
+       6,
+       8,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16
+      ],
+      "sigma_L": 3887.9362085317293,
+      "sigma_D_imb": 4306.94482021759
+     },
+     "w2": {
+      "cells": [
+       4,
+       6,
+       8,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16
+      ],
+      "sigma_L": 1455.5130913066491,
+      "sigma_D_imb": 470.85892236555924
+     }
+    },
+    "rental3_tp4_K1": {
+     "cells": 42,
+     "ambiguous": 27,
+     "verdict_as_measured": "HOLDS",
+     "extremes": [
+      "HOLDS",
+      "FALSIFIED"
+     ],
+     "verdict": "UNRESOLVED"
+    },
+    "rental3_tp4_K4": {
+     "cells": 42,
+     "verdict_as_measured": "HOLDS",
+     "extremes": [
+      "HOLDS",
+      "FALSIFIED (H_IMB)"
+     ],
+     "verdict": "UNRESOLVED"
+    },
+    "rental2_K1_SEEN": {
+     "cells": 60,
+     "ambiguous": 38,
+     "verdict_as_measured": "HOLDS",
+     "extremes": [
+      "HOLDS",
+      "FALSIFIED"
+     ],
+     "verdict": "UNRESOLVED"
+    },
+    "rental2_K4_SEEN": {
+     "cells": 60,
+     "verdict_as_measured": "HOLDS",
+     "extremes": [
+      "HOLDS",
+      "FALSIFIED (H_IMB)"
+     ],
+     "verdict": "UNRESOLVED"
+    },
+    "verdict": "RECORD"
+   }
+  }
+ }
+}

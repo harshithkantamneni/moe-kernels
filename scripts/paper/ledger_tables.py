@@ -10,7 +10,8 @@ assembled from committed files.
 Inputs: scripts/paper/ledger_rows.json (the ledger as the outline types it) and the
 committed scorer outputs (scripts/scoring/crossmodel/*.json and *.txt,
 scripts/scoring/rental1/*.score.json, scripts/scoring/rental2/*.score.json,
-scripts/scoring/session0927/score.json). Nothing is fitted, measured or rescored here.
+scripts/scoring/rental3/*.score.json, scripts/scoring/session0927/score.json). Nothing is
+fitted, measured or rescored here.
 
 APPENDIX A. One line per ledger row: the typed verdict and, where a committed
 scorer output carries a verdict or the numbers that decide one, the verdict read
@@ -24,15 +25,17 @@ scripts/scoring/session0927/score.json (a scorer written 2026-10-05, after the p
 and 6 note that the 2026-09-27 hand scoring read HELD.
 Rows whose scorer output carries no single verdict print "typed from" and the file.
 The per-cell tables are data/appendix_a_cells.csv: every cell of the cross-model
-time tests (rows 12, 17, 20, 25, 29, 33) and byte tests (rows 14, 19, 23, 28, 32,
-36, 40), as the committed outputs hold them.
+time tests (rows 12, 17, 20, 25, 29, 33, 77) and byte tests (rows 14, 19, 23, 28, 32,
+36, 40, 79), as the committed outputs hold them (row 77's resid is put as predicted /
+measured - 1, the other rows' convention; row 79's are rental 3's ALL rows).
 
 SUMMARY COUNTS. Derived, not typed: primary time tests (rows 12, 17, 20, 24, 25, 29,
-33, 37, 41), per-GEMM floor tests counted once per registration on the base
+33, 37, 41, 77), per-GEMM floor tests counted once per registration on the base
 capture (rows 10, 15, 22, 26, 30, 34, 38, 39, 42, 43, 47), PRIVATE byte tests per
 GEMM on the five 2026-09-29 GH200 registrations (rows 23, 28, 32, 36, 40), each
 from the scorer output's own verdict or stats against the registered bar, and the
-code-docstring tests of the 2026-09-27 board (rows 1 to 8) from session0927/score.json.
+code-docstring tests of the 2026-09-27 board (rows 1 to 8) from session0927/score.json,
+and the floor-law verdicts of rental 2 part 4 (row 60) and rental 3 part B (row 83).
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ ROOT = Path(__file__).resolve().parents[2]
 XM = ROOT / "scripts/scoring/crossmodel"
 SC1 = ROOT / "scripts/scoring/rental1"
 SC2 = ROOT / "scripts/scoring/rental2"
+SC3 = ROOT / "scripts/scoring/rental3"
 PUB = ROOT / "results/published"
 ROWS = ROOT / "scripts/paper/ledger_rows.json"
 BAR_RMS, LIMIT = 0.02, 0.05
@@ -180,6 +184,11 @@ L2 = SC1 / "l2.score.json"
 W1 = SC2 / "w1floor.score.json"
 CO = SC2 / "const.score.json"
 KN = SC2 / "knobs.score.json"
+E2E = SC3 / "e2e.score.json"
+FLW = SC3 / "floorlaw.score.json"
+ZF = SC3 / "zform.score.json"
+STG = SC3 / "stages.score.json"
+FLU = SC3 / "flush.score.json"
 
 def session0927(row: int) -> tuple[str, str, dict]:
     v = _j(SESS)["rows"][str(row)]["verdict"]
@@ -236,13 +245,23 @@ CHECKS = {
     75: lambda: many(KN, [("tests", "H2c BLOCK_K at G=1 (tail)", "l2bk128 w1", "verdict"),
                         ("tests", "H2c BLOCK_K at G=1 (tail)", "l2bk32 w1", "verdict"),
                         ("tests", "H3 slot pad 7 (tail)", "verdict")]),
+    77: lambda: key(E2E, "E1", "verdict"), 78: lambda: key(E2E, "E2", "verdict"),
+    79: lambda: many(E2E, [("E3", "verdict"), ("E3s", "verdict")]),
+    80: lambda: key(E2E, "E4", "verdict"), 81: lambda: key(E2E, "E6", "verdict"),
+    83: lambda: many(FLW, [("verdict",), ("hypotheses", "CEIL"), ("hypotheses", "FLUID")]),
+    84: lambda: key(FLW, "tests", "B6", "verdict"), 85: lambda: key(FLW, "tests", "B7", "verdict"),
+    86: lambda: many(ZF, [("verdict",), ("forms", "PROP", "status")]),
+    87: lambda: many(STG, [("verdict",)] + [("hypotheses", h, "status")
+                                         for h in ("DEPTH", "WIDTH", "U-OCC", "U-DEPTH")]),
+    88: lambda: many(FLU, [("hypotheses", "OVERLAP"), ("hypotheses", "SAT")]),
 }
 # 68 returns a bare string; wrap it with its source.
 _c68 = CHECKS[68]
 CHECKS[68] = lambda: (_c68(), f"{_rel(SC2 / 'launch.score.json')} models.*.P.{{P2,P4,P5}}.verdict", {})
 #: Rows whose scorer output carries no single verdict: the file the typed verdict is read from.
 TYPED = {55: "scripts/scoring/rental1/l2.score.json rules.secondary_G2 and README",
-         62: "scripts/scoring/rental2/SCORES.md part 4", 76: "docs/registered/README.md \"Scored 2026-10-02\""}
+         62: "scripts/scoring/rental2/SCORES.md part 4", 76: "docs/registered/README.md \"Scored 2026-10-02\"",
+         82: "scripts/scoring/rental3/replicate.score.json RK and SCORES.md part R"}
 
 WORDS = re.compile(r"NOT SCORABLE|NOT SCORED|NOT RUN|NOT HELD|INCONCLUSIVE|FALSIFIED|NEITHER|"
                    r"SELECTED|FAILED|HOLDS|HOLD|HELD|PASS|H1|NL|refuted|RECORD|UNDECIDED|"
@@ -281,7 +300,7 @@ def summary() -> list[tuple]:
     t = {12: time_reg("8x22b"), 17: time_reg("qwen2"), 20: time_own("olmoe-1b-7b"),
          25: time_own("qwen1.5-moe-a2.7b"), 29: time_own("phi-3.5-moe"),
          33: time_own("jetmoe-8b"), 37: time_refused(), 24: not_run("olmoe"),
-         41: not_run("granite")}
+         41: not_run("granite"), 77: key(E2E, "E1", "verdict")}
     fl = {10: floor("8x22b"), 15: floor("qwen2"), 22: floor("olmoe"),
           26: floor("qwen1.5", ("w1", "w2")), 30: floor("phi3.5", ("w1", "w2")),
           34: floor("jetmoe", ("w1", "w2")), 38: floor("granite", ("w2",)),
@@ -321,6 +340,7 @@ def summary() -> list[tuple]:
                     verdict, k, which))
     out.append(("floor law, rental 2 part 4 (row 60)", key(W1, "base (PRIMARY)", "families",
                                                           "verdict")[0], 1, "60"))
+    out.append(("floor law, rental 3 part B (row 83)", key(FLW, "verdict")[0], 1, "83"))
     return out
 
 
@@ -340,6 +360,15 @@ def cells() -> list[tuple]:
         for c in _j(XM / f"{case}.registered.json")["bytes"]["cells"]:
             out.append((row, "bytes q", case, c["arm"], c["G"], c["n"], c["gemm"], c["q_meas"],
                         c["q_reg"], c["rel"]))
+    e2e = _j(E2E)
+    for c in e2e["E1"]["cells"]:
+        out.append((77, "time", "qwen2-57b-a14b-tp8", c["arm"], c["G"], c["n"], "", c["T_meas"],
+                    c["T_M"], c["T_M"] / c["T_meas"] - 1))
+    for key3 in ("E3", "E3s"):
+        for c in e2e[key3]["rows"]:
+            arm = "private" if key3 == "E3" else "shared"
+            out.append((79, "bytes q", "qwen2-57b-a14b-tp8", arm, c["G"], c["n"], c["gemm"], c["q"],
+                        c["q_pred"], c["rel"]))
     return out
 
 

@@ -1,0 +1,7 @@
+LAUNCH FLOOR PLAN mixtral-8x7b-tp8: treads [1, 2, 3], arms ['native', 'shared', 'private'], modes ['E0', 'E240', 'E360', 'E480'], G=4, BLOCK_M 32, duty 0.25, 3 repeats, seed 0
+  declaration: 9 copies (the ladder's id count runs 256..1536, across the small-batch id bound 1024, and E x n_max = 48 is under the expert bound 64; declaring 9 copies (E x 9 = 72) keeps both ratio arms on the scan kernel at every tread); declared {'native': 8, 'shared': 72, 'private': 72}
+  pinned config: {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 4, 'num_warps': 8, 'num_stages': 4, 'BLOCK_SIZE_M': 32}
+  phase timed: 108 timed cells at ~3.0 s, 0 profiled bursts at ~4 s, 72 host probes at ~1 s, 3 min weights and compile
+  estimated 9.6 min
+  E240 = R3 as published (240 MiB flush); E0 no flush; E480 480 MiB flush; E120 / E360 120 / 360 MiB flushes (E120 is 2x the L2: printed only); GR CUDA-graph replay under E240's flush
+DRY RUN: nothing timed, nothing written (exit 2)

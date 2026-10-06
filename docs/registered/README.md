@@ -902,3 +902,24 @@ stand.
 **Scorer ambiguities, decided before any page**: every one of the review's section-6 items
 (E-1 to E-10, B-1 to B-7, A-1 to A-7, C-1 to C-7, D-1 to D-5) is resolved in writing in its
 file's `ambiguities_resolved`.
+
+**Scored 2026-10-06** on `results/published/2026-10-06-nvidia_gh200_480gb-rental3-session`
+(board bb7a34, 24 units at 49f2198, 23 exit 0; the six scorers' outputs and the per-prediction ALL /
+CLEAN table in `scripts/scoring/rental3/` and `SCORES.md`). CLEAN keeps every floor capture (lock
+in force: null kernel -1.18 to -1.78% of the lock, L2 1697.0 to 1697.8 MHz at 1710) and every
+timed page (the G = 32 page fails V5 alone, which does not gate timed pages), and drops the three
+e2e byte pages, which fail V5 (PRIVATE w1 q_P 0.957 n). Part E: E1, time from predicted bytes,
+FALSIFIED (rms 3.50%, worst -6.08%, 31 cells, every cell over-predicted by 10 to 29 us; resolution
+0.31%); E2, time from counted bytes, FALSIFIED (rms 2.52%, worst +4.72%); E3, E3s and E6 NOT SCORED
+(ALL: FALSIFIED, FALSIFIED, INCONCLUSIVE); E4 M HOLDS (b 0.984). Part R: sigma_page 0.18%. RK: K1
+and K4 UNRESOLVED at the floorrep noise, on rental 3's tp4 pool and on rental 2's (rental 2's
+verdicts stand). Part B: INCONCLUSIVE (CEIL, FLUID FALSIFIED; CLOCK neither; B1 HOLDS, B0 FALSIFIED,
+B2 fails on 1 of 8, B6 INCONCLUSIVE at theta_wall 0.58, B7 H_EST HOLDS), so the floor-law claim stays
+"ncu-measured". Part A: INCONCLUSIVE (PROP FALSIFIED; AFF fails on 1 GEMM; qwen2-tp8 w2 NOT SCORED,
+curvature). Part C: INCONCLUSIVE (DEPTH, WIDTH, U-OCC, U-DEPTH FALSIFIED; OCC and NULL survive, no
+page at 2 or fewer CTAs per SM). Part D: OVERLAP SELECTED on 3 qualifying cells. One post-page
+scorer fix (`SCORES.md`, end): E2's call into `cross_model_score.score` dropped the V5-only G = 32
+page through `r3_timing_model.admit` and printed NOT SCORED; it now reads the pages the view
+counted, as `gates.timed` says, and prints FALSIFIED. The unit-13 exit 3 is one refused host probe
+(GR n = 13), not a timed cell; the recovery step's G = 32 retake passed the plan name as the model
+and was REFUSED with nothing measured, an operations defect. The files above are unchanged.

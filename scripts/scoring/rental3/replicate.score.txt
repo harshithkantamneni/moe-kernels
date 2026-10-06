@@ -1,0 +1,20 @@
+RENTAL 3, the noise models, 2026-10-05-rental3-replicate-gh200
+  R sigma_page: 0.001801902870438887
+    shared G=8 n=3: rep8 0.3873 e2e 0.3879 (-0.16%)
+    shared G=8 n=4: rep8 0.4946 e2e 0.4954 (-0.16%)
+    shared G=8 n=5: rep8 0.6023 e2e 0.6031 (-0.13%)
+    shared G=8 n=6: rep8 0.7109 e2e 0.7112 (-0.04%)
+    private G=8 n=2: rep8 0.3388 e2e 0.3393 (-0.14%)
+    private G=8 n=3: rep8 0.4773 e2e 0.4790 (-0.36%)
+    private G=8 n=4: rep8 0.6152 e2e 0.6161 (-0.15%)
+    private G=8 n=5: rep8 0.7549 e2e 0.7532 (+0.22%)
+    private G=8 n=6: rep8 0.8921 e2e 0.8921 (+0.00%)
+  RK: RECORD
+    w1: {'cells': [2, 4, 6, 8, 10, 11, 12, 13, 14, 15, 16], 'sigma_L': 3887.9362085317293, 'sigma_D_imb': 4306.94482021759}
+    w2: {'cells': [4, 6, 8, 10, 11, 12, 13, 14, 15, 16], 'sigma_L': 1455.5130913066491, 'sigma_D_imb': 470.85892236555924}
+    rental3_tp4_K1: UNRESOLVED (as measured HOLDS, extremes ['HOLDS', 'FALSIFIED'])
+    rental3_tp4_K4: UNRESOLVED (as measured HOLDS, extremes ['HOLDS', 'FALSIFIED (H_IMB)'])
+    rental2_K1_SEEN: UNRESOLVED (as measured HOLDS, extremes ['HOLDS', 'FALSIFIED'])
+    rental2_K4_SEEN: UNRESOLVED (as measured HOLDS, extremes ['HOLDS', 'FALSIFIED (H_IMB)'])
+  two views (ALL, CLEAN):
+    0 of 6 verdicts differ between ALL and CLEAN

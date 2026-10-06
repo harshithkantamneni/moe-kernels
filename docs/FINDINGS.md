@@ -1033,7 +1033,7 @@ the bare UUID, `dram_counter_route.board`). Counted by board hash over every pub
 the 13 GH200 sessions ran on nine distinct boards: 1310e2 (2026-09-25 and Granite), 9b6d01
 (2026-09-27), 435984 (8x22B), 50e61f (Qwen2-57B), d663f7 (OLMoE), d67185 (Qwen1.5, Phi-3.5,
 JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (rental 1) and
-4da056 (rental 2).
+4da056 (rental 2). Rental 3 (2026-10-06) ran on a tenth, bb7a34: 14 GH200 sessions.
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
 each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
@@ -1142,7 +1142,9 @@ alone: only Mixtral 8x22B was timed from predicted bytes and held (1.71%), Qwen2
 timed from predicted bytes and failed (2.71%), and every other held-out model (OLMoE and
 these four) was timed from its own counted bytes, with time from predicted bytes printed
 only. The end-to-end claim, predicted bytes to predicted time, rests on one unseen model.
-Rental 3's end-to-end test on `qwen2-57b-a14b-tp8` is planned; it is not yet registered.
+CORRECTED 2026-10-06: rental 3's end-to-end test on `qwen2-57b-a14b-tp8`, registered 2026-10-05,
+was FALSIFIED (3.50% rms from predicted bytes, 2.52% from counted bytes; Rental 3 below), so the
+end-to-end claim still rests on one unseen model.
 Also from 8x7B's fit: PRIVATE bytes to 5% on
 seven of the four models' eight GEMMs; the per-CTA floor on six of seven
 scorable GEMMs, down to an 8-k-step CTA (registered predictions that held on the base captures;
@@ -1489,6 +1491,128 @@ before and after, and R 1.2866, +5.48% of the reference (implied 1804 MHz). That
 correction 5: `r3_timing_model.py` and `wave_split_bytes.py` now print the recomputed verdict,
 the stored one labelled stale. The rental-2 scorers keep their registered addendum rule 5
 unchanged.
+
+## Rental 3 (2026-10-06): end-to-end blind time on Qwen2-57B at TP 8, the floor law across clocks, the constant's form, the stage knobs, the flush ladder
+
+One Lambda GH200 480GB (board `bb7a34`, which no earlier page used; instance 7d3bb595 launched
+06:55:50Z, terminated 09:20:25Z, 2 h 25 min, about $5.53) ran `scripts/plans/rental3-2026-10.plan`
+unattended at 49f2198: 24 units in 137 minutes against an estimate of 182, none dropped, 23 exit 0.
+Six registrations and their scorers were committed before any page (11244a6). Published at
+`results/published/2026-10-06-nvidia_gh200_480gb-rental3-session`; every verdict is the committed
+scorers' output in `scripts/scoring/rental3/` (`SCORES.md` has each prediction's ALL, CLEAN and
+registered reading), with one post-page fix to reading code, below.
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| part E, end-to-end (qwen2-57b-a14b-tp8) | E1 time from predicted bytes (primary) | FALSIFIED (resolved) | rms 3.50%, worst -6.08% over 31 cells; every cell 9.7 to 29.3 us under M; resolution 0.31% |
+| | E2 time from counted bytes | FALSIFIED (post-page fix) | rms 2.52%, worst +4.72%, none beyond 5% |
+| | E3 PRIVATE q, E3s SHARED q | NOT SCORED (byte pages fail V5); ALL: FALSIFIED, FALSIFIED | PRIVATE w1 -4.4% median, w2 within 0.2%; SHARED w1 -22% median |
+| | E4 w2 per-CTA unit at S 5 | M HOLDS (F0 FALSIFIED) | b 0.984 in [0.98, 1.02] on the 1005 DUR; F0 0.637 |
+| | E6 dead-CTA term | NOT SCORED; ALL: INCONCLUSIVE | w2 29.4 us; DEAD [29.6, 44.4], FIXED [17.2, 25.8] |
+| part R, RK | sigma_page | 0.18% | rep8 against the e2e G = 8 page, 9 cells |
+| | K1, K4 at the floorrep noise | UNRESOLVED on rental 3 and on rental 2's pool | w1 sigma_L 3,888 cycles against the 5,000 threshold |
+| part B, the floor law | CLOCK / CEIL / FLUID | INCONCLUSIVE: CEIL, FLUID FALSIFIED, CLOCK neither | B1 HOLDS (14 of 16); B0 FALSIFIED (tp4 w2 +0.21); B2 fails on qwen2-tp8 w2 (0.06) |
+| | B6 wall time outside ncu | INCONCLUSIVE | theta_wall 0.58, se 0.14 |
+| | B7 part 4 on the 1005 DUR | H_EST HOLDS | theta 0.964 |
+| part A, the constant's form | PROP / AFF / MIX | INCONCLUSIVE: PROP FALSIFIED | Granite-1B w2 Z / Z_1710 0.842 +- 0.063 (MIX 0.858, AFF 1.0); qwen2-tp8 w2 NOT SCORED (curvature) |
+| part C, the stage knobs | OCC, DEPTH, WIDTH, U-OCC, U-DEPTH, NULL | INCONCLUSIVE: DEPTH, WIDTH, U-OCC, U-DEPTH FALSIFIED | every classified page base; recorded occupancy 3 to 5 CTAs per SM |
+| part D, the flush ladder | OVERLAP / SAT | OVERLAP SELECTED | 3 qualifying cells, steps +27 to +42 us per 33.8 us of flush |
+
+One post-page scorer fix, recorded here because it changed a printed verdict. E2 is registered on
+every core cell of the G with a byte page (3, 8, 32), and V5 never gates a timed page. The scorer's
+view kept the G = 32 page (INVALID on V5 alone), but `cross_model_score.score` builds the target
+through `r3_timing_model.admit`, which keeps VALID pages only, so the page was dropped inside the
+call and E2 printed NOT SCORED (22 of 31 cells). `score_e2e.py` now passes the target pages as the
+view chose them and builds the source fit first under the unchanged `admit`; it prints FALSIFIED.
+No rule, band, cell set or estimator changed, and the pinned `cross_model_score.py` is untouched.
+
+**What each test separated, and what it did not.**
+
+- Part E falsified the current model end to end on an unseen shape inside the 64-expert, top-8
+  family. The miss has one sign: every one of the 31 cells is faster than M by 10 to 29 us, the
+  relative miss largest at small n (-6.1% at PRIVATE n = 2, -1.0% at SHARED n = 8). Counted bytes
+  cut the rms from 3.50 to 2.52% (PRIVATE w1 reads 4.4% fewer weight bytes than the byte model's
+  n W), and the rest of the miss is in the time model: E2 still fails the 2% rms bar, with no
+  cell beyond 5%. The deep pages (G = 4, 2) read 2.83% rms with the
+  same sign. M+Z, M with the per-GEMM constant's -9.6 us a call, reads 1.89% rms and worst 3.52%;
+  it is printed, not a test, because a board-level T0 offset reproduces it (the registration, E5).
+  What E does not separate: whether the over-prediction is a board offset, the per-GEMM constant
+  or the dead-CTA term at a short CTA. E6 was the test for the last; its byte pages fail V5, and
+  on ALL its 29.4 us sits between the DEAD and FIXED bands.
+- E4 held on the shortest CTA ever timed: w2 at K 320 (S 5, F 36% of the unit) costs 0.984 u per
+  wave of CTAs (the joint fit's b on the 1005 MHz duration ruler, u = S c + F), where the F = 0
+  rival predicts 0.637.
+  The per-CTA fixed cost F is real at S 5. The same capture reads theta 0.06: w2's floor there
+  is fluid, not ceil.
+- Part B did not select a floor law. B1 holds: ACT.max reads the ceil law (theta 0.7 to 1.05) on
+  14 of 16 lock captures. B2 holds at 1005 on 7 of 8 GEMMs, the exception qwen2-tp8 w2 (theta
+  0.06). At 1710 most DUR fits are too wide to count (se 0.16 to 1.32); on the one that counts,
+  tp4 w2, theta_DUR 0.63 rules out CEIL and the 1005 to 1710 drop is 0.15, under CLOCK's 0.25.
+  B6, the wall-time check outside ncu, reads theta_wall 0.58 (se 0.14) on graph replay, between
+  the two labels: the clock dependence of the floor stays "ncu-measured". B7 re-asked rental 2's
+  part 4 on tp8 w1's three tread sets at 1005 MHz, where DUR carries no X, and H_EST held (theta
+  0.964, delta -1.2%): its set-dependent slopes hold on that ruler. It is one GEMM at one clock,
+  not a floor law.
+- Part A falsified PROP (the constant is not proportional to the unit: Granite-1B reads 3,540 and
+  3,719 cycles where PROP gives 1,254 and 2,025). Between the cycle form (AFF) and the cycle plus
+  nanosecond form (MIX) it is INCONCLUSIVE: Granite-1B w2's base / 1710 ratio, 0.842 +- 0.063,
+  sits on MIX (0.858) and 2.5 sigma from AFF, and w1's 0.951 fits both. The registered power section
+  said the primary lever could only narrowly separate them.
+- Part C refuted every hypothesis it could test. At G = 1 on tp2 w2, 7 or 8 stages (k64s7,
+  k32s8) and BLOCK_K 128 at 3 stages (k128s3) left survival at the base page's level (ds -0.02 to
+  +0.07); BLOCK_K 128 at 4 stages rose +0.08 to +0.14 and was unclassified. DEPTH, WIDTH and their
+  unions are FALSIFIED. OCC survives untested: the expected occupancies (2 CTAs per SM on k128s4
+  and k64s7) were the design's estimate, and the pages recorded 3, so no page sat where OCC
+  predicts a lift. NULL survives with it.
+- Part D selected OVERLAP: on the three host-bound n = 1 cells, Phi = H_cell - I rose with the
+  flush's GPU time at slope 1 (+27 to +42 us per 33.8 us step; slopes 0.92 to 1.03 over E240,
+  E360, E480) and did not saturate at its E240 value (SAT). Three cells is the registered minimum;
+  the n = 2 and 3 cells did not qualify (not host-bound at every mode).
+- Part R gives the end-to-end test its noise: one board, two pages, 0.18% rms; with the SEEN board
+  term 0.26% the resolution is 0.31%, under both of E1's margins (1.50 points on the rms, 1.08 on
+  the worst cell). RK gives K1 and K4 a same-clock
+  noise floor for the first time, and it is large: L's per-capture sigma is 3,888 cycles on w1 and
+  1,456 on w2, against K1's 5,000-cycle threshold, so neither rental's K1 or K4 verdict survives
+  flipping the cells within 2 sigma (UNRESOLVED; rental 2's HOLDS stand as registered).
+
+**Diagnosis, not tests.**
+
+- The e2e byte pages fail V5 on PRIVATE w1 alone: q_P 0.957 n at every n, 0.9566 at n = 1, where
+  every tile reads its own copy and V5 asks for at least 0.97 n. w2 reads within 0.2% of n. A
+  4.3% shortfall at n = 1 is a weight-byte count the counter route does not see; no earlier page
+  of the parent Qwen2-57B (npn 80) shows it, so it goes with w1's npn of 10 at TP 8.
+- At the 1710 lock, X = DUR - EL.avg is 0.8 to 2.4% of each long cell's duration (median 9,800
+  to 25,500 cycles per GEMM capture on tp4 and qwen2-tp8), against 7,900 at 1410 and 306 to 353
+  at 1005: the elapsed-cycle shortfall rental 2 found grows with the clock. The registered X
+  clock law reads neither LIN, HIGH nor FLAT.
+- The zform curvature check removed qwen2-tp8 w2 at 1710 (half-fit intercepts 8,380 and 7,021
+  cycles): Z extrapolated 54 waves to q = 0 is not a stable number there, as the registration
+  feared.
+
+**Operations.** Unit 13 (the tp4 wall check) exited 3 with every one of its 66 timed cells `ok`;
+the one failure is the pre-phase host probe at GR n = 13, refused because one iteration took 11.7
+times the median. B6 reads the timed cells only. The driver's recovery step asked for a G = 32
+timed retake and passed `--model rental3`, the plan's name, to R3, which refused in 10 s with
+nothing measured: an operations defect in the recovery path, with no data lost (the V5 page counts
+as registered).
+
+**What the paper can claim, after rental 3.** The per-CTA fixed cost F held on an unseen 5-k-step
+CTA (b 0.984 against the F = 0 rival's 0.637), and on host-bound eager calls Phi = H_cell - I
+rises with the flush's GPU time at slope 1 (OVERLAP, three cells). Not claimed: end-to-end time on the 64-expert family (E1 and E2
+FALSIFIED, one sign, 10 to 29 us a call), any floor law (part B INCONCLUSIVE, "ncu-measured"),
+the constant's form beyond "not proportional to u", any stage or BLOCK_K mechanism for G = 1
+survival, and K1 or K4 as resolved. The end-to-end count is now three models on three boards, one
+held (8x22B).
+
+**Instrument.** Every floor capture passes every gate under the lock-in-force check (null kernel
+-1.18 to -1.78% of the lock; L2 1697.0 to 1697.8 MHz at 1710, not read on Granite-1B's short
+cells; nvidia-smi on the lock before and after). The three e2e byte pages fail V5, so CLEAN drops
+them. The e2e G = 32 timed page is INVALID on V5 alone (UNKNOWN: b 3.09% of the private slope,
+band 2.42 to 3.64% against 3%), which does not gate timed pages; both views count it. Every
+timed page's worst cell clock is 1710.0 MHz. Every page carries its card's UUID, as every
+published session does.
 
 ---
 

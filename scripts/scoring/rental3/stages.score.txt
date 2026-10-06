@@ -1,0 +1,18 @@
+RENTAL 3 PART C (what lifts G = 1 survival), 2026-10-05-rental3-stages-gh200
+  board check: {'ok': True, 'within_0.05_at': 6}
+  k32s8: base at 5 CTAs/SM (counted)
+  k128s4: unclassified at 3 CTAs/SM (counted)
+  k128s3: base at 4 CTAs/SM (counted)
+  k64s7: base at 3 CTAs/SM (counted)
+  k64s3: base at 4 CTAs/SM (counted)
+  OCC: consistent 
+  DEPTH: FALSIFIED ['k32s8', 'k64s7']
+  WIDTH: FALSIFIED ['k128s3']
+  U-OCC: FALSIFIED ['k128s3']
+  U-DEPTH: FALSIFIED ['k32s8', 'k128s3', 'k64s7']
+  NULL: consistent 
+  pair OCC/NULL: NO SEPARATION
+  pair WIDTH/U-OCC: NO SEPARATION
+  verdict: INCONCLUSIVE
+  two views (ALL, CLEAN):
+    0 of 1 verdicts differ between ALL and CLEAN

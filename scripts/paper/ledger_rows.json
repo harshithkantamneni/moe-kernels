@@ -1,5 +1,5 @@
 {
- "what": "the OUTLINE section 3 ledger (OUTLINE.v6, 2026-10-05), transcribed: each row's test, registration, typed verdict, number, SEEN/BLIND label and scored-in cell. scripts/paper/ledger_tables.py checks every typed verdict it can against the committed scorer outputs.",
+ "what": "the OUTLINE section 3 ledger (OUTLINE.v7, 2026-10-06), transcribed: each row's test, registration, typed verdict, number, SEEN/BLIND label and scored-in cell. scripts/paper/ledger_tables.py checks every typed verdict it can against the committed scorer outputs.",
  "rows": [
   {
    "row": 1,
@@ -760,6 +760,126 @@
    "number": "null-kernel medians -1.29 to -1.50% of 1710",
    "label": "fixed after the gate outcomes were seen, before any score (reg: \"after the rental-2 pages' gate results were seen\")",
    "scored_in": "`D/README.md` \"Scored 2026-10-02\"; `SC2/SCORES.md`"
+  },
+  {
+   "row": 77,
+   "section": "3.2",
+   "test": "R3 part E E1, qwen2-57b-a14b-tp8 time from predicted bytes (primary), rms <= 2%, none > 5%",
+   "registration": "`D/2026-10-05-rental3-e2e-gh200.json`",
+   "verdict": "FALSIFIED (resolved)",
+   "number": "3.50%, worst -6.08%, 31 cells, every cell 9.7 to 29.3 us under M; resolution 0.31%",
+   "label": "BLIND: an unseen shape inside the 64-expert, top-8 family whose post-2026-09-28 terms were chosen on SEEN pages, two of them on this family (reg: scope, seen_data)",
+   "scored_in": "`SC3/e2e.score.txt` E1; `SC3/SCORES.md` part E; `F` Rental 3 table"
+  },
+  {
+   "row": 78,
+   "section": "3.2",
+   "test": "R3 E2 time from counted bytes",
+   "registration": "same",
+   "verdict": "FALSIFIED (post-page fix: the scorer had printed NOT SCORED)",
+   "number": "2.52%, worst +4.72%, none beyond 5%, 31 cells",
+   "label": "BLIND, as row 77 (reg: E2 label)",
+   "scored_in": "`SC3/e2e.score.txt` E2; `SC3/SCORES.md` part E and the post-page fix"
+  },
+  {
+   "row": 79,
+   "section": "3.2",
+   "test": "R3 E3 PRIVATE q, E3s SHARED q (54 cells each)",
+   "registration": "same",
+   "verdict": "NOT SCORED (the byte pages fail V5, CLEAN has no data); ALL: FALSIFIED, FALSIFIED",
+   "number": "PRIVATE rms 3.34%, w1 -4.4% median, w2 within 0.2%; SHARED rms 17.5%, w1 -22% median",
+   "label": "BLIND (reg: E3, E3s labels)",
+   "scored_in": "`SC3/e2e.score.json` E3, E3s; `SC3/SCORES.md` part E"
+  },
+  {
+   "row": 80,
+   "section": "3.2",
+   "test": "R3 E4 w2 per-CTA unit at S 5 on the 1005 DUR",
+   "registration": "same",
+   "verdict": "M HOLDS (F0 FALSIFIED)",
+   "number": "b 0.984 in [0.98, 1.02]; F0 0.637",
+   "label": "BLIND; c and F CAL (reg: E4 label, parent_inputs)",
+   "scored_in": "`SC3/e2e.score.txt` E4; `SC3/SCORES.md` part E"
+  },
+  {
+   "row": 81,
+   "section": "3.2",
+   "test": "R3 E6 dead-CTA term, w2 SHARED - NATIVE in-kernel time",
+   "registration": "same",
+   "verdict": "NOT SCORED (the byte pages fail V5); ALL: INCONCLUSIVE",
+   "number": "29.4 us; DEAD [29.6, 44.4], FIXED [17.2, 25.8]",
+   "label": "BLIND; the FIXED rival's parent value SEEN (reg: E6 label)",
+   "scored_in": "`SC3/e2e.score.json` E6; `SC3/SCORES.md` part E"
+  },
+  {
+   "row": 82,
+   "section": "3.2",
+   "test": "R3 part R and RK: sigma_page; K1, K4 at the floorrep noise",
+   "registration": "`D/2026-10-05-rental3-replicate-gh200.json`",
+   "verdict": "noise models, no verdict of their own; K1, K4 UNRESOLVED on rental 3 and on rental 2's pool (rental 2's HOLDS stand)",
+   "number": "sigma_page 0.18%; w1 sigma_L 3,888 cycles against 5,000",
+   "label": "sigma_board and rental 2's K1 / K4 pool SEEN (reg: seen_data)",
+   "scored_in": "`SC3/replicate.score.txt`; `SC3/SCORES.md` part R"
+  },
+  {
+   "row": 83,
+   "section": "3.2",
+   "test": "R3 part B floor law: CLOCK, CEIL, FLUID",
+   "registration": "`D/2026-10-05-rental3-floorlaw-gh200.json`",
+   "verdict": "INCONCLUSIVE; CEIL, FLUID FALSIFIED; CLOCK neither",
+   "number": "B1 14 of 16; B0 tp4 w2 +0.21; B2 fails qwen2-tp8 w2 (0.06)",
+   "label": "bands SEEN (rental 2's captures), cells new (reg: seen_data)",
+   "scored_in": "`SC3/floorlaw.score.txt`; `SC3/SCORES.md` part B; `F` Rental 3 table"
+  },
+  {
+   "row": 84,
+   "section": "3.2",
+   "test": "R3 B6 wall-time floor outside ncu",
+   "registration": "same",
+   "verdict": "INCONCLUSIVE (the claim stays ncu-measured)",
+   "number": "theta_wall 0.58, se 0.14",
+   "label": "BLIND (reg: \"no wall-time page at G = 64 exists\")",
+   "scored_in": "`SC3/floorlaw.score.json` tests.B6; `SC3/SCORES.md` part B"
+  },
+  {
+   "row": 85,
+   "section": "3.2",
+   "test": "R3 B7 part 4 on tp8 w1's 1005 DUR",
+   "registration": "same",
+   "verdict": "H_EST HOLDS",
+   "number": "theta 0.964, delta -1.2%",
+   "label": "H_EST's slopes CAL, the 1005 capture new (reg: B7 sets)",
+   "scored_in": "`SC3/floorlaw.score.json` tests.B7; `SC3/SCORES.md` part B"
+  },
+  {
+   "row": 86,
+   "section": "3.2",
+   "test": "R3 part A the per-GEMM constant's form: PROP, AFF, MIX",
+   "registration": "`D/2026-10-05-rental3-zform-gh200.json`",
+   "verdict": "INCONCLUSIVE; PROP FALSIFIED; qwen2-tp8 w2 NOT SCORED (curvature)",
+   "number": "Granite-1B w2 r 0.842 +- 0.063 (MIX 0.858, AFF 1.0)",
+   "label": "coefficients CAL; sigma_board, sigma_model SEEN; cells BLIND (reg: leakage)",
+   "scored_in": "`SC3/zform.score.txt`; `SC3/SCORES.md` part A"
+  },
+  {
+   "row": 87,
+   "section": "3.2",
+   "test": "R3 part C what lifts G = 1 survival",
+   "registration": "`D/2026-10-05-rental3-stages-gh200.json`",
+   "verdict": "INCONCLUSIVE; DEPTH, WIDTH, U-OCC, U-DEPTH FALSIFIED; OCC, NULL survive",
+   "number": "every classified page base; recorded 3 to 5 CTAs per SM",
+   "label": "bands SEEN (rental 2's knob pages); the five knob pages new (reg: seen_data)",
+   "scored_in": "`SC3/stages.score.txt`; `SC3/SCORES.md` part C"
+  },
+  {
+   "row": 88,
+   "section": "3.2",
+   "test": "R3 part D the flush ladder: OVERLAP, SAT",
+   "registration": "`D/2026-10-05-rental3-flush-gh200.json`",
+   "verdict": "OVERLAP SELECTED; SAT FALSIFIED",
+   "number": "3 cells; +27 to +42 us per 33.8 us step",
+   "label": "band SEEN (rental 2); E360 on no page (reg: seen_data)",
+   "scored_in": "`SC3/flush.score.txt`; `SC3/SCORES.md` part D"
   }
  ]
 }

@@ -139,6 +139,11 @@ def published_series(cx: Ctx) -> list[dict]:
     for f in sorted(PUB.rglob("r3f-g64*.json")):
         if "unlocked" in f.stem:
             continue
+        # Pages published after the registration (rental 3's own, 2026-10-06 on) were not
+        # there when these numbers were written; `--check` must recompute the registered
+        # files, so it reads the published set as of the registration date. (2026-10-06)
+        if f.relative_to(PUB).parts[0][:10] > C3.DATE:
+            continue
         d = json.loads(f.read_text())
         model = d["plan"]["model"]
         treads = sorted({c["n"] for c in d["cells"]})

@@ -64,10 +64,31 @@ def default_e2(reg, repo, page_dirs, counters_dir):
     have = hashlib.sha256((Path(repo) / "scripts" / "cross_model_score.py").read_bytes()).hexdigest()
     if pin and pin != have:
         return {"verdict": "NOT SCORED: scripts/cross_model_score.py differs from the registration's (sha256)"}
+    import dataclasses
+
     import cores_heldout_predict as CP
     import cross_model_score as XS
-    d = XS.score(CP.source_pages(), CP.C27, C3.TARGET, page_dirs, counters_dir)
-    return {"cells": {(c["arm"], c["G"], c["n"]): c["resid"] for c in d["cells"]}}
+    import r3_timing_model as TM
+    # POST-PAGE FIX 2026-10-06 (reading only): r3_timing_model.admit keeps VALID
+    # pages alone, so a target page this view counts but whose label is INVALID
+    # (the G = 32 page, V5 alone) was dropped inside score() and E2 lost every
+    # G = 32 cell. The view has already chosen `page_dirs` by the registered gate
+    # rule (gates.timed: V5 never gates; V1 unusable in both), so the target's
+    # pages are admitted as the view chose them. The source fit (8x7B's CAL pages)
+    # is built first under the unchanged admit and passed in, so it cannot move.
+    src = XS._build(CP.source_pages(), CP.C27)
+    admit = TM.admit
+
+    def admit_as_viewed(pages):
+        return admit([p if p.label == TM.PTF.VALID else
+                      dataclasses.replace(p, label=TM.PTF.VALID, failed=()) for p in pages])
+    TM.admit = admit_as_viewed
+    try:
+        d = XS.score(None, None, C3.TARGET, page_dirs, counters_dir, source=src)
+    finally:
+        TM.admit = admit
+    return {"cells": {(c["arm"], c["G"], c["n"]): c["resid"] for c in d["cells"]},
+            "target_pages": d["target_pages"]}
 
 
 def score_view(repo: Path, tree: Path, fview, tview, *, e2=None) -> dict:

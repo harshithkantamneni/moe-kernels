@@ -1,6 +1,6 @@
 group,verdict,count,rows
 primary time tests,HELD,3,"12, 25, 29"
-primary time tests,FALSIFIED,3,"17, 20, 33"
+primary time tests,FALSIFIED,4,"17, 20, 33, 77"
 primary time tests,NOT SCORABLE,1,37
 primary time tests,NOT RUN,2,"24, 41"
 "per-GEMM floor tests (base capture, each registration once)",HELD,14,"10 w1, 15 w1, 22 w1, 26 w1, 26 w2, 30 w1, 30 w2, 34 w1, 38 w2, 42 w1, 42 w2, 43 w1, 43 w2, 47 w2"
@@ -14,3 +14,4 @@ primary time tests,NOT RUN,2,"24, 41"
 "code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",FALSIFIED,3,"2, 5, 8"
 "code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",UNDECIDED,1,6
 "floor law, rental 2 part 4 (row 60)",NEITHER,1,60
+"floor law, rental 3 part B (row 83)",INCONCLUSIVE,1,83

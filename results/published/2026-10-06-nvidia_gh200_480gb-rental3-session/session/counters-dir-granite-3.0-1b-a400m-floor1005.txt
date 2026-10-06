@@ -1,0 +1,1 @@
+/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters

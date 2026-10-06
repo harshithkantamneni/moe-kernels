@@ -557,13 +557,21 @@ def held_by_smi(page: dict) -> bool:
     return lock is not None and bool(b) and bool(a) and all(v == lock for v in b + a)
 
 
-def derive(root: Path = PUBLISHED) -> dict:
-    """Recompute, from the published held-lock captures, the maxima each
-    tolerance is set by, and the shares the short-cell rule separates."""
+#: The tolerances were fixed on 2026-10-05 from the pages published by then;
+#: later sessions (rental 3 on) are gated by them, never used to reset them.
+DERIVED_THROUGH = "2026-10-05"
+
+
+def derive(root: Path = PUBLISHED, through: str = DERIVED_THROUGH) -> dict:
+    """Recompute, from the held-lock captures published through `through`,
+    the maxima each tolerance is set by, and the shares the short-cell rule
+    separates."""
     null_level, null_spread, ratio_meds, ratio_spread = [], [], [], []
     short_n1, long_max = [], 0.0
     smi_reads, smi_off = 0, 0.0
     for p in published_lock_pages(root):
+        if Path(p).relative_to(root).parts[0][:10] > through:
+            continue
         page = json.loads(p.read_text())
         b, a = (smi_clocks(x) for x in page_smi(page))
         lock = page_lock(page)

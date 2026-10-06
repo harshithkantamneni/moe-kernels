@@ -750,3 +750,43 @@ def test_k1_resolution_flips_the_ambiguous_cells_both_ways():
 def test_rk_is_not_run_without_its_pair(tmp_path):
     make_floor(tmp_path, "mixtral-8x7b-tp4", "floor", "lock1710", ceil_law())
     assert SR.score(REPO, tmp_path)["RK"]["verdict"].startswith("NOT RUN")
+
+
+def test_e2_default_admits_the_pages_the_view_counted(monkeypatch):
+    """POST-PAGE FIX 2026-10-06: r3_timing_model.admit keeps VALID pages only, so the
+    G = 32 target page (INVALID on V5 alone, which gates.timed never gates) was dropped
+    inside cross_model_score.score and E2 lost every G = 32 cell. default_e2 now admits
+    the target pages as the view chose them, builds the source fit first under the
+    unchanged admit, and restores admit afterwards."""
+    import dataclasses
+
+    import cores_heldout_predict as CP
+    import cross_model_score as XS
+    import r3_timing_model as TM
+    seen, built = [], []
+    page = TM.TimedPage(path=Path("p"), run="p", label=TM.PTF.INVALID, failed=("V5",), G=32)
+    ok = dataclasses.replace(page, label=TM.PTF.VALID, failed=(), G=8)
+    real = TM.admit
+
+    def recorder(pages):
+        seen.append([(p.G, p.label, p.failed) for p in pages])
+        return pages
+
+    def fake_build(timed, counters, *a):
+        built.append(TM.admit is recorder)
+        return "SRC"
+
+    def fake_score(st, sc, target, tt, tc, *a, source=None):
+        assert source == "SRC" and st is None
+        TM.admit([ok, page])
+        return {"cells": [{"arm": "shared", "G": 32, "n": 3, "resid": 0.01}], "target_pages": ["p"]}
+    monkeypatch.setattr(TM, "admit", recorder)
+    monkeypatch.setattr(CP, "source_pages", lambda: [])
+    monkeypatch.setattr(XS, "_build", fake_build)
+    monkeypatch.setattr(XS, "score", fake_score)
+    got = SE.default_e2(E2E, REPO, [Path("d")], Path("c"))
+    assert built == [True]                       # the source is built under the unchanged admit
+    assert seen == [[(8, TM.PTF.VALID, ()), (32, TM.PTF.VALID, ())]]
+    assert got["cells"] == {("shared", 32, 3): 0.01}
+    assert TM.admit is recorder                  # restored
+    monkeypatch.setattr(TM, "admit", real)

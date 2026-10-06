@@ -1,0 +1,38 @@
+2026-10-06T06:57:19Z the branch's first commit: the VM can push
+2026-10-06T06:58:50Z setup_vm.sh: READY
+2026-10-06T06:58:56Z prelude (unit 1/24 -): exit 0 (0 min)
+2026-10-06T07:01:21Z floor (unit 2/24 qwen2-57b-a14b-tp8 floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T07:02:48Z floor (unit 3/24 qwen2-57b-a14b-tp8 floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:03:14Z calibrate (unit 4/24 qwen2-57b-a14b-tp8 e2e): exit 0 (0 min)
+2026-10-06T07:39:01Z timed (unit 5/24 qwen2-57b-a14b-tp8 e2e): exit 0 (36 min)
+2026-10-06T07:40:49Z bytes: G=3 page exit 3
+2026-10-06T07:42:35Z bytes: G=8 page exit 3
+2026-10-06T07:44:20Z bytes: G=32 page exit 3
+2026-10-06T07:44:30Z bytes (unit 6/24 qwen2-57b-a14b-tp8 e2e byte-groups=3,8,32): exit 0 (5 min)
+2026-10-06T07:46:02Z floor (unit 7/24 granite-3.0-1b-a400m floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:46:55Z floor (unit 8/24 granite-3.0-1b-a400m floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:49:34Z floor (unit 9/24 mixtral-8x7b-tp4 floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (3 min)
+2026-10-06T07:50:52Z floor (unit 10/24 mixtral-8x7b-tp4 floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:52:28Z floor (unit 11/24 mixtral-8x7b-tp4 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T07:53:48Z floor (unit 12/24 mixtral-8x7b-tp4 floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T07:59:03Z launchfloor (unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0): exit 3 (5 min)
+2026-10-06T08:00:24Z floor (unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
+2026-10-06T08:02:57Z floor (unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T08:06:26Z bytes: G=1 page exit 0
+2026-10-06T08:06:37Z bytes (unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1): exit 0 (4 min)
+2026-10-06T08:10:07Z bytes: G=1 page exit 0
+2026-10-06T08:10:18Z bytes (unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8): exit 0 (4 min)
+2026-10-06T08:13:47Z bytes: G=1 page exit 0
+2026-10-06T08:13:58Z bytes (unit 18/24 mixtral-8x7b-tp2 k128s4 byte-groups=1 block-k=128 num-stages=4): exit 0 (4 min)
+2026-10-06T08:17:27Z bytes: G=1 page exit 0
+2026-10-06T08:17:38Z bytes (unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3): exit 0 (4 min)
+2026-10-06T08:21:08Z bytes: G=1 page exit 0
+2026-10-06T08:21:19Z bytes (unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7): exit 0 (4 min)
+2026-10-06T08:24:48Z bytes: G=1 page exit 0
+2026-10-06T08:24:59Z bytes (unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3): exit 0 (4 min)
+2026-10-06T08:35:52Z timed (unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6): exit 0 (11 min)
+2026-10-06T09:08:08Z deep (unit 23/24 qwen2-57b-a14b-tp8 e2e): exit 0 (32 min)
+2026-10-06T09:15:55Z launchfloor (unit 24/24 mixtral-8x7b-tp8 r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1): exit 0 (8 min)
+2026-10-06T09:15:59Z the session ended: driver exit 3
+2026-10-06T09:17:04Z recovery: timed G=32 retake
+2026-10-06T09:17:08Z recovery: END

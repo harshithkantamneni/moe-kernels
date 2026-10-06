@@ -37,6 +37,10 @@ def test_key_numbers():
     assert round(d["r3f-g64.json"]) == 156941 and round(d["r3f-g8.json"]) == 155820
     p4 = NF.part4_cells()
     assert 2000 < p4["sigma_single"] < 3500  # the registered sigma_cell is 2678
+    t8 = NF.time_rep8()  # rental 3 part R: scripts/scoring/rental3/replicate.score.txt
+    assert t8["reg_cells"] == 9 and abs(t8["reg_rms"] - 0.001802) < 2e-6
+    rk = NF.rk_floor()["per_gemm"]  # rental 3 RK, as score_replicate computes it
+    assert round(rk["w1"]["sigma_L"]) == 3888 and round(rk["w2"]["sigma_D_imb"]) == 471
 
 
 def test_cli_runs(tmp_path):

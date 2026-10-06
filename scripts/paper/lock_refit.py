@@ -2,7 +2,8 @@
 """The gate audit's refit of FL1 / V10's clock fit (moved from the session
 scratchpad's gate-audit/refit.py into the repo, logic unchanged): for every
 published lock page (r3c-g*.json byte pages and r3f-*lock*.json floor captures,
-2026-10-02 excluded as in the audit unless --include-rental2), per GEMM the least-
+2026-10-02 excluded as in the audit unless --include-rental2; sessions published after
+the audit, rental 3's of 2026-10-06 on, are outside its scope and excluded too), per GEMM the least-
 squares fit duration = t0 + cycles / f over the page's cells, the fitted f and t0,
 and the cells whose t0-corrected clock 1e3 cycles / (t - t0) reads above the lock
 by more than one 15 MHz step.
@@ -55,7 +56,8 @@ def rows(include_rental2: bool = False) -> list[dict]:
     out = []
     for p in sorted(glob.glob(root + "/*/results/**/r3c-g*.json", recursive=True)
                     + glob.glob(root + "/*/results/**/r3f-*lock*.json", recursive=True)):
-        if ("2026-10-02" in p and not include_rental2) or "profiles" in p:
+        if ("2026-10-02" in p and not include_rental2) or "profiles" in p \
+                or Path(p).relative_to(root).parts[0][:10] > "2026-10-02":
             continue
         d = json.load(open(p))
         lock = (d.get("ncu") or {}).get("lock_mhz") or (d.get("clock") or {}).get("lock_mhz")

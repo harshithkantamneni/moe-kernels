@@ -3509,3 +3509,142 @@ row,quantity,case,arm,G,n,gemm,measured,predicted,resid
 40,bytes q,granite,private,8,8,w2,8.00188,8.00481,0.000366735
 40,bytes q,granite,private,8,9,w1,8.76633,9.01213,0.0280395
 40,bytes q,granite,private,8,9,w2,9.00215,9.00546,0.000367557
+77,time,qwen2-57b-a14b-tp8,shared,8,3,,0.387904,0.404817,0.043601
+77,time,qwen2-57b-a14b-tp8,shared,8,4,,0.495424,0.51165,0.0327517
+77,time,qwen2-57b-a14b-tp8,shared,8,5,,0.603104,0.618485,0.0255031
+77,time,qwen2-57b-a14b-tp8,shared,8,6,,0.711232,0.725321,0.0198093
+77,time,qwen2-57b-a14b-tp8,private,8,2,,0.339328,0.360965,0.0637643
+77,time,qwen2-57b-a14b-tp8,private,8,3,,0.479008,0.499952,0.0437237
+77,time,qwen2-57b-a14b-tp8,private,8,4,,0.616064,0.638946,0.0371422
+77,time,qwen2-57b-a14b-tp8,private,8,5,,0.753184,0.777944,0.0328737
+77,time,qwen2-57b-a14b-tp8,private,8,6,,0.892064,0.916944,0.0278904
+77,time,qwen2-57b-a14b-tp8,shared,32,3,,0.388064,0.404818,0.0431733
+77,time,qwen2-57b-a14b-tp8,shared,32,4,,0.49536,0.51165,0.0328852
+77,time,qwen2-57b-a14b-tp8,shared,32,5,,0.6028,0.618485,0.0260203
+77,time,qwen2-57b-a14b-tp8,shared,32,6,,0.711584,0.725321,0.0193049
+77,time,qwen2-57b-a14b-tp8,private,32,2,,0.341408,0.362695,0.0623506
+77,time,qwen2-57b-a14b-tp8,private,32,3,,0.481616,0.503389,0.0452082
+77,time,qwen2-57b-a14b-tp8,private,32,4,,0.61824,0.644096,0.0418219
+77,time,qwen2-57b-a14b-tp8,private,32,5,,0.758112,0.784809,0.0352151
+77,time,qwen2-57b-a14b-tp8,private,32,6,,0.896224,0.925524,0.0326927
+77,time,qwen2-57b-a14b-tp8,shared,3,3,,0.38656,0.404816,0.0472268
+77,time,qwen2-57b-a14b-tp8,shared,3,4,,0.495136,0.51165,0.0333525
+77,time,qwen2-57b-a14b-tp8,shared,3,5,,0.602464,0.618485,0.0265924
+77,time,qwen2-57b-a14b-tp8,shared,3,6,,0.711072,0.725321,0.0200387
+77,time,qwen2-57b-a14b-tp8,shared,3,7,,0.811136,0.822098,0.0135144
+77,time,qwen2-57b-a14b-tp8,shared,3,8,,0.919264,0.928934,0.0105193
+77,time,qwen2-57b-a14b-tp8,private,3,2,,0.338784,0.360709,0.0647167
+77,time,qwen2-57b-a14b-tp8,private,3,3,,0.478944,0.499443,0.0428004
+77,time,qwen2-57b-a14b-tp8,private,3,4,,0.616352,0.638182,0.035418
+77,time,qwen2-57b-a14b-tp8,private,3,5,,0.75424,0.776926,0.030078
+77,time,qwen2-57b-a14b-tp8,private,3,6,,0.894608,0.915672,0.0235455
+77,time,qwen2-57b-a14b-tp8,private,3,7,,1.03344,1.05496,0.0208188
+77,time,qwen2-57b-a14b-tp8,private,3,8,,1.17187,1.19369,0.0186223
+79,bytes q,qwen2-57b-a14b-tp8,private,3,1,w1,0.956603,1,-0.0433972
+79,bytes q,qwen2-57b-a14b-tp8,private,3,1,w2,1.00027,1.00009,0.000181282
+79,bytes q,qwen2-57b-a14b-tp8,private,3,2,w1,1.9152,2.00118,-0.0429625
+79,bytes q,qwen2-57b-a14b-tp8,private,3,2,w2,2.0004,2.00019,0.000105278
+79,bytes q,qwen2-57b-a14b-tp8,private,3,3,w1,2.87341,3.00243,-0.0429711
+79,bytes q,qwen2-57b-a14b-tp8,private,3,3,w2,3.00057,3.0003,9.12885e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,4,w1,3.83157,4.00364,-0.0429785
+79,bytes q,qwen2-57b-a14b-tp8,private,3,4,w2,4.00068,4.0004,6.76071e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,5,w1,4.7926,5.00488,-0.0424131
+79,bytes q,qwen2-57b-a14b-tp8,private,3,5,w2,5.00082,5.00051,6.16842e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,6,w1,5.75483,6.00612,-0.041839
+79,bytes q,qwen2-57b-a14b-tp8,private,3,6,w2,6.00098,6.00062,6.09865e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,7,w1,6.71993,7.00734,-0.0410163
+79,bytes q,qwen2-57b-a14b-tp8,private,3,7,w2,7.00105,7.00072,4.65521e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,8,w1,7.68434,8.00857,-0.0404855
+79,bytes q,qwen2-57b-a14b-tp8,private,3,8,w2,8.00115,8.00083,4.00332e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,3,9,w1,8.66392,9.00982,-0.0383912
+79,bytes q,qwen2-57b-a14b-tp8,private,3,9,w2,9.00151,9.00093,6.43187e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,8,1,w1,0.957035,1,-0.0429653
+79,bytes q,qwen2-57b-a14b-tp8,private,8,1,w2,1.00026,1.00031,-5.21484e-05
+79,bytes q,qwen2-57b-a14b-tp8,private,8,2,w1,1.91546,2.00417,-0.044263
+79,bytes q,qwen2-57b-a14b-tp8,private,8,2,w2,2.00041,2.00068,-0.000135004
+79,bytes q,qwen2-57b-a14b-tp8,private,8,3,w1,2.87352,3.00844,-0.044846
+79,bytes q,qwen2-57b-a14b-tp8,private,8,3,w2,3.00055,3.00104,-0.000162621
+79,bytes q,qwen2-57b-a14b-tp8,private,8,4,w1,3.83342,4.01271,-0.044679
+79,bytes q,qwen2-57b-a14b-tp8,private,8,4,w2,4.00067,4.00141,-0.000183548
+79,bytes q,qwen2-57b-a14b-tp8,private,8,5,w1,4.79352,5.01698,-0.0445395
+79,bytes q,qwen2-57b-a14b-tp8,private,8,5,w2,5.00094,5.00177,-0.000166502
+79,bytes q,qwen2-57b-a14b-tp8,private,8,6,w1,5.7563,6.02124,-0.0440015
+79,bytes q,qwen2-57b-a14b-tp8,private,8,6,w2,6.00092,6.00214,-0.000201984
+79,bytes q,qwen2-57b-a14b-tp8,private,8,7,w1,6.71587,7.02551,-0.0440749
+79,bytes q,qwen2-57b-a14b-tp8,private,8,7,w2,7.00106,7.0025,-0.000206326
+79,bytes q,qwen2-57b-a14b-tp8,private,8,8,w1,7.68059,8.02979,-0.0434879
+79,bytes q,qwen2-57b-a14b-tp8,private,8,8,w2,8.00115,8.00287,-0.000214958
+79,bytes q,qwen2-57b-a14b-tp8,private,8,9,w1,8.65486,9.03406,-0.0419736
+79,bytes q,qwen2-57b-a14b-tp8,private,8,9,w2,9.00149,9.00323,-0.000193006
+79,bytes q,qwen2-57b-a14b-tp8,private,32,1,w1,0.957433,1,-0.0425668
+79,bytes q,qwen2-57b-a14b-tp8,private,32,1,w2,1.00028,1.00181,-0.00153211
+79,bytes q,qwen2-57b-a14b-tp8,private,32,2,w1,1.9176,2.0244,-0.0527573
+79,bytes q,qwen2-57b-a14b-tp8,private,32,2,w2,2.00052,2.00392,-0.00169866
+79,bytes q,qwen2-57b-a14b-tp8,private,32,3,w1,2.88196,3.04904,-0.0547992
+79,bytes q,qwen2-57b-a14b-tp8,private,32,3,w2,3.0006,3.00603,-0.00180522
+79,bytes q,qwen2-57b-a14b-tp8,private,32,4,w1,3.83349,4.07375,-0.0589761
+79,bytes q,qwen2-57b-a14b-tp8,private,32,4,w2,4.00068,4.00814,-0.00186033
+79,bytes q,qwen2-57b-a14b-tp8,private,32,5,w1,4.81047,5.09848,-0.0564884
+79,bytes q,qwen2-57b-a14b-tp8,private,32,5,w2,5.00094,5.01024,-0.00185678
+79,bytes q,qwen2-57b-a14b-tp8,private,32,6,w1,5.76849,6.12322,-0.0579324
+79,bytes q,qwen2-57b-a14b-tp8,private,32,6,w2,6.00103,6.01235,-0.00188244
+79,bytes q,qwen2-57b-a14b-tp8,private,32,7,w1,6.75183,7.14798,-0.0554203
+79,bytes q,qwen2-57b-a14b-tp8,private,32,7,w2,7.00105,7.01446,-0.00191229
+79,bytes q,qwen2-57b-a14b-tp8,private,32,8,w1,7.68182,8.17273,-0.0600673
+79,bytes q,qwen2-57b-a14b-tp8,private,32,8,w2,8.00116,8.01657,-0.00192148
+79,bytes q,qwen2-57b-a14b-tp8,private,32,9,w1,8.70553,9.19749,-0.0534886
+79,bytes q,qwen2-57b-a14b-tp8,private,32,9,w2,9.00169,9.01868,-0.0018839
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,1,w1,0.956698,1,-0.0433024
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,1,w2,1.00026,1.00004,0.00021292
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,2,w1,0.929297,1.00713,-0.0772769
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,2,w2,1.00042,1.01024,-0.00971715
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,3,w1,0.872364,1.0006,-0.128162
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,3,w2,1.00058,1.01015,-0.00947954
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,4,w1,0.838663,1.01245,-0.171652
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,4,w2,1.00066,1.01337,-0.0125411
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,5,w1,0.791155,1.01308,-0.219058
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,5,w2,1.00083,1.01479,-0.0137514
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,6,w1,0.739245,1.0082,-0.266766
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,6,w2,1.00088,1.01404,-0.0129733
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,7,w1,0.69748,1.01341,-0.311753
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,7,w2,1.00095,1.01488,-0.0137266
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,8,w1,0.652843,1.01329,-0.355717
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,8,w2,1.00122,1.01478,-0.0133539
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,9,w1,0.60823,1.01007,-0.397833
+79,bytes q,qwen2-57b-a14b-tp8,shared,3,9,w2,1.00141,1.01476,-0.0131611
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,1,w1,0.957004,1,-0.0429958
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,1,w2,1.00028,1.00019,9.32316e-05
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,2,w1,0.915924,1.00174,-0.0856644
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,2,w2,1.00041,1.00779,-0.0073298
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,3,w1,0.890397,1.01584,-0.123489
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,3,w2,1.00053,1.01815,-0.0173098
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,4,w1,0.82642,1.0022,-0.175395
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,4,w2,1.00071,1.01166,-0.0108233
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,5,w1,0.78869,1.0189,-0.22594
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,5,w2,1.00076,1.02046,-0.0193097
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,6,w1,0.741982,1.01575,-0.269521
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,6,w2,1.00091,1.01886,-0.0176169
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,7,w1,0.696704,1.01946,-0.316596
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,7,w2,1.00105,1.02056,-0.0191162
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,8,w1,0.650577,1.00214,-0.350815
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,8,w2,1.00122,1.01372,-0.0123373
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,9,w1,0.607796,1.01897,-0.40352
+79,bytes q,qwen2-57b-a14b-tp8,shared,8,9,w2,1.00133,1.02194,-0.0201744
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,1,w1,0.957522,1,-0.0424784
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,1,w2,1.00028,1.00148,-0.00120195
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,2,w1,0.918031,1.01028,-0.0913119
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,2,w2,1.00044,1.00933,-0.00880762
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,3,w1,0.921376,1.03755,-0.111967
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,3,w2,1.02525,1.02466,0.000584609
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,4,w1,0.826283,1.01295,-0.184281
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,4,w2,1.00068,1.01375,-0.0128841
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,5,w1,0.841598,1.0387,-0.189759
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,5,w2,1.00827,1.02824,-0.0194278
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,6,w1,0.774161,1.03352,-0.250945
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,6,w2,1.00879,1.02625,-0.0170183
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,7,w1,0.734088,1.03976,-0.293983
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,7,w2,1.00491,1.02968,-0.0240604
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,8,w1,0.650612,1.01259,-0.357478
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,8,w2,1.00109,1.01697,-0.0156141
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,9,w1,0.628795,1.03933,-0.395002
+79,bytes q,qwen2-57b-a14b-tp8,shared,32,9,w2,1.00475,1.03047,-0.0249554

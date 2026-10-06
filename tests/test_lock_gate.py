@@ -352,12 +352,31 @@ PINNED = """
 2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp4-l2s8-r3-counters/lock1710/r3c-g1.json V10 FAIL PASS
 2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor2-r3-counters/r3f-g64-lock1710.json FL1 FAIL PASS
 2026-10-02-nvidia_gh200_480gb-rental2-session/results/2026-10-02-nvidia_gh200_480gb-mixtral-8x7b-tp8-l2s8-r3-counters/lock1710/r3c-g1.json V10 FAIL PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor-r3-counters/r3f-g64-lock1710.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-granite-3.0-1b-a400m-floor1005-r3-counters/r3f-g64-lock1005.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-floor1005-r3-counters/r3f-g64-lock1005.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s3-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k128s4-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k32s8-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s3-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-k64s7-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp2-l2base-r3-counters/lock1710/r3c-g1.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor1005-r3-counters/r3f-g64-lock1005.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor1410-r3-counters/r3f-g64-lock1410.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor1005-r3-counters/r3f-g64-lock1005.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g3.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g32.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-e2e-r3-counters/lock1710/r3c-g8.json V10 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-floor-r3-counters/r3f-g64-lock1710.json FL1 PASS PASS
+2026-10-06-nvidia_gh200_480gb-rental3-session/results/2026-10-06-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-floor1005-r3-counters/r3f-g64-lock1005.json FL1 PASS PASS
 """
 
 
 def test_the_regate_of_every_published_lock_page_is_pinned():
-    """117 lock pages (summary.json files repeat their pages' gates and are
-    not pages). The 8x22B floor, the lock not in force, fails; every other
+    """136 lock pages (summary.json files repeat their pages' gates and are
+    not pages; 19 of them rental 3's, 2026-10-06, all PASS). The 8x22B floor, the lock not in force, fails; every other
     page passes, 78 stored FAILs among them. The published JSONs are read,
     never written."""
     want = [tuple(line.split()) for line in PINNED.strip().splitlines()]
@@ -384,7 +403,7 @@ def test_the_8x22b_floor_fails_on_two_independent_readings():
 def test_the_cli_prints_the_table(capsys):
     assert LG.main([]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[-1].startswith("117 lock pages; 78 verdicts change; new verdict "
+    assert out.splitlines()[-1].startswith("136 lock pages; 78 verdicts change; new verdict "
                                            "not PASS on 1: 2026-09-28-nvidia_gh200_480gb-8x22b")
 
 

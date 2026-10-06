@@ -34,8 +34,13 @@ with its standard error sd / sqrt(R) (the median's is about 1.25 x that; the
 rows print the mean's, labelled).
 
 Where a metric has no replicate of any kind the row reads
-"no replicate exists; rental 3 part R does not yet include one" (part R, as designed,
-measures sigma_page on qwen2-57b-a14b-tp8 and sigma_board on Mixtral 8x7B only).
+"no replicate exists; rental 3 part R did not include one" (part R measured sigma_page
+on qwen2-57b-a14b-tp8 and RK the tp4 1710 floor; sigma_board is Mixtral 8x7B's).
+
+Added 2026-10-06 (rental 3): (c) the planned same-board replicate of part R, the rep8
+G = 8 timed page against the e2e G = 8 page (qwen2-57b-a14b-tp8, board bb7a34); and
+(a) the same-clock repeat capture of RK, the tp4 floorrep 1710 capture against the tp4
+floor unit's 1710 capture, for K1's L, K4's D_imb and the part-4 per-cell cycles.
 
 Added 2026-10-05 (gradefix4): NATIVE bytes, (a) and (b) as for PRIVATE and SHARED;
 and the launch offsets P2 (E240 - GR), P3 (E0 - E240), P4 (E480 - E240), P8
@@ -64,7 +69,7 @@ import l2_survival as L2  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 PUB = ROOT / "results" / "published"
-NONE = "no replicate exists; rental 3 part R does not yet include one"
+NONE = "no replicate exists; rental 3 part R did not include one"
 SCORED_ARMS = ("shared", "private")
 
 
@@ -238,6 +243,16 @@ TP_FLOOR_R2 = [
 ]
 TP8_R1 = f"{R1}/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters"
 
+R3 = "2026-10-06-nvidia_gh200_480gb-rental3-session"
+#: Part R: the rep8 page against the e2e step's G = 8 page, one board (bb7a34), and the
+#: registered cells E's host rule keeps (docs/registered/2026-10-05-rental3-replicate-gh200).
+REP8 = (R3, "3908df9d", "ef2ea3e8")
+REP8_CELLS = [("shared", n) for n in (3, 4, 5, 6)] + [("private", n) for n in (2, 3, 4, 5, 6)]
+#: RK: the tp4 floor unit's 1710 capture and the floorrep unit's, same treads, one board.
+RK_PAIR = (f"{R3}/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r3-counters/r3f-g64-lock1710.json",
+           f"{R3}/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json")
+FLOORLAW = ROOT / "docs/registered/2026-10-05-rental3-floorlaw-gh200.json"
+
 #: G = 1 counter pages carrying s, by (model and GEMM, board): the L2-survival cells.
 SURVIVAL = [
     ("8x7B w2", "mixtral-8x7b", "w2", [
@@ -304,6 +319,38 @@ def time_retake() -> dict:
         srcs.append(pair_src)
     return {"pairs": rows, "gpu_bound_nongranite_sigma": rms(gpu) / math.sqrt(2),
             "gpu_bound_nongranite_cells": len(gpu), "sources": srcs}
+
+
+def time_rep8() -> dict:
+    """(c) part R's planned replicate: rep8 against the e2e G = 8 page, one board."""
+    sess, ra, rb = REP8
+    a, b = cell_values(timed_dir(sess, ra)), cell_values(timed_dir(sess, rb))
+    reg = [b[k] / a[k] - 1 for k in REP8_CELLS]
+    allc = [b[k] / a[k] - 1 for k in sorted(set(a) & set(b)) if k[0] in SCORED_ARMS]
+    return {"reg_cells": len(reg), "reg_rms": rms(reg), "all_cells": len(allc), "all_rms": rms(allc),
+            "worst": max(allc, key=abs),
+            "sources": [rel(timed_dir(sess, ra) / "report.json"), rel(timed_dir(sess, rb) / "report.json")]}
+
+
+def rk_floor() -> dict:
+    """(a) RK's same-clock repeat: per registered tp4 cell and GEMM, the two 1710 captures'
+    K1 L (EL.avg - ACT.max), K4 D_imb (ACT.max - ACT.avg - frac u; frac u cancels in the
+    difference) and the part-4 per-cell cycles (EL.avg); single-capture sigma rms / sqrt 2."""
+    cells = json.loads(FLOORLAW.read_text())["cells_registered"]["mixtral-8x7b-tp4"]
+    pa, pb = (ccells(counter(PUB / f)) for f in RK_PAIR)
+    out = {}
+    for g in ("w1", "w2"):
+        ns = [int(c["n"]) for c in cells if c["gemm"] == g and c["floor_bound"]]
+        d = {"L": [], "D_imb": [], "EL": []}
+        for n in ns:
+            ra = FE.rulers(pa[("native", n)]["per_gemm"][g], 1710.0)
+            rb = FE.rulers(pb[("native", n)]["per_gemm"][g], 1710.0)
+            d["L"].append((ra["EL.avg"] - ra["ACT.max"]) - (rb["EL.avg"] - rb["ACT.max"]))
+            d["D_imb"].append((ra["ACT.max"] - ra["ACT.avg"]) - (rb["ACT.max"] - rb["ACT.avg"]))
+            d["EL"].append(rb["EL.avg"] - ra["EL.avg"])
+        out[g] = {"cells": len(ns), **{f"sigma_{k}": rms(v) / math.sqrt(2) for k, v in d.items()},
+                  "EL_sd": st.stdev(d["EL"]), "EL_mean": st.mean(d["EL"])}
+    return {"per_gemm": out, "sources": [f"results/published/{f}" for f in RK_PAIR]}
 
 
 def time_board() -> dict:
@@ -654,6 +701,16 @@ def build() -> list[dict]:
         "c: the three non-Granite retake pairs", f"single-page sigma "
         f"{100 * rt['gpu_bound_nongranite_sigma']:.2f}%", rt["gpu_bound_nongranite_cells"],
         "; ".join(rt["sources"][:3]), "")
+    t8 = time_rep8()
+    add("time per cell, same-board replicate page, Qwen2-57B TP=8 G=8 (rental 3 part R)",
+        "E1 3.50% rms; bar 2% rms, 5% per cell",
+        "c: the planned rep8 page against the e2e G = 8 page, board bb7a34, both VALID",
+        f"rms difference {100 * t8['reg_rms']:.2f}% on the {t8['reg_cells']} registered cells "
+        f"(part R's sigma_page), single-page sigma {100 * t8['reg_rms'] / math.sqrt(2):.2f}%; all "
+        f"{t8['all_cells']} SHARED+PRIVATE cells {100 * t8['all_rms']:.2f}%, worst {100 * t8['worst']:+.2f}%",
+        t8["all_cells"], "; ".join(t8["sources"]),
+        "part R reads sigma_page as the rms of the difference (not / sqrt 2); the spread of all cells "
+        "is the two n = 1 cells (-5.2%, -6.8%), host-bound and outside E's host rule; added 2026-10-06")
     tb = time_board()
     add("time per cell, Mixtral 8x7B board to board", "as above",
         "b: 2026-09-25 (1310e2) against 2026-09-27 (9b6d01), G=2 and 4, n=1..6, SHARED+PRIVATE",
@@ -792,7 +849,26 @@ def build() -> list[dict]:
         "a: rental 2 tp8, tp4, tp2 w1 cells, 1710 capture minus base capture, n >= 2",
         f"sd of difference {p4['sd']:,.0f} cycles (single-capture sigma {p4['sigma_single']:,.0f}), "
         f"mean {p4['mean']:+,.0f}", p4["cells"], "; ".join(p4["sources"]),
-        "between clocks; a same-clock repeat capture does not exist: " + NONE)
+        "between clocks; the same-clock repeat (rental 3, another board) is the next row")
+    rk = rk_floor()
+    w1 = rk["per_gemm"]["w1"]
+    add("part-4 per-cell cycles, same-clock repeat (tp4 w1 at 1710, rental 3 floor against floorrep)",
+        "as above", "a: two 1710 captures of the same registered cells, consecutive units, board bb7a34",
+        f"sd of difference {w1['EL_sd']:,.0f} cycles (single-capture sigma "
+        f"{w1['EL_sd'] / math.sqrt(2):,.0f}), mean {w1['EL_mean']:+,.0f}", w1["cells"],
+        "; ".join(rk["sources"]), "sm__cycles_elapsed.avg; added 2026-10-06")
+    for g in ("w1", "w2"):
+        v = rk["per_gemm"][g]
+        add(f"K1 L = EL.avg - ACT.max (cycles), {g}, same-clock repeat (rental 3 RK)",
+            "K1 7 of 60 cells over 5,000 cycles (rental 2)",
+            "a: tp4 floor against floorrep at 1710, the registered cells",
+            f"single-capture sigma {v['sigma_L']:,.0f} cycles", v["cells"], "; ".join(rk["sources"]),
+            "part RK's noise; K1 reads UNRESOLVED on it (scripts/scoring/rental3/SCORES.md part R); added 2026-10-06")
+        add(f"K4 D_imb (cycles), {g}, same-clock repeat (rental 3 RK)",
+            "K4 95% within 0.2 u (rental 2)",
+            "a: tp4 floor against floorrep at 1710, the registered cells",
+            f"single-capture sigma {v['sigma_D_imb']:,.0f} cycles", v["cells"], "; ".join(rk["sources"]),
+            "part RK's noise; K4 reads UNRESOLVED on it; added 2026-10-06")
 
     add("clock elasticity eta", "0.988 at G=4, 0.312 at G=1", "interval of the fit",
         "[0.985, 0.990] and [0.311, 0.313]", "",

@@ -231,13 +231,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 5942 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 5943 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty-one further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and thirteen Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and fourteen Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -246,14 +246,16 @@ JetMoE-8B and Granite-3.0-3B-A800M, and two floor-only sessions of
 Mixtral 8x7B TP=8 floor capture, the A-tile and L2-survival byte pages and the
 launch floor, 14 units on one GH200, and rental 2 of 2026-10-02: the TP-shard floor
 captures at unseen treads and 1005 MHz, the num_stages / BLOCK_K / slot-pad knob pages and
-the two-process launch-floor rerun, 24 units on one GH200), kept so every verdict they printed can be
+the two-process launch-floor rerun, 24 units on one GH200, and rental 3 of 2026-10-06: the
+Qwen2-57B TP=8 end-to-end test, the floor at four clocks with a same-clock replicate, the stage /
+BLOCK_K pages and the flush ladder, 24 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 13 GH200 sessions ran on nine distinct boards (counted by
-board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, only
-Mixtral 8x22B's was tested end to end, from predicted bytes to predicted time, and held
-(1.71% rms); Qwen2-57B's predicted-bytes test failed, and every other held-out model was
-timed from its own counted bytes, which tests the timing model alone (docs/FINDINGS.md, the
-2026-09-29/30 held-out queue). Rental 3's end-to-end test is planned, not yet registered.
+sessions rather than arms. The 14 GH200 sessions ran on ten distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
+were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
+(1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
+Rental 3) failed. Every other held-out model was timed from its own counted bytes, which tests
+the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile
