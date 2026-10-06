@@ -1,0 +1,162 @@
+R3 TIMING MODEL LOWM-1/2 (scripts/r3_timing_model.py). NOT FINAL: the best current per-card model at one locked clock; it fails on the H100 at G=1, carries one fitted study constant (k_w) and has no identified clock term. Falsified by any of:
+  - P3: the odd-n excess of G=2 over G=4 collapsing (below 0.10 ms) or trending with n
+  - P2: the floor moving with G beyond the band
+  - P1: the eta read from the G=4 slope and the eta read from the G=2 low steps disagreeing
+  - P6: achieved occupancy near the limit and cycles per CTA k-step far from 354
+  - P8: a timed-regime counter capture on the H100 at G=1 reading ncu's cold-L2 bytes
+  - T2 on a new card: bw and R_P disagreeing by more than 2%
+
+CARD nvidia_gh200_480gb 33948cb3-46ff (never pooled with another card)
+  SMs 132 from the card's counter pages (card.sm_count); occupancy w1 5 / w2 4 CTAs per SM, RECORDED on the card's counter pages
+  bytes: COUNTED (the card's own counter pages)
+  clock: LOCKED 1710 MHz; k_w 0.5 (FITTED study constant); window w1 330 CTAs, w2 264 CTAs
+PAGES
+  d9f1f37c   G=1   VALID                      duty 0.25 1710 MHz locked  FITTED
+  df37ea07   G=2   VALID                      duty 0.25 1710 MHz locked  FITTED
+  01c08abd   G=4   VALID                      duty 0.25 1710 MHz locked  FITTED
+  1b285de2   G=16  VALID                      duty 0.25 1710 MHz locked  FITTED
+  6ff34777   G=64  VALID                      duty 0.25 1710 MHz locked  FITTED
+COUNTER PAGES (bytes, grid and occupancy read; gates as stored, not re-scored)
+  G=1 results/published/2026-09-25-nvidia_gh200_480gb-session/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g1.json  stored VALIDITY not PASS: V6 FAIL
+  G=2 results/published/2026-09-25-nvidia_gh200_480gb-session/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g2.json  stored VALIDITY not PASS: V6 FAIL
+  G=4 results/published/2026-09-25-nvidia_gh200_480gb-session/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g4.json  stored VALIDITY not PASS: V6 FAIL
+  G=16 results/published/2026-09-25-nvidia_gh200_480gb-session/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g16.json  stored VALIDITY not PASS: V6 FAIL
+  G=64 results/published/2026-09-25-nvidia_gh200_480gb-session/results/2026-09-25-nvidia_gh200_480gb-r3-counters/r3c-g64.json  stored VALIDITY not PASS: V6 FAIL, V7 FAIL
+
+FIT nvidia_gh200_480gb: T0 0.05717 ms, c 206.91 ns = 353.8 cycles per CTA k-step at 1710 MHz, bw 3606.5 GB/s, s_small +0.00398 ms, s_block -0.02048 ms  [every parameter identified, none at a bound]
+  rms 0.43% over the fitted cells, worst -0.88% (shared/G64/n2); n=5 scored only: 0.55%
+  rms per G: G1 0.44% G2 0.30% G4 0.38% G16 0.45% G64 0.55% | per arm: native 0.46% shared 0.47% private 0.36%
+  LOGO held-out rms/worst: G1 0.53%/+0.97% G2 0.33%/-0.78% G4 0.40%/-0.72% G16 0.53%/-0.83% G64 0.61%/+0.92%  mean 0.48%
+  R_P (PRIVATE's ms against its read bytes, 25 cells): 3557.4 GB/s; bw/R_P - 1 = +1.38%
+  rho* = S c bw / (SMs s_g): w1 0.690 w2 0.690 (INTERPRETATION: the slab-fetching share of a window above which it streams)
+GATES T1 PASS | T2 PASS (1.38%) | T3 PASS | T4 PASS (-0.88%)
+
+F1-F5 (measured/model; slopes over n = 2 to 6 in ms per tread):
+  F1 G=1 SHARED slope 0.7237/0.7180
+  F2 G=2 SHARED increments n1->6 measured 0.320 0.700 0.392 0.701 0.400 | model 0.316 0.693 0.407 0.695 0.405 | amplitude measured 0.304 model 0.288
+  F3 SHARED slope at G >= 4: G4 0.5454/0.5499 G16 0.5432/0.5499 G64 0.5406/0.5499 | trend G4->G64 measured -0.87% model +0.00% | G=4 dip at 3->4 -0.0180/-0.0000 ms
+  F4 PRIVATE slope: G1 0.8022/0.7965 G2 0.8015/0.7980 G4 0.8095/0.8018 G16 0.8345/0.8404 G64 0.9243/0.9348
+  F5 NATIVE vs SHARED slope %: G1 -0.51/-1.01 G2 -1.05/-1.33 G4 -1.11/-1.33 G16 -0.95/-1.33 G64 -0.52/-1.33
+
+REFERENCE k_w = 1.0 (the window the occupancy limit derives): T0 0.05683 ms, c 207.10 ns = 354.1 cycles per CTA k-step at 1710 MHz, bw 3605.2 GB/s, s_small +0.00427 ms, s_block -0.02234 ms  [every parameter identified, none at a bound]
+  rms 0.52% over the fitted cells, worst -1.93% (native/G2/n3); n=5 scored only: 0.66%
+  rms per G: G1 0.44% G2 0.70% G4 0.38% G16 0.45% G64 0.57% | per arm: native 0.57% shared 0.60% private 0.35%
+PTX (census fused_moe_kernel, the loop issuing mma.sync; per thread): 6PX334WYFO mma.sync 8 ldmatrix 8 cp.async.cg 3 x 256 threads = 45056 B per CTA k-step = 352 cycles at 128 B/clk; UWSNRLZKSJ mma.sync 8 ldmatrix 8 cp.async.cg 3 x 256 threads = 45056 B per CTA k-step = 352 cycles at 128 B/clk
+
+REGISTERED PREDICTIONS, nvidia_gh200_480gb (this card's fit; imputed from COUNTED (the card's own counter pages); ms per call; c scaled (clock / f)^eta off the fit clock)
+  imputation check, measured G=1 SHARED with sigma imputed: residual % +0.52 +0.67 +0.07 +0.00 -0.27 -0.57
+  imputation check, measured G=2 SHARED with sigma imputed: residual % -0.05 -0.31 -0.57 +0.17 -0.06 +0.08
+  imputation check, measured G=4 SHARED with sigma imputed: residual % +0.24 -0.38 -0.22 +0.54 +0.26 +0.38
+  imputation check, measured G=16 SHARED with sigma imputed: residual % -0.64 -0.57 +0.34 +0.52 +0.67 +0.61
+  imputation check, measured G=64 SHARED with sigma imputed: residual % +0.02 +0.61 +0.47 +0.81 +0.88 +0.83
+  P1 held lock, G=4 SHARED slope 2-6: eta 1.0: 1410 0.6654 1500 0.6259 1600 0.5872 | eta 0.35: 1410 0.5878 1500 0.5754 1600 0.5627
+  P1 G=2 increments at 1410, eta 1.0: 0.550 0.731 0.600 0.733 0.598
+  P1 G=2 increments at 1410, eta 0.35: 0.393 0.703 0.473 0.704 0.471
+     falsified if: a G=4 slope that neither eta gives (between them, near 0.62-0.64 at 1410 on the GH200), or the eta from the G=4 slope and the eta from the G=2 low steps disagreeing
+  P2 G=8 SHARED at 1710 MHz: T 0.8550 1.1702 1.7202 2.2701 2.8200 3.3699 3.9331 4.4830 | inc 0.315 0.550 0.550 0.550 0.550 0.563 0.550 | n1->2 0.315 (a point prediction, not held to the band), slope 2-6 0.5499, band [0.538, 0.556]
+  P2 G=8 PRIVATE at 1710 MHz: T 0.8547 1.6517 2.4534 3.2544 4.0562 4.8590 | inc 0.797 0.802 0.801 0.802 0.803 | slope 2-6 0.8018 (a point prediction, no band)
+  P2 G=32 SHARED at 1710 MHz: T 0.8550 1.1702 1.7202 2.2701 2.8200 3.3699 3.9331 4.4830 | inc 0.315 0.550 0.550 0.550 0.550 0.563 0.550 | n1->2 0.315 (a point prediction, not held to the band), slope 2-6 0.5499, band [0.538, 0.556]
+     falsified if: a SHARED per-tread increment from n=2 to n=6, or the slope 2-6, falls outside the band. The band is this tool's reading of the judge's (0.98 to 1.01 x the slope, rounded outward: 1% of noise either side, 1% more below for the measured floor's fall with G)
+  P3 G=2 n=7..10: 4.0768 4.4830 5.1374 5.5365 | odd-n excess over G=4 at n=3,5,7,9: 0.143 0.145 0.144 0.151 ms
+     falsified if: the odd-n excess falls below 0.10 ms or trends with n
+  P4 G=4 n=8->9: 0.504 against 0.550 elsewhere, because q_w2 drops from 1.031 to 1.003
+     falsified if: n=8->9 reads like the others (then the q term is wrong)
+  P5 G=3: T 0.8543 1.1968 1.7202 2.2701 2.8366 3.3699 3.9331 4.4995 | inc 0.342 0.523 0.550 0.567 0.533 0.563 0.566 | rho*_w1 0.690 against the largest slab-fetching share at G=3, 0.667: flat (rho* above it)
+     falsified if: the ladder does the other
+  P6 --floor capture: 353.8 cycles per CTA k-step at any held clock; the census PTX's shared-memory traffic needs 352 at 128 B per clock. INTERPRETATION: the shared-memory pipe near saturation and above the tensor pipe; achieved occupancy about half the limit would derive k_w = 1/2
+     falsified if: cycles far from this, or achieved occupancy near the limit (k_w = 1/2 then stays unexplained)
+  P7 no unlocked page of this card among the inputs. The rule: a fixed 353.8 cycles per CTA k-step reads an unlocked page's c-only refit c_u as an in-kernel clock of cycles / c_u. INTERPRETATION: holds only if the floor is a fixed cycle count
+     falsified if: the in-kernel clock (a capture's own cycles over its duration) reads near NVML; then the floor is not a fixed cycle count
+  P8 T3 did not trip on this card; no byte inversion
+
+CELLS (arm/G/n, measured ms, model ms, residual, byte source, fitted or scored)
+  native/G1/n1       0.8503 0.8573 +0.83% COUNTED                  fitted
+  native/G1/n2       1.4866 1.4891 +0.17% COUNTED                  fitted
+  native/G1/n3       2.2106 2.2073 -0.15% COUNTED                  fitted
+  native/G1/n4       2.9197 2.9015 -0.62% COUNTED                  fitted
+  native/G1/n5       3.6414 3.6192 -0.61% INTERPOLATED             scored
+  native/G1/n6       4.3715 4.3370 -0.79% COUNTED                  fitted
+  shared/G1/n1       0.8490 0.8534 +0.52% COUNTED                  fitted
+  shared/G1/n2       1.4786 1.4852 +0.44% COUNTED                  fitted
+  shared/G1/n3       2.2026 2.2030 +0.02% COUNTED                  fitted
+  shared/G1/n4       2.9197 2.9213 +0.05% COUNTED                  fitted
+  shared/G1/n5       3.6452 3.6392 -0.16% INTERPOLATED             scored
+  shared/G1/n6       4.3760 4.3572 -0.43% COUNTED                  fitted
+  private/G1/n1      0.8490 0.8535 +0.52% COUNTED                  fitted
+  private/G1/n2      1.6456 1.6497 +0.25% COUNTED                  fitted
+  private/G1/n3      2.4435 2.4459 +0.10% COUNTED                  fitted
+  private/G1/n4      3.2502 3.2424 -0.24% COUNTED                  fitted
+  private/G1/n5      4.0572 4.0391 -0.45% INTERPOLATED             scored
+  private/G1/n6      4.8500 4.8357 -0.29% COUNTED                  fitted
+  native/G2/n1       0.8559 0.8579 +0.24% COUNTED                  fitted
+  native/G2/n2       1.1776 1.1742 -0.29% COUNTED                  fitted
+  native/G2/n3       1.8808 1.8671 -0.73% COUNTED                  fitted
+  native/G2/n4       2.2537 2.2496 -0.18% COUNTED                  fitted
+  native/G2/n5       2.9529 2.9442 -0.30% INTERPOLATED             scored
+  native/G2/n6       3.3524 3.3494 -0.09% COUNTED                  fitted
+  shared/G2/n1       0.8544 0.8540 -0.05% COUNTED                  fitted
+  shared/G2/n2       1.1739 1.1702 -0.31% COUNTED                  fitted
+  shared/G2/n3       1.8740 1.8635 -0.56% COUNTED                  fitted
+  shared/G2/n4       2.2662 2.2701 +0.17% COUNTED                  fitted
+  shared/G2/n5       2.9669 2.9650 -0.06% INTERPOLATED             scored
+  shared/G2/n6       3.3671 3.3699 +0.08% COUNTED                  fitted
+  private/G2/n1      0.8545 0.8540 -0.06% COUNTED                  fitted
+  private/G2/n2      1.6511 1.6503 -0.05% COUNTED                  fitted
+  private/G2/n3      2.4540 2.4474 -0.27% COUNTED                  fitted
+  private/G2/n4      3.2516 3.2457 -0.18% COUNTED                  fitted
+  private/G2/n5      4.0630 4.0439 -0.47% INTERPOLATED             scored
+  private/G2/n6      4.8543 4.8421 -0.25% COUNTED                  fitted
+  native/G4/n1       0.8539 0.8588 +0.58% COUNTED                  fitted
+  native/G4/n2       1.1783 1.1742 -0.35% COUNTED                  fitted
+  native/G4/n3       1.7360 1.7241 -0.68% COUNTED                  fitted
+  native/G4/n4       2.2449 2.2496 +0.21% COUNTED                  fitted
+  native/G4/n5       2.7986 2.7995 +0.03% INTERPOLATED             scored
+  native/G4/n6       3.3435 3.3494 +0.18% COUNTED                  fitted
+  shared/G4/n1       0.8526 0.8547 +0.24% COUNTED                  fitted
+  shared/G4/n2       1.1747 1.1702 -0.38% COUNTED                  fitted
+  shared/G4/n3       1.7240 1.7202 -0.22% COUNTED                  fitted
+  shared/G4/n4       2.2580 2.2701 +0.54% COUNTED                  fitted
+  shared/G4/n5       2.8126 2.8200 +0.26% INTERPOLATED             scored
+  shared/G4/n6       3.3573 3.3699 +0.38% COUNTED                  fitted
+  private/G4/n1      0.8527 0.8547 +0.23% COUNTED                  fitted
+  private/G4/n2      1.6493 1.6517 +0.14% COUNTED                  fitted
+  private/G4/n3      2.4576 2.4534 -0.17% COUNTED                  fitted
+  private/G4/n4      3.2701 3.2544 -0.48% COUNTED                  fitted
+  private/G4/n5      4.0886 4.0567 -0.78% INTERPOLATED             scored
+  private/G4/n6      4.8815 4.8590 -0.46% COUNTED                  fitted
+  native/G16/n1      0.8632 0.8593 -0.45% COUNTED                  fitted
+  native/G16/n2      1.1796 1.1742 -0.45% COUNTED                  fitted
+  native/G16/n3      1.7282 1.7241 -0.24% COUNTED                  fitted
+  native/G16/n4      2.2457 2.2496 +0.17% COUNTED                  fitted
+  native/G16/n5      2.7932 2.7995 +0.23% INTERPOLATED             scored
+  native/G16/n6      3.3372 3.3494 +0.37% COUNTED                  fitted
+  shared/G16/n1      0.8609 0.8554 -0.64% COUNTED                  fitted
+  shared/G16/n2      1.1770 1.1702 -0.57% COUNTED                  fitted
+  shared/G16/n3      1.7143 1.7202 +0.34% COUNTED                  fitted
+  shared/G16/n4      2.2584 2.2701 +0.52% COUNTED                  fitted
+  shared/G16/n5      2.8012 2.8200 +0.67% INTERPOLATED             scored
+  shared/G16/n6      3.3494 3.3699 +0.61% COUNTED                  fitted
+  private/G16/n1     0.8612 0.8555 -0.66% COUNTED                  fitted
+  private/G16/n2     1.6785 1.6763 -0.13% COUNTED                  fitted
+  private/G16/n3     2.4986 2.4863 -0.49% COUNTED                  fitted
+  private/G16/n4     3.3494 3.3397 -0.29% COUNTED                  fitted
+  private/G16/n5     4.1767 4.1845 +0.19% INTERPOLATED             scored
+  private/G16/n6     5.0121 5.0293 +0.34% COUNTED                  fitted
+  native/G64/n1      0.8525 0.8592 +0.79% COUNTED                  fitted
+  native/G64/n2      1.1812 1.1742 -0.59% COUNTED                  fitted
+  native/G64/n3      1.7249 1.7241 -0.04% COUNTED                  fitted
+  native/G64/n4      2.2468 2.2496 +0.12% COUNTED                  fitted
+  native/G64/n5      2.7913 2.7995 +0.29% INTERPOLATED             scored
+  native/G64/n6      3.3370 3.3494 +0.37% COUNTED                  fitted
+  shared/G64/n1      0.8545 0.8547 +0.02% COUNTED                  fitted
+  shared/G64/n2      1.1806 1.1702 -0.88% COUNTED                  fitted
+  shared/G64/n3      1.7121 1.7202 +0.47% COUNTED                  fitted
+  shared/G64/n4      2.2517 2.2701 +0.81% COUNTED                  fitted
+  shared/G64/n5      2.7954 2.8200 +0.88% INTERPOLATED             scored
+  shared/G64/n6      3.3420 3.3699 +0.83% COUNTED                  fitted
+  private/G64/n1     0.8546 0.8546 +0.00% COUNTED                  fitted
+  private/G64/n2     1.6704 1.6747 +0.26% COUNTED                  fitted
+  private/G64/n3     2.5330 2.5428 +0.39% COUNTED                  fitted
+  private/G64/n4     3.4390 3.4615 +0.66% COUNTED                  fitted
+  private/G64/n5     4.3780 4.4327 +1.25% INTERPOLATED             scored
+  private/G64/n6     5.3693 5.4039 +0.65% COUNTED                  fitted

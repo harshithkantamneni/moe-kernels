@@ -9,16 +9,19 @@ assembled from committed files.
 
 Inputs: scripts/paper/ledger_rows.json (the ledger as the outline types it) and the
 committed scorer outputs (scripts/scoring/crossmodel/*.json and *.txt,
-scripts/scoring/rental1/*.score.json, scripts/scoring/rental2/*.score.json).
-Nothing is fitted, measured or rescored here.
+scripts/scoring/rental1/*.score.json, scripts/scoring/rental2/*.score.json,
+scripts/scoring/session0927/score.json). Nothing is fitted, measured or rescored here.
 
 APPENDIX A. One line per ledger row: the typed verdict and, where a committed
 scorer output carries a verdict or the numbers that decide one, the verdict read
 from that file (`CHECKS` below says which file and key) and whether they agree. A
 row agrees when every verdict word the scorer output carries (HELD, FALSIFIED,
 INCONCLUSIVE, NEITHER, NOT SCORED, NOT SCORABLE, NOT RUN, NOT HELD, SELECTED, NL,
-H1, FAILED) appears in the typed verdict. Rows 1 to 9, 13 and 18 have no scorer:
-they print "hand-scored, no scorer" and the session README that holds the count.
+H1, FAILED, UNDECIDED, NOT ANSWERED) appears in the typed verdict. Rows 13 and 18
+have no scorer: they print "hand-scored, no scorer" and the session README that holds
+the count. Rows 1 to 9 carry the registered procedure's verdicts, read from
+scripts/scoring/session0927/score.json (a scorer written 2026-10-05, after the pages); rows 2
+and 6 note that the 2026-09-27 hand scoring read HELD.
 Rows whose scorer output carries no single verdict print "typed from" and the file.
 The per-cell tables are data/appendix_a_cells.csv: every cell of the cross-model
 time tests (rows 12, 17, 20, 25, 29, 33) and byte tests (rows 14, 19, 23, 28, 32,
@@ -28,7 +31,8 @@ SUMMARY COUNTS. Derived, not typed: primary time tests (rows 12, 17, 20, 24, 25,
 33, 37, 41), per-GEMM floor tests counted once per registration on the base
 capture (rows 10, 15, 22, 26, 30, 34, 38, 39, 42, 43, 47), PRIVATE byte tests per
 GEMM on the five 2026-09-29 GH200 registrations (rows 23, 28, 32, 36, 40), each
-from the scorer output's own verdict or stats against the registered bar.
+from the scorer output's own verdict or stats against the registered bar, and the
+code-docstring tests of the 2026-09-27 board (rows 1 to 8) from session0927/score.json.
 """
 from __future__ import annotations
 
@@ -47,8 +51,8 @@ PUB = ROOT / "results/published"
 ROWS = ROOT / "scripts/paper/ledger_rows.json"
 BAR_RMS, LIMIT = 0.02, 0.05
 
-HAND = {r: "results/published/2026-09-27-nvidia_gh200_480gb-session/session/README.md"
-        for r in range(1, 10)}
+SESS = ROOT / "scripts/scoring/session0927/score.json"
+HAND = {}
 HAND[13] = "results/published/2026-09-28-nvidia_gh200_480gb-8x22b-session/session/README.md"
 HAND[18] = "results/published/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/session/README.md"
 
@@ -177,7 +181,13 @@ W1 = SC2 / "w1floor.score.json"
 CO = SC2 / "const.score.json"
 KN = SC2 / "knobs.score.json"
 
+def session0927(row: int) -> tuple[str, str, dict]:
+    v = _j(SESS)["rows"][str(row)]["verdict"]
+    return v, f"{_rel(SESS)} rows.{row}.verdict (written after the pages)", {}
+
+
 CHECKS = {
+    **{r: (lambda r=r: session0927(r)) for r in range(1, 10)},
     10: lambda: floor("8x22b"), 11: lambda: slope("8x22b"), 12: lambda: time_reg("8x22b"),
     14: lambda: bytes_named("8x22b"),
     15: lambda: floor("qwen2"), 16: lambda: slope("qwen2"), 17: lambda: time_reg("qwen2"),
@@ -235,8 +245,10 @@ TYPED = {55: "scripts/scoring/rental1/l2.score.json rules.secondary_G2 and READM
          62: "scripts/scoring/rental2/SCORES.md part 4", 76: "docs/registered/README.md \"Scored 2026-10-02\""}
 
 WORDS = re.compile(r"NOT SCORABLE|NOT SCORED|NOT RUN|NOT HELD|INCONCLUSIVE|FALSIFIED|NEITHER|"
-                   r"SELECTED|FAILED|HOLDS|HOLD|HELD|PASS|H1|NL|refuted|RECORD")
-NORM = {"HOLDS": "HELD", "HOLD": "HELD", "PASS": "HELD", "refuted": "FALSIFIED"}
+                   r"SELECTED|FAILED|HOLDS|HOLD|HELD|PASS|H1|NL|refuted|RECORD|UNDECIDED|"
+                   r"NOT ANSWERED|not answered")
+NORM = {"HOLDS": "HELD", "HOLD": "HELD", "PASS": "HELD", "refuted": "FALSIFIED",
+        "not answered": "NOT ANSWERED"}
 
 
 def words(s: str) -> set[str]:
@@ -302,6 +314,11 @@ def summary() -> list[tuple]:
         out.append((f"PRIVATE bytes per GEMM, row {row} (inside its byte test)", "FALSIFIED",
                     sum(v == "FALSIFIED" for v in d.values()),
                     ", ".join(g for g, v in d.items() if v == "FALSIFIED")))
+    sess = [(row, session0927(row)[0]) for row in range(1, 9)]
+    for verdict in ("HELD", "FALSIFIED", "UNDECIDED"):
+        k, which = count(sess, verdict)
+        out.append(("code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",
+                    verdict, k, which))
     out.append(("floor law, rental 2 part 4 (row 60)", key(W1, "base (PRIMARY)", "families",
                                                           "verdict")[0], 1, "60"))
     return out
@@ -349,9 +366,12 @@ def write(b: dict, out: Path) -> None:
     md = ["# Appendix A: the full ledger", "",
           "Generated by `python scripts/paper/ledger_tables.py` from `scripts/paper/ledger_rows.json` "
           "(the outline's ledger, transcribed) and the committed scorer outputs. "
-          f"{n_check} rows are checked against a scorer output and {n_yes} agree; rows 1 to 9, "
-          "13 and 18 are hand-scored with no scorer (gap 6.13); the rest are typed from the file "
-          "named. Per-cell tables: `docs/paper/data/appendix_a_cells.csv`.", "",
+          f"{n_check} rows are checked against a scorer output and {n_yes} agree; rows 13 and 18 "
+          "are hand-scored with no scorer (gap 6.13); rows 1 to 9 carry the procedure's verdicts "
+          "from `scripts/scoring/session0927/score.json`, written 2026-10-05 after the pages (rows "
+          "2 and 6 differ from the 2026-09-27 hand scoring: see `docs/FINDINGS.md`, the 2026-09-27 "
+          "section); the rest are typed from the file named. Per-cell tables: "
+          "`docs/paper/data/appendix_a_cells.csv`.", "",
           "| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     md += ["| " + " | ".join(_md_cell(r[c]) for c in cols) + " |" for r in b["rows"]]
     (out / "appendix_a.md").write_text("\n".join(md) + "\n")

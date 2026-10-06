@@ -689,6 +689,30 @@ against the predictions `scripts/r3_timing_model.py` and
 `scripts/wave_split_bytes.py` registered from the 2026-09-25 board before
 any page here existed.
 
+CORRECTED 2026-10-05: those registrations are code docstrings, not files in `docs/registered/`
+(fe73508 for P1 to P8, f0a831b for P1's 1605 MHz clock, bb979d4 for the byte tests, each an
+ancestor of the run commit 161f9ec), and they count as registered by the owner's decision with
+this disclosure. Literal in them are P2's band [0.538, 0.556] and 0.315 ms step, P4's q_w2 1.031
+to 1.003, P5's 2/3, P6's 353.8 cycles and the byte test's 1.12 ceiling with 1.082 and 1.118. The
+rest (P1's slopes, P3's excesses, P4's 0.504 ms, P5's ladder, every byte prediction at n = 5 and
+8) is what the registered procedure computes from the 2026-09-25 pages; no docstring printed it
+before these pages, though several are test pins committed before the run. Index:
+`docs/registered/2026-09-27-docstring-registrations.md`. Scorer: `scripts/scoring/session0927/`,
+which reruns the pre-run code. Both were written 2026-10-05, after the pages. By the owner's
+decision (the rental-2 precedent: a post-page scorer makes the printed verdict follow the
+registration's text) the verdicts here are the procedure's. Two differ from the 2026-09-27 hand
+scoring, which read both HELD, and the session README (left as published) still prints HELD for
+both. P2: G=32's n=4 to 5 step is 0.53754 ms, 0.46 us under the band; the hand scoring compared it
+rounded to 3 decimals, which nothing registered says, so P2 is FALSIFIED. P6: the falsifier gives
+no number for "far" or "near" and reads AND in the docstring, OR in the tool's printout; achieved
+occupancy is 0.88 to 0.99 of the limit, which the hand scoring did not read, and w1 reaches 365.0
+cycles (G=2, n=3), outside its "350 to 352", so P6 is UNDECIDED. Of the eight scored tests, four
+held (P1, P3, P4, the byte test at G=8), three failed (P2, P5, the byte test at n = 5 and 8) and
+one is undecided (P6). P1's slopes below are (T6 - T2) / 4; the registered OLS slopes are 0.6593,
+0.6222, 0.5809. The byte percentages below divide by the measured q; against the prediction, as
+registered, G=16 n=5 and 8 read +8.1 and +19.4%, and PRIVATE w2 G=16 n=8 reads +3.1%, outside
+1.5%.
+
 **The floor's clock exponent is 1 at G >= 2.** R1 in lock mode (1710, 1500,
 1410 MHz, every VALIDITY gate PASS) reads the per-M-tile cost's elasticity
 at **0.988 [0.985, 0.990] at G=4** and **0.312 [0.311, 0.313] at G=1**. P1
@@ -708,10 +732,16 @@ traffic is 352 cycles at 128 B per clock). The shared-memory pipe runs at 75 to
 shared-memory reading of the floor now has counters behind it (INTERPRETATION
 still: no capture varied the shared-memory load).
 
-**The timing model's registrations: five held, P5 failed.** P2 (G=8 and G=32
-SHARED steps flat inside [0.538, 0.556]), P3 (G=2's odd-n excess over G=4:
-0.154 0.153 0.162 0.160 ms against 0.143 0.145 0.144 0.151), P4 (G=4 n=8 to 9:
-0.508 ms against 0.504) and P6 held. **P5 is falsified:** G=3 was registered
+**The timing model's registrations: three held, P2 and P5 failed, P6 undecided.** P1 (above),
+P3 (G=2's odd-n excess over G=4: 0.154 0.153 0.162 0.160 ms against 0.143 0.145 0.144 0.151) and
+P4 (G=4 n=8 to 9: 0.508 ms against 0.504) held. CORRECTED 2026-10-05: this paragraph first read
+"five held", with P2 and P6 HELD; that was the 2026-09-27 hand scoring, and the registered
+procedure reads otherwise (the note at the head of this section). **P2 is falsified** by 0.46 us:
+G=8's SHARED steps sit inside [0.538, 0.556], but G=32's n=4 to 5 step is 0.53754 ms; the hand
+scoring rounded it to 0.538. **P6 is undecided**: the floor reads 350.3 to 365.0 cycles on w1 and
+354.1 to 367.4 on w2 against 353.8, but the falsifier names no tolerance, says AND in the docstring
+and OR in the printout, and achieved occupancy sits at 0.88 to 0.99 of the limit, which the hand
+scoring did not read. **P5 is falsified:** G=3 was registered
 flat and its SHARED steps n=2 to 8 read 0.491 0.576 0.550 | 0.516 0.580 0.560, a
 period-3 ripple. Its bytes carry the period (w1 SHARED reads 1.38, 1.00, 2.00,
 2.38 weight sets at n=2 to 5, which the group schedule gives exactly), so the

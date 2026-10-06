@@ -122,8 +122,11 @@ def _counters_dir(session: Path) -> Path:
 
 
 def measured_time(session: Path, model: str) -> tuple[dict, list[dict]]:
-    TM.set_model(model)
-    pages = TM.discover_timed([session / "results"])
+    old = TM.set_model(model)
+    try:
+        pages = TM.discover_timed([session / "results"])
+    finally:
+        TM.set_model(old)
     use = [p for p in pages if p.label == "VALID" and p.locked and next(iter(p.clocks)) == LOCK]
     cells: dict = {}
     for p in use:

@@ -1,5 +1,5 @@
 {
- "what": "the OUTLINE section 3 ledger (OUTLINE.v5, 2026-10-05), transcribed: each row's test, registration, typed verdict, number, SEEN/BLIND label and scored-in cell. scripts/paper/ledger_tables.py checks every typed verdict it can against the committed scorer outputs.",
+ "what": "the OUTLINE section 3 ledger (OUTLINE.v6, 2026-10-05), transcribed: each row's test, registration, typed verdict, number, SEEN/BLIND label and scored-in cell. scripts/paper/ledger_tables.py checks every typed verdict it can against the committed scorer outputs.",
  "rows": [
   {
    "row": 1,
@@ -7,19 +7,19 @@
    "test": "P1 floor clock exponent",
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
    "verdict": "HELD, eta 1",
-   "number": "G=4 slopes 0.6598/0.6222/0.5812 vs 0.6654/0.6259/0.5854",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P1"
+   "number": "G=4 OLS slopes 0.6593/0.6222/0.5809 vs 0.6654/0.6259/0.5854",
+   "label": "BLIND (docstring at f0a831b, ancestor of the run commit 161f9ec); group (b): the slopes and increments; (a): clocks, etas, the agreement rule",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P1 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 2,
    "section": "3.1",
    "test": "P2 G=8, 32 SHARED steps in [0.538, 0.556]",
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
-   "verdict": "HELD",
-   "number": "all steps inside",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P2"
+   "verdict": "FALSIFIED (the 2026-09-27 hand scoring read it inside the band after rounding to 3 decimals)",
+   "number": "G=8 all inside; G=32 n=4 to 5 0.53754 ms, 0.46 us under 0.538",
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (a): the band [0.538, 0.556]",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P2 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 3,
@@ -28,8 +28,8 @@
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
    "verdict": "HELD",
    "number": "0.154 0.153 0.162 0.160 vs 0.143 0.145 0.144 0.151",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P3"
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (a): the 0.10 ms floor and flat in n; (b): the excesses",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P3 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 4,
@@ -38,8 +38,8 @@
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
    "verdict": "HELD",
    "number": "0.508 vs 0.504 ms",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P4"
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (b): 0.504 ms; (a): q_w2 1.031 to 1.003",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P4 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 5,
@@ -48,18 +48,18 @@
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
    "verdict": "FALSIFIED",
    "number": "period-3 ripple 0.491 0.576 0.550, 0.516 0.580 0.560",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P5"
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (a): flat above 2/3; (b): the ladder",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P5 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 6,
    "section": "3.1",
    "test": "P6 floor near 353.8 cycles",
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
-   "verdict": "HELD",
-   "number": "w1 350 to 352, w2 354 to 367",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P6"
+   "verdict": "UNDECIDED (no numeric falsifier, AND in the docstring vs OR in the printout; the 2026-09-27 hand scoring read the cycles alone, not achieved occupancy)",
+   "number": "w1 350.3 to 365.0, w2 354.1 to 367.4 cycles vs 353.8; achieved occupancy 0.88 to 0.99 of the limit",
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (a): 353.8 cycles",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` P6 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 7,
@@ -68,8 +68,8 @@
    "registration": "`R/scripts/wave_split_bytes.py` \"WHAT WOULD FALSIFY IT\"",
    "verdict": "HELD",
    "number": "1.078, 1.100 vs 1.082, 1.118 (LRU rival 1.139, 1.159)",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` WSC G=8 test"
+   "label": "BLIND (docstring at bb979d4, ancestor of the run commit 161f9ec); group (a): 1.12, 1.082, 1.118",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` row 7 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 8,
@@ -77,9 +77,9 @@
    "test": "WSC n >= 5 within 5%",
    "registration": "`R/scripts/wave_split_bytes.py` \"WHAT WOULD FALSIFY IT\"",
    "verdict": "FALSIFIED",
-   "number": "G=16 n=5, 7, 8 +7.5/+12.6/+16.3%; G=4 n=8 5.9%; G=2 6.0 to 13.2%",
-   "label": "",
-   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` WSC n >= 5 test"
+   "number": "vs the prediction: G=16 n=5, 8 +8.1/+19.4%; G=4 n=8 +6.2%; G=2 n=5, 8 +6.4/+15.3%",
+   "label": "BLIND (docstring at bb979d4, ancestor of the run commit 161f9ec); group (a): the 5% rule; (b): every cell's prediction",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` row 8 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 9,
@@ -88,8 +88,8 @@
    "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
    "verdict": "not answered",
    "number": "",
-   "label": "",
-   "scored_in": ""
+   "label": "BLIND (docstring at fe73508, ancestor of the run commit 161f9ec); group (a)",
+   "scored_in": "`R/scripts/scoring/session0927/score.txt` row 9 (written 2026-10-05, after the pages); hand-scored in `P/2026-09-27-nvidia_gh200_480gb-session/session/README.md`"
   },
   {
    "row": 10,

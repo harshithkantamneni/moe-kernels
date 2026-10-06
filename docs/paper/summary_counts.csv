@@ -10,4 +10,7 @@ primary time tests,NOT RUN,2,"24, 41"
 "PRIVATE bytes per GEMM, five 2026-09-29 GH200 registrations",FALSIFIED,1,32 w2
 "PRIVATE bytes per GEMM, row 14 (inside its byte test)",FALSIFIED,2,"w1, w2"
 "PRIVATE bytes per GEMM, row 19 (inside its byte test)",FALSIFIED,2,"w1, w2"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",HELD,4,"1, 3, 4, 7"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",FALSIFIED,3,"2, 5, 8"
+"code-docstring tests, 2026-09-27 board (rows 1 to 8, the procedure's verdicts)",UNDECIDED,1,6
 "floor law, rental 2 part 4 (row 60)",NEITHER,1,60
