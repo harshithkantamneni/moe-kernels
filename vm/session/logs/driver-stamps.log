@@ -14,3 +14,5 @@
 2026-10-06T23:33:06Z stamps REFUSED: the perturbation gate for u14-sttail reads 'FAIL median=0.058963939633133566 worst=0.14645017231508917' (instr-gate.env): an instrumented unit runs only on a PASS
 == 2026-10-06T23:33:09Z step stamps: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s4; runs only on a PASS gate
 2026-10-06T23:33:09Z stamps REFUSED: the perturbation gate for u15-stdead4 reads 'FAIL median=0.014500143448019032 worst=0.035777535396228854' (instr-gate.env): an instrumented unit runs only on a PASS
+== 2026-10-06T23:33:12Z step stamps: stamps at the 1710 lock: the instrumented copy (stamps=cta), G=8 treads 2 4 arms native shared, BK 64 s8; runs only on a PASS gate
+2026-10-06T23:33:12Z stamps REFUSED: the perturbation gate for u16-stdead2 reads 'FAIL median=0.021444182073370566 worst=0.05636746732690201' (instr-gate.env): an instrumented unit runs only on a PASS
