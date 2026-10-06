@@ -75,3 +75,7 @@
 2026-10-06T23:33:00Z stamps REFUSED: the perturbation gate for u12-stk64s8 reads 'FAIL median=0.09510375148566308 worst=0.097600832498965' (instr-gate.env): an instrumented unit runs only on a PASS
 2026-10-06T23:33:00Z stamps END: exit 2 after 0 min [unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8]
 2026-10-06T23:33:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:33:03Z stamps START: stamps at the 1710 lock: the instrumented copy (stamps=iter,every=1,marks=112), G=8 treads 1 arms native private, BK 64 s4; runs only on a PASS gate [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112] (estimate 3 min, cap 10 min, 344 min left)
+2026-10-06T23:33:03Z stamps REFUSED: the perturbation gate for u13-sttail reads 'FAIL median=0.07526497609799226 worst=0.16675163224599054' (instr-gate.env): an instrumented unit runs only on a PASS
+2026-10-06T23:33:03Z stamps END: exit 2 after 0 min [unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112]
+2026-10-06T23:33:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

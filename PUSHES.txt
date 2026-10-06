@@ -12,3 +12,4 @@
 2026-10-06T23:32:56Z stamps (unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4): exit 2 (0 min)
 2026-10-06T23:32:59Z stamps (unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128): exit 2 (0 min)
 2026-10-06T23:33:02Z stamps (unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8): exit 2 (0 min)
+2026-10-06T23:33:05Z stamps (unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112): exit 2 (0 min)
