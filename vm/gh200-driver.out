@@ -90,3 +90,7 @@
 2026-10-06T08:25:01Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 6), no G=3 page [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6] (estimate 14 min, cap 40 min, 302 min left)
 2026-10-06T08:35:49Z timed END: exit 0 after 11 min [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6]
 2026-10-06T08:35:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5d349a8 to run-gh200-rental3-20261006t0655: timed (unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6): exit 0 (11 min)
+2026-10-06T08:35:53Z deep START: 3c.6 timed R3 at 1710 to tread 9, G=4 then G=2: P3, P4 [unit 23/24 qwen2-57b-a14b-tp8 e2e] (estimate 35 min, cap 75 min, 291 min left)
+2026-10-06T09:08:05Z deep END: exit 0 after 32 min [unit 23/24 qwen2-57b-a14b-tp8 e2e]
+2026-10-06T09:08:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
