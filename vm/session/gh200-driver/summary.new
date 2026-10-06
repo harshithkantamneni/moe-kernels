@@ -14,3 +14,4 @@ stamps     exit 2 after 0 min [unit 13/25 mixtral-8x22b sttail stamp-groups=8 st
 stamps     exit 2 after 0 min [unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112]
 stamps     exit 2 after 0 min [unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta]
 stamps     exit 2 after 0 min [unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8]
+bytes      exit 0 after 3 min [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64]

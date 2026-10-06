@@ -68,3 +68,5 @@
 2026-10-06T23:33:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed 9676741 to run-gh200-rental4-20261006t2245: stamps (unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8): exit 2 (0 min)
 2026-10-06T23:33:15Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64] (estimate 4 min, cap 20 min, 344 min left)
+2026-10-06T23:36:02Z bytes END: exit 0 after 3 min [unit 17/25 olmoe-1b-7b k64s4 byte-groups=64]
+2026-10-06T23:36:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
