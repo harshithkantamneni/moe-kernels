@@ -1,0 +1,65 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-zform-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r3/DESIGN.md section 4 with REVIEW.md section 3: the pooling bug fixed, the SEEN tp4 ratios registered as priors, MID added, base / 1710 the primary clock lever, the curvature check, the verdict arithmetic stated
+tool: scorer scripts/scoring/rental3/score_zform.py; the AFF coefficients are r3_timing_model's GEMM_CONST (asserted equal here)
+
+  CAL PROP  coef [0.336108]  chi2/dof 21.118743
+  CAL AFF   coef [2850.014923, 0.208086]  chi2/dof 12.562728
+  CAL MIX   coef [3405.86257, 0.2001]  chi2/dof 11.493722
+  CAL MIX3  coef [6773.678332, -3020.187886, 0.201278]  chi2/dof 11.78076
+  SEEN residual rms (cycles): {'PROP': 2051.080067, 'AFF': 1295.507077, 'MIX': 1186.100757, 'MIX3': 1212.610604} over 36 series
+
+Z: floor_estimator.intercept of sm__cycles_active.avg on q over a capture's registered floor-bound cells of one GEMM, the slope free (rental 2's score_const.z_intercept); one Z per (capture FILE, GEMM): base, lock1710, lock1005 never pooled
+fit_basis: weighted least squares on the CAL models' G = 64 base and 1710-lock captures (8x7B 09-27 and 09-30, 8x22B, Qwen2-57B, OLMoE), weight 1 / sigma_Z^2, sigma_Z = max(300, the intercept's error at sigma_active = max(250, 0.02 u)); each series at its own measured clock (median sm_clock_mhz of its cells)
+forms:
+  PROP: Z = zeta u (one zeta; the form question (a) names)
+  AFF: Z = g + b u, SM cycles, clock-free (the cycle form; r3_timing_model --gemm-const)
+  MIX: Z = a (f / 1710) + b u: a constant in ns plus a cycle term
+  MIX3: a (f / 1710) + g + b u: PRINTED, never required to be FALSIFIED (it nests AFF and MIX)
+seen_priors:
+  pairs: [{"model": "mixtral-8x7b-tp2", "gemm": "w1", "pair": "base/lock1710", "r": 0.925981, "sigma_r_registered_noise": 0.065487, "f_ratio": 0.811849, "AFF": 1.0, "MIX": 0.919401}, {"model": "mixtral-8x7b-tp2", "gemm": "w2", "pair": "base/lock1710", "r": 0.96204, "sigma_r_registered_noise": 0.136681, "f_ratio": 0.813826, "AFF": 1.0, "MIX": 0.944507}, {"model": "mixtral-8x7b-tp4", "gemm": "w1", "pair": "base/lock1710", "r": 0.948943, "sigma_r_registered_noise": 0.069132, "f_ratio": 0.814974, "AFF": 1.0, "MIX": 0.92093}, {"model": "mixtral-8x7b-tp4", "gemm": "w1", "pair": "lock1005/lock1710", "r": 0.935748, "sigma_r_registered_noise": 0.070677, "f_ratio": 0.594473, "AFF": 1.0, "MIX": 0.826699}, {"model": "mixtral-8x7b-tp4", "gemm": "w2", "pair": "base/lock1710", "r": 0.923135, "sigma_r_registered_noise": 0.085684, "f_ratio": 0.819599, "AFF": 1.0, "MIX": 0.918456}, {"model": "mixtral-8x7b-tp4", "gemm": "w2", "pair": "lock1005/lock1710", "r": 0.906978, "sigma_r_registered_noise": 0.088739, "f_ratio": 0.598625, "AFF": 1.0, "MIX": 0.818572}, {"model": "mixtral-8x7b-tp8", "gemm": "w1", "pair": "base/lock1710", "r": 0.973018, "sigma_r_registered_noise": 0.126811, "f_ratio": 0.818331, "AFF": 1.0, "MIX": 0.922626}, {"model": "mixtral-8x7b-tp8", "gemm": "w2", "pair": "base/lock1710", "r": 0.921515, "sigma_r_registered_noise": 0.09136, "f_ratio": 0.822056, "AFF": 1.0, "MIX": 0.891434}]
+  label: SEEN, registered as labelled priors: rental 2's same-board ratios sit between AFF (1.0) and MIX; the likely outcome on the new GEMMs is INCONCLUSIVE on the primary lever (MID unreachable at the registered noise, A2.power); MID_1005_printed reports the 1005 lever (DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): the label said MID)
+separating_gemms:
+  qwen2-57b-a14b-tp8 w2: {"role": "scored", "u": 2699.5, "cells": [2, 3, 4, 5, 6, 8, 10, 12, 13, 14, 16], "sigma_int": 157.72739, "sigma_tot": 563.363053, "A1_centres_at_1690": {"PROP": 907.323546, "AFF": 3411.74308, "MIX": 3906.19787}, "A1_bands_at_1690": {"PROP": [-219.40256, 2034.049652], "AFF": [2285.016974, 4538.469186], "MIX": [2779.471764, 5032.923976]}, "A1_forms": ["PROP", "AFF", "MIX"], "A2_primary_MIX_ratio_base1375_over_1690": 0.839385, "A2_second_MIX_ratio_1005_over_1690": 0.650725, "half_fits": {"n<=8": [2, 3, 4, 5, 6, 8], "n>=8": [8, 10, 12, 13, 14, 16], "sigma_lo": 262.202212, "sigma_hi": 486.815978}, "extrapolation_waves": 54.30303, "power": {"base": {"gap_AFF_MIX": 0.160615, "two_sigma_r": 0.13076, "MID_window": [0.970145, 0.86924], "MID_possible": false}, "lock1005": {"gap_AFF_MIX": 0.349275, "two_sigma_r": 0.13076, "MID_window": [0.781485, 0.86924], "MID_possible": true}}}
+  granite-3.0-1b-a400m w2: {"role": "scored", "u": 3731.8, "cells": [3, 4, 5, 6, 8, 10, 12, 14, 16], "sigma_int": 185.900037, "sigma_tot": 571.89057, "A1_centres_at_1690": {"PROP": 1254.287834, "AFF": 3626.550258, "MIX": 4112.7611}, "A1_bands_at_1690": {"PROP": [110.506694, 2398.068974], "AFF": [2482.769118, 4770.331398], "MIX": [2968.97996, 5256.54224]}, "A1_forms": ["PROP", "AFF", "MIX"], "A2_primary_MIX_ratio_base1375_over_1690": 0.847451, "A2_second_MIX_ratio_1005_over_1690": 0.668267, "half_fits": {"n<=8": [3, 4, 5, 6, 8], "n>=8": [8, 10, 12, 14, 16], "sigma_lo": 355.934258, "sigma_hi": 487.339721}, "extrapolation_waves": 11.636364, "power": {"base": {"gap_AFF_MIX": 0.152549, "two_sigma_r": 0.144988, "MID_window": [0.992439, 0.855012], "MID_possible": false}, "lock1005": {"gap_AFF_MIX": 0.331733, "two_sigma_r": 0.144988, "MID_window": [0.813255, 0.855012], "MID_possible": true}}}
+  granite-3.0-1b-a400m w1: {"role": "scored", "u": 6025.6, "cells": [3, 4, 5, 6, 8, 10, 12, 14, 16], "sigma_int": 185.900037, "sigma_tot": 571.89057, "A1_centres_at_1690": {"PROP": 2025.252365, "AFF": 4103.857925, "MIX": 4571.75048}, "A1_bands_at_1690": {"PROP": [881.471225, 3169.033505], "AFF": [2960.076785, 5247.639065], "MIX": [3427.96934, 5715.53162]}, "A1_forms": ["PROP", "MIX"], "A2_primary_MIX_ratio_base1375_over_1690": 0.862767, "A2_second_MIX_ratio_1005_over_1690": 0.701572, "half_fits": {"n<=8": [3, 4, 5, 6, 8], "n>=8": [8, 10, 12, 14, 16], "sigma_lo": 355.934258, "sigma_hi": 487.339721}, "extrapolation_waves": 11.636364, "power": {"base": {"gap_AFF_MIX": 0.137233, "two_sigma_r": 0.128124, "MID_window": [0.990891, 0.871876], "MID_possible": false}, "lock1005": {"gap_AFF_MIX": 0.298428, "two_sigma_r": 0.128124, "MID_window": [0.829697, 0.871876], "MID_possible": true}}}
+  qwen2-57b-a14b-tp8 w1: {"role": "printed", "u": 19789.6, "cells": [3, 4, 5, 6, 8, 10, 12, 13, 14, 16], "sigma_int": 291.672431, "sigma_tot": 614.469533, "A1_centres_at_1690": {"PROP": 6651.442877, "AFF": 6967.953629, "MIX": 7325.92688}, "A1_bands_at_1690": {"PROP": [5422.503811, 7880.381943], "AFF": [5739.014563, 8196.892695], "MIX": [6096.987814, 8554.865946]}, "A1_forms": ["PROP", "AFF", "MIX"], "A2_primary_MIX_ratio_base1375_over_1690": 0.91436, "A2_second_MIX_ratio_1005_over_1690": 0.813766, "half_fits": {"n<=8": [3, 4, 5, 6, 8], "n>=8": [8, 10, 12, 13, 14, 16], "sigma_lo": 563.503712, "sigma_hi": 770.71147}, "extrapolation_waves": 14.545455, "power": {"base": {"gap_AFF_MIX": 0.08564, "two_sigma_r": 0.118395, "MID_window": [1.032755, 0.881605], "MID_possible": false}, "lock1005": {"gap_AFF_MIX": 0.186234, "two_sigma_r": 0.118395, "MID_window": [0.932161, 0.881605], "MID_possible": false}}}
+noise:
+  sigma_int: max(the registered sigma_int, the realised intercept standard error of the fit) per capture
+  sigma_board: 300.0
+  sigma_model: 450.0
+  basis: sigma_board: the same shape on two boards (tp8 r1 / r2 dZ 123 to 467, JetMoE 09-29 / 09-30 264 to 277, SEEN); sigma_model: the SEEN rms of AFF and MIX at u < 12k
+A1:
+  what: Z at the 1710 capture against each form's centre at the capture's MEASURED clock (median sm_clock_mhz of its cells)
+  band: centre +- 2 sigma_tot, sigma_tot = sqrt(sigma_int^2 + sigma_board^2 + sigma_model^2)
+  forms_per_gemm: PROP, AFF and MIX on qwen2-tp8 w2 and granite-1B w2; PROP and MIX on granite-1B w1 (PROP and AFF overlap there); qwen2-tp8 w1 printed
+A2:
+  primary: r = Z_base / Z_1710, same board: the SM clock moves and the L2 stays at about 1704 MHz
+  second: r' = Z_1005 / Z_1710, PRINTED with the label 'SM and L2 moved together' (the L2 follows a 1005 lock to 1125 MHz)
+  predictions: AFF and PROP: 1.0; MIX: Z_MIX(u, f_base) / Z_MIX(u, f_1710) at the two captures' measured clocks
+  sigma_r: r sqrt(sigma_int,base^2 + sigma_int,1710^2) / Z_1710 (sigma_board cancels on one board)
+  rule: AFF and PROP FAIL A2 when |r - 1| > 2 sigma_r; MIX FAILS when |r - r_MIX| > 2 sigma_r; MID when r_MIX + 2 sigma_r < r < 1 - 2 sigma_r ('neither cycle-constant nor ns-constant')
+  power: per GEMM in separating_gemms.power, at the registered sigma_int: on the base / 1710 lever the AFF-MIX gap (0.14 to 0.16) exceeds 2 sigma_r (0.13 to 0.15) by little, so an endpoint reading falsifies the other form only narrowly and the MID window is EMPTY: MID cannot be read on the primary lever. It is read on the printed 1005 lever (gap 0.30 to 0.35, window open) as MID_1005_printed; a reading between the forms on the primary lever is INCONCLUSIVE, which the SEEN priors (0.92 to 0.97) make the likely outcome
+  SEEN_base_clocks_mhz: [1377.860725, 1372.039378, 1377.36324, 1375.303566, 1374.919982, 1371.70395]
+curvature: per GEMM and capture, the intercepts of the n <= 8 and n >= 8 half-fits agree within 2 sqrt(sigma_lo^2 + sigma_hi^2), else that GEMM is NOT SCORED (qwen2-tp8 w2 extrapolates 13.6 waves to q = 0 and Z is 1.26 u)
+verdict:
+  per_form: a form FAILS a GEMM when A1 (where it is scored for it) or A2 fails there; it is FALSIFIED when it fails on at least 2 of the GEMMs scored for it (AFF: A1 on 2 GEMMs and A2 on 3 count as 3 GEMMs)
+  selected: SELECTED when it fails on no scored GEMM and every other one of PROP, AFF, MIX is FALSIFIED; MIX3 is printed and need not be FALSIFIED
+  MID: when A2 reads MID on 2 or more GEMMs, the verdict is MID (unreachable on the primary lever at the registered noise: see A2.power); MID_1005_printed reports the 1005 lever's reading beside it
+  else: INCONCLUSIVE, each A printed
+also_printed:
+  - the Z / u of every new capture
+  - the base capture's Z, a third clock
+  - K3's tp4 value refit under each form (the tp4 floor and floor1005 units)
+ambiguities_resolved:
+  A-1 sigma_int: the larger of the registered and the realised intercept error
+  A-2 cell set: the registered floor-bound cells (floorlaw cells_registered)
+  A-3 MIX's clock: each capture's measured clock
+  A-4 2 of 3: per form, at least 2 of the GEMMs scored for it
+  A-5 MIX3: printed only
+  A-6 pooling: one series per capture file
+  A-7 A2's primary: base / 1710
+leakage: the coefficients are CAL; sigma_board and sigma_model are SEEN, labelled; the cells are BLIND
+seen_data:
+  - the SEEN residuals and priors are diagnosis, never a test
+  - Z's form at small u was diagnosed on SEEN Granite-3B and tp8 w2 series

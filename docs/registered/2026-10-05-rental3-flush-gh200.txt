@@ -1,0 +1,55 @@
+REGISTERED 2026-10-05, before any rental-3 page: rental 3, 2026-10-05-rental3-flush-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r3/DESIGN.md section 6 with REVIEW.md sections 5 and 6 (D): scored on the modes of 240 MiB and above; E120 under the 4x rule
+tool: scripts/launch_floor.py --phase timed / trace (E120 and E360 in MODES, FLUSH_MB and make_flushers); scorer scripts/scoring/rental3/score_flush.py
+
+
+unit:
+  model: mixtral-8x7b-tp8
+  label: r3
+  treads: [1, 2, 3]
+  modes_planned: ["E0", "E240", "E360", "E480"]
+  path: <date>-nvidia_gh200_480gb-launch-floor-r3/mixtral-8x7b-tp8/
+E120: NOT PLANNED: 120 MiB is 2x the GH200's 60 MiB L2, under timing.flush_mb_for_device's own 4x rule, so it evicts incompletely and the kernel after it gets faster too; launch_floor.py accepts it and the scorer prints it when present, never scores it
+C_reg_ms:
+  native: {"1": 0.158, "2": 0.2053, "3": 0.2821}
+  shared: {"1": 0.146, "2": 0.1933, "3": 0.2701}
+  private: {"1": 0.146, "2": 0.259, "3": 0.3493}
+C_reg_source: the 2026-10-01 rental-2 launch2 registration's C_reg_ms (G = 4, CAL)
+F_gpu_ms:
+  E0: 0.0
+  E120: 0.03377
+  E240: 0.067539
+  E360: 0.101309
+  E480: 0.135079
+F_basis: MiB x 2^20 bytes over the 3.7261 TB/s ruler (never the trace's F_tr: P3's instrument problem)
+definitions:
+  Phi: Phi(F) = H_cell(F) - I(F), each mode's own cell: H_cell the median over the cell's repeats of host_enqueue_ms / calls_per_burst, I the median of ms_p50 (rental 2's definitions)
+  qualifying: a (arm, n) cell is scored when, at every one of E240, E360 and E480, it is host-bound by rule (C_reg + F_mode < H_pre, hostprobe.csv) AND measured host-bound (host_bound_fraction >= 0.8) AND not an edge (|C_reg + F_mode - H_pre| > 0.020 ms)
+hypotheses:
+  OVERLAP: Phi(F) = F_gpu(F) - h_flush + delta(level): linear in F_gpu with slope 1 at fixed level
+  SAT: Phi saturates at the E240 value
+tests:
+  differences: per qualifying cell, d1 = Phi(E360) - Phi(E240) and d2 = Phi(E480) - Phi(E360) (F_gpu steps 33.8 and 33.8 us)
+  OVERLAP_band_us: [21.77, 45.77]
+  SAT_band_us: [-10.0, 10.0]
+  band_basis: +-12 us: rental 2's P3 / P4 band (E0 - E240 is a difference of two host-paced intervals that scatter about 8 us between arms at fixed n), SEEN
+  cell_rule: a cell supports a hypothesis when both d1 and d2 lie in its band (the bands are disjoint)
+  rule: per model, a hypothesis is SELECTED when at least 2/3 of the qualifying cells support it; FALSIFIED when at least 2/3 support neither it nor lie in its band; else INCONCLUSIVE; NOT TESTED when fewer than 3 cells qualify
+  slope: the OLS slope of Phi on F_gpu over E240, E360 and E480 per cell is printed (OVERLAP predicts 1, SAT 0)
+printed:
+  - E0 and E120 (E0 warm, E120 partly warm: they change the kernel, so neither enters a slope)
+  - the two-level Phi law below
+two_level_law_SEEN:
+  rule: Phi_hi (about 100 us) while C_reg < C*, Phi_lo (75 to 85 us) once C_reg > C*
+  C_star: between 0.158 and 0.193 ms on tp8 and between GR(2) and GR(3) on Granite-3B
+  label: SEEN-fitted (rental 2's launch.score.json), diagnosis
+gates: the launch directory records no validity gate; P0 (rental 2's) is printed: a P0 failure marks every verdict 'host drift', as rental 2 did
+ambiguities_resolved:
+  D-1: each mode's own H_cell and I
+  D-2: the 2/3 rule per model over qualifying cells
+  D-3: the verdict reads d1 and d2; the 3-mode slope is printed
+  D-4: rental 2's P3 / P4 band, SEEN
+  D-5: E0 and E120 printed only
+seen_data:
+  - the band and the two-level law are SEEN (rental 2); E360 is on no page

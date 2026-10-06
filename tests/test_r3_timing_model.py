@@ -1335,3 +1335,76 @@ def test_rho_is_the_calibration_counters_measurement(fixed_0927):
     at = rms(11.48)
     assert 100 * at == pytest.approx(2.25, abs=0.01)
     assert at < rms(11.28) and at < rms(11.68)
+
+
+# --------------------------------------------------------------------------
+# The per-GEMM constant (GEMM_CONST, rental 3, 2026-10-05): off by default, a
+# per-call term in cycles beside the dead CTAs, collinear with T0 on one model
+# --------------------------------------------------------------------------
+
+def _cp():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import cores_heldout_predict as CP
+    return CP
+
+
+@pytest.fixture(scope="module")
+def gh200_0927_const():
+    """8x7B's 2026-09-27 pages (the registered source fit), without and with the term."""
+    CP = _cp()
+    args = [*CP.source_pages(), "--counters", CP.C27]
+    return build(*args), build(*args, "--gemm-const")
+
+
+def test_the_gemm_constant_is_off_by_default_and_restored_after_a_build():
+    assert M.GEMM_CONST is False
+    assert M.build_parser().parse_args(["x"]).gemm_const is False
+    assert M.gemm_const_ms("w1", 200.0) == 0.0
+    with M.gemm_const(True):
+        assert M.gemm_const_ms("w1", 200.0) > 0
+    assert M.GEMM_CONST is False
+
+
+def test_the_gemm_constant_is_its_cycle_form_in_ksteps_of_c():
+    """(g / C_CYC + b S'_g) k-steps: g + b u cycles at u = S'_g C_CYC, so at the
+    counter pages' c (C_CYC cycles a k-step) the term is Z_AFF(u) in cycles."""
+    M.set_model("mixtral-8x7b")
+    for g in ("w1", "w2"):
+        u = M.floor_ksteps(g) * M.C_CYC_PER_KSTEP
+        z = M.GEMM_CONST_CYCLES + M.GEMM_CONST_PER_U * u
+        assert M.gemm_const_ksteps(g) * M.C_CYC_PER_KSTEP == pytest.approx(z)
+        with M.gemm_const(True):
+            # c in ns per k-step: the clock moves the term through c
+            assert M.gemm_const_ms(g, 2 * 200.0) == pytest.approx(2 * M.gemm_const_ms(g, 200.0))
+        with M.cta_fixed(False):
+            assert M.gemm_const_ksteps(g) == pytest.approx(
+                M.GEMM_CONST_CYCLES / M.C_CYC_PER_KSTEP
+                + M.GEMM_CONST_PER_U * M.GEOMETRY[g].ksteps)
+
+
+def test_off_prices_every_cell_as_before_and_on_adds_exactly_the_term(gh200_0927_const):
+    off, _on = gh200_0927_const
+    fit, ctx = off["main"], off["ctx"]
+    for cell in off["cells"][:12]:
+        base = M.call_ms(fit.x, cell, ctx, fit.k_w)
+        with M.gemm_const(False):
+            assert M.call_ms(fit.x, cell, ctx, fit.k_w) == base
+        with M.gemm_const(True):
+            add = sum(M.gemm_const_ms(g, fit.params["c"]) for g in M.GEMMS)
+            assert M.call_ms(fit.x, cell, ctx, fit.k_w) == pytest.approx(base + add, rel=1e-12)
+
+
+def test_on_one_model_the_term_moves_t0_alone_by_its_own_constant(gh200_0927_const):
+    """The 8x7B refit with the term on: c, bw and the offsets unchanged, the same
+    rms, and T0 lower by 8x7B's own per-call constant (about 15.7 us at 1710)."""
+    off, on = gh200_0927_const
+    p0, p1 = off["main"].params, on["main"].params
+    for k in ("c", "bw", "s_small", "s_block"):
+        assert p1[k] == pytest.approx(p0[k], rel=1e-6, abs=1e-7), k
+    assert on["score"]["rms"] == pytest.approx(off["score"]["rms"], rel=1e-6)
+    M.set_model("mixtral-8x7b")
+    with M.gemm_const(True):
+        z_ms = sum(M.gemm_const_ms(g, p0["c"]) for g in M.GEMMS)
+    assert p0["T0"] - p1["T0"] == pytest.approx(z_ms, rel=1e-4)
+    assert 0.0150 < z_ms < 0.0165
+    assert M.GEMM_CONST is False

@@ -198,3 +198,85 @@ def test_parse_trace_reads_the_planted_burst():
     assert c["d_tail_us"] == 255 - 246
     assert got["median"]["flush_us"] == 68 and got["median"]["h_flush_us"] == 10
     assert got["launch_api_share"] == pytest.approx(30 / 250)
+
+
+# --------------------------------------------------------------------------
+# rental 3 (2026-10-05): the flush ladder's modes and the NATIVE wall-time check
+# --------------------------------------------------------------------------
+
+class _FakeFlusher:
+    def __init__(self, megabytes):
+        self.megabytes = megabytes
+
+
+_FAKE_T = SimpleNamespace(L2Flusher=_FakeFlusher, flush_mb_for_device=lambda: 240)
+
+
+def test_every_mode_has_a_flusher_of_its_registered_size():
+    """The run loop indexes `flushers[mode]` (probe_all, time_cells) and
+    `flushers[tr["flush"]]` (trace_cell): a mode in MODES without an entry raises
+    KeyError on the GPU, past the dry run, which never builds them."""
+    fl = LF.make_flushers(_FAKE_T)
+    assert set(fl) == set(LF.MODES) == set(LF.FLUSH_MB)
+    assert {"E120", "E360"} <= set(LF.MODES)
+    for mode, mb in LF.FLUSH_MB.items():
+        if mb == 0:
+            assert fl[mode] is None
+        else:
+            assert fl[mode].megabytes == (240 if mb is None else mb), mode
+    assert fl["GR"] is fl["E240"]
+    assert (fl["E120"].megabytes, fl["E360"].megabytes) == (120, 360)
+    # every flush a planned trace names is a key too
+    a = LF.build_parser().parse_args([*CONTRACT[:4], "--modes", "E0,E240,E360,E480",
+                                      "--trace-treads", "1", "--out", "OUT"])
+    for tr in LF.make_plan(a)["traces"]:
+        assert tr["flush"] in fl
+
+
+def test_run_builds_its_flushers_from_make_flushers_only():
+    import inspect
+    src = inspect.getsource(LF.run)
+    assert "flushers = make_flushers(T)" in src
+    assert src.count("flushers = {") == 0 and "L2Flusher(" not in src
+
+
+@pytest.mark.parametrize("modes", ["E0,E240,E360,E480", "E120", "E240,E120,E360,GR"])
+def test_the_flush_ladder_modes_plan(modes):
+    a = LF.build_parser().parse_args(["--model", "mixtral-8x7b-tp8", "--treads", "1,2,3",
+                                      "--modes", modes, "--out", "OUT", "--phase", "timed"])
+    plan = LF.make_plan(a)
+    assert plan["modes"] == modes.split(",")
+    assert plan["timed_cells"] == 3 * 3 * len(modes.split(",")) * 3
+
+
+WALL = ["--model", "mixtral-8x7b-tp4", "--treads", "2,4,6,8,10,11,12,13,14,15,16",
+        "--modes", "E240,GR", "--group-m", "64", "--out", "OUT", "--phase", "timed"]
+
+
+def test_a_native_only_plan_takes_treads_past_the_counter_ladder():
+    plan = LF.make_plan(LF.build_parser().parse_args([*WALL, "--arms", "native"]))
+    assert plan["treads"][-1] == 16 == PW.NATIVE_COUNTER_MAX_TREADS
+    assert plan["arms"] == ["native"] and plan["group_m"] == 64
+    assert plan["timed_cells"] == 11 * 2 * 3
+    with pytest.raises(LF.Refused, match="counter ladder"):
+        LF.make_plan(LF.build_parser().parse_args([*WALL, "--arms", "native,shared"]))
+    with pytest.raises(LF.Refused, match="NATIVE's ladder"):
+        LF.make_plan(LF.build_parser().parse_args(
+            ["--model", "mixtral-8x7b-tp4", "--treads", "17", "--arms", "native", "--out", "OUT"]))
+
+
+def test_the_ladder_is_natives_only_for_a_native_only_plan():
+    cfg = LF.MODEL_CONFIGS["mixtral-8x7b-tp4"]
+    lad, bound = LF.plan_ladder(cfg, ["native"])
+    assert not bound and lad == PW.ladder_treads(cfg, LF.BLOCK_M, PW.NATIVE_COUNTER_MAX_TREADS)
+    lad, bound = LF.plan_ladder(cfg, ["native", "private"])
+    assert bound and lad == PW.counter_ladder(cfg, LF.BLOCK_M)
+
+
+def test_the_inputs_build_only_the_plans_arms():
+    """private_topk_ids refuses a tread past the copies declared by design, so a
+    native-only plan must not build it: calls_for hands its arms to arm_inputs."""
+    import inspect
+    src = inspect.getsource(LF.run)
+    assert 'PW.arm_inputs(\n            cfg, n, BLOCK_M, copies, args.seed, "bf16", w1.dtype, arms=tuple(args.arms))' in src
+    assert "arms" in inspect.signature(PW.arm_inputs).parameters

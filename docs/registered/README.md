@@ -798,3 +798,107 @@ fixes, in 9e04d99 (`SCORES.md`, end): H2c now applies the registered V6 rule to 
 reads NOT SCORED where a registered tread was never planned (JetMoE n = 5). Seen on the pages: the 1005 capture's GEMM cells
 read 1003 to 1005 MHz, so the "about 1.4% low, uniformly" above holds for the null kernel
 only (GEMM cells read 0.5 to 5.5% low at 1710). The files above are unchanged.
+
+## 2026-10-05, before any page: rental 3, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental3-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six registrations below, their scorers
+(`scripts/scoring/rental3/`, tested on synthetic pages only in
+`tests/test_scoring_rental3.py`) and the scaffolding they need are committed in ONE commit
+before the rental. Every number in the six JSON files is written by
+`scripts/scoring/rental3/register.py` from committed files (`--check` recomputes them, and a
+test runs it); the `.txt` beside each is rendered from its JSON. Design: the scratchpad's
+`design-r3/DESIGN.md` with every fix of `design-r3-review/REVIEW.md` (the review wins where
+they differ). Labels: CAL (fitted on the calibration models), SEEN (any other published
+page: every published page is SEEN, rental 2's and the parent Qwen2-57B's included), BLIND
+(a cell on no page).
+
+| block | units | est. min |
+|---|---|---:|
+| prelude (also locks 1005 and 1410 MHz once, read back, reset) | 1 | 3 |
+| E: qwen2-57b-a14b-tp8 floor (base + 1710), floor at 1005, calibrate, timed, bytes G = 3, 8, 32 | 5 | 57 |
+| A + B: granite-3.0-1b-a400m floor (base + 1710), floor at 1005 | 2 | 7 |
+| B + RK (drop-group x): tp4 floor (base + 1710), floorrep (1710, the K1 / K4 replicate), 1005, 1410, the G = 64 wall-time check | 5 | 17 |
+| B2: tp8 and tp2 at 1005 | 2 | 5 |
+| C (drop-group c): tp2 G = 1 l2base, k32s8, k128s4, k128s3, k64s7; then k64s3 alone | 6 | 30 |
+| R: the rep8 timed replicate (G = 8, treads 6, no G = 3 page) | 1 | 14 |
+| tail: deep (G = 4, 2 to n = 9); tp8 flush ladder E0, E240, E360, E480 | 2 | 49 |
+
+182 min of units; the core through rep8 is 133. With 30 min of setup: 212 min at the
+estimate ($8.1 at $2.29/h); about 188 min at the published ratios (timed, rep8 and deep do
+not compress, the rest at rental 2's 0.75): $7.2. The guardian's hard cap of 410 min is $15.6.
+`--deadline` at launch + 240 min runs the whole plan (setup, 182 and the 8-minute reserve
+is 220); at launch + 180 the driver drops the tail by rule (the flush ladder, then deep) and
+keeps the core. The driver drops the last unit first; drop-groups x and c go together.
+
+**Part E, end-to-end blind time** (`2026-10-05-rental3-e2e-gh200.{json,txt}`). Predictions
+are `cross_model_predict.py --gemm-const` at this commit from 8x7B's 2026-09-27 fit (CAL;
+T0 0.04424 ms, c 202.55 ns, bw 3598 GB/s at 1710). SCOPE, stated in the file: an UNSEEN
+SHAPE INSIDE THE 64-EXPERT, TOP-8 FAMILY on which every post-2026-09-28 term was chosen, not
+transfer across expert counts. `parent_inputs` names what of the target comes from the
+parent Qwen2-57B (routing, declaration and w2 grid exactly; w1's per-CTA unit; F, c and the
+CAL Z fit on CAL pages that include it; the dead-CTA term adopted to repair its miss;
+LATER_MISS written for its w2 SHARED). E1 (time from predicted bytes) over the 31 core
+cells the host rule keeps (T_M + 0.0676 >= 0.40 ms): rms <= 2% and no cell beyond 5%; the
+deep pages get their own printed reading. E2 the same from counted bytes
+(`cross_model_score.py`, pinned by sha256). E3 / E3s PRIVATE / SHARED q on 54 cells: rms <=
+3% and at most 10% beyond 5%. E4 the w2 unit (S 5, F 36% of u) on the 1005 DUR ruler: b in
+[0.98, 1.02] against the F = 0 rival's 0.637. E5 (M against M+Z) PRINTED only: M+Z is a
+near-uniform -9.6 us a call that a board offset reproduces. E6 (new, blind): counted
+SHARED minus NATIVE in-kernel w2 time on the byte pages against the dead-CTA term's 37.0 us (DEAD,
++-20%) and the parent's counted 21.5 us at the same 31,248 dead CTAs (FIXED, SEEN, +-20%).
+V5 does not gate the timed pages; a V8 that latches INVALID drops the page in CLEAN only;
+every byte-page V-gate, V10 included, gates CLEAN (E6 converts cycles at 1710 MHz).
+
+**Part B, the floor law** (`2026-10-05-rental3-floorlaw-gh200.{json,txt}`). Re-registered as
+CLOCK (ceil at 1005, flatter at 1710, the flattening in GAP = EL.avg - ACT.max), CEIL and
+FLUID; the design's X mechanism is dropped (SEEN theta(X / u) -0.17 to +0.13). B0: theta(X /
+u) in [-0.15, 0.15] on the new 1710 GEMMs; B1 theta_ACT.max in [0.70, 1.05] on 80% of lock
+captures; B2 theta_DUR at 1005 in [0.70, 1.05]; B3 same-board dtheta (granite-1B, tp4;
+qwen2-tp8 w2, tp8 and tp2 printed, the last two cross-board); B4 theta_DUR at 1710 against
+theta_ACT.max - 0.20 on 2 GEMMs, one of them blind (granite-1B or qwen2-tp8) (CLOCK), or >= 0.70 (CEIL); B6 the wall-time floor OUTSIDE ncu (graph
+replay, NATIVE, G = 64, tp4 at 1710) labels a CLOCK selection 'in wall time' or 'in the ncu
+replay only', and without it the claim is 'ncu-measured'; B7 part 4's tp8 w1 sets on the
+1005 DUR. A GEMM capture is fitted only with >= 5 cells and |corr(q, frac)| <= 0.95 (every
+new GEMM passes: the review's 'frac proportional to q' read q per occupancy wave), and is
+counted for a test only when se(theta) <= 0.15. The lock-in-force check of CLEAN: the null
+kernel within 3% AND, at 1710 only, the L2 clock in [1690, 1715] MHz over cells of 0.5 ms or more (printed, not gated, when
+fewer than 3 reach it: short cells read low) AND nvidia-smi before and after within 15 MHz of
+the lock. Fixes 2 to 5 of the build's independent check (B4's blind GEMM, the MID label, the
+L2 leg, V10) were decided on 2026-10-05, before any rental-3 page; each is marked in its file.
+
+**Part A, the per-GEMM constant's form** (`2026-10-05-rental3-zform-gh200.{json,txt}`). One
+series per capture FILE (the design pooled tp4's 1710 and 1005 cells; fixed). CAL fits:
+PROP zeta 0.336, AFF 2850 + 0.2081 u (r3_timing_model's GEMM_CONST, asserted equal), MIX
+3406 (f / 1710) + 0.200 u. A1 at the 1710 capture's measured clock, +-2 sigma_tot; A2's
+primary lever is base / 1710 (the L2 stays put), 1005 / 1710 printed ('SM and L2 moved
+together'). The MID window is empty on the primary lever at the registered noise and is
+read on the 1005 lever only (printed); a reading between the forms is INCONCLUSIVE, which
+the SEEN tp4 ratios (0.92 to 0.97, registered as priors) make likely. A curvature check
+(the n <= 8 and n >= 8 half-fits) can make a GEMM NOT SCORED; MIX3 is printed.
+
+**Part C, what lifts G = 1 survival** (`2026-10-05-rental3-stages-gh200.{json,txt}`). OCC,
+DEPTH, WIDTH, U-OCC, U-DEPTH and NULL on k32s8, k128s4, k128s3, k64s7 and the k64s3 control,
+each page keyed to its RECORDED w2 occupancy (k128s3 scored as such only at 3 CTAs per SM).
+The three pairs one page separates (OCC / U-OCC on k128s3, WIDTH / U-OCC on k64s7, U-OCC /
+U-DEPTH on k32s8) read NO SEPARATION when that page is unclassified; SELECTED needs 4 of the
+5 pages classified and every rival, NULL included, FALSIFIED; a lifted control falsifies
+all; a failed board check makes every verdict INCONCLUSIVE.
+
+**Part D, the flush ladder** (`2026-10-05-rental3-flush-gh200.{json,txt}`). tp8 n = 1..3 at
+E0, E240, E360, E480; E120 is not planned (2x the L2, under the 4x rule). OVERLAP (Phi =
+H_cell - I rises 33.8 us per 120 MiB step, +-12 us) against SAT (within +-10 us), read on
+E360 - E240 and E480 - E360 per qualifying host-bound cell, 2/3 of the cells to select.
+
+**Part R and RK, the noise models** (`2026-10-05-rental3-replicate-gh200.{json,txt}`). R:
+sigma_page from rep8 against the e2e G = 8 page on 9 cells, beside sigma_board 0.26% (SEEN,
+8x7B's 09-25 and 09-27 pages, 24 common cells, page IDs named); E1's UNRESOLVED label reads
+sqrt(sigma_page^2 + sigma_board^2). RK: the tp4 floorrep 1710 capture against the floor
+unit's 1710 capture gives K1's L and K4's D_imb a per-cell noise floor; K1 / K4 are
+RESOLVED on a pool when flipping every cell within 2 sigma of a threshold leaves the verdict;
+it is applied to rental 2's published pool (SEEN) and printed beside its verdicts, which
+stand.
+
+**Scorer ambiguities, decided before any page**: every one of the review's section-6 items
+(E-1 to E-10, B-1 to B-7, A-1 to A-7, C-1 to C-7, D-1 to D-5) is resolved in writing in its
+file's `ambiguities_resolved`.

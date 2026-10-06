@@ -74,6 +74,9 @@ shapes (w1: K 4096, N 28672, 448 N-tiles, S 64 k-steps; w2: K 14336, N 4096,
      ns MEASURED on the 2026-09-27 GH200's 8x7B counter pages (see DEAD). Fixed
      per arm on one model's pages, so no single-card fit sees it; at 64 experts
      x 9 copies it is 56 us a SHARED or PRIVATE call (2026-09-29).
+  9. Under `--gemm-const` only (rental 3, 2026-10-05; off by default): plus, per
+     GEMM, (g / C_CYC + b S'_g) k-steps of c, the per-GEMM constant's cycle form
+     Z = g + b u measured on the CAL floor captures (see GEMM_CONST).
 
 Five parameters are fitted per card by this tool, never pooled across cards:
 T0 (ms), c (ns per CTA k-step per SM), bw (GB/s), s_small and s_block (ms).
@@ -705,6 +708,52 @@ def cta_fixed(on: bool):
         CTA_FIXED = saved
 
 
+#: THE PER-GEMM CONSTANT (rental 3, 2026-10-05; docs/registered/2026-10-05-rental3-zform-gh200
+#: part A and -e2e-gh200 E5). The intercept Z of sm__cycles_active.avg on q over a floor
+#: capture's floor-bound cells (rental 2's estimator, floor_estimator.intercept) is a
+#: per-GEMM-call cost the CTA lifetime does not hold: an intercept in q, the slope free,
+#: so a per-call constant and not a per-CTA one. Its CYCLE form (AFF), Z = g + b u in SM
+#: cycles with u = S'_g c the floor-bound CTA's unit, is MEASURED, not fitted on timing:
+#: weighted least squares over the CAL models' G = 64 base and 1710-lock floor captures
+#: (8x7B 09-27 and 09-30, 8x22B, Qwen2-57B, OLMoE; 20 series, weight 1 / sigma_Z^2),
+#: computed and cross-checked by scripts/scoring/rental3/register.py. The call pays
+#: (g / C_CYC + b S'_g) k-steps of c per GEMM, beside dead_ms, outside smax. In cycles,
+#: so it moves with the clock through c. On one model at one clock it is collinear with
+#: T0: an 8x7B refit with it on gives the same residuals with T0 lower by 8x7B's own Z
+#: (the tests hold both); only cross-model and cross-clock predictions move. OFF by
+#: default (`--gemm-const` turns it on) until part A scores it. It is not the per-kernel
+#: excess X of the rental-3 design (outside SM-active time, in T0), and not the withdrawn
+#: "ncu duration offset".
+GEMM_CONST_CYCLES = 2850.0
+GEMM_CONST_PER_U = 0.2081
+#: cycles per CTA k-step on the counter pages, CTA_FIXED_KSTEPS' c (the CAL counters)
+C_CYC_PER_KSTEP = 344.1
+GEMM_CONST = False
+
+
+def gemm_const_ksteps(gemm: str) -> float:
+    """The per-GEMM constant in k-steps of c: g / C_CYC + b S'_g (S'_g = floor_ksteps)."""
+    return GEMM_CONST_CYCLES / C_CYC_PER_KSTEP + GEMM_CONST_PER_U * floor_ksteps(gemm)
+
+
+def gemm_const_ms(gemm: str, c_ns: float) -> float:
+    """The per-GEMM constant's time per call, in ms (0 unless --gemm-const)."""
+    if not GEMM_CONST:
+        return 0.0
+    return gemm_const_ksteps(gemm) * c_ns * 1e-6
+
+
+@contextlib.contextmanager
+def gemm_const(on: bool):
+    """Hold GEMM_CONST at `on` for a block (a caller pricing cells outside `build`)."""
+    global GEMM_CONST
+    saved, GEMM_CONST = GEMM_CONST, bool(on)
+    try:
+        yield
+    finally:
+        GEMM_CONST = saved
+
+
 def dead_ctas(declared: int, n: int, gemm: str) -> int:
     """CTAs of one GEMM's grid past the live rows: they exit after one load."""
     return (grid_rows(declared, n) - live_rows(n)) * GEOMETRY[gemm].npn
@@ -1195,6 +1244,7 @@ def call_ms(x, cell: Cell, ctx: Context, k_w: float, *, c_scale: float = 1.0,
         sigma = cell.sigma[g] * (w2_scale if g == "w2" else 1.0)
         t += gemm_ms(win, g, sigma, c_ns * c_scale, bw, ctx.sms, occ=ctx.occupancy[g])
         t += dead_ms(cell.declared, cell.n, g, c_ns * c_scale, k_w, ctx.occupancy[g])
+        t += gemm_const_ms(g, c_ns * c_scale)
     if cell.arm == "native":
         t += s_small if cell.path == SMALL_BATCH else s_block
     return t
@@ -1722,8 +1772,9 @@ def find_counters(args, inputs) -> dict | None:
 def build(args) -> dict:
     """Everything the page prints, as one dict (the --out JSON), under the
     knee exponent `--p-knee` (restored after, so one build never leaks it)."""
-    global P_KNEE, TAIL, DEAD, CTA_FIXED, CORES, CORES_PER_LEAD
+    global P_KNEE, TAIL, DEAD, CTA_FIXED, CORES, CORES_PER_LEAD, GEMM_CONST
     saved, P_KNEE = P_KNEE, float(getattr(args, "p_knee", P_KNEE))
+    saved_const, GEMM_CONST = GEMM_CONST, bool(getattr(args, "gemm_const", False))
     saved_tail, TAIL = TAIL, not getattr(args, "no_tail", False)
     saved_cores, CORES = CORES, not getattr(args, "no_cores", False)
     saved_lead, CORES_PER_LEAD = CORES_PER_LEAD, bool(getattr(args, "cores_per_lead", False))
@@ -1732,7 +1783,7 @@ def build(args) -> dict:
     saved_model = MODEL
     if not P_KNEE >= 1:
         P_KNEE, TAIL, DEAD, CTA_FIXED = saved, saved_tail, saved_dead, saved_fixed
-        CORES, CORES_PER_LEAD = saved_cores, saved_lead
+        CORES, CORES_PER_LEAD, GEMM_CONST = saved_cores, saved_lead, saved_const
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
                       "the hard max)")
     try:
@@ -1743,6 +1794,7 @@ def build(args) -> dict:
         CORES, CORES_PER_LEAD = saved_cores, saved_lead
         DEAD = saved_dead
         CTA_FIXED = saved_fixed
+        GEMM_CONST = saved_const
         if MODEL != saved_model:
             set_model(saved_model)
     return out
@@ -2209,6 +2261,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="price a floor-bound CTA at S_g k-steps of c (every pin before "
                         "2026-09-29); by default it costs S_g + CTA_FIXED_KSTEPS "
                         f"{CTA_FIXED_KSTEPS}, measured on the GH200's counter pages")
+    p.add_argument("--gemm-const", action="store_true",
+                   help="add the per-GEMM constant in its cycle form (GEMM_CONST: "
+                        f"{GEMM_CONST_CYCLES:g} + {GEMM_CONST_PER_U:g} u SM cycles a GEMM call, "
+                        "MEASURED on the CAL floor captures; rental 3, 2026-10-05); off by "
+                        "default until part A scores it")
     p.add_argument("--out", type=Path, default=None, help="write everything as JSON here")
     return p
 

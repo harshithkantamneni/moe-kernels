@@ -61,7 +61,8 @@ tool, args = m.group(1), argv[1:]
 SC = json.loads(Path(os.environ["FAKE_SCENARIO"]).read_text())
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(json.dumps({"exe": "python", "tool": tool, "argv": args,
-                        "dry": "--dry-run" in args}) + "\n")
+                        "dry": "--dry-run" in args,
+                        "results_dir": os.environ.get("MOE_RESULTS_DIR")}) + "\n")
 
 def val(flag, default=None):
     return args[args.index(flag) + 1] if flag in args else default
@@ -1451,7 +1452,7 @@ def test_the_rental1_plan_prints_every_unit_in_the_registered_order_and_fits_its
     ("- prelude\nolmoe-1b-7b bytes byte-groups=1\n", "label=..."),
     ("- prelude\nolmoe-1b-7b bytes label=a\nolmoe-1b-7b bytes label=a\n", "twice"),
     ("- prelude\nolmoe-1b-7b bytes label=a colour=red\n", "no key 'colour'"),
-    ("- prelude\nolmoe-1b-7b timed label=a\n", "a plan runs prelude, bytes, floor and launchfloor"),
+    ("- prelude\nolmoe-1b-7b eta label=a\n", "a plan runs prelude, bytes, floor, launchfloor, calibrate, timed and deep"),
     ("- prelude\nolmoe-1b-7b bytes label=a byte-groups=1;2\n", "comma-separated"),
     ("- prelude\nolmoe-1b-7b bytes label=a est=30 cap=10\n", "under the estimate"),
 ])
@@ -1591,7 +1592,8 @@ def test_no_default_plan_runs_the_launch_floor():
     assert re.findall(r"^  (\w+)\s+\d+\s+\d+  ", got.stdout, re.M) == ["prelude", "launchfloor"]
 
 
-@pytest.mark.parametrize("plan_name", ["rental1-2026-10.plan", "rental2-2026-10.plan"])
+@pytest.mark.parametrize("plan_name", ["rental1-2026-10.plan", "rental2-2026-10.plan",
+                                       "rental3-2026-10.plan"])
 def test_start_copies_a_tracked_plan_beside_the_driver_and_passes_it(tmp_path, plan_name):
     plan_src = REPO / "scripts" / "plans" / plan_name
     lap = Laptop(tmp_path)
@@ -1749,3 +1751,157 @@ olmoe-1b-7b bytes label=b byte-groups=2 est=1 cap=5
     assert re.findall(r"DROPPED unit (\d+)/", led) == ["5", "4", "3"], led
     assert "drop-group pair goes with unit 4" in led
     assert re.findall(r"^\S+ (\w+) START", led, re.M) == ["prelude", "bytes"]
+
+
+# --------------------------------------------------------------------------
+# rental 3 (2026-10-05): calibrate / timed / deep in a plan, timed-groups and
+# timed-treads, the G = 64 NATIVE wall-time check, its plan
+# --------------------------------------------------------------------------
+
+RENTAL3 = REPO / "scripts" / "plans" / "rental3-2026-10.plan"
+
+
+def _unit_dir(overrides: str) -> str:
+    """The page directory print_units ends a unit's line with."""
+    return overrides.split("; ")[-1].split(" [drop-group")[0].split(" ", 1)[-1] \
+        if "; " not in overrides else overrides.split("; ")[-1].split(" [drop-group")[0]
+
+
+def test_the_rental3_plan_parses_in_its_registered_order_and_fits_the_cap():
+    """Parse-only: every key accepted, E's floor first, then E's timed block, granite above
+    tp8 / tp2 at 1005, tp4's group x, C's group c with k64s3 ungrouped, rep8, the tail."""
+    got = _dry("--plan", str(RENTAL3))
+    assert got.returncode == exit_codes.REFUSED, got.stdout + got.stderr
+    assert "a PLAN of 24 units" in got.stdout
+    units = _units(got.stdout)
+    order = [(m, s, re.match(r"label=(\S+)", o).group(1) if o.startswith("label=") else None)
+             for _, m, s, _e, _c, o in units]
+    Q, T4 = "qwen2-57b-a14b-tp8", "mixtral-8x7b-tp4"
+    assert order == [
+        ("-", "prelude", None), (Q, "floor", "floor"), (Q, "floor", "floor1005"),
+        (Q, "calibrate", "e2e"), (Q, "timed", "e2e"), (Q, "bytes", "e2e"),
+        ("granite-3.0-1b-a400m", "floor", "floor"), ("granite-3.0-1b-a400m", "floor", "floor1005"),
+        (T4, "floor", "floor"), (T4, "floor", "floorrep"), (T4, "floor", "floor1005"),
+        (T4, "floor", "floor1410"), (T4, "launchfloor", "wall"),
+        ("mixtral-8x7b-tp8", "floor", "floor1005"), ("mixtral-8x7b-tp2", "floor", "floor1005"),
+        *[("mixtral-8x7b-tp2", "bytes", k) for k in ("l2base", "k32s8", "k128s4", "k128s3", "k64s7", "k64s3")],
+        (Q, "timed", "rep8"), (Q, "deep", "e2e"), ("mixtral-8x7b-tp8", "launchfloor", "r3")]
+    ests = [int(e) for _, _m, _s, e, *_r in units]
+    total = sum(ests)
+    assert f"{total} min of units, estimated" in got.stdout
+    assert total <= 410 - 60, total
+    groups = [re.search(r"\[drop-group (\w+)\]", u[5]) for u in units]
+    tags = [g.group(1) if g else None for g in groups]
+    assert tags[8:13] == ["x"] * 5 and tags[15:20] == ["c"] * 5 and tags[20] is None
+    assert tags.count("x") == 5 and tags.count("c") == 5
+    assert "probes the floor lock(s) 1005 1410 MHz" in got.stdout
+    # every page directory is its own, except e2e's timed and deep units, which share
+    # gaps-<card>-qwen2-57b-a14b-tp8-e2e by design (two session tags in one directory)
+    dirs = [_unit_dir(u[5]) for u in units if u[2] not in ("prelude", "calibrate")]
+    dup = {d for d in dirs if dirs.count(d) > 1}
+    assert dup == {"$RESULTS_ROOT/gaps-<card>-qwen2-57b-a14b-tp8-e2e"}, dup
+    assert dirs.count("$RESULTS_ROOT/gaps-<card>-qwen2-57b-a14b-tp8-e2e") == 2
+    assert "card-wide ruler" in units[3][5]
+    assert "timed R3 at 1710: G=8 (treads 6), no G=3 page" in got.stdout
+    import dram_counter_route as DCRM
+    for u in units:
+        m = re.search(r"floor-treads=([\d,]+)", u[5])
+        if m:
+            ft = [int(x) for x in m.group(1).split(",")]
+            assert ft == sorted(set(ft)) and ft[-1] <= DCRM.R3_FLOOR_MAX_TREADS
+
+
+@pytest.mark.parametrize("body, why", [
+    ("- prelude\nolmoe-1b-7b timed\n", "a timed unit names its run directory: label=..."),
+    ("- prelude\nolmoe-1b-7b calibrate\n", "a calibrate unit names its run directory"),
+    ("- prelude\nolmoe-1b-7b bytes label=a timed-groups=8\n", "timed-groups belongs to a timed unit, not bytes"),
+    ("- prelude\nolmoe-1b-7b timed label=a timed-treads=12\n", "timed-treads 12"),
+    ("- prelude\nolmoe-1b-7b launchfloor label=a lf-arms=foo\n", "lf-arms foo"),
+    ("- prelude\nolmoe-1b-7b floor label=a floor-groups=64 lf-group-m=64\n", "lf-group-m belongs to a launchfloor unit"),
+    ("- prelude\nolmoe-1b-7b r1lock label=a\n", "a plan runs prelude, bytes, floor, launchfloor"),
+])
+def test_rental3_keys_and_steps_are_refused_where_they_do_not_belong(tmp_path, body, why):
+    f = tmp_path / "p.plan"
+    f.write_text(body)
+    got = _dry("--plan", str(f))
+    assert got.returncode == exit_codes.REFUSED and why in got.stderr, got.stderr
+
+
+PLAN_TIMED = """- prelude
+olmoe-1b-7b calibrate label=a est=2 cap=10
+olmoe-1b-7b timed label=a est=5 cap=10
+qwen2-57b-a14b-tp8 timed label=rep8 timed-groups=8 timed-treads=6 est=5 cap=10
+"""
+
+
+def test_plan_timed_units_write_their_own_directories_on_one_ruler(tmp_path):
+    box, got = _plan_box(tmp_path, PLAN_TIMED)
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    led = box.ledger()
+    assert re.findall(r"^\S+ (\w+) START", led, re.M) == ["prelude", "calibrate", "timed", "timed"]
+    calls = [c for c in box.calls() if c.get("tool") == "locked_r3"]
+    dirs = [c["results_dir"] for c in calls]
+    assert dirs == [str(box.results / f"gaps-{CARD}-olmoe-1b-7b-a")] * 2 + \
+                  [str(box.results / f"gaps-{CARD}-qwen2-57b-a14b-tp8-rep8")]
+    cal = [c for c in box.calls() if c.get("tool") == "calibrate_hardware"]
+    assert cal[0]["results_dir"] == str(box.results / f"gaps-{CARD}-olmoe-1b-7b-a")
+    tags = [val(c["argv"], "--session-tag").rsplit("-", 1)[-1] for c in calls]
+    assert tags == ["p2", "p5", "p2b"]
+    rep = calls[2]["argv"]
+    assert groups_of(rep) == ["8"] and val(r3_side(rep), "--treads") == "6"
+    assert val(r3_side(rep), "--model") == "qwen2-57b-a14b-tp8"
+    assert "--declared-copies" in r3_side(rep)
+    # one card-wide ruler: calibrate stood, so neither timed unit takes the fallback numbers
+    for c in calls:
+        assert "--ridge" not in r3_side(c["argv"])
+    assert (box.session / "gh200-driver" / "ruler.env").read_text().startswith("RULER_KIND=measured")
+    assert "no G=3 page (timed-groups / timed-treads)" in led
+    assert not (box.session / "gh200-driver" / "ruler-qwen2-57b-a14b-tp8-rep8.env").exists()
+
+
+def test_rental3_target_passes_r3s_own_dry_run_offline(tmp_path):
+    """The offline proof that R3's dry run and the driver's check_dry accept
+    qwen2-57b-a14b-tp8 at every design rental 3 runs (timed e2e: G = 8, 32 at treads 6,
+    G = 3 at 8; rep8: G = 8 at 6; deep: G = 4, 2 at 9), with the 2026-09-25 ruler the
+    fallback hands R3 when calibrate fails."""
+    body = """- prelude
+qwen2-57b-a14b-tp8 calibrate label=e2e est=2 cap=30
+qwen2-57b-a14b-tp8 timed label=e2e est=38 cap=90
+qwen2-57b-a14b-tp8 timed label=rep8 timed-groups=8 timed-treads=6 est=14 cap=40
+qwen2-57b-a14b-tp8 deep label=e2e est=35 cap=75
+"""
+    box, got = _plan_box(tmp_path, body, {"calibrate": {"rc": 4, "results": []}},
+                         FAKE_REAL_DRY=1, timeout=900)
+    led = box.ledger()
+    assert "may not lock" not in led, led
+    calls = box.tool("locked_r3")
+    assert [val(a, "--session-tag").rsplit("-", 1)[-1] for a in calls] == ["p2", "p5", "p2b", "deep"]
+    assert [groups_of(a) for a in calls] == [["8", "32"], ["3"], ["8"], ["4", "2"]]
+    for a in calls:
+        r3 = r3_side(a)
+        assert val(r3, "--declared-copies") == "9" and "--ridge" in r3
+    logs = sorted((box.session / "logs").glob("r3-*-dry*.log"))
+    assert len(logs) == 6   # e2e G = 8, 32, 3; rep8 G = 8; deep G = 4, 2
+    for log in logs:
+        text = log.read_text()
+        assert "REFUSED:" not in text and "n_decl = 9 against" in text, log.name
+        assert "read: planted" not in text and "model       qwen2-57b-a14b-tp8" in text, log.name   # R3 own text, not the fake
+
+
+def test_the_wall_time_unit_runs_native_at_g64_timed_phase_only(tmp_path):
+    body = """- prelude
+mixtral-8x7b-tp4 launchfloor label=wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0 est=7 cap=25
+"""
+    box, got = _plan_box(tmp_path, body)
+    assert got.returncode == exit_codes.DONE, got.stdout + got.stderr
+    lf = box.tool("launch_floor")
+    assert [("--dry-run" in a) for a in lf] == [True, False]
+    assert [val(a, "--phase") for a in lf] == ["timed", "timed"]
+    import launch_floor as LFM
+    for a in lf:
+        assert val(a, "--arms") == "native" and val(a, "--group-m") == "64"
+        assert "--trace-treads" not in a
+        plan = LFM.make_plan(LFM.build_parser().parse_args(a))
+        assert plan["timed_cells"] == 11 * 2 * 3 and plan["traces"] == []
+    phases = (box.session / "logs" / "launchfloor-mixtral-8x7b-tp4.phases").read_text()
+    assert "trace phase not run (lf-trace=0)" in phases

@@ -45,7 +45,15 @@
 # rental 2's bytes keys num-stages, block-k, slot-pad-rows, partition-metrics=1 and
 # floor keys floor-lock-mhz, floor-base=0, floor-shape-metrics=1, floor-null-kernel=1,
 # each refused on a unit of another step; drop-group=NAME, units the deadline drops
-# together; `#` comments). The first unit is `- prelude`. Each unit's step runs with that
+# together; `#` comments). The first unit is `- prelude`.
+# RENTAL 3 (2026-10-05): a plan also runs calibrate, timed and deep, each with a label=.
+# Their R3 pages go under $RESULTS_ROOT/gaps-<card>-<model>-<label> (a timed and a deep unit
+# of one label share that directory by design, under different session tags); the ruler
+# stays ONE per card (calibrate's measured_<card>.yaml and ruler.env), so a timed unit with
+# no calibrate of its own (the rep8 replicate) times on the ruler the e2e calibrate set. New
+# keys: timed-groups=G[,G] and timed-treads=N (timed units: those groups at those treads,
+# and no G=3 page); lf-arms=<arms>, lf-group-m=N and lf-trace=0 (launchfloor units: the
+# G = 64 NATIVE wall-time check, timed phase only, outside ncu). Each unit's step runs with that
 # model and those overrides in the environment (MOE_DRIVER_*), its pages in a
 # directory of its own (`<date>-<card>-<model>-<label>-r3-counters`, or
 # `-launch-floor-<label>/<model>` for launchfloor), so no two page groups mix in one
@@ -153,6 +161,11 @@ BYTE_GROUPS="${MOE_DRIVER_BYTE_GROUPS:-}"
 #: A plan unit's own name for its pages' directory (see A PLAN OF SEVERAL MODELS).
 #: Empty: the session's one counters directory, as before.
 OUT_LABEL="${MOE_DRIVER_OUT_LABEL:-}"
+#: RENTAL 3 (2026-10-05): a timed unit's own groups and treads (timed-groups, timed-treads).
+#: Empty: G=8, 32 at treads 6 and G=3 at treads 8, as before. Either given: those groups
+#: (8 32 by default) at those treads (6 by default), and no G=3 page.
+TIMED_GROUPS="${MOE_DRIVER_TIMED_GROUPS:-}"
+TIMED_TREADS="${MOE_DRIVER_TIMED_TREADS:-}"
 #: RENTAL 2's knobs (2026-10-01; docs/registered/README.md, rental 2). A bytes
 #: unit's config values for the existing kernel and its partition metrics; a floor
 #: unit's lock (a lock other than 1710 is the one the prelude probed), whether its
@@ -173,6 +186,10 @@ PROBE_LOCKS="${MOE_DRIVER_PROBE_LOCKS:-}"
 LF_TREADS="${MOE_DRIVER_LF_TREADS:-1,2,3,4,5,6,7,8,9}"
 LF_MODES="${MOE_DRIVER_LF_MODES:-E240,E0,E480,GR}"
 LF_TRACE="${MOE_DRIVER_LF_TRACE:-1,2}"
+#: RENTAL 3 (2026-10-05): the launch floor's arms and G (lf-arms, lf-group-m); lf-trace=0
+#: runs no trace phase (the G = 64 NATIVE wall-time check times only).
+LF_ARMS="${MOE_DRIVER_LF_ARMS:-native,shared,private}"
+LF_GROUP_M="${MOE_DRIVER_LF_GROUP_M:-4}"
 R3_BASE=(--model "$MODEL" --block-m 32 --repeats 9 --duty 0.25 --seed 0)
 #: R1 in lock mode (section 3b); each state a held SM clock.
 R1_BASE=(--model "$MODEL" --dtype bf16 --treads 8 --repeats 13 --burst-ms 40
@@ -264,13 +281,15 @@ step_what() {
     bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control$(knob_text)"
                else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control$(knob_text)"; fi ;;
     calibrate) echo "3c.3 calibrate (the ruler), no lock in force" ;;
-    timed)     echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5" ;;
+    timed)     if [[ -n "$TIMED_GROUPS$TIMED_TREADS" ]]; then echo "3c.3 timed R3 at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ',') (treads $(timed_treads)), no G=3 page"
+               else echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5"; fi ;;
     eta)       echo "3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1" ;;
     floor)     if [[ -n "$FLOOR_GROUPS" ]]; then echo "3c.5 registered floor design: NATIVE at G = ${FLOOR_GROUPS//,/ }, treads ${FLOOR_TREADS:-default}, $([[ "$FLOOR_BASE" == 0 ]] && echo "no base-clock capture" || echo "base clock") and the ${FLOOR_LOCK_MHZ:-$LOCK_TIMED} lock$(floor_knob_text)"
                else echo "3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at ${LOCK_TIMED}: P6"; fi ;;
     deep)      echo "3c.6 timed R3 at ${LOCK_TIMED} to tread 9, G=4 then G=2: P3, P4" ;;
     r1lock)    echo "3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent" ;;
-    launchfloor) echo "launch floor at the ${LOCK_TIMED} lock: treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE; a timed process (no profiler) then a trace process" ;;
+    launchfloor) if [[ "$LF_TRACE" == 0 ]]; then echo "launch floor at the ${LOCK_TIMED} lock: arms $LF_ARMS, G=$LF_GROUP_M, treads $LF_TREADS, modes $LF_MODES; a timed process (no profiler), no trace phase"
+                 else echo "launch floor at the ${LOCK_TIMED} lock: arms $LF_ARMS, G=$LF_GROUP_M, treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE; a timed process (no profiler) then a trace process"; fi ;;
   esac
 }
 #: Rental 2's bytes knobs as dram_counter_route.py's flags, and as text.
@@ -297,6 +316,12 @@ floor_knob_text() {
   [[ -n "$t" ]] && echo "; ${t% }"
   return 0
 }
+#: A timed unit's groups and treads (rental 3's timed-groups / timed-treads).
+timed_groups() { if [[ -n "$TIMED_GROUPS" ]]; then echo "${TIMED_GROUPS//,/ }"; else echo "8 32"; fi; }
+timed_treads() { echo "${TIMED_TREADS:-6}"; }
+#: R3's results directory for a timed step: the session's one directory, or a plan
+#: unit's own (rental 3, 2026-10-05: gaps-<card>-<model>-<label>).
+results_dir() { echo "$RESULTS_ROOT/gaps-$MOE_CARD${OUT_LABEL:+-$MODEL-$OUT_LABEL}"; }
 #: What the deadline drops, in the draft's order, with the minutes each saves.
 DROPS=(r1_g1 r1_g4 eta_1605 bytes_tail)
 drop_step() { case "$1" in r1_g1|r1_g4) echo r1lock ;; eta_1605) echo eta ;; bytes_tail) echo bytes ;; esac; }
@@ -639,7 +664,7 @@ step_bytes() {
 # 3c.3 calibrate, with no lock in force
 # ==========================================================================
 step_calibrate() {
-  export MOE_RESULTS_DIR="$RESULTS_ROOT/gaps-$MOE_CARD"
+  export MOE_RESULTS_DIR="$(results_dir)"
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "calibrate REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   moe_counter ncu --clock-control reset; sudo -n nvidia-smi -rgc
@@ -687,20 +712,24 @@ r3_dry() {   # LOG PLANNED TAG G ARGS...
 }
 
 step_timed() {
-  export MOE_RESULTS_DIR="$RESULTS_ROOT/gaps-$MOE_CARD"
+  export MOE_RESULTS_DIR="$(results_dir)"
   load_ruler
-  local R6=("${R3_BASE[@]}" --treads 6 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
+  # rental 3: a unit's timed-groups / timed-treads replace G=8, 32 at treads 6 and drop G=3
+  local TT; TT="$(timed_treads)"
+  local own=0; [[ -n "$TIMED_GROUPS$TIMED_TREADS" ]] && own=1
+  local R6=("${R3_BASE[@]}" --treads "$TT" ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
   local R8=("${R3_BASE[@]}" --treads 8 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
-  local T2 T5; T2="$(fresh_tag "$B-p2")"; T5="$(fresh_tag "$B-p5")"
+  local T2 T5=""; T2="$(fresh_tag "$B-p2")"; (( own )) || T5="$(fresh_tag "$B-p5")"
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "timed REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   moe_counter ncu --clock-control reset; sudo -n nvidia-smi -rgc
+  (( own )) && ledger "timed: G = $(timed_groups) at treads $TT, no G=3 page (timed-groups / timed-treads)"
   local p2=() G
-  for G in 8 32; do
-    r3_dry "$S/logs/r3-g$G-t6-dry.log" 6 "$T2-lock$LOCK_TIMED" "$G" "${R6[@]}" && p2+=("$G")
+  for G in $(timed_groups); do
+    r3_dry "$S/logs/r3-g$G-t$TT-dry${OUT_LABEL:+-$OUT_LABEL}.log" "$TT" "$T2-lock$LOCK_TIMED" "$G" "${R6[@]}" && p2+=("$G")
   done
   local p5=0
-  r3_dry "$S/logs/r3-g3-t8-dry.log" 8 "$T5-lock$LOCK_TIMED" 3 "${R8[@]}" && p5=1
+  (( own )) || { r3_dry "$S/logs/r3-g3-t8-dry${OUT_LABEL:+-$OUT_LABEL}.log" 8 "$T5-lock$LOCK_TIMED" 3 "${R8[@]}" && p5=1; }
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
     trap 'exit 130' INT TERM HUP
@@ -714,7 +743,9 @@ step_timed() {
     else
       echo "P2 skipped: no design passed its dry run" >> "$D/timed-results"; rc2=3
     fi
-    if (( p5 )); then
+    if (( own )); then
+      echo "P5 not run: this unit names its own groups (timed-groups / timed-treads)" >> "$D/timed-results"
+    elif (( p5 )); then
       python3 scripts/locked_r3.py --session-tag "$T5" --groups 3 --locks "$LOCK_TIMED" $(lr3_cap) -- "${R8[@]}" 2>&1 \
         | tee -i "$S/logs/locked_r3-$T5.log"
       rc5=${PIPESTATUS[0]}
@@ -728,7 +759,7 @@ step_timed() {
   nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.limit --format=csv \
     | tee "$S/clocks-after-timed.txt"
   local l; while IFS= read -r l; do ledger "timed: $l"; done < <(
-    cat "$D/timed-results" 2>/dev/null; ledger_lines "$S/locked-r3/$T2/status" "$S/locked-r3/$T5/status")
+    cat "$D/timed-results" 2>/dev/null; ledger_lines "$S/locked-r3/$T2/status" ${T5:+"$S/locked-r3/$T5/status"})
   : > "$D/timed-results"
   return "$rc"
 }
@@ -898,7 +929,7 @@ step_floor() {
 # 3c.6 timed R3 to tread 9 (P3, P4)
 # ==========================================================================
 step_deep() {
-  export MOE_RESULTS_DIR="$RESULTS_ROOT/gaps-$MOE_CARD"
+  export MOE_RESULTS_DIR="$(results_dir)"
   load_ruler
   local R9=("${R3_BASE[@]}" --treads 9 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
   local T; T="$(fresh_tag "$B-deep")"
@@ -1021,13 +1052,15 @@ step_launchfloor() {
   # profiler guarded off and measures the host first, then the trace phase. Rental 1
   # ran both in one process and its traces' profiler state confounded the timing.
   local LF=(--model "$MODEL" --treads "$LF_TREADS" --modes "$LF_MODES"
-            --arms native,shared,private --group-m 4 --duty 0.25 --repeats 3 --seed 0 --out "$R")
+            --arms "$LF_ARMS" --group-m "$LF_GROUP_M" --duty 0.25 --repeats 3 --seed 0 --out "$R")
+  # rental 3 (2026-10-05): lf-trace=0 runs the timed phase alone (the wall-time check)
+  local phases=(timed); [[ "$LF_TRACE" == 0 ]] || phases+=(trace)
   local TIMED=("${LF[@]}" --phase timed) TRACE=("${LF[@]}" --phase trace --trace-treads "$LF_TRACE")
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "launchfloor REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   # each phase's own dry run first: 2 is a plan printed, anything else is a refusal
   local ph drc
-  for ph in timed trace; do
+  for ph in "${phases[@]}"; do
     if [[ "$ph" == timed ]]; then "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1
     else "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1; fi
     drc=$?
@@ -1048,9 +1081,14 @@ step_launchfloor() {
     rt=${PIPESTATUS[0]}
     echo "timed phase exit $rt" >> "$S/logs/launchfloor-$MODEL.phases"
     (( rt >= 4 )) && exit "$rt"
-    "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-trace.log"
-    rr=${PIPESTATUS[0]}
-    echo "trace phase exit $rr" >> "$S/logs/launchfloor-$MODEL.phases"
+    rr=0
+    if [[ "$LF_TRACE" == 0 ]]; then
+      echo "trace phase not run (lf-trace=0)" >> "$S/logs/launchfloor-$MODEL.phases"
+    else
+      "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-trace.log"
+      rr=${PIPESTATUS[0]}
+      echo "trace phase exit $rr" >> "$S/logs/launchfloor-$MODEL.phases"
+    fi
     exit $(( rt > rr ? rt : rr )) )
   local rc=$?
   sleep 5
@@ -1168,7 +1206,8 @@ print_plan() {
   echo "            --census \$S/census.json --page-clock none --page-lock-mhz $LOCK_TIMED --out \$R/lock$LOCK_TIMED/r3c-gG.json"
   echo "            for G in ${BYTE_GS[*]}, under nvidia-smi -lgc $LOCK_TIMED,$LOCK_TIMED; then G=2 at ncu's base clock"
   echo "  cal     \$PY_BASE scripts/calibrate_hardware.py --publish --results-root \$RESULTS_ROOT"
-  echo "  timed   python3 scripts/locked_r3.py --session-tag \$B-p2 --groups 8 32 --locks $LOCK_TIMED -- ${R3_BASE[*]} --treads 6"
+  echo "  timed   python3 scripts/locked_r3.py --session-tag \$B-p2 --groups $(timed_groups) --locks $LOCK_TIMED -- ${R3_BASE[*]} --treads $(timed_treads)"
+  [[ -n "$TIMED_GROUPS$TIMED_TREADS" ]] && echo "          no G=3 page (timed-groups / timed-treads)" || \
   echo "          python3 scripts/locked_r3.py --session-tag \$B-p5 --groups 3 --locks $LOCK_TIMED -- ${R3_BASE[*]} --treads 8"
   echo "  eta     python3 scripts/locked_r3.py --session-tag \$B-eta<F> --locks <F> --groups <G> -- ${R3_BASE[*]} --treads 6"
   echo "            for 1410:4 2, 1500:4, 1605:4 (1590 if 1605 is not supported)"
@@ -1220,17 +1259,21 @@ load_plan() {   # FILE
         drop-group) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "drop-group $v"; return 1; }; group="$v" ;;
         est|cap) [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: minutes"; return 1; }
                  [[ "$k" == est ]] && est="$v" || cap="$v" ;;
-        byte-groups|floor-groups|floor-treads|lf-treads|lf-trace)
+        byte-groups|floor-groups|floor-treads|lf-treads|lf-trace|timed-groups)
           [[ "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { plan_refuse "$ln" "$k $v: a comma-separated list of integers"; return 1; }
           opts+=" $k=$v" ;;
         lf-modes) [[ "$v" =~ ^[A-Z0-9]+(,[A-Z0-9]+)*$ ]] || { plan_refuse "$ln" "lf-modes $v"; return 1; }; opts+=" $k=$v" ;;
-        num-stages|block-k|slot-pad-rows|floor-lock-mhz)
+        num-stages|block-k|slot-pad-rows|floor-lock-mhz|lf-group-m)
           [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: a whole number"; return 1; }
+          opts+=" $k=$v" ;;
+        timed-treads) [[ "$v" =~ ^[1-9]$ ]] || { plan_refuse "$ln" "timed-treads $v: a tread 1..9 (R3's counter ladder)"; return 1; }
+          opts+=" $k=$v" ;;
+        lf-arms) [[ "$v" =~ ^(native|shared|private)(,(native|shared|private))*$ ]] || { plan_refuse "$ln" "lf-arms $v: arms from native,shared,private"; return 1; }
           opts+=" $k=$v" ;;
         partition-metrics|floor-base|floor-shape-metrics|floor-null-kernel)
           [[ "$v" =~ ^[01]$ ]] || { plan_refuse "$ln" "$k $v: 0 or 1"; return 1; }
           opts+=" $k=$v" ;;
-        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel)"; return 1 ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m)"; return 1 ;;
       esac
     done
     # rental 2's keys belong to one step each; a floor key needs a registered design
@@ -1239,6 +1282,10 @@ load_plan() {   # FILE
       case "$k" in
         num-stages|block-k|slot-pad-rows|partition-metrics)
           [[ "$step" == bytes ]] || { plan_refuse "$ln" "$k belongs to a bytes unit, not $step"; return 1; } ;;
+        timed-groups|timed-treads)
+          [[ "$step" == timed ]] || { plan_refuse "$ln" "$k belongs to a timed unit, not $step"; return 1; } ;;
+        lf-arms|lf-group-m)
+          [[ "$step" == launchfloor ]] || { plan_refuse "$ln" "$k belongs to a launchfloor unit, not $step"; return 1; } ;;
         floor-lock-mhz|floor-base|floor-shape-metrics|floor-null-kernel)
           [[ "$step" == floor ]] || { plan_refuse "$ln" "$k belongs to a floor unit, not $step"; return 1; }
           [[ " $opts " == *" floor-groups="* ]] || { plan_refuse "$ln" "$k needs a registered floor design (floor-groups=...)"; return 1; }
@@ -1251,7 +1298,8 @@ load_plan() {   # FILE
     case "$step" in
       prelude|launchfloor) ;;
       bytes|floor) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its pages' directory: label=..."; return 1; } ;;
-      *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor and launchfloor"; return 1 ;;
+      calibrate|timed|deep) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its run directory: label=..."; return 1; } ;;
+      *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor, launchfloor, calibrate, timed and deep"; return 1 ;;
     esac
     key="$model|$label|$step"
     [[ "$seen" == *"<$key>"* ]] && { plan_refuse "$ln" "$model $step label=$label twice: two units would write one directory"; return 1; }
@@ -1274,6 +1322,7 @@ apply_unit() {   # INDEX
   MODEL="${U_MODEL[$i]}"; [[ "$MODEL" == - ]] && MODEL="$DEFAULT_MODEL"
   FLOOR_GROUPS=""; FLOOR_TREADS=""; BYTE_GROUPS=""; OUT_LABEL="${U_LABEL[$i]}"
   LF_TREADS=1,2,3,4,5,6,7,8,9; LF_MODES=E240,E0,E480,GR; LF_TRACE=1,2
+  LF_ARMS=native,shared,private; LF_GROUP_M=4; TIMED_GROUPS=""; TIMED_TREADS=""
   NUM_STAGES=""; BLOCK_K=""; SLOT_PAD_ROWS=""; PARTITION_METRICS=""
   FLOOR_LOCK_MHZ=""; FLOOR_BASE=1; FLOOR_SHAPE=""; FLOOR_NULL=""
   for kv in ${U_OPTS[$i]}; do
@@ -1281,6 +1330,8 @@ apply_unit() {   # INDEX
     case "$k" in
       byte-groups) BYTE_GROUPS="$v" ;; floor-groups) FLOOR_GROUPS="$v" ;; floor-treads) FLOOR_TREADS="$v" ;;
       lf-treads) LF_TREADS="$v" ;; lf-modes) LF_MODES="$v" ;; lf-trace) LF_TRACE="$v" ;;
+      lf-arms) LF_ARMS="$v" ;; lf-group-m) LF_GROUP_M="$v" ;;
+      timed-groups) TIMED_GROUPS="$v" ;; timed-treads) TIMED_TREADS="$v" ;;
       num-stages) NUM_STAGES="$v" ;; block-k) BLOCK_K="$v" ;; slot-pad-rows) SLOT_PAD_ROWS="$v" ;;
       partition-metrics) [[ "$v" == 1 ]] && PARTITION_METRICS=1 ;;
       floor-lock-mhz) FLOOR_LOCK_MHZ="$v" ;; floor-base) FLOOR_BASE="$v" ;;
@@ -1294,6 +1345,8 @@ apply_unit() {   # INDEX
   export MOE_DRIVER_MODEL="$MODEL" MOE_DRIVER_FLOOR_GROUPS="$FLOOR_GROUPS" MOE_DRIVER_FLOOR_TREADS="$FLOOR_TREADS"
   export MOE_DRIVER_BYTE_GROUPS="$BYTE_GROUPS" MOE_DRIVER_OUT_LABEL="$OUT_LABEL"
   export MOE_DRIVER_LF_TREADS="$LF_TREADS" MOE_DRIVER_LF_MODES="$LF_MODES" MOE_DRIVER_LF_TRACE="$LF_TRACE"
+  export MOE_DRIVER_LF_ARMS="$LF_ARMS" MOE_DRIVER_LF_GROUP_M="$LF_GROUP_M"
+  export MOE_DRIVER_TIMED_GROUPS="$TIMED_GROUPS" MOE_DRIVER_TIMED_TREADS="$TIMED_TREADS"
 }
 unit_text() { local i="$1"; echo "unit $(( i + 1 ))/${#U_STEP[@]} ${U_MODEL[$i]}${U_LABEL[$i]:+ ${U_LABEL[$i]}}${U_OPTS[$i]:+ ${U_OPTS[$i]}}"; }
 unit_dropped() { [[ -f "$D/plan-drops" ]] && grep -qx -- "$1" "$D/plan-drops"; }
@@ -1332,6 +1385,8 @@ unit_dir() {
   case "${U_STEP[$i]}" in
     bytes|floor) echo "\$RESULTS_ROOT/<date>-<card>-$m-${U_LABEL[$i]}-r3-counters" ;;
     launchfloor) echo "\$RESULTS_ROOT/<date>-<card>-launch-floor${U_LABEL[$i]:+-${U_LABEL[$i]}}/$m" ;;
+    calibrate) echo "card-wide ruler moe/bench/hardware/measured_<card>.yaml, \$D/ruler.env" ;;
+    timed|deep) echo "\$RESULTS_ROOT/gaps-<card>-$m-${U_LABEL[$i]}" ;;
     *) echo "-" ;;
   esac
 }

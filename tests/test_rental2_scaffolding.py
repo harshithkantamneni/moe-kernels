@@ -38,7 +38,10 @@ def test_pinned_config_takes_block_k_and_keeps_its_default():
     assert PW.block_k_kw(128) == {"block_k": 128}
 
 
-@pytest.mark.parametrize("bk, st", [(64, 4), (32, 4), (128, 2), (64, 8), (64, 6)])
+#: rental 2's knob pages, then rental 3's part C pages (2026-10-05, scripts/plans/rental3-2026-10.plan:
+#: k32s8, k128s4, k128s3, k64s7, k64s3)
+@pytest.mark.parametrize("bk, st", [(64, 4), (32, 4), (128, 2), (64, 8), (64, 6),
+                                    (32, 8), (128, 4), (128, 3), (64, 7), (64, 3)])
 def test_every_config_the_plan_asks_is_accepted(bk, st):
     assert PW.config_refusal(TP2, block_m=32, block_n=64, block_k=bk, num_stages=st) == ""
 

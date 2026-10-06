@@ -22,6 +22,10 @@ THE MODES, per (arm, n, repeat), all at the page's duty and lock:
   E0    no flush. The lever's other side: a host-paced cell moves by about
         +(F - h_flush), a GPU-bound one by its warm-L2 speed-up only.
   E480  a 480 MiB flush: F roughly doubles; host-paced cells move by -dF.
+  E120, E360  (rental 3, 2026-10-05) 120 and 360 MiB flushes, the flush-size ladder of
+        docs/registered rental3-flush. E360 is 6x the GH200's 60 MiB L2. E120 is 2x, under
+        `timing.flush_mb_for_device`'s 4x rule ("2.1x is tight"): it evicts incompletely,
+        so the kernel after it runs partly warm; it is printed only, never scored.
   GR    one captured `fused_experts` call replayed as a CUDA graph (capture
         inside `override_config` after three side-stream warmups, as
         `moe.bench.driver.time_kernel_graph` does), timed by the same duty
@@ -77,6 +81,16 @@ the profiler's state. `--phase` now splits the run:
   both    rental 1's single process, kept so its record reads as it ran.
 The driver runs `timed` and then `trace` as two processes under one lock.
 
+THE G = 64 NATIVE WALL-TIME CHECK (rental 3, 2026-10-05; part B of docs/registered
+rental3-floorlaw). The floor law is measured under ncu; the same cells timed outside
+ncu by CUDA events tell an instrument effect from a physical one. `--arms native
+--group-m 64` with treads past R3's counter ladder, up to
+`private_weight_reference.NATIVE_COUNTER_MAX_TREADS`: NATIVE reads copy 0 of each
+expert at every tread (`w1[::copies]`), so the copies declared bound the SHARED and
+PRIVATE treads and not NATIVE's, as `validate_counter_plan` rules for the floor
+capture. Such a plan builds NATIVE's routing alone (`arm_inputs(arms=...)`). The driver
+runs it with `lf-trace=0`: the timed phase only.
+
 EXIT CODES (moe/bench/exit_codes.py): 0 every cell and trace ran; 2 refused
 (bad arguments, no CUDA or no vLLM; and --dry-run, which prints the plan and
 its minutes); 3 some cells, modes, probes or traces failed and the files are
@@ -107,9 +121,10 @@ from moe.bench import exit_codes  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 SWEEP = PW.SWEEP
-MODES = ("E240", "E0", "E480", "GR")
-#: flush MiB per eager mode; GR replays under E240's flush (outside the graph)
-FLUSH_MB = {"E240": None, "E0": 0, "E480": 480, "GR": None}
+MODES = ("E240", "E0", "E480", "GR", "E120", "E360")
+#: flush MiB per eager mode; GR replays under E240's flush (outside the graph); None is
+#: `timing.flush_mb_for_device()` (240 MiB on a GH200). E120 and E360: rental 3's ladder
+FLUSH_MB = {"E240": None, "E0": 0, "E480": 480, "GR": None, "E120": 120, "E360": 360}
 BLOCK_M = 32
 #: R3's defaults for a timed cell (`private_weight_reference` --warmup,
 #: --cell-budget-ms, --trials), every GH200 page's
@@ -210,16 +225,19 @@ def make_plan(args) -> dict:
     if args.repeats < 1 or args.group_m < 1:
         raise Refused("--repeats and --group-m must be at least 1")
     try:
-        ladder = PW.counter_ladder(cfg, BLOCK_M)
+        ladder, copies_bound = plan_ladder(cfg, args.arms)
         copies, why = PW.counter_declaration(cfg, BLOCK_M)
     except PW.PrivateWeightRefusal as exc:
         raise Refused(f"{args.model}: R3 refuses its ladder: {exc}") from None
     off = [n for n in args.treads if n not in ladder]
+    if off and not copies_bound:
+        raise Refused(f"treads {off} are not on NATIVE's ladder {ladder} for {args.model} "
+                      f"(max {PW.NATIVE_COUNTER_MAX_TREADS})")
     if off:
         raise Refused(f"treads {off} are not on R3's counter ladder {ladder} for "
                       f"{args.model} (max {PW.COUNTER_MAX_TREADS}: the 9-copy "
                       "declaration every published page and C_reg use)")
-    if max(args.treads) > copies:
+    if copies_bound and max(args.treads) > copies:
         raise Refused(f"tread {max(args.treads)} is past the {copies} copies declared")
     bad_tr = [n for n in args.trace_treads if n not in args.treads]
     if bad_tr:
@@ -259,6 +277,28 @@ def make_plan(args) -> dict:
             "warmup_ms": WARMUP_MS, "cell_budget_ms": CELL_BUDGET_MS, "trials": TRIALS}
 
 
+def plan_ladder(cfg, arms) -> tuple[list[int], bool]:
+    """The treads a plan may time and whether the copies declared bound them: R3's
+    counter ladder for any plan with SHARED or PRIVATE, NATIVE's own ladder to
+    `NATIVE_COUNTER_MAX_TREADS` for a NATIVE-only plan (rental 3's wall-time check)."""
+    if PW.native_only(arms):
+        return PW.ladder_treads(cfg, BLOCK_M, PW.NATIVE_COUNTER_MAX_TREADS), False
+    return PW.counter_ladder(cfg, BLOCK_M), True
+
+
+def make_flushers(T) -> dict:
+    """One flusher per mode in MODES, from FLUSH_MB (`T` is moe.bench.timing, or a fake):
+    None is the device's flush (`T.flush_mb_for_device()`), one object shared by every
+    such mode (E240 and GR); 0 is no flush; else `T.L2Flusher(mb)`. Every mode the run
+    loop indexes is here, so a mode added to MODES cannot reach the GPU without one."""
+    shared = T.L2Flusher(T.flush_mb_for_device())
+    out = {}
+    for mode in MODES:
+        mb = FLUSH_MB[mode]
+        out[mode] = shared if mb is None else (None if mb == 0 else T.L2Flusher(mb))
+    return out
+
+
 def plan_lines(plan: dict) -> list[str]:
     return [
         f"LAUNCH FLOOR PLAN {plan['model']}: treads {plan['treads']}, arms {plan['arms']}, "
@@ -273,6 +313,7 @@ def plan_lines(plan: dict) -> list[str]:
         f"~{SEC_PER_PROBE:.0f} s, {SETUP_MIN:.0f} min weights and compile",
         f"  estimated {plan['minutes']:.1f} min",
         "  E240 = R3 as published (240 MiB flush); E0 no flush; E480 480 MiB flush; "
+        "E120 / E360 120 / 360 MiB flushes (E120 is 2x the L2: printed only); "
         "GR CUDA-graph replay under E240's flush",
     ]
 
@@ -712,9 +753,7 @@ def run(args, plan: dict) -> int:
     copies = plan["copies_declared"]
     declared = plan["declared_by_arm"]
     conf = plan["pinned"]
-    flush240 = T.L2Flusher(T.flush_mb_for_device())
-    flushers = {"E240": flush240, "GR": flush240, "E0": None,
-                "E480": T.L2Flusher(480)}
+    flushers = make_flushers(T)
     w1, w2, delta = PW.build_private_weights(cfg, "bf16", copies, args.seed)
     nw1, nw2 = w1[::copies], w2[::copies]
     manifest = {"tool": "scripts/launch_floor.py", "plan": plan, "phase": phase,
@@ -743,7 +782,7 @@ def run(args, plan: dict) -> int:
 
     def calls_for(n):
         tokens, x, ids_by_arm, weights, kw = PW.arm_inputs(
-            cfg, n, BLOCK_M, copies, args.seed, "bf16", w1.dtype)
+            cfg, n, BLOCK_M, copies, args.seed, "bf16", w1.dtype, arms=tuple(args.arms))
         return tokens, {arm: PW.arm_call(fused_experts, arm, w1, w2, nw1, nw2, declared, x,
                                          ids_by_arm, weights, kw) for arm in args.arms}
 

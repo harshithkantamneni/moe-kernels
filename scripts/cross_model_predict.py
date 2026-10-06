@@ -45,6 +45,13 @@ says so), under the file's label, beside the registered view's q (R0), which
 is unchanged. The pooled law is fitted on PRIVATE alone, so no SHARED or NATIVE
 number comes from it. `--bytes-only` registers bytes without the timing model
 (no --timed): `predict_bytes`. `--groups` replaces the plan's G list (e.g. 128).
+
+THE PER-GEMM CONSTANT BESIDE IT (rental 3, 2026-10-05). `--gemm-const` adds, per
+cell, `ms_gemm_const`: the time under r3_timing_model's `--gemm-const` (the cycle
+form of the per-GEMM constant, MEASURED on the CAL floor captures), with the source
+fit REFIT with the term on (`timing_params_gemm_const`: T0 falls by the source's own
+constant), beside the default `ms`, which is unchanged. That is the registered
+rival M+Z of docs/registered/2026-10-05-rental3-e2e-gh200 (E5, printed).
 """
 from __future__ import annotations
 
@@ -188,7 +195,7 @@ def predict_bytes(counters: Path, target: str, byte_params=(), groups=PLAN_G) ->
 
 
 def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool = False,
-            byte_params=None) -> dict:
+            byte_params=None, gemm_const: bool = False) -> dict:
     card = W.load_card(counters)
     src_cfg, tgt_cfg = MODEL_CONFIGS[card.geom.model], MODEL_CONFIGS[target]
     same = (src_cfg.num_experts, src_cfg.top_k) == (tgt_cfg.num_experts, tgt_cfg.top_k)
@@ -208,6 +215,12 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
     R = TM.build(TM.build_parser().parse_args([*map(str, timed), "--counters", str(counters),
                                                *(["--no-cta-fixed"] if no_cta_fixed else [])]))
     fit, ctx = R["main"], R["ctx"]
+    fit_z = None
+    if gemm_const:
+        Rz = TM.build(TM.build_parser().parse_args(
+            [*map(str, timed), "--counters", str(counters), "--gemm-const",
+             *(["--no-cta-fixed"] if no_cta_fixed else [])]))
+        fit_z = Rz["main"]
     src_cells = R["cells"]
     path = {c.n: c.path for c in src_cells if c.arm == "native"}
     declared = {c.arm: c.declared for c in src_cells}
@@ -241,6 +254,10 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
                                        reads=reads, sigma=sigma, fit=False)
                         with TM.cta_fixed(not no_cta_fixed):
                             row["ms"] = TM.call_ms(fit.x, cell, ctx, fit.k_w)
+                            if fit_z is not None:
+                                with TM.gemm_const(True):
+                                    row["ms_gemm_const"] = TM.call_ms(fit_z.x, cell, ctx,
+                                                                      fit_z.k_w)
                     out_cells.append(row)
     finally:
         TM.set_model(old)
@@ -254,6 +271,9 @@ def predict(timed: list[Path], counters: Path, target: str, no_cta_fixed: bool =
                 "source_experts": src_cfg.num_experts},
             "clock_mhz": ctx.clock_mhz,
             "timing_params": fit.params, "timing_pages": [p.run for p in R["use"]],
+            **({"gemm_const": {"cycles": TM.GEMM_CONST_CYCLES, "per_u": TM.GEMM_CONST_PER_U,
+                               "c_cycles_per_kstep": TM.C_CYC_PER_KSTEP},
+                "timing_params_gemm_const": fit_z.params} if fit_z is not None else {}),
             "counter_pages": {str(G): str(p) for G, p in sorted(card.paths.items())},
             "byte_params": {v: p.as_json() for v, p in prm.items()},
             **({"pooled": {name: {"label": doc.get("label"), "form": doc.get("form"),
@@ -293,6 +313,10 @@ def summary_lines(d: dict) -> list[str]:
             q2 = " ".join("--" if r["q"]["w2"] is None else f"{r['q']['w2']:.3f}" for r in row)
             flag = " OOD" if any(r["status"]["w2"] == W.OUT_OF_DOMAIN for r in row) else ""
             L.append(f"  G={G:<3} {arm:<7} T ms {T}")
+            if any("ms_gemm_const" in r for r in row):
+                Tz = " ".join("--" if r.get("ms_gemm_const") is None else
+                              f"{r['ms_gemm_const']:.4f}" for r in row)
+                L.append(f"  {'':<5} {'':<7} M+Z  {Tz}")
             L.append(f"  {'':<5} {'':<7} q_w2 {q2}{flag}")
     return L
 
@@ -329,6 +353,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="bytes only, no timing model and no --timed (predict_bytes)")
     p.add_argument("--groups", type=lambda t: tuple(int(x) for x in t.split(",")),
                    default=PLAN_G, help="--bytes-only: the G list (default the plan's)")
+    p.add_argument("--gemm-const", action="store_true",
+                   help="also price every cell under r3_timing_model --gemm-const (the "
+                        "source refit with the term on): ms_gemm_const beside ms (M+Z)")
     p.add_argument("--out", type=Path, default=None)
     return p
 
@@ -342,7 +369,7 @@ def main(argv=None) -> int:
             raise Refused("--timed is required unless --bytes-only")
         else:
             d = predict(args.timed, args.counters, args.target, args.no_cta_fixed,
-                        byte_params=args.byte_params)
+                        byte_params=args.byte_params, gemm_const=args.gemm_const)
     except (Refused, TM.Refused, W.Refused) as exc:
         print(f"REFUSED: {exc}")
         return 2

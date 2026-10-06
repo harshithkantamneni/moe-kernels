@@ -1,0 +1,2937 @@
+{
+ "registered": "2026-10-05, before any rental-3 page",
+ "name": "2026-10-05-rental3-floorlaw-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r3/DESIGN.md section 3, RE-REGISTERED as the review directs (REVIEW.md section 2): the X mechanism is refuted on SEEN data and dropped; CLOCK / CEIL / FLUID; B0 added; identifiable GEMMs only; tp2 printed; the tp4 1005 capture and a wall-time check outside ncu added",
+ "tool": "scripts/floor_estimator.py (joint_theta, rulers); scorer scripts/scoring/rental3/score_floorlaw.py",
+ "framing": "with the wall-time check (B6) scored, part B asks whether the clock dependence of the floor law is ncu's or the kernel's; without it (unit dropped or NOT SCORED) part B is registered as the clock dependence of the NCU-MEASURED floor, and says so",
+ "captures": {
+  "qwen2-57b-a14b-tp8": {
+   "floor": {
+    "clocks": [
+     "base",
+     "lock1710"
+    ],
+    "treads": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ]
+   },
+   "floor1005": {
+    "clocks": [
+     "lock1005"
+    ],
+    "treads": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ]
+   }
+  },
+  "granite-3.0-1b-a400m": {
+   "floor": {
+    "clocks": [
+     "base",
+     "lock1710"
+    ],
+    "treads": [
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     14,
+     16
+    ]
+   },
+   "floor1005": {
+    "clocks": [
+     "lock1005"
+    ],
+    "treads": [
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     14,
+     16
+    ]
+   }
+  },
+  "mixtral-8x7b-tp4": {
+   "floor": {
+    "clocks": [
+     "base",
+     "lock1710"
+    ],
+    "treads": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "floorrep": {
+    "clocks": [
+     "lock1710"
+    ],
+    "treads": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "floor1005": {
+    "clocks": [
+     "lock1005"
+    ],
+    "treads": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "floor1410": {
+    "clocks": [
+     "lock1410"
+    ],
+    "treads": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   }
+  },
+  "mixtral-8x7b-tp8": {
+   "floor1005": {
+    "clocks": [
+     "lock1005"
+    ],
+    "treads": [
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   }
+  },
+  "mixtral-8x7b-tp2": {
+   "floor1005": {
+    "clocks": [
+     "lock1005"
+    ],
+    "treads": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   }
+  }
+ },
+ "capture_path": "<date>-nvidia_gh200_480gb-<model>-<label>-r3-counters/r3f-g64[-lock<F>].json",
+ "wall_unit": "<date>-nvidia_gh200_480gb-launch-floor-wall/mixtral-8x7b-tp4/cells.csv (launch_floor.py, NATIVE, G = 64, modes E240 and GR, the 1710 lock, no profiler)",
+ "cells_registered": {
+  "qwen2-57b-a14b-tp8": [
+   {
+    "n": 2,
+    "gemm": "w1",
+    "q": 9.69697,
+    "ceil": 10,
+    "frac": 0.30303,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 1.939,
+    "live": 1280,
+    "dead": 620,
+    "grid": 1900,
+    "cores": 202546.0,
+    "floor_share_sigma1": 0.977042,
+    "floor_bound": false
+   },
+   {
+    "n": 2,
+    "gemm": "w2",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 13.576,
+    "live": 7168,
+    "dead": 3472,
+    "grid": 10640,
+    "cores": 151946.0,
+    "floor_share_sigma1": 0.97714,
+    "floor_bound": true
+   },
+   {
+    "n": 3,
+    "gemm": "w1",
+    "q": 14.545455,
+    "ceil": 15,
+    "frac": 0.454545,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 2.909,
+    "live": 1920,
+    "dead": 620,
+    "grid": 2540,
+    "cores": 298802.0,
+    "floor_share_sigma1": 0.993447,
+    "floor_bound": true
+   },
+   {
+    "n": 3,
+    "gemm": "w2",
+    "q": 81.454545,
+    "ceil": 82,
+    "frac": 0.545455,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 20.364,
+    "live": 10752,
+    "dead": 3472,
+    "grid": 14224,
+    "cores": 225315.0,
+    "floor_share_sigma1": 0.982442,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w1",
+    "q": 19.393939,
+    "ceil": 20,
+    "frac": 0.606061,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 3.879,
+    "live": 2560,
+    "dead": 620,
+    "grid": 3180,
+    "cores": 398393.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w2",
+    "q": 108.606061,
+    "ceil": 109,
+    "frac": 0.393939,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 27.152,
+    "live": 14336,
+    "dead": 3472,
+    "grid": 17808,
+    "cores": 298688.0,
+    "floor_share_sigma1": 0.985127,
+    "floor_bound": true
+   },
+   {
+    "n": 5,
+    "gemm": "w1",
+    "q": 24.242424,
+    "ceil": 25,
+    "frac": 0.757576,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 4.848,
+    "live": 3200,
+    "dead": 620,
+    "grid": 3820,
+    "cores": 497991.0,
+    "floor_share_sigma1": 0.993472,
+    "floor_bound": true
+   },
+   {
+    "n": 5,
+    "gemm": "w2",
+    "q": 135.757576,
+    "ceil": 136,
+    "frac": 0.242424,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 33.939,
+    "live": 17920,
+    "dead": 3472,
+    "grid": 21392,
+    "cores": 372061.0,
+    "floor_share_sigma1": 0.986752,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w1",
+    "q": 29.090909,
+    "ceil": 30,
+    "frac": 0.909091,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 5.818,
+    "live": 3840,
+    "dead": 620,
+    "grid": 4460,
+    "cores": 597590.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w2",
+    "q": 162.909091,
+    "ceil": 163,
+    "frac": 0.090909,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 40.727,
+    "live": 21504,
+    "dead": 3472,
+    "grid": 24976,
+    "cores": 445434.0,
+    "floor_share_sigma1": 0.987842,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w1",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 7.758,
+    "live": 5120,
+    "dead": 620,
+    "grid": 5740,
+    "cores": 776866.0,
+    "floor_share_sigma1": 0.993472,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w2",
+    "q": 217.212121,
+    "ceil": 218,
+    "frac": 0.787879,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 54.303,
+    "live": 28672,
+    "dead": 3472,
+    "grid": 32144,
+    "cores": 594897.0,
+    "floor_share_sigma1": 0.989232,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w1",
+    "q": 48.484848,
+    "ceil": 49,
+    "frac": 0.515152,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 9.697,
+    "live": 6400,
+    "dead": 620,
+    "grid": 7020,
+    "cores": 976063.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w2",
+    "q": 271.515152,
+    "ceil": 272,
+    "frac": 0.484848,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 67.879,
+    "live": 35840,
+    "dead": 3472,
+    "grid": 39312,
+    "cores": 741643.0,
+    "floor_share_sigma1": 0.99005,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w1",
+    "q": 58.181818,
+    "ceil": 59,
+    "frac": 0.818182,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 11.636,
+    "live": 7680,
+    "dead": 620,
+    "grid": 8300,
+    "cores": 1175260.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w2",
+    "q": 325.818182,
+    "ceil": 326,
+    "frac": 0.181818,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 81.455,
+    "live": 43008,
+    "dead": 3472,
+    "grid": 46480,
+    "cores": 888388.0,
+    "floor_share_sigma1": 0.9906,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w1",
+    "q": 63.030303,
+    "ceil": 64,
+    "frac": 0.969697,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 12.606,
+    "live": 8320,
+    "dead": 620,
+    "grid": 8940,
+    "cores": 1274858.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w2",
+    "q": 352.969697,
+    "ceil": 353,
+    "frac": 0.030303,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 88.242,
+    "live": 46592,
+    "dead": 3472,
+    "grid": 50064,
+    "cores": 961761.0,
+    "floor_share_sigma1": 0.990811,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w1",
+    "q": 67.878788,
+    "ceil": 68,
+    "frac": 0.121212,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 13.576,
+    "live": 8960,
+    "dead": 620,
+    "grid": 9580,
+    "cores": 1354536.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w2",
+    "q": 380.121212,
+    "ceil": 381,
+    "frac": 0.878788,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 95.03,
+    "live": 50176,
+    "dead": 3472,
+    "grid": 53648,
+    "cores": 1037852.0,
+    "floor_share_sigma1": 0.990998,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w1",
+    "q": 77.575758,
+    "ceil": 78,
+    "frac": 0.424242,
+    "u": 19789.6,
+    "ksteps": 56,
+    "npn": 10,
+    "waves": 15.515,
+    "live": 10240,
+    "dead": 620,
+    "grid": 10860,
+    "cores": 1553733.0,
+    "floor_share_sigma1": 0.993471,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w2",
+    "q": 434.424242,
+    "ceil": 435,
+    "frac": 0.575758,
+    "u": 2699.5,
+    "ksteps": 5,
+    "npn": 56,
+    "waves": 108.606,
+    "live": 57344,
+    "dead": 3472,
+    "grid": 60816,
+    "cores": 1184597.0,
+    "floor_share_sigma1": 0.991293,
+    "floor_bound": true
+   }
+  ],
+  "granite-3.0-1b-a400m": [
+   {
+    "n": 3,
+    "gemm": "w1",
+    "q": 11.636364,
+    "ceil": 12,
+    "frac": 0.363636,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 2.327,
+    "live": 1536,
+    "dead": 496,
+    "grid": 2032,
+    "cores": 72786.0,
+    "floor_share_sigma1": 0.993422,
+    "floor_bound": true
+   },
+   {
+    "n": 3,
+    "gemm": "w2",
+    "q": 11.636364,
+    "ceil": 12,
+    "frac": 0.363636,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 2.909,
+    "live": 1536,
+    "dead": 496,
+    "grid": 2032,
+    "cores": 45079.0,
+    "floor_share_sigma1": 0.993403,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w1",
+    "q": 15.515152,
+    "ceil": 16,
+    "frac": 0.484848,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 3.103,
+    "live": 2048,
+    "dead": 496,
+    "grid": 2544,
+    "cores": 97046.0,
+    "floor_share_sigma1": 0.993442,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w2",
+    "q": 15.515152,
+    "ceil": 16,
+    "frac": 0.484848,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 3.879,
+    "live": 2048,
+    "dead": 496,
+    "grid": 2544,
+    "cores": 60105.0,
+    "floor_share_sigma1": 0.993408,
+    "floor_bound": true
+   },
+   {
+    "n": 5,
+    "gemm": "w1",
+    "q": 19.393939,
+    "ceil": 20,
+    "frac": 0.606061,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 3.879,
+    "live": 2560,
+    "dead": 496,
+    "grid": 3056,
+    "cores": 121308.0,
+    "floor_share_sigma1": 0.993438,
+    "floor_bound": true
+   },
+   {
+    "n": 5,
+    "gemm": "w2",
+    "q": 19.393939,
+    "ceil": 20,
+    "frac": 0.606061,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 4.848,
+    "live": 2560,
+    "dead": 496,
+    "grid": 3056,
+    "cores": 75132.0,
+    "floor_share_sigma1": 0.993398,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w1",
+    "q": 23.272727,
+    "ceil": 24,
+    "frac": 0.727273,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 4.655,
+    "live": 3072,
+    "dead": 496,
+    "grid": 3568,
+    "cores": 145569.0,
+    "floor_share_sigma1": 0.993442,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w2",
+    "q": 23.272727,
+    "ceil": 24,
+    "frac": 0.727273,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 5.818,
+    "live": 3072,
+    "dead": 496,
+    "grid": 3568,
+    "cores": 90158.0,
+    "floor_share_sigma1": 0.993403,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w1",
+    "q": 31.030303,
+    "ceil": 32,
+    "frac": 0.969697,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 6.206,
+    "live": 4096,
+    "dead": 496,
+    "grid": 4592,
+    "cores": 194093.0,
+    "floor_share_sigma1": 0.993437,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w2",
+    "q": 31.030303,
+    "ceil": 32,
+    "frac": 0.969697,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 7.758,
+    "live": 4096,
+    "dead": 496,
+    "grid": 4592,
+    "cores": 120211.0,
+    "floor_share_sigma1": 0.9934,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w1",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 7.758,
+    "live": 5120,
+    "dead": 496,
+    "grid": 5616,
+    "cores": 236550.0,
+    "floor_share_sigma1": 0.993441,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w2",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 9.697,
+    "live": 5120,
+    "dead": 496,
+    "grid": 5616,
+    "cores": 146507.0,
+    "floor_share_sigma1": 0.993401,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w1",
+    "q": 46.545455,
+    "ceil": 47,
+    "frac": 0.454545,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 9.309,
+    "live": 6144,
+    "dead": 496,
+    "grid": 6640,
+    "cores": 285074.0,
+    "floor_share_sigma1": 0.993437,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w2",
+    "q": 46.545455,
+    "ceil": 47,
+    "frac": 0.454545,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 11.636,
+    "live": 6144,
+    "dead": 496,
+    "grid": 6640,
+    "cores": 176559.0,
+    "floor_share_sigma1": 0.993405,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w1",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 10.861,
+    "live": 7168,
+    "dead": 496,
+    "grid": 7664,
+    "cores": 333597.0,
+    "floor_share_sigma1": 0.993438,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w2",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 13.576,
+    "live": 7168,
+    "dead": 496,
+    "grid": 7664,
+    "cores": 206612.0,
+    "floor_share_sigma1": 0.993403,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w1",
+    "q": 62.060606,
+    "ceil": 63,
+    "frac": 0.939394,
+    "u": 6025.6,
+    "ksteps": 16,
+    "npn": 16,
+    "waves": 12.412,
+    "live": 8192,
+    "dead": 496,
+    "grid": 8688,
+    "cores": 382120.0,
+    "floor_share_sigma1": 0.993439,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w2",
+    "q": 62.060606,
+    "ceil": 63,
+    "frac": 0.939394,
+    "u": 3731.8,
+    "ksteps": 8,
+    "npn": 16,
+    "waves": 15.515,
+    "live": 8192,
+    "dead": 496,
+    "grid": 8688,
+    "cores": 236665.0,
+    "floor_share_sigma1": 0.993402,
+    "floor_bound": true
+   }
+  ],
+  "mixtral-8x7b-tp4": [
+   {
+    "n": 2,
+    "gemm": "w1",
+    "q": 13.575758,
+    "ceil": 14,
+    "frac": 0.424242,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 2.715,
+    "live": 1792,
+    "dead": 896,
+    "grid": 2688,
+    "cores": 317895.0,
+    "floor_share_sigma1": 0.992761,
+    "floor_bound": true
+   },
+   {
+    "n": 2,
+    "gemm": "w2",
+    "q": 7.757576,
+    "ceil": 8,
+    "frac": 0.242424,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 1.939,
+    "live": 1024,
+    "dead": 512,
+    "grid": 1536,
+    "cores": 165649.0,
+    "floor_share_sigma1": 0.977904,
+    "floor_bound": false
+   },
+   {
+    "n": 4,
+    "gemm": "w1",
+    "q": 27.151515,
+    "ceil": 28,
+    "frac": 0.848485,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 5.43,
+    "live": 3584,
+    "dead": 896,
+    "grid": 4480,
+    "cores": 635334.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w2",
+    "q": 15.515152,
+    "ceil": 16,
+    "frac": 0.484848,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 3.879,
+    "live": 2048,
+    "dead": 512,
+    "grid": 2560,
+    "cores": 326107.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w1",
+    "q": 40.727273,
+    "ceil": 41,
+    "frac": 0.272727,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 8.145,
+    "live": 5376,
+    "dead": 896,
+    "grid": 6272,
+    "cores": 930311.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w2",
+    "q": 23.272727,
+    "ceil": 24,
+    "frac": 0.727273,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 5.818,
+    "live": 3072,
+    "dead": 512,
+    "grid": 3584,
+    "cores": 489161.0,
+    "floor_share_sigma1": 0.993469,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w1",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 10.861,
+    "live": 7168,
+    "dead": 896,
+    "grid": 8064,
+    "cores": 1247978.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w2",
+    "q": 31.030303,
+    "ceil": 32,
+    "frac": 0.969697,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 7.758,
+    "live": 4096,
+    "dead": 512,
+    "grid": 4608,
+    "cores": 652214.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w1",
+    "q": 67.878788,
+    "ceil": 68,
+    "frac": 0.121212,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 13.576,
+    "live": 8960,
+    "dead": 896,
+    "grid": 9856,
+    "cores": 1542954.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w2",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 9.697,
+    "live": 5120,
+    "dead": 512,
+    "grid": 5632,
+    "cores": 794886.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w1",
+    "q": 74.666667,
+    "ceil": 75,
+    "frac": 0.333333,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 14.933,
+    "live": 9856,
+    "dead": 896,
+    "grid": 10752,
+    "cores": 1701788.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w2",
+    "q": 42.666667,
+    "ceil": 43,
+    "frac": 0.333333,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 10.667,
+    "live": 5632,
+    "dead": 512,
+    "grid": 6144,
+    "cores": 876413.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w1",
+    "q": 81.454545,
+    "ceil": 82,
+    "frac": 0.545455,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 16.291,
+    "live": 10752,
+    "dead": 896,
+    "grid": 11648,
+    "cores": 1860621.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w2",
+    "q": 46.545455,
+    "ceil": 47,
+    "frac": 0.454545,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 11.636,
+    "live": 6144,
+    "dead": 512,
+    "grid": 6656,
+    "cores": 957940.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w1",
+    "q": 88.242424,
+    "ceil": 89,
+    "frac": 0.757576,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 17.648,
+    "live": 11648,
+    "dead": 896,
+    "grid": 12544,
+    "cores": 2019455.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w2",
+    "q": 50.424242,
+    "ceil": 51,
+    "frac": 0.575758,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 12.606,
+    "live": 6656,
+    "dead": 512,
+    "grid": 7168,
+    "cores": 1039466.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w1",
+    "q": 95.030303,
+    "ceil": 96,
+    "frac": 0.969697,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 19.006,
+    "live": 12544,
+    "dead": 896,
+    "grid": 13440,
+    "cores": 2178288.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w2",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 13.576,
+    "live": 7168,
+    "dead": 512,
+    "grid": 7680,
+    "cores": 1120993.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w1",
+    "q": 101.818182,
+    "ceil": 102,
+    "frac": 0.181818,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 20.364,
+    "live": 13440,
+    "dead": 896,
+    "grid": 14336,
+    "cores": 2314432.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w2",
+    "q": 58.181818,
+    "ceil": 59,
+    "frac": 0.818182,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 14.545,
+    "live": 7680,
+    "dead": 512,
+    "grid": 8192,
+    "cores": 1202520.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w1",
+    "q": 108.606061,
+    "ceil": 109,
+    "frac": 0.393939,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 112,
+    "waves": 21.721,
+    "live": 14336,
+    "dead": 896,
+    "grid": 15232,
+    "cores": 2473265.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w2",
+    "q": 62.060606,
+    "ceil": 63,
+    "frac": 0.939394,
+    "u": 20248.6,
+    "ksteps": 56,
+    "npn": 64,
+    "waves": 15.515,
+    "live": 8192,
+    "dead": 512,
+    "grid": 8704,
+    "cores": 1284047.0,
+    "floor_share_sigma1": 0.99347,
+    "floor_bound": true
+   }
+  ],
+  "mixtral-8x7b-tp8": [
+   {
+    "n": 6,
+    "gemm": "w1",
+    "q": 20.363636,
+    "ceil": 21,
+    "frac": 0.636364,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 4.073,
+    "live": 2688,
+    "dead": 448,
+    "grid": 3136,
+    "cores": 476501.0,
+    "floor_share_sigma1": 0.993472,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w2",
+    "q": 23.272727,
+    "ceil": 24,
+    "frac": 0.727273,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 5.818,
+    "live": 3072,
+    "dead": 512,
+    "grid": 3584,
+    "cores": 256409.0,
+    "floor_share_sigma1": 0.993457,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w1",
+    "q": 27.151515,
+    "ceil": 28,
+    "frac": 0.848485,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 5.43,
+    "live": 3584,
+    "dead": 448,
+    "grid": 4032,
+    "cores": 635334.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w2",
+    "q": 31.030303,
+    "ceil": 32,
+    "frac": 0.969697,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 7.758,
+    "live": 4096,
+    "dead": 512,
+    "grid": 4608,
+    "cores": 341879.0,
+    "floor_share_sigma1": 0.993456,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w1",
+    "q": 33.939394,
+    "ceil": 34,
+    "frac": 0.060606,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 6.788,
+    "live": 4480,
+    "dead": 448,
+    "grid": 4928,
+    "cores": 771477.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w2",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 9.697,
+    "live": 5120,
+    "dead": 512,
+    "grid": 5632,
+    "cores": 416665.0,
+    "floor_share_sigma1": 0.993456,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w1",
+    "q": 37.333333,
+    "ceil": 38,
+    "frac": 0.666667,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 7.467,
+    "live": 4928,
+    "dead": 448,
+    "grid": 5376,
+    "cores": 862239.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w2",
+    "q": 42.666667,
+    "ceil": 43,
+    "frac": 0.333333,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 10.667,
+    "live": 5632,
+    "dead": 512,
+    "grid": 6144,
+    "cores": 459400.0,
+    "floor_share_sigma1": 0.993455,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w1",
+    "q": 40.727273,
+    "ceil": 41,
+    "frac": 0.272727,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 8.145,
+    "live": 5376,
+    "dead": 448,
+    "grid": 5824,
+    "cores": 930311.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w2",
+    "q": 46.545455,
+    "ceil": 47,
+    "frac": 0.454545,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 11.636,
+    "live": 6144,
+    "dead": 512,
+    "grid": 6656,
+    "cores": 502134.0,
+    "floor_share_sigma1": 0.993457,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w1",
+    "q": 44.121212,
+    "ceil": 45,
+    "frac": 0.878788,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 8.824,
+    "live": 5824,
+    "dead": 448,
+    "grid": 6272,
+    "cores": 1021073.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w2",
+    "q": 50.424242,
+    "ceil": 51,
+    "frac": 0.575758,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 12.606,
+    "live": 6656,
+    "dead": 512,
+    "grid": 7168,
+    "cores": 544869.0,
+    "floor_share_sigma1": 0.993457,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w1",
+    "q": 47.515152,
+    "ceil": 48,
+    "frac": 0.484848,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 9.503,
+    "live": 6272,
+    "dead": 448,
+    "grid": 6720,
+    "cores": 1089144.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w2",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 13.576,
+    "live": 7168,
+    "dead": 512,
+    "grid": 7680,
+    "cores": 587604.0,
+    "floor_share_sigma1": 0.993456,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w1",
+    "q": 50.909091,
+    "ceil": 51,
+    "frac": 0.090909,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 10.182,
+    "live": 6720,
+    "dead": 448,
+    "grid": 7168,
+    "cores": 1157216.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w2",
+    "q": 58.181818,
+    "ceil": 59,
+    "frac": 0.818182,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 14.545,
+    "live": 7680,
+    "dead": 512,
+    "grid": 8192,
+    "cores": 630339.0,
+    "floor_share_sigma1": 0.993456,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w1",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 56,
+    "waves": 10.861,
+    "live": 7168,
+    "dead": 448,
+    "grid": 7616,
+    "cores": 1247978.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w2",
+    "q": 62.060606,
+    "ceil": 63,
+    "frac": 0.939394,
+    "u": 10613.8,
+    "ksteps": 28,
+    "npn": 64,
+    "waves": 15.515,
+    "live": 8192,
+    "dead": 512,
+    "grid": 8704,
+    "cores": 673074.0,
+    "floor_share_sigma1": 0.993456,
+    "floor_bound": true
+   }
+  ],
+  "mixtral-8x7b-tp2": [
+   {
+    "n": 2,
+    "gemm": "w1",
+    "q": 27.151515,
+    "ceil": 28,
+    "frac": 0.848485,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 5.43,
+    "live": 3584,
+    "dead": 1792,
+    "grid": 5376,
+    "cores": 635763.0,
+    "floor_share_sigma1": 0.992803,
+    "floor_bound": true
+   },
+   {
+    "n": 2,
+    "gemm": "w2",
+    "q": 7.757576,
+    "ceil": 8,
+    "frac": 0.242424,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 1.939,
+    "live": 1024,
+    "dead": 512,
+    "grid": 1536,
+    "cores": 323309.0,
+    "floor_share_sigma1": 0.977843,
+    "floor_bound": false
+   },
+   {
+    "n": 4,
+    "gemm": "w1",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 10.861,
+    "live": 7168,
+    "dead": 1792,
+    "grid": 8960,
+    "cores": 1247978.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 4,
+    "gemm": "w2",
+    "q": 15.515152,
+    "ceil": 16,
+    "frac": 0.484848,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 3.879,
+    "live": 2048,
+    "dead": 512,
+    "grid": 2560,
+    "cores": 636443.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w1",
+    "q": 81.454545,
+    "ceil": 82,
+    "frac": 0.545455,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 16.291,
+    "live": 10752,
+    "dead": 1792,
+    "grid": 12544,
+    "cores": 1860621.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 6,
+    "gemm": "w2",
+    "q": 23.272727,
+    "ceil": 24,
+    "frac": 0.727273,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 5.818,
+    "live": 3072,
+    "dead": 512,
+    "grid": 3584,
+    "cores": 954664.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w1",
+    "q": 108.606061,
+    "ceil": 109,
+    "frac": 0.393939,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 21.721,
+    "live": 14336,
+    "dead": 1792,
+    "grid": 16128,
+    "cores": 2473265.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 8,
+    "gemm": "w2",
+    "q": 31.030303,
+    "ceil": 32,
+    "frac": 0.969697,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 7.758,
+    "live": 4096,
+    "dead": 512,
+    "grid": 4608,
+    "cores": 1272885.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w1",
+    "q": 135.757576,
+    "ceil": 136,
+    "frac": 0.242424,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 27.152,
+    "live": 17920,
+    "dead": 1792,
+    "grid": 19712,
+    "cores": 3085909.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 10,
+    "gemm": "w2",
+    "q": 38.787879,
+    "ceil": 39,
+    "frac": 0.212121,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 9.697,
+    "live": 5120,
+    "dead": 512,
+    "grid": 5632,
+    "cores": 1551329.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w1",
+    "q": 149.333333,
+    "ceil": 150,
+    "frac": 0.666667,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 29.867,
+    "live": 19712,
+    "dead": 1792,
+    "grid": 21504,
+    "cores": 3403576.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 11,
+    "gemm": "w2",
+    "q": 42.666667,
+    "ceil": 43,
+    "frac": 0.333333,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 10.667,
+    "live": 5632,
+    "dead": 512,
+    "grid": 6144,
+    "cores": 1710439.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w1",
+    "q": 162.909091,
+    "ceil": 163,
+    "frac": 0.090909,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 32.582,
+    "live": 21504,
+    "dead": 1792,
+    "grid": 23296,
+    "cores": 3698552.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 12,
+    "gemm": "w2",
+    "q": 46.545455,
+    "ceil": 47,
+    "frac": 0.454545,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 11.636,
+    "live": 6144,
+    "dead": 512,
+    "grid": 6656,
+    "cores": 1869550.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w1",
+    "q": 176.484848,
+    "ceil": 177,
+    "frac": 0.515152,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 35.297,
+    "live": 23296,
+    "dead": 1792,
+    "grid": 25088,
+    "cores": 4016219.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 13,
+    "gemm": "w2",
+    "q": 50.424242,
+    "ceil": 51,
+    "frac": 0.575758,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 12.606,
+    "live": 6656,
+    "dead": 512,
+    "grid": 7168,
+    "cores": 2028660.0,
+    "floor_share_sigma1": 0.993478,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w1",
+    "q": 190.060606,
+    "ceil": 191,
+    "frac": 0.939394,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 38.012,
+    "live": 25088,
+    "dead": 1792,
+    "grid": 26880,
+    "cores": 4333886.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 14,
+    "gemm": "w2",
+    "q": 54.30303,
+    "ceil": 55,
+    "frac": 0.69697,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 13.576,
+    "live": 7168,
+    "dead": 512,
+    "grid": 7680,
+    "cores": 2187771.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w1",
+    "q": 203.636364,
+    "ceil": 204,
+    "frac": 0.363636,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 40.727,
+    "live": 26880,
+    "dead": 1792,
+    "grid": 28672,
+    "cores": 4628863.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 15,
+    "gemm": "w2",
+    "q": 58.181818,
+    "ceil": 59,
+    "frac": 0.818182,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 14.545,
+    "live": 7680,
+    "dead": 512,
+    "grid": 8192,
+    "cores": 2346882.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w1",
+    "q": 217.212121,
+    "ceil": 218,
+    "frac": 0.787879,
+    "u": 22542.4,
+    "ksteps": 64,
+    "npn": 224,
+    "waves": 43.442,
+    "live": 28672,
+    "dead": 1792,
+    "grid": 30464,
+    "cores": 4946530.0,
+    "floor_share_sigma1": 0.993473,
+    "floor_bound": true
+   },
+   {
+    "n": 16,
+    "gemm": "w2",
+    "q": 62.060606,
+    "ceil": 63,
+    "frac": 0.939394,
+    "u": 39518.2,
+    "ksteps": 112,
+    "npn": 64,
+    "waves": 15.515,
+    "live": 8192,
+    "dead": 512,
+    "grid": 8704,
+    "cores": 2505992.0,
+    "floor_share_sigma1": 0.993477,
+    "floor_bound": true
+   }
+  ]
+ },
+ "definitions": {
+  "q": "N_live / 132",
+  "frac": "ceil(q) - q, the last wave's idle-SM share",
+  "u": "S c + F_g (c 344.1, F_w1 520, F_w2 979: CAL, 0f77622)",
+  "rulers": "floor_estimator.rulers: ACT.max sm__cycles_active.max; EL.avg sm__cycles_elapsed.avg; DUR gpu__time_duration x f / 1e3 with f the LOCK of a lock capture (a base capture: f the median over its cells of n >= 10 of EL.max / duration, printed only); X = DUR - EL.avg; GAP = EL.avg - ACT.max",
+  "fit": "floor_estimator.joint_theta(y / u, q, frac) per ruler, GEMM and capture: theta 1 the ceil law on that ruler, 0 the fluid law",
+  "cells": "the registered floor-bound cells (CORES floor share >= 0.97 at sigma 1 and waves >= 2, cells_registered) present on the capture"
+ },
+ "identifiability": {
+  "rule": "a GEMM capture is fitted only when it has >= 5 cells and |corr(q, frac)| <= 0.95; else NOT SCORED (printed)",
+  "per_gemm": {
+   "qwen2-57b-a14b-tp8 w1": {
+    "identifiable": true,
+    "why": "corr(q, frac) -0.160",
+    "cells": [
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ]
+   },
+   "qwen2-57b-a14b-tp8 w2": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.007",
+    "cells": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ]
+   },
+   "granite-3.0-1b-a400m w1": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.349",
+    "cells": [
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     14,
+     16
+    ]
+   },
+   "granite-3.0-1b-a400m w2": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.349",
+    "cells": [
+     3,
+     4,
+     5,
+     6,
+     8,
+     10,
+     12,
+     14,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp4 w1": {
+    "identifiable": true,
+    "why": "corr(q, frac) -0.048",
+    "cells": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp4 w2": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.239",
+    "cells": [
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp8 w1": {
+    "identifiable": true,
+    "why": "corr(q, frac) -0.191",
+    "cells": [
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp8 w2": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.158",
+    "cells": [
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp2 w1": {
+    "identifiable": true,
+    "why": "corr(q, frac) -0.148",
+    "cells": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   },
+   "mixtral-8x7b-tp2 w2": {
+    "identifiable": true,
+    "why": "corr(q, frac) +0.239",
+    "cells": [
+     4,
+     6,
+     8,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ]
+   }
+  },
+  "note": "computed here on the registered cells with q = N_live / 132: every new GEMM is identifiable (qwen2-tp8 w1 q = 4.85 n, granite-1B q = 3.88 n spread frac); the review's 'frac proportional to q' read q per occupancy wave (0.970 n), not the floor law's q, and the rule stands as written",
+  "se_rule": "a GEMM capture whose se(theta) on the ruler a test reads exceeds 0.15 is printed for that test, not counted"
+ },
+ "hypotheses": {
+  "CLOCK": "the wall-time floor is ceil at 1005 and flatter at 1710, and the flattening sits in GAP = EL.avg - ACT.max (both SM-clock counters)",
+  "CEIL": "theta about 1 on every ruler at every clock: the SEEN 1710 lows were noise",
+  "FLUID": "theta about 0 at both clocks"
+ },
+ "tests": {
+  "B0": {
+   "what": "theta(X / u) at 1710",
+   "gemms": "every identifiable new 1710 GEMM: granite-1B w1, w2; qwen2-tp8 w1; tp4 w1, w2 (floor and floorrep)",
+   "band": [
+    -0.15,
+    0.15
+   ],
+   "rule": "HOLDS (X is uncorrelated with frac: it sets the level, not the shape) when every scored GEMM's theta lies in the band, FALSIFIED when any lies outside",
+   "SEEN": {
+    "theta_X_range": [
+     -0.167035,
+     0.1253
+    ],
+    "label": "SEEN: rental 2's 14 GEMM captures"
+   }
+  },
+  "B1": {
+   "what": "theta_ACT.max",
+   "captures": "every lock capture (1005, 1410, 1710) of an identifiable GEMM; base printed",
+   "band": [
+    0.7,
+    1.05
+   ],
+   "rule": "holds on a capture when theta lies in the band; B1 HOLDS when it holds on >= 80% of the scored lock captures",
+   "SEEN": {
+    "range": [
+     -0.151211,
+     0.95067
+    ],
+    "label": "SEEN rental-2 lock captures"
+   }
+  },
+  "B2": {
+   "what": "theta_DUR at 1005",
+   "gemms": "qwen2-tp8 w1, w2; granite-1B w1, w2; tp4 w1, w2; tp8 w1, w2; tp2 w1, w2 (every identifiable 1005 GEMM)",
+   "band": [
+    0.7,
+    1.05
+   ],
+   "rule": "holds per GEMM inside the band",
+   "SEEN": "tp4 1005: 0.95 / 0.81 (rental 2)"
+  },
+  "B3": {
+   "what": "dtheta = theta_DUR(1005) - theta_DUR(1710), same GEMM, same board",
+   "pairs_counted": "granite-1B w1, w2; tp4 w1, w2 (floor1005 against the floor unit's 1710)",
+   "pairs_printed": "qwen2-tp8 w2 (its 1710 DUR is printed: X's cell-to-cell scatter there is 1 to 2 u); tp8 and tp2 (their 1710 capture is rental 2's, another board)",
+   "rule": "per pair where theta_DUR(1710) <= 0.70: CLOCK predicts dtheta >= 0.25, CEIL and FLUID |dtheta| <= 0.20"
+  },
+  "B4": {
+   "what": "theta_DUR at 1710",
+   "gemms": "granite-1B w1, w2; tp4 w1, w2; qwen2-tp8 w1 (new 1710 GEMMs; qwen2-tp8 w2 printed)",
+   "rule": "CLOCK: theta_DUR <= theta_ACT.max - 0.20 on at least 2 of them, at least one of them a BLIND shape (granite-1B or qwen2-tp8; DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): the overlap narrowing below was chosen on SEEN rental-2 values, so the tp4 replicate alone, whose SEEN values meet the condition, may not pass the clause); CEIL: theta_DUR >= 0.70 on every one; a GEMM whose theta_DUR lies where the two clauses' bands overlap (theta_ACT.max > 0.90 and 0.70 <= theta_DUR <= theta_ACT.max - 0.20) is printed and enters neither clause (the design's 'touch' rule, narrowed to the overlap so a theta_ACT.max above 0.90 alone does not drop a GEMM: SEEN theta_ACT.max reads 0.91 to 0.95 on three of rental 2's 1710 GEMMs)"
+  },
+  "B5": {
+   "what": "X at 1005 (median of cells)",
+   "status": "PRINTED (a lock-in-force reading, in no verdict; SEEN 312 to 342 cycles)"
+  },
+  "B6": {
+   "what": "the wall-time floor OUTSIDE ncu: GR (graph replay, the call's GPU time) cells of the wall unit, T(n) = a + b n + theta_wall W(n), W(n) = sum_g frac_g(n) u_g / 1710 MHz (ms), OLS over the unit's treads (every tp4 tread is floor-bound on both GEMMs at G = 64)",
+   "W_ms": {
+    "2": 0.008463,
+    "4": 0.016927,
+    "6": 0.012207,
+    "8": 0.02067,
+    "10": 0.00411,
+    "11": 0.008341,
+    "12": 0.012573,
+    "13": 0.016805,
+    "14": 0.021036,
+    "15": 0.012085,
+    "16": 0.016317
+   },
+   "corr_n_W": 0.218192,
+   "rule": "theta_wall >= 0.70: the 1710 flattening is ncu's (CLOCK reads 'in the ncu replay only'); theta_wall <= 0.50: it is the kernel's (CLOCK reads 'in wall time'); between: INCONCLUSIVE; se(theta_wall) > 0.20 or |corr(n, W)| > 0.95: NOT SCORED. E240 is printed beside GR",
+   "label": "BLIND: no wall-time page at G = 64 exists"
+  },
+  "B7": {
+   "what": "part 4 re-asked on the clean ruler: tp8 w1's registered sets on the 1005 capture's DUR",
+   "sets": {
+    "A": {
+     "treads": [
+      13,
+      14,
+      15
+     ],
+     "H_EST": 313.387207,
+     "bias": -0.110201,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 8.716427
+    },
+    "B": {
+     "treads": [
+      11,
+      15,
+      16
+     ],
+     "H_EST": 350.695701,
+     "bias": -0.004271,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 3.2945
+    },
+    "C": {
+     "treads": [
+      11,
+      12,
+      13
+     ],
+     "H_EST": 365.619559,
+     "bias": 0.038102,
+     "FLUID": 352.2,
+     "FLUID_LOW": 339.5208,
+     "sigma_slope": 8.716427
+    }
+   },
+   "asymptote": 352.2,
+   "sigma_theta": 0.04705,
+   "rule": "theta and delta by floor_estimator.theta_delta over the three sets (slopes by implied_slope on DUR); H_EST HOLDS when theta > 0.5 and |theta - 1| <= 0.20 (2 sigma_theta, inflated for the SEEN 0.81 to 0.95 at 1005); FLUID HOLDS when |theta| <= 0.20; else INCONCLUSIVE; delta printed, never scored"
+  }
+ },
+ "verdict": {
+  "CLOCK": "HOLDS when B1 HOLDS, B2 holds on every scored 1005 GEMM, B3 gives dtheta >= 0.25 on every counted pair where it applies, B4's CLOCK clause holds and B0 HOLDS; FALSIFIED when B2 fails on 2 or more GEMMs or B4's CEIL clause holds",
+  "CEIL": "HOLDS when B4's CEIL clause holds and B2 holds on every scored 1005 GEMM; FALSIFIED when B4's CEIL clause fails",
+  "FLUID": "FALSIFIED when B1 HOLDS or B2 holds on 2 or more GEMMs; HOLDS when theta_DUR <= 0.30 on every scored 1005 and 1710 GEMM",
+  "selected": "a hypothesis is SELECTED when it HOLDS and the other two are FALSIFIED; else INCONCLUSIVE. B6 then labels CLOCK 'in wall time' or 'in the ncu replay only', and its absence labels the claim 'ncu-measured'"
+ },
+ "X_clock_law": {
+  "status": "PRINTED (3.5 kept as printed, the review)",
+  "X1710": "per GEMM, the median over the GEMM's registered cells of X at the tp4 floor unit's 1710 capture",
+  "X1005": "the same at the tp4 floor1005 capture",
+  "X1410": "the same at floor1410",
+  "LIN": "X1410 within +-35% of X1005 + (405 / 705)(X1710 - X1005)",
+  "HIGH": "X1410 <= 0.25 X1710",
+  "FLAT": "X1410 >= 0.80 X1710",
+  "base": "the base capture's X is printed (ncu's pin is not an -lgc lock)"
+ },
+ "gates": {
+  "floor": {
+   "null_tol": 0.03,
+   "l2_lock_mhz": 1710.0,
+   "l2_band_mhz": [
+    1690.0,
+    1715.0
+   ],
+   "l2_min_duration_ns": 500000.0,
+   "smi_tol_mhz": 15.0,
+   "rule": "a capture under a lock is in CLEAN when V1 passes and the lock is in force: the null kernel's median clock within 3% of the lock AND, at the 1710 lock only, the median over cells of duration >= 0.5 ms of lts__cycles_elapsed.avg / duration in [1690, 1715] MHz (SEEN 1700.5 to 1706.0 on every rental-2 1710 and base cell of 0.5 ms or more; DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): when fewer than 3 cells reach 0.5 ms, as on Granite-1B (30 to 230 us), the L2 leg is PRINTED, not gated, and the null kernel and nvidia-smi still gate: short cells read low through a fixed offset of about 0.75 us, 1675 to 1677 MHz under 50 us, 1694.5 to 1700 at 150 to 250 us, so an all-cell median would put a held lock on a coin flip; the L2 reads 1125 MHz at a 1005 lock, it follows a low SM lock, so 1005 and 1410 print it) AND nvidia-smi before and after within 15 MHz (one step) of the lock. FL1 is printed and gates nothing. Rental 2's rule 2 (a cell over the lock by more than 15 MHz is dropped) is kept; base captures carry no lock and no check",
+   "SEEN_L2": [
+    1703.959442,
+    1703.528513,
+    1705.31511,
+    1705.36428,
+    1703.305499,
+    1701.752122,
+    1704.994246,
+    1703.624441,
+    1125.080588,
+    1125.087644,
+    1701.758961,
+    1703.986673
+   ]
+  },
+  "wall": "the wall unit has no validity gate; its manifest's profiler_enabled_ever must be False (else NOT SCORED)"
+ },
+ "ambiguities_resolved": {
+  "B-1 cells": "the registered floor-bound cells (CORES share >= 0.97, waves >= 2), cells_registered; never the route's 4-wave set",
+  "B-2 singular": "the identifiability rule above (>= 5 cells, |corr(q, frac)| <= 0.95)",
+  "B-3 B1 denominator": "lock captures only (1005, 1410, 1710); base printed",
+  "B-4 points or intervals": "point estimates against the registered bands; a GEMM capture whose se(theta) exceeds 0.15 is printed for that test",
+  "B-5 B5": "printed only",
+  "B-6 FLUID and B1": "FLUID is FALSIFIED by B1 HOLDING (>= 80% of lock captures in [0.70, 1.05]) or by B2 holding on 2 or more GEMMs",
+  "B-7 X1710": "per GEMM median over that GEMM's cells"
+ },
+ "consequence_for_E": "M prices the floor with ceil(q) at 1710. If CLOCK holds in wall time, M's floor-bound w1 cells at large frac are mispriced; qwen2-tp8 w1's frac is 0.06 to 0.27 at the scored n (q = 4.85 n), so the effect is small there; printed with E",
+ "seen_rulers": [
+  {
+   "capture": "mixtral-8x7b-tp2 lock1710",
+   "gemm": "w1",
+   "f_ruler": 1710.0,
+   "u": 22542.4,
+   "cells": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": -0.151211,
+    "se": 0.304463,
+    "b": 0.993657
+   },
+   "DUR": {
+    "theta": 0.155512,
+    "se": 0.284035,
+    "b": 0.991707
+   },
+   "EL.avg": {
+    "theta": 0.210137,
+    "se": 0.046239,
+    "b": 0.992612
+   },
+   "X": {
+    "theta": -0.054625,
+    "se": 0.254161,
+    "b": -0.000905
+   },
+   "GAP": {
+    "theta": 0.361348,
+    "se": 0.284994,
+    "b": -0.001045
+   },
+   "X_median": 20666.1,
+   "L2_mhz": 1703.959442
+  },
+  {
+   "capture": "mixtral-8x7b-tp2 lock1710",
+   "gemm": "w2",
+   "f_ruler": 1710.0,
+   "u": 39518.2,
+   "cells": [
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.95067,
+    "se": 0.032807,
+    "b": 1.014389
+   },
+   "DUR": {
+    "theta": 0.630306,
+    "se": 0.077105,
+    "b": 1.012735
+   },
+   "EL.avg": {
+    "theta": 0.621446,
+    "se": 0.054244,
+    "b": 1.012657
+   },
+   "X": {
+    "theta": 0.008861,
+    "se": 0.106095,
+    "b": 7.8e-05
+   },
+   "GAP": {
+    "theta": -0.329225,
+    "se": 0.039448,
+    "b": -0.001732
+   },
+   "X_median": 25773.76,
+   "L2_mhz": 1703.528513
+  },
+  {
+   "capture": "mixtral-8x7b-tp2 base",
+   "gemm": "w1",
+   "f_ruler": 1379.799608,
+   "u": 22542.4,
+   "cells": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.527008,
+    "se": 0.160239,
+    "b": 0.992654
+   },
+   "DUR": {
+    "theta": 0.553212,
+    "se": 0.20018,
+    "b": 0.990139
+   },
+   "EL.avg": {
+    "theta": 0.427912,
+    "se": 0.180866,
+    "b": 0.992774
+   },
+   "X": {
+    "theta": 0.1253,
+    "se": 0.128786,
+    "b": -0.002635
+   },
+   "GAP": {
+    "theta": -0.099096,
+    "se": 0.049429,
+    "b": 0.00012
+   },
+   "X_median": 4734.318768,
+   "L2_mhz": 1705.31511
+  },
+  {
+   "capture": "mixtral-8x7b-tp2 base",
+   "gemm": "w2",
+   "f_ruler": 1377.807748,
+   "u": 39518.2,
+   "cells": [
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.970332,
+    "se": 0.043178,
+    "b": 1.013584
+   },
+   "DUR": {
+    "theta": 0.802667,
+    "se": 0.072522,
+    "b": 1.007795
+   },
+   "EL.avg": {
+    "theta": 0.870699,
+    "se": 0.068881,
+    "b": 1.012373
+   },
+   "X": {
+    "theta": -0.068032,
+    "se": 0.091752,
+    "b": -0.004578
+   },
+   "GAP": {
+    "theta": -0.099633,
+    "se": 0.066601,
+    "b": -0.001211
+   },
+   "X_median": 7473.607132,
+   "L2_mhz": 1705.36428
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 lock1710",
+   "gemm": "w1",
+   "f_ruler": 1710.0,
+   "u": 22542.4,
+   "cells": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.931065,
+    "se": 0.016027,
+    "b": 0.993734
+   },
+   "DUR": {
+    "theta": 0.450091,
+    "se": 0.081713,
+    "b": 0.994471
+   },
+   "EL.avg": {
+    "theta": 0.49873,
+    "se": 0.049941,
+    "b": 0.994756
+   },
+   "X": {
+    "theta": -0.048639,
+    "se": 0.076904,
+    "b": -0.000285
+   },
+   "GAP": {
+    "theta": -0.432335,
+    "se": 0.045648,
+    "b": 0.001022
+   },
+   "X_median": 19484.53,
+   "L2_mhz": 1703.305499
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 lock1710",
+   "gemm": "w2",
+   "f_ruler": 1710.0,
+   "u": 20248.6,
+   "cells": [
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.886083,
+    "se": 0.047845,
+    "b": 1.010443
+   },
+   "DUR": {
+    "theta": 0.153588,
+    "se": 0.079352,
+    "b": 1.013333
+   },
+   "EL.avg": {
+    "theta": 0.292611,
+    "se": 0.077802,
+    "b": 1.011593
+   },
+   "X": {
+    "theta": -0.139023,
+    "se": 0.089452,
+    "b": 0.00174
+   },
+   "GAP": {
+    "theta": -0.593472,
+    "se": 0.071795,
+    "b": 0.00115
+   },
+   "X_median": 16318.2675,
+   "L2_mhz": 1701.752122
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 base",
+   "gemm": "w1",
+   "f_ruler": 1379.782331,
+   "u": 22542.4,
+   "cells": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.876467,
+    "se": 0.024402,
+    "b": 0.99252
+   },
+   "DUR": {
+    "theta": 0.488292,
+    "se": 0.237818,
+    "b": 0.988217
+   },
+   "EL.avg": {
+    "theta": 0.655327,
+    "se": 0.084324,
+    "b": 0.992303
+   },
+   "X": {
+    "theta": -0.167035,
+    "se": 0.195572,
+    "b": -0.004086
+   },
+   "GAP": {
+    "theta": -0.221141,
+    "se": 0.075226,
+    "b": -0.000217
+   },
+   "X_median": 2966.264684,
+   "L2_mhz": 1704.994246
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 base",
+   "gemm": "w2",
+   "f_ruler": 1379.44908,
+   "u": 20248.6,
+   "cells": [
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.843266,
+    "se": 0.042614,
+    "b": 1.008159
+   },
+   "DUR": {
+    "theta": 0.610047,
+    "se": 0.096345,
+    "b": 1.004413
+   },
+   "EL.avg": {
+    "theta": 0.763703,
+    "se": 0.044598,
+    "b": 1.005761
+   },
+   "X": {
+    "theta": -0.153656,
+    "se": 0.10553,
+    "b": -0.001348
+   },
+   "GAP": {
+    "theta": -0.079563,
+    "se": 0.059539,
+    "b": -0.002398
+   },
+   "X_median": 2809.770668,
+   "L2_mhz": 1703.624441
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 lock1005",
+   "gemm": "w1",
+   "f_ruler": 1005.0,
+   "u": 22542.4,
+   "cells": [
+    2,
+    4,
+    6,
+    8,
+    12,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.947637,
+    "se": 0.052052,
+    "b": 0.992907
+   },
+   "DUR": {
+    "theta": 0.946222,
+    "se": 0.033782,
+    "b": 0.992868
+   },
+   "EL.avg": {
+    "theta": 0.945416,
+    "se": 0.033139,
+    "b": 0.992867
+   },
+   "X": {
+    "theta": 0.000806,
+    "se": 0.001348,
+    "b": 1e-06
+   },
+   "GAP": {
+    "theta": -0.002221,
+    "se": 0.020714,
+    "b": -4e-05
+   },
+   "X_median": 317.8975,
+   "L2_mhz": 1125.080588
+  },
+  {
+   "capture": "mixtral-8x7b-tp4 lock1005",
+   "gemm": "w2",
+   "f_ruler": 1005.0,
+   "u": 20248.6,
+   "cells": [
+    4,
+    6,
+    8,
+    12,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.786511,
+    "se": 0.049382,
+    "b": 1.007465
+   },
+   "DUR": {
+    "theta": 0.81385,
+    "se": 0.045747,
+    "b": 1.006848
+   },
+   "EL.avg": {
+    "theta": 0.81308,
+    "se": 0.045126,
+    "b": 1.006844
+   },
+   "X": {
+    "theta": 0.00077,
+    "se": 0.000942,
+    "b": 4e-06
+   },
+   "GAP": {
+    "theta": 0.026569,
+    "se": 0.024305,
+    "b": -0.000621
+   },
+   "X_median": 325.33,
+   "L2_mhz": 1125.087644
+  },
+  {
+   "capture": "mixtral-8x7b-tp8 lock1710",
+   "gemm": "w1",
+   "f_ruler": 1710.0,
+   "u": 22542.4,
+   "cells": [
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.909621,
+    "se": 0.009362,
+    "b": 0.994195
+   },
+   "DUR": {
+    "theta": 0.149775,
+    "se": 0.131151,
+    "b": 0.993539
+   },
+   "EL.avg": {
+    "theta": 0.146982,
+    "se": 0.121779,
+    "b": 0.9917
+   },
+   "X": {
+    "theta": 0.002794,
+    "se": 0.046023,
+    "b": 0.001839
+   },
+   "GAP": {
+    "theta": -0.762639,
+    "se": 0.124151,
+    "b": -0.002495
+   },
+   "X_median": 17797.685,
+   "L2_mhz": 1701.758961
+  },
+  {
+   "capture": "mixtral-8x7b-tp8 lock1710",
+   "gemm": "w2",
+   "f_ruler": 1710.0,
+   "u": 10613.8,
+   "cells": [
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.800918,
+    "se": 0.053935,
+    "b": 1.003355
+   },
+   "DUR": {
+    "theta": 0.217528,
+    "se": 0.079469,
+    "b": 1.014511
+   },
+   "EL.avg": {
+    "theta": 0.241161,
+    "se": 0.089222,
+    "b": 1.000822
+   },
+   "X": {
+    "theta": -0.023633,
+    "se": 0.099735,
+    "b": 0.013689
+   },
+   "GAP": {
+    "theta": -0.559757,
+    "se": 0.053919,
+    "b": -0.002532
+   },
+   "X_median": 12546.37,
+   "L2_mhz": null
+  },
+  {
+   "capture": "mixtral-8x7b-tp8 base",
+   "gemm": "w1",
+   "f_ruler": 1379.125442,
+   "u": 22542.4,
+   "cells": [
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.935788,
+    "se": 0.018458,
+    "b": 0.992343
+   },
+   "DUR": {
+    "theta": 0.571125,
+    "se": 0.178708,
+    "b": 0.997057
+   },
+   "EL.avg": {
+    "theta": 0.545744,
+    "se": 0.158493,
+    "b": 0.993748
+   },
+   "X": {
+    "theta": 0.025381,
+    "se": 0.046336,
+    "b": 0.003309
+   },
+   "GAP": {
+    "theta": -0.390044,
+    "se": 0.161846,
+    "b": 0.001405
+   },
+   "X_median": 2828.63884,
+   "L2_mhz": 1703.986673
+  },
+  {
+   "capture": "mixtral-8x7b-tp8 base",
+   "gemm": "w2",
+   "f_ruler": 1378.74253,
+   "u": 10613.8,
+   "cells": [
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "ACT.max": {
+    "theta": 0.73185,
+    "se": 0.047067,
+    "b": 0.998426
+   },
+   "DUR": {
+    "theta": 0.42857,
+    "se": 0.093885,
+    "b": 0.993828
+   },
+   "EL.avg": {
+    "theta": 0.445846,
+    "se": 0.066502,
+    "b": 1.000952
+   },
+   "X": {
+    "theta": -0.017276,
+    "se": 0.098817,
+    "b": -0.007124
+   },
+   "GAP": {
+    "theta": -0.286004,
+    "se": 0.079851,
+    "b": 0.002526
+   },
+   "X_median": 2859.406189,
+   "L2_mhz": null
+  }
+ ],
+ "seen_data": [
+  "every band is read off rental 2's captures (SEEN, labelled in each test); the cells are new captures",
+  "tp8's and tp2's 1710 captures are rental 2's (another board): their B3 pairs are printed, not counted",
+  "the X mechanism of the design (X flattens theta) is refuted on the SEEN theta(X/u) above; the drop sits in GAP"
+ ],
+ "code_pins": {
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "scripts/r3_timing_model.py": "dca04983ad613ee1b42ba726e3281ebbfb3277d4f730d770928362e119b2e316",
+  "scripts/wave_split_bytes.py": "4f40e5b2f11f8ba1cd0d6092d3899b5923618d11b5ee6e6e49f156b83fa3bd4a",
+  "scripts/floor_estimator.py": "40c785ea144740ae663ed11f5692b0978f2436fa836bf682fd5cc71201989cda",
+  "scripts/l2_survival.py": "cd85277d931ec7d09d27a02acfdf5c887142571b2456825b1bf809ae6a56e09b",
+  "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305"
+ }
+}

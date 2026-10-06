@@ -1,0 +1,59 @@
+# RENTAL 3 (registered 2026-10-05, docs/registered/README.md, rental 3): one gpu_1x_gh200, six
+# registrations (2026-10-05-rental3-{e2e,floorlaw,zform,stages,flush,replicate}-gh200), run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental3-2026-10.plan --deadline <epoch s>
+# One unit a line: <model> <step> [key=value ...]. The order is the priority: when time runs short
+# the driver drops the LAST unit first (a drop-group goes together).
+# KEYS AND STEPS NEW IN RENTAL 3: calibrate, timed and deep units in a plan (each with a label=; R3's
+# pages under gaps-<card>-<model>-<label>, ONE card-wide ruler, so rep8 times on e2e's ruler);
+# timed-groups, timed-treads (timed: those groups at those treads, no G=3 page); lf-arms,
+# lf-group-m, lf-trace=0 (launchfloor: the G = 64 NATIVE wall-time check, timed phase only);
+# launch_floor.py modes E120 and E360.
+# Minutes, from the published ledgers: Qwen1.5's held-out session (2026-09-29) timed 36 and deep 33
+# min, which do not compress (Qwen1.5, OLMoE, Granite-3B: 36 / 36 / 36 and 33 / 32 / 32); bytes
+# about 2.5 min a page, calibrate 0 to 1; rental 2's floor units 2 / 3 / 4 min (tp8 / tp4 / tp2,
+# base + lock, 11 to 12 treads), 1 min a 6-tread single-lock capture; tp2 G = 1 byte page about
+# 4 min (206 s + analyse); launch_floor.py's own --dry-run minutes (wall check: timed phase 7.0;
+# tp8 ladder: timed 9.6 + trace 3.6), rounded up.
+# The review's corrections (design-r3-review/REVIEW.md sections 2, 4, 5 and 7) are in: the tp4 1005
+# capture and the wall-time check (drop-group x, with tp4's base + 1710 and 1410 units, since
+# 1410 without its same-board 1710 is useless); granite above tp8 / tp2 at 1005 (granite carries
+# two of part A's three separating GEMMs and part B's one identifiable new GEMM); part C's pages
+# in drop-group c, the k64s3 control ungrouped so it drops alone first; E120 NOT PLANNED: it is
+# 2x the 60 MiB L2, under timing.flush_mb_for_device's 4x rule, so it evicts incompletely and
+# moves the kernel too; it would only be printed, so its minutes go to modes that are scored.
+# THE K1/K4 REPLICATE (grading, 2026-10-05): part R replicated the timed pages only. floorrep is a
+# 1710-only same-board replicate of the tp4 floor unit's 1710 capture, so rental 2's per-GEMM
+# constant tests K1 (L) and K4 (D_imb) each get a per-cell noise floor. It fits the budget; it
+# sits in drop-group x, because without the tp4 floor unit on this board it has no partner.
+- prelude est=3 cap=15
+# ---- E + A + B: the target's floor, base clock then the 1710 lock, then the 1005 lock alone
+qwen2-57b-a14b-tp8 floor label=floor floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-shape-metrics=1 floor-null-kernel=1 est=5 cap=15
+qwen2-57b-a14b-tp8 floor label=floor1005 floor-groups=64 floor-treads=2,3,4,5,6,8,10,12,13,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=3 cap=12
+# ---- E: end-to-end time from predicted bytes on a never-measured shape
+qwen2-57b-a14b-tp8 calibrate label=e2e est=2 cap=30
+qwen2-57b-a14b-tp8 timed label=e2e est=38 cap=90
+qwen2-57b-a14b-tp8 bytes label=e2e byte-groups=3,8,32 est=9 cap=30
+# ---- A and B: granite-1B, two separating GEMMs for A, the identifiable new GEMM for B
+granite-3.0-1b-a400m floor label=floor floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-shape-metrics=1 floor-null-kernel=1 est=4 cap=15
+granite-3.0-1b-a400m floor label=floor1005 floor-groups=64 floor-treads=3,4,5,6,8,10,12,14,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=3 cap=12
+# ---- B (and R): tp4 on one board, base + 1710, the K1/K4 replicate, 1005, 1410, the wall-time check
+mixtral-8x7b-tp4 floor label=floor floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-shape-metrics=1 floor-null-kernel=1 drop-group=x est=3 cap=15
+mixtral-8x7b-tp4 floor label=floorrep floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1710 floor-shape-metrics=1 floor-null-kernel=1 drop-group=x est=2 cap=10
+mixtral-8x7b-tp4 floor label=floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 drop-group=x est=2 cap=10
+mixtral-8x7b-tp4 floor label=floor1410 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1410 floor-shape-metrics=1 floor-null-kernel=1 drop-group=x est=3 cap=12
+mixtral-8x7b-tp4 launchfloor label=wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0 drop-group=x est=7 cap=25
+# ---- B2 only: tp8 and tp2 at 1005 (their 1710 partners are rental 2's, cross-board: printed)
+mixtral-8x7b-tp8 floor label=floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=2 cap=10
+mixtral-8x7b-tp2 floor label=floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1 est=3 cap=12
+# ---- C: which feature lifts G = 1 survival (tp2, G = 1, 1710); the same-board default first
+mixtral-8x7b-tp2 bytes label=l2base byte-groups=1 drop-group=c est=5 cap=20
+mixtral-8x7b-tp2 bytes label=k32s8 byte-groups=1 block-k=32 num-stages=8 drop-group=c est=5 cap=20
+mixtral-8x7b-tp2 bytes label=k128s4 byte-groups=1 block-k=128 num-stages=4 drop-group=c est=5 cap=20
+mixtral-8x7b-tp2 bytes label=k128s3 byte-groups=1 block-k=128 num-stages=3 drop-group=c est=5 cap=20
+mixtral-8x7b-tp2 bytes label=k64s7 byte-groups=1 num-stages=7 drop-group=c est=5 cap=20
+mixtral-8x7b-tp2 bytes label=k64s3 byte-groups=1 num-stages=3 est=5 cap=20
+# ---- R: the within-board timed replicate (G = 8, treads 6, no G = 3 page), on e2e's ruler
+qwen2-57b-a14b-tp8 timed label=rep8 timed-groups=8 timed-treads=6 est=14 cap=40
+# ---- tail, dropped first from the bottom
+qwen2-57b-a14b-tp8 deep label=e2e est=35 cap=75
+mixtral-8x7b-tp8 launchfloor label=r3 lf-treads=1,2,3 lf-modes=E0,E240,E360,E480 lf-trace=1 est=14 cap=35

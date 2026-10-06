@@ -1,0 +1,981 @@
+{
+ "registered": "2026-10-05, before any rental-3 page",
+ "name": "2026-10-05-rental3-zform-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r3/DESIGN.md section 4 with REVIEW.md section 3: the pooling bug fixed, the SEEN tp4 ratios registered as priors, MID added, base / 1710 the primary clock lever, the curvature check, the verdict arithmetic stated",
+ "tool": "scorer scripts/scoring/rental3/score_zform.py; the AFF coefficients are r3_timing_model's GEMM_CONST (asserted equal here)",
+ "Z": "floor_estimator.intercept of sm__cycles_active.avg on q over a capture's registered floor-bound cells of one GEMM, the slope free (rental 2's score_const.z_intercept); one Z per (capture FILE, GEMM): base, lock1710, lock1005 never pooled",
+ "fits_CAL": {
+  "PROP": {
+   "coef": [
+    0.336108
+   ],
+   "cov": [
+    [
+     4.029796321451028e-05
+    ]
+   ],
+   "chi2_dof": 21.118743,
+   "series": 20
+  },
+  "AFF": {
+   "coef": [
+    2850.014923,
+    0.208086
+   ],
+   "cov": [
+    [
+     46381.11026453138,
+     -2.083431472064439
+    ],
+    [
+     -2.083431472064439,
+     0.0001338853455352826
+    ]
+   ],
+   "chi2_dof": 12.562728,
+   "series": 20
+  },
+  "MIX": {
+   "coef": [
+    3405.86257,
+    0.2001
+   ],
+   "cov": [
+    [
+     59679.74619383753,
+     -2.383221537797939
+    ],
+    [
+     -2.3832215377979384,
+     0.0001354683561946744
+    ]
+   ],
+   "chi2_dof": 11.493722,
+   "series": 20
+  },
+  "MIX3": {
+   "coef": [
+    6773.678332,
+    -3020.187886,
+    0.201278
+   ],
+   "cov": [
+    [
+     1774535.2350903756,
+     -1537847.1211661696,
+     -1.7835871060269581
+    ],
+    [
+     -1537847.1211661699,
+     1379109.6587391577,
+     -0.537739821589567
+    ],
+    [
+     -1.7835871060269552,
+     -0.5377398215895697,
+     0.00013567803068566993
+    ]
+   ],
+   "chi2_dof": 11.78076,
+   "series": 20
+  }
+ },
+ "fit_basis": "weighted least squares on the CAL models' G = 64 base and 1710-lock captures (8x7B 09-27 and 09-30, 8x22B, Qwen2-57B, OLMoE), weight 1 / sigma_Z^2, sigma_Z = max(300, the intercept's error at sigma_active = max(250, 0.02 u)); each series at its own measured clock (median sm_clock_mhz of its cells)",
+ "forms": {
+  "PROP": "Z = zeta u (one zeta; the form question (a) names)",
+  "AFF": "Z = g + b u, SM cycles, clock-free (the cycle form; r3_timing_model --gemm-const)",
+  "MIX": "Z = a (f / 1710) + b u: a constant in ns plus a cycle term",
+  "MIX3": "a (f / 1710) + g + b u: PRINTED, never required to be FALSIFIED (it nests AFF and MIX)"
+ },
+ "seen_residuals": {
+  "per_series": [
+   {
+    "series": "jetmoe-8b 2026-09-29 lock1710 w1",
+    "u": 11531.2,
+    "mhz": 1634.023155,
+    "Z": 4995.295445,
+    "sigma": 340.69257,
+    "PROP": 1119.566875,
+    "AFF": -254.200761,
+    "MIX": -566.634694,
+    "MIX3": -778.211226
+   },
+   {
+    "series": "jetmoe-8b 2026-09-29 base w1",
+    "u": 11531.2,
+    "mhz": 1345.368393,
+    "Z": 4290.776873,
+    "sigma": 340.69257,
+    "PROP": 415.048303,
+    "AFF": -958.719333,
+    "MIX": -696.230196,
+    "MIX3": -339.30611
+   },
+   {
+    "series": "phi-3.5-moe 2026-09-29 lock1710 w1",
+    "u": 22542.4,
+    "mhz": 1674.732077,
+    "Z": 9005.851434,
+    "sigma": 614.402259,
+    "PROP": 1429.170455,
+    "AFF": 1465.078665,
+    "MIX": 1159.498892,
+    "MIX3": 854.77564
+   },
+   {
+    "series": "phi-3.5-moe 2026-09-29 lock1710 w2",
+    "u": 35389.0,
+    "mhz": 1645.147951,
+    "Z": 13111.660623,
+    "sigma": 964.541554,
+    "PROP": 1217.134611,
+    "AFF": 2897.690246,
+    "MIX": 2753.627086,
+    "MIX3": 2492.03597
+   },
+   {
+    "series": "phi-3.5-moe 2026-09-29 base w1",
+    "u": 22542.4,
+    "mhz": 1366.959352,
+    "Z": 7076.278573,
+    "sigma": 614.402259,
+    "PROP": -500.402406,
+    "AFF": -464.494196,
+    "MIX": -157.073031,
+    "MIX3": 144.356837
+   },
+   {
+    "series": "phi-3.5-moe 2026-09-29 base w2",
+    "u": 35389.0,
+    "mhz": 1355.401734,
+    "Z": 8110.13142,
+    "sigma": 964.541554,
+    "PROP": -3784.394592,
+    "AFF": -2103.838957,
+    "MIX": -1670.80516,
+    "MIX3": -1361.746056
+   },
+   {
+    "series": "qwen1.5-moe-a2.7b 2026-09-29 lock1710 w1",
+    "u": 11531.2,
+    "mhz": 1654.236245,
+    "Z": 5845.053571,
+    "sigma": 340.692572,
+    "PROP": 1969.325001,
+    "AFF": 595.557365,
+    "MIX": 242.864364,
+    "MIX3": -8.521504
+   },
+   {
+    "series": "qwen1.5-moe-a2.7b 2026-09-29 lock1710 w2",
+    "u": 8549.2,
+    "mhz": 1636.696695,
+    "Z": 5391.911145,
+    "sigma": 340.692573,
+    "PROP": 2518.456631,
+    "AFF": 762.927391,
+    "MIX": 421.35423,
+    "MIX3": 208.025002
+   },
+   {
+    "series": "qwen1.5-moe-a2.7b 2026-09-29 base w1",
+    "u": 11531.2,
+    "mhz": 1358.583726,
+    "Z": 5105.658571,
+    "sigma": 340.692572,
+    "PROP": 1229.930001,
+    "AFF": -143.837635,
+    "MIX": 92.330094,
+    "MIX3": 423.226807
+   },
+   {
+    "series": "qwen1.5-moe-a2.7b 2026-09-29 base w2",
+    "u": 8549.2,
+    "mhz": 1339.963618,
+    "Z": 4155.013998,
+    "sigma": 340.692573,
+    "PROP": 1281.559484,
+    "AFF": -473.969756,
+    "MIX": -224.530005,
+    "MIX3": 146.551489
+   },
+   {
+    "series": "granite-3.0-3b-a800m 2026-09-30 lock1710 w1",
+    "u": 8778.4,
+    "mhz": 1650.361203,
+    "Z": 5040.065304,
+    "sigma": 521.84427,
+    "PROP": 2089.574837,
+    "AFF": 363.388239,
+    "MIX": -3.570576,
+    "MIX3": -244.081816
+   },
+   {
+    "series": "granite-3.0-3b-a800m 2026-09-30 lock1710 w2",
+    "u": 3731.8,
+    "mhz": 1670.936395,
+    "Z": 4252.706818,
+    "sigma": 340.692575,
+    "PROP": 2998.418984,
+    "AFF": 626.15656,
+    "MIX": 177.91532,
+    "MIX3": -97.173515
+   },
+   {
+    "series": "granite-3.0-3b-a800m 2026-09-30 base w1",
+    "u": 8778.4,
+    "mhz": 1334.220787,
+    "Z": 4570.501734,
+    "sigma": 521.84427,
+    "PROP": 1620.011267,
+    "AFF": -106.175331,
+    "MIX": 156.532994,
+    "MIX3": 538.654898
+   },
+   {
+    "series": "granite-3.0-3b-a800m 2026-09-30 base w2",
+    "u": 3731.8,
+    "mhz": 1360.521298,
+    "Z": 3397.978962,
+    "sigma": 340.692575,
+    "PROP": 2143.691128,
+    "AFF": -228.571296,
+    "MIX": -58.5487,
+    "MIX3": 277.719692
+   },
+   {
+    "series": "jetmoe-8b 2026-09-30 lock1710 w1",
+    "u": 11531.2,
+    "mhz": 1664.731551,
+    "Z": 4731.131201,
+    "sigma": 300.0,
+    "PROP": 855.402631,
+    "AFF": -518.365005,
+    "MIX": -891.961848,
+    "MIX3": -1164.018041
+   },
+   {
+    "series": "jetmoe-8b 2026-09-30 lock1710 w2",
+    "u": 31259.8,
+    "mhz": 1653.118587,
+    "Z": 7924.636635,
+    "sigma": 1535.962298,
+    "PROP": -2582.032223,
+    "AFF": -1430.105031,
+    "MIX": -1623.019356,
+    "MIX3": -1895.444306
+   },
+   {
+    "series": "jetmoe-8b 2026-09-30 base w1",
+    "u": 11531.2,
+    "mhz": 1380.876815,
+    "Z": 4568.070906,
+    "sigma": 300.0,
+    "PROP": 692.342336,
+    "AFF": -681.4253,
+    "MIX": -489.659441,
+    "MIX3": -202.668585
+   },
+   {
+    "series": "jetmoe-8b 2026-09-30 base w2",
+    "u": 31259.8,
+    "mhz": 1383.906152,
+    "Z": 7798.879932,
+    "sigma": 1535.962298,
+    "PROP": -2707.788926,
+    "AFF": -1555.861734,
+    "MIX": -1212.576904,
+    "MIX3": -954.792566
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-01 lock1710 w1",
+    "u": 22542.4,
+    "mhz": 1648.416573,
+    "Z": 6579.395549,
+    "sigma": 499.097126,
+    "PROP": -997.28543,
+    "AFF": -961.37722,
+    "MIX": -1214.543548,
+    "MIX3": -1467.438865
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-01 lock1710 w2",
+    "u": 10613.8,
+    "mhz": 1658.259577,
+    "Z": 5309.689764,
+    "sigma": 300.0,
+    "PROP": 1742.306674,
+    "AFF": 251.091654,
+    "MIX": -116.941104,
+    "MIX3": -375.170158
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-01 base w1",
+    "u": 22542.4,
+    "mhz": 1364.234138,
+    "Z": 6123.058639,
+    "sigma": 499.097126,
+    "PROP": -1453.62234,
+    "AFF": -1417.71413,
+    "MIX": -1104.865067,
+    "MIX3": -798.067937
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-01 base w2",
+    "u": 10613.8,
+    "mhz": 1366.576108,
+    "Z": 4899.151877,
+    "sigma": 300.0,
+    "PROP": 1331.768787,
+    "AFF": -159.446233,
+    "MIX": 53.476453,
+    "MIX3": 369.713004
+   },
+   {
+    "series": "mixtral-8x7b-tp2 2026-10-02 lock1710 w1",
+    "u": 22542.4,
+    "mhz": 1697.189143,
+    "Z": 7106.881082,
+    "sigma": 341.487792,
+    "PROP": -469.799897,
+    "AFF": -433.891687,
+    "MIX": -784.199928,
+    "MIX3": -1133.151987
+   },
+   {
+    "series": "mixtral-8x7b-tp2 2026-10-02 lock1710 w2",
+    "u": 39518.2,
+    "mhz": 1685.912115,
+    "Z": 7842.94152,
+    "sigma": 772.523132,
+    "PROP": -5439.441646,
+    "AFF": -3230.257568,
+    "MIX": -3422.536247,
+    "MIX3": -3769.275885
+   },
+   {
+    "series": "mixtral-8x7b-tp2 2026-10-02 base w1",
+    "u": 22542.4,
+    "mhz": 1377.860725,
+    "Z": 6580.835883,
+    "sigma": 341.487792,
+    "PROP": -995.845096,
+    "AFF": -959.936886,
+    "MIX": -674.228339,
+    "MIX3": -394.26854
+   },
+   {
+    "series": "mixtral-8x7b-tp2 2026-10-02 base w2",
+    "u": 39518.2,
+    "mhz": 1372.039378,
+    "Z": 7545.224124,
+    "sigma": 772.523132,
+    "PROP": -5737.159042,
+    "AFF": -3527.974964,
+    "MIX": -3095.103112,
+    "MIX3": -2823.675762
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 lock1710 w1",
+    "u": 22542.4,
+    "mhz": 1690.070739,
+    "Z": 6809.736859,
+    "sigma": 341.487793,
+    "PROP": -766.94412,
+    "AFF": -731.03591,
+    "MIX": -1067.166194,
+    "MIX3": -1402.098679
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 lock1710 w2",
+    "u": 20248.6,
+    "mhz": 1678.020499,
+    "Z": 6287.118701,
+    "sigma": 395.830577,
+    "PROP": -518.597748,
+    "AFF": -776.346402,
+    "MIX": -1106.794118,
+    "MIX3": -1415.291764
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 base w1",
+    "u": 22542.4,
+    "mhz": 1377.36324,
+    "Z": 6462.053469,
+    "sigma": 341.487793,
+    "PROP": -1114.62751,
+    "AFF": -1078.7193,
+    "MIX": -792.019896,
+    "MIX3": -511.080308
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 base w2",
+    "u": 20248.6,
+    "mhz": 1375.303566,
+    "Z": 5803.859485,
+    "sigma": 395.830577,
+    "PROP": -1001.856964,
+    "AFF": -1259.605618,
+    "MIX": -987.122181,
+    "MIX3": -699.424004
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 lock1005 w1",
+    "u": 22542.4,
+    "mhz": 1004.70156,
+    "Z": 6372.199329,
+    "sigma": 359.904055,
+    "PROP": -1204.48165,
+    "AFF": -1168.57344,
+    "MIX": -139.631658,
+    "MIX3": 875.258737
+   },
+   {
+    "series": "mixtral-8x7b-tp4 2026-10-02 lock1005 w2",
+    "u": 20248.6,
+    "mhz": 1004.505289,
+    "Z": 5702.275397,
+    "sigma": 427.061931,
+    "PROP": -1103.441052,
+    "AFF": -1361.189706,
+    "MIX": -350.175291,
+    "MIX3": 667.803753
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-02 lock1710 w1",
+    "u": 22542.4,
+    "mhz": 1680.15044,
+    "Z": 6455.941474,
+    "sigma": 586.760687,
+    "PROP": -1120.739505,
+    "AFF": -1084.831295,
+    "MIX": -1401.202997,
+    "MIX3": -1716.597622
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-02 lock1710 w2",
+    "u": 10613.8,
+    "mhz": 1668.625253,
+    "Z": 4842.903664,
+    "sigma": 325.365031,
+    "PROP": 1275.520574,
+    "AFF": -215.694446,
+    "MIX": -604.372858,
+    "MIX3": -883.016933
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-02 base w1",
+    "u": 22542.4,
+    "mhz": 1374.919982,
+    "Z": 6281.749899,
+    "sigma": 586.760687,
+    "PROP": -1294.93108,
+    "AFF": -1259.02287,
+    "MIX": -967.45715,
+    "MIX3": -681.705607
+   },
+   {
+    "series": "mixtral-8x7b-tp8 2026-10-02 base w2",
+    "u": 10613.8,
+    "mhz": 1371.70395,
+    "Z": 4462.809575,
+    "sigma": 325.365031,
+    "PROP": 895.426485,
+    "AFF": -595.788535,
+    "MIX": -393.079139,
+    "MIX3": -86.941785
+   }
+  ],
+  "rms": {
+   "PROP": 2051.080067,
+   "AFF": 1295.507077,
+   "MIX": 1186.100757,
+   "MIX3": 1212.610604
+  },
+  "series": 36,
+  "label": "SEEN: every non-CAL published capture, each capture file its own series (the design pooled tp4's 1710 and 1005 cells; fixed)"
+ },
+ "seen_priors": {
+  "pairs": [
+   {
+    "model": "mixtral-8x7b-tp2",
+    "gemm": "w1",
+    "pair": "base/lock1710",
+    "r": 0.925981,
+    "sigma_r_registered_noise": 0.065487,
+    "f_ratio": 0.811849,
+    "AFF": 1.0,
+    "MIX": 0.919401
+   },
+   {
+    "model": "mixtral-8x7b-tp2",
+    "gemm": "w2",
+    "pair": "base/lock1710",
+    "r": 0.96204,
+    "sigma_r_registered_noise": 0.136681,
+    "f_ratio": 0.813826,
+    "AFF": 1.0,
+    "MIX": 0.944507
+   },
+   {
+    "model": "mixtral-8x7b-tp4",
+    "gemm": "w1",
+    "pair": "base/lock1710",
+    "r": 0.948943,
+    "sigma_r_registered_noise": 0.069132,
+    "f_ratio": 0.814974,
+    "AFF": 1.0,
+    "MIX": 0.92093
+   },
+   {
+    "model": "mixtral-8x7b-tp4",
+    "gemm": "w1",
+    "pair": "lock1005/lock1710",
+    "r": 0.935748,
+    "sigma_r_registered_noise": 0.070677,
+    "f_ratio": 0.594473,
+    "AFF": 1.0,
+    "MIX": 0.826699
+   },
+   {
+    "model": "mixtral-8x7b-tp4",
+    "gemm": "w2",
+    "pair": "base/lock1710",
+    "r": 0.923135,
+    "sigma_r_registered_noise": 0.085684,
+    "f_ratio": 0.819599,
+    "AFF": 1.0,
+    "MIX": 0.918456
+   },
+   {
+    "model": "mixtral-8x7b-tp4",
+    "gemm": "w2",
+    "pair": "lock1005/lock1710",
+    "r": 0.906978,
+    "sigma_r_registered_noise": 0.088739,
+    "f_ratio": 0.598625,
+    "AFF": 1.0,
+    "MIX": 0.818572
+   },
+   {
+    "model": "mixtral-8x7b-tp8",
+    "gemm": "w1",
+    "pair": "base/lock1710",
+    "r": 0.973018,
+    "sigma_r_registered_noise": 0.126811,
+    "f_ratio": 0.818331,
+    "AFF": 1.0,
+    "MIX": 0.922626
+   },
+   {
+    "model": "mixtral-8x7b-tp8",
+    "gemm": "w2",
+    "pair": "base/lock1710",
+    "r": 0.921515,
+    "sigma_r_registered_noise": 0.09136,
+    "f_ratio": 0.822056,
+    "AFF": 1.0,
+    "MIX": 0.891434
+   }
+  ],
+  "label": "SEEN, registered as labelled priors: rental 2's same-board ratios sit between AFF (1.0) and MIX; the likely outcome on the new GEMMs is INCONCLUSIVE on the primary lever (MID unreachable at the registered noise, A2.power); MID_1005_printed reports the 1005 lever (DECIDED 2026-10-05 BEFORE ANY RENTAL-3 PAGE (independent check of the build): the label said MID)"
+ },
+ "separating_gemms": {
+  "qwen2-57b-a14b-tp8 w2": {
+   "role": "scored",
+   "u": 2699.5,
+   "cells": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    13,
+    14,
+    16
+   ],
+   "sigma_int": 157.72739,
+   "sigma_tot": 563.363053,
+   "A1_centres_at_1690": {
+    "PROP": 907.323546,
+    "AFF": 3411.74308,
+    "MIX": 3906.19787
+   },
+   "A1_bands_at_1690": {
+    "PROP": [
+     -219.40256,
+     2034.049652
+    ],
+    "AFF": [
+     2285.016974,
+     4538.469186
+    ],
+    "MIX": [
+     2779.471764,
+     5032.923976
+    ]
+   },
+   "A1_forms": [
+    "PROP",
+    "AFF",
+    "MIX"
+   ],
+   "A2_primary_MIX_ratio_base1375_over_1690": 0.839385,
+   "A2_second_MIX_ratio_1005_over_1690": 0.650725,
+   "half_fits": {
+    "n<=8": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     8
+    ],
+    "n>=8": [
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ],
+    "sigma_lo": 262.202212,
+    "sigma_hi": 486.815978
+   },
+   "extrapolation_waves": 54.30303,
+   "power": {
+    "base": {
+     "gap_AFF_MIX": 0.160615,
+     "two_sigma_r": 0.13076,
+     "MID_window": [
+      0.970145,
+      0.86924
+     ],
+     "MID_possible": false
+    },
+    "lock1005": {
+     "gap_AFF_MIX": 0.349275,
+     "two_sigma_r": 0.13076,
+     "MID_window": [
+      0.781485,
+      0.86924
+     ],
+     "MID_possible": true
+    }
+   }
+  },
+  "granite-3.0-1b-a400m w2": {
+   "role": "scored",
+   "u": 3731.8,
+   "cells": [
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16
+   ],
+   "sigma_int": 185.900037,
+   "sigma_tot": 571.89057,
+   "A1_centres_at_1690": {
+    "PROP": 1254.287834,
+    "AFF": 3626.550258,
+    "MIX": 4112.7611
+   },
+   "A1_bands_at_1690": {
+    "PROP": [
+     110.506694,
+     2398.068974
+    ],
+    "AFF": [
+     2482.769118,
+     4770.331398
+    ],
+    "MIX": [
+     2968.97996,
+     5256.54224
+    ]
+   },
+   "A1_forms": [
+    "PROP",
+    "AFF",
+    "MIX"
+   ],
+   "A2_primary_MIX_ratio_base1375_over_1690": 0.847451,
+   "A2_second_MIX_ratio_1005_over_1690": 0.668267,
+   "half_fits": {
+    "n<=8": [
+     3,
+     4,
+     5,
+     6,
+     8
+    ],
+    "n>=8": [
+     8,
+     10,
+     12,
+     14,
+     16
+    ],
+    "sigma_lo": 355.934258,
+    "sigma_hi": 487.339721
+   },
+   "extrapolation_waves": 11.636364,
+   "power": {
+    "base": {
+     "gap_AFF_MIX": 0.152549,
+     "two_sigma_r": 0.144988,
+     "MID_window": [
+      0.992439,
+      0.855012
+     ],
+     "MID_possible": false
+    },
+    "lock1005": {
+     "gap_AFF_MIX": 0.331733,
+     "two_sigma_r": 0.144988,
+     "MID_window": [
+      0.813255,
+      0.855012
+     ],
+     "MID_possible": true
+    }
+   }
+  },
+  "granite-3.0-1b-a400m w1": {
+   "role": "scored",
+   "u": 6025.6,
+   "cells": [
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16
+   ],
+   "sigma_int": 185.900037,
+   "sigma_tot": 571.89057,
+   "A1_centres_at_1690": {
+    "PROP": 2025.252365,
+    "AFF": 4103.857925,
+    "MIX": 4571.75048
+   },
+   "A1_bands_at_1690": {
+    "PROP": [
+     881.471225,
+     3169.033505
+    ],
+    "AFF": [
+     2960.076785,
+     5247.639065
+    ],
+    "MIX": [
+     3427.96934,
+     5715.53162
+    ]
+   },
+   "A1_forms": [
+    "PROP",
+    "MIX"
+   ],
+   "A2_primary_MIX_ratio_base1375_over_1690": 0.862767,
+   "A2_second_MIX_ratio_1005_over_1690": 0.701572,
+   "half_fits": {
+    "n<=8": [
+     3,
+     4,
+     5,
+     6,
+     8
+    ],
+    "n>=8": [
+     8,
+     10,
+     12,
+     14,
+     16
+    ],
+    "sigma_lo": 355.934258,
+    "sigma_hi": 487.339721
+   },
+   "extrapolation_waves": 11.636364,
+   "power": {
+    "base": {
+     "gap_AFF_MIX": 0.137233,
+     "two_sigma_r": 0.128124,
+     "MID_window": [
+      0.990891,
+      0.871876
+     ],
+     "MID_possible": false
+    },
+    "lock1005": {
+     "gap_AFF_MIX": 0.298428,
+     "two_sigma_r": 0.128124,
+     "MID_window": [
+      0.829697,
+      0.871876
+     ],
+     "MID_possible": true
+    }
+   }
+  },
+  "qwen2-57b-a14b-tp8 w1": {
+   "role": "printed",
+   "u": 19789.6,
+   "cells": [
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    13,
+    14,
+    16
+   ],
+   "sigma_int": 291.672431,
+   "sigma_tot": 614.469533,
+   "A1_centres_at_1690": {
+    "PROP": 6651.442877,
+    "AFF": 6967.953629,
+    "MIX": 7325.92688
+   },
+   "A1_bands_at_1690": {
+    "PROP": [
+     5422.503811,
+     7880.381943
+    ],
+    "AFF": [
+     5739.014563,
+     8196.892695
+    ],
+    "MIX": [
+     6096.987814,
+     8554.865946
+    ]
+   },
+   "A1_forms": [
+    "PROP",
+    "AFF",
+    "MIX"
+   ],
+   "A2_primary_MIX_ratio_base1375_over_1690": 0.91436,
+   "A2_second_MIX_ratio_1005_over_1690": 0.813766,
+   "half_fits": {
+    "n<=8": [
+     3,
+     4,
+     5,
+     6,
+     8
+    ],
+    "n>=8": [
+     8,
+     10,
+     12,
+     13,
+     14,
+     16
+    ],
+    "sigma_lo": 563.503712,
+    "sigma_hi": 770.71147
+   },
+   "extrapolation_waves": 14.545455,
+   "power": {
+    "base": {
+     "gap_AFF_MIX": 0.08564,
+     "two_sigma_r": 0.118395,
+     "MID_window": [
+      1.032755,
+      0.881605
+     ],
+     "MID_possible": false
+    },
+    "lock1005": {
+     "gap_AFF_MIX": 0.186234,
+     "two_sigma_r": 0.118395,
+     "MID_window": [
+      0.932161,
+      0.881605
+     ],
+     "MID_possible": false
+    }
+   }
+  }
+ },
+ "noise": {
+  "sigma_int": "max(the registered sigma_int, the realised intercept standard error of the fit) per capture",
+  "sigma_board": 300.0,
+  "sigma_model": 450.0,
+  "basis": "sigma_board: the same shape on two boards (tp8 r1 / r2 dZ 123 to 467, JetMoE 09-29 / 09-30 264 to 277, SEEN); sigma_model: the SEEN rms of AFF and MIX at u < 12k"
+ },
+ "A1": {
+  "what": "Z at the 1710 capture against each form's centre at the capture's MEASURED clock (median sm_clock_mhz of its cells)",
+  "band": "centre +- 2 sigma_tot, sigma_tot = sqrt(sigma_int^2 + sigma_board^2 + sigma_model^2)",
+  "forms_per_gemm": "PROP, AFF and MIX on qwen2-tp8 w2 and granite-1B w2; PROP and MIX on granite-1B w1 (PROP and AFF overlap there); qwen2-tp8 w1 printed"
+ },
+ "A2": {
+  "primary": "r = Z_base / Z_1710, same board: the SM clock moves and the L2 stays at about 1704 MHz",
+  "second": "r' = Z_1005 / Z_1710, PRINTED with the label 'SM and L2 moved together' (the L2 follows a 1005 lock to 1125 MHz)",
+  "predictions": "AFF and PROP: 1.0; MIX: Z_MIX(u, f_base) / Z_MIX(u, f_1710) at the two captures' measured clocks",
+  "sigma_r": "r sqrt(sigma_int,base^2 + sigma_int,1710^2) / Z_1710 (sigma_board cancels on one board)",
+  "rule": "AFF and PROP FAIL A2 when |r - 1| > 2 sigma_r; MIX FAILS when |r - r_MIX| > 2 sigma_r; MID when r_MIX + 2 sigma_r < r < 1 - 2 sigma_r ('neither cycle-constant nor ns-constant')",
+  "power": "per GEMM in separating_gemms.power, at the registered sigma_int: on the base / 1710 lever the AFF-MIX gap (0.14 to 0.16) exceeds 2 sigma_r (0.13 to 0.15) by little, so an endpoint reading falsifies the other form only narrowly and the MID window is EMPTY: MID cannot be read on the primary lever. It is read on the printed 1005 lever (gap 0.30 to 0.35, window open) as MID_1005_printed; a reading between the forms on the primary lever is INCONCLUSIVE, which the SEEN priors (0.92 to 0.97) make the likely outcome",
+  "SEEN_base_clocks_mhz": [
+   1377.860725,
+   1372.039378,
+   1377.36324,
+   1375.303566,
+   1374.919982,
+   1371.70395
+  ]
+ },
+ "curvature": "per GEMM and capture, the intercepts of the n <= 8 and n >= 8 half-fits agree within 2 sqrt(sigma_lo^2 + sigma_hi^2), else that GEMM is NOT SCORED (qwen2-tp8 w2 extrapolates 13.6 waves to q = 0 and Z is 1.26 u)",
+ "verdict": {
+  "per_form": "a form FAILS a GEMM when A1 (where it is scored for it) or A2 fails there; it is FALSIFIED when it fails on at least 2 of the GEMMs scored for it (AFF: A1 on 2 GEMMs and A2 on 3 count as 3 GEMMs)",
+  "selected": "SELECTED when it fails on no scored GEMM and every other one of PROP, AFF, MIX is FALSIFIED; MIX3 is printed and need not be FALSIFIED",
+  "MID": "when A2 reads MID on 2 or more GEMMs, the verdict is MID (unreachable on the primary lever at the registered noise: see A2.power); MID_1005_printed reports the 1005 lever's reading beside it",
+  "else": "INCONCLUSIVE, each A printed"
+ },
+ "also_printed": [
+  "the Z / u of every new capture",
+  "the base capture's Z, a third clock",
+  "K3's tp4 value refit under each form (the tp4 floor and floor1005 units)"
+ ],
+ "ambiguities_resolved": {
+  "A-1 sigma_int": "the larger of the registered and the realised intercept error",
+  "A-2 cell set": "the registered floor-bound cells (floorlaw cells_registered)",
+  "A-3 MIX's clock": "each capture's measured clock",
+  "A-4 2 of 3": "per form, at least 2 of the GEMMs scored for it",
+  "A-5 MIX3": "printed only",
+  "A-6 pooling": "one series per capture file",
+  "A-7 A2's primary": "base / 1710"
+ },
+ "leakage": "the coefficients are CAL; sigma_board and sigma_model are SEEN, labelled; the cells are BLIND",
+ "seen_data": [
+  "the SEEN residuals and priors are diagnosis, never a test",
+  "Z's form at small u was diagnosed on SEEN Granite-3B and tp8 w2 series"
+ ],
+ "code_pins": {
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "scripts/r3_timing_model.py": "dca04983ad613ee1b42ba726e3281ebbfb3277d4f730d770928362e119b2e316",
+  "scripts/wave_split_bytes.py": "4f40e5b2f11f8ba1cd0d6092d3899b5923618d11b5ee6e6e49f156b83fa3bd4a",
+  "scripts/floor_estimator.py": "40c785ea144740ae663ed11f5692b0978f2436fa836bf682fd5cc71201989cda",
+  "scripts/l2_survival.py": "cd85277d931ec7d09d27a02acfdf5c887142571b2456825b1bf809ae6a56e09b",
+  "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305"
+ }
+}
