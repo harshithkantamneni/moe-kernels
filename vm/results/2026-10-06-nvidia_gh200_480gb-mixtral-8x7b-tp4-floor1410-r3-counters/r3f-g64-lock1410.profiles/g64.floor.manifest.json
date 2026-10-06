@@ -1,0 +1,206 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      6
+    ],
+    [
+      "native",
+      8
+    ],
+    [
+      "native",
+      10
+    ],
+    [
+      "native",
+      11
+    ],
+    [
+      "native",
+      12
+    ],
+    [
+      "native",
+      13
+    ],
+    [
+      "native",
+      14
+    ],
+    [
+      "native",
+      15
+    ],
+    [
+      "native",
+      16
+    ]
+  ],
+  "calls_per_cell": 2,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 66,
+  "launch_count": 66,
+  "tokens": {
+    "2": 256,
+    "4": 512,
+    "6": 768,
+    "8": 1024,
+    "10": 1280,
+    "11": 1408,
+    "12": 1536,
+    "13": 1664,
+    "14": 1792,
+    "15": 1920,
+    "16": 2048
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/2": "f568310ce909c90b38da372699a031abb49db16fdd3a038a374b6b163d328195",
+    "native/4": "72eac24e8b77a04abfba12045b4d0a95d68426c2737e86af731e16011802854f",
+    "native/6": "32462167f09ce1d6fa09104f484c1c11ec1a4e3802c75859cfb3c8312159ff39",
+    "native/8": "c2519307679a38f7118681c76aabb5d2ece77767ebf9badc654bf792cded5e24",
+    "native/10": "13e960832e2e268cc7ce40ddcb854b71c2487c8e7b3b63614051b17e91721788",
+    "native/11": "0493d3313e5042eaa55d1452e6f05c1ddcf5030fa3e53257e4cd22120031b515",
+    "native/12": "6dc4ba7ddc96fd34ecfdcaff475d52ee8e3bf4c62f8d4ffb7f72794ccff9f1d6",
+    "native/13": "d368f0c67043182629db7dfa604c69dae6e5de379de379dbdce885f1af8ee8da",
+    "native/14": "7b8a07b736980bab8de26be80e2edca48778053d4c5b26981f032b1101587181",
+    "native/15": "059950b7a505dfa3ec0c0b9dcf3964720ca3fe699c647f3a2878895ca439503e",
+    "native/16": "3ee41ab32b8d84ea76e59388f45e21cd0aa6bbeaca900c8b1eeb9a8b8632ba84"
+  },
+  "sorted_ids_len": {
+    "native/2": 760,
+    "native/4": 1272,
+    "native/6": 1784,
+    "native/8": 2296,
+    "native/10": 2808,
+    "native/11": 3064,
+    "native/12": 3320,
+    "native/13": 3576,
+    "native/14": 3832,
+    "native/15": 4088,
+    "native/16": 4344
+  },
+  "grids": {
+    "native/2": {
+      "w1": 2688,
+      "w2": 1536
+    },
+    "native/4": {
+      "w1": 4480,
+      "w2": 2560
+    },
+    "native/6": {
+      "w1": 6272,
+      "w2": 3584
+    },
+    "native/8": {
+      "w1": 8064,
+      "w2": 4608
+    },
+    "native/10": {
+      "w1": 9856,
+      "w2": 5632
+    },
+    "native/11": {
+      "w1": 10752,
+      "w2": 6144
+    },
+    "native/12": {
+      "w1": 11648,
+      "w2": 6656
+    },
+    "native/13": {
+      "w1": 12544,
+      "w2": 7168
+    },
+    "native/14": {
+      "w1": 13440,
+      "w2": 7680
+    },
+    "native/15": {
+      "w1": 14336,
+      "w2": 8192
+    },
+    "native/16": {
+      "w1": 15232,
+      "w2": 8704
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n2",
+    "r3/native/g64/n2",
+    "r3/native/g64/n4",
+    "r3/native/g64/n4",
+    "r3/native/g64/n6",
+    "r3/native/g64/n6",
+    "r3/native/g64/n8",
+    "r3/native/g64/n8",
+    "r3/native/g64/n10",
+    "r3/native/g64/n10",
+    "r3/native/g64/n11",
+    "r3/native/g64/n11",
+    "r3/native/g64/n12",
+    "r3/native/g64/n12",
+    "r3/native/g64/n13",
+    "r3/native/g64/n13",
+    "r3/native/g64/n14",
+    "r3/native/g64/n14",
+    "r3/native/g64/n15",
+    "r3/native/g64/n15",
+    "r3/native/g64/n16",
+    "r3/native/g64/n16"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 4,
+    "BLOCK_SIZE_M": 32
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 704643072,
+    "weight_bytes": 6341787648,
+    "activation_bytes": 155189248,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 6807355392,
+    "device_free_bytes": 100721426432,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 1
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "00827a0f-81e7-0fe3-caef-3114182a12bc"
+  },
+  "null_kernel": true,
+  "null_kernel_name": "spin_kernel",
+  "null_kernel_cycles": 1000
+}
