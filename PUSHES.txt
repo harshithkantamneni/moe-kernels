@@ -18,3 +18,4 @@
 2026-10-06T07:59:03Z launchfloor (unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0): exit 3 (5 min)
 2026-10-06T08:00:24Z floor (unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (1 min)
 2026-10-06T08:02:57Z floor (unit 15/24 mixtral-8x7b-tp2 floor1005 floor-groups=64 floor-treads=2,4,6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1): exit 0 (2 min)
+2026-10-06T08:06:26Z bytes: G=1 page exit 0
