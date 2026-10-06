@@ -30,3 +30,4 @@
 2026-10-06T08:21:19Z bytes (unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7): exit 0 (4 min)
 2026-10-06T08:24:48Z bytes: G=1 page exit 0
 2026-10-06T08:24:59Z bytes (unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3): exit 0 (4 min)
+2026-10-06T08:35:52Z timed (unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6): exit 0 (11 min)

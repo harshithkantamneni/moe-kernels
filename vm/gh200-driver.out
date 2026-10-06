@@ -86,3 +86,7 @@
 2026-10-06T08:21:20Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3] (estimate 5 min, cap 20 min, 306 min left)
 2026-10-06T08:24:57Z bytes END: exit 0 after 4 min [unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3]
 2026-10-06T08:24:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d37a91a to run-gh200-rental3-20261006t0655: bytes (unit 21/24 mixtral-8x7b-tp2 k64s3 byte-groups=1 num-stages=3): exit 0 (4 min)
+2026-10-06T08:25:01Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 6), no G=3 page [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6] (estimate 14 min, cap 40 min, 302 min left)
+2026-10-06T08:35:49Z timed END: exit 0 after 11 min [unit 22/24 qwen2-57b-a14b-tp8 rep8 timed-groups=8 timed-treads=6]
+2026-10-06T08:35:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
