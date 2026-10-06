@@ -34,7 +34,14 @@ with its standard error sd / sqrt(R) (the median's is about 1.25 x that; the
 rows print the mean's, labelled).
 
 Where a metric has no replicate of any kind the row reads
-"no replicate exists; rental 3 part R".
+"no replicate exists; rental 3 part R does not yet include one" (part R, as designed,
+measures sigma_page on qwen2-57b-a14b-tp8 and sigma_board on Mixtral 8x7B only).
+
+Added 2026-10-05 (gradefix4): NATIVE bytes, (a) and (b) as for PRIVATE and SHARED;
+and the launch offsets P2 (E240 - GR), P3 (E0 - E240), P4 (E480 - E240), P8
+(H - I_E240), each the SE of the offset from repeat-paired differences over the
+3 repeats of a cell, and P6's eager cell value (relative SE), with rental 1
+against rental 2 for the same (model, arm, n) as the board-and-host term.
 """
 from __future__ import annotations
 
@@ -57,7 +64,7 @@ import l2_survival as L2  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 PUB = ROOT / "results" / "published"
-NONE = "no replicate exists; rental 3 part R"
+NONE = "no replicate exists; rental 3 part R does not yet include one"
 SCORED_ARMS = ("shared", "private")
 
 
@@ -308,8 +315,8 @@ def time_board() -> dict:
             "worst": max(d, key=abs), "mean": st.mean(d), "sources": srcs}
 
 
-def bytes_repeat() -> dict:
-    """(a) per-call spread of PRIVATE per-GEMM DRAM bytes, every published GH200
+def bytes_repeat(arm: str = "private") -> dict:
+    """(a) per-call spread of one arm's per-GEMM DRAM bytes, every published GH200
     lock-1710 counter page of the scored models and Mixtral (3 calls a cell)."""
     se, srcs = [], []
     pages = sorted(PUB.glob("2026-09-2*-nvidia_gh200*/results/*-r3-counters/lock1710/r3c-g*.json"))
@@ -317,7 +324,7 @@ def bytes_repeat() -> dict:
         pg = counter(p)
         srcs.append(rel(p))
         for c in pg["cells"]:
-            if c["arm"] != "private":
+            if c["arm"] != arm:
                 continue
             for _g, vals in (c.get("per_gemm_values") or {}).items():
                 if len(vals) >= 2:
@@ -326,12 +333,12 @@ def bytes_repeat() -> dict:
             "p90": pct(se, 0.9), "max": max(se), "sources": srcs}
 
 
-def bytes_board() -> dict:
-    out = {"private": [], "shared": [], "rows": [], "sources": []}
+def bytes_board(arms=("private", "shared")) -> dict:
+    out = {**{a: [] for a in arms}, "rows": [], "sources": []}
     for G, pa, pb, boards in BOARD_BYTES:
         a, b = ccells(counter(PUB / pa)), ccells(counter(PUB / pb))
         out["sources"] += [f"results/published/{pa}", f"results/published/{pb}"]
-        for arm in ("private", "shared"):
+        for arm in arms:
             d = []
             for key in sorted(set(a) & set(b)):
                 if key[0] != arm:
@@ -343,6 +350,12 @@ def bytes_board() -> dict:
             if d:
                 out["rows"].append((G, boards, arm, len(d), rms(d), max(d, key=abs)))
     return out
+
+
+def _board_diffs(pa: str, pb: str, arm: str) -> list[float]:
+    a, b = ccells(counter(PUB / pa)), ccells(counter(PUB / pb))
+    return [b[k]["per_gemm"][g]["dram_bytes_read"] / a[k]["per_gemm"][g]["dram_bytes_read"] - 1
+            for k in sorted(set(a) & set(b)) if k[0] == arm for g in ("w1", "w2")]
 
 
 def floor_slopes(sdir: str, model: str, treads) -> dict:
@@ -527,6 +540,91 @@ def launch_metric() -> dict:
             "board": board, "sources": srcs}
 
 
+#: The launch-floor offsets (D/2026-10-01-launch-floor-gh200.txt; rental 2's rerun,
+#: D/2026-10-01-rental2-launch2-gh200.txt): (metric, quoted error, mode a, mode b,
+#: cell rule). Each offset is a difference of two cell values in us; P6 is the
+#: eager cell value itself, against MP. The cell rules are the registrations' sets
+#: on Granite-3B and JetMoE; P8's rule (cells host-bound in every repeat at E240)
+#: is applied to every model on the page.
+LAUNCH_OFFSETS = [
+    ("P2 E240 - GR (us)", "rental 1 1 of 15 out; rental 2 E240 - GR 3.6 to 6.7 us; band max(2%, 6 us)",
+     "E240", "GR", lambda m, n: (m == "granite-3.0-3b-a800m" and n >= 7) or (m == "jetmoe-8b" and n >= 3)),
+    ("P3 E0 - E240 (us)", "+45 to +65 us; rental 2 pooled 10 of 15 out; band +-12 us",
+     "E0", "E240", lambda m, n: m == "granite-3.0-3b-a800m" and n <= 2),
+    ("P4 E480 - E240 (us)", "shift -54 to -73 us against -67.4; band +-12 us",
+     "E480", "E240", lambda m, n: m == "granite-3.0-3b-a800m"),
+    ("P8 H - I_E240 (us)", "H - I 75 to 79 us; plateau band [0.23, 0.27] ms",
+     "H", "E240", lambda m, n: True),
+]
+
+
+def _launch_cells(d: str, model: str) -> dict:
+    """(mode, arm, n) -> {repeat: (ms_p50, H ms per call, host_bound)} of one launch page."""
+    out: dict = {}
+    p = PUB / d / model / "cells.csv"
+    if not p.exists():
+        return out
+    for r in read_csv(p):
+        if r["status"] != "ok" or not r.get("ms_p50"):
+            continue
+        H = (float(r["host_enqueue_ms"]) / float(r["calls_per_burst"])
+             if r.get("host_enqueue_ms") and r.get("calls_per_burst") else None)
+        out.setdefault((r["mode"], r["arm"], int(r["tiles"])), {})[int(r["repeat"])] = (
+            float(r["ms_p50"]), H, r["host_bound"] == "True")
+    return out
+
+
+def launch_offsets() -> dict:
+    """(a) the SE of each launch offset from the 3 repeats of its cells (repeat-paired
+    differences, sd / sqrt 3, the mean's SE), and the relative SE of each eager cell
+    value (P6); (b) the same offset's cell median, rental 1 against rental 2."""
+    models = ("granite-3.0-3b-a800m", "jetmoe-8b", "granite-3.0-1b-a400m", "mixtral-8x7b-tp8")
+    pages = {(rental, m): _launch_cells(d, m) for rental, d in LAUNCH.items() for m in models}
+    srcs = sorted(rel(PUB / LAUNCH[r] / m / "cells.csv") for (r, m), c in pages.items() if c)
+    res = {}
+    for metric, quoted, ma, mb, rule in LAUNCH_OFFSETS:
+        se, med = [], {}
+        for (rental, m), cells in pages.items():
+            for (mode, arm, n), reps in cells.items():
+                if mode != mb or not rule(m, n):
+                    continue
+                if ma == "H":
+                    if not all(v[2] for v in reps.values()):
+                        continue
+                    d = [1e3 * (v[1] - v[0]) for v in reps.values() if v[1] is not None]
+                else:
+                    other = cells.get((ma, arm, n))
+                    if not other:
+                        continue
+                    common = sorted(set(reps) & set(other))
+                    d = [1e3 * (other[k][0] - reps[k][0]) for k in common]
+                if len(d) >= 2:
+                    se.append(st.stdev(d) / math.sqrt(len(d)))
+                    med[(rental, m, arm, n)] = st.median(d)
+        board = [med[("rental2", m, a, n)] - med[("rental1", m, a, n)]
+                 for (r, m, a, n) in med if r == "rental1" and ("rental2", m, a, n) in med]
+        res[metric] = {"quoted": quoted, "cells": len(se),
+                       "se_median": st.median(se) if se else None,
+                       "se_max": max(se) if se else None, "board_cells": len(board),
+                       "board_rms": rms(board) if board else None,
+                       "board_worst": max(board, key=abs) if board else None}
+    rel_se, board6 = [], []
+    for (rental, m), cells in pages.items():
+        for (mode, arm, n), reps in cells.items():
+            if mode in ("E0", "E240", "E480") and len(reps) >= 2:
+                v = [x[0] for x in reps.values()]
+                rel_se.append(st.stdev(v) / st.mean(v) / math.sqrt(len(v)))
+                if rental == "rental1" and (mode, arm, n) in pages.get(("rental2", m), {}):
+                    v2 = [x[0] for x in pages[("rental2", m)][(mode, arm, n)].values()]
+                    board6.append(st.median(v2) / st.median(v) - 1)
+    res["P6 eager I (relative)"] = {
+        "quoted": "rental 1 55 of 57 out; rental 2 tp8 5 of 24 out, n=1 7 to 9% over MP; band max(5%, 12 us)",
+        "cells": len(rel_se), "se_median": st.median(rel_se), "se_max": max(rel_se),
+        "board_cells": len(board6), "board_rms": rms(board6) if board6 else None,
+        "board_worst": max(board6, key=abs) if board6 else None}
+    return {"metrics": res, "sources": srcs}
+
+
 # ------------------------------------------------------------ the table
 def build() -> list[dict]:
     rows: list[dict] = []
@@ -586,6 +684,28 @@ def build() -> list[dict]:
         f"rms difference {100 * rms(bb['private']):.2f}%, worst "
         f"{100 * max(bb['private'], key=abs):+.2f}%", len(bb["private"]),
         "; ".join(sorted(set(bb["sources"]))), "single-board sigma = rms / sqrt 2")
+    nr = bytes_repeat("native")
+    add("byte error % (NATIVE per GEMM)",
+        "printed in the w1 all-arms and SHARED+NATIVE w2 G<=16 n<=4 sets (8x22B, Qwen2-57B); bar 5% per cell",
+        "a: per-call values of every lock-1710 GH200 counter page 2026-09-2x (3 calls)",
+        f"SE of a cell value {100 * nr['median']:.4f}% median, {100 * nr['p90']:.4f}% p90, "
+        f"{100 * nr['max']:.3f}% max", nr["cell_gemms"],
+        f"{nr['pages']} pages under results/published/2026-09-2*-nvidia_gh200*/results/*-r3-counters/lock1710/",
+        "NATIVE added 2026-10-05 (gradefix4)")
+    nb = bytes_board(("native",))
+    nb2 = [x for G, pa, pb, _b in BOARD_BYTES if G >= 2
+           for x in _board_diffs(pa, pb, "native")]
+    add("bytes, NATIVE, pooled board to board (8x7B), G >= 2", "as above",
+        "b: every BOARD_BYTES pair at G >= 2",
+        f"rms difference {100 * rms(nb2):.2f}%, worst {100 * max(nb2, key=abs):+.2f}%",
+        len(nb2), "; ".join(sorted(set(nb["sources"]))),
+        "single-board sigma = rms / sqrt 2; NATIVE added 2026-10-05 (gradefix4)")
+    nb1d = [x for G, pa, pb, _b in BOARD_BYTES if G == 1 for x in _board_diffs(pa, pb, "native")]
+    add("bytes, NATIVE, pooled board to board (8x7B), G = 1", "as above",
+        "b: every BOARD_BYTES pair at G = 1",
+        f"rms difference {100 * rms(nb1d):.2f}%, worst {100 * max(nb1d, key=abs):+.2f}%",
+        len(nb1d), "; ".join(sorted(set(nb["sources"]))),
+        "single-board sigma = rms / sqrt 2; NATIVE added 2026-10-05 (gradefix4)")
 
     fm = floor_metric()
     add("floor cycles per CTA k-step (slope over n = 2, 3, 4, 6)",
@@ -651,6 +771,21 @@ def build() -> list[dict]:
             f"{100 * w:+.2f}%", n, f"results/published/{LAUNCH['rental1']}/{model}/cells.csv; "
             f"results/published/{LAUNCH['rental2']}/{model}/cells.csv",
             "two boards and two host states (rental 1's post-trace host)")
+    lo = launch_offsets()
+    for metric, m in lo["metrics"].items():
+        unit = "%" if "relative" in metric else " us"
+        sc = 100 if unit == "%" else 1
+        f = (f"SE {sc * m['se_median']:.2f}{unit} median, {sc * m['se_max']:.2f}{unit} max"
+             if m["se_median"] is not None else NONE)
+        add(f"launch {metric}", m["quoted"], "a: the 3 repeats of each cell, rentals 1 and 2",
+            f, m["cells"], "; ".join(lo["sources"]),
+            "repeat-paired differences, sd / sqrt 3; added 2026-10-05 (gradefix4)")
+        if m["board_cells"]:
+            add(f"launch {metric}, rental 1 against rental 2", "as above",
+                "b: 7269a7 / 4da056, same (model, arm, n)",
+                f"rms difference {sc * m['board_rms']:.2f}{unit}, worst "
+                f"{sc * m['board_worst']:+.2f}{unit}", m["board_cells"], "; ".join(lo["sources"]),
+                "two boards and two host states (rental 1's post-trace host); added 2026-10-05 (gradefix4)")
 
     p4 = part4_cells()
     add("part-4 per-cell rms (cycles)", "tp8 4248 / 4104, tp4 4028 / 4423; sigma_cell 2678 (CAL)",

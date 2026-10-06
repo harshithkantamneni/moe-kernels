@@ -44,3 +44,11 @@ def test_cli_runs(tmp_path):
                         "--out-dir", str(tmp_path)], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
     assert (tmp_path / "noise_floors.csv").exists()
+
+
+def test_native_and_launch_offsets_have_floors():
+    rows = {r["metric"]: r for r in csv.DictReader((ROOT / "docs/paper/noise_floors.csv").open())}
+    for m in ("byte error % (NATIVE per GEMM)", "bytes, NATIVE, pooled board to board (8x7B), G >= 2",
+              "launch P2 E240 - GR (us)", "launch P3 E0 - E240 (us)", "launch P4 E480 - E240 (us)",
+              "launch P8 H - I_E240 (us)", "launch P6 eager I (relative)"):
+        assert m in rows and rows[m]["noise_floor"] != NF.NONE, m

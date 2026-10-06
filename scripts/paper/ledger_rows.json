@@ -1,0 +1,765 @@
+{
+ "what": "the OUTLINE section 3 ledger (OUTLINE.v5, 2026-10-05), transcribed: each row's test, registration, typed verdict, number, SEEN/BLIND label and scored-in cell. scripts/paper/ledger_tables.py checks every typed verdict it can against the committed scorer outputs.",
+ "rows": [
+  {
+   "row": 1,
+   "section": "3.1",
+   "test": "P1 floor clock exponent",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "HELD, eta 1",
+   "number": "G=4 slopes 0.6598/0.6222/0.5812 vs 0.6654/0.6259/0.5854",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P1"
+  },
+  {
+   "row": 2,
+   "section": "3.1",
+   "test": "P2 G=8, 32 SHARED steps in [0.538, 0.556]",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "HELD",
+   "number": "all steps inside",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P2"
+  },
+  {
+   "row": 3,
+   "section": "3.1",
+   "test": "P3 G=2 odd-n excess over G=4 >= 0.10 ms, flat",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "HELD",
+   "number": "0.154 0.153 0.162 0.160 vs 0.143 0.145 0.144 0.151",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P3"
+  },
+  {
+   "row": 4,
+   "section": "3.1",
+   "test": "P4 G=4 n=8 to 9",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "HELD",
+   "number": "0.508 vs 0.504 ms",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P4"
+  },
+  {
+   "row": 5,
+   "section": "3.1",
+   "test": "P5 G=3 flat",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "FALSIFIED",
+   "number": "period-3 ripple 0.491 0.576 0.550, 0.516 0.580 0.560",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P5"
+  },
+  {
+   "row": 6,
+   "section": "3.1",
+   "test": "P6 floor near 353.8 cycles",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "HELD",
+   "number": "w1 350 to 352, w2 354 to 367",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` P6"
+  },
+  {
+   "row": 7,
+   "section": "3.1",
+   "test": "WSC w2 SHARED G=8 n=2, 4 <= 1.12",
+   "registration": "`R/scripts/wave_split_bytes.py` \"WHAT WOULD FALSIFY IT\"",
+   "verdict": "HELD",
+   "number": "1.078, 1.100 vs 1.082, 1.118 (LRU rival 1.139, 1.159)",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` WSC G=8 test"
+  },
+  {
+   "row": 8,
+   "section": "3.1",
+   "test": "WSC n >= 5 within 5%",
+   "registration": "`R/scripts/wave_split_bytes.py` \"WHAT WOULD FALSIFY IT\"",
+   "verdict": "FALSIFIED",
+   "number": "G=16 n=5, 7, 8 +7.5/+12.6/+16.3%; G=4 n=8 5.9%; G=2 6.0 to 13.2%",
+   "label": "",
+   "scored_in": "`P/2026-09-27-nvidia_gh200_480gb-session/session/README.md` WSC n >= 5 test"
+  },
+  {
+   "row": 9,
+   "section": "3.1",
+   "test": "P7, P8",
+   "registration": "`R/scripts/r3_timing_model.py` P1 to P8",
+   "verdict": "not answered",
+   "number": "",
+   "label": "",
+   "scored_in": ""
+  },
+  {
+   "row": 10,
+   "section": "3.2",
+   "test": "8x22B floor w1 in 340 to 365",
+   "registration": "`D/2026-09-27-mixtral-8x22b-gh200.json`",
+   "verdict": "HELD",
+   "number": "346 to 348",
+   "label": "BLIND (reg: \"before any 8x22B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/8x22b.registered.json` floor w1; summary `D/README.md`"
+  },
+  {
+   "row": 11,
+   "section": "3.2",
+   "test": "8x22B G>=8 slope 0.908 to 0.946",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "0.9155, 0.9141",
+   "label": "BLIND (reg: \"before any 8x22B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/8x22b.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 12,
+   "section": "3.2",
+   "test": "8x22B time rms <= 2%, none > 5% (predicted bytes)",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "1.71%, worst -4.73%, 40 cells (G=3, 8, 32; G=2, 4 ran at 1605, not scored)",
+   "label": "BLIND, predicted bytes (reg: \"before any 8x22B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/8x22b.registered.json` time_predicted_bytes; summary `D/README.md`"
+  },
+  {
+   "row": 13,
+   "section": "3.2",
+   "test": "8x22B G=3 ripple, G=2 zig-zag phase",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "ripple 0.559 0.815 0.990 / 0.939 0.808 0.974 / 0.948",
+   "label": "BLIND (reg: \"before any 8x22B page\")",
+   "scored_in": "`P/2026-09-28-nvidia_gh200_480gb-8x22b-session/session/README.md` (ripple, not in a scorer)"
+  },
+  {
+   "row": 14,
+   "section": "3.2",
+   "test": "8x22B bytes, 240 named cells within 5%",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "5 of 240 beyond (5.3 to 6.7%); w1 1.02%, PRIVATE w2 1.63%",
+   "label": "BLIND (reg: \"before any 8x22B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/8x22b.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 15,
+   "section": "3.2",
+   "test": "Qwen2-57B floor w1 in 340 to 365",
+   "registration": "`D/2026-09-28-qwen2-57b-a14b-gh200.json`",
+   "verdict": "HELD",
+   "number": "353.3 to 353.7",
+   "label": "BLIND (reg: \"before any Qwen2-57B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen2.registered.json` floor w1; summary `D/README.md`"
+  },
+  {
+   "row": 16,
+   "section": "3.2",
+   "test": "Qwen2 slope 0.670 to 0.697",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "0.6962, 0.6953 (upper edge)",
+   "label": "BLIND (reg: \"before any Qwen2-57B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen2.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 17,
+   "section": "3.2",
+   "test": "Qwen2 time (predicted bytes)",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "2.71%, worst -5.00%, 58 cells, uniform 2.3 to 2.7% fast",
+   "label": "BLIND (reg: \"before any Qwen2-57B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen2.registered.json` time_predicted_bytes; summary `D/README.md`"
+  },
+  {
+   "row": 18,
+   "section": "3.2",
+   "test": "Qwen2 G=2 zig-zag phase",
+   "registration": "same",
+   "verdict": "HELD (phase)",
+   "number": "amplitude 0.04 vs 0.21 ms",
+   "label": "BLIND (reg: \"before any Qwen2-57B page\")",
+   "scored_in": "`P/2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/session/README.md` (zig-zag, not in a scorer)"
+  },
+  {
+   "row": 19,
+   "section": "3.2",
+   "test": "Qwen2 bytes",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "w1 SHARED and PRIVATE 14.3% rms (140 cells; all three arms 16.38%); G=1 w1 1.23 to 1.91 vs 1.16 to 1.23; w2 SHARED +97%; PRIVATE w2 1.89%, 7 beyond 5%",
+   "label": "BLIND (reg: \"before any Qwen2-57B page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen2.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 20,
+   "section": "3.2",
+   "test": "OLMoE time (own bytes)",
+   "registration": "`D/2026-09-29-olmoe-1b-7b-gh200.json`",
+   "verdict": "FALSIFIED",
+   "number": "3.53%, 12 beyond 5%, 76 cells",
+   "label": "BLIND (reg: \"before any OLMoE page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/olmoe-1b-7b.score.json` (cross_model_score.py at 7d9a1a1); summary `D/README.md`"
+  },
+  {
+   "row": 21,
+   "section": "3.2",
+   "test": "OLMoE slope 0.1565 to 0.1629",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "0.1705, 0.1707 (+6.8%)",
+   "label": "BLIND (reg: \"before any OLMoE page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/olmoe.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 22,
+   "section": "3.2",
+   "test": "OLMoE floor w1 340 to 365",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "360.5 base, 359.4 lock",
+   "label": "BLIND (reg: \"before any OLMoE page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/olmoe.registered.json` floor w1; summary `D/README.md`"
+  },
+  {
+   "row": 23,
+   "section": "3.2",
+   "test": "OLMoE PRIVATE bytes within 5%",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "w1 1.97%, w2 0.30%",
+   "label": "BLIND (reg: \"before any OLMoE page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/olmoe.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 24,
+   "section": "3.2",
+   "test": "OLMoE on H100",
+   "registration": "`D/2026-09-29-olmoe-1b-7b-h100.json`",
+   "verdict": "NOT RUN",
+   "number": "",
+   "label": "not run",
+   "scored_in": ""
+  },
+  {
+   "row": 25,
+   "section": "3.2",
+   "test": "Qwen1.5 time (own bytes)",
+   "registration": "`D/2026-09-29-qwen1.5-moe-a2.7b-gh200.json`",
+   "verdict": "HELD",
+   "number": "1.87%, worst +4.81%, 76 cells",
+   "label": "BLIND (c, F from 4 calibration models) (reg: \"None of these four models has a page\"; c, F \"measured on the four models' counters\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen1.5-moe-a2.7b.score.json` (at 0f77622); summary `D/README.md`"
+  },
+  {
+   "row": 26,
+   "section": "3.2",
+   "test": "Qwen1.5 floor w1 / w2 within 2%",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "361.0 (+0.17%), 385.8 (-0.73%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen1.5.registered.json` floor; summary `D/README.md`"
+  },
+  {
+   "row": 27,
+   "section": "3.2",
+   "test": "Qwen1.5 slope within 2%",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "0.2156, 0.2154 (-0.15, -0.21%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen1.5.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 28,
+   "section": "3.2",
+   "test": "Qwen1.5 PRIVATE bytes",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "w1 1.31%, w2 0.53%",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/qwen1.5.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 29,
+   "section": "3.2",
+   "test": "Phi-3.5 time (own bytes)",
+   "registration": "`D/2026-09-29-phi-3.5-moe-gh200.json`",
+   "verdict": "HELD",
+   "number": "0.57%, worst -1.27%, 76 cells",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/phi-3.5-moe.score.json` (at 0f77622); summary `D/README.md`"
+  },
+  {
+   "row": 30,
+   "section": "3.2",
+   "test": "Phi floor w1 / w2",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "349.6 (-0.73%), 355.4 (+0.42%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/phi3.5.registered.json` floor; summary `D/README.md`"
+  },
+  {
+   "row": 31,
+   "section": "3.2",
+   "test": "Phi slope",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "0.4839, 0.4828 (-1.21, -1.39%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/phi3.5.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 32,
+   "section": "3.2",
+   "test": "Phi PRIVATE bytes",
+   "registration": "same",
+   "verdict": "w1 HELD, w2 FALSIFIED",
+   "number": "w1 0.36%; w2 3 cells beyond 5% at G=64 n=7..9 (-5.1 to -8.0%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/phi3.5.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 33,
+   "section": "3.2",
+   "test": "JetMoE time (own bytes)",
+   "registration": "`D/2026-09-29-jetmoe-8b-gh200.json`",
+   "verdict": "FALSIFIED",
+   "number": "7.17%, 12 beyond 5%; n=1 -15 to -20%, n=3 SHARED +10 to +11%",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/jetmoe-8b.score.json` (at 0f77622); summary `D/README.md`"
+  },
+  {
+   "row": 34,
+   "section": "3.2",
+   "test": "JetMoE floor w1 / w2",
+   "registration": "same",
+   "verdict": "w1 HELD, w2 FALSIFIED",
+   "number": "360.3 (-0.02%); 368.0 vs 355.2 (+3.6%), cells 0.97 to 2.91 waves",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/jetmoe.registered.json` floor; summary `D/README.md`"
+  },
+  {
+   "row": 35,
+   "section": "3.2",
+   "test": "JetMoE slope",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "0.1135, 0.1105 (+5.4, +2.6%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/jetmoe.registered.json` slope_g8; summary `D/README.md`"
+  },
+  {
+   "row": 36,
+   "section": "3.2",
+   "test": "JetMoE PRIVATE bytes",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "w1 0.19%, w2 0.59%",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/jetmoe.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 37,
+   "section": "3.2",
+   "test": "Granite-3B time, slope",
+   "registration": "`D/2026-09-29-granite-3.0-3b-a800m-gh200.json`",
+   "verdict": "NOT SCORABLE",
+   "number": "10 of 10 pages INVALID (V5), host-bound plateau",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/granite-3.0-3b-a800m.score.txt` (REFUSED: no VALID page); `R/scripts/scoring/crossmodel/granite.registered.json`; summary `D/README.md`"
+  },
+  {
+   "row": 38,
+   "section": "3.2",
+   "test": "Granite-3B floor w2 (4+-wave estimator, a156392)",
+   "registration": "same + `D/README.md` estimator note",
+   "verdict": "HELD",
+   "number": "459.8 vs 466.5 (-1.43%) base; lock 456.1 (-2.22%)",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/granite.registered.json` floor w2; summary `D/README.md`"
+  },
+  {
+   "row": 39,
+   "section": "3.2",
+   "test": "Granite-3B floor w1",
+   "registration": "same",
+   "verdict": "NOT SCORABLE",
+   "number": "one 4+-wave cell; all-cell 374.2 printed",
+   "label": "not scored",
+   "scored_in": "`R/scripts/scoring/crossmodel/granite.registered.json` floor w1; summary `D/README.md`"
+  },
+  {
+   "row": 40,
+   "section": "3.2",
+   "test": "Granite-3B PRIVATE bytes",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "w1 3.02%, w2 0.17%",
+   "label": "BLIND (reg: \"None of these four models has a page\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/granite.registered.json` bytes; summary `D/README.md`"
+  },
+  {
+   "row": 41,
+   "section": "3.2",
+   "test": "Granite-3B on H100",
+   "registration": "`D/2026-09-29-granite-3.0-3b-a800m-h100.json`",
+   "verdict": "NOT RUN",
+   "number": "",
+   "label": "not run",
+   "scored_in": ""
+  },
+  {
+   "row": 42,
+   "section": "3.2",
+   "test": "JetMoE floor at 4+ waves",
+   "registration": "`D/README.md` 2026-09-30 (79c5034)",
+   "verdict": "HELD",
+   "number": "w1 360.8 (+0.12%), w2 361.7 (+1.84%) base; lock w2 +2.61%",
+   "label": "w2 cells n = 9..11 BLIND; w1 set includes the SEEN n = 2..6 (reg: \"JetMoE's floor data at n = 2 to 6 is published; n = 9 to 11 is not yet measured\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/jetmoe-floor.registered.json`; summary `D/README.md`"
+  },
+  {
+   "row": 43,
+   "section": "3.2",
+   "test": "8x7B floor at 4+ waves",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "w1 349.9 (-0.66%), w2 354.2 (+1.65%) base",
+   "label": "calibration model; w2 cells n = 6..8 new (reg: \"calibration data for c and F; its w2 cells at 6 to 8 are new\")",
+   "scored_in": "`R/scripts/scoring/crossmodel/mixtral-floor.registered.json`; summary `D/README.md`"
+  },
+  {
+   "row": 44,
+   "section": "3.2",
+   "test": "tp8 F1 D within 0.5 u",
+   "registration": "`D/2026-09-30-mixtral-8x7b-tp8-floor-gh200.json`",
+   "verdict": "HELD",
+   "number": "156,941 / 155,820 vs 155,193",
+   "label": "BLIND (reg: \"before any page\", `D/README.md` 2026-09-30 tp8)",
+   "scored_in": "`SC1/floor.score.txt` F1 lines; `SC1/floor.score.json`"
+  },
+  {
+   "row": 45,
+   "section": "3.2",
+   "test": "tp8 F2 w1 n=2 in -3% to +8%",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "+4.8%, +4.9%",
+   "label": "BLIND (reg: \"before any page\", `D/README.md` 2026-09-30 tp8)",
+   "scored_in": "`SC1/floor.score.txt` F2 lines"
+  },
+  {
+   "row": 46,
+   "section": "3.2",
+   "test": "tp8 F3 other cells within 8%",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "w1 n=1 +13.4/+14.9%; w2 n=1..3 +8.3 to +11.1%",
+   "label": "BLIND (reg: \"before any page\", `D/README.md` 2026-09-30 tp8)",
+   "scored_in": "`SC1/floor.score.txt` F3 lines; `D/README.md` \"Scored 2026-10-01\" tp8"
+  },
+  {
+   "row": 47,
+   "section": "3.2",
+   "test": "tp8 F4 floor within 2%",
+   "registration": "same",
+   "verdict": "w1 FALSIFIED, w2 HELD",
+   "number": "w1 339.6/342.5 vs 352.2 (-3.6, -2.8%); w2 374.3/374.2 vs 379.1 (-1.3%)",
+   "label": "BLIND (reg: \"before any page\", `D/README.md` 2026-09-30 tp8)",
+   "scored_in": "`SC1/floor.score.txt` F4 lines"
+  },
+  {
+   "row": 48,
+   "section": "3.2",
+   "test": "A launch floor P1",
+   "registration": "`D/2026-10-01-launch-floor-gh200.json`",
+   "verdict": "HELD",
+   "number": "15 of 15 GR in [0.80, 1.10] x C_reg",
+   "label": "scorer written after pages; C_reg CAL (8x7B) (reg: \"fitted on what: C_reg on Mixtral 8x7B 2026-09-27 only\"; scorer timing from `SC1/README.md`)",
+   "scored_in": "`SC1/launch.score.txt` P1; `D/README.md` rental 1"
+  },
+  {
+   "row": 49,
+   "section": "3.2",
+   "test": "A P2, P3, P4, P6, P8",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "P2 1 of 15; P3 6 of 6 out (+45 to +65 us); P4 shift -54 to -73 us; P6 55 of 57; P8 3 of 27",
+   "label": "P8's plateau band and Phi SEEN (fitted on Granite, `D/2026-10-01-launch-floor-gh200.txt`); host slowed by profiler (reg: \"FITTED ON GRANITE (SEEN)\")",
+   "scored_in": "`SC1/launch.score.txt` P2 to P8; `F` Rental 1 table"
+  },
+  {
+   "row": 50,
+   "section": "3.2",
+   "test": "A P5",
+   "registration": "same",
+   "verdict": "HELD",
+   "number": "52/53, 21/22, 27/27",
+   "label": "rule read off the published pages first (`D/README.md`, launch floor: post hoc 439 of 441), cells new (reg: \"post hoc 439/441 on the published pages\")",
+   "scored_in": "`SC1/launch.score.txt` P5; `F` Rental 1 table"
+  },
+  {
+   "row": 51,
+   "section": "3.2",
+   "test": "B L2 survival H1 vs H0, tp2 w2",
+   "registration": "`D/2026-10-01-l2-survival-tp-gh200.json`",
+   "verdict": "H1",
+   "number": "0.54 to 0.59 at n = 3..9",
+   "label": "d-lead SEEN (Phi, JetMoE) (reg: \"informed by Phi-3.5 and JetMoE (seen)\")",
+   "scored_in": "`SC1/l2.score.txt`; `D/README.md` \"Scored 2026-10-01\" L2"
+  },
+  {
+   "row": 52,
+   "section": "3.2",
+   "test": "B tp4 w1",
+   "registration": "same",
+   "verdict": "INCONCLUSIVE",
+   "number": "0.42 0.38 0.38 0.36",
+   "label": "d-lead SEEN, as row 51 (reg: as row 51)",
+   "scored_in": "`SC1/l2.score.txt`"
+  },
+  {
+   "row": 53,
+   "section": "3.2",
+   "test": "B x-only law",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "difference 0.10 to 0.19 at 6 of 6 n",
+   "label": "d-lead SEEN, as row 51 (reg: as row 51)",
+   "scored_in": "`SC1/l2.score.txt`; `D/README.md` \"Scored 2026-10-01\" L2"
+  },
+  {
+   "row": 54,
+   "section": "3.2",
+   "test": "B controls",
+   "registration": "same",
+   "verdict": "1 of 4 HELD",
+   "number": "tp8 w1 0.82 to 0.91 vs >= 0.95",
+   "label": "d-lead SEEN, as row 51 (reg: as row 51)",
+   "scored_in": "`SC1/l2.score.txt`; `D/README.md` \"Scored 2026-10-01\" L2"
+  },
+  {
+   "row": 55,
+   "section": "3.2",
+   "test": "B PRIVATE F/Mn; G=2 vs R0",
+   "registration": "same",
+   "verdict": "HELD; PRIVATE HELD, SHARED FALSIFIED",
+   "number": "0.504 to 0.521; SHARED 31 of 54 beyond 5%",
+   "label": "d-lead SEEN, as row 51 (reg: as row 51)",
+   "scored_in": "`SC1/l2.score.json`; `D/README.md` \"Scored 2026-10-01\" L2"
+  },
+  {
+   "row": 56,
+   "section": "3.2",
+   "test": "C T1 content-keyed w1",
+   "registration": "`D/2026-10-01-atile-ksteps-gh200.json`",
+   "verdict": "OLMoE HELD, Qwen2 NOT HELD (inside neither pass nor falsifier)",
+   "number": "+0.52%; +2.1 to +2.6% at n = 6, 7, 9",
+   "label": "harness property (reg: `harness_note`)",
+   "scored_in": "`SC1/atile.score.txt` T1; `SC1/atile.score.json`"
+  },
+  {
+   "row": 57,
+   "section": "3.2",
+   "test": "C T2 duration rho",
+   "registration": "same",
+   "verdict": "every candidate refuted",
+   "number": "rho42 1.199, rho84 1.184",
+   "label": "R1-all8, R2-all8 include the SEEN diagnosis models; R0, R1-cal, R2-cal do not (reg: \"diagnosis models SEEN\")",
+   "scored_in": "`SC1/atile.score.txt` T2; `D/README.md` \"Scored 2026-10-01\" A-tile"
+  },
+  {
+   "row": 58,
+   "section": "3.2",
+   "test": "C T3 G=1 credit",
+   "registration": "same",
+   "verdict": "HELD tp8, tp4",
+   "number": "-0.00438 vs -0.00446; -0.00138 vs -0.00193",
+   "label": "BLIND: no shard page before rental 1 (rule: the registration labels no T3 input)",
+   "scored_in": "`SC1/atile.score.txt` T3"
+  },
+  {
+   "row": 59,
+   "section": "3.2",
+   "test": "C T4 all PRIVATE cells",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "best R2 1.55%, 10 cells beyond 4%",
+   "label": "R1-all8, R2-all8 include the SEEN diagnosis models; R0, R1-cal, R2-cal do not (reg: \"diagnosis models SEEN\")",
+   "scored_in": "`SC1/atile.score.txt` T4; `D/README.md` \"Scored 2026-10-01\" A-tile"
+  },
+  {
+   "row": 60,
+   "section": "3.2",
+   "test": "R2 part 4 w1 floor families",
+   "registration": "`D/2026-10-01-rental2-w1floor-gh200.json`",
+   "verdict": "NEITHER (4 families FALSIFIED)",
+   "number": "theta +0.54 (0.28), +0.80 (0.20); delta_H -1.29%, -1.75%",
+   "label": "BLIND tread sets (reg: \"on no published page\"; \"tp8 w1 (6, 8, 10) ... SEEN; none is in a scored set\")",
+   "scored_in": "`SC2/w1floor.score.json` families; `SC2/SCORES.md` part 4"
+  },
+  {
+   "row": 61,
+   "section": "3.2",
+   "test": "R2 part 4 co-primary",
+   "registration": "same",
+   "verdict": "INCONCLUSIVE",
+   "number": "rms 4248/4104, 4028/4423 cycles",
+   "label": "unseen tread sets, as row 60; H_EST CAL (reg: as row 60)",
+   "scored_in": "`SC2/w1floor.score.json`; `SC2/SCORES.md` part 4"
+  },
+  {
+   "row": 62,
+   "section": "3.2",
+   "test": "R2 part 4 w2 offset",
+   "registration": "same",
+   "verdict": "H_EST HOLDS x3; FLUID HOLDS tp8, tp4, FALSIFIED tp2",
+   "number": "+1.81, +2.61, +3.89% vs +3.8%",
+   "label": "unseen tread sets, as row 60; H_EST CAL (reg: as row 60)",
+   "scored_in": "`SC2/w1floor.score.json`; `SC2/SCORES.md` part 4"
+  },
+  {
+   "row": 63,
+   "section": "3.2",
+   "test": "R2 part 3 K1, K2, K4",
+   "registration": "`D/2026-10-01-rental2-const-gh200.json`",
+   "verdict": "HOLD",
+   "number": "11.7%; 0.254; 95%",
+   "label": "a = elapsed - ceil(q) u at tp2, tp4 n <= 9 SEEN and tp8 floor counters SEEN (rental 1); active and shape counters new; Z by intercept on CAL (reg: \"seen data\")",
+   "scored_in": "`SC2/const.score.txt`; `SC2/SCORES.md` part 3"
+  },
+  {
+   "row": 64,
+   "section": "3.2",
+   "test": "R2 part 3 K3",
+   "registration": "same",
+   "verdict": "cycle form HOLDS, ns FALSIFIED",
+   "number": "0.921 +- 0.075 vs 0.597",
+   "label": "a = elapsed - ceil(q) u at tp2, tp4 n <= 9 SEEN and tp8 floor counters SEEN (rental 1); active and shape counters new; Z by intercept on CAL (reg: \"seen data\")",
+   "scored_in": "`SC2/const.score.txt` K3; `SC2/SCORES.md` part 3"
+  },
+  {
+   "row": 65,
+   "section": "3.2",
+   "test": "R2 part 3 identification",
+   "registration": "same",
+   "verdict": "INCONCLUSIVE",
+   "number": "H_ZT needs ns form",
+   "label": "a = elapsed - ceil(q) u at tp2, tp4 n <= 9 SEEN and tp8 floor counters SEEN (rental 1); active and shape counters new; Z by intercept on CAL (reg: \"seen data\")",
+   "scored_in": "`SC2/const.score.txt`"
+  },
+  {
+   "row": 66,
+   "section": "3.2",
+   "test": "R2 part 2 P0",
+   "registration": "`D/2026-10-01-rental2-launch2-gh200.json`",
+   "verdict": "HELD tp8, JetMoE; FAILED both Granites",
+   "number": "GR H_cell/H_pre 1.6 to 3.4",
+   "label": "tp8 BLIND (host side); Granite-3B SEEN; JetMoE, Granite-1B tail units, SEEN (rental-1 launch pages) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B (\"tail unit\" in the registration))",
+   "scored_in": "`SC2/launch.score.txt` P0; `F` Rental 2 table"
+  },
+  {
+   "row": 67,
+   "section": "3.2",
+   "test": "R2 P1",
+   "registration": "same",
+   "verdict": "HELD tp8 (27/27), Granite-3B (15/15); FALSIFIED Granite-1B; NOT SCORED JetMoE",
+   "number": "Granite-1B 0.764 to 0.767",
+   "label": "tp8 C_reg CAL, GEMM durations SEEN (not blind); Granite-3B SEEN (`D/2026-10-01-rental2-launch2-gh200.txt`); JetMoE, Granite-1B tail units, SEEN (rental-1 launch pages) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B (\"tail unit\" in the registration))",
+   "scored_in": "`SC2/launch.score.txt` P1; `SC2/SCORES.md` part 2"
+  },
+  {
+   "row": 68,
+   "section": "3.2",
+   "test": "R2 P2, P4, P5",
+   "registration": "same",
+   "verdict": "HELD (Granites marked host drift)",
+   "number": "E240 - GR 3.6 to 6.7 us; P5 tp8 77/77, JetMoE 31/32, Granite-3B 72/72, Granite-1B 26/26",
+   "label": "tp8 BLIND (host side); Granite-3B SEEN; JetMoE and Granite-1B SEEN (rental-1 launch pages, P5's rule read off published pages, rows 48 to 50); both Granites printed under \"host drift\" (P0 FAILED) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B (\"tail unit\" in the registration))",
+   "scored_in": "`SC2/SCORES.md` part 2; `SC2/launch.score.json`"
+  },
+  {
+   "row": 69,
+   "section": "3.2",
+   "test": "R2 P3 pooled",
+   "registration": "same",
+   "verdict": "FALSIFIED",
+   "number": "10 of 15 out",
+   "label": "tp8 BLIND (host side); Granite-3B SEEN; JetMoE, Granite-1B tail units, SEEN (rental-1 launch pages) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B)",
+   "scored_in": "`SC2/SCORES.md` part 2"
+  },
+  {
+   "row": 70,
+   "section": "3.2",
+   "test": "R2 P6",
+   "registration": "same",
+   "verdict": "FALSIFIED tp8 (5 of 24); HELD others",
+   "number": "n=1 7 to 9% over MP",
+   "label": "tp8 BLIND (host side); Granite-3B SEEN; JetMoE, Granite-1B tail units, SEEN (rental-1 launch pages) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B)",
+   "scored_in": "`SC2/SCORES.md` part 2"
+  },
+  {
+   "row": 71,
+   "section": "3.2",
+   "test": "R2 P8",
+   "registration": "same",
+   "verdict": "FALSIFIED tp8, JetMoE, Granite-1B; HELD Granite-3B",
+   "number": "H - I 75 to 79 us",
+   "label": "Granite-3B HELD on a SEEN band, under host drift (`D/2026-10-01-rental2-launch2-gh200.txt`); tp8 BLIND; JetMoE, Granite-1B tail units, SEEN (rental-1 launch pages) (reg for tp8 and Granite-3B; rule for JetMoE and Granite-1B)",
+   "scored_in": "`SC2/SCORES.md` part 2; `F` Rental 2 table"
+  },
+  {
+   "row": 72,
+   "section": "3.2",
+   "test": "R2 part 1 tp2 w2 s8, tp4 w1 s8 (primaries)",
+   "registration": "`D/2026-10-01-rental2-knobs-gh200.json`",
+   "verdict": "INCONCLUSIVE, every hypothesis FALSIFIED",
+   "number": "s 0.86 to 0.76 vs base 0.58 to 0.53",
+   "label": "lambda(n) SEEN (reg: \"lambda(n), SEEN\")",
+   "scored_in": "`SC2/knobs.score.txt`; `F` Rental 2 table"
+  },
+  {
+   "row": 73,
+   "section": "3.2",
+   "test": "R2 part 1 tp2 w2 s6",
+   "registration": "same",
+   "verdict": "NL",
+   "number": "0.58 to 0.52",
+   "label": "lambda(n) SEEN, as row 72 (reg: as row 72)",
+   "scored_in": "`SC2/knobs.score.txt`; `F` Rental 2 table"
+  },
+  {
+   "row": 74,
+   "section": "3.2",
+   "test": "R2 part 1 8x7B x-invariance; T5",
+   "registration": "same",
+   "verdict": "NOT SCORED (V7); ALL: HELD; T5 ALL: R0/R1/R2 FALSIFIED, R2h INCONCLUSIVE",
+   "number": "rho_BK 0.357",
+   "label": "R2h's m SEEN (reg: \"R2h's m is fitted on rental 1's rho84 = 1.184 (SEEN)\")",
+   "scored_in": "`SC2/SCORES.md` part 1; `SC2/knobs.score.json`"
+  },
+  {
+   "row": 75,
+   "section": "3.2",
+   "test": "R2 part 1 H2c, H3",
+   "registration": "same",
+   "verdict": "l2bk128 SELECTED; l2bk32 INCONCLUSIVE (V6, post-page fix); H3 FALSIFIED",
+   "number": "PRIVATE bytes within 0.02% under pad 7",
+   "label": "BLIND: rental-2 pages (rule: the registration labels no H2c or H3 input)",
+   "scored_in": "`SC2/SCORES.md` part 1"
+  },
+  {
+   "row": 76,
+   "section": "3.2",
+   "test": "R2 gate addendum: a gate-failed page counts under ALL and CLEAN; CLEAN floor captures use a null-kernel lock check within 3% in place of FL1",
+   "registration": "`D/2026-10-02-rental2-addendum-gates.json`",
+   "verdict": "a counting rule, no verdict of its own; applied: CLEAN keeps every floor capture, drops the four byte pages that fail V7, no floor cell above its lock",
+   "number": "null-kernel medians -1.29 to -1.50% of 1710",
+   "label": "fixed after the gate outcomes were seen, before any score (reg: \"after the rental-2 pages' gate results were seen\")",
+   "scored_in": "`D/README.md` \"Scored 2026-10-02\"; `SC2/SCORES.md`"
+  }
+ ]
+}
