@@ -1,0 +1,39 @@
+REGISTERED 2026-10-06, before any rental-4 page: rental 4, 2026-10-06-rental4-perturb-gh200
+status: REGISTERED BEFORE ANY PAGE: a gate, no verdict of the study's own
+design: owner decision 2 (2026-10-06): median <= 1%, worst <= 2%, identical occupancy limit; REANALYSIS.md section 4 (plain vs instrumented, stamps on, hints none)
+tool: scripts/instr_probe.py --mode perturb (the gate, on the VM); scorer scripts/scoring/rental4/score_perturb.py (recomputes it off perturb.json)
+
+
+tolerance:
+  median_max: 0.01
+  worst_max: 0.02
+  occupancy: identical
+variants: one per instrumented unit of scripts/plans/rental4-2026-10.plan after the perturb unit (the driver writes them: gh200_model_session.sh --print-variants --plan ...)
+cells:
+  stamps_unit: its own cells (G x arm x n)
+  bytes_unit: its G at treads [1, 5, 9], every arm
+copy_spec:
+  stamps_unit: the unit's stamps, no hint
+  bytes_unit: every instrument off (the hint is the unit's treatment; the gate certifies the copy itself)
+method:
+  timer: a CUDA event pair around each fused_moe_kernel launch, the same wrapper for plain (moe.instrumented.timed_plain) and copy (install)
+  flush: an L2 flush (moe.bench.timing.L2Flusher at the device's size) before every timed call, OUTSIDE the event pairs, on both sides, as R3's pages flush (review_fix: build-r4-review section 2)
+  cache: each perturb and stamps unit compiles into its own TRITON_CACHE_DIR (the driver sets $R/triton-cache; the probe sets the same), so no earlier unit's compile hides one (review_fix: bug G1)
+  host: torch.cuda._sleep of 25.0 ms ahead of each burst, so no launch waits on Python
+  bursts: 8 bursts of 10 calls each way, alternating order; one untimed call first under the same kernel (no compile inside a burst)
+  ratio: r = median over bursts of the burst-median plain ms / the same for the copy, per (cell, GEMM)
+rule:
+  median: median over the variant's (cell, GEMM) of |r - 1| <= 1%
+  worst: max |r - 1| <= 2%
+  occupancy: plain and copy PAIRED BY CONFIG (moe.instrumented.config_key: BM, BN, BK, G, stages, warps, MUL_ROUTED_WEIGHT, top_k), every plain config with a copy, and per config equal registers (the cubin's EIATTR_REGCOUNT), shared (Triton's metadata) and CTAs per SM, read off each launch's CompiledKernel (review_fix: section 2)
+  sass: per config, the ALL-OFF copy's SASS (cuobjdump -sass, addresses, encodings and line info stripped: moe.instrumented.cubin.normalize_sass) equals the plain kernel's; unread FAILS (review_fix: section 1)
+  hint: a unit asking an eviction hint FAILS unless its compiled PTX carries L2::cache_hint on the A/B copies (cubin.hint_in_ptx); the counter child refuses such a page too (private_weight_reference.counter_hint_refusal), with no manifest (review_fix: E1)
+  upstream: the installed vLLM fused_moe.py's sha256 is d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28 and its excerpt's becf0caadaed1be31578b685649260fcb91757face2eb39d26fe837d5dd19a41; else FAIL
+  use: an instrumented unit runs only when its line in gate.env reads PASS (the driver refuses it in 0 minutes otherwise); a FAIL leaves its pages unwritten, never written and voided
+printed:
+  - each variant's per-cell ratios and per-config registers and shared, and the copy's SASS bracket checks (cubin.sass_checks), which the stamps scorer gates on the unit's own SASS
+eviction_hints:
+  status: CUT from rental 4 before any page (build-r4-review E1): Triton 3.7.1's LowerLoops carries eviction_policy into AsyncCopyGlobalToLocalOp and its cp.async lowering emits .ca / .cg only, so every pipelined rental-4 config compiles a hinted copy to the all-off kernel
+  deferred: an L2 access-policy-window design (cudaAccessPolicyWindow on the stream, host side, the kernel unchanged) is DEFERRED and unregistered; the instrumented copy keeps its EVICT_A / EVICT_B parameters, and any hinted unit is refused by the hint leg above
+seen_data:
+  - none: the copy has never run; the tolerance is the owner's

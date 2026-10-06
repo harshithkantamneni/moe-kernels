@@ -1,0 +1,15 @@
+REGISTERED 2026-10-06, before any NATIVE-only histogram page: rental 4, 2026-10-06-rental4-nativegates-gh200
+status: REGISTERED GATE DEFINITION (owner decision 1, 2026-10-06); NO RENTAL-4 UNIT USES IT: the histogram page and its plumbing (balanced_ids replaced by realize_counts) are rental 5's
+design: REVIEW.md section 1 (the NATIVE-only, M-ladder, histogram timed page) and section 4 (the uniform-path control, the token shuffle); REANALYSIS.md section 4 owner decision 1
+tool: -
+
+
+gates:
+  G1_lock_thermal: V7: the 1710 lock in force and the thermal gate, as every timed page
+  G2_host_bound: the host-bound guard (R3's): a cell whose host enqueue exceeds its GPU time is excluded
+  G3_uniform_control: the uniform histogram through the new path matches R3's NATIVE cell (balanced_ids) on the same board within 2 sigma_page (sigma_page 0.18%, SEEN rental 3)
+  G4_worst_cell_clock: the worst cell's measured SM clock is 1710 MHz (no cell below the lock)
+  G5_provenance: the page records the histogram file's sha256 and the token-shuffle seed
+rule: a NATIVE-only histogram page is VALID only when G1 to G5 all pass; G3 failing voids every histogram cell of its board
+seen_data:
+  - sigma_page is SEEN

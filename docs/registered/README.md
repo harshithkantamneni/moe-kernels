@@ -923,3 +923,96 @@ page through `r3_timing_model.admit` and printed NOT SCORED; it now reads the pa
 counted, as `gates.timed` says, and prints FALSIFIED. The unit-13 exit 3 is one refused host probe
 (GR n = 13), not a timed cell; the recovery step's G = 32 retake passed the plan name as the model
 and was REFUSED with nothing measured, an operations defect. The files above are unchanged.
+
+## 2026-10-06, before any page: rental 4, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental4-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six files below, their scorers (`scripts/scoring/rental4/`,
+tested on synthetic pages only in `tests/test_scoring_rental4.py`) and the scaffolding they need
+are committed together before the rental. Every number in them is written by
+`scripts/scoring/rental4/register.py` from committed files or is a typed-in input carrying its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r4/DESIGN.md`, corrected by `design-r4-review/REVIEW.md` and then by
+`reanalysis/REANALYSIS.md` section 4 (the later document wins); the build's independent review
+(`build-r4-review/REVIEW.md`) is applied before any page and each fix is marked `review_fix`.
+Labels as in rental 3: CAL, SEEN (every published page), BLIND; SEEN-fitted marks a constant
+fitted on published pages after they were seen, SEEN third-party a published number of
+someone else's.
+
+**Owner decisions of 2026-10-06** bound here. (1) The NATIVE-only histogram page's gates (V7 lock
+and thermal, the host-bound guard, the uniform-routing control within 2 sigma_page, worst-cell
+clock 1710, the histogram's sha256 and the shuffle seed on the page): registered as
+`2026-10-06-rental4-nativegates-gh200` for rental 5; no rental-4 unit runs such a page, and the
+skew plumbing (balanced_ids replaced by realize_counts, with the uniform-path control) is
+rental 5's. (2) The instrumented copy's perturbation tolerance: median |plain / copy - 1| <= 1%,
+worst <= 2%, identical occupancy limit. (3) RRZE-HPC/gpu-benches (GPL-3.0, third party) runs on the
+VM, fetched at commit 23e586dd into `$MOE_HOME/ext`, never vendored. (4) A3 is cut. (5) The
+instrumented copy of vLLM 0.27.1's kernel (`moe/instrumented/`), timestamps and eviction hints,
+off by default; the plain installed kernel stays the measured object of every timed test.
+
+**Cut by the build review (E1).** The eviction trio (8x7B G = 2, plain, A evict_first, B
+evict_last) and its registration: Triton 3.7.1 lowers these pipelined loads to cp.async .ca /
+.cg and drops `eviction_policy`, so a hinted page would count the all-off kernel. The copy keeps
+its hint parameters; any hinted unit is refused unless its compiled PTX carries L2::cache_hint
+(the perturb gate's hint leg, and the counter child's refusal). An L2 access-policy-window
+design (host side, kernel unchanged) is deferred and unregistered.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| rulers (torch read2d, copy, add, matmul; the L2 size), gpubench (latency, stream, l2-cache) | 2 | 11 |
+| A1 (drop-group a1): qwen2-57b-a14b-tp8 timed G = 8 n 1..9 at 9 and 15 copies | 2 | 33 |
+| perturb: the gate of the 9 stamps units below | 1 | 10 |
+| stamps (drop-group st): F (8x7B), K at BK 32 / 64 / 128 and s8 (OLMoE G = 64), tail (8x22B, 8x7B), dead (OLMoE s4, s8) | 9 | 25 |
+| B' (drop-group b): OLMoE G = 64 counters k64s4, k32s4, k128s4, k64s6, k64s2, k64s3, k64s8 | 7 | 28 |
+| A2 (drop-group a2): olmoe-1b-7b timed G = 8 n 1..9 at 9 and 15 copies | 2 | 32 |
+
+144 min of units; with about 12 of pushes 156 (2.6 h, $5.95 at $2.29/h), with setup about 186
+($7.10); the guardian's 410-minute cap is $15.65. The driver drops the last unit first; each pair
+and group goes together. Z (phi-3.5-moe at 1005), past the line in both drafts, is left out.
+
+**dead** (`2026-10-06-rental4-dead-gh200`). Delta = (SHARED - NATIVE at 15 copies) - (at 9), the
+median over n = 3..9, less the alignment kernel's growth read off each page's align_probe.
+Predicted (us): A1 D 20.73, D2 21.46, M 27.77, K0 24.43, SLOT 21.09, FIXED 0; A2 D 23.69, D2 23.33,
+M 31.74, K0 23.69, SLOT 21.70. D (d 0.995 ns, kappa 0.325) is refitted here on the CAL rows and
+reproduces the offset study; D2 (0.93 / 1.03 ns, kappa 0.30) is SEEN-fitted on all 16 GEMMs. z
+at sigma_noise 0.9 us (registered) and 0.45 (printed); D FAILS beyond 3 on A1 or A2; M, K0, SLOT
+EXCLUDED beyond 3; FIXED EXCLUDED above 3 sigma; K5 NOT TESTED (A3 cut); D / SLOT and D / D2 are
+printed NOT SEPARATED. The NATIVE null control NATIVE(c15) - NATIVE(c9) within 3 sqrt 2 x 0.18% x T,
+else every verdict INCONCLUSIVE. Every c15 page is labelled NOT JOINABLE TO COUNTER BYTES.
+
+**occlaw** (`2026-10-06-rental4-occlaw-gh200`, the review's B'). Per page and GEMM, c from the
+floor-bound cells (n >= 4, DRAM <= 0.5 x 4022 GB/s), F held; the knob over the same-board k64s4
+base against MVA2, LK (the max form), PS, LITTLE and OCC, all SEEN-fitted (labelled); 2% per
+(page, GEMM), any miss falsifies; SELECTED needs every other law falsified and 8 of 12 scored.
+Occupancy is the SEEN cubins' and is re-keyed to the page's recorded limit. The k64s4 base is
+SEEN (OLMoE's 2026-09-29 G = 64 page); MVA2 is in-sample at k32s4, k64s4 and k64s8. B' and the
+stamps K block share configurations: they are ONE test of the law.
+
+**perturb** (`2026-10-06-rental4-perturb-gh200`). Decision 2 per variant on its own cells: an
+event pair around each launch, plain and copy alike, an L2 flush before every call outside the
+pairs, the GPU held ahead of the host, each unit in its own Triton cache. Legs: timing; plain and
+copy paired by config with equal registers, shared and CTAs per SM; the all-off copy's SASS equal
+to the plain kernel's with line info stripped; a hinted unit's PTX carrying L2::cache_hint; the
+installed vLLM being upstream's. A FAIL leaves the unit unrun.
+
+**stamps** (`2026-10-06-rental4-stamps-gh200`). Scored only when the unit's own SASS puts the
+clock reads where its readout needs them (before the num_tokens LDG; between the loop-exit BAR and
+the topk LDG; two or more inside the k-loop). The prologue stamp lands before the pipeliner's fill,
+so the fill / epilogue split is withdrawn. F: the w2 epilogue's extra over w1 against the near
+L2, far L2 and DRAM latency (this rental's gpubench, else RRZE's published GH200). K: per-iteration
+time against occ x c, 3%, in three classes PS, LK=LITTLE, MVA2~OCC (no cell separates MVA2 from
+OCC beyond two bands). T: the final partial wave's per-iteration time against rho as one stage at
+loaded latency (1070 ns), three stages loaded (478) or idle (110), and the device share (stage
+bytes x tail CTAs / 3598 GB/s). D: a dead CTA's life against 150 / 451 / 667 cycles, and its
+dispatch from the dead CTAs that start after the last live CTA ends (100 or more, over 20
+globaltimer ticks) against DISP / MIX / SLOT.
+
+**hw** (`2026-10-06-rental4-hw-gh200`). gpubench's constants by its registered windows and the
+rulers, against RRZE's published GH200 (far L2 253.4 ns within 5%, DRAM 346.4 within 10%, triad
+3783 GB/s within 3%) and the 60 MiB L2; eta_mix = 3598 / each ruler printed.
+
+**Leakage, stated once.** Every constant typed into these files was fitted or chosen after
+published pages were seen (each labelled); no rental-4 page exists. OLMoE and Qwen2-57B are CAL
+models, so B' and the stamps are BLIND-CALMODEL apart from the SEEN k64s4 configuration; the
+15-copy contrasts are on no page.

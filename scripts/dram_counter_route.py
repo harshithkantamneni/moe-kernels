@@ -3030,6 +3030,9 @@ def run_id_for(mode: str, args, card: str) -> str:
             knobs["block_k"] = int(bk)
         if getattr(args, "slot_pad_rows", 0):
             knobs["slot_pad_rows"] = int(args.slot_pad_rows)
+        # Rental 4 (2026-10-06): the instrumented copy's eviction hints, a knob only when given
+        if getattr(args, "instr", None):
+            knobs["instr"] = str(args.instr)
         if mode == "r3-run" and getattr(args, "partition_metrics", False):
             knobs["partition_metrics"] = list(R3_PARTITION_METRICS)
         if mode == "r3-floor" and getattr(args, "floor_shape_metrics", False):
@@ -5543,7 +5546,8 @@ def r3_byte_model(cfg, dtype: str, block_m: int) -> dict:
 def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: int,
             group_m: int, treads, kind: str, arms, calls: int, warmups: int,
             profile_dir: Path, stem: str, block_k: int | None = None,
-            slot_pad_rows: int = 0, null_kernel: bool = False) -> dict:
+            slot_pad_rows: int = 0, null_kernel: bool = False,
+            instr: str | None = None) -> dict:
     """The plan the child runs, validated by R3 before anything touches a box.
 
     The declaration is R3's own (`counter_declaration`, over R3's whole ladder
@@ -5572,6 +5576,8 @@ def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: i
         plan["slot_pad_rows"] = int(slot_pad_rows)
     if null_kernel:
         plan["null_kernel"] = True
+    if instr:
+        plan["instr"] = str(instr)
     r3.validate_counter_plan(plan)
     r3.counter_schedule(plan)
     return plan
@@ -5590,6 +5596,8 @@ def r3_design(plan: dict) -> dict:
         extra["slot_pad_rows"] = int(plan["slot_pad_rows"])
     if plan.get("null_kernel"):
         extra["null_kernel"] = True
+    if plan.get("instr"):
+        extra["instr"] = r3.counter_instr_spec(plan).as_dict()
     return {**extra, "model": plan["model"], "dtype": plan["dtype"],
             "block_m": int(plan["block_m"]), "block_n": pinned["BLOCK_SIZE_N"],
             "block_k": pinned["BLOCK_SIZE_K"], "num_warps": pinned["num_warps"],
@@ -7191,7 +7199,8 @@ def do_dry_run_r3(args) -> int:
                             calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
                             profile_dir=Path("$R") / f"r3c-g{g}.profiles",
                             stem=f"g{g}", block_k=getattr(args, "block_k", None),
-                            slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0))
+                            slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0),
+                            instr=getattr(args, "instr", None))
                  for g in groups}
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
@@ -7932,7 +7941,8 @@ def do_run_r3(args) -> int:
                        calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
                        profile_dir=profiles, stem=stem,
                        block_k=getattr(args, "block_k", None),
-                       slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0))
+                       slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0),
+                       instr=getattr(args, "instr", None))
     except r3.CounterPlanRefused as exc:
         print(f"REFUSE: {exc}")
         return exit_codes.REFUSED
@@ -8481,7 +8491,8 @@ def planted_r3_manifest(plan: dict, *, device_uuid: str) -> dict:
             "memory_plan": None, "versions": {"planted": True},
             "device": {"name": "planted", "uuid": device_uuid},
             **({"null_kernel": True, "null_kernel_name": NULL_KERNEL_NAME,
-                "null_kernel_cycles": r3.NULL_KERNEL_CYCLES} if plan.get("null_kernel") else {})}
+                "null_kernel_cycles": r3.NULL_KERNEL_CYCLES} if plan.get("null_kernel") else {}),
+            **({"instr": r3.counter_instr_spec(plan).as_dict()} if plan.get("instr") else {})}
 
 
 def r3_world_launch(world: str, cfg, *, block_m: int, group_m: int, arm: str, n: int,
@@ -8801,6 +8812,14 @@ def build_parser() -> argparse.ArgumentParser:
                          "address control): P extra rows allocated per expert slot; the "
                          "bytes read are unchanged and stride(0) moves. In the run id "
                          "only when not 0")
+    ap.add_argument("--instr", default=None, metavar="SPEC",
+                    help="with --run or --dry-run --family r3-arms, a page (rental 4, owner "
+                         "decision 5): the instrumented copy of vLLM's kernel "
+                         "(moe/instrumented) with eviction hints only, e.g. "
+                         "'evict_a=first,evict_b=none'. A spec with stamps, or one that turns "
+                         "nothing on, is refused; the child refuses the page (no manifest) unless "
+                         "the compiled PTX carries L2::cache_hint. In the page's design and run "
+                         "id only when given")
     ap.add_argument("--partition-metrics", action="store_true",
                     help="with --run --family r3-arms, a page (rental 2): also ask the "
                          "L2 fabric's own read, hit and miss sectors "
@@ -8982,6 +9001,11 @@ def main(argv=None) -> int:
                   "--reduce-only (the ladder family's sweep has no such knob, and a "
                   "census or floor runs R3's default tile)")
             return exit_codes.REFUSED
+    if args.instr and not (args.family == R3_FAMILY and (args.run or args.dry_run)
+                           and not args.floor and not args.census_only and not args.reduce_only):
+        print("REFUSE: --instr belongs to a page: --run or --dry-run --family r3-arms, not "
+              "--floor, --census-only or --reduce-only")
+        return exit_codes.REFUSED
     if args.slot_pad_rows < 0:
         print(f"REFUSE: --slot-pad-rows {args.slot_pad_rows}: a slot cannot be shorter "
               "than its weights")

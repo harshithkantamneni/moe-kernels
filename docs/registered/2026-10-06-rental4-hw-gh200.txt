@@ -1,0 +1,63 @@
+REGISTERED 2026-10-06, before any rental-4 page: rental 4, 2026-10-06-rental4-hw-gh200
+status: REGISTERED BEFORE ANY PAGE: hardware constants measured independently of any fused_moe page, and consistency checks
+design: owner decision 3 (RRZE-HPC/gpu-benches on the VM, GPL-3.0, fetched at a pinned commit, never vendored) and REANALYSIS.md section 4 (the rulers step)
+tool: scripts/gpubench.py and scripts/hw_rulers.py on the VM; scorer scripts/scoring/rental4/score_hw.py
+
+
+gpubench:
+  pin:
+    repo: https://github.com/RRZE-HPC/gpu-benches
+    commit: 23e586dd8d8a19e72abd9d385a088623cefabfae
+    committed: 2025-10-24T09:08:33+02:00
+    licence: GPL-3.0
+    note: third-party; fetched on the VM at this commit, never vendored into moe-kernels
+  benches:
+    - gpu-latency
+    - gpu-stream
+    - gpu-l2-cache
+  rules:
+    near_l2: median ns over buffers from 4 MiB to 0.4 L
+    far_l2: median ns over 0.6 L to 0.95 L
+    dram: median ns over buffers >= 2.5 L
+    l2_plateau: median GB/s over total volume <= 0.25 L
+    l2_floor: >= 4.0 L
+    l2_half_way: the log-volume interpolation of the first fall below (plateau + floor) / 2
+    stream: peaks per kernel; the least occupancy reaching 0.95 of the triad peak
+  L: the card's L2 (60 MiB on GH200; the rulers' device query is printed beside it)
+rulers:
+  read2d: torch.sum(a, dim=1), a fp32 [4096, 262144]
+  copy: y.copy_(x), fp32, each the buffer
+  add: torch.add(a, b, out=c), fp32, each the buffer
+  matmul: torch.matmul bf16 8192^3
+checks:
+  far_l2:
+    against_ns: 253.384
+    band: 0.05
+  dram:
+    against_ns: 346.414
+    band: 0.1
+  triad:
+    against_gbps: 3783.0
+    band: 0.03
+  l2_cache_size:
+    against_bytes: 62914560
+    band: 0.0
+  rule: each a CONSISTENT / DIFFERS line against the published GH200 value (SEEN third-party) within its band; latencies are compared in ns (the published run was at 1980 MHz, this one at the 1710 lock: an L2 or DRAM latency fixed in ns reads the same)
+printed:
+  eta_mix: bw 3598.0 GB/s (CAL, the 8x7B fit) over each streaming ruler (read2d, copy, add) and over triad
+  cycles_at_lock: every latency x 1.710
+  tau_mma: matmul TFLOP/s over 132 SMs x 1.710 GHz: FLOP per clock per SM, an upper bound for mma.sync
+use: the stamps F readout's rivals take this rental's latencies when gpubench ran and parsed
+licence: gpu-benches' code never enters the repository; its printed outputs are measurements published with the session, attributed to RRZE-HPC (GPL-3.0 applies to the code, not to a measurement)
+rrze_gh200:
+  near_l2_ns: 141.616
+  far_l2_ns: 253.384
+  dram_ns: 346.414
+  triad_gbps: 3783.0
+  read_gbps: 2775.0
+  init_gbps: 3944.0
+  clock_mhz: 1980.0
+  label: SEEN third-party (RRZE-HPC/gpu-benches master 23e586dd, GH200, 1980 MHz), parsed by gpubench.py's rules
+seen_data:
+  - the comparison values are SEEN third-party (RRZE's published GH200 run)
+  - bw 3598 is CAL

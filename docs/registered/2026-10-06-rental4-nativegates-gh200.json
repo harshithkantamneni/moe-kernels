@@ -1,0 +1,27 @@
+{
+ "registered": "2026-10-06, before any NATIVE-only histogram page",
+ "name": "2026-10-06-rental4-nativegates-gh200",
+ "status": "REGISTERED GATE DEFINITION (owner decision 1, 2026-10-06); NO RENTAL-4 UNIT USES IT: the histogram page and its plumbing (balanced_ids replaced by realize_counts) are rental 5's",
+ "design": "REVIEW.md section 1 (the NATIVE-only, M-ladder, histogram timed page) and section 4 (the uniform-path control, the token shuffle); REANALYSIS.md section 4 owner decision 1",
+ "gates": {
+  "G1_lock_thermal": "V7: the 1710 lock in force and the thermal gate, as every timed page",
+  "G2_host_bound": "the host-bound guard (R3's): a cell whose host enqueue exceeds its GPU time is excluded",
+  "G3_uniform_control": "the uniform histogram through the new path matches R3's NATIVE cell (balanced_ids) on the same board within 2 sigma_page (sigma_page 0.18%, SEEN rental 3)",
+  "G4_worst_cell_clock": "the worst cell's measured SM clock is 1710 MHz (no cell below the lock)",
+  "G5_provenance": "the page records the histogram file's sha256 and the token-shuffle seed"
+ },
+ "rule": "a NATIVE-only histogram page is VALID only when G1 to G5 all pass; G3 failing voids every histogram cell of its board",
+ "seen_data": [
+  "sigma_page is SEEN"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "dca04983ad613ee1b42ba726e3281ebbfb3277d4f730d770928362e119b2e316",
+  "scripts/instr_probe.py": "d5360a2feec55271e078af5fbc5c3a043e08881043cf2bb1ef1b9b0157c1154b",
+  "scripts/gpubench.py": "591def14403dbaf4e7023ec176f95980a41e93d047226e817604a7da162a1a6c",
+  "scripts/hw_rulers.py": "8615e321ba45ab34ec8a4d7ce650e07a523969f684b3b2d971ca910fc5994415",
+  "moe/instrumented/__init__.py": "655813ac766a2f9258dc09fbc1b6916b51cff8713eba28bfdb09ad63cd90623b",
+  "moe/instrumented/fused_moe_instr.py": "2c0a25f58ab7c7e82c945885c1476d75bda95aafdb5e88b0cfaa2248e37194e8",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental4/r4common.py": "f2cb03333cce44470855b0633292af135084b755352e10e0334d09a94ff37665"
+ }
+}

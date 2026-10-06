@@ -100,6 +100,9 @@ moe/
                    ai_model (the byte model and what a fit returns). Read
                    docs/APPARATUS.md before any of them.
   runner/          cross-virtualenv execution
+  instrumented/    vLLM 0.27.1's fused_moe kernel copied with timestamps and eviction
+                   hints, off by default, for gated instrumented units only (rental 4);
+                   not a kernel of the study's
 scripts/           setup_runpod.sh, run_all.sh (the sweep), h200_gaps_session.sh
                    (the session driver for every open experiment),
                    capture_traces.py, plot.py, and one script per arm
@@ -231,7 +234,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 5945 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 6051 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder

@@ -371,6 +371,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import copy
 import csv
 import hashlib
@@ -7982,7 +7983,14 @@ COUNTER_PLAN_KEYS: tuple[str, ...] = (
 #: written before them reads as it did: `block_k` (BLOCK_SIZE_K handed to the
 #: existing kernel as a config value), `slot_pad_rows` (`build_private_weights`'
 #: pad_rows) and `null_kernel` (the floor capture's launch-cost probe below).
-COUNTER_PLAN_OPTIONAL: dict = {"block_k": None, "slot_pad_rows": 0, "null_kernel": False}
+COUNTER_PLAN_OPTIONAL: dict = {"block_k": None, "slot_pad_rows": 0, "null_kernel": False,
+                               "instr": None}
+#: RENTAL 4 (2026-10-06, owner decision 5): `instr`, the instrumented copy of vLLM's kernel
+#: (moe/instrumented) with EVICTION HINTS ONLY, as its spec text
+#: ("evict_a=first,evict_b=none"). A counter page counts bytes, so no stamp may ride on it
+#: (the stamp stores are DRAM writes of their own): `validate_counter_plan` refuses a spec
+#: with stamps, and an all-off spec (the plain kernel is the off spec's object). The child
+#: installs the copy around its calls (`counter_instr`) and the manifest records the spec.
 
 #: THE NULL KERNEL (rental 2, part 3). Not a kernel of this repo: it is
 #: `torch.cuda._sleep(cycles)`, which launches ATen's own one-thread
@@ -8079,6 +8087,45 @@ def counter_declaration(cfg, block_m: int) -> tuple[int, str]:
     return declared_copies_for(cfg, deepest, block_m)
 
 
+def counter_instr_spec(plan: dict):
+    """The plan's `instr` spec (moe.instrumented.InstrSpec), or CounterPlanRefused."""
+    from moe import instrumented
+    try:
+        return instrumented.parse_spec(str(plan["instr"]))
+    except instrumented.SpecError as exc:
+        raise CounterPlanRefused(f"instr {plan['instr']!r}: {exc}") from None
+
+
+@contextlib.contextmanager
+def counter_instr(plan: dict, module=None, kernel=None):
+    """Around the child's calls: the instrumented copy when the plan carries `instr`
+    (rental 4's eviction-hint pages), else nothing at all (every other page)."""
+    if plan.get("instr") is None:
+        yield None
+        return
+    from moe import instrumented
+    with instrumented.install(counter_instr_spec(plan), module=module, kernel=kernel,
+                              alloc=lambda *a: None) as rec:
+        yield rec
+
+
+def counter_hint_refusal(rec) -> str:
+    """'' when every launch the copy made under a hinted plan compiled with L2::cache_hint on
+    its A/B copies, else why not. Triton 3.7.1 lowers a pipelined load to cp.async and drops
+    `eviction_policy` (build-r4-review section 1, E1): such a page would count the all-off
+    kernel's bytes under a hint's name, so the child refuses it and writes no manifest."""
+    from moe.instrumented import cubin as CB
+    if rec is None or not rec.spec.hints:
+        return ""
+    facts = [CB.compiled_facts(lr.get("compiled")) for lr in rec.launches]
+    if not facts or any(f is None for f in facts):
+        return "no compiled kernel recorded: the eviction hint cannot be confirmed in the PTX"
+    if not all(CB.hint_in_ptx(f["ptx"]) for f in facts):
+        return ("the compiler dropped the eviction hint: no L2::cache_hint on the A/B copies "
+                "in the compiled PTX (Triton lowers the pipelined loads to cp.async .ca/.cg)")
+    return ""
+
+
 def validate_counter_plan(plan: dict):
     """The plan's model config, or `CounterPlanRefused` naming what is wrong.
 
@@ -8144,6 +8191,16 @@ def validate_counter_plan(plan: dict):
     pad = plan.get("slot_pad_rows") or 0
     if not isinstance(pad, int) or isinstance(pad, bool) or pad < 0:
         raise CounterPlanRefused(f"slot_pad_rows {pad!r} is not a whole number of rows >= 0")
+    if plan.get("instr") is not None:
+        spec = counter_instr_spec(plan)
+        if spec.stamps:
+            raise CounterPlanRefused(
+                f"instr {plan['instr']!r} carries stamps: a counter page counts bytes and "
+                "the stamp stores write DRAM of their own; eviction hints only")
+        if not spec.hints:
+            raise CounterPlanRefused(
+                f"instr {plan['instr']!r} turns nothing on: the plain kernel is that page's "
+                "object (drop the key)")
     if plan.get("null_kernel"):
         if not native:
             raise CounterPlanRefused(
@@ -8401,6 +8458,7 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
         **({"slot_pad_rows": pad} if pad else {}),
         **({"null_kernel": True, "null_kernel_name": NULL_KERNEL_NAME,
             "null_kernel_cycles": NULL_KERNEL_CYCLES} if null else {}),
+        **({"instr": counter_instr_spec(plan).as_dict()} if plan.get("instr") is not None else {}),
     }
 
 
@@ -8500,7 +8558,11 @@ def _counter_child_mode(args) -> int:
                          "uuid": device_identity()},
         null_kernel=torch.cuda._sleep)
     try:
-        manifest = counter_child(plan, stack)
+        with counter_instr(plan) as rec:
+            manifest = counter_child(plan, stack)
+        why = counter_hint_refusal(rec)
+        if why:
+            raise CounterPlanRefused(why)
     except CounterPlanRefused as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED

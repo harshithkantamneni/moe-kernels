@@ -1,0 +1,92 @@
+REGISTERED 2026-10-06, before any rental-4 page: rental 4, 2026-10-06-rental4-dead-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r4 DESIGN.md stage 1 part A, with REVIEW.md section 3 (D2 beside D, the NATIVE null control, both noise values, the key on timed units only) and REANALYSIS.md section 4; A3 (mixtral-8x7b-tp2, the kappa lever) CUT by the owner on 2026-10-06 (decision 4)
+tool: scorer scripts/scoring/rental4/score_dead.py
+
+predicted Delta (us), per contrast:
+  A1 qwen2-57b-a14b-tp8 copies [9, 15]: D 20.73  D2 21.46  M 27.77  K5 20.73  K0 24.43  SLOT 21.09  FIXED 0.00  sigma_D 0.83
+  A2 olmoe-1b-7b copies [9, 15]: D 23.69  D2 23.33  M 31.74  K5 23.69  K0 23.69  SLOT 21.70  FIXED 0.00  sigma_D 0.95
+
+pages:
+  path: gaps-<card>-<model>-<label>/private_weight_reference/*/report.json, labels c9 and c15, the G = 8 page at treads 1..9
+  contrasts:
+    A1: {"model": "qwen2-57b-a14b-tp8", "copies": [9, 15]}
+    A2: {"model": "olmoe-1b-7b", "copies": [9, 15]}
+  declaration_check: each page's recorded copies_declared must equal its label's (9 or 15); else the contrast is NOT SCORED
+  label: every c15 page is NOT JOINABLE TO COUNTER BYTES (no counter page declares 15; validate_counter_plan): its directory carries DECLARED_COPIES.txt saying so
+statistic:
+  Delta_n: [SHARED(n) - NATIVE(n)] at c15 minus the same at c9, us, ms_p50 off each page's treads_table, same board, G = 8
+  treads:
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+  Delta: median over n = 3..9 of Delta_n (the dead count is n-free, so Delta_n is flat in n)
+  alignment: A_n = [align(SHARED, n) - align(NATIVE, n)] at c15 minus at c9, median over each page's align_probe repeats, us; the registered statistic is Delta - median_n A_n (the alignment kernel's growth with the declared slots, the design's confound); raw Delta printed
+fit_D_CAL:
+  d_ns: 0.995
+  kappa: 0.325
+  se:
+    - 0.039944
+    - 0.021575
+  cal_rms_us: 0.931373
+fit_SLOT_CAL:
+  t_ns_slot: 4.05
+  kappa: 0.245
+  cal_rms_us: 0.998526
+D2:
+  d_w1: 0.93
+  d_w2: 1.03
+  kappa: 0.3
+  label: SEEN-fitted on all 16 GEMMs (8 CAL, 8 held-out), principles/work/dead_ratio.py
+M:
+  d: 1.333
+  kappa: 0.5
+  label: the registered model M: DEAD_CTA_NS 1.333, k_w 0.5 (CAL, r3_timing_model)
+predictions_us:
+  A1:
+    model: qwen2-57b-a14b-tp8
+    copies: [9, 15]
+    declared_slots: [576, 960]
+    dead_ctas: {"9": {"w1": 5580, "w2": 31248}, "15": {"w1": 9300, "w2": 52080}}
+    rivals: {"D": {"w1": 0.0, "w2": 20.72784, "total": 20.72784}, "D2": {"w1": 0.0, "w2": 21.45696, "total": 21.45696}, "M": {"w1": 0.0, "w2": 27.769056, "total": 27.769056}, "K5": {"w1": 0.0, "w2": 20.72784, "total": 20.72784}, "K0": {"w1": 3.7014, "w2": 20.72784, "total": 24.42924}, "SLOT": {"w1": 0.0, "w2": 21.0924, "total": 21.0924}, "FIXED": {"w1": 0.0, "w2": 0.0, "total": 0.0}}
+    sigma_D_us: 0.832113
+  A2:
+    model: olmoe-1b-7b
+    copies: [9, 15]
+    declared_slots: [576, 960]
+    dead_ctas: {"9": {"w1": 17856, "w2": 17856}, "15": {"w1": 29760, "w2": 29760}}
+    rivals: {"D": {"w1": 11.84448, "w2": 11.84448, "total": 23.68896}, "D2": {"w1": 11.07072, "w2": 12.26112, "total": 23.33184}, "M": {"w1": 15.868032, "w2": 15.868032, "total": 31.736064}, "K5": {"w1": 11.84448, "w2": 11.84448, "total": 23.68896}, "K0": {"w1": 11.84448, "w2": 11.84448, "total": 23.68896}, "SLOT": {"w1": 9.64224, "w2": 12.0528, "total": 21.69504}, "FIXED": {"w1": 0.0, "w2": 0.0, "total": 0.0}}
+    sigma_D_us: 0.950987
+noise:
+  sigma_noise_us: 0.9
+  sigma_noise_basis: the design's: 1.25 x 2 x 0.18% x 0.5 ms / sqrt 7 (sigma_page 0.18% SEEN, rental 3 rep8)
+  sigma_noise_resolution_us: 0.45
+  resolution_basis: REVIEW.md section 3: SEEN SHARED - NATIVE on qwen2-tp8 spans 29.6 to 30.4 us over six pages; every verdict is also printed at 0.45 us, the registered one is at 0.9
+  sigma_rival: sigma_D (the CAL fit's se, by finite differences) for D; 0 for every other rival
+z: (Delta_meas - Delta_pred) / sqrt(sigma_noise^2 + sigma_rival^2)
+rules:
+  D: FAILS if |z_D| > 3 on A1 or A2; else HOLDS on the contrasts measured
+  D2: the same rule, scored beside D (REVIEW.md section 3)
+  M: EXCLUDED if |z_M| > 3 on A1 or A2 (separation 7 to 8 us)
+  FIXED: EXCLUDED if Delta > 3 sigma_noise above 0 on A1 or A2
+  K0: EXCLUDED if |z| > 3 on A1 or A2 (K0 differs from D on A1 by its w1 term)
+  K5: NOT TESTED: K5 equals D on A1 and A2; A3, its lever, is cut
+  SLOT: EXCLUDED if |z| > 3; if D and SLOT both survive, 'D against SLOT UNDECIDED' (they separate by 0.4 and 2.0 us)
+  not_separated:
+    pairs: ["D/SLOT", "D/D2"]
+    rule: printed NOT SEPARATED whatever the pages read: the predictions differ by 0.4 to 2.2 sigma_noise on A1 and A2, so no reading can tell them apart
+    review_fix: build-r4-review section 3
+  per_gemm_d: PRINTED, not a verdict: d_w2 = Delta_A1 / dN_w2(A1) and d_w1 = (Delta_A2 - dN_w2(A2) d_w2) / dN_w1(A2), ns (both declarations past the hidden window under D, so the windows cancel)
+null_control:
+  what: NATIVE(c15, n) - NATIVE(c9, n) per tread n = 3..9: NATIVE declares E slots on both pages, so its call is the same call
+  rule: PASS when |median_n| <= 3 sqrt(2) x 0.18% x median_n T_NATIVE(c9, n); a FAIL turns every A verdict INCONCLUSIVE (board drift between the pages)
+gates: R3's VALIDITY gates by rental 3's two views (ALL and CLEAN, rental 2's addendum rule 3); V5 does not gate timed pages; a page whose V1 failed is unusable in both
+missing: a contrast with a page missing or dropped is NOT SCORED; the drop-groups a1 / a2 keep each c9 / c15 pair together
+seen_data:
+  - D's and SLOT's fits are CAL (in-kernel counters of the four CAL models); D2 is SEEN-fitted on all 16 GEMMs
+  - sigma 0.18% and the 0.45 us spread are SEEN (rental 3)
+  - no qwen2-tp8 or OLMoE page at 15 copies exists: both contrasts are BLIND

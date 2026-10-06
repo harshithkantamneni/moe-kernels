@@ -61,6 +61,27 @@
 # each unit, while the estimates still to run overrun the deadline less
 # RESERVE_MIN, the LAST unit not yet run is dropped (the file's order is the
 # priority order). `--dry-run --plan FILE` prints every unit.
+# RENTAL 4 (2026-10-06): four plan-only steps and their keys, each refused off its step.
+#   rulers     scripts/hw_rulers.py at the 1710 lock: torch read / copy / add / matmul rulers
+#              and the device's L2 size (eta_mix = bw / ruler on this board)
+#   gpubench   scripts/gpubench.py at the 1710 lock: THIRD-PARTY RRZE-HPC/gpu-benches (GPL-3.0,
+#              owner decision 3), fetched at its pinned commit into $MOE_HOME/ext (outside the
+#              checkout), built with nvcc, latency / stream / l2-cache run once each
+#   perturb    scripts/instr_probe.py --mode perturb at the 1710 lock: the owner's decision-2
+#              gate (median |plain / copy - 1| <= 1%, worst <= 2%, identical occupancy) for
+#              EVERY instrumented unit after it in the plan; writes $D/instr-gate.env
+#   stamps     scripts/instr_probe.py --mode stamps at the 1710 lock: the instrumented copy of
+#              vLLM's kernel (moe/instrumented) with timestamps on the unit's cells; keys
+#              stamp-groups, stamp-treads, stamp-arms, instr-stamps=cta|iter, instr-every,
+#              instr-marks, block-k, num-stages. REFUSED unless its gate line reads PASS
+#   keys       declared-copies=N (timed units ONLY: R3's --declared-copies, refused on bytes and
+#              floor units, whose counter pages declare R3's 9; the page's directory carries a
+#              NOT-JOINABLE label when N is not 9); instr-evict-a / instr-evict-b=first|last|none
+#              (bytes units: the copy's eviction hints on a counter page, gated like stamps;
+#              the gate FAILS unless the compiled PTX carries L2::cache_hint, which Triton
+#              3.7.1 drops on pipelined loads, so rental 4's plan has no such unit)
+# Every instrumented unit needs a perturb unit before it in the file. The plain installed
+# kernel stays the measured object of every timed, deep, floor and plain bytes unit.
 #
 # WHY UNATTENDED, AND HOW THE DRAFT'S "STOPS" BECAME RULES. The draft of
 # section 3c (2026-09-26) was blocks a person pastes, each with a "Stops"
@@ -166,6 +187,23 @@ OUT_LABEL="${MOE_DRIVER_OUT_LABEL:-}"
 #: (8 32 by default) at those treads (6 by default), and no G=3 page.
 TIMED_GROUPS="${MOE_DRIVER_TIMED_GROUPS:-}"
 TIMED_TREADS="${MOE_DRIVER_TIMED_TREADS:-}"
+#: RENTAL 4 (2026-10-06): a timed unit's declaration (declared-copies); empty: COUNTER_COPIES
+#: for a non-Mixtral model and R3's own rule (9) for Mixtral, as before.
+DECLARED_COPIES="${MOE_DRIVER_DECLARED_COPIES:-}"
+#: the instrumented copy's keys (moe/instrumented): a bytes unit's eviction hints, a stamps
+#: unit's stamps, cells and config; the unit's variant id in $D/instr-variants.json
+INSTR_EVICT_A="${MOE_DRIVER_INSTR_EVICT_A:-}"
+INSTR_EVICT_B="${MOE_DRIVER_INSTR_EVICT_B:-}"
+INSTR_STAMPS="${MOE_DRIVER_INSTR_STAMPS:-}"
+INSTR_EVERY="${MOE_DRIVER_INSTR_EVERY:-}"
+INSTR_MARKS="${MOE_DRIVER_INSTR_MARKS:-}"
+STAMP_GROUPS="${MOE_DRIVER_STAMP_GROUPS:-}"
+STAMP_TREADS="${MOE_DRIVER_STAMP_TREADS:-}"
+STAMP_ARMS="${MOE_DRIVER_STAMP_ARMS:-}"
+VARIANT_ID="${MOE_DRIVER_VARIANT_ID:-}"
+#: gpu-benches lives here on the VM, outside the checkout (GPL-3.0, never in the repo)
+GPUBENCH_DEST="${MOE_DRIVER_GPUBENCH_DEST:-$MOE_HOME/ext/gpu-benches}"
+GPUBENCH_L2_MIB=60
 #: RENTAL 2's knobs (2026-10-01; docs/registered/README.md, rental 2). A bytes
 #: unit's config values for the existing kernel and its partition metrics; a floor
 #: unit's lock (a lock other than 1710 is the one the prelude probed), whether its
@@ -216,9 +254,9 @@ floor_treads() {
 }
 
 # ---- the steps: name, estimate and cap in minutes, what it answers ----------
-STEPS=(prelude bytes calibrate timed eta floor deep r1lock launchfloor)
+STEPS=(prelude bytes calibrate timed eta floor deep r1lock launchfloor rulers gpubench perturb stamps)
 #: Steps no default plan runs: asked for by --steps or a --plan line only.
-OPT_IN_STEPS=(launchfloor)
+OPT_IN_STEPS=(launchfloor rulers gpubench perturb stamps)
 #: Another model's pages run longer by about its weight bytes over 8x7B's
 #: (8x22B: 4.83 GB against 2.82, x1.7); the estimates and caps below are
 #: 8x7B's, scaled by this percentage for the steps that measure.
@@ -226,12 +264,13 @@ OPT_IN_STEPS=(launchfloor)
 model_scale_pct() {
   case "$MODEL" in "$DEFAULT_MODEL") echo 100 ;; mixtral-8x22b) echo 170 ;; qwen2-57b-a14b) echo 125 ;; olmoe-1b-7b|qwen1.5-moe-a2.7b|phi-3.5-moe|jetmoe-8b|granite-3.0-3b-a800m) echo 100 ;; *) echo 200 ;; esac
 }
-_scaled() { case "$1" in prelude|calibrate) echo "$2" ;; *) echo $(( $2 * $(model_scale_pct) / 100 )) ;; esac; }
+_scaled() { case "$1" in prelude|calibrate|rulers|gpubench|perturb) echo "$2" ;; *) echo $(( $2 * $(model_scale_pct) / 100 )) ;; esac; }
 step_est() {
   local m
   case "$1" in
     prelude) m=3 ;; bytes) m=55 ;; calibrate) m=8 ;; timed) m=37 ;;
     eta) m=50 ;; floor) m=15 ;; deep) m=33 ;; r1lock) m=62 ;; launchfloor) m=25 ;;
+    rulers) m=3 ;; gpubench) m=8 ;; perturb) m=10 ;; stamps) m=3 ;;
   esac
   _scaled "$1" "$m"
 }
@@ -240,6 +279,7 @@ step_cap() {
   case "$1" in
     prelude) m=15 ;; bytes) m=120 ;; calibrate) m=30 ;; timed) m=90 ;;
     eta) m=115 ;; floor) m=45 ;; deep) m=75 ;; r1lock) m=130 ;; launchfloor) m=60 ;;
+    rulers) m=10 ;; gpubench) m=20 ;; perturb) m=25 ;; stamps) m=10 ;;
   esac
   _scaled "$1" "$m"
 }
@@ -288,6 +328,10 @@ step_what() {
                else echo "3c.5 floor counters, G=64 and G=2 at base, G=64 unlocked (record), G=64 at ${LOCK_TIMED}: P6"; fi ;;
     deep)      echo "3c.6 timed R3 at ${LOCK_TIMED} to tread 9, G=4 then G=2: P3, P4" ;;
     r1lock)    echo "3c.7 R1 in lock mode, G=4 then G=1: the floor's clock exponent" ;;
+    rulers)    echo "rulers at the ${LOCK_TIMED} lock: torch read2d / copy / add / matmul bf16 8192^3, the device's L2 size" ;;
+    gpubench)  echo "THIRD-PARTY RRZE-HPC/gpu-benches (GPL-3.0) at the ${LOCK_TIMED} lock: latency, stream, l2-cache; fetched into \$MOE_HOME/ext, never the repo" ;;
+    perturb)   echo "perturbation gate at the ${LOCK_TIMED} lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2)" ;;
+    stamps)    echo "stamps at the ${LOCK_TIMED} lock: the instrumented copy ($(stamp_spec)), G=${STAMP_GROUPS//,/ } treads ${STAMP_TREADS//,/ } arms ${STAMP_ARMS//,/ }, BK ${BLOCK_K:-64} s${NUM_STAGES:-4}; runs only on a PASS gate" ;;
     launchfloor) if [[ "$LF_TRACE" == 0 ]]; then echo "launch floor at the ${LOCK_TIMED} lock: arms $LF_ARMS, G=$LF_GROUP_M, treads $LF_TREADS, modes $LF_MODES; a timed process (no profiler), no trace phase"
                  else echo "launch floor at the ${LOCK_TIMED} lock: arms $LF_ARMS, G=$LF_GROUP_M, treads $LF_TREADS, modes $LF_MODES, traces at $LF_TRACE; a timed process (no profiler) then a trace process"; fi ;;
   esac
@@ -298,8 +342,18 @@ knob_args() {
   [[ -n "$BLOCK_K" ]] && printf '%s\n' --block-k "$BLOCK_K"
   [[ -n "$SLOT_PAD_ROWS" ]] && printf '%s\n' --slot-pad-rows "$SLOT_PAD_ROWS"
   [[ "$PARTITION_METRICS" == 1 ]] && printf '%s\n' --partition-metrics
+  [[ -n "$INSTR_EVICT_A$INSTR_EVICT_B" ]] && printf '%s\n' --instr "$(evict_spec)"
   return 0
 }
+#: rental 4: a bytes unit's eviction-hint spec, and a stamps unit's stamp spec (moe.instrumented)
+evict_spec() { echo "evict_a=${INSTR_EVICT_A:-none},evict_b=${INSTR_EVICT_B:-none}"; }
+stamp_spec() {
+  local t="stamps=${INSTR_STAMPS:-off}"
+  [[ "$INSTR_STAMPS" == iter ]] && t+=",every=${INSTR_EVERY:-1}${INSTR_MARKS:+,marks=$INSTR_MARKS}"
+  echo "$t"
+}
+#: the declaration a timed unit's R3 dry run must print (check_dry)
+decl_expect() { echo "${DECLARED_COPIES:-$COUNTER_COPIES}"; }
 knob_text() {
   local t; t="$(knob_args | tr '\n' ' ')"
   [[ -n "$t" ]] && echo "; knobs ${t% }"
@@ -379,7 +433,8 @@ check_dry() {
   if grep -q '^REFUSED:' "$log"; then
     echo "REFUSED: $(grep -m1 '^REFUSED:' "$log" | cut -c10-160)"; return 1
   fi
-  grep -qE 'n_decl = 9 against n_max' "$log" || { echo "no 'n_decl = 9 against n_max' line"; return 1; }
+  local want; want="$(decl_expect)"
+  grep -qE "n_decl = $want against n_max" "$log" || { echo "no 'n_decl = $want against n_max' line"; return 1; }
   n="$(grep -oE 'retracted +tread +[0-9]+ +against the [0-9]+ planned' "$log" | head -1 | awk '{print $3}')"
   [[ -n "$n" && "$n" -ge "$planned" ]] || { echo "retracted tread ${n:-(none printed)} is under the $planned planned"; return 1; }
   if grep -qE '^ *ridge .*HYPOTHESIS' "$log"; then
@@ -552,6 +607,9 @@ counters_dir() {
 
 step_bytes() {
   local R F C L G tail_dropped=0
+  if [[ -n "$INSTR_EVICT_A$INSTR_EVICT_B" ]]; then
+    gate_ok bytes || return "$EXIT_REFUSED"
+  fi
   R="$(counters_dir)"; F="$LOCK_TIMED"; L="$R/lock$F"
   C="$(census_for)" || return "$EXIT_REFUSED"
   mkdir -p "$L"
@@ -713,6 +771,14 @@ r3_dry() {   # LOG PLANNED TAG G ARGS...
 
 step_timed() {
   export MOE_RESULTS_DIR="$(results_dir)"
+  if [[ -n "$DECLARED_COPIES" ]]; then
+    mkdir -p "$MOE_RESULTS_DIR"
+    { echo "declared-copies $DECLARED_COPIES (plan key, rental 4): R3 --declared-copies $DECLARED_COPIES"
+      [[ "$DECLARED_COPIES" == "$COUNTER_COPIES" ]] \
+        || echo "NOT JOINABLE TO COUNTER BYTES: every counter page declares R3's $COUNTER_COPIES copies (validate_counter_plan), so no byte page shares this page's grid"
+    } > "$MOE_RESULTS_DIR/DECLARED_COPIES.txt"
+    ledger "timed: declared-copies $DECLARED_COPIES on every page of this unit$([[ "$DECLARED_COPIES" == "$COUNTER_COPIES" ]] || echo ', labelled NOT JOINABLE TO COUNTER BYTES')"
+  fi
   load_ruler
   # rental 3: a unit's timed-groups / timed-treads replace G=8, 32 at treads 6 and drop G=3
   local TT; TT="$(timed_treads)"
@@ -1099,6 +1165,104 @@ step_launchfloor() {
 }
 
 # ==========================================================================
+# rental 4 (2026-10-06): rulers, gpubench, perturb, stamps
+# ==========================================================================
+#: A plan-only unit's own directory, <date>-<card>-<what>-<label> under $RESULTS_ROOT.
+unit_out() {   # WHAT
+  local f="$S/unit-dir-$1${OUT_LABEL:+-$OUT_LABEL}.txt" R
+  if [[ -s "$f" ]]; then R="$(cat "$f")"
+  else R="$RESULTS_ROOT/$(date -u +%F)-$MOE_CARD-$1${OUT_LABEL:+-$OUT_LABEL}"; echo "$R" > "$f"; fi
+  mkdir -p "$R"
+  printf '%s\n' "$R"
+}
+#: An instrumented unit runs only when the perturb unit wrote PASS for its variant.
+gate_ok() {   # STEP
+  local k line
+  k="GATE_$(printf '%s' "$VARIANT_ID" | tr -c 'A-Za-z0-9' '_')"
+  line="$(grep -E "^$k=" "$D/instr-gate.env" 2>/dev/null | tail -1)"
+  if [[ "${line#*=}" != PASS* ]]; then
+    ledger "$1 REFUSED: the perturbation gate for ${VARIANT_ID:-(no variant)} reads '${line#*=}' (instr-gate.env): an instrumented unit runs only on a PASS"
+    return 1
+  fi
+  return 0
+}
+#: Lock 1710, run one tool under it, reset (the subshell's trap); the tool's exit.
+locked_run() {   # LOG CMD...
+  local log="$1"; shift
+  ( set -o pipefail
+    trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
+    trap 'exit 130' INT TERM HUP
+    [ -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)" ] || { echo "the GPU is in use: stop"; exit 2; }
+    moe_counter ncu --clock-control reset >/dev/null 2>&1 || true
+    MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
+    [ "$LOCK_TIMED" -le "$MAX" ] || { echo "F=$LOCK_TIMED MHz is above this card's maximum, $MAX MHz"; exit 2; }
+    lock_and_check "$LOCK_TIMED" || exit 2
+    "$@" 2>&1 | tee "$log"
+    exit "${PIPESTATUS[0]}" )
+}
+#: A tool's own dry run first: 2 with no REFUSED line may go on, anything else refuses.
+dry_ok() {   # NAME LOG CMD...
+  local name="$1" log="$2"; shift 2
+  "$@" --dry-run > "$log" 2>&1
+  local drc=$?
+  if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$log"; then
+    ledger "$name REFUSED: its dry run exited $drc ($(grep -m1 '^REFUSED:' "$log" | cut -c1-160))"
+    return 1
+  fi
+  return 0
+}
+
+step_rulers() {
+  local R; R="$(unit_out rulers)"
+  local T=("$PY_VLLM" scripts/hw_rulers.py --out "$R" --lock-mhz "$LOCK_TIMED")
+  dry_ok rulers "$S/logs/rulers-dry.log" "${T[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/rulers${OUT_LABEL:+-$OUT_LABEL}.log" "${T[@]}"
+  local rc=$?
+  ledger "rulers: exit $rc ($R/rulers.json)"
+  return "$rc"
+}
+
+step_gpubench() {
+  local R; R="$(unit_out gpubench)"
+  local G=("$PY_BASE" scripts/gpubench.py --dest "$GPUBENCH_DEST" --out "$R" --sm 90
+           --lock-mhz "$LOCK_TIMED" --l2-mib "$GPUBENCH_L2_MIB")
+  dry_ok gpubench "$S/logs/gpubench-dry.log" "${G[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/gpubench${OUT_LABEL:+-$OUT_LABEL}.log" "${G[@]}"
+  local rc=$?
+  ledger "gpubench: exit $rc (third-party GPL-3.0 code at its pin, outside the checkout; $R/constants.json)"
+  return "$rc"
+}
+
+step_perturb() {
+  local R V="$D/instr-variants.json"; R="$(unit_out perturb)"
+  [[ -s "$V" ]] || { ledger "perturb REFUSED: no $V (no instrumented unit after this one)"; return "$EXIT_REFUSED"; }
+  # its own Triton cache (build-r4-review G1): env.sh's shared one would hide this unit's compiles
+  local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode perturb --variants "$V" --out "$R")
+  dry_ok perturb "$S/logs/perturb-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/perturb${OUT_LABEL:+-$OUT_LABEL}.log" "${P[@]}"
+  local rc=$?
+  if [[ -s "$R/gate.env" ]]; then
+    cat "$R/gate.env" >> "$D/instr-gate.env"
+    local l; while IFS= read -r l; do ledger "perturb: $l"; done < "$R/gate.env"
+  else
+    ledger "perturb: no gate.env written: every instrumented unit after it refuses"
+  fi
+  return "$rc"
+}
+
+step_stamps() {
+  gate_ok stamps || return "$EXIT_REFUSED"
+  local R; R="$(unit_out "instr-$MODEL")"
+  local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode stamps --variants "$D/instr-variants.json"
+           --variant "$VARIANT_ID" --gate "$D/instr-gate.env" --out "$R")
+  dry_ok stamps "$S/logs/stamps-$VARIANT_ID-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/stamps-$VARIANT_ID.log" "${P[@]}"
+  local rc=$?
+  ledger "stamps: $VARIANT_ID exit $rc ($R)"
+  return "$rc"
+}
+
+# ==========================================================================
 # the orchestrator
 # ==========================================================================
 push_results() {   # MESSAGE [FINAL_EXIT]
@@ -1236,7 +1400,7 @@ resolve_plan() {
 }
 plan_refuse() { echo "--plan: line $1: $2" >&2; return 1; }
 load_plan() {   # FILE
-  local f="$1" line ln=0 kv k v model step est cap label opts seen="" key group
+  local f="$1" line ln=0 kv k v model step est cap label opts seen="" key group seen_perturb=0 instr_after=0
   local -a w
   while IFS= read -r line || [[ -n "$line" ]]; do
     ln=$(( ln + 1 )); line="${line%%#*}"
@@ -1247,6 +1411,8 @@ load_plan() {   # FILE
     if [[ "$step" == prelude ]]; then
       [[ "$model" == - && ${#U_STEP[@]} -eq 0 ]] \
         || { plan_refuse "$ln" "the prelude is the first unit, '- prelude', and only once"; return 1; }
+    elif [[ "$model" == - && ( "$step" == rulers || "$step" == gpubench || "$step" == perturb ) ]]; then
+      (( ${#U_STEP[@]} )) || { plan_refuse "$ln" "the first unit is '- prelude'"; return 1; }
     else
       (( ${#U_STEP[@]} )) || { plan_refuse "$ln" "the first unit is '- prelude'"; return 1; }
       [[ "$model" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { plan_refuse "$ln" "'$model' is not a model name"; return 1; }
@@ -1259,12 +1425,23 @@ load_plan() {   # FILE
         drop-group) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "drop-group $v"; return 1; }; group="$v" ;;
         est|cap) [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: minutes"; return 1; }
                  [[ "$k" == est ]] && est="$v" || cap="$v" ;;
-        byte-groups|floor-groups|floor-treads|lf-treads|lf-trace|timed-groups)
+        byte-groups|floor-groups|floor-treads|lf-treads|lf-trace|timed-groups|stamp-groups|stamp-treads)
           [[ "$v" =~ ^[0-9]+(,[0-9]+)*$ ]] || { plan_refuse "$ln" "$k $v: a comma-separated list of integers"; return 1; }
           opts+=" $k=$v" ;;
         lf-modes) [[ "$v" =~ ^[A-Z0-9]+(,[A-Z0-9]+)*$ ]] || { plan_refuse "$ln" "lf-modes $v"; return 1; }; opts+=" $k=$v" ;;
         num-stages|block-k|slot-pad-rows|floor-lock-mhz|lf-group-m)
           [[ "$v" =~ ^[0-9]+$ ]] || { plan_refuse "$ln" "$k $v: a whole number"; return 1; }
+          opts+=" $k=$v" ;;
+        declared-copies|instr-every|instr-marks)
+          [[ "$v" =~ ^[1-9][0-9]*$ ]] || { plan_refuse "$ln" "$k $v: a whole number of at least 1"; return 1; }
+          opts+=" $k=$v" ;;
+        instr-evict-a|instr-evict-b)
+          [[ "$v" =~ ^(first|last|none)$ ]] || { plan_refuse "$ln" "$k $v: first, last or none"; return 1; }
+          opts+=" $k=$v" ;;
+        instr-stamps)
+          [[ "$v" =~ ^(cta|iter)$ ]] || { plan_refuse "$ln" "instr-stamps $v: cta or iter"; return 1; }
+          opts+=" $k=$v" ;;
+        stamp-arms) [[ "$v" =~ ^(native|shared|private)(,(native|shared|private))*$ ]] || { plan_refuse "$ln" "stamp-arms $v: arms from native,shared,private"; return 1; }
           opts+=" $k=$v" ;;
         timed-treads) [[ "$v" =~ ^[1-9]$ ]] || { plan_refuse "$ln" "timed-treads $v: a tread 1..9 (R3's counter ladder)"; return 1; }
           opts+=" $k=$v" ;;
@@ -1273,15 +1450,27 @@ load_plan() {   # FILE
         partition-metrics|floor-base|floor-shape-metrics|floor-null-kernel)
           [[ "$v" =~ ^[01]$ ]] || { plan_refuse "$ln" "$k $v: 0 or 1"; return 1; }
           opts+=" $k=$v" ;;
-        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m)"; return 1 ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m declared-copies instr-evict-a instr-evict-b instr-stamps instr-every instr-marks stamp-groups stamp-treads stamp-arms)"; return 1 ;;
       esac
     done
     # rental 2's keys belong to one step each; a floor key needs a registered design
     for kv in ${opts}; do
       k="${kv%%=*}"
       case "$k" in
-        num-stages|block-k|slot-pad-rows|partition-metrics)
+        slot-pad-rows|partition-metrics)
           [[ "$step" == bytes ]] || { plan_refuse "$ln" "$k belongs to a bytes unit, not $step"; return 1; } ;;
+        num-stages|block-k)
+          [[ "$step" == bytes || "$step" == stamps ]] || { plan_refuse "$ln" "$k belongs to a bytes unit (or a stamps unit), not $step"; return 1; } ;;
+        declared-copies)
+          case "$step" in
+            timed) ;;
+            bytes|floor) plan_refuse "$ln" "declared-copies belongs to a timed unit, not $step: a counter page declares R3's $COUNTER_COPIES copies (validate_counter_plan) and no other"; return 1 ;;
+            *) plan_refuse "$ln" "declared-copies belongs to a timed unit, not $step"; return 1 ;;
+          esac ;;
+        instr-evict-a|instr-evict-b)
+          [[ "$step" == bytes ]] || { plan_refuse "$ln" "$k belongs to a bytes unit, not $step (a stamps unit carries no hint)"; return 1; } ;;
+        instr-stamps|instr-every|instr-marks|stamp-groups|stamp-treads|stamp-arms)
+          [[ "$step" == stamps ]] || { plan_refuse "$ln" "$k belongs to a stamps unit, not $step"; return 1; } ;;
         timed-groups|timed-treads)
           [[ "$step" == timed ]] || { plan_refuse "$ln" "$k belongs to a timed unit, not $step"; return 1; } ;;
         lf-arms|lf-group-m)
@@ -1296,10 +1485,22 @@ load_plan() {   # FILE
       esac
     done
     case "$step" in
-      prelude|launchfloor) ;;
-      bytes|floor) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its pages' directory: label=..."; return 1; } ;;
+      prelude|launchfloor|rulers|gpubench) ;;
+      perturb) seen_perturb=1 ;;
+      stamps)
+        [[ -n "$label" ]] || { plan_refuse "$ln" "a stamps unit names its variant: label=..."; return 1; }
+        for key in instr-stamps stamp-groups stamp-treads stamp-arms; do
+          [[ " $opts " == *" $key="* ]] || { plan_refuse "$ln" "a stamps unit needs $key=..."; return 1; }
+        done
+        (( seen_perturb )) || { plan_refuse "$ln" "an instrumented unit needs a perturb unit before it (its gate)"; return 1; }
+        instr_after=1 ;;
+      bytes|floor) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its pages' directory: label=..."; return 1; }
+        if [[ " $opts " == *" instr-evict-"* ]]; then
+          (( seen_perturb )) || { plan_refuse "$ln" "an instrumented unit needs a perturb unit before it (its gate)"; return 1; }
+          instr_after=1
+        fi ;;
       calibrate|timed|deep) [[ -n "$label" ]] || { plan_refuse "$ln" "a $step unit names its run directory: label=..."; return 1; } ;;
-      *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor, launchfloor, calibrate, timed and deep"; return 1 ;;
+      *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor, launchfloor, calibrate, timed and deep (rental 4 adds rulers, gpubench, perturb and stamps)"; return 1 ;;
     esac
     key="$model|$label|$step"
     [[ "$seen" == *"<$key>"* ]] && { plan_refuse "$ln" "$model $step label=$label twice: two units would write one directory"; return 1; }
@@ -1314,6 +1515,9 @@ load_plan() {   # FILE
     U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label"); U_GROUP+=("$group")
   done < "$f"
   (( ${#U_STEP[@]} >= 2 )) || { echo "--plan: $f holds no unit after the prelude" >&2; return 1; }
+  if (( seen_perturb && ! instr_after )); then
+    echo "--plan: $f has a perturb unit and no instrumented unit after it to gate" >&2; return 1
+  fi
 }
 #: Unit i's model and overrides into this shell and the environment its step inherits;
 #: every override not on the line is cleared, so nothing leaks from the unit before.
@@ -1325,6 +1529,8 @@ apply_unit() {   # INDEX
   LF_ARMS=native,shared,private; LF_GROUP_M=4; TIMED_GROUPS=""; TIMED_TREADS=""
   NUM_STAGES=""; BLOCK_K=""; SLOT_PAD_ROWS=""; PARTITION_METRICS=""
   FLOOR_LOCK_MHZ=""; FLOOR_BASE=1; FLOOR_SHAPE=""; FLOOR_NULL=""
+  DECLARED_COPIES=""; INSTR_EVICT_A=""; INSTR_EVICT_B=""; INSTR_STAMPS=""; INSTR_EVERY=""; INSTR_MARKS=""
+  STAMP_GROUPS=""; STAMP_TREADS=""; STAMP_ARMS=""; VARIANT_ID=""
   for kv in ${U_OPTS[$i]}; do
     k="${kv%%=*}"; v="${kv#*=}"
     case "$k" in
@@ -1337,8 +1543,15 @@ apply_unit() {   # INDEX
       floor-lock-mhz) FLOOR_LOCK_MHZ="$v" ;; floor-base) FLOOR_BASE="$v" ;;
       floor-shape-metrics) [[ "$v" == 1 ]] && FLOOR_SHAPE=1 ;;
       floor-null-kernel) [[ "$v" == 1 ]] && FLOOR_NULL=1 ;;
+      declared-copies) DECLARED_COPIES="$v" ;;
+      instr-evict-a) INSTR_EVICT_A="$v" ;; instr-evict-b) INSTR_EVICT_B="$v" ;;
+      instr-stamps) INSTR_STAMPS="$v" ;; instr-every) INSTR_EVERY="$v" ;; instr-marks) INSTR_MARKS="$v" ;;
+      stamp-groups) STAMP_GROUPS="$v" ;; stamp-treads) STAMP_TREADS="$v" ;; stamp-arms) STAMP_ARMS="$v" ;;
     esac
   done
+  if [[ "${U_STEP[$i]}" == stamps || -n "$INSTR_EVICT_A$INSTR_EVICT_B" ]]; then
+    VARIANT_ID="u$(( i + 1 ))-${U_LABEL[$i]}"
+  fi
   export MOE_DRIVER_NUM_STAGES="$NUM_STAGES" MOE_DRIVER_BLOCK_K="$BLOCK_K" MOE_DRIVER_SLOT_PAD_ROWS="$SLOT_PAD_ROWS"
   export MOE_DRIVER_PARTITION_METRICS="$PARTITION_METRICS" MOE_DRIVER_FLOOR_LOCK_MHZ="$FLOOR_LOCK_MHZ"
   export MOE_DRIVER_FLOOR_BASE="$FLOOR_BASE" MOE_DRIVER_FLOOR_SHAPE="$FLOOR_SHAPE" MOE_DRIVER_FLOOR_NULL="$FLOOR_NULL"
@@ -1347,6 +1560,31 @@ apply_unit() {   # INDEX
   export MOE_DRIVER_LF_TREADS="$LF_TREADS" MOE_DRIVER_LF_MODES="$LF_MODES" MOE_DRIVER_LF_TRACE="$LF_TRACE"
   export MOE_DRIVER_LF_ARMS="$LF_ARMS" MOE_DRIVER_LF_GROUP_M="$LF_GROUP_M"
   export MOE_DRIVER_TIMED_GROUPS="$TIMED_GROUPS" MOE_DRIVER_TIMED_TREADS="$TIMED_TREADS"
+  export MOE_DRIVER_DECLARED_COPIES="$DECLARED_COPIES" MOE_DRIVER_VARIANT_ID="$VARIANT_ID"
+  export MOE_DRIVER_INSTR_EVICT_A="$INSTR_EVICT_A" MOE_DRIVER_INSTR_EVICT_B="$INSTR_EVICT_B"
+  export MOE_DRIVER_INSTR_STAMPS="$INSTR_STAMPS" MOE_DRIVER_INSTR_EVERY="$INSTR_EVERY" MOE_DRIVER_INSTR_MARKS="$INSTR_MARKS"
+  export MOE_DRIVER_STAMP_GROUPS="$STAMP_GROUPS" MOE_DRIVER_STAMP_TREADS="$STAMP_TREADS" MOE_DRIVER_STAMP_ARMS="$STAMP_ARMS"
+}
+#: The plan's instrumented units as instr_probe.py's variants (JSON): every stamps unit and
+#: every bytes unit with an eviction hint, in file order, ids u<unit>-<label>.
+variants_json() {
+  local i keep="$MODEL" first=1 g t a spec kind
+  printf '['
+  for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
+    apply_unit "$i"
+    [[ -n "$VARIANT_ID" ]] || continue
+    if [[ "${U_STEP[$i]}" == stamps ]]; then
+      kind=stamps; g="$STAMP_GROUPS"; t="$STAMP_TREADS"; a="$STAMP_ARMS"; spec="$(stamp_spec)"
+    else
+      kind=bytes; g="${BYTE_GROUPS:-${BYTE_GS[*]}}"; g="${g// /,}"; t="$TREADS"; a="native,shared,private"; spec="$(evict_spec)"
+    fi
+    (( first )) || printf ','
+    first=0
+    printf '\n {"id": "%s", "kind": "%s", "model": "%s", "groups": [%s], "treads": [%s], "arms": ["%s"], "block_k": %s, "num_stages": %s, "spec": "%s"}' \
+      "$VARIANT_ID" "$kind" "$MODEL" "$g" "$t" "${a//,/\", \"}" "${BLOCK_K:-64}" "${NUM_STAGES:-4}" "$spec"
+  done
+  printf '\n]\n'
+  MODEL="$keep"
 }
 unit_text() { local i="$1"; echo "unit $(( i + 1 ))/${#U_STEP[@]} ${U_MODEL[$i]}${U_LABEL[$i]:+ ${U_LABEL[$i]}}${U_OPTS[$i]:+ ${U_OPTS[$i]}}"; }
 unit_dropped() { [[ -f "$D/plan-drops" ]] && grep -qx -- "$1" "$D/plan-drops"; }
@@ -1387,6 +1625,8 @@ unit_dir() {
     launchfloor) echo "\$RESULTS_ROOT/<date>-<card>-launch-floor${U_LABEL[$i]:+-${U_LABEL[$i]}}/$m" ;;
     calibrate) echo "card-wide ruler moe/bench/hardware/measured_<card>.yaml, \$D/ruler.env" ;;
     timed|deep) echo "\$RESULTS_ROOT/gaps-<card>-$m-${U_LABEL[$i]}" ;;
+    rulers|gpubench|perturb) echo "\$RESULTS_ROOT/<date>-<card>-${U_STEP[$i]}${U_LABEL[$i]:+-${U_LABEL[$i]}}" ;;
+    stamps) echo "\$RESULTS_ROOT/<date>-<card>-instr-$m-${U_LABEL[$i]}" ;;
     *) echo "-" ;;
   esac
 }
@@ -1410,16 +1650,23 @@ print_units() {
   echo "   ${order}"
   echo "  pushes: after every unit and every byte page, to the run's branch (scripts/vm_results_push.sh)$( (( NO_PUSH )) && echo ': OFF (--no-push)')"
   [[ -z "$PROBE_LOCKS" ]] || echo "  the prelude also probes the floor lock(s) ${PROBE_LOCKS//,/ } MHz (lock, read back, reset)"
+  local ids=""
+  for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
+    apply_unit "$i"; [[ -n "$VARIANT_ID" ]] && ids+=" $VARIANT_ID"
+  done
+  MODEL="$keep"
+  [[ -z "$ids" ]] || echo "  instrumented units, each run only on its perturb unit's PASS:$ids"
 }
 
 usage() { sed -n '2,9p' "$SELF" | sed 's/^# \{0,1\}//'; }
 
 # ---- arguments -----------------------------------------------------------
-DRY=0; NO_PUSH=0; SETUP=0; COMMIT=""; REPO_URL=""; DEADLINE=""; FROM=""; ONLY=""; ONE_STEP=""; PLAN_FILE=""
+PRINT_VARIANTS=0; DRY=0; NO_PUSH=0; SETUP=0; COMMIT=""; REPO_URL=""; DEADLINE=""; FROM=""; ONLY=""; ONE_STEP=""; PLAN_FILE=""
 ARGS=("$@")
 while (( $# )); do
   case "$1" in
     --dry-run)  DRY=1; shift ;;
+    --print-variants) PRINT_VARIANTS=1; DRY=1; shift ;;
     --no-push)  NO_PUSH=1; shift ;;
     --setup)    SETUP=1; shift ;;
     --commit)   COMMIT="${2:-}"; shift 2 ;;
@@ -1455,7 +1702,12 @@ R3_BASE[1]="$MODEL"; R1_BASE[1]="$MODEL"
 #: 9 by the page's treads, and the byte model refuses timed pages whose
 #: declaration is not the counter pages' (the counter ladder's 9). A model
 #: other than Mixtral's pins the counter pages' count on every timed page.
-case "$MODEL" in mixtral-*) ;; *) R3_BASE+=(--declared-copies "$COUNTER_COPIES") ;; esac
+#: Rental 4: a timed unit's declared-copies key replaces it (and reaches Mixtral too).
+if [[ -n "$DECLARED_COPIES" ]]; then
+  R3_BASE+=(--declared-copies "$DECLARED_COPIES")
+else
+  case "$MODEL" in mixtral-*) ;; *) R3_BASE+=(--declared-copies "$COUNTER_COPIES") ;; esac
+fi
 
 # One step, in its own process: the orchestrator runs this under a cap.
 if [[ -n "$ONE_STEP" ]]; then
@@ -1492,6 +1744,11 @@ if [[ -n "$PLAN_FILE" ]]; then
   export MOE_DRIVER_PROBE_LOCKS="$PROBE_LOCKS"
 fi
 
+if (( PRINT_VARIANTS )) && [[ -n "$PLAN_FILE" ]]; then
+  # rental 4: the plan's instrumented units as instr_probe.py reads them; nothing runs
+  variants_json
+  exit "$EXIT_REFUSED"
+fi
 if (( DRY )) && [[ -n "$PLAN_FILE" ]]; then
   print_units
   echo "DRY RUN: nothing ran, nothing was written (exit 2, as every dry run in this repo)"
@@ -1544,6 +1801,8 @@ fi
 . "$ENV_SH"
 S="$SESSION_ROOT"; D="$S/gh200-driver"
 mkdir -p "$S/logs" "$D"
+# rental 4: the plan's instrumented units, for the perturb and stamps steps
+[[ -n "$PLAN_FILE" ]] && { variants_json > "$D/instr-variants.json"; apply_unit 0; }
 trap 'on_signal TERM' TERM
 trap 'on_signal INT' INT
 trap 'on_signal HUP' HUP
