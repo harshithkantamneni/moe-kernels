@@ -72,3 +72,5 @@
 2026-10-06T23:36:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed 6a4eb5f to run-gh200-rental4-20261006t2245: bytes (unit 17/25 olmoe-1b-7b k64s4 byte-groups=64): exit 0 (3 min)
 2026-10-06T23:36:06Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 4 min, cap 20 min, 341 min left)
+2026-10-06T23:38:38Z bytes END: exit 0 after 3 min [unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4]
+2026-10-06T23:38:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
