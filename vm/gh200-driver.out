@@ -78,3 +78,5 @@
 2026-10-06T08:13:59Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 128 [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3] (estimate 5 min, cap 20 min, 313 min left)
 2026-10-06T08:17:35Z bytes END: exit 0 after 4 min [unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3]
 2026-10-06T08:17:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a88bb75 to run-gh200-rental3-20261006t0655: bytes (unit 19/24 mixtral-8x7b-tp2 k128s3 byte-groups=1 block-k=128 num-stages=3): exit 0 (4 min)
+2026-10-06T08:17:39Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 7 [unit 20/24 mixtral-8x7b-tp2 k64s7 byte-groups=1 num-stages=7] (estimate 5 min, cap 20 min, 310 min left)
