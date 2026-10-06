@@ -54,3 +54,7 @@
 2026-10-06T07:53:50Z launchfloor START: launch floor at the 1710 lock: arms native, G=64, treads 2,4,6,8,10,11,12,13,14,15,16, modes E240,GR; a timed process (no profiler), no trace phase [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0] (estimate 7 min, cap 25 min, 334 min left)
 2026-10-06T07:59:01Z launchfloor END: exit 3 after 5 min [unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0]
 2026-10-06T07:59:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1a569be to run-gh200-rental3-20261006t0655: launchfloor (unit 13/24 mixtral-8x7b-tp4 wall lf-arms=native lf-group-m=64 lf-treads=2,4,6,8,10,11,12,13,14,15,16 lf-modes=E240,GR lf-trace=0): exit 3 (5 min)
+2026-10-06T07:59:04Z floor START: 3c.5 registered floor design: NATIVE at G = 64, treads 6,8,10,11,12,13,14,15,16, no base-clock capture and the 1005 lock; --floor-shape-metrics --floor-null-kernel [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1] (estimate 2 min, cap 10 min, 328 min left)
+2026-10-06T08:00:21Z floor END: exit 0 after 1 min [unit 14/24 mixtral-8x7b-tp8 floor1005 floor-groups=64 floor-treads=6,8,10,11,12,13,14,15,16 floor-base=0 floor-lock-mhz=1005 floor-shape-metrics=1 floor-null-kernel=1]
+2026-10-06T08:00:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
