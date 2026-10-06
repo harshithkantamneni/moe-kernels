@@ -10,3 +10,7 @@
 2026-10-06T22:49:02Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/25 mixtral-8x7b r4] (estimate 2 min, cap 30 min, 388 min left)
 2026-10-06T22:49:27Z calibrate END: exit 0 after 0 min [unit 2/25 mixtral-8x7b r4]
 2026-10-06T22:49:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b7be655 to run-gh200-rental4-20261006t2245: calibrate (unit 2/25 mixtral-8x7b r4): exit 0 (0 min)
+2026-10-06T22:49:29Z rulers START: rulers at the 1710 lock: torch read2d / copy / add / matmul bf16 8192^3, the device's L2 size [unit 3/25 - r4] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-06T22:49:39Z rulers END: exit 0 after 0 min [unit 3/25 - r4]
+2026-10-06T22:49:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
