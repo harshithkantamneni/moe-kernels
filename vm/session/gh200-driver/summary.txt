@@ -1,1 +1,2 @@
 prelude    exit 0 after 0 min [unit 1/25 -]
+calibrate  exit 0 after 0 min [unit 2/25 mixtral-8x7b r4]
