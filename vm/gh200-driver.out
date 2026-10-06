@@ -66,3 +66,5 @@
 2026-10-06T08:02:58Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1] (estimate 5 min, cap 20 min, 324 min left)
 2026-10-06T08:06:35Z bytes END: exit 0 after 4 min [unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1]
 2026-10-06T08:06:35Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8eb59a2 to run-gh200-rental3-20261006t0655: bytes (unit 16/24 mixtral-8x7b-tp2 l2base byte-groups=1): exit 0 (4 min)
+2026-10-06T08:06:38Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 8 --block-k 32 [unit 17/24 mixtral-8x7b-tp2 k32s8 byte-groups=1 block-k=32 num-stages=8] (estimate 5 min, cap 20 min, 321 min left)
