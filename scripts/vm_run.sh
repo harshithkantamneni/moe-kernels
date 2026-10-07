@@ -209,6 +209,17 @@ cmd_start() {
     git -C "$ROOT" ls-files --error-unmatch "$PLAN_ARG" >/dev/null 2>&1 \
       || refuse "--plan $PLAN_ARG is not tracked: the VM measures a commit, and the plan is part of it"
     "$SCP" "${SSH_OPTS[@]}" "$ROOT/$PLAN_ARG" "ubuntu@$IP:" >/dev/null
+    # the files a plan names (rental 5's histogram pages) go beside it at their repo-relative
+    # paths: the pre-setup dry run runs in the VM's home before setup clones the checkout
+    local hf
+    while IFS= read -r hf; do
+      [[ "$hf" =~ ^[A-Za-z0-9._/-]+[.]json$ && "$hf" != /* && "$hf" != *..* ]] \
+        || refuse "--plan $PLAN_ARG names histogram=$hf: a repo-relative .json path"
+      git -C "$ROOT" ls-files --error-unmatch "$hf" >/dev/null 2>&1 \
+        || refuse "--plan $PLAN_ARG names $hf, which is not tracked"
+      vm mkdir -p "$(dirname "$hf")"
+      "$SCP" "${SSH_OPTS[@]}" "$ROOT/$hf" "ubuntu@$IP:$hf" >/dev/null
+    done < <(grep -oE 'histogram=[^[:space:]]+' "$ROOT/$PLAN_ARG" | sed 's/^histogram=//' | sort -u)
     model+=(--plan "$PLAN_ARG")
   fi
   vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \

@@ -1639,6 +1639,32 @@ def test_the_driver_resolves_a_plan_from_the_checkout_then_beside_itself(tmp_pat
     assert got.returncode == exit_codes.REFUSED and "a PLAN of 14 units" in got.stdout, got.stderr
 
 
+def test_a_plan_naming_histogram_pages_prints_before_setup_from_the_files_beside_it(tmp_path):
+    """Rental 5 (2026-10-07) failed its start: the pre-setup dry run runs in the VM's home,
+    where only the driver and the plan were copied, so every histogram= page read 'no such
+    file'. vm_run.sh now copies each tracked page the plan names to its repo-relative path
+    in the home; with them there the plan prints, and without them it refuses."""
+    vm_src = VMRUN.read_text()
+    assert "grep -oE 'histogram=[^[:space:]]+'" in vm_src and 'ubuntu@$IP:$hf' in vm_src
+    plan = REPO / "scripts" / "plans" / "rental5-2026-10.plan"
+    pages = sorted(set(re.findall(r"histogram=(\S+)", plan.read_text())))
+    assert pages
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy(DRIVER, home / DRIVER.name)
+    shutil.copy(plan, home / plan.name)
+    env = {**os.environ, "HOME": str(home), "MOE_HOME": str(home / "moe")}
+    args = ["bash", str(home / DRIVER.name), "--dry-run", "--plan", f"scripts/plans/{plan.name}"]
+    bare = subprocess.run(args, capture_output=True, text=True, timeout=60, cwd=home, env=env)
+    assert "no such file" in bare.stdout + bare.stderr
+    for p in pages:
+        (home / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / p, home / p)
+    got = subprocess.run(args, capture_output=True, text=True, timeout=60, cwd=home, env=env)
+    assert got.returncode == exit_codes.REFUSED and "THE GH200 MODEL-TEST SESSION" in got.stdout, (
+        got.stdout[-2000:] + got.stderr[-2000:])
+
+
 # --------------------------------------------------------------------------
 # rental 2 (2026-10-01): its plan, its keys, the 1005 probe, two launch phases
 # --------------------------------------------------------------------------
