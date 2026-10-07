@@ -21,3 +21,4 @@ bytes      exit 0 after 3 min [unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-s
 bytes      exit 0 after 3 min [unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2]
 bytes      exit 0 after 3 min [unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3]
 bytes      exit 0 after 3 min [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8]
+timed      exit 0 after 16 min [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9]

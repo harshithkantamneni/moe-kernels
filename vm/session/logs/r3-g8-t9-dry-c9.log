@@ -1,5 +1,5 @@
-experiment  private_weight_reference / nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-94e2fecb
-model       qwen2-57b-a14b-tp8 E=64 k=8  bf16 (2 bytes)
+experiment  private_weight_reference / nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n64-183ddc17
+model       olmoe-1b-7b E=64 k=8  bf16 (2 bytes)
 tile        BLOCK_M=32, one tile per run and in the run id
 pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
 arms        native: E experts declared over w1[::n_decl], copy 0 of each expert: the call this study fits, reading SHARED's bytes at SHARED's addresses; shared: E x n_decl experts declared, every M-tile of expert e routed to copy 0: PRIVATE's call with one copy read (the numerator); private: E x n_decl experts declared, M-tile j of expert e routed to copy j: reuse across M-tiles impossible by construction (the denominator)
@@ -43,28 +43,28 @@ alignment   which moe_align_block_size kernel each call takes under the cited HY
             native   one kernel throughout
             shared   one kernel throughout
             private  one kernel throughout
-session     gh200-20261006T224900Z-p2-lock1710
+session     gh200-20261006T224900Z-p2c-lock1710
 replicates  (none: this run is scored ALONE; its interval is over repeats within one run and is not the run-to-run spread; a second --seed run read back through --replicate-of is what puts one on this page)
 bytes       (none: C1 will REFUSE, no same-card byte page; the H200-era refit band is not a per-card claim, owner 2026-09-26; the page prints what the H200-era band test would have said, ungated. --byte-reference names this card's r3c-g<G>.json, here or later with --read)
 bandwidth   3725.9 GB/s, measured on this device: NVIDIA GH200 480GB (measured), 3725.9 GB/s (triad pattern)
 card        nvidia_gh200_480gb
-WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-c9/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelqwen2_57b_a14b-94e2fecb
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-c9/private_weight_reference/nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n64-183ddc17
             cells.csv (appended per cell), report.txt, report.json, triton-cache/
-git         git check-ignore exited 128; path UNVERIFIED (fatal: Invalid path '/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-c9/private_weight_reference': No such file or directory). Common cause: the path is outside this work tree, e.g. /workspace/results on a pod, which git has no opinion about at all.
+git         git check-ignore exited 128; path UNVERIFIED (fatal: Invalid path '/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-c9/private_weight_reference': No such file or directory). Common cause: the path is outside this work tree, e.g. /workspace/results on a pod, which git has no opinion about at all.
 resources   one CTA's bill under the pinned constants, so a setting that cannot physically run is refused here and not diagnosed from its timing afterwards:
   BLOCK_M=  32  smem     48 KiB of       ?  acc     8 reg/thread of 255  ok
 memory      the arithmetic this arm commits to, before a byte is allocated:
-            per copy of the routed expert weight set      0.4404 GB
-            x 9 copies declared and filled (all read at the deepest tread)     3.9636 GB
-            + modelled activation working set x 3.0 allowance     0.6016 GB
+            per copy of the routed expert weight set      0.8053 GB
+            x 9 copies declared and filled (all read at the deepest tread)     7.2478 GB
+            + modelled activation working set x 3.0 allowance     0.6229 GB
             + the instrument's L2 flush buffer             0.2517 GB  (timing.flush_mb_for_device(), this device's own L2 x 4)
-            = predicted peak                               4.8169 GB
+            = predicted peak                               8.1223 GB
             against 100.9 GB (free on the attached device, asked of the driver), of which this arm may take 66% = 66.6 GB: FITS
 depth       the deepest tread whose SHARED ladder is still under 95% of the fixed roof, per world, at this run's own ridge:
             alpha=1.000 no-reuse   tread  >72   against the 9 planned
             alpha=0.558 refit      tread  >72   against the 9 planned
-            alpha=0.100 retracted  tread   63   against the 9 planned
-            V4'S FIXED-ROOF FLOOR: alpha=0.0034. Below it the model puts this design's shared ladder over 95% of the fixed roof before the deepest tread and V4 voids the page. It is NOT the alpha this design can resolve: under the fixed roof is not memory bound, and an on-chip floor below the roof blinds the ratio as the roof would (session 5, BLOCK_M=32: V4 passed at 20-25% of the fixed roof while the shared per-M-tile cost sat on a clock-scaled floor).
+            alpha=0.100 retracted  tread   16   against the 9 planned
+            V4'S FIXED-ROOF FLOOR: alpha=0.0475. Below it the model puts this design's shared ladder over 95% of the fixed roof before the deepest tread and V4 voids the page. It is NOT the alpha this design can resolve: under the fixed roof is not memory bound, and an on-chip floor below the roof blinds the ratio as the roof would (session 5, BLOCK_M=32: V4 passed at 20-25% of the fixed roof while the shared per-M-tile cost sat on a clock-scaled floor).
             DISCRIMINATION FLOOR: not determined before the run. It is read off the run's own shared ladder over treads 2 and deeper, against one weight stream at this page's bandwidth, and printed under FITS.
 
 PREDICTIONS, registered before the run and printed before any measurement
@@ -72,7 +72,7 @@ PREDICTIONS, registered before the run and printed before any measurement
   the study's refit alpha 0.558, band 0.529-0.588 (90%), against the retracted 0.1: the H200-era band, fitted from H200 and A100-80GB rows pooled, a POSITION on this page and not C1's claim (owner, 2026-09-26)
   ridge       177.50 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 661.3 TFLOP/s bf16 over 3725.9 GB/s (triad pattern); calibrated 2026-10-06 at 85ef38cd
   bandwidth   3725.9 GB/s, measured on this device: NVIDIA GH200 480GB (measured), 3725.9 GB/s (triad pattern)
-  one complete stream of the routed expert weight set: 0.4404 GB in 0.1182 ms at that rate
+  one complete stream of the routed expert weight set: 0.8053 GB in 0.2161 ms at that rate
 
   THE REGISTERED PARTITION OF THE RATIO, covering [0, inf) with no gap and no overlap; every row names a position and nothing more, the three middle ones against the H200-era band and the two outer ones where a registered world would put the ratio:
     [0.000, 0.350)  ISSUE-AND-LATENCY
@@ -89,10 +89,10 @@ PREDICTIONS, registered before the run and printed before any measurement
 
   WHAT EACH ARM PREDICTS, under the study's own traffic model, so the two worlds are on the page before the run:
     native   the study's call over the same bytes: the SAME slope as shared, a different intercept, and the slope difference is V5
-    shared   slope ~ alpha x one stream + activations = 0.558 + 0.0756 streams per M-tile
-    private  slope ~ one stream + activations = 1.0000 + 0.0756 streams per M-tile, BY CONSTRUCTION
-    so the ratio is predicted at 0.5891 in the refit world and 1.0000 in the no-reuse world
-    and at 0.1633 in the retracted alpha=0.1 world, which the partition names ISSUE-AND-LATENCY
+    shared   slope ~ alpha x one stream + activations = 0.558 + 0.0365 streams per M-tile
+    private  slope ~ one stream + activations = 1.0000 + 0.0365 streams per M-tile, BY CONSTRUCTION
+    so the ratio is predicted at 0.5735 in the refit world and 1.0000 in the no-reuse world
+    and at 0.1317 in the retracted alpha=0.1 world, which the partition names ISSUE-AND-LATENCY
 
   THE GATES, and the thresholds they are scored at:
     V0 all cells, >= 3 usable treads in the claim's window and >= 3 repeats per arm
@@ -112,14 +112,14 @@ PREDICTIONS, registered before the run and printed before any measurement
   AND WHAT NONE BOUNDS: a cost paid by READING the copies that vanishes at one copy, which is the shape of a TLB or DRAM-page locality cost. NATIVE does not read them and n=1 has one. The only trace such a cost leaves here is the private ladder's own mean relative residual, printed in the ladder table and SCORED BY NOTHING.
   THE ALIGNMENT KERNEL, SEPARATED THREE WAYS: vLLM switches moe_align_block_size kernel at the cited id and expert bounds, and for THIS ladder it does not: the id count stays on one side of the bound at every tread, so NATIVE switches nowhere in it. The ratio arms are declared past the expert bound so both take one kernel throughout (the census above, refused otherwise); the probe times the alignment op alone along the ladder once per ARM -- NATIVE's declaration, and SHARED's and PRIVATE's id sets at the ratio arms' -- and V8 scores both ratio series; and NATIVE, which keeps the study's declaration and its switch, has its difference from SHARED fitted with a step term so V5 reads the declaration's per-tile cost with the step out and the step is printed with an interval.
   AND THIS LADDER GIVES V8 NO POSITIVE CONTROL: its id count runs 2048..18432 and stays on one side of the 1024-id bound, so NATIVE switches kernel nowhere in it and there is no switch to read beside the ratio series. Under the CUDA graph that is informational and V8 rests on the GPU-timed ratio series; on the EAGER fallback, which an H200 makes host-bound, V8 can only read UNKNOWN -- the page latches INVALID and the ladder is still paid for, because the sweep is skipped on a FAIL alone. A tile whose ladder CROSSES that bound supplies the control; the booked tile does.
-  AND TWO SMALL ASYMMETRIES, REGISTERED AND NOT REMOVED: on the scan kernel, `count_and_sort_expert_tokens` does one atomic add per id into a per-expert counter, so SHARED's 64 counters take 32 n increments each while PRIVATE's 64 x n take 32 each; a per-tread term in the numerator alone. The probe times the alignment op on PRIVATE's id set as well as SHARED's, and V8 prints slope(private ids) - slope(shared ids) in us per tread and in the ratio's units: MEASURED, printed, not scored. And the wider declaration puts the top expert slot 575 at 1.23 Gi ELEMENTS from the weight base in w1, past the 2^31 an int32 offset holds, which the kernel addresses through an int64 cast of `off_experts`; NATIVE's strided view multiplies its own index by the same stride and depends on the cast too. A build without it reads the wrong bytes, and V2's same_layer and kernel_read parts are what catch that.
+  AND TWO SMALL ASYMMETRIES, REGISTERED AND NOT REMOVED: on the scan kernel, `count_and_sort_expert_tokens` does one atomic add per id into a per-expert counter, so SHARED's 64 counters take 32 n increments each while PRIVATE's 64 x n take 32 each; a per-tread term in the numerator alone. The probe times the alignment op on PRIVATE's id set as well as SHARED's, and V8 prints slope(private ids) - slope(shared ids) in us per tread and in the ratio's units: MEASURED, printed, not scored. And the wider declaration puts the top expert slot 575 at 2.25 Gi ELEMENTS from the weight base in w1, past the 2^31 an int32 offset holds, which the kernel addresses through an int64 cast of `off_experts`; NATIVE's strided view multiplies its own index by the same stride and depends on the cast too. A build without it reads the wrong bytes, and V2's same_layer and kernel_read parts are what catch that.
   AND THE ASSUMPTION THE RATIO KEEPS: no rate enters the number, but the ratio is alpha as a traffic fraction only if both arms deliver the same bytes per second. The shared arm's non-re-read bytes come from L2, which is not free.
   NOT A READOUT: the LEVEL of any ladder. Only the slopes are compared; native's intercept differs from shared's by the declaration's dead launches, which are a constant per tread.
   NOT MEASURED HERE: alpha_a, the activation-side miss fraction. Both ladders carry the same activation term and the ratio subtracts nothing.
 
 estimated GPU time 231 s at the model's own timings, excluding compiles and allocation; that includes the alignment probe's 13 s
-WALL CLOCK at duty 0.25: the ladder's 219 s of kernel time takes about 874 s, the idle gaps between bursts being the point; the probe is timed at full duty
-NOT IN THAT FIGURE: the Triton compiles, and the private weight build, which copies 3.96 GB device-to-device once, and the five-part buffer proof's 27 extra fused_experts calls at the deepest tread.
+WALL CLOCK at duty 0.25: the ladder's 218 s of kernel time takes about 874 s, the idle gaps between bursts being the point; the probe is timed at full duty
+NOT IN THAT FIGURE: the Triton compiles, and the private weight build, which copies 7.25 GB device-to-device once, and the five-part buffer proof's 27 extra fused_experts calls at the deepest tread.
 
 ========================================================================
 REFUSED. Nothing was measured and nothing was written.

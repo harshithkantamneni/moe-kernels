@@ -161,3 +161,11 @@
 2026-10-06T23:51:36Z bytes: analyse of 1 pages exit 1 (/home/ubuntu/moe/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s8-r3-counters/lock1710/summary.json)
 2026-10-06T23:51:36Z bytes END: exit 0 after 3 min [unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8]
 2026-10-06T23:51:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-06T23:51:40Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9] (estimate 16 min, cap 45 min, 325 min left)
+2026-10-06T23:51:40Z timed: declared-copies 9 on every page of this unit
+2026-10-06T23:51:41Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-07T00:07:49Z timed: P2 locked_r3 exit 0
+2026-10-07T00:07:49Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-07T00:07:49Z timed: 2026-10-07T00:07:43Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n64-183ddc17
+2026-10-07T00:07:49Z timed END: exit 0 after 16 min [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9]
+2026-10-07T00:07:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
