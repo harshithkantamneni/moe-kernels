@@ -37,7 +37,8 @@ UP = json.loads((PKG / "UPSTREAM.json").read_text())
 EXCERPT = (PKG / "upstream_v0.27.1_fused_moe.excerpt").read_text()
 COPY = (PKG / "fused_moe_instr.py").read_text()
 FUNCS = ("write_zeros_to_output", "fused_moe_kernel")
-INSTR_PARAMS = ("stamps_ptr", "STAMPS", "STAMP_EVERY", "STAMP_MARKS", "EVICT_A", "EVICT_B")
+INSTR_PARAMS = ("stamps_ptr", "STAMPS", "STAMP_EVERY", "STAMP_MARKS", "EVICT_A", "EVICT_B",
+                "STAMP_PHASE", "STAMP_CTA_MOD", "STAMP_ITER_MOD", "STAMP_DEAD_MOD")
 #: the one upstream line the copy replaces (split over INSTR lines to carry the hint)
 EDITED = ["            b = tl.load(b_ptrs, mask=offs_k[:, None] < K - k * BLOCK_SIZE_K, other=0.0)\n"]
 
@@ -178,7 +179,8 @@ def test_the_instruments_are_off_by_default_and_appended_after_upstreams_paramet
     defaults = dict(zip(names[-len(fn.args.defaults):],
                         [ast.literal_eval(d) for d in fn.args.defaults], strict=True))
     assert defaults == {"USE_TD": False, "stamps_ptr": None, "STAMPS": 0, "STAMP_EVERY": 1,
-                        "STAMP_MARKS": 0, "EVICT_A": "", "EVICT_B": ""}
+                        "STAMP_MARKS": 0, "EVICT_A": "", "EVICT_B": "", "STAMP_PHASE": 0,
+                        "STAMP_CTA_MOD": 1, "STAMP_ITER_MOD": 1, "STAMP_DEAD_MOD": 1}
     # the eviction hints ride only on the default path's A and B loads
     loads = [n for n in ast.walk(fn) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "load"
              and any(k.arg == "eviction_policy" for k in n.keywords)]
@@ -190,8 +192,8 @@ def test_the_instruments_are_off_by_default_and_appended_after_upstreams_paramet
 def test_every_stamp_block_is_a_constexpr_if_on_stamps():
     fn = _funcs(_copy_body())["fused_moe_kernel"]
     calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
-             and getattr(n.func, "id", "").startswith("_stamp")]
-    assert len(calls) >= 9
+             and getattr(n.func, "id", "").startswith(("_stamp", "_sample"))]
+    assert len(calls) >= 13
     parents = {}
     for node in ast.walk(fn):
         for ch in ast.iter_child_nodes(node):
@@ -201,7 +203,12 @@ def test_every_stamp_block_is_a_constexpr_if_on_stamps():
         while p in parents and not (isinstance(p, ast.If) and "STAMPS" in ast.unparse(p.test)):
             p = parents[p]
         assert isinstance(p, ast.If), ast.unparse(c)
-        assert re.fullmatch(r"STAMPS >= [12]", ast.unparse(p.test)), ast.unparse(p.test)
+        # a test on the STAMPS constexpr alone (the "ends" level 3 added after rental 4), so
+        # each block folds away at compile time and STAMPS=0 compiles none of them
+        # rental 5 adds the sample level (STAMPS == 4) and keeps levels 1 to 3 off it
+        assert re.fullmatch(r"STAMPS >= 1|STAMPS == 2|STAMPS == 1 or STAMPS == 2|"
+                            r"STAMPS == 2 and STAMP_EVERY == 1|STAMPS >= 1 and STAMPS <= 3|STAMPS == 4",
+                            ast.unparse(p.test)), ast.unparse(p.test)
 
 
 def test_the_timers_are_the_ptx_special_registers_and_the_row_layout_matches_the_decoder():
@@ -436,3 +443,194 @@ def test_normalized_sass_drops_addresses_encodings_and_line_info():
     shifted = "\n".join(ln.replace("/*0", "/*1") for ln in SASS.splitlines()) + "\n  //## File \"x.py\", line 9\n"
     assert C.normalize_sass(shifted)[:3] == a[:3] and len(a) == 13
     assert C.normalize_sass(SASS.replace("CS2R R20", "CS2R R21")) != a
+
+
+# --------------------------------------------------------------------------
+# proposed after rental 4's perturbation gate: the "ends" level, every > 1, regcheck
+# --------------------------------------------------------------------------
+
+def test_the_ends_level_stamps_no_site_next_to_the_k_loop():
+    spec = I.parse_spec("stamps=ends")
+    assert spec.stamps == 3 and spec.width == I.HDR and spec.text().startswith("stamps=ends")
+    assert spec.kernel_kwargs()["STAMPS"] == 3 and spec.kernel_kwargs()["STAMP_MARKS"] == 0
+    # the prologue, epilogue and iteration sites are guarded off level 3 in the copy's source
+    guards = {ln.split("#")[1].strip(): ln.split("if ", 1)[1].split(":", 1)[0]
+              for ln in COPY.splitlines() if "if STAMPS" in ln and "# INSTR" in ln}
+    assert guards["INSTR the prologue's end, before the k-loop"] == "STAMPS == 1 or STAMPS == 2"
+    assert guards["INSTR the epilogue's start, before the routed-weight load"] == "STAMPS == 1 or STAMPS == 2"
+    assert guards["INSTR the top of k-iteration k"] == "STAMPS == 2"
+    assert guards["INSTR CTA start, before the dead check"] == "STAMPS >= 1 and STAMPS <= 3"
+
+
+def test_regcheck_rows_flag_a_copy_that_lands_at_another_occupancy():
+    sys.path.insert(0, str(REPO / "scripts"))
+    import instr_probe as IP
+
+    def f(regs, shared=36864, warps=8):
+        return {"regs": regs, "shared": shared, "occupancy": C.occupancy(regs, shared, warps)}
+    k1, k2 = (32, 64, 64, 8, 4, 8, False, 8), (32, 64, 64, 8, 4, 8, True, 1)
+    plain, off = {k1: f(48), k2: f(55)}, {k1: f(48), k2: f(55)}
+    rows = IP.regcheck_rows(plain, off, {"stamps=cta": {k1: f(44), k2: f(48)},
+                                         "stamps=ends": {k1: f(48), k2: f(55)}})
+    r1, r2 = rows
+    assert r1["off_same"] and r2["off_same"]
+    assert r2["plain"]["ctas_per_sm"] == 4 and r2["specs"]["stamps=cta"]["copy"]["ctas_per_sm"] == 5
+    assert not r2["specs"]["stamps=cta"]["same_ctas_per_sm"] and r1["specs"]["stamps=cta"]["same_ctas_per_sm"]
+    assert r2["specs"]["stamps=ends"]["same_regs"] and r2["specs"]["stamps=ends"]["same_ctas_per_sm"]
+
+
+# --------------------------------------------------------------------------
+# rental 5: the sample level, CTA sampling, the buffer pool, regcheck on CTAs per SM
+# --------------------------------------------------------------------------
+
+def test_the_sample_level_marks_iteration_zero_and_always_the_last():
+    for S in (1, 5, 15, 16, 17, 32, 64, 224, 256):
+        for every in (1, 4, 16):
+            ks = I.sample_ks(S, every)
+            assert ks[0] == 0 and ks[-1] == S - 1 and ks == sorted(set(ks))
+            assert all(k == 0 or k % every == (S - 1) % every for k in ks)
+            slots = [I.sample_slot(k, S, every) for k in range(S)]
+            assert [s for s in slots if s is not None] == list(range(len(ks)))
+            assert [k for k in range(S) if slots[k] is not None] == ks
+    assert I.sample_ks(64, 16) == [0, 15, 31, 47, 63] and I.sample_ks(16, 16) == [0, 15]
+    assert I.sample_ks(224, 16)[:3] == [0, 15, 31] and len(I.sample_ks(224, 16)) == 15
+
+
+def test_the_sample_spec_and_its_per_launch_layout():
+    s = I.parse_spec(I.R5_VARIANTS["v2"])
+    assert (s.stamps, s.every, s.cta_mod, s.iter_mod, s.dead_mod) == (4, 16, 1, 17, 17)
+    assert I.parse_spec(s.text()) == s
+    kw = s.kernel_kwargs()
+    assert kw["STAMPS"] == 4 and kw["STAMP_ITER_MOD"] == 17 and kw["STAMP_DEAD_MOD"] == 17
+    lay = s.layout(4096, 64)
+    assert lay["extra"] == {"STAMP_PHASE": 15, "STAMP_MARKS": 5} and lay["width"] == I.HDR + 10
+    assert lay["mark_k"] == [0, 15, 31, 47, 63]
+    assert I.parse_spec(I.R5_VARIANTS["v3"]).cta_mod == 17 and I.parse_spec(I.R5_VARIANTS["v1"]).cta_mod == 1
+    # older levels take no sampling constexprs, and refuse a modulus
+    assert "STAMP_CTA_MOD" not in I.parse_spec("stamps=cta").kernel_kwargs()
+    for bad in ("stamps=cta,cta_mod=17", "stamps=iter,dead_mod=2", "stamps=sample,iter_mod=0"):
+        with pytest.raises(I.SpecError):
+            I.parse_spec(bad)
+    # no variant samples by pid mod 16 (it stamps only pid_m offset 0 of each GROUP_M group)
+    for t in I.R5_VARIANTS.values():
+        assert all(m in (1, 17) for m in (I.parse_spec(t).cta_mod, I.parse_spec(t).iter_mod, I.parse_spec(t).dead_mod))
+
+
+def test_install_passes_the_phase_and_sizes_each_launch_by_its_k():
+    class Mod:
+        pass
+    mod, plain, instr = Mod(), _FakeKernel(), _FakeKernel()
+    mod.fused_moe_kernel = plain
+    pool = I.BufferPool(make=lambda c, w, like: ("buf", c, w))
+    pool.reserve([(130 * 16, I.HDR + 2 * 3)], "A")
+    with I.install(I.parse_spec(I.R5_VARIANTS["v3"]), module=mod, kernel=instr, alloc=pool) as rec:
+        _upstream_call(mod)        # K 2048 at BK 64: S 32, marks 0 15 31
+        _upstream_call(mod)
+    kw = instr.calls[0][2]
+    assert kw["STAMPS"] == 4 and kw["STAMP_PHASE"] == 15 and kw["STAMP_MARKS"] == 3 and kw["STAMP_CTA_MOD"] == 17
+    assert rec.launches[0]["mark_k"] == [0, 15, 31] and rec.launches[0]["width"] == I.HDR + 6
+    # the first buffer came from the pool (before the flush); the second was late
+    assert pool.late == 1 and I.BufferPool.shapes(rec.launches) == [(2080, 16), (2080, 16)]
+
+
+def test_decode_names_the_k_of_every_mark():
+    import numpy as np
+    row = [1, 10, 100, -1, -1, -1, -1, 90, 900, 1] + [200, -1, 400, -1, 600, -1]
+    cols = I.decode(np.array([row]), 3, [0, 15, 31])
+    assert cols["mark_k"].tolist() == [0, 15, 31] and cols["iter_top"].tolist() == [[200, 400, 600]]
+    with pytest.raises(ValueError):
+        I.decode(np.array([row]), 3, [0, 15])
+
+
+def test_the_sample_blocks_are_constexpr_guarded_and_levels_1_to_3_stay_off_them():
+    guards = [ln.split("if ", 1)[1].split(":", 1)[0] for ln in COPY.splitlines()
+              if "if STAMPS" in ln and "# INSTR" in ln]
+    assert guards.count("STAMPS == 4") == 5
+    assert guards.count("STAMPS >= 1 and STAMPS <= 3") == 3
+    # the sampling is a runtime test only inside the helpers the STAMPS == 4 blocks call
+    for helper in ("_sample_read", "_sample_start", "_sample_exit", "_sample_top"):
+        assert f"def {helper}(" in COPY
+
+
+def test_the_sample_level_stores_nothing_before_the_dead_check_and_each_path_uses_its_own_mod():
+    """build-r5-review F1: the CTA start's timers are read into registers before the dead check
+    and stored after it, a dead CTA under STAMP_DEAD_MOD and a live one under STAMP_CTA_MOD, so
+    v2 (dead 1 in 17) does not make every dead CTA write."""
+    import ast
+    tree = ast.parse(COPY)
+    kern = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "fused_moe_kernel")
+    src = ast.get_source_segment(COPY, kern)
+    head, rest = src.split("if pid_m * BLOCK_SIZE_M >= num_tokens_post_padded:", 1)
+    dead, live = rest.split("        return\n", 1)
+    s4_head = [ln for ln in head.splitlines() if "_sample" in ln]
+    assert s4_head == ["        s4_t, s4_c, s4_sm = _sample_read()  # INSTR"], s4_head
+    assert "_sample_start(stamps_ptr, pid, STAMP_MARKS, STAMP_DEAD_MOD, s4_t, s4_c, s4_sm)" in dead
+    assert "_sample_exit(stamps_ptr, pid, STAMP_MARKS, STAMP_DEAD_MOD, 2)" in dead
+    first_live = live.split("if not naive_block_assignment", 1)[0]
+    assert "_sample_start(stamps_ptr, pid, STAMP_MARKS, STAMP_CTA_MOD, s4_t, s4_c, s4_sm)" in first_live
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_sample_read")
+    assert "tl.store" not in ast.get_source_segment(COPY, fn)
+    assert "pid % MOD == 0" in COPY and "k % STAMP_EVERY == STAMP_PHASE" in COPY
+
+
+def test_regcheck_rules_on_ctas_per_sm_only_and_writes_env_lines():
+    sys.path.insert(0, str(REPO / "scripts"))
+    import instr_probe as IP
+
+    def f(regs, shared=36864, warps=8):
+        return {"regs": regs, "shared": shared, "occupancy": C.occupancy(regs, shared, warps)}
+    k1, k2 = (32, 64, 64, 8, 4, 8, False, 8), (32, 64, 64, 8, 4, 8, True, 1)
+    plain, off = {k1: f(48), k2: f(55)}, {k1: f(48), k2: f(55)}
+    v3 = I.parse_spec(I.R5_VARIANTS["v3"]).text()
+    # different registers, the same CTAs per SM: PASS (registers printed, not gating)
+    rows = IP.regcheck_rows(plain, off, {v3: {k1: f(46), k2: f(56)}})
+    assert not rows[0]["specs"][v3]["same_regs"] and rows[0]["specs"][v3]["same_ctas_per_sm"]
+    ok, why = IP.regcheck_ok(rows, v3)
+    assert ok and why == ""
+    # w2 drops to 48 registers and gains a CTA per SM: FAIL
+    rows = IP.regcheck_rows(plain, off, {v3: {k1: f(48), k2: f(48)}})
+    ok, why = IP.regcheck_ok(rows, v3)
+    assert not ok and "CTAs/SM" in why
+    assert IP.regcheck_line("u4-stF-v3", True, "") == "REGCHECK_u4_stF_v3=PASS"
+    assert IP.regcheck_line("u4-stF-v1", False, "x y").startswith("REGCHECK_u4_stF_v1=FAIL x y")
+    for spec in I.R5_VARIANTS.values():
+        assert spec in IP.REGCHECK_SPECS
+
+
+def test_read_regcheck_and_the_rental5_occupancy_leg(tmp_path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import instr_probe as IP
+    env = tmp_path / "regcheck.env"
+    env.write_text("REGCHECK_u4_stF_v1=FAIL w2 at 5 CTAs/SM\nREGCHECK_u4_stF_v2=PASS\n")
+    assert IP.read_regcheck(env, "u4-stF-v1") == "FAIL" and IP.read_regcheck(env, "u4-stF-v2") == "PASS"
+    assert IP.read_regcheck(env, "u4-stF-v3") == "" and IP.read_regcheck(tmp_path / "none", "x") == ""
+
+    def f(regs, shared=36864):
+        return {"regs": regs, "shared": shared, "occupancy": C.occupancy(regs, shared, 8)}
+    k = (32, 64, 64, 8, 4, 8, False, 8)
+    r4 = IP.compare_configs({k: f(48)}, {k: f(44)})
+    r5 = IP.compare_configs({k: f(48)}, {k: f(44)}, IP.OCC_LEGS_R5)
+    assert r4[0]["equal"] is False and r5[0]["equal"] is True and r5[0]["copy"]["regs"] == 44
+    assert IP.PERTURB_TOL_R5["median_max"] == 0.01 and IP.PERTURB_TOL_R5["worst_max"] == 0.02
+    # rental 4's registered tolerance is untouched
+    assert IP.PERTURB_TOL == {"median_max": 0.01, "worst_max": 0.02, "occupancy": "identical"}
+
+
+def test_a_stamps_unit_refuses_without_its_regcheck_pass(tmp_path, capsys):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import instr_probe as IP
+    vs = [{"id": "u4-stF-v3", "kind": "stamps", "model": "mixtral-8x7b", "groups": [8], "treads": [2],
+           "arms": ["native"], "spec": I.R5_VARIANTS["v3"]}]
+    vf = tmp_path / "v.json"
+    vf.write_text(json.dumps(vs))
+    gate = tmp_path / "gate.env"
+    gate.write_text("GATE_u4_stF_v3=PASS median=0.001 worst=0.002\n")
+    reg = tmp_path / "regcheck.env"
+    reg.write_text("REGCHECK_u4_stF_v3=FAIL w1 at 4 CTAs/SM\n")
+    rc = IP.main(["--mode", "stamps", "--variants", str(vf), "--variant", "u4-stF-v3", "--gate", str(gate),
+                  "--regcheck", str(reg), "--out", str(tmp_path / "o"), "--dry-run"])
+    assert rc == 2 and "regcheck line for u4-stF-v3 reads FAIL" in capsys.readouterr().out
+    reg.write_text("REGCHECK_u4_stF_v3=PASS\n")
+    rc = IP.main(["--mode", "stamps", "--variants", str(vf), "--variant", "u4-stF-v3", "--gate", str(gate),
+                  "--regcheck", str(reg), "--out", str(tmp_path / "o"), "--dry-run"])
+    assert rc == 2 and "DRY RUN" in capsys.readouterr().out

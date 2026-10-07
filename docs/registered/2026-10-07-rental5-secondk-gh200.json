@@ -1,0 +1,102 @@
+{
+ "registered": "2026-10-07, before any rental-5 page",
+ "name": "2026-10-07-rental5-secondk-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r5 DESIGN.md part 4b with REVIEW.md section (f) (H_ITER and H_CTA stay separated even if F at S = 5 is off by 50%); second K placed ABOVE BK 128 in the plan",
+ "tool": "scorer scripts/scoring/rental5/score_secondk.py; r4common.page_c",
+ "pages": {
+  "path": "<date>-<card>-qwen2-57b-a14b-tp8-<label>-r3-counters/lock1710/r3c-g64.json",
+  "labels": {
+   "k64s4": [
+    64,
+    4
+   ],
+   "k32s4": [
+    32,
+    4
+   ]
+  },
+  "design_check": "each page's design (block_k, num_stages) must equal its label's; else NOT SCORED",
+  "k_note": "w2 K = 320 at BK 32 is 10 whole k-steps (at BK 64, 5), so neither page is refused"
+ },
+ "statistic": {
+  "c_page": "per (page, GEMM) c by r4common.page_c over NATIVE and SHARED cells n = 4..9 at DRAM <= 0.5 x 4022 GB/s, F held at CAL (w1 520, w2 979 clk); fewer than 3 cells: NOT SCORED",
+  "r_meas": "u(k32) / u(k64), u = S c + F",
+  "e": "r_meas / r_pred - 1 per hypothesis"
+ },
+ "inputs": {
+  "c64": {
+   "w1": 346.2,
+   "w2": 344.0
+  },
+  "c32": {
+   "w1": 245.2,
+   "w2": 234.3
+  },
+  "K_olmoe": {
+   "w1": 2048,
+   "w2": 1024
+  },
+  "F_cal": {
+   "w1": 520.0,
+   "w2": 979.0
+  },
+  "label": "c64 / c32 SEEN (OLMoE rental-4 B' counter pages, SCORES.md); F CAL (r3_timing_model CTA_FIXED_KSTEPS)"
+ },
+ "hypotheses": {
+  "H_ITER": "the BK 32 excess is per k-step: u(k32) = S32 c32 + F",
+  "H_CTA": "the same excess is per CTA: u(k32) = S32 c64 / 2 + F + dF, dF = (c32 - c64/2) x OLMoE's BK-32 steps"
+ },
+ "predicted_ratio": {
+  "w1": {
+   "K": 3584,
+   "S64": 56,
+   "S32": 112,
+   "H_ITER": 1.405642,
+   "H_CTA": 1.231796,
+   "dF_cycles": 4614.4,
+   "gap_pct": 14.113272
+  },
+  "w2": {
+   "K": 320,
+   "S64": 5,
+   "S32": 10,
+   "H_ITER": 1.230826,
+   "H_CTA": 1.738644,
+   "dF_cycles": 1993.6,
+   "gap_pct": 29.207689
+  }
+ },
+ "rules": {
+  "per_gemm": "the nearer hypothesis within 3% (|e| <= 3%) is that GEMM's reading; both beyond 3%: NEITHER",
+  "verdict": "SELECTED <H> when both GEMMs read the same H; else UNDECIDED (the readings printed)",
+  "noise": "counter noise about 0.3% against gaps of 14% (w1) and 29% (w2)"
+ },
+ "gates": "the counter page's V-gates by rental 2's two views; V6, V7 and V10 do not gate (cycles are read per GEMM)",
+ "missing": "a page missing or out of the view: NOT SCORED; the drop-group k2 keeps the pair together",
+ "labels": {
+  "k64s4": "SEEN (rental 3's qwen2-57b-a14b-tp8 G = 64 floor pages ran k64s4)",
+  "k32s4": "BLIND"
+ },
+ "secondary": "r5common.secondary on (r_pred of the selected-or-nearest H, r_meas): NOT APPLICABLE below 3 values",
+ "seen_data": [
+  "c64, c32 are SEEN (OLMoE rental 4)",
+  "F is CAL",
+  "the k64s4 configuration is SEEN on this model; k32s4 is BLIND"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/private_weight_reference.py": "6c90112eb2f850382003bca2d5b947e6b67f192dcea16eec10c83e0c2ccde277",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+  "scripts/skew_synth.py": "eea9d019f25b2b427ed74f6c33194dbd35b37f4ba95aab27a030c3d88fb94c23",
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+  "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11"
+ }
+}

@@ -1,0 +1,1223 @@
+{
+ "what": "Zipf or Dirichlet shapes fitted to the trace statistics (scripts/skew_synth.py --fit)",
+ "kinds": "moe.routing.distributions: zipf (exponent s) and dirichlet (alpha), drawn by sample_topk_ids",
+ "fit_seeds": 16,
+ "zipf_grid": [
+  0.0,
+  3.0,
+  121
+ ],
+ "dirichlet_grid": [
+  0.05,
+  500.0,
+  97
+ ],
+ "loss": "sum over cv, max_mean, gini of log(median simulated / target)^2",
+ "match_tol": 0.1,
+ "shapes": [
+  {
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "B": 256,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 13.051,
+   "loss": 0.000996,
+   "both": {
+    "zipf": {
+     "param": 0.35,
+     "loss": 0.010127,
+     "sim_median": {
+      "cv": 0.254833,
+      "max_mean": 1.507812,
+      "gini": 0.13208
+     }
+    },
+    "dirichlet": {
+     "param": 13.051,
+     "loss": 0.000996,
+     "sim_median": {
+      "cv": 0.254643,
+      "max_mean": 1.429688,
+      "gini": 0.140137
+     }
+    }
+   },
+   "target": {
+    "cv": 0.260989,
+    "max_mean": 1.421875,
+    "gini": 0.142822
+   },
+   "fit_residual": {
+    "cv": -0.0243,
+    "max_mean": 0.0055,
+    "gini": -0.0188
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 256"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "B": 256,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 3.7495,
+   "loss": 0.00427,
+   "both": {
+    "zipf": {
+     "param": 0.6,
+     "loss": 0.033707,
+     "sim_median": {
+      "cv": 0.425305,
+      "max_mean": 1.921875,
+      "gini": 0.217529
+     }
+    },
+    "dirichlet": {
+     "param": 3.7495,
+     "loss": 0.00427,
+     "sim_median": {
+      "cv": 0.412244,
+      "max_mean": 1.671875,
+      "gini": 0.232422
+     }
+    }
+   },
+   "target": {
+    "cv": 0.432589,
+    "max_mean": 1.609375,
+    "gini": 0.227295
+   },
+   "fit_residual": {
+    "cv": -0.047,
+    "max_mean": 0.0388,
+    "gini": 0.0226
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 256"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 2,
+   "B": 256,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 10.772,
+   "loss": 0.03088,
+   "both": {
+    "zipf": {
+     "param": 0.4,
+     "loss": 0.052611,
+     "sim_median": {
+      "cv": 0.287391,
+      "max_mean": 1.59375,
+      "gini": 0.148926
+     }
+    },
+    "dirichlet": {
+     "param": 10.772,
+     "loss": 0.03088,
+     "sim_median": {
+      "cv": 0.276814,
+      "max_mean": 1.460938,
+      "gini": 0.153076
+     }
+    }
+   },
+   "target": {
+    "cv": 0.305538,
+    "max_mean": 1.28125,
+    "gini": 0.143799
+   },
+   "fit_residual": {
+    "cv": -0.094,
+    "max_mean": 0.1402,
+    "gini": 0.0645
+   },
+   "matches": [
+    "cv",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 256"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 8,
+   "B": 1024,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 17.404,
+   "loss": 0.002259,
+   "both": {
+    "zipf": {
+     "param": 0.3,
+     "loss": 0.008352,
+     "sim_median": {
+      "cv": 0.196712,
+      "max_mean": 1.394531,
+      "gini": 0.102966
+     }
+    },
+    "dirichlet": {
+     "param": 17.404,
+     "loss": 0.002259,
+     "sim_median": {
+      "cv": 0.190983,
+      "max_mean": 1.349609,
+      "gini": 0.101868
+     }
+    }
+   },
+   "target": {
+    "cv": 0.187108,
+    "max_mean": 1.292969,
+    "gini": 0.101807
+   },
+   "fit_residual": {
+    "cv": 0.0207,
+    "max_mean": 0.0438,
+    "gini": 0.0006
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 1024"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 8,
+   "B": 1024,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 5.0,
+   "loss": 0.022083,
+   "both": {
+    "zipf": {
+     "param": 0.525,
+     "loss": 0.046166,
+     "sim_median": {
+      "cv": 0.343314,
+      "max_mean": 1.755859,
+      "gini": 0.180115
+     }
+    },
+    "dirichlet": {
+     "param": 5.0,
+     "loss": 0.022083,
+     "sim_median": {
+      "cv": 0.337694,
+      "max_mean": 1.615234,
+      "gini": 0.187866
+     }
+    }
+   },
+   "target": {
+    "cv": 0.368792,
+    "max_mean": 1.435547,
+    "gini": 0.184082
+   },
+   "fit_residual": {
+    "cv": -0.0843,
+    "max_mean": 0.1252,
+    "gini": 0.0206
+   },
+   "matches": [
+    "cv",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 1024"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 8,
+   "B": 1024,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 8.8914,
+   "loss": 0.056221,
+   "both": {
+    "zipf": {
+     "param": 0.4,
+     "loss": 0.065505,
+     "sim_median": {
+      "cv": 0.26136,
+      "max_mean": 1.546875,
+      "gini": 0.135986
+     }
+    },
+    "dirichlet": {
+     "param": 8.8914,
+     "loss": 0.056221,
+     "sim_median": {
+      "cv": 0.261917,
+      "max_mean": 1.490234,
+      "gini": 0.141296
+     }
+    }
+   },
+   "target": {
+    "cv": 0.293684,
+    "max_mean": 1.242188,
+    "gini": 0.127869
+   },
+   "fit_residual": {
+    "cv": -0.1082,
+    "max_mean": 0.1997,
+    "gini": 0.105
+   },
+   "matches": [],
+   "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 1024"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 32,
+   "B": 4096,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 37.495,
+   "loss": 0.001791,
+   "both": {
+    "zipf": {
+     "param": 0.2,
+     "loss": 0.010538,
+     "sim_median": {
+      "cv": 0.12923,
+      "max_mean": 1.265625,
+      "gini": 0.068268
+     }
+    },
+    "dirichlet": {
+     "param": 37.495,
+     "loss": 0.001791,
+     "sim_median": {
+      "cv": 0.122033,
+      "max_mean": 1.217773,
+      "gini": 0.06723
+     }
+    }
+   },
+   "target": {
+    "cv": 0.121252,
+    "max_mean": 1.186523,
+    "gini": 0.065063
+   },
+   "fit_residual": {
+    "cv": 0.0064,
+    "max_mean": 0.0263,
+    "gini": 0.0333
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 24 (the median-CV layer at this B) at B 4096"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 32,
+   "B": 4096,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 7.339,
+   "loss": 0.027305,
+   "both": {
+    "zipf": {
+     "param": 0.425,
+     "loss": 0.052371,
+     "sim_median": {
+      "cv": 0.278599,
+      "max_mean": 1.604492,
+      "gini": 0.145798
+     }
+    },
+    "dirichlet": {
+     "param": 7.339,
+     "loss": 0.027305,
+     "sim_median": {
+      "cv": 0.279022,
+      "max_mean": 1.480469,
+      "gini": 0.15358
+     }
+    }
+   },
+   "target": {
+    "cv": 0.313762,
+    "max_mean": 1.321777,
+    "gini": 0.149628
+   },
+   "fit_residual": {
+    "cv": -0.1107,
+    "max_mean": 0.1201,
+    "gini": 0.0264
+   },
+   "matches": [
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 4096"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "n": 32,
+   "B": 4096,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 9.7867,
+   "loss": 0.055003,
+   "both": {
+    "zipf": {
+     "param": 0.375,
+     "loss": 0.080548,
+     "sim_median": {
+      "cv": 0.246171,
+      "max_mean": 1.532715,
+      "gini": 0.129776
+     }
+    },
+    "dirichlet": {
+     "param": 9.7867,
+     "loss": 0.055003,
+     "sim_median": {
+      "cv": 0.244247,
+      "max_mean": 1.405762,
+      "gini": 0.13295
+     }
+    }
+   },
+   "target": {
+    "cv": 0.289837,
+    "max_mean": 1.223633,
+    "gini": 0.122681
+   },
+   "fit_residual": {
+    "cv": -0.1573,
+    "max_mean": 0.1488,
+    "gini": 0.0837
+   },
+   "matches": [
+    "gini"
+   ],
+   "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 4096"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 2,
+   "B": 512,
+   "shape": "PT",
+   "kind": "zipf",
+   "param": 0.625,
+   "loss": 0.025522,
+   "both": {
+    "zipf": {
+     "param": 0.625,
+     "loss": 0.025522,
+     "sim_median": {
+      "cv": 0.734338,
+      "max_mean": 4.53125,
+      "gini": 0.323437
+     }
+    },
+    "dirichlet": {
+     "param": 1.1857,
+     "loss": 0.067342,
+     "sim_median": {
+      "cv": 0.788499,
+      "max_mean": 3.429688,
+      "gini": 0.421116
+     }
+    }
+   },
+   "target": {
+    "cv": 0.717791,
+    "max_mean": 4.226562,
+    "gini": 0.372776
+   },
+   "fit_residual": {
+    "cv": 0.0231,
+    "max_mean": 0.0721,
+    "gini": -0.1324
+   },
+   "matches": [
+    "cv",
+    "max_mean"
+   ],
+   "trace_statistic": "prefill layer 11 (the median-CV layer at this B) at B 512"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 2,
+   "B": 512,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 0.88914,
+   "loss": 0.009299,
+   "both": {
+    "zipf": {
+     "param": 0.75,
+     "loss": 0.071641,
+     "sim_median": {
+      "cv": 0.915451,
+      "max_mean": 5.53125,
+      "gini": 0.389725
+     }
+    },
+    "dirichlet": {
+     "param": 0.88914,
+     "loss": 0.009299,
+     "sim_median": {
+      "cv": 0.921357,
+      "max_mean": 4.1875,
+      "gini": 0.49115
+     }
+    }
+   },
+   "target": {
+    "cv": 0.906576,
+    "max_mean": 4.53125,
+    "gini": 0.465778
+   },
+   "fit_residual": {
+    "cv": 0.0163,
+    "max_mean": -0.0759,
+    "gini": 0.0545
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 512"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 2,
+   "B": 512,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 2.8117,
+   "loss": 4.9e-05,
+   "both": {
+    "zipf": {
+     "param": 0.45,
+     "loss": 0.127705,
+     "sim_median": {
+      "cv": 0.499804,
+      "max_mean": 3.257812,
+      "gini": 0.234924
+     }
+    },
+    "dirichlet": {
+     "param": 2.8117,
+     "loss": 4.9e-05,
+     "sim_median": {
+      "cv": 0.521229,
+      "max_mean": 2.484375,
+      "gini": 0.29298
+     }
+    }
+   },
+   "target": {
+    "cv": 0.519781,
+    "max_mean": 2.46875,
+    "gini": 0.293297
+   },
+   "fit_residual": {
+    "cv": 0.0028,
+    "max_mean": 0.0063,
+    "gini": -0.0011
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 512"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 4,
+   "B": 1024,
+   "shape": "PT",
+   "kind": "zipf",
+   "param": 0.575,
+   "loss": 0.019731,
+   "both": {
+    "zipf": {
+     "param": 0.575,
+     "loss": 0.019731,
+     "sim_median": {
+      "cv": 0.664888,
+      "max_mean": 4.222656,
+      "gini": 0.295454
+     }
+    },
+    "dirichlet": {
+     "param": 1.5811,
+     "loss": 0.070522,
+     "sim_median": {
+      "cv": 0.670687,
+      "max_mean": 3.042969,
+      "gini": 0.369854
+     }
+    }
+   },
+   "target": {
+    "cv": 0.650533,
+    "max_mean": 3.84375,
+    "gini": 0.3272
+   },
+   "fit_residual": {
+    "cv": 0.0221,
+    "max_mean": 0.0986,
+    "gini": -0.097
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 3 (the median-CV layer at this B) at B 1024"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 4,
+   "B": 1024,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 1.0772,
+   "loss": 0.011582,
+   "both": {
+    "zipf": {
+     "param": 0.65,
+     "loss": 0.09349,
+     "sim_median": {
+      "cv": 0.767748,
+      "max_mean": 4.78125,
+      "gini": 0.335203
+     }
+    },
+    "dirichlet": {
+     "param": 1.0772,
+     "loss": 0.011582,
+     "sim_median": {
+      "cv": 0.822557,
+      "max_mean": 3.582031,
+      "gini": 0.442545
+     }
+    }
+   },
+   "target": {
+    "cv": 0.782989,
+    "max_mean": 3.828125,
+    "gini": 0.413113
+   },
+   "fit_residual": {
+    "cv": 0.0505,
+    "max_mean": -0.0643,
+    "gini": 0.0712
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 1024"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 4,
+   "B": 1024,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 2.8117,
+   "loss": 4.5e-05,
+   "both": {
+    "zipf": {
+     "param": 0.45,
+     "loss": 0.130922,
+     "sim_median": {
+      "cv": 0.494488,
+      "max_mean": 3.300781,
+      "gini": 0.231653
+     }
+    },
+    "dirichlet": {
+     "param": 2.8117,
+     "loss": 4.5e-05,
+     "sim_median": {
+      "cv": 0.508901,
+      "max_mean": 2.46875,
+      "gini": 0.286644
+     }
+    }
+   },
+   "target": {
+    "cv": 0.510845,
+    "max_mean": 2.476562,
+    "gini": 0.287952
+   },
+   "fit_residual": {
+    "cv": -0.0038,
+    "max_mean": -0.0032,
+    "gini": -0.0045
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 1024"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 16,
+   "B": 4096,
+   "shape": "PT",
+   "kind": "zipf",
+   "param": 0.475,
+   "loss": 0.018669,
+   "both": {
+    "zipf": {
+     "param": 0.475,
+     "loss": 0.018669,
+     "sim_median": {
+      "cv": 0.527079,
+      "max_mean": 3.489258,
+      "gini": 0.239572
+     }
+    },
+    "dirichlet": {
+     "param": 2.5545,
+     "loss": 0.082011,
+     "sim_median": {
+      "cv": 0.532086,
+      "max_mean": 2.486328,
+      "gini": 0.296513
+     }
+    }
+   },
+   "target": {
+    "cv": 0.503386,
+    "max_mean": 3.213867,
+    "gini": 0.264494
+   },
+   "fit_residual": {
+    "cv": 0.0471,
+    "max_mean": 0.0857,
+    "gini": -0.0942
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 3 (the median-CV layer at this B) at B 4096"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 16,
+   "B": 4096,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 1.5811,
+   "loss": 0.004286,
+   "both": {
+    "zipf": {
+     "param": 0.55,
+     "loss": 0.149055,
+     "sim_median": {
+      "cv": 0.630522,
+      "max_mean": 4.067383,
+      "gini": 0.279478
+     }
+    },
+    "dirichlet": {
+     "param": 1.5811,
+     "loss": 0.004286,
+     "sim_median": {
+      "cv": 0.668666,
+      "max_mean": 2.985352,
+      "gini": 0.366969
+     }
+    }
+   },
+   "target": {
+    "cv": 0.639005,
+    "max_mean": 2.973633,
+    "gini": 0.350111
+   },
+   "fit_residual": {
+    "cv": 0.0464,
+    "max_mean": 0.0039,
+    "gini": 0.0482
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 4096"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "n": 16,
+   "B": 4096,
+   "shape": "DW",
+   "kind": "dirichlet",
+   "param": 2.8117,
+   "loss": 0.000928,
+   "both": {
+    "zipf": {
+     "param": 0.45,
+     "loss": 0.141907,
+     "sim_median": {
+      "cv": 0.493123,
+      "max_mean": 3.300781,
+      "gini": 0.225947
+     }
+    },
+    "dirichlet": {
+     "param": 2.8117,
+     "loss": 0.000928,
+     "sim_median": {
+      "cv": 0.507853,
+      "max_mean": 2.382812,
+      "gini": 0.284853
+     }
+    }
+   },
+   "target": {
+    "cv": 0.504851,
+    "max_mean": 2.455078,
+    "gini": 0.284894
+   },
+   "fit_residual": {
+    "cv": 0.0059,
+    "max_mean": -0.0294,
+    "gini": -0.0001
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 4096"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 1,
+   "B": 480,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 6.0576,
+   "loss": 0.001826,
+   "both": {
+    "zipf": {
+     "param": 0.35,
+     "loss": 0.038298,
+     "sim_median": {
+      "cv": 0.418913,
+      "max_mean": 2.640625,
+      "gini": 0.209201
+     }
+    },
+    "dirichlet": {
+     "param": 6.0576,
+     "loss": 0.001826,
+     "sim_median": {
+      "cv": 0.412668,
+      "max_mean": 2.140625,
+      "gini": 0.22816
+     }
+    }
+   },
+   "target": {
+    "cv": 0.417871,
+    "max_mean": 2.227272,
+    "gini": 0.230394
+   },
+   "fit_residual": {
+    "cv": -0.0125,
+    "max_mean": -0.0389,
+    "gini": -0.0097
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 14 (the median-CV layer at this B) at B 480 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 1,
+   "B": 480,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 2.5545,
+   "loss": 8.2e-05,
+   "both": {
+    "zipf": {
+     "param": 0.45,
+     "loss": 0.099123,
+     "sim_median": {
+      "cv": 0.548954,
+      "max_mean": 3.34375,
+      "gini": 0.262257
+     }
+    },
+    "dirichlet": {
+     "param": 2.5545,
+     "loss": 8.2e-05,
+     "sim_median": {
+      "cv": 0.574582,
+      "max_mean": 2.640625,
+      "gini": 0.321215
+     }
+    }
+   },
+   "target": {
+    "cv": 0.578472,
+    "max_mean": 2.631972,
+    "gini": 0.319587
+   },
+   "fit_residual": {
+    "cv": -0.0067,
+    "max_mean": 0.0033,
+    "gini": 0.0051
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 480 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 1,
+   "B": 480,
+   "shape": "DW",
+   "kind": "zipf",
+   "param": 0.325,
+   "loss": 0.001614,
+   "both": {
+    "zipf": {
+     "param": 0.325,
+     "loss": 0.001614,
+     "sim_median": {
+      "cv": 0.388569,
+      "max_mean": 2.515625,
+      "gini": 0.196016
+     }
+    },
+    "dirichlet": {
+     "param": 7.339,
+     "loss": 0.023233,
+     "sim_median": {
+      "cv": 0.37989,
+      "max_mean": 2.140625,
+      "gini": 0.211832
+     }
+    }
+   },
+   "target": {
+    "cv": 0.386542,
+    "max_mean": 2.476595,
+    "gini": 0.20333
+   },
+   "fit_residual": {
+    "cv": 0.0052,
+    "max_mean": 0.0158,
+    "gini": -0.036
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 480 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 2,
+   "B": 960,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 7.339,
+   "loss": 0.001105,
+   "both": {
+    "zipf": {
+     "param": 0.3,
+     "loss": 0.066205,
+     "sim_median": {
+      "cv": 0.336039,
+      "max_mean": 2.375,
+      "gini": 0.166311
+     }
+    },
+    "dirichlet": {
+     "param": 7.339,
+     "loss": 0.001105,
+     "sim_median": {
+      "cv": 0.358206,
+      "max_mean": 1.992188,
+      "gini": 0.199891
+     }
+    }
+   },
+   "target": {
+    "cv": 0.350801,
+    "max_mean": 1.958144,
+    "gini": 0.196076
+   },
+   "fit_residual": {
+    "cv": 0.0211,
+    "max_mean": 0.0174,
+    "gini": 0.0195
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 14 (the median-CV layer at this B) at B 960 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 2,
+   "B": 960,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 3.4065,
+   "loss": 0.001544,
+   "both": {
+    "zipf": {
+     "param": 0.4,
+     "loss": 0.152274,
+     "sim_median": {
+      "cv": 0.470055,
+      "max_mean": 3.101562,
+      "gini": 0.220638
+     }
+    },
+    "dirichlet": {
+     "param": 3.4065,
+     "loss": 0.001544,
+     "sim_median": {
+      "cv": 0.497376,
+      "max_mean": 2.367188,
+      "gini": 0.277331
+     }
+    }
+   },
+   "target": {
+    "cv": 0.508771,
+    "max_mean": 2.341731,
+    "gini": 0.285843
+   },
+   "fit_residual": {
+    "cv": -0.0224,
+    "max_mean": 0.0109,
+    "gini": -0.0298
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 960 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 2,
+   "B": 960,
+   "shape": "DW",
+   "kind": "zipf",
+   "param": 0.325,
+   "loss": 0.004649,
+   "both": {
+    "zipf": {
+     "param": 0.325,
+     "loss": 0.004649,
+     "sim_median": {
+      "cv": 0.37035,
+      "max_mean": 2.546875,
+      "gini": 0.179106
+     }
+    },
+    "dirichlet": {
+     "param": 7.339,
+     "loss": 0.049278,
+     "sim_median": {
+      "cv": 0.358206,
+      "max_mean": 1.992188,
+      "gini": 0.199891
+     }
+    }
+   },
+   "target": {
+    "cv": 0.366615,
+    "max_mean": 2.470308,
+    "gini": 0.190204
+   },
+   "fit_residual": {
+    "cv": 0.0102,
+    "max_mean": 0.031,
+    "gini": -0.0583
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 960 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 8,
+   "B": 3840,
+   "shape": "PT",
+   "kind": "dirichlet",
+   "param": 10.772,
+   "loss": 0.000429,
+   "both": {
+    "zipf": {
+     "param": 0.275,
+     "loss": 0.074878,
+     "sim_median": {
+      "cv": 0.288211,
+      "max_mean": 2.212891,
+      "gini": 0.14144
+     }
+    },
+    "dirichlet": {
+     "param": 10.772,
+     "loss": 0.000429,
+     "sim_median": {
+      "cv": 0.28249,
+      "max_mean": 1.757812,
+      "gini": 0.160505
+     }
+    }
+   },
+   "target": {
+    "cv": 0.282218,
+    "max_mean": 1.727834,
+    "gini": 0.15867
+   },
+   "fit_residual": {
+    "cv": 0.001,
+    "max_mean": 0.0174,
+    "gini": 0.0116
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 13 (the median-CV layer at this B) at B 3840 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 8,
+   "B": 3840,
+   "shape": "PW",
+   "kind": "dirichlet",
+   "param": 4.127,
+   "loss": 0.005032,
+   "both": {
+    "zipf": {
+     "param": 0.375,
+     "loss": 0.186311,
+     "sim_median": {
+      "cv": 0.417477,
+      "max_mean": 2.900391,
+      "gini": 0.19537
+     }
+    },
+    "dirichlet": {
+     "param": 4.127,
+     "loss": 0.005032,
+     "sim_median": {
+      "cv": 0.437462,
+      "max_mean": 2.195312,
+      "gini": 0.245462
+     }
+    }
+   },
+   "target": {
+    "cv": 0.442994,
+    "max_mean": 2.058668,
+    "gini": 0.252248
+   },
+   "fit_residual": {
+    "cv": -0.0125,
+    "max_mean": 0.0664,
+    "gini": -0.0269
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 3840 (interpolated in log B)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "n": 8,
+   "B": 3840,
+   "shape": "DW",
+   "kind": "zipf",
+   "param": 0.325,
+   "loss": 0.005776,
+   "both": {
+    "zipf": {
+     "param": 0.325,
+     "loss": 0.005776,
+     "sim_median": {
+      "cv": 0.350776,
+      "max_mean": 2.523438,
+      "gini": 0.167363
+     }
+    },
+    "dirichlet": {
+     "param": 7.339,
+     "loss": 0.064909,
+     "sim_median": {
+      "cv": 0.342056,
+      "max_mean": 1.935547,
+      "gini": 0.193611
+     }
+    }
+   },
+   "target": {
+    "cv": 0.352578,
+    "max_mean": 2.465623,
+    "gini": 0.179893
+   },
+   "fit_residual": {
+    "cv": -0.0051,
+    "max_mean": 0.0234,
+    "gini": -0.0697
+   },
+   "matches": [
+    "cv",
+    "max_mean",
+    "gini"
+   ],
+   "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 3840 (interpolated in log B)"
+  }
+ ]
+}

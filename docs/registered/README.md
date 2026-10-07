@@ -1037,3 +1037,62 @@ One post-page scorer fix to reading code, changing no verdict (`SCORES.md`, end)
 reads a refused unit's gate line and prints NOT RUN with its median and worst, where it printed "0
 stamps.json". The gate's diagnosis (ptxas reallocates the whole kernel around the stamps; the
 stamps' cost at equal occupancy) is in `docs/FINDINGS.md`, rental 4. The files above are unchanged.
+
+## 2026-10-07, before any page: rental 5, six registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental5-2026-10.plan` through
+`gh200_model_session.sh --plan`. The six files `2026-10-07-rental5-{v2,skew,c15,stamps2,secondk,bk128}-gh200`,
+their scorers (`scripts/scoring/rental5/`, tested on synthetic pages only) and the scaffolding
+they need are committed together before the rental. Every number in them is written by
+`scripts/scoring/rental5/register.py` from committed files or is a typed-in input carrying its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r5/DESIGN.md`, corrected by `design-r5-review/REVIEW.md` (the later document wins). Labels:
+CAL, CAL-counters (the four models d and kappa were fitted on), SEEN (every published page),
+SEEN-fitted, BLIND, BLIND-CALMODEL (a never-measured cell on a CAL model). Every published page is
+SEEN, and so is every rental-5 input that came from one; each file's `seen_data` and `leakage`
+blocks say which.
+
+**Owner decisions of 2026-10-07** bound here. (1) G3 is a TOST on the pooled
+shuffled-minus-balanced difference with a cluster-t interval (df = pages - 1), margin 0.36%, and
+Cochran's Q gates (p < 0.01 sends the TOST to each n-stratum); every per-cell difference is kept
+and printed; the model's shuffle effect is registered per cell; the label-permutation cells
+(PW-hotfirst, PW-rand1) are included. (2) Dead- and live-CTA stamp sampling at 1 in 17 (pid mod
+17) under the gate CTAs/SM identical, timing median <= 1%, worst <= 2%; regcheck runs right after
+calibrate, before any timed unit. (3) The skew histograms are SYNTHETIC: Zipf / Dirichlet shapes
+fitted by `scripts/skew_synth.py` to summary statistics (cv, max/mean, Gini by layer and batch) of
+three public routing logs that state no licence, drawn from registered seeds, committed openly in
+`2026-10-07-rental5-skew-hist/` with the fitting targets (`trace_stats.json`, statistics only) and
+the fitted shapes (`synth_fit.json`, each shape's matched statistics). No trace-derived count is in
+the repository or on the VM; the prototype's rescaled histograms are not used.
+
+**v2** (no unit): model M with D, `r3_timing_model.py --dead-model v2` (default `m`, so every
+earlier scorer reads the same bytes): d 0.995 ns, kappa 0.325 in the dead window, T0 refit to
+43.23 us on the CAL 8x7B pages. Its re-predictions of the earlier held-out tests are SEEN
+diagnostics with no verdict (`scripts/scoring/rental5/v2seen.score.txt`, reproducing the design's
+table to 0.01 point); 8x22B, Qwen2-57B and OLMoE are IN-SAMPLE for (d, kappa). **skew**: two pages
+per shape (Mixtral n 2/8/32, OLMoE 2/4/16, Qwen1.5 1/2/8; NATIVE and SHARED at 9 copies, G = 8), a
+byte-leg counter page for Mixtral and OLMoE; S (v2 + the per-expert schedule M2 + the per-expert
+byte walk M3) against U, LT (the close rival) and PW; SKEW-RATIO, E1-SKEW, E1-UNI-EXT, B-SKEW,
+E2-SKEW and the decomposition; predicted r_S - 1 from +1.1 to +30.4% (Mixtral), +2.6 to +21.9%
+(OLMoE), +5.6 to +21.7% (Qwen1.5); 40 / 48 / 17 lever cells for U / PW / LT. The registered
+shuffle effect delta_M3 is 0 on every cell: a token-row permutation keeps each expert's token set,
+so the review's premise that the shuffle breaks realize_counts' co-occurrence classes does not
+hold. By the owner's decision of 2026-10-07 G3 is kept as exactly that: a test of token order against the model's predicted zero effect. The owner confirmed the registered thresholds (B-SKEW every cell <= 5% and rms <= 3%; E2-SKEW rms <= 2% and worst <= 5%; cells under 1705 MHz excluded). **c15**: SHARED at 15 against 9 copies on
+OLMoE's skewed cells, D 23.69 us at every histogram, M 31.74, sigma 1.03 us. **stamps2**: the
+sample level (CTA start and end, iteration tops at k = 0 and k = S - 1 - 16 m), variants v1 / v2
+/ v3 (`moe.instrumented.R5_VARIANTS`), the first passing regcheck and perturb per unit; F2, K2 and
+D2 with kappa's error including d's. **secondk** and **bk128** (a BLIND confirmation of the
+occupancy-3 floor; SYNC is already excluded by SEEN counters). The tp2 lever (9 against 32 copies)
+was CUT by the owner on 2026-10-07; kappa is read from the stamps only.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate, regcheck (compile only) | 3 | 8 |
+| skew Mixtral, OLMoE (skm, sko; never dropped): pages A, B and the byte leg C | 6 | 66 |
+| skew Qwen1.5 (skq) | 2 | 29 |
+| c15 (OLMoE SHARED at 15 copies) | 1 | 7 |
+| stamps (st: perturb, stf; stt and std depend on st) | 6 | 28 |
+| second K (k2), BK 128 (bk) | 4 | 14 |
+
+152 min of units (2.5 h, $5.80 at $2.29/h). The driver drops the last unit first: BK 128, then
+second K, std, stt, st, c15, skq.

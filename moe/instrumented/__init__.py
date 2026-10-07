@@ -34,7 +34,22 @@ HDR = 10
 COLUMNS = ("smid", "start_ns", "start_clk", "prologue_ns", "prologue_clk", "epi_ns", "epi_clk",
            "end_ns", "end_clk", "kind")
 KIND = {1: "live", 2: "dead", -1: "unstamped"}
-STAMP_LEVELS = {"off": 0, "cta": 1, "iter": 2}
+#: "ends" (3): the CTA start, a dead CTA's exit and the end only, nothing next to the k-loop
+#: (the cadence proposed after rental 4's perturbation gate failed; fused_moe_instr.py)
+#: "sample" (4, rental 5, owner decision 2 of 2026-10-07): the CTA start, a dead CTA's exit, the
+#: end, and the TOP of k-iteration 0 and of every k with k mod every = (S - 1) mod every
+#: (phase-aligned, so the last iteration is always marked), with CTA sampling (cta_mod,
+#: iter_mod, dead_mod: a CTA is stamped only when pid mod the modulus is 0)
+STAMP_LEVELS = {"off": 0, "cta": 1, "iter": 2, "ends": 3, "sample": 4}
+SAMPLE = 4
+#: RENTAL 5's three registered variants of the sample level, in the driver's preference order
+#: (docs/registered/2026-10-07-rental5-stamps2-gh200): pid mod 17, never 16, because pid mod 16
+#: stamps only pid_m offset 0 of every GROUP_M group (design-r5-review work/sample_bias.txt)
+R5_VARIANTS = {
+    "v1": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1",
+    "v2": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17",
+    "v3": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17",
+}
 EVICT = {"none": "", "first": "evict_first", "last": "evict_last"}
 #: iteration marks a row holds when a spec does not say: K / BLOCK_K of the deepest GEMM
 #: rental 4 stamps (OLMoE w1 at BK 32: 2048 / 32 = 64)
@@ -54,10 +69,22 @@ class InstrSpec:
     marks: int = 0
     evict_a: str = "none"
     evict_b: str = "none"
+    #: rental 5's sampling (the sample level only): stamp a live CTA when pid mod cta_mod is
+    #: 0, its iteration tops when also pid mod iter_mod is 0, a dead CTA when pid mod
+    #: dead_mod is 0
+    cta_mod: int = 1
+    iter_mod: int = 1
+    dead_mod: int = 1
 
     def __post_init__(self):
-        if self.stamps not in (0, 1, 2):
-            raise SpecError(f"stamps {self.stamps}: 0 off, 1 cta, 2 iter")
+        if self.stamps not in (0, 1, 2, 3, 4):
+            raise SpecError(f"stamps {self.stamps}: 0 off, 1 cta, 2 iter, 3 ends, 4 sample")
+        for name in ("cta_mod", "iter_mod", "dead_mod"):
+            m = getattr(self, name)
+            if m < 1:
+                raise SpecError(f"{name} {m}: at least 1")
+            if m != 1 and self.stamps != SAMPLE:
+                raise SpecError(f"{name} {m}: sampling belongs to stamps=sample only")
         if self.every < 1:
             raise SpecError(f"every {self.every}: at least 1")
         if self.marks < 0 or (self.stamps == 2 and self.marks < 1):
@@ -76,26 +103,69 @@ class InstrSpec:
 
     @property
     def width(self) -> int:
-        """int64 columns per stamp row."""
+        """int64 columns per stamp row (the sample level's depends on the launch's K: see
+        `layout`; this is its width with no mark)."""
         return HDR + 2 * (self.marks if self.stamps == 2 else 0)
 
     def kernel_kwargs(self) -> dict:
-        """The instrument constexprs the copy takes, beside upstream's own arguments."""
-        return {"STAMPS": self.stamps, "STAMP_EVERY": self.every,
-                "STAMP_MARKS": self.marks if self.stamps == 2 else 0,
-                "EVICT_A": EVICT[self.evict_a], "EVICT_B": EVICT[self.evict_b]}
+        """The instrument constexprs the copy takes, beside upstream's own arguments. The
+        sample level adds STAMP_PHASE and its own STAMP_MARKS per launch (`layout`)."""
+        out = {"STAMPS": self.stamps, "STAMP_EVERY": self.every,
+               "STAMP_MARKS": self.marks if self.stamps == 2 else 0,
+               "EVICT_A": EVICT[self.evict_a], "EVICT_B": EVICT[self.evict_b]}
+        if self.stamps == SAMPLE:
+            out.update(STAMP_CTA_MOD=self.cta_mod, STAMP_ITER_MOD=self.iter_mod,
+                       STAMP_DEAD_MOD=self.dead_mod)
+        return out
+
+    def layout(self, K: int, block_k: int) -> dict:
+        """One launch's row layout: the constexprs it adds, its width and which k each mark
+        holds. The sample level: S = cdiv(K, BLOCK_K), phase (S - 1) mod every, marks at
+        k = 0 and every k = phase (mod every) (sample_ks); other levels: as kernel_kwargs."""
+        if self.stamps != SAMPLE:
+            ks = list(range(0, self.marks * self.every, self.every)) if self.stamps == 2 else []
+            return {"extra": {}, "width": self.width, "marks": len(ks), "mark_k": ks}
+        S = -(-int(K) // int(block_k))
+        ks = sample_ks(S, self.every)
+        return {"extra": {"STAMP_PHASE": (S - 1) % self.every, "STAMP_MARKS": len(ks)},
+                "width": HDR + 2 * len(ks), "marks": len(ks), "mark_k": ks, "ksteps": S}
 
     def text(self) -> str:
         level = {v: k for k, v in STAMP_LEVELS.items()}[self.stamps]
         out = [f"stamps={level}"]
         if self.stamps == 2:
             out += [f"every={self.every}", f"marks={self.marks}"]
+        if self.stamps == SAMPLE:
+            out += [f"every={self.every}", f"cta_mod={self.cta_mod}", f"iter_mod={self.iter_mod}",
+                    f"dead_mod={self.dead_mod}"]
         out += [f"evict_a={self.evict_a}", f"evict_b={self.evict_b}"]
         return ",".join(out)
 
     def as_dict(self) -> dict:
         return {"stamps": self.stamps, "every": self.every, "marks": self.marks,
-                "evict_a": self.evict_a, "evict_b": self.evict_b, "text": self.text()}
+                "evict_a": self.evict_a, "evict_b": self.evict_b, "cta_mod": self.cta_mod,
+                "iter_mod": self.iter_mod, "dead_mod": self.dead_mod, "text": self.text()}
+
+
+def sample_ks(S: int, every: int) -> list[int]:
+    """The k-iterations the sample level marks, in slot order: 0, then every k with
+    k mod every = (S - 1) mod every (so S - 1, the last, is always one)."""
+    if S < 1 or every < 1:
+        raise SpecError(f"sample_ks needs S and every >= 1, got {S}, {every}")
+    phase = (S - 1) % every
+    ks = list(range(phase, S, every))
+    return ks if phase == 0 else [0] + ks
+
+
+def sample_slot(k: int, S: int, every: int) -> int | None:
+    """The kernel's slot rule for mark k (the copy computes the same): phase 0, k // every;
+    else 0 for k = 0 and 1 + k // every for k = phase (mod every); None when unmarked."""
+    phase = (S - 1) % every
+    if phase == 0:
+        return k // every if k % every == 0 else None
+    if k == 0:
+        return 0
+    return 1 + k // every if k % every == phase else None
 
 
 def parse_spec(text: str) -> InstrSpec:
@@ -110,14 +180,15 @@ def parse_spec(text: str) -> InstrSpec:
             if v not in STAMP_LEVELS:
                 raise SpecError(f"stamps {v!r}: one of {sorted(STAMP_LEVELS)}")
             kw["stamps"] = STAMP_LEVELS[v]
-        elif k in ("every", "marks"):
+        elif k in ("every", "marks", "cta_mod", "iter_mod", "dead_mod"):
             if not v.isdigit():
                 raise SpecError(f"{k} {v!r}: a whole number")
             kw[k] = int(v)
         elif k in ("evict_a", "evict_b"):
             kw[k] = v
         else:
-            raise SpecError(f"no instrument key {k!r} (stamps every marks evict_a evict_b)")
+            raise SpecError(f"no instrument key {k!r} (stamps every marks cta_mod iter_mod dead_mod "
+                            "evict_a evict_b)")
     if kw.get("stamps") == 2 and "marks" not in kw:
         kw["marks"] = DEFAULT_MARKS
     return InstrSpec(**kw)
@@ -127,9 +198,10 @@ def parse_spec(text: str) -> InstrSpec:
 # the stamp rows
 # --------------------------------------------------------------------------
 
-def decode(rows, marks: int = 0) -> dict:
+def decode(rows, marks: int = 0, mark_k=None) -> dict:
     """A [num_ctas, HDR + 2 marks] int64 array (numpy or nested lists) as named columns:
-    every header column, `iter_top` / `iter_end` [num_ctas, marks] (-1 where no stamp)."""
+    every header column, `iter_top` / `iter_end` [num_ctas, marks] (-1 where no stamp) and
+    `mark_k`, which k-iteration each mark column holds (the launch record's, else 0..marks-1)."""
     import numpy as np
     a = np.asarray(rows, dtype=np.int64)
     if a.ndim != 2 or a.shape[1] != HDR + 2 * marks:
@@ -137,6 +209,10 @@ def decode(rows, marks: int = 0) -> dict:
     out = {c: a[:, i] for i, c in enumerate(COLUMNS)}
     out["iter_top"] = a[:, HDR::2][:, :marks] if marks else np.zeros((len(a), 0), np.int64)
     out["iter_end"] = a[:, HDR + 1::2][:, :marks] if marks else np.zeros((len(a), 0), np.int64)
+    ks = list(range(marks)) if mark_k is None else [int(k) for k in mark_k]
+    if len(ks) != marks:
+        raise ValueError(f"{len(ks)} mark k values for {marks} marks")
+    out["mark_k"] = np.asarray(ks, dtype=np.int64)
     return out
 
 
@@ -184,6 +260,10 @@ class _Launcher:
 
     def __call__(self, *args, **kwargs):
         extra = self.spec.kernel_kwargs() if self.spec is not None else {}
+        lay = None
+        if self.spec is not None and self.spec.stamps:
+            lay = self.spec.layout(int(args[11]), int(kwargs.get("BLOCK_SIZE_K") or 0) or 1)
+            extra.update(lay["extra"])
         clash = sorted(set(extra) & set(kwargs))
         if clash:
             raise SpecError(f"the launch already passes {clash}: not upstream's call")
@@ -196,8 +276,9 @@ class _Launcher:
                  "BLOCK_SIZE_K": meta.get("BLOCK_SIZE_K"), "GROUP_SIZE_M": meta.get("GROUP_SIZE_M"),
                  "num_stages": meta.get("num_stages"), "num_warps": meta.get("num_warps"),
                  "MUL_ROUTED_WEIGHT": meta.get("MUL_ROUTED_WEIGHT"), "buffer": None}
-        if self.spec is not None and self.spec.stamps:
-            entry["buffer"] = self.alloc(ctas, self.spec.width, args[0])
+        if lay is not None:
+            entry["buffer"] = self.alloc(ctas, lay["width"], args[0])
+            entry.update(width=lay["width"], marks=lay["marks"], mark_k=lay["mark_k"])
             extra["stamps_ptr"] = entry["buffer"]
         self.rec.launches.append(entry)
         entry["top_k"] = meta.get("top_k")
@@ -229,6 +310,32 @@ class _Wrapper:
 def _torch_alloc(ctas: int, width: int, like):
     import torch
     return torch.full((ctas, width), -1, dtype=torch.int64, device=like.device)
+
+
+class BufferPool:
+    """Stamp buffers allocated and filled with -1 BEFORE the L2 flush (gate-fix diagnosis
+    item 4: a torch.full inside the call left 11 to 16 MB of dirty lines after the flush).
+    `reserve` makes one buffer per (ctas, width) a call's launches will ask for (read off an
+    earlier call's records), the caller then flushes and calls; the installer's alloc takes
+    them in order. A launch with no reserved buffer still gets one, counted in `late`."""
+
+    def __init__(self, make=_torch_alloc):
+        self.make, self.ready, self.late = make, [], 0
+
+    @staticmethod
+    def shapes(launches) -> list[tuple[int, int]]:
+        return [(int(r["ctas"]), int(r["width"])) for r in launches if r.get("width")]
+
+    def reserve(self, shapes, like) -> None:
+        self.ready = [((c, w), self.make(c, w, like)) for c, w in shapes]
+
+    def __call__(self, ctas: int, width: int, like):
+        for i, (shape, buf) in enumerate(self.ready):
+            if shape == (ctas, width):
+                del self.ready[i]
+                return buf
+        self.late += 1
+        return self.make(ctas, width, like)
 
 
 def _module(module):

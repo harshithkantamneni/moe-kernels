@@ -157,7 +157,8 @@ def test_the_plans_variants_pass_the_probes_own_checks(tmp_path):
     ("- prelude\n- perturb\nolmoe-1b-7b stamps label=s stamp-groups=8 stamp-treads=2 stamp-arms=all instr-stamps=cta\n",
      "stamp-arms all"),
     ("- prelude\nolmoe-1b-7b bytes label=b instr-evict-a=keep\n", "first, last or none"),
-    ("- prelude\nolmoe-1b-7b timed label=a block-k=32\n", "block-k belongs to a bytes unit (or a stamps unit), not timed"),
+    # rental 5 (S12) admits block-k and num-stages on timed units too
+    ("- prelude\nolmoe-1b-7b deep label=a block-k=32\n", "block-k belongs to a bytes unit (or a stamps or timed unit), not deep"),
 ])
 def test_rental4_keys_are_refused_off_their_step(tmp_path, body, why):
     f = tmp_path / "p.plan"

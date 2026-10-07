@@ -10,7 +10,22 @@ instruments the owner approved on 2026-10-06 (decision 5), each OFF by default:
       software pipeliner's peeled fill: the fill lands in iteration 0, and no source point
       separates it without changing the loop), the epilogue's start (after the loop, before
       the routed-weight load) and the end (after the final store); with STAMPS=2 also
-      clock64 at the top and the end of every STAMP_EVERY-th k-iteration.
+      clock64 at the top of every STAMP_EVERY-th k-iteration (and at its end too when
+      STAMP_EVERY is 1, the rental-4 layout); with STAMPS=3 ("ends") only the CTA start,
+      a dead CTA's exit and the end, so no stamp sits next to the k-loop; with STAMPS=4
+      ("sample", rental 5) the CTA start, a dead CTA's exit, the end and clock64 at the TOP
+      of k-iteration 0 and of every k with k mod STAMP_EVERY = STAMP_PHASE (the host sets
+      STAMP_PHASE = (S - 1) mod STAMP_EVERY, so the last iteration is always marked), each
+      only on sampled CTAs: a live CTA when pid mod STAMP_CTA_MOD is 0, its iteration tops
+      when also pid mod STAMP_ITER_MOD is 0, a dead CTA when pid mod STAMP_DEAD_MOD is 0
+      (every modulus 1 by default; the sampling is a runtime test inside a constexpr
+      STAMPS == 4 block, so levels 0 to 3 compile exactly as before).
+      Rental 4's perturbation gate (results/published/2026-10-07-*-rental4-session) found
+      that any stamp changes ptxas's whole-kernel register allocation (with per-CTA stamps
+      the PTX of the k-loop is unchanged; w2 at BK 64 s4: 55 -> 45 or 48 registers, 4 -> 5
+      CTAs per SM)
+      and that one clock64 + st.global per k-iteration costs 7.5 to 11% at equal
+      occupancy; levels 3 and STAMP_EVERY > 1 are the cadences proposed against that.
   (b) EVICTION HINTS. An `eviction_policy` on the A and B `tl.load` of the default
       path (not USE_TD, not SWAP_AB): "" (tl.load's own default), "evict_first" or
       "evict_last". Triton 3.7.1 DROPS it on pipelined loads (they lower to cp.async .ca /
@@ -104,6 +119,57 @@ def _stamp_iter(stamps_ptr, pid, STAMP_MARKS: tl.constexpr, STAMP_EVERY: tl.cons
             tl.store(row + STAMP_HDR + 2 * j + SIDE, c)
 
 
+@triton.jit
+def _sampled(pid, MOD: tl.constexpr):
+    if MOD == 1:
+        return pid >= 0
+    else:
+        return pid % MOD == 0
+
+
+@triton.jit
+def _sample_read():
+    # the CTA start's timers, held in registers: nothing is stored before the dead check
+    # (build-r5-review F1: a store there made every dead CTA write under DEAD_MOD 17's v2)
+    return _globaltimer(), _clock64(), _smid().to(tl.int64)
+
+
+@triton.jit
+def _sample_start(stamps_ptr, pid, STAMP_MARKS: tl.constexpr, MOD: tl.constexpr, t, c, sm):
+    # the start stamp of a CTA whose own path (live: CTA_MOD, dead: DEAD_MOD) samples it
+    if _sampled(pid, MOD):
+        row = _stamp_row(stamps_ptr, pid, STAMP_MARKS)
+        tl.store(row + 1, t)
+        tl.store(row + 2, c)
+        tl.store(row + 0, sm)
+
+
+@triton.jit
+def _sample_exit(stamps_ptr, pid, STAMP_MARKS: tl.constexpr, MOD: tl.constexpr,
+                 KIND: tl.constexpr):
+    if _sampled(pid, MOD):
+        _stamp_pair(stamps_ptr, pid, STAMP_MARKS, 7)
+        _stamp_kind(stamps_ptr, pid, STAMP_MARKS, KIND)
+
+
+@triton.jit
+def _sample_top(stamps_ptr, pid, STAMP_MARKS: tl.constexpr, STAMP_EVERY: tl.constexpr,
+                STAMP_PHASE: tl.constexpr, CTA_MOD: tl.constexpr, ITER_MOD: tl.constexpr, k):
+    # the slot rule of moe.instrumented.sample_slot: phase 0, k // every; else 0 for k = 0
+    # and 1 + k // every for k = phase (mod every)
+    if STAMP_PHASE == 0:
+        hit = k % STAMP_EVERY == 0
+        j = k // STAMP_EVERY
+    else:
+        hit = (k == 0) | (k % STAMP_EVERY == STAMP_PHASE)
+        j = tl.where(k == 0, 0, 1 + k // STAMP_EVERY)
+    if hit & _sampled(pid, CTA_MOD) & _sampled(pid, ITER_MOD):
+        if j < STAMP_MARKS:
+            c = _clock64()
+            row = _stamp_row(stamps_ptr, pid, STAMP_MARKS)
+            tl.store(row + STAMP_HDR + 2 * j, c)
+
+
 # ---- the two upstream functions, instrumented (lines marked # INSTR are the instruments) ----
 
 @triton.jit
@@ -185,11 +251,15 @@ def fused_moe_kernel(
     USE_TD: tl.constexpr = False,
     # INSTRUMENTATION (moe-kernels, rental 4), every parameter off by default:  # INSTR
     stamps_ptr=None,  # INSTR int64 [num_ctas, STAMP_HDR + 2 * STAMP_MARKS], or None
-    STAMPS: tl.constexpr = 0,  # INSTR 0 off, 1 per CTA, 2 per CTA and per k-iteration
+    STAMPS: tl.constexpr = 0,  # INSTR 0 off, 1 per CTA, 2 per CTA and per k-iteration, 3 CTA ends only
     STAMP_EVERY: tl.constexpr = 1,  # INSTR an iteration mark every N k-iterations
     STAMP_MARKS: tl.constexpr = 0,  # INSTR iteration marks a row holds
     EVICT_A: tl.constexpr = "",  # INSTR eviction_policy of the A load ("" is tl.load's default)
     EVICT_B: tl.constexpr = "",  # INSTR eviction_policy of the B load
+    STAMP_PHASE: tl.constexpr = 0,  # INSTR sample level: the marked k's residue, (S - 1) mod STAMP_EVERY
+    STAMP_CTA_MOD: tl.constexpr = 1,  # INSTR sample level: a live CTA is stamped when pid mod this is 0
+    STAMP_ITER_MOD: tl.constexpr = 1,  # INSTR sample level: its iteration tops when also pid mod this is 0
+    STAMP_DEAD_MOD: tl.constexpr = 1,  # INSTR sample level: a dead CTA is stamped when pid mod this is 0
 ):
     """
     Implements the fused computation for a Mixture of Experts (MOE) using
@@ -224,8 +294,10 @@ def fused_moe_kernel(
     # Map program ids `pid` to the block of C it should compute.
     # This is done in a grouped ordering to promote L2 data reuse.
     pid = tl.program_id(axis=0)
-    if STAMPS >= 1:  # INSTR CTA start, before the dead check
+    if STAMPS >= 1 and STAMPS <= 3:  # INSTR CTA start, before the dead check
         _stamp_start(stamps_ptr, pid, STAMP_MARKS)  # INSTR
+    if STAMPS == 4:  # INSTR CTA start, read into registers (sample level; stored past the dead check)
+        s4_t, s4_c, s4_sm = _sample_read()  # INSTR
     num_pid_m = tl.cdiv(EM, BLOCK_SIZE_M)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
     num_pid_in_group = GROUP_SIZE_M * num_pid_n
@@ -244,10 +316,15 @@ def fused_moe_kernel(
     offs = tl.arange(0, BLOCK_SIZE_M).to(tl.int64)
     num_tokens_post_padded = tl.load(num_tokens_post_padded_ptr)
     if pid_m * BLOCK_SIZE_M >= num_tokens_post_padded:
-        if STAMPS >= 1:  # INSTR a dead CTA's exit
+        if STAMPS >= 1 and STAMPS <= 3:  # INSTR a dead CTA's exit
             _stamp_pair(stamps_ptr, pid, STAMP_MARKS, 7)  # INSTR
             _stamp_kind(stamps_ptr, pid, STAMP_MARKS, 2)  # INSTR
+        if STAMPS == 4:  # INSTR a dead CTA's start and exit, sampled by STAMP_DEAD_MOD
+            _sample_start(stamps_ptr, pid, STAMP_MARKS, STAMP_DEAD_MOD, s4_t, s4_c, s4_sm)  # INSTR
+            _sample_exit(stamps_ptr, pid, STAMP_MARKS, STAMP_DEAD_MOD, 2)  # INSTR
         return
+    if STAMPS == 4:  # INSTR a live CTA's start, sampled by STAMP_CTA_MOD
+        _sample_start(stamps_ptr, pid, STAMP_MARKS, STAMP_CTA_MOD, s4_t, s4_c, s4_sm)  # INSTR
     if not naive_block_assignment:
         offs_token_id = pid_m * BLOCK_SIZE_M + offs
         offs_token = tl.load(sorted_token_ids_ptr + offs_token_id)
@@ -360,11 +437,13 @@ def fused_moe_kernel(
         accumulator = tl.zeros((BLOCK_SIZE_N, BLOCK_SIZE_M), dtype=tl.float32)
     else:
         accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
-    if STAMPS >= 1:  # INSTR the prologue's end, before the k-loop
+    if STAMPS == 1 or STAMPS == 2:  # INSTR the prologue's end, before the k-loop
         _stamp_pair(stamps_ptr, pid, STAMP_MARKS, 3)  # INSTR
     for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
-        if STAMPS >= 2:  # INSTR the top of k-iteration k
+        if STAMPS == 2:  # INSTR the top of k-iteration k
             _stamp_iter(stamps_ptr, pid, STAMP_MARKS, STAMP_EVERY, k, 0)  # INSTR
+        if STAMPS == 4:  # INSTR the top of k-iteration k, phase-aligned and sampled
+            _sample_top(stamps_ptr, pid, STAMP_MARKS, STAMP_EVERY, STAMP_PHASE, STAMP_CTA_MOD, STAMP_ITER_MOD, k)  # INSTR
         # Load the next block of A and B, generate a mask by checking the
         # K dimension.
         if USE_TD:
@@ -418,12 +497,12 @@ def fused_moe_kernel(
             # Advance the ptrs to the next K block.
             a_ptrs += BLOCK_SIZE_K * stride_ak
             b_ptrs += BLOCK_SIZE_K * stride_bk
-        if STAMPS >= 2:  # INSTR the end of k-iteration k
+        if STAMPS == 2 and STAMP_EVERY == 1:  # INSTR the end of k-iteration k (no readout uses it past every=1)
             _stamp_iter(stamps_ptr, pid, STAMP_MARKS, STAMP_EVERY, k, 1)  # INSTR
 
     if SWAP_AB:
         accumulator = tl.trans(accumulator, (1, 0))
-    if STAMPS >= 1:  # INSTR the epilogue's start, before the routed-weight load
+    if STAMPS == 1 or STAMPS == 2:  # INSTR the epilogue's start, before the routed-weight load
         _stamp_pair(stamps_ptr, pid, STAMP_MARKS, 5)  # INSTR
 
     # Dequantization for supported quantization schemes:
@@ -465,7 +544,9 @@ def fused_moe_kernel(
     c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[None, :]
     c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
     tl.store(c_ptrs, accumulator, mask=c_mask)
-    if STAMPS >= 1:  # INSTR after the final store
+    if STAMPS >= 1 and STAMPS <= 3:  # INSTR after the final store
         _stamp_pair(stamps_ptr, pid, STAMP_MARKS, 7)  # INSTR
         _stamp_kind(stamps_ptr, pid, STAMP_MARKS, 1)  # INSTR
+    if STAMPS == 4:  # INSTR after the final store, sampled
+        _sample_exit(stamps_ptr, pid, STAMP_MARKS, STAMP_CTA_MOD, 1)  # INSTR
 

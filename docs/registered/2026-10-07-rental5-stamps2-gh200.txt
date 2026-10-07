@@ -1,0 +1,217 @@
+REGISTERED 2026-10-07, before any rental-5 page: rental 5, 2026-10-07-rental5-stamps2-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r5 DESIGN.md part 3 (3.1 gate, cadences, variants; 3.2 readouts, rivals, rules) with design-r5-review REVIEW.md section e (regcheck moved before any timed unit; pid mod 17; live-CTA sampling needs the owner; a deterministic variant rule; kappa's error with d's; a minimum per R(j) bin) and the owner's decision 2 of 2026-10-07 (live and dead CTA sampling at 1 in 17 approved; the gate below)
+tool: scripts/instr_probe.py --mode regcheck, --mode perturb, --mode stamps; scorer scripts/scoring/rental5/score_stamps2.py
+
+variants (first passing regcheck and perturb, per unit):
+  v1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1
+  v2: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17
+  v3: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17
+R(j) rivals, cycles per k-step at BK 64 s4: {"1": {"MVA2": 591.7, "LK": 350.5, "PS": 344.1, "OCC": 502.0}, "2": {"MVA2": 786.0, "LK": 700.9, "PS": 688.2, "OCC": 804.0}, "3": {"MVA2": 1051.9, "LK": 1051.4, "PS": 1032.3, "OCC": 1106.0}, "4": {"MVA2": 1364.7, "LK": 1401.8, "PS": 1376.4, "OCC": 1408.0}, "5": {"MVA2": 1697.0, "LK": 1752.3, "PS": 1720.5, "OCC": 1710.0}}
+Delta_epi rivals: {"NEAR": 260.6, "FAR": 470.3, "DRAM": 592.4}
+
+instrument:
+  copy: moe/instrumented/fused_moe_instr.py: gate-fix.patch (level 3 'ends', the iteration end mark only at every = 1) plus level 4 'sample', the only kernel change: STAMPS == 4 blocks and constexpr sampling, no tiling or scheduling logic
+  sample_level: the CTA start, a dead CTA's exit, the end, and clock64 at the TOP of k-iteration 0 and of every k with k mod 16 = (S - 1) mod 16 (STAMP_PHASE, set per launch from K and BLOCK_K), so the last iteration S - 1 is always marked; no prologue, epilogue or end-of-iteration site
+  sampling: constexpr moduli: a live CTA is stamped when pid mod STAMP_CTA_MOD is 0, its iteration tops when also pid mod STAMP_ITER_MOD is 0, a dead CTA when pid mod STAMP_DEAD_MOD is 0; every modulus 1 by default (levels 0 to 3 compile as before). pid mod 17, never 16: under the GROUP_M swizzle pid mod 16 = 0 stamps only pid_m offset 0 of every group, the slab-leading CTAs (design-r5-review work/sample_bias.txt)
+  buffer: every stamp buffer is allocated and filled with -1 BEFORE the L2 flush (moe.instrumented.BufferPool; gate-fix diagnosis item 4)
+  mark_k:
+    mixtral-8x22b: {"w1": {"S": 96, "S_prime": 97.512, "npn": 512, "mark_k": [0, 15, 31, 47, 63, 79, 95]}, "w2": {"S": 256, "S_prime": 258.846, "npn": 96, "mark_k": [0, 15, 31, 47, 63, 79, 95, 111, 127, 143, 159, 175, 191, 207, 223, 239, 255]}}
+    mixtral-8x7b: {"w1": {"S": 64, "S_prime": 65.512, "npn": 448, "mark_k": [0, 15, 31, 47, 63]}, "w2": {"S": 224, "S_prime": 226.846, "npn": 64, "mark_k": [0, 15, 31, 47, 63, 79, 95, 111, 127, 143, 159, 175, 191, 207, 223]}}
+    olmoe-1b-7b: {"w1": {"S": 32, "S_prime": 33.512, "npn": 32, "mark_k": [0, 15, 31]}, "w2": {"S": 16, "S_prime": 18.846, "npn": 32, "mark_k": [0, 15]}}
+cadences:
+  cta: CTA start and end (and a dead CTA's exit)
+  iteration: a 1-in-16 iteration sample (tops only)
+  sample_level: the phase-aligned sample level above, which is what F2 and K2 need (the last iteration's top)
+variants:
+  texts:
+    v1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1
+    v2: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17
+    v3: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17
+  V1: the sample level on every CTA
+  V2: ends on every live CTA; iteration tops and dead CTAs 1 in 17
+  V3: everything on 1 in 17 CTAs (live-CTA sampling approved by the owner, decision 2 of 2026-10-07)
+  choice_rule: per unit, the FIRST of its listed variants (in the listed order) whose regcheck line (regcheck.env REGCHECK_<id>=PASS) AND perturbation gate line (gate.env GATE_<id>=PASS) both read PASS; deterministic. The driver records the chosen id and spec text in the unit's directory (CHOSEN_VARIANT.txt) and the manifest (stamps.json) carries the spec text; the scorer recomputes the choice off the two env files and refuses a unit whose chosen variant differs, or whose manifest spec differs from its variant's
+  per_unit:
+    stf: ["v1", "v2", "v3"]
+    stt8x22: ["v1", "v2"]
+    stt: ["v1", "v2"]
+    std4: ["v2", "v3"]
+    std2: ["v2", "v3"]
+  readout_needs: R(j) needs every live CTA's start and end on its SM (residency): V1 or V2 only; under V3 K2's R(j) is NOT SCORED and only R(occ) is read
+gate:
+  regcheck: scripts/instr_probe.py --mode regcheck, compile only, IMMEDIATELY after calibrate and before any timed unit (review e1): per variant, the all-off copy and the variant's own spec at the plain kernel's CTAs per SM on every config (registers and shared printed, not gating)
+  perturb: median |plain / copy - 1| <= 1%, worst <= 2% over the variant's (cell, GEMM) ratios; CTAs per SM identical to the plain kernel's on every paired config (registers printed: ptxas reallocates the whole kernel around any stamp, gate-fix diagnosis item 2); the all-off copy's SASS equal to the plain kernel's; the installed vLLM fused_moe.py upstream's
+  tolerance:
+    median_max: 0.01
+    worst_max: 0.02
+    occupancy: identical CTAs per SM
+  use: a stamps unit runs only on its chosen variant, with both lines PASS; no variant passing: the unit is not run (NOT SCORED, the gate numbers printed)
+  priors:
+    V1: about 1.0 to 1.4%, likely FAIL
+    V2: about 0.8 to 1.2%, borderline
+    V3: about 0.1 to 0.2%, likely PASS
+    basis: gate-fix.patch's cadence table, scaled from rental 4's measured per-site costs; ESTIMATES, not measured
+sass_precondition:
+  rule: r4common.sass_precondition on the unit's own SASS, per block: F2 and D2 a clock read before the first LDG (num_tokens) on both GEMMs; K2 at least 2 clock reads inside the k-loop; else NOT SCORED (the sample level has no epilogue stamp, so F2 needs no epi bracket)
+  blocks:
+    F2: D
+    K2: K
+    D2: D
+units:
+  stf:
+    model: mixtral-8x7b
+    G: 8
+    treads: [2, 4, 6]
+    arms: ["native"]
+    num_stages: 4
+    blocks: ["F2", "K2"]
+    drop_group: st
+    variants: ["v1", "v2", "v3"]
+  stt8x22:
+    model: mixtral-8x22b
+    G: 8
+    treads: [1]
+    arms: ["native"]
+    num_stages: 4
+    blocks: ["K2"]
+    drop_group: stt
+    depends: st
+    variants: ["v1", "v2"]
+  stt:
+    model: mixtral-8x7b
+    G: 8
+    treads: [1, 2]
+    arms: ["native"]
+    num_stages: 4
+    blocks: ["K2"]
+    drop_group: stt
+    depends: st
+    variants: ["v1", "v2"]
+  std4:
+    model: olmoe-1b-7b
+    G: 8
+    treads: [2, 4]
+    arms: ["native", "shared"]
+    num_stages: 4
+    blocks: ["D2"]
+    drop_group: std
+    depends: st
+    variants: ["v2", "v3"]
+  std2:
+    model: olmoe-1b-7b
+    G: 8
+    treads: [2, 4]
+    arms: ["native", "shared"]
+    num_stages: 8
+    blocks: ["D2"]
+    drop_group: std
+    depends: st
+    variants: ["v2", "v3"]
+F2:
+  units:
+    - stf
+  delta_epi:
+    readout: epi = end - top(S - 1) - T_iter per live CTA, T_iter = (top(S - 1) - top(previous mark)) / (k gap); median over live CTAs per launch; Delta_epi = median over n of [epi(w2) - epi(w1)], cycles
+    rivals_cycles: {"NEAR": 260.6, "FAR": 470.3, "DRAM": 592.4}
+    rivals_source: NEAR and FAR: rental 4's own gpubench on the board it ran (152.4 and 275.0 ns, SEEN, results/published 2026-10-07 rental4 gpubench-r4 constants.json), DRAM: RRZE's published GH200 346.4 ns (SEEN third-party, gpubench read no DRAM plateau); each x 1.710
+    rule: r4common.nearest (linear), half-gap
+  t_fix:
+    readout: T_fix,g = median over STEADY-WAVE live CTAs (start order past the first wave of 132 x occ_g and before the final partial wave) of [lifetime - S_g T_iter,g], lifetime = end - start, cycles
+    rivals_cycles: {"w1": {"PS": 2600.0, "LAT": 520.0}, "w2": {"PS": 3916.0, "LAT": 979.0}}
+    rivals_basis: PS: F is shared work, so a CTA among occ pays occ F (occ 5 / 4); LAT: F is exposed latency, paid once (F_w1 520, F_w2 979 clk, CAL counters, CTA_FIXED_KSTEPS)
+    rule: r4common.nearest in log space (a 4 to 5x gap)
+  printed: the prologue is not stamped at this level (none is read)
+K2:
+  units:
+    - stt8x22
+    - stt
+    - stf
+  readout: R = (top(k + 16) - top(k)) / 16 cycles per k-step on every 16-step window of every stamped live CTA (the tail wave's CTAs give j < occ, the steady waves j = occ), binned by j = round(the time-averaged number of live CTAs resident on the same smid over that window, the CTA itself included), from every live CTA's start and end stamps (clock64 is per SM); R(j) = the median per bin, both GEMMs pooled (BK 64 on both)
+  rivals_cycles:
+    1: {"MVA2": 591.7, "LK": 350.5, "PS": 344.1, "OCC": 502.0}
+    2: {"MVA2": 786.0, "LK": 700.9, "PS": 688.2, "OCC": 804.0}
+    3: {"MVA2": 1051.9, "LK": 1051.4, "PS": 1032.3, "OCC": 1106.0}
+    4: {"MVA2": 1364.7, "LK": 1401.8, "PS": 1376.4, "OCC": 1408.0}
+    5: {"MVA2": 1697.0, "LK": 1752.3, "PS": 1720.5, "OCC": 1710.0}
+  rivals_basis: R(j) = j c_law(BK 64, s4, j) with rental 4's registered law parameters (MVA2 closed queue at N = j; LK; PS = the model's CORES g(k) = k; OCC c0 + lam / j), SEEN-fitted or CAL per law (docs/registered/2026-10-06-rental4-occlaw-gh200); design-r5/work/rj_pred.txt
+  sync_cost: Z = R(1) - R(occ) / occ, printed
+  classes:
+    PS~LK: ["PS", "LK"]
+    MVA2: ["MVA2"]
+    OCC: ["OCC"]
+  rule: r4common.nearest (linear) at j = 1; a class is SELECTED when it is nearest at j = 1 and within 3% at j = 2 and at occ; PS and LK are one class (1.8% apart); MVA2 and OCC separate at j = 1 only (18%); else UNDECIDED
+  bin_minimum: a bin with fewer than 30 distinct stamped CTAs (not windows: one CTA gives many windows) is NOT SCORED (review e7, build-r5-review F7)
+  bin_minimum_ctas: 30
+  band: 0.03
+  occ_bins:
+    - 4
+    - 5
+  occ_z: 5
+  occ_note: the occupancy bins j = 4 and 5 (w2 and w1 at BK 64 s4) and Z = R(1) - R(5) / 5 are registered here; the scorer reads them
+  tail_ctas:
+    stt8x22 n1 w1: {"live": 4096, "wave": 660, "tail_ctas": 136, "sampled_1_in_17": 8}
+    stt8x22 n1 w2: {"live": 768, "wave": 528, "tail_ctas": 240, "sampled_1_in_17": 14}
+    stt n1 w1: {"live": 3584, "wave": 660, "tail_ctas": 284, "sampled_1_in_17": 16}
+    stt n1 w2: {"live": 512, "wave": 528, "tail_ctas": 512, "sampled_1_in_17": 30}
+    stt n2 w1: {"live": 7168, "wave": 660, "tail_ctas": 568, "sampled_1_in_17": 33}
+    stt n2 w2: {"live": 1024, "wave": 528, "tail_ctas": 496, "sampled_1_in_17": 29}
+    stf n2 w1: {"live": 7168, "wave": 660, "tail_ctas": 568, "sampled_1_in_17": 33}
+    stf n2 w2: {"live": 1024, "wave": 528, "tail_ctas": 496, "sampled_1_in_17": 29}
+    stf n4 w1: {"live": 14336, "wave": 660, "tail_ctas": 476, "sampled_1_in_17": 28}
+    stf n4 w2: {"live": 2048, "wave": 528, "tail_ctas": 464, "sampled_1_in_17": 27}
+    stf n6 w1: {"live": 21504, "wave": 660, "tail_ctas": 384, "sampled_1_in_17": 22}
+    stf n6 w2: {"live": 3072, "wave": 528, "tail_ctas": 432, "sampled_1_in_17": 25}
+  tail_printed_only:
+    - stt8x22 n1 w1
+    - stt8x22 n1 w2
+    - stt n1 w1
+    - stt n2 w2
+    - stf n2 w2
+    - stf n4 w1
+    - stf n4 w2
+    - stf n6 w1
+    - stf n6 w2
+  tail_rule: under a variant with iter_mod 17 (v2) the tail bins (j < 4) of every (unit, n, GEMM) whose registered sampled tail count (tail_ctas[].sampled_1_in_17) is under 30 are PRINTED ONLY, never scored: stt8x22 n1 w1, stt8x22 n1 w2, stt n1 w1, stt n2 w2, stf n2 w2, stf n4 w1, stf n4 w2, stf n6 w1, stf n6 w2; at 1 in 17 those tails cannot reach 30 CTAs, so their j < occ reading needs v1; the other launches' tails are counted under the 30-CTA minimum
+  variants: R(j < occ) exists under V1 and V2 only (residency needs every live CTA's start and end); under V3 only R(occ) is read and the class rule is NOT SCORED
+  prior: the rental-1 counters' g_w1(1) = 0.76 (SEEN) is the PS-side prior
+  bk128: MVA2's Z is 0 at BK 128: no lever there, no BK 128 K unit
+D2:
+  units:
+    - std4
+    - std2
+  occupancy:
+    std4: {"w1": 5, "w2": 4}
+    std2: {"w1": 2, "w2": 2}
+  life:
+    readout: median over sampled dead CTAs of end - start, cycles
+    rivals_cycles: {"FAST": 150.0, "MIX": 451.0, "DRAM": 667.4}
+    rule: r4common.nearest (linear), as rental 4
+  dispatch:
+    readout: SHARED cells: the sampled dead CTAs that start after the last stamped live CTA ends; (max - min of their start globaltimer) / (count - 1) / 17 (consecutive sampled dead CTAs are 17 pids apart), ns per dead CTA
+    admission: at least 100 sampled dead CTAs over at least 20 globaltimer ticks, else NOT SCORED
+    rivals_ns: {"2": {"DISP": 0.995, "MIX": 1.53, "SLOT": 2.025}, "5": {"DISP": 0.995, "MIX": 0.93, "SLOT": 0.81}, "4": {"DISP": 0.995, "MIX": 1.03, "SLOT": 1.012}}
+    rule: r4common.nearest (linear) at the GEMM's own occupancy; at occupancy 5 and 4 they read BETWEEN by design; per-GEMM d (Dg) printed
+    cta_mod_rule: dispatch and kappa are NOT SCORED when the unit's variant samples live CTAs (cta_mod != 1, v3): the last live end is then read off sampled CTAs only, which biases both (build-r5-review F2); life is still scored
+  hiding:
+    readout: kappa_meas = 17 N_hid,sampled d_meas / (occ S' c): N_hid,sampled the sampled dead CTAs that start BEFORE the last live end, d_meas the dispatch readout of the same GEMM (ns), S' = S + PHI (r3_timing_model.floor_ksteps), c = 202.547644 ns per k-step (CAL, 8x7B fit)
+    rivals: {"D": 0.325, "D2": 0.3, "SLOT": 0.245, "K5": 0.5, "K0": 0.0}
+    error: sigma_kappa = kappa sqrt(1 / N_hid,sampled + 0.05^2): binomial AND d_meas's error (review e6); at the design's 11,000 hidden OLMoE w1 dead CTAs (647 sampled) that is +-0.021
+    kappa_source: the only kappa reading of rental 5: the tp2 lever (9 against 32 copies) was CUT by the owner on 2026-10-07
+    rule: nearest (linear); SELECTED only when the second-nearest rival is at least 2 sigma_kappa from the reading, else NOT SEPARATED (nearest and second named); D against D2 is printed NOT SEPARATED whatever the reading (0.025 apart, about 1 sigma)
+    S_prime: {"w1": 33.512, "w2": 18.846}
+    c_ns: 202.547644
+    d_rel_err: 0.05
+    sample_mod: 17
+    separation_sigma: 2.0
+secondary: calibration line and gamma: NOT APPLICABLE on every block here (fewer than 3 predicted values per block: Delta_epi, T_fix, R(j), life, dispatch, kappa); top-1 regret NOT APPLICABLE (one tile)
+missing: a unit with no stamps.json, no PASS variant or a variant mismatch is NOT SCORED; drop-groups st (perturb, stf), stt and std (both depend on st)
+labels:
+  stf: BLIND-CALMODEL (a CAL model; no stamp page of this kernel exists)
+  stt8x22: BLIND-CALMODEL (a CAL model; no stamp page of this kernel exists)
+  stt: BLIND-CALMODEL (a CAL model; no stamp page of this kernel exists)
+  std4: BLIND-CALMODEL (a CAL model; no stamp page of this kernel exists)
+  std2: BLIND-CALMODEL (a CAL model; no stamp page of this kernel exists)
+seen_data:
+  - every rival constant is SEEN: F_w1 520 / F_w2 979 and c 202.55 ns CAL; the k-step law parameters SEEN-fitted (rental 4 occlaw); NEAR / FAR SEEN (rental 4's gpubench); DRAM SEEN third-party (RRZE); MIX's d0 0.53 ns and L 264 ns SEEN-fitted; D's d 0.995 / kappa 0.325 CAL-counters (4 models); D2 SEEN-fitted on 16 GEMMs; SLOT's t 4.05 ns CAL refit
+  - no stamp page exists: rental 4's gate failed every stamped config and published none

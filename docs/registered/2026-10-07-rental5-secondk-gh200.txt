@@ -1,0 +1,66 @@
+REGISTERED 2026-10-07, before any rental-5 page: rental 5, 2026-10-07-rental5-secondk-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r5 DESIGN.md part 4b with REVIEW.md section (f) (H_ITER and H_CTA stay separated even if F at S = 5 is off by 50%); second K placed ABOVE BK 128 in the plan
+tool: scorer scripts/scoring/rental5/score_secondk.py; r4common.page_c
+
+predicted u(k32)/u(k64): w1 H_ITER 1.4056 H_CTA 1.2318 (gap 14.1%); w2 H_ITER 1.2308 H_CTA 1.7386 (gap 29.2%)
+
+pages:
+  path: <date>-<card>-qwen2-57b-a14b-tp8-<label>-r3-counters/lock1710/r3c-g64.json
+  labels:
+    k64s4: [64, 4]
+    k32s4: [32, 4]
+  design_check: each page's design (block_k, num_stages) must equal its label's; else NOT SCORED
+  k_note: w2 K = 320 at BK 32 is 10 whole k-steps (at BK 64, 5), so neither page is refused
+statistic:
+  c_page: per (page, GEMM) c by r4common.page_c over NATIVE and SHARED cells n = 4..9 at DRAM <= 0.5 x 4022 GB/s, F held at CAL (w1 520, w2 979 clk); fewer than 3 cells: NOT SCORED
+  r_meas: u(k32) / u(k64), u = S c + F
+  e: r_meas / r_pred - 1 per hypothesis
+inputs:
+  c64:
+    w1: 346.2
+    w2: 344.0
+  c32:
+    w1: 245.2
+    w2: 234.3
+  K_olmoe:
+    w1: 2048
+    w2: 1024
+  F_cal:
+    w1: 520.0
+    w2: 979.0
+  label: c64 / c32 SEEN (OLMoE rental-4 B' counter pages, SCORES.md); F CAL (r3_timing_model CTA_FIXED_KSTEPS)
+hypotheses:
+  H_ITER: the BK 32 excess is per k-step: u(k32) = S32 c32 + F
+  H_CTA: the same excess is per CTA: u(k32) = S32 c64 / 2 + F + dF, dF = (c32 - c64/2) x OLMoE's BK-32 steps
+predicted_ratio:
+  w1:
+    K: 3584
+    S64: 56
+    S32: 112
+    H_ITER: 1.405642
+    H_CTA: 1.231796
+    dF_cycles: 4614.4
+    gap_pct: 14.113272
+  w2:
+    K: 320
+    S64: 5
+    S32: 10
+    H_ITER: 1.230826
+    H_CTA: 1.738644
+    dF_cycles: 1993.6
+    gap_pct: 29.207689
+rules:
+  per_gemm: the nearer hypothesis within 3% (|e| <= 3%) is that GEMM's reading; both beyond 3%: NEITHER
+  verdict: SELECTED <H> when both GEMMs read the same H; else UNDECIDED (the readings printed)
+  noise: counter noise about 0.3% against gaps of 14% (w1) and 29% (w2)
+gates: the counter page's V-gates by rental 2's two views; V6, V7 and V10 do not gate (cycles are read per GEMM)
+missing: a page missing or out of the view: NOT SCORED; the drop-group k2 keeps the pair together
+labels:
+  k64s4: SEEN (rental 3's qwen2-57b-a14b-tp8 G = 64 floor pages ran k64s4)
+  k32s4: BLIND
+secondary: r5common.secondary on (r_pred of the selected-or-nearest H, r_meas): NOT APPLICABLE below 3 values
+seen_data:
+  - c64, c32 are SEEN (OLMoE rental 4)
+  - F is CAL
+  - the k64s4 configuration is SEEN on this model; k32s4 is BLIND

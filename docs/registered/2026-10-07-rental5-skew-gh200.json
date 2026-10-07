@@ -1,0 +1,7210 @@
+{
+ "registered": "2026-10-07, before any rental-5 page",
+ "name": "2026-10-07-rental5-skew-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r5 DESIGN.md part 2 corrected by design-r5-review REVIEW.md (b, c, d, g, h; owner item 1's G3 text verbatim) and the owner's decisions of 2026-10-07 (1 G3 TOST + cluster-t + Cochran Q, permutation cells; 3 SYNTHETIC histograms fitted to the traces' statistics, published openly)",
+ "tool": "scorer scripts/scoring/rental5/score_skew.py; predictions scripts/scoring/rental5/skewmodel.py (r3_timing_model MODEL M2, wave_split_bytes MODEL M3) and reg_skew.py; histograms scripts/skew_synth.py",
+ "model": {
+  "S": "model v2 (docs/registered/2026-10-07-rental5-v2-gh200) with MODEL M2 (r3_timing_model.schedule with counts: live rows sum_e ceil(c_e / 32), owner = the expert whose tile range holds pid_m, A share per actual rows, grid_rows and dead_ctas from numel, B_OTHER proportional to numel) and MODEL M3 (wave_split_bytes.walk with counts: the per-expert owner in the walk and in each group's working set, stack_distance on each group's distinct owners, equal to an exact LRU walk (tests); A re-reads weighted by their tile's rows; no closed form)",
+  "U": "skew ignored: priced at the uniform histogram of the same tokens; r_U = 1",
+  "LT": "S without the last wave's quantisation (wave_q = 1): the close rival (review d)",
+  "PW": "S plus each expert's CTAs quantised to their own waves (the grouped-GEMM view), applied to every cell including uniform and balanced, so r_PW is its own ratio",
+  "M1": "S under model M's dead term (DEAD_CTA_NS 1.333, k_w 0.5), printed only",
+  "NATIVE_bytes": "NATIVE's bytes are SHARED's walk (the byte model has no dead-CTA term), as in every cross-model registration",
+  "source": {
+   "timing_fit_v2": {
+    "T0": 0.04323024982488314,
+    "c": 202.54764415793517,
+    "bw": 3597.800853079132,
+    "s_small": 0.012986935170298423,
+    "s_block": -0.0070686230486082914
+   },
+   "timing_fit_m": {
+    "T0": 0.04424120842779277,
+    "c": 202.54764415801023,
+    "bw": 3597.8008530665534,
+    "s_small": 0.011975976562022109,
+    "s_block": -0.008079581651752444
+   },
+   "k_w": 0.5,
+   "p_knee": 14.0,
+   "sms": 132,
+   "occupancy": {
+    "w1": 5,
+    "w2": 4
+   },
+   "clock_mhz": 1710.0,
+   "timing_pages": [
+    "04d9320b",
+    "e20972ef",
+    "8ab16728",
+    "848523de",
+    "2085264b"
+   ],
+   "dead_v2": {
+    "d_ns": 0.995,
+    "kappa": 0.325
+   },
+   "byte_view": "mix",
+   "byte_params": {
+    "C_A": 138.48020407774175,
+    "beta_A": 1.2664978352827505,
+    "theta1_A": 1.7147270423859942e-07,
+    "C_B": 72.52141980445369,
+    "beta_B": 1.3239898646683528,
+    "theta1": 0.19674854776229564,
+    "eps1_w1": 1.1265901074698326e-08,
+    "eps1_w2": 0.10273998149024145,
+    "view": "mix",
+    "C_A2": 86.17989278767973,
+    "beta_A2": 1.4761302885910965
+   },
+   "byte_card": "nvidia_gh200_480gb",
+   "byte_pages": [
+    "r3c-g1.json",
+    "r3c-g16.json",
+    "r3c-g2.json",
+    "r3c-g3.json",
+    "r3c-g32.json",
+    "r3c-g4.json",
+    "r3c-g64.json",
+    "r3c-g8.json"
+   ]
+  }
+ },
+ "histograms": {
+  "synthetic": "SYNTHETIC (owner decision 3): Zipf / Dirichlet shapes fitted by scripts/skew_synth.py to summary statistics (cv, max/mean, Gini) of three public routing logs, drawn from registered seeds; no trace-derived count is in the repository or on the VM; the pages are published openly",
+  "files": {
+   "mixtral-8x7b-A.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json",
+    "sha256": "9cc371ef8a155b63243acf275d99c7e1f744dec6326397d2886a3d997f6ccde4",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "86b8e89af5abe84c41ae597a6c2dc9ecd17f66220b45234bdb64365f9266814d"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "b6d879d542d49fa5f12c8e022e67da659fc6753acb5622226663d85c86d261cc"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be"
+     },
+     {
+      "label": "PW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 8,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 8,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "8bb16ba92b471f5a466707f788923ddfa85d55019c880d4c5855828d1acf98eb"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "7e7e0278080e7382fae71d66467e66952c8815743264c98adbd26062bf2a6525"
+     },
+     {
+      "label": "PW",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "fd052ec9bd9a64e23c038c4ac5de34cac50116b39284842043973f51e7e03dcc"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 32,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "845b09fcf88f7b8b94765271d32e81869e0bb5038ccebec0726a740138c1919a"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 32,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "3e82eaf00c7f6894b804569a216e92be2cd82132ca251c7241ffd722eb3c13d8"
+     },
+     {
+      "label": "uniform",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b"
+     },
+     {
+      "label": "balanced",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-B.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json",
+    "sha256": "98946f4a9022529ba3797559a09cc0e411832d9d02e7cf2ffb9e05c81941170c",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "DW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "2e257996efe4c023fd5747d7305efa46c25381e0eb9922a05e940db482a4e431"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "94f25a359c1fc6ad79fd045e50cf48d2644cc3c1b1d44ae7ec38c8abebcdea29"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "603c4c43c22333ff1d477c68718f0db0cdf4f71759dd131490ef1d729595d05d"
+     },
+     {
+      "label": "uniform",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b"
+     },
+     {
+      "label": "balanced",
+      "n": 32,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-C.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json",
+    "sha256": "4123ee42da8695584b9ce4f153a324f7a3861a49999af9cbb084cfd32622ca6c",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be"
+     },
+     {
+      "label": "PW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-A.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json",
+    "sha256": "4799007c7c773a2ac5bdb7f6b2ad6303b78a2d0a030b97afdb31608d67b236bf",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "4c50bf325b5768b8546f821e5f8d8da99fd1631d769d5f1dfae1259cf6a7fc3d"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "00e88a3cb14775eb1408e896dcce4bf1d0f362a1ab426b68633200adbb02b553"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 4,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "41112903d3eba2040246c0748593d9e4578dee42b397b35adad86093d544e3e5"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 4,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "1fa85412daae9ae22211cc5606c47a3157920f2636e5236a62c55c3a7aa2ee9b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "4ddb7492ac3858aa59851eadbca3582977c80b2693a9378fc4107fa8cedfabb7"
+     },
+     {
+      "label": "PW",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "76d48b57c63105222cf81d57be1b9348c794d0e05b41764bc25b9bf4c8da4516"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "ae94602987e04d101824013c8a76c3884879a89facb82a6586d8dc38ae6dbb01"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "30684dbb7033f0242edbc401782e0b59948c1387d7bbad0a9257c22639673af4"
+     },
+     {
+      "label": "uniform",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b"
+     },
+     {
+      "label": "balanced",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-B.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json",
+    "sha256": "44ae712688534abfc4b2fc4341597374492a6046c5457380ec93cc925fefed91",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "DW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "dbb9ee40935f75133f526ce97724e375927c22a8203cfa2c3d2a64c0a3cf8454"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "47812379ffb4c3890e26449563d0c0a74a6e45800728dd99eb6399f78bf9c62b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "95f7273920907272a4715db6c0319e940a4da34ddb69e8c62b834fab8b6d538c"
+     },
+     {
+      "label": "uniform",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b"
+     },
+     {
+      "label": "balanced",
+      "n": 16,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-C.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json",
+    "sha256": "69539e4fabc1ee70bfa5400ba97a16ec5815bf0c8e03aa48e7d9f1aeff83e4c4",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "4ddb7492ac3858aa59851eadbca3582977c80b2693a9378fc4107fa8cedfabb7"
+     },
+     {
+      "label": "PW",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "76d48b57c63105222cf81d57be1b9348c794d0e05b41764bc25b9bf4c8da4516"
+     },
+     {
+      "label": "uniform",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b"
+     },
+     {
+      "label": "balanced",
+      "n": 16,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-bk.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json",
+    "sha256": "83d5f80ae595ca4a9f01f86bfc5474ea2b326ea5b58d9f6f8d722a8097f77d6c",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 3,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 5,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 6,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 7,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "balanced",
+      "n": 9,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-c15.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json",
+    "sha256": "1c5e18c7e3434858f444f655b48efbe94b40b4e1eb7e86f402706ce94d14becf",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af"
+     },
+     {
+      "label": "DW",
+      "n": 2,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "dbb9ee40935f75133f526ce97724e375927c22a8203cfa2c3d2a64c0a3cf8454"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53"
+     },
+     {
+      "label": "DW",
+      "n": 4,
+      "arms": [
+       "shared"
+      ],
+      "counts_sha256": "47812379ffb4c3890e26449563d0c0a74a6e45800728dd99eb6399f78bf9c62b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     }
+    ]
+   },
+   "qwen1.5-moe-a2.7b-A.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-A.json",
+    "sha256": "fd63d090e6b16c5165917948eb36137ec5594b3ea911ed2739c958c0d543ab3b",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "f7d1008ea2b296d09715154ea9a0bce4c8fa126dba73e87acdac1ce4400003c3"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6569be967423a57eedac4c7568fff1915c95425a1129d12e72e3e11012f27dea"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 1,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "6b535da514d5eb4ffbd2c4a59ab501011facc676255852de0e6fea21f30e1bb8"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 1,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "e443e5c5b4c9970f0415b6e076032efd7ff012e21499a964aaa11750d4574260"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "97ecbcb6817885284f096e2012de34340315f8d129522cf8c29a40208ed4c290"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9bf417ab44e53e234c6704f7e205f70f954e9647a56d5849888904f06b5b7eab"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "fe088377d370644ceaa9cc0dd2df65662b2a18c25e78d5c2f9a71c5754eb1834"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 2,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "b47b3fca48b70272cef2a234dff2d62071958465d40141ca31a17b2466e91c0a"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "01c335835799b1493ecac2273841ec8c05e25e6a0c06a54b8e660df4d138af22"
+     },
+     {
+      "label": "PW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "b2eece98422adb94bcd94b1aa293353197d4951f132d52e5f73c7f9ccc8a0b49"
+     },
+     {
+      "label": "PW-hotfirst",
+      "n": 8,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "6da8d19e1b9c54f180c52a7ab50c8580fa66069f01ec9edce270c05d2734a037"
+     },
+     {
+      "label": "PW-rand1",
+      "n": 8,
+      "arms": [
+       "native"
+      ],
+      "counts_sha256": "af999480ee32947a55bfad248256f5c6f0273ae3d66823c92116457a7b4243cb"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "qwen1.5-moe-a2.7b-B.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json",
+    "sha256": "fc7efc9d7a74059357476883f8a0a1db749c103f931e4a035af8e1cd89b527f9",
+    "shuffle_seed": 20261007,
+    "cells": [
+     {
+      "label": "DW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e8a6ac528d3b4a3b68c54db1b27c63a1d9fff2473c58bef5c2035fdbb59553ea"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e13c97bc76574af922d864822e2c19571135b371d0ccd914efc6ac11fe09a44a"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "DW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "7c2069840b7adbb18962cf4e0168f05b22b09bf694a1388ef7129f87cf37436b"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "synth_fit.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/synth_fit.json",
+    "sha256": "0f30f477d0ed082e5e34d8bbf2dd55a39aacd6e1656870a103645f931d5e09cd"
+   },
+   "trace_stats.json": {
+    "path": "docs/registered/2026-10-07-rental5-skew-hist/trace_stats.json",
+    "sha256": "cc3124c9d001ab3907b90b5433f2caed2cc6911df96e5b6c14eb1ead273a1330"
+   }
+  },
+  "shapes": [
+   {
+    "model": "mixtral-8x7b",
+    "n": 2,
+    "B": 256,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 13.051,
+    "loss": 0.000996,
+    "target": {
+     "cv": 0.260989,
+     "max_mean": 1.421875,
+     "gini": 0.142822
+    },
+    "fit_residual": {
+     "cv": -0.0243,
+     "max_mean": 0.0055,
+     "gini": -0.0188
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 256"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 2,
+    "B": 256,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 3.7495,
+    "loss": 0.00427,
+    "target": {
+     "cv": 0.432589,
+     "max_mean": 1.609375,
+     "gini": 0.227295
+    },
+    "fit_residual": {
+     "cv": -0.047,
+     "max_mean": 0.0388,
+     "gini": 0.0226
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 256"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 2,
+    "B": 256,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 10.772,
+    "loss": 0.03088,
+    "target": {
+     "cv": 0.305538,
+     "max_mean": 1.28125,
+     "gini": 0.143799
+    },
+    "fit_residual": {
+     "cv": -0.094,
+     "max_mean": 0.1402,
+     "gini": 0.0645
+    },
+    "matches": [
+     "cv",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 256"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 8,
+    "B": 1024,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 17.404,
+    "loss": 0.002259,
+    "target": {
+     "cv": 0.187108,
+     "max_mean": 1.292969,
+     "gini": 0.101807
+    },
+    "fit_residual": {
+     "cv": 0.0207,
+     "max_mean": 0.0438,
+     "gini": 0.0006
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 25 (the median-CV layer at this B) at B 1024"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 8,
+    "B": 1024,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 5.0,
+    "loss": 0.022083,
+    "target": {
+     "cv": 0.368792,
+     "max_mean": 1.435547,
+     "gini": 0.184082
+    },
+    "fit_residual": {
+     "cv": -0.0843,
+     "max_mean": 0.1252,
+     "gini": 0.0206
+    },
+    "matches": [
+     "cv",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 1024"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 8,
+    "B": 1024,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 8.8914,
+    "loss": 0.056221,
+    "target": {
+     "cv": 0.293684,
+     "max_mean": 1.242188,
+     "gini": 0.127869
+    },
+    "fit_residual": {
+     "cv": -0.1082,
+     "max_mean": 0.1997,
+     "gini": 0.105
+    },
+    "matches": [],
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 1024"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 32,
+    "B": 4096,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 37.495,
+    "loss": 0.001791,
+    "target": {
+     "cv": 0.121252,
+     "max_mean": 1.186523,
+     "gini": 0.065063
+    },
+    "fit_residual": {
+     "cv": 0.0064,
+     "max_mean": 0.0263,
+     "gini": 0.0333
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 24 (the median-CV layer at this B) at B 4096"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 32,
+    "B": 4096,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 7.339,
+    "loss": 0.027305,
+    "target": {
+     "cv": 0.313762,
+     "max_mean": 1.321777,
+     "gini": 0.149628
+    },
+    "fit_residual": {
+     "cv": -0.1107,
+     "max_mean": 0.1201,
+     "gini": 0.0264
+    },
+    "matches": [
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 12 (the scheme's most skewed layer) at B 4096"
+   },
+   {
+    "model": "mixtral-8x7b",
+    "n": 32,
+    "B": 4096,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 9.7867,
+    "loss": 0.055003,
+    "target": {
+     "cv": 0.289837,
+     "max_mean": 1.223633,
+     "gini": 0.122681
+    },
+    "fit_residual": {
+     "cv": -0.1573,
+     "max_mean": 0.1488,
+     "gini": 0.0837
+    },
+    "matches": [
+     "gini"
+    ],
+    "trace_statistic": "decode layer 11 (the scheme's most skewed layer) at B 4096"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 2,
+    "B": 512,
+    "shape": "PT",
+    "kind": "zipf",
+    "param": 0.625,
+    "loss": 0.025522,
+    "target": {
+     "cv": 0.717791,
+     "max_mean": 4.226562,
+     "gini": 0.372776
+    },
+    "fit_residual": {
+     "cv": 0.0231,
+     "max_mean": 0.0721,
+     "gini": -0.1324
+    },
+    "matches": [
+     "cv",
+     "max_mean"
+    ],
+    "trace_statistic": "prefill layer 11 (the median-CV layer at this B) at B 512"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 2,
+    "B": 512,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 0.88914,
+    "loss": 0.009299,
+    "target": {
+     "cv": 0.906576,
+     "max_mean": 4.53125,
+     "gini": 0.465778
+    },
+    "fit_residual": {
+     "cv": 0.0163,
+     "max_mean": -0.0759,
+     "gini": 0.0545
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 512"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 2,
+    "B": 512,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 2.8117,
+    "loss": 4.9e-05,
+    "target": {
+     "cv": 0.519781,
+     "max_mean": 2.46875,
+     "gini": 0.293297
+    },
+    "fit_residual": {
+     "cv": 0.0028,
+     "max_mean": 0.0063,
+     "gini": -0.0011
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 512"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 4,
+    "B": 1024,
+    "shape": "PT",
+    "kind": "zipf",
+    "param": 0.575,
+    "loss": 0.019731,
+    "target": {
+     "cv": 0.650533,
+     "max_mean": 3.84375,
+     "gini": 0.3272
+    },
+    "fit_residual": {
+     "cv": 0.0221,
+     "max_mean": 0.0986,
+     "gini": -0.097
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 3 (the median-CV layer at this B) at B 1024"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 4,
+    "B": 1024,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 1.0772,
+    "loss": 0.011582,
+    "target": {
+     "cv": 0.782989,
+     "max_mean": 3.828125,
+     "gini": 0.413113
+    },
+    "fit_residual": {
+     "cv": 0.0505,
+     "max_mean": -0.0643,
+     "gini": 0.0712
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 1024"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 4,
+    "B": 1024,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 2.8117,
+    "loss": 4.5e-05,
+    "target": {
+     "cv": 0.510845,
+     "max_mean": 2.476562,
+     "gini": 0.287952
+    },
+    "fit_residual": {
+     "cv": -0.0038,
+     "max_mean": -0.0032,
+     "gini": -0.0045
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 1024"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 16,
+    "B": 4096,
+    "shape": "PT",
+    "kind": "zipf",
+    "param": 0.475,
+    "loss": 0.018669,
+    "target": {
+     "cv": 0.503386,
+     "max_mean": 3.213867,
+     "gini": 0.264494
+    },
+    "fit_residual": {
+     "cv": 0.0471,
+     "max_mean": 0.0857,
+     "gini": -0.0942
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 3 (the median-CV layer at this B) at B 4096"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 16,
+    "B": 4096,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 1.5811,
+    "loss": 0.004286,
+    "target": {
+     "cv": 0.639005,
+     "max_mean": 2.973633,
+     "gini": 0.350111
+    },
+    "fit_residual": {
+     "cv": 0.0464,
+     "max_mean": 0.0039,
+     "gini": 0.0482
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 15 (the scheme's most skewed layer) at B 4096"
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "n": 16,
+    "B": 4096,
+    "shape": "DW",
+    "kind": "dirichlet",
+    "param": 2.8117,
+    "loss": 0.000928,
+    "target": {
+     "cv": 0.504851,
+     "max_mean": 2.455078,
+     "gini": 0.284894
+    },
+    "fit_residual": {
+     "cv": 0.0059,
+     "max_mean": -0.0294,
+     "gini": -0.0001
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 15 (the scheme's most skewed layer) at B 4096"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "B": 480,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 6.0576,
+    "loss": 0.001826,
+    "target": {
+     "cv": 0.417871,
+     "max_mean": 2.227272,
+     "gini": 0.230394
+    },
+    "fit_residual": {
+     "cv": -0.0125,
+     "max_mean": -0.0389,
+     "gini": -0.0097
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 14 (the median-CV layer at this B) at B 480 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "B": 480,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 2.5545,
+    "loss": 8.2e-05,
+    "target": {
+     "cv": 0.578472,
+     "max_mean": 2.631972,
+     "gini": 0.319587
+    },
+    "fit_residual": {
+     "cv": -0.0067,
+     "max_mean": 0.0033,
+     "gini": 0.0051
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 480 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "B": 480,
+    "shape": "DW",
+    "kind": "zipf",
+    "param": 0.325,
+    "loss": 0.001614,
+    "target": {
+     "cv": 0.386542,
+     "max_mean": 2.476595,
+     "gini": 0.20333
+    },
+    "fit_residual": {
+     "cv": 0.0052,
+     "max_mean": 0.0158,
+     "gini": -0.036
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 480 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "B": 960,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 7.339,
+    "loss": 0.001105,
+    "target": {
+     "cv": 0.350801,
+     "max_mean": 1.958144,
+     "gini": 0.196076
+    },
+    "fit_residual": {
+     "cv": 0.0211,
+     "max_mean": 0.0174,
+     "gini": 0.0195
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 14 (the median-CV layer at this B) at B 960 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "B": 960,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 3.4065,
+    "loss": 0.001544,
+    "target": {
+     "cv": 0.508771,
+     "max_mean": 2.341731,
+     "gini": 0.285843
+    },
+    "fit_residual": {
+     "cv": -0.0224,
+     "max_mean": 0.0109,
+     "gini": -0.0298
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 960 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "B": 960,
+    "shape": "DW",
+    "kind": "zipf",
+    "param": 0.325,
+    "loss": 0.004649,
+    "target": {
+     "cv": 0.366615,
+     "max_mean": 2.470308,
+     "gini": 0.190204
+    },
+    "fit_residual": {
+     "cv": 0.0102,
+     "max_mean": 0.031,
+     "gini": -0.0583
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 960 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 8,
+    "B": 3840,
+    "shape": "PT",
+    "kind": "dirichlet",
+    "param": 10.772,
+    "loss": 0.000429,
+    "target": {
+     "cv": 0.282218,
+     "max_mean": 1.727834,
+     "gini": 0.15867
+    },
+    "fit_residual": {
+     "cv": 0.001,
+     "max_mean": 0.0174,
+     "gini": 0.0116
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 13 (the median-CV layer at this B) at B 3840 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 8,
+    "B": 3840,
+    "shape": "PW",
+    "kind": "dirichlet",
+    "param": 4.127,
+    "loss": 0.005032,
+    "target": {
+     "cv": 0.442994,
+     "max_mean": 2.058668,
+     "gini": 0.252248
+    },
+    "fit_residual": {
+     "cv": -0.0125,
+     "max_mean": 0.0664,
+     "gini": -0.0269
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "prefill layer 23 (the scheme's most skewed layer) at B 3840 (interpolated in log B)"
+   },
+   {
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 8,
+    "B": 3840,
+    "shape": "DW",
+    "kind": "zipf",
+    "param": 0.325,
+    "loss": 0.005776,
+    "target": {
+     "cv": 0.352578,
+     "max_mean": 2.465623,
+     "gini": 0.179893
+    },
+    "fit_residual": {
+     "cv": -0.0051,
+     "max_mean": 0.0234,
+     "gini": -0.0697
+    },
+    "matches": [
+     "cv",
+     "max_mean",
+     "gini"
+    ],
+    "trace_statistic": "decode layer 21 (the scheme's most skewed layer) at B 3840 (interpolated in log B)"
+   }
+  ],
+  "coverage": "the shapes span the typical (median-CV) to the most skewed layer of each scheme, at the per-layer MEDIAN over batches (p50); they do not cover the p90 batches of any layer or the least-skewed layers (build-r5-review section 2). Mixtral DW at n 8 and 32 use the registered least-loss fallback (cv -11.6%, Gini +15% off the target)",
+  "match_rule": "a statistic is MATCHED when the fitted shape's median over 16 seeds is within 10% of the trace statistic",
+  "draw_rule": "per shape the first of 64 registered seeds whose draw has all three statistics within 10% of the target, else the draw of least loss (scripts/skew_synth.py --draw)",
+  "shuffle": "every non-balanced cell: realize_counts(counts, tokens, k), then ids[torch.randperm(tokens, Generator().manual_seed(shuffle_seed))]; 'balanced' is R3's balanced_ids unshuffled"
+ },
+ "cells": {
+  "common": "R3's tile 32x64x64 w8 s4 at G = 8; NATIVE and SHARED at 9 copies (this is not vLLM's tile, so nothing here is the working bar)",
+  "pages": {
+   "A": "PT, PW (NATIVE, SHARED), PW-hotfirst and PW-rand1 (NATIVE only), uniform and balanced (NATIVE, SHARED), at the model's three n",
+   "B": "DW, uniform, balanced (NATIVE, SHARED) at the three n",
+   "C": "the byte leg (counter page, Mixtral and OLMoE): PT, PW, uniform, balanced at n <= 9 (NATIVE, SHARED) and OLMoE n 16 NATIVE only"
+  },
+  "treads": {
+   "mixtral-8x7b": [
+    2,
+    8,
+    32
+   ],
+   "olmoe-1b-7b": [
+    2,
+    4,
+    16
+   ],
+   "qwen1.5-moe-a2.7b": [
+    1,
+    2,
+    8
+   ]
+  },
+  "n_stratum": "G3's n-stratum is the tread's rank within its shape (first, second, third n: Mixtral 2 / 8 / 32, OLMoE 2 / 4 / 16, Qwen1.5 1 / 2 / 8), so every stratum keeps all six pages as clusters",
+  "labels": {
+   "mixtral-8x7b": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "olmoe-1b-7b": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "qwen1.5-moe-a2.7b": "BLIND (a SEEN held-out model, not CAL)"
+  }
+ },
+ "predictions": [
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 1344,
+    "w2": 192
+   },
+   "q_pred": {
+    "w1": 1.128108,
+    "w2": 1.203679
+   },
+   "ms": {
+    "S": 1.531526,
+    "LT": 1.484627,
+    "PW": 2.934302,
+    "M1": 1.531526
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.304043,
+    "LT": 1.280087,
+    "PW": 1.124725,
+    "M1": 1.304043,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 29120,
+    "w2": 4160
+   },
+   "q_pred": {
+    "w1": 1.128108,
+    "w2": 1.203679
+   },
+   "ms": {
+    "S": 1.52595,
+    "LT": 1.479051,
+    "PW": 2.928727,
+    "M1": 1.525193
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.303009,
+    "LT": 1.278969,
+    "PW": 1.124029,
+    "M1": 1.302363,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 1344,
+    "w2": 192
+   },
+   "q_pred": {
+    "w1": 1.128221,
+    "w2": 1.221864
+   },
+   "ms": {
+    "S": 1.531541,
+    "LT": 1.484674,
+    "PW": 2.801624,
+    "M1": 1.531541
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.304056,
+    "LT": 1.280128,
+    "PW": 1.073869,
+    "M1": 1.304056,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 29120,
+    "w2": 4160
+   },
+   "q_pred": {
+    "w1": 1.128221,
+    "w2": 1.221864
+   },
+   "ms": {
+    "S": 1.525966,
+    "LT": 1.479099,
+    "PW": 2.796049,
+    "M1": 1.525209
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.303023,
+    "LT": 1.279011,
+    "PW": 1.073108,
+    "M1": 1.302376,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "86b8e89af5abe84c41ae597a6c2dc9ecd17f66220b45234bdb64365f9266814d",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 1344,
+    "w2": 192
+   },
+   "q_pred": {
+    "w1": 1.12821,
+    "w2": 1.220862
+   },
+   "ms": {
+    "S": 1.531538,
+    "LT": 1.484666,
+    "PW": 2.801621,
+    "M1": 1.531538
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": -2e-06
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "b6d879d542d49fa5f12c8e022e67da659fc6753acb5622226663d85c86d261cc",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 21,
+   "dead_ctas": {
+    "w1": 1344,
+    "w2": 192
+   },
+   "q_pred": {
+    "w1": 1.128213,
+    "w2": 1.239479
+   },
+   "ms": {
+    "S": 1.540414,
+    "LT": 1.498004,
+    "PW": 2.810498,
+    "M1": 1.540414
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": 0.005794
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.174444,
+    "LT": 1.159786,
+    "PW": 2.608907,
+    "M1": 1.174444
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.171097,
+    "LT": 1.15644,
+    "PW": 2.605561,
+    "M1": 1.171097
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.174444,
+    "LT": 1.159786,
+    "PW": 2.608907,
+    "M1": 1.174444
+   },
+   "ext_tread": false,
+   "label_blind": "CAL (SEEN): the 2026-09-27 GH200 8x7B timed pages (G 8, n 1..6) carry this balanced cell"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.171097,
+    "LT": 1.15644,
+    "PW": 2.605561,
+    "M1": 1.171097
+   },
+   "ext_tread": false,
+   "label_blind": "CAL (SEEN): the 2026-09-27 GH200 8x7B timed pages (G 8, n 1..6) carry this balanced cell"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 66,
+   "dead_ctas": {
+    "w1": 2688,
+    "w2": 384
+   },
+   "q_pred": {
+    "w1": 1.88158,
+    "w2": 2.089747
+   },
+   "ms": {
+    "S": 4.534865,
+    "LT": 4.534865,
+    "PW": 5.298539,
+    "M1": 4.534865
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.017896,
+    "LT": 1.030622,
+    "PW": 1.116173,
+    "M1": 1.017896,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 66,
+   "dead_ctas": {
+    "w1": 30464,
+    "w2": 4352
+   },
+   "q_pred": {
+    "w1": 1.88158,
+    "w2": 2.089747
+   },
+   "ms": {
+    "S": 4.550683,
+    "LT": 4.550683,
+    "PW": 5.314357,
+    "M1": 4.55038
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.01763,
+    "LT": 1.030304,
+    "PW": 1.115578,
+    "M1": 1.017562,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 1.881258,
+    "w2": 2.103759
+   },
+   "ms": {
+    "S": 4.673603,
+    "LT": 4.669396,
+    "PW": 5.798715,
+    "M1": 4.673603
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.049037,
+    "LT": 1.061196,
+    "PW": 1.221538,
+    "M1": 1.049037,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 29568,
+    "w2": 4224
+   },
+   "q_pred": {
+    "w1": 1.881258,
+    "w2": 2.103759
+   },
+   "ms": {
+    "S": 4.688529,
+    "LT": 4.684322,
+    "PW": 5.813641,
+    "M1": 4.687923
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.048455,
+    "LT": 1.060561,
+    "PW": 1.220387,
+    "M1": 1.04832,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 1.881258,
+    "w2": 2.103759
+   },
+   "ms": {
+    "S": 4.673603,
+    "LT": 4.669396,
+    "PW": 5.798715,
+    "M1": 4.673603
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "8bb16ba92b471f5a466707f788923ddfa85d55019c880d4c5855828d1acf98eb",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 2.006821,
+    "w2": 2.217946
+   },
+   "ms": {
+    "S": 4.6736,
+    "LT": 4.669393,
+    "PW": 5.798712,
+    "M1": 4.6736
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": -1e-06
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.455135,
+    "LT": 4.400126,
+    "PW": 4.74706,
+    "M1": 4.455135
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.471845,
+    "LT": 4.416835,
+    "PW": 4.763769,
+    "M1": 4.471845
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.455135,
+    "LT": 4.400126,
+    "PW": 4.74706,
+    "M1": 4.455135
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.471845,
+    "LT": 4.416835,
+    "PW": 4.763769,
+    "M1": 4.471845
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "7e7e0278080e7382fae71d66467e66952c8815743264c98adbd26062bf2a6525",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 259,
+   "dead_ctas": {
+    "w1": 2240,
+    "w2": 320
+   },
+   "q_pred": {
+    "w1": 4.891165,
+    "w2": 5.502964
+   },
+   "ms": {
+    "S": 17.726319,
+    "LT": 17.693959,
+    "PW": 18.451176,
+    "M1": 17.726319
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.010945,
+    "LT": 1.011545,
+    "PW": 1.035523,
+    "M1": 1.010945,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "7e7e0278080e7382fae71d66467e66952c8815743264c98adbd26062bf2a6525",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 259,
+   "dead_ctas": {
+    "w1": 30016,
+    "w2": 4288
+   },
+   "q_pred": {
+    "w1": 4.891165,
+    "w2": 5.502964
+   },
+   "ms": {
+    "S": 17.741691,
+    "LT": 17.709331,
+    "PW": 18.466548,
+    "M1": 17.741236
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.010858,
+    "LT": 1.011457,
+    "PW": 1.035415,
+    "M1": 1.010832,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "fd052ec9bd9a64e23c038c4ac5de34cac50116b39284842043973f51e7e03dcc",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 260,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 5.016566,
+    "w2": 5.630321
+   },
+   "ms": {
+    "S": 17.812073,
+    "LT": 17.76127,
+    "PW": 19.068887,
+    "M1": 17.812073
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.015835,
+    "LT": 1.015393,
+    "PW": 1.070191,
+    "M1": 1.015835,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "fd052ec9bd9a64e23c038c4ac5de34cac50116b39284842043973f51e7e03dcc",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 260,
+   "dead_ctas": {
+    "w1": 29568,
+    "w2": 4224
+   },
+   "q_pred": {
+    "w1": 5.016566,
+    "w2": 5.630321
+   },
+   "ms": {
+    "S": 17.826999,
+    "LT": 17.776197,
+    "PW": 19.083813,
+    "M1": 17.826393
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.015719,
+    "LT": 1.015276,
+    "PW": 1.070025,
+    "M1": 1.015684,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "845b09fcf88f7b8b94765271d32e81869e0bb5038ccebec0726a740138c1919a",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 260,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 4.891043,
+    "w2": 5.500906
+   },
+   "ms": {
+    "S": 17.812073,
+    "LT": 17.76127,
+    "PW": 19.068887,
+    "M1": 17.812073
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "3e82eaf00c7f6894b804569a216e92be2cd82132ca251c7241ffd722eb3c13d8",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 260,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 5.016566,
+    "w2": 5.630321
+   },
+   "ms": {
+    "S": 17.812073,
+    "LT": 17.76127,
+    "PW": 19.068887,
+    "M1": 17.812073
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.534408,
+    "LT": 17.492019,
+    "PW": 17.818211,
+    "M1": 17.534408
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.551117,
+    "LT": 17.508729,
+    "PW": 17.834921,
+    "M1": 17.551117
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.534408,
+    "LT": 17.492019,
+    "PW": 17.818211,
+    "M1": 17.534408
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "A",
+   "n": 32,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.551117,
+    "LT": 17.508729,
+    "PW": 17.834921,
+    "M1": 17.551117
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "2e257996efe4c023fd5747d7305efa46c25381e0eb9922a05e940db482a4e431",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 19,
+   "dead_ctas": {
+    "w1": 2240,
+    "w2": 320
+   },
+   "q_pred": {
+    "w1": 1.254116,
+    "w2": 1.332461
+   },
+   "ms": {
+    "S": 1.399915,
+    "LT": 1.360262,
+    "PW": 2.808831,
+    "M1": 1.399915
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.191981,
+    "LT": 1.172856,
+    "PW": 1.076631,
+    "M1": 1.191981,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "2e257996efe4c023fd5747d7305efa46c25381e0eb9922a05e940db482a4e431",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 19,
+   "dead_ctas": {
+    "w1": 30016,
+    "w2": 4288
+   },
+   "q_pred": {
+    "w1": 1.254116,
+    "w2": 1.332461
+   },
+   "ms": {
+    "S": 1.395232,
+    "LT": 1.355578,
+    "PW": 2.804147,
+    "M1": 1.394777
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.191389,
+    "LT": 1.172199,
+    "PW": 1.076216,
+    "M1": 1.191,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.174444,
+    "LT": 1.159786,
+    "PW": 2.608907,
+    "M1": 1.174444
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.171097,
+    "LT": 1.15644,
+    "PW": 2.605561,
+    "M1": 1.171097
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "small-batch",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.174444,
+    "LT": 1.159786,
+    "PW": 2.608907,
+    "M1": 1.174444
+   },
+   "ext_tread": false,
+   "label_blind": "CAL (SEEN): the 2026-09-27 GH200 8x7B timed pages (G 8, n 1..6) carry this balanced cell"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 16,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "ms": {
+    "S": 1.171097,
+    "LT": 1.15644,
+    "PW": 2.605561,
+    "M1": 1.171097
+   },
+   "ext_tread": false,
+   "label_blind": "CAL (SEEN): the 2026-09-27 GH200 8x7B timed pages (G 8, n 1..6) carry this balanced cell"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "94f25a359c1fc6ad79fd045e50cf48d2644cc3c1b1d44ae7ec38c8abebcdea29",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "q_pred": {
+    "w1": 2.006807,
+    "w2": 2.234088
+   },
+   "ms": {
+    "S": 4.673602,
+    "LT": 4.669395,
+    "PW": 5.732368,
+    "M1": 4.673602
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.049037,
+    "LT": 1.061196,
+    "PW": 1.207562,
+    "M1": 1.049037,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "94f25a359c1fc6ad79fd045e50cf48d2644cc3c1b1d44ae7ec38c8abebcdea29",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 68,
+   "dead_ctas": {
+    "w1": 29568,
+    "w2": 4224
+   },
+   "q_pred": {
+    "w1": 2.006807,
+    "w2": 2.234088
+   },
+   "ms": {
+    "S": 4.688528,
+    "LT": 4.684322,
+    "PW": 5.747294,
+    "M1": 4.687923
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.048455,
+    "LT": 1.060561,
+    "PW": 1.206459,
+    "M1": 1.04832,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.455135,
+    "LT": 4.400126,
+    "PW": 4.74706,
+    "M1": 4.455135
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.471845,
+    "LT": 4.416835,
+    "PW": 4.763769,
+    "M1": 4.471845
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.455135,
+    "LT": 4.400126,
+    "PW": 4.74706,
+    "M1": 4.455135
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 64,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "ms": {
+    "S": 4.471845,
+    "LT": 4.416835,
+    "PW": 4.763769,
+    "M1": 4.471845
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "603c4c43c22333ff1d477c68718f0db0cdf4f71759dd131490ef1d729595d05d",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 261,
+   "dead_ctas": {
+    "w1": 1344,
+    "w2": 192
+   },
+   "q_pred": {
+    "w1": 5.016515,
+    "w2": 5.631066
+   },
+   "ms": {
+    "S": 17.851881,
+    "LT": 17.828583,
+    "PW": 19.135233,
+    "M1": 17.851881
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.018106,
+    "LT": 1.019241,
+    "PW": 1.073914,
+    "M1": 1.018106,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "603c4c43c22333ff1d477c68718f0db0cdf4f71759dd131490ef1d729595d05d",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 261,
+   "dead_ctas": {
+    "w1": 29120,
+    "w2": 4160
+   },
+   "q_pred": {
+    "w1": 5.016515,
+    "w2": 5.631066
+   },
+   "ms": {
+    "S": 17.866361,
+    "LT": 17.843063,
+    "PW": 19.149714,
+    "M1": 17.865604
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "ratio": {
+    "S": 1.017961,
+    "LT": 1.019095,
+    "PW": 1.07372,
+    "M1": 1.017918,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.534408,
+    "LT": 17.492019,
+    "PW": 17.818211,
+    "M1": 17.534408
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.551117,
+    "LT": 17.508729,
+    "PW": 17.834921,
+    "M1": 17.551117
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 8,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 3584,
+    "w2": 512
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.534408,
+    "LT": 17.492019,
+    "PW": 17.818211,
+    "M1": 17.534408
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "B",
+   "n": 32,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 72,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 31360,
+    "w2": 4480
+   },
+   "q_pred": {
+    "w1": 4.012851,
+    "w2": 4.601903
+   },
+   "ms": {
+    "S": 17.551117,
+    "LT": 17.508729,
+    "PW": 17.834921,
+    "M1": 17.551117
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 157,
+   "dead_ctas": {
+    "w1": 1056,
+    "w2": 1056
+   },
+   "q_pred": {
+    "w1": 1.049664,
+    "w2": 1.0406
+   },
+   "ms": {
+    "S": 0.462245,
+    "LT": 0.452374,
+    "PW": 3.197946,
+    "M1": 0.462245
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.191381,
+    "LT": 1.19733,
+    "PW": 1.000006,
+    "M1": 1.191381,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 157,
+   "dead_ctas": {
+    "w1": 16928,
+    "w2": 16928
+   },
+   "q_pred": {
+    "w1": 1.049664,
+    "w2": 1.0406
+   },
+   "ms": {
+    "S": 0.487008,
+    "LT": 0.477137,
+    "PW": 3.222708,
+    "M1": 0.490851
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.174643,
+    "LT": 1.179779,
+    "PW": 0.999433,
+    "M1": 1.171284,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 161,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.031131,
+    "w2": 1.018769
+   },
+   "ms": {
+    "S": 0.472832,
+    "LT": 0.462632,
+    "PW": 3.14872,
+    "M1": 0.472832
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.218667,
+    "LT": 1.224481,
+    "PW": 0.984613,
+    "M1": 1.218667,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 161,
+   "dead_ctas": {
+    "w1": 16800,
+    "w2": 16800
+   },
+   "q_pred": {
+    "w1": 1.031131,
+    "w2": 1.018769
+   },
+   "ms": {
+    "S": 0.49734,
+    "LT": 0.48714,
+    "PW": 3.173228,
+    "M1": 0.501097
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.199563,
+    "LT": 1.204513,
+    "PW": 0.984088,
+    "M1": 1.195733,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "4c50bf325b5768b8546f821e5f8d8da99fd1631d769d5f1dfae1259cf6a7fc3d",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 161,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.020272,
+    "w2": 1.017634
+   },
+   "ms": {
+    "S": 0.47297,
+    "LT": 0.462817,
+    "PW": 3.148858,
+    "M1": 0.47297
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": 0.000292
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "00e88a3cb14775eb1408e896dcce4bf1d0f362a1ab426b68633200adbb02b553",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 161,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.027016,
+    "w2": 1.018824
+   },
+   "ms": {
+    "S": 0.472756,
+    "LT": 0.462529,
+    "PW": 3.148644,
+    "M1": 0.472756
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": -0.000161
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.387991,
+    "LT": 0.377819,
+    "PW": 3.197926,
+    "M1": 0.387991
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.414601,
+    "LT": 0.404429,
+    "PW": 3.224536,
+    "M1": 0.419071
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.387991,
+    "LT": 0.377819,
+    "PW": 3.197926,
+    "M1": 0.387991
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.414601,
+    "LT": 0.404429,
+    "PW": 3.224536,
+    "M1": 0.419071
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 289,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.05201,
+    "w2": 1.042733
+   },
+   "ms": {
+    "S": 0.813598,
+    "LT": 0.803636,
+    "PW": 3.225208,
+    "M1": 0.813598
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.116417,
+    "LT": 1.118031,
+    "PW": 1.004757,
+    "M1": 1.116417,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 289,
+   "dead_ctas": {
+    "w1": 16800,
+    "w2": 16800
+   },
+   "q_pred": {
+    "w1": 1.05201,
+    "w2": 1.042733
+   },
+   "ms": {
+    "S": 0.838106,
+    "LT": 0.828144,
+    "PW": 3.249716,
+    "M1": 0.841862
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.109535,
+    "LT": 1.110999,
+    "PW": 1.004069,
+    "M1": 1.107949,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 291,
+   "dead_ctas": {
+    "w1": 864,
+    "w2": 864
+   },
+   "q_pred": {
+    "w1": 1.028819,
+    "w2": 1.024026
+   },
+   "ms": {
+    "S": 0.813598,
+    "LT": 0.808778,
+    "PW": 3.176,
+    "M1": 0.813598
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.116417,
+    "LT": 1.125184,
+    "PW": 0.989427,
+    "M1": 1.116417,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 291,
+   "dead_ctas": {
+    "w1": 16736,
+    "w2": 16736
+   },
+   "q_pred": {
+    "w1": 1.028819,
+    "w2": 1.024026
+   },
+   "ms": {
+    "S": 0.837979,
+    "LT": 0.833159,
+    "PW": 3.200381,
+    "M1": 0.841692
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.109367,
+    "LT": 1.117727,
+    "PW": 0.988825,
+    "M1": 1.107726,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "41112903d3eba2040246c0748593d9e4578dee42b397b35adad86093d544e3e5",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 291,
+   "dead_ctas": {
+    "w1": 864,
+    "w2": 864
+   },
+   "q_pred": {
+    "w1": 1.030595,
+    "w2": 1.028154
+   },
+   "ms": {
+    "S": 0.813598,
+    "LT": 0.808778,
+    "PW": 3.176,
+    "M1": 0.813598
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "1fa85412daae9ae22211cc5606c47a3157920f2636e5236a62c55c3a7aa2ee9b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 291,
+   "dead_ctas": {
+    "w1": 864,
+    "w2": 864
+   },
+   "q_pred": {
+    "w1": 1.033548,
+    "w2": 1.022515
+   },
+   "ms": {
+    "S": 0.813598,
+    "LT": 0.808778,
+    "PW": 3.176,
+    "M1": 0.813598
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.728758,
+    "LT": 0.718796,
+    "PW": 3.209938,
+    "M1": 0.728758
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.755367,
+    "LT": 0.745405,
+    "PW": 3.236548,
+    "M1": 0.759838
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.728758,
+    "LT": 0.718796,
+    "PW": 3.209938,
+    "M1": 0.728758
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.755367,
+    "LT": 0.745405,
+    "PW": 3.236548,
+    "M1": 0.759838
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "4ddb7492ac3858aa59851eadbca3582977c80b2693a9378fc4107fa8cedfabb7",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1054,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "q_pred": {
+    "w1": 1.038972,
+    "w2": 1.042835
+   },
+   "ms": {
+    "S": 2.848966,
+    "LT": 2.843824,
+    "PW": 4.140249,
+    "M1": 2.848966
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.026754,
+    "LT": 1.027877,
+    "PW": 1.26097,
+    "M1": 1.026754,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "4ddb7492ac3858aa59851eadbca3582977c80b2693a9378fc4107fa8cedfabb7",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1054,
+   "dead_ctas": {
+    "w1": 16896,
+    "w2": 16896
+   },
+   "q_pred": {
+    "w1": 1.038972,
+    "w2": 1.042835
+   },
+   "ms": {
+    "S": 2.873665,
+    "LT": 2.868523,
+    "PW": 4.164948,
+    "M1": 2.877486
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.025818,
+    "LT": 1.026928,
+    "PW": 1.258295,
+    "M1": 1.025545,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "76d48b57c63105222cf81d57be1b9348c794d0e05b41764bc25b9bf4c8da4516",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1057,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.040753,
+    "w2": 1.043592
+   },
+   "ms": {
+    "S": 2.859571,
+    "LT": 2.851537,
+    "PW": 4.484703,
+    "M1": 2.859571
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.030576,
+    "LT": 1.030665,
+    "PW": 1.365878,
+    "M1": 1.030576,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "76d48b57c63105222cf81d57be1b9348c794d0e05b41764bc25b9bf4c8da4516",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1057,
+   "dead_ctas": {
+    "w1": 16800,
+    "w2": 16800
+   },
+   "q_pred": {
+    "w1": 1.040753,
+    "w2": 1.043592
+   },
+   "ms": {
+    "S": 2.884079,
+    "LT": 2.876045,
+    "PW": 4.509211,
+    "M1": 2.887835
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.029536,
+    "LT": 1.02962,
+    "PW": 1.362302,
+    "M1": 1.029234,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "ae94602987e04d101824013c8a76c3884879a89facb82a6586d8dc38ae6dbb01",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1057,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.041095,
+    "w2": 1.045386
+   },
+   "ms": {
+    "S": 2.859571,
+    "LT": 2.851537,
+    "PW": 4.484703,
+    "M1": 2.859571
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "30684dbb7033f0242edbc401782e0b59948c1387d7bbad0a9257c22639673af4",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1057,
+   "dead_ctas": {
+    "w1": 928,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.041437,
+    "w2": 1.04388
+   },
+   "ms": {
+    "S": 2.859571,
+    "LT": 2.851537,
+    "PW": 4.484703,
+    "M1": 2.859571
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.774731,
+    "LT": 2.766697,
+    "PW": 3.283384,
+    "M1": 2.774731
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.80134,
+    "LT": 2.793306,
+    "PW": 3.309993,
+    "M1": 2.805811
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.774731,
+    "LT": 2.766697,
+    "PW": 3.283384,
+    "M1": 2.774731
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "A",
+   "n": 16,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.80134,
+    "LT": 2.793306,
+    "PW": 3.309993,
+    "M1": 2.805811
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "dbb9ee40935f75133f526ce97724e375927c22a8203cfa2c3d2a64c0a3cf8454",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 159,
+   "dead_ctas": {
+    "w1": 992,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.040131,
+    "w2": 1.029263
+   },
+   "ms": {
+    "S": 0.462142,
+    "LT": 0.457345,
+    "PW": 3.197842,
+    "M1": 0.462142
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.191115,
+    "LT": 1.210487,
+    "PW": 0.999974,
+    "M1": 1.191115,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "dbb9ee40935f75133f526ce97724e375927c22a8203cfa2c3d2a64c0a3cf8454",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 159,
+   "dead_ctas": {
+    "w1": 16864,
+    "w2": 16864
+   },
+   "q_pred": {
+    "w1": 1.040131,
+    "w2": 1.029263
+   },
+   "ms": {
+    "S": 0.486777,
+    "LT": 0.48198,
+    "PW": 3.222478,
+    "M1": 0.490577
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.174085,
+    "LT": 1.191754,
+    "PW": 0.999362,
+    "M1": 1.17063,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.387991,
+    "LT": 0.377819,
+    "PW": 3.197926,
+    "M1": 0.387991
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.414601,
+    "LT": 0.404429,
+    "PW": 3.224536,
+    "M1": 0.419071
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.387991,
+    "LT": 0.377819,
+    "PW": 3.197926,
+    "M1": 0.387991
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 128,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "ms": {
+    "S": 0.414601,
+    "LT": 0.404429,
+    "PW": 3.224536,
+    "M1": 0.419071
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "47812379ffb4c3890e26449563d0c0a74a6e45800728dd99eb6399f78bf9c62b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 285,
+   "dead_ctas": {
+    "w1": 1056,
+    "w2": 1056
+   },
+   "q_pred": {
+    "w1": 1.053719,
+    "w2": 1.04345
+   },
+   "ms": {
+    "S": 0.802993,
+    "LT": 0.793352,
+    "PW": 3.209939,
+    "M1": 0.802993
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.101865,
+    "LT": 1.103723,
+    "PW": 1.0,
+    "M1": 1.101865,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "47812379ffb4c3890e26449563d0c0a74a6e45800728dd99eb6399f78bf9c62b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 285,
+   "dead_ctas": {
+    "w1": 16928,
+    "w2": 16928
+   },
+   "q_pred": {
+    "w1": 1.053719,
+    "w2": 1.04345
+   },
+   "ms": {
+    "S": 0.827756,
+    "LT": 0.818115,
+    "PW": 3.234702,
+    "M1": 0.831599
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.095833,
+    "LT": 1.097544,
+    "PW": 0.99943,
+    "M1": 1.094442,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.728758,
+    "LT": 0.718796,
+    "PW": 3.209938,
+    "M1": 0.728758
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.755367,
+    "LT": 0.745405,
+    "PW": 3.236548,
+    "M1": 0.759838
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.728758,
+    "LT": 0.718796,
+    "PW": 3.209938,
+    "M1": 0.728758
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 256,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "ms": {
+    "S": 0.755367,
+    "LT": 0.745405,
+    "PW": 3.236548,
+    "M1": 0.759838
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 and 2026-10-07 (rental 4) OLMoE G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "95f7273920907272a4715db6c0319e940a4da34ddb69e8c62b834fab8b6d538c",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1054,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "q_pred": {
+    "w1": 1.040343,
+    "w2": 1.044963
+   },
+   "ms": {
+    "S": 2.848966,
+    "LT": 2.843824,
+    "PW": 4.435496,
+    "M1": 2.848966
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.026754,
+    "LT": 1.027877,
+    "PW": 1.350892,
+    "M1": 1.026754,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "95f7273920907272a4715db6c0319e940a4da34ddb69e8c62b834fab8b6d538c",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1054,
+   "dead_ctas": {
+    "w1": 16896,
+    "w2": 16896
+   },
+   "q_pred": {
+    "w1": 1.040343,
+    "w2": 1.044963
+   },
+   "ms": {
+    "S": 2.873665,
+    "LT": 2.868523,
+    "PW": 4.460195,
+    "M1": 2.877486
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "ratio": {
+    "S": 1.025818,
+    "LT": 1.026928,
+    "PW": 1.347494,
+    "M1": 1.025545,
+    "U": 1.0
+   },
+   "lever": {
+    "U": false,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.774731,
+    "LT": 2.766697,
+    "PW": 3.283384,
+    "M1": 2.774731
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.80134,
+    "LT": 2.793306,
+    "PW": 3.309993,
+    "M1": 2.805811
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 64,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 1984,
+    "w2": 1984
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.774731,
+    "LT": 2.766697,
+    "PW": 3.283384,
+    "M1": 2.774731
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "B",
+   "n": 16,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 576,
+   "path": "block-scan",
+   "live_rows": 1024,
+   "dead_ctas": {
+    "w1": 17856,
+    "w2": 17856
+   },
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "ms": {
+    "S": 2.80134,
+    "LT": 2.793306,
+    "PW": 3.309993,
+    "M1": 2.805811
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "f7d1008ea2b296d09715154ea9a0bce4c8fa126dba73e87acdac1ce4400003c3",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 90,
+   "dead_ctas": {
+    "w1": 1276,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.01782,
+    "w2": 1.016012
+   },
+   "ms": {
+    "S": 0.37682,
+    "LT": 0.376207,
+    "PW": 3.306604,
+    "M1": 0.37682
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.103526,
+    "LT": 1.101886,
+    "PW": 0.979921,
+    "M1": 1.103526,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "f7d1008ea2b296d09715154ea9a0bce4c8fa126dba73e87acdac1ce4400003c3",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 90,
+   "dead_ctas": {
+    "w1": 21736,
+    "w2": 15808
+   },
+   "q_pred": {
+    "w1": 1.01782,
+    "w2": 1.016012
+   },
+   "ms": {
+    "S": 0.403672,
+    "LT": 0.40306,
+    "PW": 3.333457,
+    "M1": 0.407911
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.089268,
+    "LT": 1.087758,
+    "PW": 0.979426,
+    "M1": 1.086028,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "6569be967423a57eedac4c7568fff1915c95425a1129d12e72e3e11012f27dea",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 89,
+   "dead_ctas": {
+    "w1": 1320,
+    "w2": 960
+   },
+   "q_pred": {
+    "w1": 1.063379,
+    "w2": 1.022353
+   },
+   "ms": {
+    "S": 0.383305,
+    "LT": 0.38087,
+    "PW": 3.31309,
+    "M1": 0.383305
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.122518,
+    "LT": 1.115544,
+    "PW": 0.981843,
+    "M1": 1.122518,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "6569be967423a57eedac4c7568fff1915c95425a1129d12e72e3e11012f27dea",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 89,
+   "dead_ctas": {
+    "w1": 21780,
+    "w2": 15840
+   },
+   "q_pred": {
+    "w1": 1.063379,
+    "w2": 1.022353
+   },
+   "ms": {
+    "S": 0.410233,
+    "LT": 0.407798,
+    "PW": 3.340018,
+    "M1": 0.414498
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.106973,
+    "LT": 1.100545,
+    "PW": 0.981354,
+    "M1": 1.103565,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "6b535da514d5eb4ffbd2c4a59ab501011facc676255852de0e6fea21f30e1bb8",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 89,
+   "dead_ctas": {
+    "w1": 1320,
+    "w2": 960
+   },
+   "q_pred": {
+    "w1": 1.064888,
+    "w2": 1.025658
+   },
+   "ms": {
+    "S": 0.382864,
+    "LT": 0.38048,
+    "PW": 3.312649,
+    "M1": 0.382864
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": -0.001151
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "e443e5c5b4c9970f0415b6e076032efd7ff012e21499a964aaa11750d4574260",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 89,
+   "dead_ctas": {
+    "w1": 1320,
+    "w2": 960
+   },
+   "q_pred": {
+    "w1": 1.067924,
+    "w2": 1.03137
+   },
+   "ms": {
+    "S": 0.379981,
+    "LT": 0.377619,
+    "PW": 3.309765,
+    "M1": 0.379981
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": -0.008672
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.341469,
+    "LT": 0.341421,
+    "PW": 3.374358,
+    "M1": 0.341469
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.37059,
+    "LT": 0.370542,
+    "PW": 3.40348,
+    "M1": 0.375599
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.341469,
+    "LT": 0.341421,
+    "PW": 3.374358,
+    "M1": 0.341469
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.37059,
+    "LT": 0.370542,
+    "PW": 3.40348,
+    "M1": 0.375599
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "97ecbcb6817885284f096e2012de34340315f8d129522cf8c29a40208ed4c290",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 149,
+   "dead_ctas": {
+    "w1": 1320,
+    "w2": 960
+   },
+   "q_pred": {
+    "w1": 1.081372,
+    "w2": 1.048151
+   },
+   "ms": {
+    "S": 0.576408,
+    "LT": 0.569744,
+    "PW": 3.29495,
+    "M1": 0.576408
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.217268,
+    "LT": 1.214847,
+    "PW": 0.999932,
+    "M1": 1.217268,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "97ecbcb6817885284f096e2012de34340315f8d129522cf8c29a40208ed4c290",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 149,
+   "dead_ctas": {
+    "w1": 21780,
+    "w2": 15840
+   },
+   "q_pred": {
+    "w1": 1.081372,
+    "w2": 1.048151
+   },
+   "ms": {
+    "S": 0.603336,
+    "LT": 0.596672,
+    "PW": 3.321878,
+    "M1": 0.607601
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.200318,
+    "LT": 1.197884,
+    "PW": 0.999273,
+    "M1": 1.196873,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "9bf417ab44e53e234c6704f7e205f70f954e9647a56d5849888904f06b5b7eab",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 148,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.063188,
+    "w2": 1.042257
+   },
+   "ms": {
+    "S": 0.571373,
+    "LT": 0.566266,
+    "PW": 3.294947,
+    "M1": 0.571373
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.206635,
+    "LT": 1.207431,
+    "PW": 0.999931,
+    "M1": 1.206635,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "9bf417ab44e53e234c6704f7e205f70f954e9647a56d5849888904f06b5b7eab",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 148,
+   "dead_ctas": {
+    "w1": 21824,
+    "w2": 15872
+   },
+   "q_pred": {
+    "w1": 1.063188,
+    "w2": 1.042257
+   },
+   "ms": {
+    "S": 0.598377,
+    "LT": 0.59327,
+    "PW": 3.321951,
+    "M1": 0.602667
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.190452,
+    "LT": 1.191054,
+    "PW": 0.999295,
+    "M1": 1.187154,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "fe088377d370644ceaa9cc0dd2df65662b2a18c25e78d5c2f9a71c5754eb1834",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 148,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.057204,
+    "w2": 1.041866
+   },
+   "ms": {
+    "S": 0.571334,
+    "LT": 0.56622,
+    "PW": 3.294907,
+    "M1": 0.571334
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": -6.8e-05
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "b47b3fca48b70272cef2a234dff2d62071958465d40141ca31a17b2466e91c0a",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 148,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.051285,
+    "w2": 1.037546
+   },
+   "ms": {
+    "S": 0.571463,
+    "LT": 0.566369,
+    "PW": 3.295037,
+    "M1": 0.571463
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": 0.000158
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.473526,
+    "LT": 0.468984,
+    "PW": 3.295173,
+    "M1": 0.473526
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.502647,
+    "LT": 0.498105,
+    "PW": 3.324294,
+    "M1": 0.507657
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.473526,
+    "LT": 0.468984,
+    "PW": 3.295173,
+    "M1": 0.473526
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.502647,
+    "LT": 0.498105,
+    "PW": 3.324294,
+    "M1": 0.507657
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "01c335835799b1493ecac2273841ec8c05e25e6a0c06a54b8e660df4d138af22",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 510,
+   "dead_ctas": {
+    "w1": 1276,
+    "w2": 928
+   },
+   "q_pred": {
+    "w1": 1.06581,
+    "w2": 1.053671
+   },
+   "ms": {
+    "S": 1.872039,
+    "LT": 1.870209,
+    "PW": 3.33822,
+    "M1": 1.872039
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.058287,
+    "LT": 1.05917,
+    "PW": 1.0,
+    "M1": 1.058287,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "01c335835799b1493ecac2273841ec8c05e25e6a0c06a54b8e660df4d138af22",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 510,
+   "dead_ctas": {
+    "w1": 21736,
+    "w2": 15808
+   },
+   "q_pred": {
+    "w1": 1.06581,
+    "w2": 1.053671
+   },
+   "ms": {
+    "S": 1.898892,
+    "LT": 1.897062,
+    "PW": 3.365072,
+    "M1": 1.90313
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.056081,
+    "LT": 1.056946,
+    "PW": 0.999326,
+    "M1": 1.055498,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "b2eece98422adb94bcd94b1aa293353197d4951f132d52e5f73c7f9ccc8a0b49",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 508,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.074482,
+    "w2": 1.05707
+   },
+   "ms": {
+    "S": 1.872039,
+    "LT": 1.863244,
+    "PW": 3.392289,
+    "M1": 1.872039
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.058287,
+    "LT": 1.055225,
+    "PW": 1.016197,
+    "M1": 1.058287,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "b2eece98422adb94bcd94b1aa293353197d4951f132d52e5f73c7f9ccc8a0b49",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 508,
+   "dead_ctas": {
+    "w1": 21824,
+    "w2": 15872
+   },
+   "q_pred": {
+    "w1": 1.074482,
+    "w2": 1.05707
+   },
+   "ms": {
+    "S": 1.899043,
+    "LT": 1.890248,
+    "PW": 3.419292,
+    "M1": 1.903333
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.056165,
+    "LT": 1.05315,
+    "PW": 1.015428,
+    "M1": 1.05561,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW-hotfirst",
+   "arm": "native",
+   "counts_sha256": "6da8d19e1b9c54f180c52a7ab50c8580fa66069f01ec9edce270c05d2734a037",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 508,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.071621,
+    "w2": 1.057747
+   },
+   "ms": {
+    "S": 1.872039,
+    "LT": 1.863244,
+    "PW": 3.392289,
+    "M1": 1.872039
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "PW-rand1",
+   "arm": "native",
+   "counts_sha256": "af999480ee32947a55bfad248256f5c6f0273ae3d66823c92116457a7b4243cb",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 508,
+   "dead_ctas": {
+    "w1": 1364,
+    "w2": 992
+   },
+   "q_pred": {
+    "w1": 1.07305,
+    "w2": 1.054717
+   },
+   "ms": {
+    "S": 1.872039,
+    "LT": 1.863244,
+    "PW": 3.392289,
+    "M1": 1.872039
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "perm_dr_S": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.768934,
+    "LT": 1.765731,
+    "PW": 3.33822,
+    "M1": 1.768934
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.798055,
+    "LT": 1.794852,
+    "PW": 3.367341,
+    "M1": 1.803064
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.768934,
+    "LT": 1.765731,
+    "PW": 3.33822,
+    "M1": 1.768934
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "A",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.798055,
+    "LT": 1.794852,
+    "PW": 3.367341,
+    "M1": 1.803064
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "e8a6ac528d3b4a3b68c54db1b27c63a1d9fff2473c58bef5c2035fdbb59553ea",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 81,
+   "dead_ctas": {
+    "w1": 1672,
+    "w2": 1216
+   },
+   "q_pred": {
+    "w1": 1.049938,
+    "w2": 1.024617
+   },
+   "ms": {
+    "S": 0.365093,
+    "LT": 0.364241,
+    "PW": 3.325306,
+    "M1": 0.365093
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.069183,
+    "LT": 1.066838,
+    "PW": 0.985463,
+    "M1": 1.069183,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "e8a6ac528d3b4a3b68c54db1b27c63a1d9fff2473c58bef5c2035fdbb59553ea",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 81,
+   "dead_ctas": {
+    "w1": 22132,
+    "w2": 16096
+   },
+   "q_pred": {
+    "w1": 1.049938,
+    "w2": 1.024617
+   },
+   "ms": {
+    "S": 0.392627,
+    "LT": 0.391774,
+    "PW": 3.352839,
+    "M1": 0.397096
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.059465,
+    "LT": 1.0573,
+    "PW": 0.985121,
+    "M1": 1.057234,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.341469,
+    "LT": 0.341421,
+    "PW": 3.374358,
+    "M1": 0.341469
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6401aa48105880398783703bf9e2fb7c15cf20a7e859b5383fbd3a9f793fbabe",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.37059,
+    "LT": 0.370542,
+    "PW": 3.40348,
+    "M1": 0.375599
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.341469,
+    "LT": 0.341421,
+    "PW": 3.374358,
+    "M1": 0.341469
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 60,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001623,
+    "w2": 1.001343
+   },
+   "ms": {
+    "S": 0.37059,
+    "LT": 0.370542,
+    "PW": 3.40348,
+    "M1": 0.375599
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "e13c97bc76574af922d864822e2c19571135b371d0ccd914efc6ac11fe09a44a",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 147,
+   "dead_ctas": {
+    "w1": 1408,
+    "w2": 1024
+   },
+   "q_pred": {
+    "w1": 1.088122,
+    "w2": 1.052806
+   },
+   "ms": {
+    "S": 0.564557,
+    "LT": 0.562729,
+    "PW": 3.294919,
+    "M1": 0.564557
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.192241,
+    "LT": 1.19989,
+    "PW": 0.999923,
+    "M1": 1.192241,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": true
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "e13c97bc76574af922d864822e2c19571135b371d0ccd914efc6ac11fe09a44a",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 147,
+   "dead_ctas": {
+    "w1": 21868,
+    "w2": 15904
+   },
+   "q_pred": {
+    "w1": 1.088122,
+    "w2": 1.052806
+   },
+   "ms": {
+    "S": 0.591636,
+    "LT": 0.589809,
+    "PW": 3.321998,
+    "M1": 0.595952
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.177041,
+    "LT": 1.184106,
+    "PW": 0.999309,
+    "M1": 1.173926,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": true,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.473526,
+    "LT": 0.468984,
+    "PW": 3.295173,
+    "M1": 0.473526
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "3cd0e70c9cb172f173c937789989a0067de361f20e6418ee45c5cf670d653626",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.502647,
+    "LT": 0.498105,
+    "PW": 3.324294,
+    "M1": 0.507657
+   },
+   "ext_tread": false,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.473526,
+    "LT": 0.468984,
+    "PW": 3.295173,
+    "M1": 0.473526
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 120,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001662,
+    "w2": 1.015988
+   },
+   "ms": {
+    "S": 0.502647,
+    "LT": 0.498105,
+    "PW": 3.324294,
+    "M1": 0.507657
+   },
+   "ext_tread": false,
+   "label_blind": "SEEN: the 2026-09-29 Qwen1.5 G 8 timed pages carry this balanced cell"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "DW",
+   "arm": "native",
+   "counts_sha256": "7c2069840b7adbb18962cf4e0168f05b22b09bf694a1388ef7129f87cf37436b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 509,
+   "dead_ctas": {
+    "w1": 1320,
+    "w2": 960
+   },
+   "q_pred": {
+    "w1": 1.072642,
+    "w2": 1.05834
+   },
+   "ms": {
+    "S": 1.872039,
+    "LT": 1.866726,
+    "PW": 3.426228,
+    "M1": 1.872039
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.058287,
+    "LT": 1.057197,
+    "PW": 1.026364,
+    "M1": 1.058287,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "DW",
+   "arm": "shared",
+   "counts_sha256": "7c2069840b7adbb18962cf4e0168f05b22b09bf694a1388ef7129f87cf37436b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 509,
+   "dead_ctas": {
+    "w1": 21780,
+    "w2": 15840
+   },
+   "q_pred": {
+    "w1": 1.072642,
+    "w2": 1.05834
+   },
+   "ms": {
+    "S": 1.898967,
+    "LT": 1.893655,
+    "PW": 3.453156,
+    "M1": 1.903232
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "ratio": {
+    "S": 1.056123,
+    "LT": 1.055048,
+    "PW": 1.025484,
+    "M1": 1.055554,
+    "U": 1.0
+   },
+   "lever": {
+    "U": true,
+    "PW": false,
+    "LT": false
+   }
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.768934,
+    "LT": 1.765731,
+    "PW": 3.33822,
+    "M1": 1.768934
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ab9b43cb12da3832e07d340888da02e5e6b8a9577af42ac29e795441899860a2",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.798055,
+    "LT": 1.794852,
+    "PW": 3.367341,
+    "M1": 1.803064
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)",
+   "delta_M3": 0.0
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 60,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 2596,
+    "w2": 1888
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.768934,
+    "LT": 1.765731,
+    "PW": 3.33822,
+    "M1": 1.768934
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)"
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "B",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "declared": 540,
+   "path": "block-scan",
+   "live_rows": 480,
+   "dead_ctas": {
+    "w1": 23056,
+    "w2": 16768
+   },
+   "q_pred": {
+    "w1": 1.001272,
+    "w2": 1.028881
+   },
+   "ms": {
+    "S": 1.798055,
+    "LT": 1.794852,
+    "PW": 3.367341,
+    "M1": 1.803064
+   },
+   "ext_tread": true,
+   "label_blind": "BLIND (a SEEN held-out model, not CAL)"
+  }
+ ],
+ "byte_predictions": [
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+   "q_pred": {
+    "w1": 1.128108,
+    "w2": 1.203679
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "fdbd206d846e9ad48ca900ef674637d3c6b4c5dc814ca0a337b300a8c20b5d02",
+   "q_pred": {
+    "w1": 1.128108,
+    "w2": 1.203679
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+   "q_pred": {
+    "w1": 1.128221,
+    "w2": 1.221864
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "201d468a000e4d45a35c10deb0f949d9ca4784e9d5f517521f7880b708bb2a98",
+   "q_pred": {
+    "w1": 1.128221,
+    "w2": 1.221864
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.004246,
+    "w2": 1.084989
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+   "q_pred": {
+    "w1": 1.88158,
+    "w2": 2.089747
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "f34f0645012abee6f5034589e78273b5fbaf4f30bf6e7f91dc171161599100be",
+   "q_pred": {
+    "w1": 1.88158,
+    "w2": 2.089747
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+   "q_pred": {
+    "w1": 1.881258,
+    "w2": 2.103759
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "34db55c36623b17ae2c124b55656534e9c602b7091a90fc9bfc7d537c7a958e3",
+   "q_pred": {
+    "w1": 1.881258,
+    "w2": 2.103759
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "C",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.003157,
+    "w2": 1.208174
+   },
+   "label_blind": "BLIND-CALMODEL (8x7B is the CAL timing model; no skewed GH200 page exists)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4",
+   "q_pred": {
+    "w1": 1.049664,
+    "w2": 1.0406
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "bd205712cdd05e004d39053afde307da503fd3ab345453b8476b612611915fe4",
+   "q_pred": {
+    "w1": 1.049664,
+    "w2": 1.0406
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af",
+   "q_pred": {
+    "w1": 1.031131,
+    "w2": 1.018769
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "1a033d9b95c0026fd00445e4c75894354af77bad57e5afb7e7d4651a065591af",
+   "q_pred": {
+    "w1": 1.031131,
+    "w2": 1.018769
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "e0f6f9c8b4e72640283e68643adee031b51daaa20bc6bb189f308266c6323366",
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.00158,
+    "w2": 1.014419
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6",
+   "q_pred": {
+    "w1": 1.05201,
+    "w2": 1.042733
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "751455652ca2d5e4be1c9602ace709e309bc7f661b093d5465c43c606fa0c5f6",
+   "q_pred": {
+    "w1": 1.05201,
+    "w2": 1.042733
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53",
+   "q_pred": {
+    "w1": 1.028819,
+    "w2": 1.024026
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "e3cc6f43beddc75ba6e78ccbf165d488cefb7309cf053e6e8199c2e269a91f53",
+   "q_pred": {
+    "w1": 1.028819,
+    "w2": 1.024026
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.00144,
+    "w2": 1.021515
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 16,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "4ddb7492ac3858aa59851eadbca3582977c80b2693a9378fc4107fa8cedfabb7",
+   "q_pred": {
+    "w1": 1.038972,
+    "w2": 1.042835
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 16,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "76d48b57c63105222cf81d57be1b9348c794d0e05b41764bc25b9bf4c8da4516",
+   "q_pred": {
+    "w1": 1.040753,
+    "w2": 1.043592
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 16,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "C",
+   "n": 16,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "q_pred": {
+    "w1": 1.02197,
+    "w2": 1.037031
+   },
+   "label_blind": "BLIND-CALMODEL only because OLMoE is in the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE) that d and kappa were fitted on (review a3)"
+  }
+ ],
+ "summary": {
+  "mixtral-8x7b": {
+   "S_minus_1_pct": [
+    1.0858,
+    30.4056
+   ],
+   "LT_minus_1_pct": [
+    1.1457,
+    28.0128
+   ],
+   "PW_minus_1_pct": [
+    3.5415,
+    22.1538
+   ]
+  },
+  "olmoe-1b-7b": {
+   "S_minus_1_pct": [
+    2.5818,
+    21.8667
+   ],
+   "LT_minus_1_pct": [
+    2.6928,
+    22.4481
+   ],
+   "PW_minus_1_pct": [
+    -1.5912,
+    36.5878
+   ]
+  },
+  "qwen1.5-moe-a2.7b": {
+   "S_minus_1_pct": [
+    5.6081,
+    21.7268
+   ],
+   "LT_minus_1_pct": [
+    5.315,
+    21.4847
+   ],
+   "PW_minus_1_pct": [
+    -2.0574,
+    2.6364
+   ]
+  }
+ },
+ "levers": {
+  "rule": "U and PW: |r_rival - r_S| > 4.5% (3 x the 1.5% prior); LT: |r_LT - r_S| > 0.75% (3 x 0.25%, one cell against one)",
+  "cells": {
+   "U": [
+    "mixtral-8x7b/A/n2/PT/native",
+    "mixtral-8x7b/A/n2/PT/shared",
+    "mixtral-8x7b/A/n2/PW/native",
+    "mixtral-8x7b/A/n2/PW/shared",
+    "mixtral-8x7b/A/n8/PW/native",
+    "mixtral-8x7b/A/n8/PW/shared",
+    "mixtral-8x7b/B/n2/DW/native",
+    "mixtral-8x7b/B/n2/DW/shared",
+    "mixtral-8x7b/B/n8/DW/native",
+    "mixtral-8x7b/B/n8/DW/shared",
+    "olmoe-1b-7b/A/n2/PT/native",
+    "olmoe-1b-7b/A/n2/PT/shared",
+    "olmoe-1b-7b/A/n2/PW/native",
+    "olmoe-1b-7b/A/n2/PW/shared",
+    "olmoe-1b-7b/A/n4/PT/native",
+    "olmoe-1b-7b/A/n4/PT/shared",
+    "olmoe-1b-7b/A/n4/PW/native",
+    "olmoe-1b-7b/A/n4/PW/shared",
+    "olmoe-1b-7b/B/n2/DW/native",
+    "olmoe-1b-7b/B/n2/DW/shared",
+    "olmoe-1b-7b/B/n4/DW/native",
+    "olmoe-1b-7b/B/n4/DW/shared",
+    "qwen1.5-moe-a2.7b/A/n1/PT/native",
+    "qwen1.5-moe-a2.7b/A/n1/PT/shared",
+    "qwen1.5-moe-a2.7b/A/n1/PW/native",
+    "qwen1.5-moe-a2.7b/A/n1/PW/shared",
+    "qwen1.5-moe-a2.7b/A/n2/PT/native",
+    "qwen1.5-moe-a2.7b/A/n2/PT/shared",
+    "qwen1.5-moe-a2.7b/A/n2/PW/native",
+    "qwen1.5-moe-a2.7b/A/n2/PW/shared",
+    "qwen1.5-moe-a2.7b/A/n8/PT/native",
+    "qwen1.5-moe-a2.7b/A/n8/PT/shared",
+    "qwen1.5-moe-a2.7b/A/n8/PW/native",
+    "qwen1.5-moe-a2.7b/A/n8/PW/shared",
+    "qwen1.5-moe-a2.7b/B/n1/DW/native",
+    "qwen1.5-moe-a2.7b/B/n1/DW/shared",
+    "qwen1.5-moe-a2.7b/B/n2/DW/native",
+    "qwen1.5-moe-a2.7b/B/n2/DW/shared",
+    "qwen1.5-moe-a2.7b/B/n8/DW/native",
+    "qwen1.5-moe-a2.7b/B/n8/DW/shared"
+   ],
+   "PW": [
+    "mixtral-8x7b/A/n2/PT/native",
+    "mixtral-8x7b/A/n2/PT/shared",
+    "mixtral-8x7b/A/n2/PW/native",
+    "mixtral-8x7b/A/n2/PW/shared",
+    "mixtral-8x7b/A/n8/PT/native",
+    "mixtral-8x7b/A/n8/PT/shared",
+    "mixtral-8x7b/A/n8/PW/native",
+    "mixtral-8x7b/A/n8/PW/shared",
+    "mixtral-8x7b/A/n32/PW/native",
+    "mixtral-8x7b/A/n32/PW/shared",
+    "mixtral-8x7b/B/n2/DW/native",
+    "mixtral-8x7b/B/n2/DW/shared",
+    "mixtral-8x7b/B/n8/DW/native",
+    "mixtral-8x7b/B/n8/DW/shared",
+    "mixtral-8x7b/B/n32/DW/native",
+    "mixtral-8x7b/B/n32/DW/shared",
+    "olmoe-1b-7b/A/n2/PT/native",
+    "olmoe-1b-7b/A/n2/PT/shared",
+    "olmoe-1b-7b/A/n2/PW/native",
+    "olmoe-1b-7b/A/n2/PW/shared",
+    "olmoe-1b-7b/A/n4/PT/native",
+    "olmoe-1b-7b/A/n4/PT/shared",
+    "olmoe-1b-7b/A/n4/PW/native",
+    "olmoe-1b-7b/A/n4/PW/shared",
+    "olmoe-1b-7b/A/n16/PT/native",
+    "olmoe-1b-7b/A/n16/PT/shared",
+    "olmoe-1b-7b/A/n16/PW/native",
+    "olmoe-1b-7b/A/n16/PW/shared",
+    "olmoe-1b-7b/B/n2/DW/native",
+    "olmoe-1b-7b/B/n2/DW/shared",
+    "olmoe-1b-7b/B/n4/DW/native",
+    "olmoe-1b-7b/B/n4/DW/shared",
+    "olmoe-1b-7b/B/n16/DW/native",
+    "olmoe-1b-7b/B/n16/DW/shared",
+    "qwen1.5-moe-a2.7b/A/n1/PT/native",
+    "qwen1.5-moe-a2.7b/A/n1/PT/shared",
+    "qwen1.5-moe-a2.7b/A/n1/PW/native",
+    "qwen1.5-moe-a2.7b/A/n1/PW/shared",
+    "qwen1.5-moe-a2.7b/A/n2/PT/native",
+    "qwen1.5-moe-a2.7b/A/n2/PT/shared",
+    "qwen1.5-moe-a2.7b/A/n2/PW/native",
+    "qwen1.5-moe-a2.7b/A/n2/PW/shared",
+    "qwen1.5-moe-a2.7b/A/n8/PT/native",
+    "qwen1.5-moe-a2.7b/A/n8/PT/shared",
+    "qwen1.5-moe-a2.7b/B/n1/DW/native",
+    "qwen1.5-moe-a2.7b/B/n1/DW/shared",
+    "qwen1.5-moe-a2.7b/B/n2/DW/native",
+    "qwen1.5-moe-a2.7b/B/n2/DW/shared"
+   ],
+   "LT": [
+    "mixtral-8x7b/A/n2/PT/native",
+    "mixtral-8x7b/A/n2/PT/shared",
+    "mixtral-8x7b/A/n2/PW/native",
+    "mixtral-8x7b/A/n2/PW/shared",
+    "mixtral-8x7b/A/n8/PT/native",
+    "mixtral-8x7b/A/n8/PT/shared",
+    "mixtral-8x7b/A/n8/PW/native",
+    "mixtral-8x7b/A/n8/PW/shared",
+    "mixtral-8x7b/B/n2/DW/native",
+    "mixtral-8x7b/B/n2/DW/shared",
+    "mixtral-8x7b/B/n8/DW/native",
+    "mixtral-8x7b/B/n8/DW/shared",
+    "olmoe-1b-7b/A/n4/PW/native",
+    "olmoe-1b-7b/A/n4/PW/shared",
+    "olmoe-1b-7b/B/n2/DW/native",
+    "olmoe-1b-7b/B/n2/DW/shared",
+    "qwen1.5-moe-a2.7b/B/n2/DW/native"
+   ]
+  },
+  "counts": {
+   "U": 40,
+   "PW": 48,
+   "LT": 17
+  }
+ },
+ "gates": {
+  "source": "docs/registered/2026-10-06-rental4-nativegates-gh200 (owner decision 1 of 2026-10-06) with G3 replaced below",
+  "G1_lock_thermal": "V7: the 1710 lock in force and the thermal gate, as every timed page",
+  "G2_host_bound": "R3's host-bound guard: a cell whose host enqueue exceeds its GPU time is excluded (the page's histogram_gates lists them)",
+  "G4_worst_cell_clock": "every scored cell's measured SM clock is the 1710 lock: a cell read below 1705 MHz (a third of the 15 MHz grid step under it) is excluded (OWNER-CONFIRMED 2026-10-07)",
+  "G5_provenance": "the page's histogram file sha256 equals the registered one, every row's counts_sha256 equals its registered cell's, bincount_ok on every row, the shuffle seed recorded; else the page is NOT SCORED",
+  "G3": "G3 (per board). d_i = T(uniform-shuffled)/T(balanced) - 1 - delta_M3,i, on every valid (shape, page, n, arm) cell, NATIVE and SHARED pooled. Equivalence holds if the 90% cluster-t CI of mean(d), clustered on page (df = pages - 1), lies within +-0.36%. Heterogeneity: Q = sum (d_i - mean)^2 / (2 x 0.0018^2) against chi2(N-1). If p < 0.01, apply the same TOST per n-stratum, and only the failing strata's histogram cells are voided. Otherwise, a failure voids every histogram cell on the board. Every d_i, Q, its p, and the per-shape and per-arm means are printed. The same rule is applied to the permutation cells against S's predicted dr.",
+  "G3_what_it_tests": "OWNER DECISION 2026-10-07: G3 is kept as a test of TOKEN ORDER against the model's predicted zero effect. The uniform-shuffled and balanced cells have identical per-expert counts and identical per-expert token sets; they differ only in which tokens sit in which rows (the row shuffle), which moves the A-row gather locality. Every registered model (M2, M3 and the content-keyed term) predicts delta_M3 = 0 for that, so G3 asks whether token order alone moves the time by more than the +-0.36% margin",
+  "G3_delta_M3": "registered per cell in predictions[].delta_M3 (S(uniform)/S(balanced) - 1). It is 0.0 on every cell: a token-row permutation keeps every expert's token set (the realize_counts classes of k experts with identical token sets survive it, permuted), and the registered byte view keys A by M-tile, so neither M2 nor M3 nor the content-keyed term moves. The review's 'the shuffle destroys those classes' does not hold for a row shuffle; G3 therefore tests the token ORDER (A-row gather locality) the models do not price",
+  "G3_power": "Monte Carlo of the registered g3_rule (build-r5-review area5/g3_mc.txt), 6 pages x 6 cells at sigma_page 0.18%: with no effect a board is voided 0.4% of the time; with a true effect at the 0.36% margin it wrongly passes 5.2% of the time; Q's size 1.1%; a +0.6% effect at one n is caught by Q 93% of the time. If the true cell noise is 0.25%, a board with no effect is voided 38% of the time (Q fires on the noise itself)",
+  "G3_margin_fixed": "the margin stays fixed at +-0.36% (2 x 0.18%) whatever sigma the pages show; it is never re-chosen on a page",
+  "G3_no_rows": "a board with no valid G3 row (no uniform-balanced pair on any page) has no control: every histogram cell's test (SKEW-RATIO, E1-SKEW, the permutation control, B-SKEW, E2-SKEW) is NOT SCORED (build-r5-review F6); E1-UNI and E1-UNI-EXT, on balanced cells, are still scored",
+  "G3_margin": 0.0036,
+  "G3_q_alpha": 0.01,
+  "G3_shared": "SHARED is pooled with NATIVE in G3 (the review's text); the per-arm means are printed",
+  "views": "R3's VALIDITY gates by rental 3's two views (ALL and CLEAN, rental 2's addendum rule 3); a page whose V1 failed is unusable in both",
+  "perm_control": "the G3 rule on the permutation cells: d_i = [T(perm)/T(PW) - 1]_meas - perm_dr_S, NATIVE, clustered on page; a failure is printed as S failing the label-permutation control (it voids nothing)"
+ },
+ "tests": {
+  "SKEW-RATIO": {
+   "statistic": "r = T(h) / T(uniform-hist), same page, n and arm; e = r_pred / r_meas - 1 on every valid (shape, page, n, h in PT PW DW, arm); a ratio needs both cells valid",
+   "S": "HOLDS if rms(e) <= 1.5% and max|e| <= 4%; else FAILS",
+   "rivals": "U, PW and LT are each EXCLUDED if their rms on their own lever cells is at least 2 x S's rms there and at least 3 sqrt2 sigma_page (0.76%); UNDECIDED if fewer than 6 of a rival's lever cells survive the gates; M1 printed",
+   "rms_max": 0.015,
+   "max_abs": 0.04,
+   "rival_factor": 2.0,
+   "rival_floor": 0.007637,
+   "min_lever_cells": 6
+  },
+  "E1-SKEW": {
+   "statistic": "e = T_pred / T_meas - 1, predicted bytes (M3), on every valid histogram cell (PT PW DW, the permutations, uniform)",
+   "rule": "HOLDS if rms <= 2.5%, worst <= 6% and |mean e| <= 1.5%",
+   "rms_max": 0.025,
+   "max_abs": 0.06,
+   "mean_max": 0.015,
+   "prior": "2 to 3%: rental 3's E1 under v2 reads 1.79% (SEEN)"
+  },
+  "E1-UNI-EXT": {
+   "statistic": "e on the balanced cells at treads past every timed CAL tread (Mixtral 32, OLMoE 16, Qwen1.5 8; R3's DEFAULT_TREADS 6), reported apart from E1-SKEW (review b3)",
+   "rule": "the E1-SKEW bands, printed as HOLDS or FALSIFIED; the balanced cells at n <= 6 are printed as E1-UNI (in range)"
+  },
+  "B-SKEW": {
+   "statistic": "e_B = q_pred / q_counted - 1 per (cell, GEMM) on the byte-leg counter pages (q = (dram_bytes_read - n x operand) / W_g)",
+   "rule": "HOLDS if every PT / PW cell's |e_B| <= 5% (the WSC registrations' per-cell band) and their rms <= 3%; the uniform and balanced cells of the same page are printed as the control",
+   "gates": "the byte leg takes the timed pages' gates too (build-r5-review F5): G5 row by row (every counter cell's counts_sha256 equals its registered cell's and its bincount equals the counts, else the page is NOT SCORED), G3's voiding (a voided stratum's byte cells are dropped, and no G3 row means NOT SCORED), and the 1705 MHz cut on each cell's SM clock = sm__cycles_elapsed.avg / gpu_time_ns over its (cell, GEMM) of at least 0.5 ms (shorter GEMMs read low by a fixed offset, rental 3), else the page's median over such GEMMs; a page with no such GEMM is NOT SCORED",
+   "max_abs": 0.05,
+   "rms_max": 0.03,
+   "owner": "thresholds OWNER-CONFIRMED 2026-10-07 as registered"
+  },
+  "E2-SKEW": {
+   "statistic": "e = T(counted bytes) / T_meas - 1: S's time with sigma from the byte-leg page's counted bytes of the same (model, n, label, arm), computed by skewmodel.Engine.price_counted at the registered fit and code",
+   "rule": "HOLDS if rms <= 2%, worst <= 5% and |mean| <= 1.5%",
+   "rms_max": 0.02,
+   "max_abs": 0.05,
+   "mean_max": 0.015,
+   "owner": "thresholds OWNER-CONFIRMED 2026-10-07 as registered",
+   "code": "scored only when scripts/r3_timing_model.py, scripts/wave_split_bytes.py and scripts/scoring/rental5/skewmodel.py have the registration's sha256 (code_pins)"
+  },
+  "DECOMPOSITION": "per byte-leg cell, ln(T_pred / T_meas) = ln(T_pred / T_counted) + ln(T_counted / T_meas): the byte model's part (B as time) and E2's, printed (review c)",
+  "reported": "per arm, per shape and pooled; ALL and CLEAN; the calibration line (cluster = shape), gamma (strata (shape, arm, n) across PT PW DW uniform; mostly skewed-against-uniform pairs resolve), top-1 regret NOT APPLICABLE"
+ },
+ "noise": {
+  "sigma_page": 0.0018,
+  "sigma_page_alt": 0.001,
+  "rule": "every rule at 0.18% and also printed at 0.10% (rental 4's NATIVE c9 / c15 replicate)"
+ },
+ "missing": "a ratio needs both its cells valid; a missing page's cells are NOT SCORED; the drop-groups skm, sko and skq keep each shape's A, B (and C) pages together",
+ "rival_note": "PW sits far above S on every cell (a strawman, as the design said); LT is the close rival (review d): its lever cells are listed",
+ "wsc_citation": "the per-expert walk is in scripts/wave_split_bytes.py (walk, stack_distance, tile_content_ids, DESIGN_KEYS at c213664 lines 615 (owner at 638), 590, 788, 1093), not r3_timing_model's 590-640 CORES block (review b)",
+ "leakage": {
+  "no_skewed_gh200_page": "no skewed GH200 page exists; every R3 page so far is balanced_ids",
+  "padding_seen": "docs/FINDINGS.md:2729 'Padding is either zero or free' (SEEN, H200, the August sweeps): above batch 256 vLLM's autotuner sizes BLOCK_SIZE_M to rows per expert (0% padding), and below it the wasted arithmetic hides inside a 20 us weight read. S predicts the opposite here, +2 to +30% from padding. The regime boundary: R3 pins BLOCK_M 32 (no autotuner, so a partly filled tile is real), and these cells are floor-bound (the CTA's shared-memory floor, not the weight read, sets its time), where a partly filled M-tile costs a whole CTA lifetime",
+  "earlier_skew_timings": "the August H200 / A100 sweeps timed zipf, hot and dirichlet (FINDINGS C5 'seven routing regimes'): SEEN, another harness, unlocked, fitted by no current constant",
+  "histograms": "the synthetic shapes are fitted to SEEN routing statistics (no GH200 page); the counts are drawn, never timed, fitted on nothing",
+  "wsc": "WSC's card constants are CAL on uniform 8x7B pages only; a skew page is a target only and never joins a CAL card",
+  "d_kappa": "d and kappa are fitted on the CAL-counters set (8x7B, 8x22B, Qwen2-57B, OLMoE counter pages): OLMoE's cells are BLIND-CALMODEL only because of that set"
+ },
+ "seen_data": [
+  "the timing fit is 8x7B's CAL 2026-09-27 pages under v2; d and kappa CAL-counters",
+  "the byte model's parameters are CAL (8x7B counter pages)",
+  "sigma_page 0.18% and 0.10% are SEEN",
+  "the routing statistics the shapes are fitted to are SEEN (routing logs, no timing)",
+  "no skewed GH200 page exists: every cell is BLIND or BLIND-CALMODEL (labels)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/private_weight_reference.py": "6c90112eb2f850382003bca2d5b947e6b67f192dcea16eec10c83e0c2ccde277",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+  "scripts/skew_synth.py": "eea9d019f25b2b427ed74f6c33194dbd35b37f4ba95aab27a030c3d88fb94c23",
+  "scripts/cross_model_score.py": "d770e8ba1c4178add7c7180921d434aca8c4ee115068809cb5f0227dad22ef07",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+  "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+  "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11"
+ }
+}

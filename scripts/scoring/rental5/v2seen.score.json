@@ -1,0 +1,1002 @@
+{
+ "registration": "2026-10-07-rental5-v2-gh200",
+ "status": "SEEN DIAGNOSTIC, NO VERDICT",
+ "host_rule": {
+  "F240_ms": 0.067551,
+  "host_ms": 0.4,
+  "set": "SHARED + PRIVATE"
+ },
+ "timing": {
+  "m": {
+   "version": "M (DEAD_CTA_NS 1.333, k_w 0.5)",
+   "source_fit": {
+    "T0": 0.044241,
+    "c": 202.547644,
+    "bw": 3597.800853,
+    "s_small": 0.011976,
+    "s_block": -0.00808
+   },
+   "tests": {
+    "mixtral-8x7b (in-sample)": {
+     "cells": 76,
+     "rms": 0.002556,
+     "worst": 0.006017,
+     "mean": 0.000329,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 2.45215,
+      "shared": 5.719319,
+      "private": -4.828266
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.00036,
+       "slope": 1.000036,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 59,
+       "discordant": 5,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.84375,
+       "ci": [
+        0.571429,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 86,
+       "discordant": 9,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.810526,
+       "ci": [
+        0.619048,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "CAL (in-sample)"
+    },
+    "mixtral-8x22b": {
+     "cells": 40,
+     "rms": 0.010309,
+     "worst": -0.026389,
+     "mean": -0.004026,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 9.939451,
+      "shared": 13.753051,
+      "private": -47.275795
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 40,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": 0.008066,
+       "slope": 0.99709,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 23,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.84,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 23,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.84,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "qwen2-57b-a14b": {
+     "cells": 58,
+     "rms": 0.010596,
+     "worst": -0.019875,
+     "mean": -0.003501,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -3.668059,
+      "shared": 9.366774,
+      "private": -64.767682
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 58,
+       "clusters": 4,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.009456,
+       "slope": 1.011271,
+       "verdict": "NOT RESOLVED (4 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 27,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 30,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "olmoe-1b-7b": {
+     "cells": 66,
+     "rms": 0.014032,
+     "worst": 0.031339,
+     "mean": 0.011561,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -0.638709,
+      "shared": 8.208382,
+      "private": 11.023718
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 66,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.011141,
+       "slope": 1.014156,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 16,
+       "discordant": 5,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.52381,
+       "ci": [
+        -1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 31,
+       "discordant": 14,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.377778,
+       "ci": [
+        -0.371429,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "jetmoe-8b": {
+     "cells": 46,
+     "rms": 0.00843,
+     "worst": -0.027237,
+     "mean": 0.001278,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -2.242704,
+      "shared": 1.287127,
+      "private": -1.9863
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 46,
+       "clusters": 4,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": 0.004181,
+       "slope": 1.014054,
+       "verdict": "NOT RESOLVED (4 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 30,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 36,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.894737,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "qwen1.5-moe-a2.7b": {
+     "cells": 76,
+     "rms": 0.018719,
+     "worst": 0.048074,
+     "mean": 0.010905,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -3.17667,
+      "shared": 6.731982,
+      "private": 5.356955
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.011746,
+       "slope": 1.02152,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 28,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 32,
+       "discordant": 6,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.684211,
+       "ci": [
+        -0.333333,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "phi-3.5-moe": {
+     "cells": 76,
+     "rms": 0.005667,
+     "worst": -0.012713,
+     "mean": -0.00085,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 5.21039,
+      "shared": 7.239346,
+      "private": -17.618128
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.001545,
+       "slope": 1.002878,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 65,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 94,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "rental3 E2 (counted)": {
+     "cells": 31,
+     "rms": 0.025162,
+     "worst": 0.047222,
+     "mean": 0.020361,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 0.088362,
+      "shared": 15.052773,
+      "private": 6.1824
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 31,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.000493,
+       "slope": 1.040315,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 6,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "verdict": "NOT RESOLVED (6 resolved pairs, under 10)"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 11,
+       "discordant": 1,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.833333,
+       "ci": [
+        0.0,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "rental3 E1 (predicted)": {
+     "cells": 31,
+     "rms": 0.036578,
+     "worst": 0.064716,
+     "mean": 0.033967,
+     "beyond_5pct": 3,
+     "mean_us_by_arm": {
+      "native": 0.089026,
+      "shared": 15.053436,
+      "private": 23.021055
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 31,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.017739,
+       "slope": 1.033012,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 6,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "verdict": "NOT RESOLVED (6 resolved pairs, under 10)"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 11,
+       "discordant": 1,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.833333,
+       "ci": [
+        0.0,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    }
+   }
+  },
+  "v2": {
+   "version": "v2 (d 0.995 ns, kappa 0.325)",
+   "source_fit": {
+    "T0": 0.04323,
+    "c": 202.547644,
+    "bw": 3597.800853,
+    "s_small": 0.012987,
+    "s_block": -0.007069
+   },
+   "tests": {
+    "mixtral-8x7b (in-sample)": {
+     "cells": 76,
+     "rms": 0.002556,
+     "worst": 0.006017,
+     "mean": 0.000329,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 2.45215,
+      "shared": 5.719319,
+      "private": -4.828266
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.00036,
+       "slope": 1.000036,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 59,
+       "discordant": 5,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.84375,
+       "ci": [
+        0.571429,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 86,
+       "discordant": 9,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.810526,
+       "ci": [
+        0.619048,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "CAL (in-sample)"
+    },
+    "mixtral-8x22b": {
+     "cells": 40,
+     "rms": 0.009936,
+     "worst": -0.025814,
+     "mean": -0.003251,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 9.939451,
+      "shared": 16.3078,
+      "private": -44.721046
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 40,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": 0.006202,
+       "slope": 0.997884,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 23,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.84,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 23,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.84,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "qwen2-57b-a14b": {
+     "cells": 58,
+     "rms": 0.011333,
+     "worst": -0.020984,
+     "mean": -0.007473,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -3.668059,
+      "shared": -1.026674,
+      "private": -75.16113
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 58,
+       "clusters": 4,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.000645,
+       "slope": 1.007112,
+       "verdict": "NOT RESOLVED (4 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 27,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 30,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "olmoe-1b-7b": {
+     "cells": 66,
+     "rms": 0.008761,
+     "worst": 0.02092,
+     "mean": 0.006415,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -0.638709,
+      "shared": 3.738121,
+      "private": 6.553457
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 66,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.006127,
+       "slope": 1.008922,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 16,
+       "discordant": 5,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 0.52381,
+       "ci": [
+        -1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 31,
+       "discordant": 14,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.377778,
+       "ci": [
+        -0.371429,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "IN-SAMPLE (d, kappa): its counter pages are in D's CAL-counters fit set; SEEN"
+    },
+    "jetmoe-8b": {
+     "cells": 46,
+     "rms": 0.008584,
+     "worst": -0.02699,
+     "mean": 0.001623,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -2.242704,
+      "shared": 1.504431,
+      "private": -1.768996
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 46,
+       "clusters": 4,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": 0.003964,
+       "slope": 1.014397,
+       "verdict": "NOT RESOLVED (4 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 30,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 36,
+       "discordant": 2,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.894737,
+       "ci": [
+        0.6,
+        1.0
+       ],
+       "clusters": 4,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "qwen1.5-moe-a2.7b": {
+     "cells": 76,
+     "rms": 0.012829,
+     "worst": 0.034024,
+     "mean": 0.005072,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": -3.17667,
+      "shared": 1.722565,
+      "private": 0.347539
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.005628,
+       "slope": 1.015445,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 28,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 32,
+       "discordant": 6,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.684211,
+       "ci": [
+        -0.333333,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "phi-3.5-moe": {
+     "cells": 76,
+     "rms": 0.005761,
+     "worst": -0.012418,
+     "mean": -0.000246,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 5.21039,
+      "shared": 8.375026,
+      "private": -16.482448
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 76,
+       "clusters": 5,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.002681,
+       "slope": 1.003511,
+       "verdict": "NOT RESOLVED (5 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 65,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 94,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 1.0,
+       "ci": [
+        1.0,
+        1.0
+       ],
+       "clusters": 5,
+       "verdict": "CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "rental3 E2 (counted)": {
+     "cells": 31,
+     "rms": 0.009697,
+     "worst": 0.020162,
+     "mean": 0.002004,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 0.027258,
+      "shared": 4.592422,
+      "private": -4.277951
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 31,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": 0.008957,
+       "slope": 1.021687,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 6,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "verdict": "NOT RESOLVED (6 resolved pairs, under 10)"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 11,
+       "discordant": 1,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.833333,
+       "ci": [
+        0.0,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    },
+    "rental3 E1 (predicted)": {
+     "cells": 31,
+     "rms": 0.017853,
+     "worst": 0.03384,
+     "mean": 0.015609,
+     "beyond_5pct": 0,
+     "mean_us_by_arm": {
+      "native": 0.027922,
+      "shared": 4.593086,
+      "private": 12.560704
+     },
+     "secondary": {
+      "calibration": {
+       "cells": 31,
+       "clusters": 3,
+       "fit": "OLS ln(meas) on ln(pred)",
+       "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+       "seed": 20261007,
+       "resamples": 2000,
+       "intercept": -0.008171,
+       "slope": 1.014867,
+       "verdict": "NOT RESOLVED (3 clusters, under 6): descriptive only"
+      },
+      "gamma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 6,
+       "discordant": 0,
+       "resolved_threshold_ln": 0.005091,
+       "gamma": 1.0,
+       "verdict": "NOT RESOLVED (6 resolved pairs, under 10)"
+      },
+      "gamma_alt_sigma": {
+       "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+       "concordant": 11,
+       "discordant": 1,
+       "resolved_threshold_ln": 0.002828,
+       "gamma": 0.833333,
+       "ci": [
+        0.0,
+        1.0
+       ],
+       "clusters": 3,
+       "verdict": "NOT CONSISTENT"
+      },
+      "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+     },
+     "label": "held-out, SEEN"
+    }
+   }
+  }
+ },
+ "dead_contrasts": {
+  "A1": {
+   "model": "qwen2-57b-a14b-tp8",
+   "Delta_meas_us": 22.925976,
+   "M_pred_us": 27.769056,
+   "v2_pred_us": 20.72784,
+   "M_minus_meas_us": 4.84308,
+   "v2_minus_meas_us": -2.198136,
+   "label": "SEEN (rental 4 published); v2's d and kappa are D's, which A1 / A2 tested blind"
+  },
+  "A2": {
+   "model": "olmoe-1b-7b",
+   "Delta_meas_us": 24.445998,
+   "M_pred_us": 31.736064,
+   "v2_pred_us": 23.68896,
+   "M_minus_meas_us": 7.290066,
+   "v2_minus_meas_us": -0.757038,
+   "label": "SEEN (rental 4 published); v2's d and kappa are D's, which A1 / A2 tested blind"
+  },
+  "per_gemm_d_printed": {
+   "d_w2_ns": 1.1005172682654245,
+   "d_w1_ns": 0.953078034356059
+  }
+ },
+ "skipped": {
+  "granite-3.0-3b-a800m": "REFUSED by the timing model: no VALID R3 page among the inputs; nothing to fit"
+ },
+ "floors": {
+  "jetmoe-floor": "unaffected: a floor capture reads cycles per CTA k-step, no dead term",
+  "mixtral-floor": "unaffected: a floor capture reads cycles per CTA k-step, no dead term"
+ },
+ "reproduces_expected": true,
+ "mismatches": []
+}

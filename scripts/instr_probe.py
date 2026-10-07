@@ -4,6 +4,7 @@ owner decisions 2 and 5 of 2026-10-06).
 
     python scripts/instr_probe.py --mode perturb --variants FILE --out DIR [--dry-run]
     python scripts/instr_probe.py --mode stamps --variants FILE --variant ID --gate FILE --out DIR
+    python scripts/instr_probe.py --mode regcheck --variants FILE --out DIR
 
 R3'S OWN CALL. Weights, inputs, routing and the call come from private_weight_reference
 (`build_private_weights`, `arm_inputs`, `arm_call`, `declared_experts`, `pinned_config`,
@@ -36,12 +37,34 @@ saved as DIR/stamps/G<g>-<arm>-n<n>-call<c>-<w1|w2>.npy and indexed in DIR/stamp
 measured call, and each compiled config's SASS under DIR/sass/ with its bracket checks
 (moe.instrumented.cubin.sass_checks), which the scorer requires.
 
+REGCHECK (proposed after rental 4, compile only, nothing timed). Rental 4's gate failed every
+variant; the all-off copy's SASS equalled the plain kernel's on all 18 configs, and every
+stamped copy compiled to different registers (ptxas reallocates the whole kernel around the
+stamps; the k-loop's PTX is unchanged). Per variant, one call each of the plain kernel, the
+all-off copy, the variant's own spec and REGCHECK_SPECS, and per config the registers,
+shared and CTAs per SM of each (regcheck_rows): which stamp levels keep the plain kernel's
+occupancy, before any timed unit is spent on them. Writes DIR/regcheck.json and
+DIR/regcheck.env (`REGCHECK_<id>=PASS` or `REGCHECK_<id>=FAIL <why>`, the id's non-alphanumeric
+characters as `_`, as gate.env's GATE_ lines); exit 0 when every variant's own spec keeps the
+plain kernel's CTAs per SM, else 1.
+
+RENTAL 5 (owner decision 2 of 2026-10-07). The occupancy leg of regcheck and of the perturb
+gate reads CTAs PER SM only: registers and shared are printed and do not gate (ptxas
+reallocates the whole kernel around any stamp, gate-fix diagnosis item 2, so equal registers
+is unreachable). The timing legs are unchanged (median <= 1%, worst <= 2%), and so is the
+all-off SASS-equality leg. Every stamp buffer is allocated and filled BEFORE the L2 flush
+(moe.instrumented.BufferPool; gate-fix diagnosis item 4). `--regcheck FILE` on a stamps unit
+refuses it unless its REGCHECK_ line reads PASS. The sample level's variants are
+moe.instrumented.R5_VARIANTS (v1, v2, v3); REGCHECK_SPECS compiles all three beside every
+variant.
+
 EXIT CODES: 0 done (every gate PASS for perturb); 1 perturb ran and some gate FAILED; 2
 refused (bad variants, no CUDA / vLLM, the gate not PASS; and --dry-run); 3 a cell failed.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import shutil
@@ -77,6 +100,16 @@ BYTE_GATE_TREADS = (1, 5, 9)
 #: the sleep that holds the GPU ahead of a burst: cycles = ms x the lock in kHz
 SLEEP_AHEAD_MS = 25.0
 KINDS = ("stamps", "bytes")
+#: the stamp levels REGCHECK compiles beside each variant's own spec
+REGCHECK_SPECS = ("stamps=cta", "stamps=ends", "stamps=iter,every=1,marks=64",
+                  "stamps=iter,every=8,marks=8", "stamps=iter,every=16,marks=4",
+                  *I.R5_VARIANTS.values())
+#: rental 5's gate (owner decision 2, 2026-10-07): the same timing tolerance, the occupancy
+#: leg on CTAs per SM alone
+PERTURB_TOL_R5 = {"median_max": 0.01, "worst_max": 0.02, "occupancy": "identical CTAs per SM"}
+#: the occupancy fields compare_configs gates on: rental 4's three, rental 5's one
+OCC_LEGS_R4 = ("regs", "shared", "ctas_per_sm")
+OCC_LEGS_R5 = ("ctas_per_sm",)
 
 
 class Refused(Exception):
@@ -128,7 +161,7 @@ def check_variant(v: dict) -> dict:
         gate_spec = I.InstrSpec()
         gate_cells = [(g, a, n) for g in groups for a in PW.ARMS for n in BYTE_GATE_TREADS if n in ladder]
     else:
-        gate_spec = I.InstrSpec(stamps=spec.stamps, every=spec.every, marks=spec.marks)
+        gate_spec = dataclasses.replace(spec, evict_a="none", evict_b="none")
         gate_cells = [(g, a, n) for g in groups for a in arms for n in treads]
     return {**v, "cfg": cfg, "spec_obj": spec, "gate_spec": gate_spec, "block_k": bk,
             "num_stages": st, "groups": groups, "treads": treads, "arms": arms,
@@ -146,10 +179,12 @@ def load_variants(path: Path) -> list[dict]:
     return [check_variant(v) for v in vs]
 
 
-def compare_configs(plain: dict, copy: dict) -> list[dict]:
+def compare_configs(plain: dict, copy: dict, legs=OCC_LEGS_R4) -> list[dict]:
     """Pair the plain and copy kernels BY CONFIG (moe.instrumented.config_key: tile, G, stages,
     warps, MUL_ROUTED_WEIGHT, top_k) and compare registers, shared and CTAs per SM; every
-    plain config needs a copy of the same config. Values are compiled_facts dicts."""
+    plain config needs a copy of the same config. Values are compiled_facts dicts. `equal`
+    reads the fields in `legs` (rental 4: all three; rental 5, OCC_LEGS_R5: CTAs per SM),
+    and every field is printed either way."""
     out = []
     for key in sorted(set(plain) | set(copy), key=str):
         p, c = plain.get(key), copy.get(key)
@@ -160,9 +195,67 @@ def compare_configs(plain: dict, copy: dict) -> list[dict]:
         else:
             row["plain"]["ctas_per_sm"] = p["occupancy"]["ctas_per_sm"]
             row["copy"]["ctas_per_sm"] = c["occupancy"]["ctas_per_sm"]
-            row["equal"] = row["plain"] == row["copy"]
+            row["equal"] = all(row["plain"][k] == row["copy"][k] for k in legs)
+            row["legs"] = list(legs)
         out.append(row)
     return out
+
+
+def regcheck_ok(rows: list[dict], own: str) -> tuple[bool, str]:
+    """Rental 5's regcheck rule: every config's all-off copy and the variant's own spec at
+    the plain kernel's CTAs per SM (registers printed, not gating)."""
+    why = []
+    for r in rows:
+        name = key_name(tuple(r["config"]))
+        if (r["off"] or {}).get("ctas_per_sm") != (r["plain"] or {}).get("ctas_per_sm"):
+            why.append(f"{name}: the all-off copy at {(r['off'] or {}).get('ctas_per_sm')} CTAs/SM")
+        x = r["specs"].get(own)
+        if x is None or not x["same_ctas_per_sm"]:
+            got = (x or {}).get("copy") or {}
+            why.append(f"{name}: {own} at {got.get('ctas_per_sm')} CTAs/SM against the plain "
+                       f"{(r['plain'] or {}).get('ctas_per_sm')}")
+    if not rows:
+        why.append("no config compiled")
+    return (not why), "; ".join(why)
+
+
+def regcheck_line(vid: str, ok: bool, why: str) -> str:
+    return f"REGCHECK_{gate_key(vid)}=" + ("PASS" if ok else f"FAIL {why}")
+
+
+def read_regcheck(path: Path, vid: str) -> str:
+    """The regcheck line's verdict word for `vid` in a regcheck.env, or ''."""
+    if not Path(path).exists():
+        return ""
+    for line in Path(path).read_text().splitlines():
+        k, _, val = line.partition("=")
+        if k == f"REGCHECK_{gate_key(vid)}":
+            return val.split()[0] if val else ""
+    return ""
+
+
+def _occ(f: dict | None) -> dict | None:
+    if f is None:
+        return None
+    occ = f.get("occupancy") or {}
+    return {"regs": f.get("regs"), "shared": f.get("shared"), "ctas_per_sm": occ.get("ctas_per_sm")}
+
+
+def regcheck_rows(plain: dict, off: dict, by_spec: dict) -> list[dict]:
+    """Per config (moe.instrumented.config_key), the plain kernel's registers, shared and CTAs
+    per SM beside the all-off copy's and each stamped spec's (pure; the values are
+    compiled_facts dicts keyed by config, as facts_by_config builds them)."""
+    rows = []
+    for key in sorted(plain, key=str):
+        p = _occ(plain[key])
+        row = {"config": list(key), "plain": p, "off": _occ(off.get(key)), "specs": {}}
+        row["off_same"] = row["off"] == p
+        for text, facts in by_spec.items():
+            c = _occ(facts.get(key))
+            row["specs"][text] = {"copy": c, "same_regs": c is not None and c["regs"] == p["regs"],
+                                  "same_ctas_per_sm": c is not None and c["ctas_per_sm"] == p["ctas_per_sm"]}
+        rows.append(row)
+    return rows
 
 
 def gate_verdict(ratios: list, configs: list[dict], *, upstream_ok: bool = True,
@@ -349,13 +442,17 @@ class Card:
         (their compiled kernels). One untimed call first, so no compile lands in the burst."""
         torch = self.torch
         fl = self.flusher()
+        pool = I.BufferPool()
+        like = torch.empty(0, device="cuda")
         with self.override_config(conf):
-            with make_ctx(None):
+            with make_ctx(None, pool) as warm:
                 fn()
             torch.cuda.synchronize()
-            with make_ctx(launch_event_factory(torch)) as rec:
+            shapes = I.BufferPool.shapes(warm.launches)
+            with make_ctx(launch_event_factory(torch), pool) as rec:
                 self.sleep_ahead()
                 for _ in range(calls):
+                    pool.reserve(shapes, like)     # every stamp buffer before the flush (item 4)
                     fl.flush()
                     fn()
                 torch.cuda.synchronize()
@@ -428,7 +525,7 @@ def perturb(args, variants: list[dict]) -> int:
     from moe.instrumented import cubin as CB
     card = Card(args)
     torch = card.torch
-    report = {"tool": "scripts/instr_probe.py --mode perturb", "tolerance": PERTURB_TOL,
+    report = {"tool": "scripts/instr_probe.py --mode perturb", "tolerance": PERTURB_TOL_R5,
               "reps": REPS, "calls": CALLS, "upstream": card.upstream, "override_hook": card.where,
               "triton_cache": os.environ.get("TRITON_CACHE_DIR"),
               "versions": PW._package_versions(), "device": {"name": torch.cuda.get_device_name(0),
@@ -446,8 +543,9 @@ def perturb(args, variants: list[dict]) -> int:
                 order = ("plain", "copy") if rep % 2 == 0 else ("copy", "plain")
                 for which in order:
                     gspec = v["gate_spec"]
-                    make = ((lambda ev: I.timed_plain(module=card.FM, events=ev)) if which == "plain"
-                            else (lambda ev, gs=gspec: I.install(gs, module=card.FM, events=ev)))
+                    make = ((lambda ev, pool: I.timed_plain(module=card.FM, events=ev)) if which == "plain"
+                            else (lambda ev, pool, gs=gspec: I.install(gs, module=card.FM, events=ev,
+                                                                       alloc=pool)))
                     ms, launches = card.burst(fn, conf, make)
                     facts_by_config(launches, plain_f if which == "plain" else copy_f)
                     ms = split_gemms(ms)
@@ -462,7 +560,7 @@ def perturb(args, variants: list[dict]) -> int:
             facts_by_config(card.compile_once(fn, conf, I.InstrSpec()), off_f)
             if v["spec_obj"].hints:
                 hinted += card.compile_once(fn, conf, v["spec_obj"])
-        configs = compare_configs(plain_f, copy_f)
+        configs = compare_configs(plain_f, copy_f, OCC_LEGS_R5)
         out_dir = Path(args.out) / "sass" / gate_key(v["id"])
         sass_ok, sass_rows = sass_equal_leg(plain_f, off_f, out_dir)
         hint_ok = None
@@ -475,7 +573,7 @@ def perturb(args, variants: list[dict]) -> int:
             if t:
                 brackets[key_name(key)] = CB.sass_checks(t)
         verdict = gate_verdict([r["ratio"] for r in rows], configs, upstream_ok=upstream_ok,
-                               sass_equal=sass_ok, hint_ok=hint_ok)
+                               sass_equal=sass_ok, hint_ok=hint_ok, tol=PERTURB_TOL_R5)
         report["variants"][v["id"]] = {"kind": v["kind"], "model": v["model"], "block_k": v["block_k"],
                                        "num_stages": v["num_stages"], "gate_spec": v["gate_spec"].as_dict(),
                                        "unit_spec": v["spec_obj"].as_dict(), "cells": rows,
@@ -494,6 +592,42 @@ def perturb(args, variants: list[dict]) -> int:
     return worst
 
 
+def regcheck(args, variants: list[dict]) -> int:
+    """Compile only: per variant, the plain kernel, the all-off copy, its own spec and
+    REGCHECK_SPECS on its first gate cell; the per-config registers / shared / CTAs per SM."""
+    card = Card(args)
+    report = {"tool": "scripts/instr_probe.py --mode regcheck", "versions": PW._package_versions(),
+              "specs": list(REGCHECK_SPECS), "variants": {}}
+    worst, env = exit_codes.DONE, []
+    for v in variants:
+        card.load(v["model"])
+        g, arm, n = v["gate_cells"][0]
+        fn, conf = card.call(v, arm, n), card.conf(v, g)
+        plain_f = facts_by_config(card.compile_once(fn, conf, None), {})
+        off_f = facts_by_config(card.compile_once(fn, conf, I.InstrSpec()), {})
+        texts = [v["spec_obj"].text()] + [t for t in REGCHECK_SPECS if I.parse_spec(t).text() != v["spec_obj"].text()]
+        by_spec = {t: facts_by_config(card.compile_once(fn, conf, I.parse_spec(t)), {}) for t in texts}
+        rows = regcheck_rows(plain_f, off_f, by_spec)
+        own = v["spec_obj"].text()
+        ok, why = regcheck_ok(rows, own)
+        report["variants"][v["id"]] = {"cell": [g, arm, n], "own_spec": own, "rows": rows,
+                                       "own_spec_keeps_occupancy": ok, "why": why,
+                                       "rule": "CTAs per SM identical to the plain kernel's (registers printed)"}
+        env.append(regcheck_line(v["id"], ok, why))
+        for r in rows:
+            cells = "  ".join(f"{t}: {x['copy']['regs'] if x['copy'] else '-'}r/"
+                              f"{x['copy']['ctas_per_sm'] if x['copy'] else '-'}"
+                              for t, x in r["specs"].items())
+            print(f"  {v['id']} {key_name(tuple(r['config']))}: plain {r['plain']['regs']}r/"
+                  f"{r['plain']['ctas_per_sm']} off {'=' if r['off_same'] else '!='} | {cells}", flush=True)
+        if not ok:
+            worst = exit_codes.CLAIM_FAIL
+    out = Path(args.out)
+    (out / "regcheck.json").write_text(json.dumps(report, indent=1, default=str))
+    (out / "regcheck.env").write_text("\n".join(env) + "\n")
+    return worst
+
+
 def stamps(args, v: dict) -> int:
     import numpy as np
 
@@ -508,14 +642,18 @@ def stamps(args, v: dict) -> int:
     for g, arm, n in v["cells"]:
         fn, conf = card.call(v, arm, n), card.conf(v, g)
         try:
+            pool = I.BufferPool()
+            like = torch.empty(0, device="cuda")
             with card.override_config(conf):
-                with I.install(v["spec_obj"], module=card.FM):
+                with I.install(v["spec_obj"], module=card.FM) as warm:
                     for _ in range(STAMP_WARMUP):
                         fn()
                 torch.cuda.synchronize()
+                shapes = I.BufferPool.shapes(warm.launches[-PW.GEMMS_PER_CALL:])
                 for c in range(STAMP_CALLS):
+                    pool.reserve(shapes, like)      # the buffers before the flush (item 4)
                     fl.flush()                      # outside the stamps' launches, as R3 flushes
-                    with I.install(v["spec_obj"], module=card.FM,
+                    with I.install(v["spec_obj"], module=card.FM, alloc=pool,
                                    events=launch_event_factory(torch)) as rec:
                         fn()
                         torch.cuda.synchronize()
@@ -526,8 +664,7 @@ def stamps(args, v: dict) -> int:
                         np.save(out / "stamps" / name, lr["buffer"].cpu().numpy())
                         index.append({k: lr[k] for k in lr if k not in ("buffer", "events", "compiled")}
                                      | {"G": g, "arm": arm, "n": n, "call": c, "gemm": gemm, "file": name,
-                                        "launch_ms": lms, "width": v["spec_obj"].width,
-                                        "marks": v["spec_obj"].marks if v["spec_obj"].stamps == 2 else 0})
+                                        "launch_ms": lms, "late_buffers": pool.late})
         except Exception as exc:                                  # noqa: BLE001
             index.append({"G": g, "arm": arm, "n": n, "error": f"{type(exc).__name__}: {exc}"})
             bad += 1
@@ -539,6 +676,7 @@ def stamps(args, v: dict) -> int:
                      "checks": CB.sass_checks(text) if text else None,
                      "regs": f["regs"], "shared": f["shared"]})
     man = {"tool": "scripts/instr_probe.py --mode stamps", "variant": v["id"], "model": v["model"],
+           "spec_text": v["spec_obj"].text(),
            "block_k": v["block_k"], "num_stages": v["num_stages"], "spec": v["spec_obj"].as_dict(),
            "columns": list(I.COLUMNS), "hdr": I.HDR, "upstream": card.upstream,
            "triton_cache": os.environ.get("TRITON_CACHE_DIR"), "l2_flush_mb": fl.megabytes,
@@ -552,10 +690,12 @@ def stamps(args, v: dict) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--mode", choices=("perturb", "stamps"), required=True)
+    p.add_argument("--mode", choices=("perturb", "stamps", "regcheck"), required=True)
     p.add_argument("--variants", type=Path, required=True)
     p.add_argument("--variant", default=None, help="stamps: the variant id to run")
     p.add_argument("--gate", type=Path, default=None, help="stamps: the perturb unit's gate.env")
+    p.add_argument("--regcheck", type=Path, default=None,
+                   help="stamps: the regcheck unit's regcheck.env; given, the variant's line must read PASS")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--dry-run", action="store_true")
@@ -583,6 +723,12 @@ def main(argv=None) -> int:
             print(f"REFUSED: the perturbation gate for {args.variant} reads {g or 'nothing'} "
                   f"({args.gate}): an instrumented unit runs only after its gate PASSES")
             return exit_codes.REFUSED
+        if args.regcheck is not None:
+            r = read_regcheck(args.regcheck, args.variant)
+            if r != "PASS":
+                print(f"REFUSED: the regcheck line for {args.variant} reads {r or 'nothing'} "
+                      f"({args.regcheck}): a stamps unit runs only on its regcheck PASS")
+                return exit_codes.REFUSED
     if args.dry_run:
         print("DRY RUN: nothing launched (exit 2)")
         return exit_codes.REFUSED
@@ -594,6 +740,8 @@ def main(argv=None) -> int:
     # a cache of this unit's own (build-r4-review bug G1: env.sh's shared cache let an earlier
     # unit's compile hide this one's); the driver sets the same directory
     os.environ["TRITON_CACHE_DIR"] = str(Path(args.out) / "triton-cache")
+    if args.mode == "regcheck":
+        return regcheck(args, variants)
     return perturb(args, variants) if args.mode == "perturb" else stamps(args, variants[0])
 
 

@@ -7888,7 +7888,8 @@ def padded_weight_bytes(cfg, dtype: str, copies: int, pad_rows: int) -> int:
 
 
 def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
-               dtype: str, w_dtype, *, device: str = "cuda", arms=ARMS):
+               dtype: str, w_dtype, *, device: str = "cuda", arms=ARMS,
+               cell=None, shuffle_seed: int | None = None, shuffle: bool = True):
     """`(tokens, x, ids_by_arm, weights, kw)` for tread `n`, shared by all arms.
 
     `ids_by_arm` holds the three arms' routing: NATIVE's balanced ids, SHARED's
@@ -7902,6 +7903,14 @@ def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
     `arms` names the routings built (all three by default). A NATIVE-only
     counter plan (the floor capture) builds NATIVE's alone, because its treads
     may pass the declared copies, where `private_topk_ids` refuses by design.
+
+    `cell` (rental 5, a `HistCell` of a `--histogram` page): NATIVE's ids are
+    `histogram_ids` (realize_counts of the cell's counts, then the page's token-row
+    shuffle at `shuffle_seed`) instead of `balanced_ids`; its "balanced" cell is
+    `balanced_ids` itself. Everything else (x, the weights, kw, SHARED's
+    relabelling) is built exactly as on R3's own cell, so the timed page and the
+    counter child build a histogram cell through this one function. `shuffle=False`
+    exists for the test that the uniform path reproduces this tuple bitwise.
     """
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
@@ -7914,7 +7923,15 @@ def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
     spec = BenchSpec(cfg, num_tokens=tokens, dtype=dtype,
                      routing=RoutingSpec("uniform", 0.0), seed=seed)
     x = torch.randn((tokens, cfg.hidden_size), device=device, dtype=w_dtype)
-    ids = SWEEP.balanced_ids(cfg, tokens, device)
+    if cell is None:
+        ids = SWEEP.balanced_ids(cfg, tokens, device)
+    else:
+        if PRIVATE in arms:
+            raise HistogramRefused(PRIVATE_SKEW_REFUSAL)
+        if int(cell.n) != int(n):
+            raise HistogramRefused(f"cell {cell.label} is tread {cell.n}, asked at {n}")
+        ids = histogram_ids(cfg, cell, block_m, shuffle_seed, shuffle=shuffle,
+                            device=device)
     weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
                          device=device)
     by_arm = {NATIVE: ids}
@@ -7926,6 +7943,200 @@ def arm_inputs(cfg, n: int, block_m: int, copies_declared: int, seed: int,
     kw = vllm_call_kwargs(spec)
     kw["activation"] = MoEActivation(kw["activation"])
     return tokens, x, {a: by_arm[a] for a in ARMS if a in by_arm}, weights, kw
+
+
+# --------------------------------------------------------------------------
+# THE HISTOGRAM PAGE (rental 5, design-r5 section 2.1 S1 to S5, review (b)).
+# A `--histogram FILE` page times per-expert histograms instead of R3's
+# balanced ladder: per cell, `realize_counts` (exact) and then one token-row
+# shuffle per page. SCAFFOLDING: the kernel, its pin and its call are R3's.
+# --------------------------------------------------------------------------
+
+HISTOGRAM_SCHEMA = "moe-kernels/histogram-page/1"
+HIST_LABEL_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+#: the cell label that is R3's own `balanced_ids`, unshuffled
+BALANCED_LABEL = "balanced"
+PRIVATE_SKEW_REFUSAL = (
+    "PRIVATE cannot run skewed: its relabelling gives every M-tile its own copy, so a "
+    "hot expert's t_e tiles need t_e copies (past R3's declaration, and past the "
+    f"{ALIGN_MAX_PADDED_EXPERTS}-slot scan limit at the skews registered), and "
+    "private_topk_ids refuses any histogram that is not exactly n BLOCK_M rows an "
+    "expert. Run a histogram page with --arms native,shared (or native)")
+
+
+class HistogramRefused(PrivateWeightRefusal):
+    """A histogram file or a histogram run R3 will not take."""
+
+
+@dataclass(frozen=True)
+class HistCell:
+    label: str
+    n: int
+    #: per-expert row counts (E ints), None for the "balanced" cell
+    counts: tuple | None
+    #: the arms this cell runs, None for the run's --arms
+    arms: tuple | None = None
+
+
+@dataclass(frozen=True)
+class HistogramPage:
+    model: str
+    page: str
+    shuffle_seed: int
+    cells: tuple
+    file_sha256: str
+    schema: str = HISTOGRAM_SCHEMA
+
+    @property
+    def treads(self) -> list[int]:
+        return sorted({c.n for c in self.cells})
+
+    def ordered(self) -> list:
+        """Cells in page order: n ascending, then the file's order."""
+        return sorted(self.cells, key=lambda c: (c.n, self.cells.index(c)))
+
+
+def counts_sha256(counts) -> str:
+    """sha256 of json.dumps(counts, separators=(",", ":")): "null" for balanced."""
+    import hashlib
+    text = json.dumps(None if counts is None else [int(v) for v in counts],
+                      separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def parse_arms(text) -> tuple:
+    """`--arms native,shared`: a subset of ARMS, kept in ARMS' order."""
+    if text is None or text == "":
+        return ARMS
+    got = [a.strip() for a in str(text).split(",") if a.strip()]
+    bad = [a for a in got if a not in ARMS]
+    if not got or bad or len(set(got)) != len(got):
+        raise HistogramRefused(f"--arms {text!r}: a comma list of distinct arms from "
+                               f"{','.join(ARMS)}")
+    return tuple(a for a in ARMS if a in got)
+
+
+def histogram_page_from(doc: dict, cfg, block_m: int, model: str,
+                        file_sha256: str = "") -> HistogramPage:
+    """A histogram file's JSON checked against R3's call: every refusal here is one
+    the run would otherwise meet on the card."""
+    from moe.routing.distributions import feasible
+    if not isinstance(doc, dict) or doc.get("schema") != HISTOGRAM_SCHEMA:
+        raise HistogramRefused(f"the histogram file's schema is "
+                               f"{doc.get('schema') if isinstance(doc, dict) else type(doc).__name__!r}, "
+                               f"not {HISTOGRAM_SCHEMA!r}")
+    if doc.get("model") != model:
+        raise HistogramRefused(f"the histogram file is {doc.get('model')!r}'s, this run "
+                               f"is {model!r}")
+    seed = doc.get("shuffle_seed")
+    if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
+        raise HistogramRefused(f"shuffle_seed {seed!r}: a whole number")
+    raw = doc.get("cells")
+    if not isinstance(raw, list) or not raw:
+        raise HistogramRefused("the histogram file holds no cells")
+    cells, seen = [], set()
+    for c in raw:
+        label, n = c.get("label"), c.get("n")
+        if not isinstance(label, str) or not HIST_LABEL_RE.match(label):
+            raise HistogramRefused(f"cell label {label!r}: letters, digits and _ . - only")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+            raise HistogramRefused(f"cell {label}: n {n!r} is not a tread")
+        if (label, n) in seen:
+            raise HistogramRefused(f"cell ({label}, n={n}) twice")
+        seen.add((label, n))
+        try:
+            tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
+        except ValueError as exc:
+            raise HistogramRefused(f"cell {label} n={n}: {exc}") from None
+        counts = c.get("counts")
+        if label == BALANCED_LABEL:
+            if counts is not None:
+                raise HistogramRefused("the balanced cell is R3's balanced_ids: counts null")
+        else:
+            if (not isinstance(counts, list) or len(counts) != cfg.num_experts
+                    or any(not isinstance(v, int) or isinstance(v, bool) for v in counts)):
+                raise HistogramRefused(f"cell {label} n={n}: counts must be "
+                                       f"{cfg.num_experts} whole numbers")
+            if sum(counts) != tokens * cfg.top_k:
+                raise HistogramRefused(f"cell {label} n={n}: counts sum to {sum(counts)}, "
+                                       f"tokens(n) x top_k is {tokens * cfg.top_k}")
+            ok, why = feasible(counts, tokens, cfg.top_k)
+            if not ok:
+                raise HistogramRefused(f"cell {label} n={n}: {why}")
+            counts = tuple(int(v) for v in counts)
+        arms = c.get("arms")
+        if arms is not None:
+            arms = parse_arms(",".join(arms) if isinstance(arms, list) else arms)
+        cells.append(HistCell(label=label, n=int(n), counts=counts, arms=arms))
+    return HistogramPage(model=model, page=str(doc.get("page", "")), shuffle_seed=int(seed),
+                         cells=tuple(cells), file_sha256=file_sha256)
+
+
+def load_histogram_page(path, cfg, block_m: int, model: str) -> HistogramPage:
+    import hashlib
+    try:
+        data = Path(path).read_bytes()
+        doc = json.loads(data)
+    except (OSError, ValueError) as exc:
+        raise HistogramRefused(f"cannot read the histogram file {path}: {exc}") from None
+    return histogram_page_from(doc, cfg, block_m, model,
+                               hashlib.sha256(data).hexdigest())
+
+
+def cell_arms(page: HistogramPage, cell: HistCell, arms) -> tuple:
+    """The arms a cell runs: its own list, which must sit inside the run's."""
+    mine = cell.arms or tuple(arms)
+    extra = [a for a in mine if a not in arms]
+    if extra:
+        raise HistogramRefused(f"cell {cell.label} n={cell.n} asks arms {extra} that the "
+                               f"run's --arms {','.join(arms)} does not run")
+    if PRIVATE in mine:
+        raise HistogramRefused(PRIVATE_SKEW_REFUSAL)
+    return tuple(a for a in ARMS if a in mine)
+
+
+def histogram_cells(page: HistogramPage, arms) -> list[tuple[HistCell, str]]:
+    """(cell, arm) in page order: n ascending, the file's cell order, then arms."""
+    return [(c, a) for c in page.ordered() for a in cell_arms(page, c, arms)]
+
+
+def histogram_ids(cfg, cell: HistCell, block_m: int, shuffle_seed: int | None, *,
+                  shuffle: bool = True, device: str = "cpu"):
+    """NATIVE's [T, k] ids for one histogram cell: `balanced_ids` for the balanced
+    cell; else `realize_counts(counts, T, k)` and the page's token-row shuffle
+    `ids[randperm(T, Generator(cpu).manual_seed(shuffle_seed))]`, on the CPU, then
+    moved. REFUSES unless bincount(ids) is the cell's counts exactly."""
+    import torch
+
+    from moe.routing.distributions import realize_counts
+    tokens = SWEEP.tokens_for_rows(cfg, cell.n * block_m)
+    if cell.counts is None:
+        return SWEEP.balanced_ids(cfg, tokens, device)
+    ids = realize_counts(list(cell.counts), tokens, cfg.top_k, device="cpu")
+    if shuffle:
+        if shuffle_seed is None:
+            raise HistogramRefused("a shuffled histogram cell needs its page's shuffle_seed")
+        g = torch.Generator(device="cpu").manual_seed(int(shuffle_seed))
+        ids = ids[torch.randperm(tokens, generator=g)]
+    got = torch.bincount(ids.reshape(-1).to(torch.int64), minlength=cfg.num_experts).tolist()
+    if got != list(cell.counts):
+        raise HistogramRefused(f"cell {cell.label} n={cell.n}: the realised bincount "
+                               f"{got} is not the request {list(cell.counts)}")
+    return ids.to(device)
+
+
+def realised_bincount(ids, num_experts: int) -> list[int]:
+    import torch
+    return torch.bincount(ids.reshape(-1).to("cpu", torch.int64),
+                          minlength=num_experts).tolist()
+
+
+def histogram_provenance(page: HistogramPage, arms, shuffle_seed: int) -> dict:
+    """report.json's top-level "histogram" block (S5)."""
+    return {"schema": page.schema, "file_sha256": page.file_sha256, "page": page.page,
+            "shuffle_seed": int(shuffle_seed),
+            "cells": [{"label": c.label, "n": c.n, "counts_sha256": counts_sha256(c.counts),
+                       "arms": list(cell_arms(page, c, arms))} for c in page.ordered()]}
 
 
 def arm_call(fused_experts, arm: str, w1, w2, native_w1, native_w2,
@@ -8145,6 +8356,9 @@ def validate_counter_plan(plan: dict):
     except KeyError:
         raise CounterPlanRefused(f"unknown model {plan['model']!r}") from None
     block_m = int(plan["block_m"])
+    if plan.get("histogram") is not None:
+        validate_histogram_counter_plan(plan, cfg, block_m)
+        return cfg
     # A NATIVE-only plan reads one copy at every tread, so its ladder runs to
     # NATIVE_COUNTER_MAX_TREADS on the same whole-token rule; every plan with
     # SHARED or PRIVATE keeps the counter ladder and the copies bound below.
@@ -8178,6 +8392,67 @@ def validate_counter_plan(plan: dict):
         raise CounterPlanRefused(
             f"the plan's cells {cells} are not its arms x treads in manifest "
             f"order {want}")
+    _counter_plan_common(plan, cfg, block_m, native)
+    return cfg
+
+
+def plan_histogram_page(plan: dict, cfg, block_m: int) -> HistogramPage:
+    """The histogram page a counter plan carries (plan["histogram"]), re-checked as R3
+    checks a --histogram file."""
+    h = plan["histogram"]
+    try:
+        return histogram_page_from(
+            {"schema": h.get("schema", HISTOGRAM_SCHEMA), "model": plan["model"],
+             "page": h.get("page", ""), "shuffle_seed": h.get("shuffle_seed"),
+             "cells": h.get("cells")}, cfg, block_m, plan["model"],
+            str(h.get("file_sha256") or ""))
+    except HistogramRefused as exc:
+        raise CounterPlanRefused(f"the plan's histogram: {exc}") from None
+
+
+def histogram_plan_cells(page: HistogramPage, arms) -> list[list]:
+    """A histogram counter plan's cells, [arm, n, label], in the timed page's order."""
+    return [[a, c.n, c.label] for c, a in histogram_cells(page, arms)]
+
+
+def validate_histogram_counter_plan(plan: dict, cfg, block_m: int) -> None:
+    """A histogram counter plan (rental 5's byte leg, review (c)): NATIVE cells to
+    NATIVE_COUNTER_MAX_TREADS, SHARED cells on the counter ladder, PRIVATE refused,
+    the cells exactly the page's (arm, n, label) in order, R3's declaration."""
+    arms = list(plan["arms"])
+    if not arms or set(arms) - set(ARMS):
+        raise CounterPlanRefused(f"arms {arms} are not a subset of {list(ARMS)}")
+    if PRIVATE in arms:
+        raise CounterPlanRefused(PRIVATE_SKEW_REFUSAL)
+    page = plan_histogram_page(plan, cfg, block_m)
+    try:
+        want = histogram_plan_cells(page, tuple(a for a in ARMS if a in arms))
+    except HistogramRefused as exc:
+        raise CounterPlanRefused(str(exc)) from None
+    cells = [[str(c[0]), int(c[1]), str(c[2])] if len(c) == 3 else list(c)
+             for c in plan["cells"]]
+    if cells != want:
+        raise CounterPlanRefused(f"the plan's cells {cells} are not its histogram page's "
+                                 f"(arm, n, label) in page order {want}")
+    if [int(n) for n in plan["treads"]] != page.treads:
+        raise CounterPlanRefused(f"treads {plan['treads']} are not the page's {page.treads}")
+    native_ladder = ladder_treads(cfg, block_m, NATIVE_COUNTER_MAX_TREADS)
+    ratio_ladder = counter_ladder(cfg, block_m)
+    for a, n, label in want:
+        ladder = native_ladder if a == NATIVE else ratio_ladder
+        if n not in ladder:
+            raise CounterPlanRefused(
+                f"cell {label} {a} n={n} is outside R3's {a} counter ladder {ladder}")
+    copies, _why = counter_declaration(cfg, block_m)
+    if int(plan["copies_declared"]) != copies:
+        raise CounterPlanRefused(
+            f"copies_declared {plan['copies_declared']} is not R3's declaration {copies}")
+    _counter_plan_common(plan, cfg, block_m, native_only(arms))
+
+
+def _counter_plan_common(plan: dict, cfg, block_m: int, native: bool) -> None:
+    """The checks every counter plan takes after its cells: GEMMs per call, the
+    config, the knobs."""
     if int(plan["gemms_per_call"]) != GEMMS_PER_CALL:
         raise CounterPlanRefused(
             f"gemms_per_call {plan['gemms_per_call']} is not the cited "
@@ -8209,7 +8484,6 @@ def validate_counter_plan(plan: dict):
         if plan["kind"] != "measure":
             raise CounterPlanRefused("null_kernel is a measure plan's; a census counts "
                                      "GEMM launches alone")
-    return cfg
 
 
 @dataclass(frozen=True)
@@ -8257,11 +8531,11 @@ def counter_schedule(plan: dict) -> CounterSchedule:
             "calls, and one call has none")
     if kind == "census" and k < 1:
         raise CounterPlanRefused(f"calls_per_cell {k}: a census needs a call")
-    cells = [(str(a), int(n)) for a, n in plan["cells"]]
+    cells = [_cell_entry(c) for c in plan["cells"]]
     if not cells:
         raise CounterPlanRefused("the plan has no cells")
     warmups = tuple(c for c in cells for _ in range(u))
-    measured = tuple((a, n, i) for a, n in cells for i in range(k))
+    measured = tuple((*c, i) for c in cells for i in range(k))
     if kind == "census":
         return CounterSchedule(warmups, measured, 0, None)
     # With the null kernel each call is gpc GEMM launches then one spin_kernel,
@@ -8314,8 +8588,14 @@ def ids_digest(ids) -> str:
     return hashlib.sha256(flat).hexdigest()
 
 
-def _cell_key(arm: str, n: int) -> str:
-    return f"{arm}/{n}"
+def _cell_key(arm: str, n: int, label: str | None = None) -> str:
+    """A counter cell's key: "arm/n", or "arm/n/label" on a histogram plan."""
+    return f"{arm}/{n}" if label is None else f"{arm}/{n}/{label}"
+
+
+def _cell_entry(c) -> tuple:
+    """A plan cell as (arm, n) or, on a histogram plan, (arm, n, label)."""
+    return (str(c[0]), int(c[1])) if len(c) == 2 else (str(c[0]), int(c[1]), str(c[2]))
 
 
 @dataclass
@@ -8394,13 +8674,34 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
     native_w1, native_w2 = w1[::copies], w2[::copies]
     declared_by_arm = {arm: declared_experts(arm, cfg.num_experts, copies)
                        for arm in ARMS}
-    inputs = {n: arm_inputs(cfg, n, block_m, copies, int(plan["seed"]), dtype,
-                            w1.dtype, device=stack.device, arms=plan["arms"])
-              for n in treads}
-    calls, grids, em, digests = {}, {}, {}, {}
-    for arm, n in [(str(a), int(n)) for a, n in plan["cells"]]:
-        tokens, x, ids_by_arm, weights, kw = inputs[n]
-        key = _cell_key(arm, n)
+    hist = plan.get("histogram")
+    hcells: dict = {}
+    if hist is None:
+        inputs = {n: arm_inputs(cfg, n, block_m, copies, int(plan["seed"]), dtype,
+                                w1.dtype, device=stack.device, arms=plan["arms"])
+                  for n in treads}
+    else:
+        # A HISTOGRAM PLAN builds each cell's inputs through arm_inputs(cell=...), the
+        # function the timed --histogram page uses, at the page's shuffle seed.
+        page = plan_histogram_page(plan, cfg, block_m)
+        run_arms = tuple(a for a in ARMS if a in plan["arms"])
+        inputs = {}
+        for c in page.ordered():
+            inputs[(c.n, c.label)] = arm_inputs(
+                cfg, c.n, block_m, copies, int(plan["seed"]), dtype, w1.dtype,
+                device=stack.device, arms=cell_arms(page, c, run_arms), cell=c,
+                shuffle_seed=page.shuffle_seed)
+            hcells[(c.n, c.label)] = c
+    calls, grids, em, digests, hrec = {}, {}, {}, {}, {}
+    for entry in [_cell_entry(c) for c in plan["cells"]]:
+        arm, n = entry[0], entry[1]
+        label = entry[2] if len(entry) == 3 else None
+        tokens, x, ids_by_arm, weights, kw = inputs[n if label is None else (n, label)]
+        key = _cell_key(*entry)
+        if label is not None:
+            hrec[key] = {"label": label, "n": n,
+                         "counts_sha256": counts_sha256(hcells[(n, label)].counts),
+                         "bincount": realised_bincount(ids_by_arm[NATIVE], cfg.num_experts)}
         calls[key] = arm_call(stack.fused_experts, arm, w1, w2, native_w1,
                               native_w2, declared_by_arm, x, ids_by_arm,
                               weights, kw)
@@ -8412,16 +8713,18 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
                                     block_n=int(plan["block_n"]))
         digests[key] = ids_digest(ids_by_arm[arm])
     stack.synchronize()
-    for arm, n in sched.warmups:
+    for entry in sched.warmups:
         with stack.override_config(conf):
-            calls[_cell_key(arm, n)]()
+            calls[_cell_key(*entry)]()
         stack.synchronize()
         after_call()
     ranges = []
-    for arm, n, _i in sched.measured:
-        name = NVTX_FORMAT.format(arm=arm, group_m=plan["group_m"], n=n)
+    for *entry, _i in sched.measured:
+        name = NVTX_FORMAT.format(arm=entry[0], group_m=plan["group_m"], n=entry[1])
+        if len(entry) == 3:
+            name += f"/{entry[2]}"
         with stack.nvtx_range(name), stack.override_config(conf):
-            calls[_cell_key(arm, n)]()
+            calls[_cell_key(*entry)]()
             stack.synchronize()
         after_call()
         ranges.append(name)
@@ -8441,12 +8744,13 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
                  "verdict": got.verdict, "tread": deepest}
     return {
         "family": plan["family"], "kind": plan["kind"],
-        "order": [[a, n] for a, n in plan["cells"]],
+        "order": [list(_cell_entry(c)) for c in plan["cells"]],
         "calls_per_cell": int(plan["calls_per_cell"]),
         "warmup_calls": int(plan["warmup_calls"]),
         "gemms_per_call": GEMMS_PER_CALL,
         "launch_skip": sched.launch_skip, "launch_count": sched.launch_count,
-        "tokens": {str(n): inputs[n][0] for n in treads},
+        "tokens": ({str(n): inputs[n][0] for n in treads} if hist is None else
+                   {str(n): SWEEP.tokens_for_rows(cfg, n * block_m) for n in treads}),
         "copies_declared": copies,
         "declared_by_arm": declared_by_arm,
         "ids_sha256": digests, "sorted_ids_len": em, "grids": grids,
@@ -8459,6 +8763,9 @@ def counter_child(plan: dict, stack: CounterStack) -> dict:
         **({"null_kernel": True, "null_kernel_name": NULL_KERNEL_NAME,
             "null_kernel_cycles": NULL_KERNEL_CYCLES} if null else {}),
         **({"instr": counter_instr_spec(plan).as_dict()} if plan.get("instr") is not None else {}),
+        **({"histogram": {"file_sha256": hist.get("file_sha256"), "page": hist.get("page"),
+                          "shuffle_seed": hist.get("shuffle_seed"), "cells": hrec}}
+           if hist is not None else {}),
     }
 
 
@@ -8902,6 +9209,14 @@ def git_visibility(path: Path) -> str:
             "pod, which git has no opinion about at all.")
 
 
+def _file_sha(path) -> str:
+    import hashlib
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return "unreadable"
+
+
 def default_run_id(args, card: str) -> str:
     """Derived from every argument that changes a measured cell.
 
@@ -8982,6 +9297,10 @@ def default_run_id(args, card: str) -> str:
            if getattr(args, "block_k", SWEEP.FIXED["BLOCK_SIZE_K"])
            != SWEEP.FIXED["BLOCK_SIZE_K"] else {}),
         **({"pad": args.slot_pad_rows} if getattr(args, "slot_pad_rows", 0) else {}),
+        # rental 5's histogram page: in the key only when given, as the knobs above
+        **({"hist": _file_sha(args.histogram)[:16], "arms": str(args.arms or "all"),
+            "shuf": "file" if args.shuffle_seed is None else int(args.shuffle_seed)}
+           if getattr(args, "histogram", None) is not None else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
     return prefix + PV.run_id(card=card, **swept)
@@ -9126,6 +9445,17 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--session-tag", default="",
                     help="the driving session's name; in the run id, so a new "
                          "session measures fresh and a resumed one resumes")
+    ap.add_argument("--histogram", type=Path, default=None,
+                    help="rental 5: a histogram page (schema "
+                         f"{HISTOGRAM_SCHEMA}) instead of the balanced ladder: per "
+                         "cell realize_counts and one token-row shuffle per page; "
+                         "needs --declared-copies and --arms without private")
+    ap.add_argument("--arms", default=None,
+                    help="rental 5: the arms a --histogram page runs, a comma list "
+                         "from native,shared (PRIVATE cannot run skewed); without "
+                         "--histogram only the default, all three, is accepted")
+    ap.add_argument("--shuffle-seed", type=int, default=None,
+                    help="rental 5: overrides the histogram file's shuffle_seed")
     ap.add_argument("--declared-copies", type=int, default=0,
                     help="copies SHARED and PRIVATE declare and the build "
                          "allocates; 0 = the rule in declared_copies_for, "
@@ -9244,6 +9574,22 @@ def _main(argv=None) -> int:
         print(f"REFUSED: --slot-pad-rows {args.slot_pad_rows}: a slot cannot be shorter "
               "than its weights")
         return exit_codes.REFUSED
+    if args.histogram is not None:
+        return _histogram_mode(args, cfg)
+    if args.shuffle_seed is not None:
+        print("REFUSED: --shuffle-seed rides with --histogram; R3's balanced ladder "
+              "shuffles nothing")
+        return exit_codes.REFUSED
+    if args.arms is not None:
+        try:
+            if parse_arms(args.arms) != ARMS:
+                print(f"REFUSED: --arms {args.arms} rides with --histogram: R3's balanced "
+                      "ladder is the three arms' ratio and its gates read all three (a "
+                      "NATIVE-only timed page is a histogram page of balanced cells)")
+                return exit_codes.REFUSED
+        except HistogramRefused as exc:
+            print(f"REFUSED: {exc}")
+            return exit_codes.REFUSED
 
     # THE CONTROL IS PART OF THE DESIGN, SO ITS FEASIBILITY IS A PLAN-TIME
     # REFUSAL. V6 reads the n=1 tread and a model that cannot form one has no
@@ -9673,6 +10019,292 @@ def _main(argv=None) -> int:
         print("         a claim that did not pass is a RESULT and the arm is "
               "FINISHED, not broken.")
     return rc
+
+
+#: a histogram cell whose clock spread over its repeats, or whose page's cells
+#: spread, exceeds one 15 MHz step reads off the lock (G1)
+HIST_CLOCK_STEP_MHZ = 15.0
+
+
+def histogram_gates(rows: list[dict], samples_by_cell: dict) -> dict:
+    """The native-only gate set of a histogram page (rental 4's registration
+    2026-10-06-rental4-nativegates, decision 1), less G3, which the rental-5
+    scorer reads off the page pair: G1 lock and thermal (every cell's under-load
+    clock read, no drift flagged, every cell within one 15 MHz step of the page's
+    top clock), G2 host-bound cells (listed and excluded, not a void), G4 the
+    worst cell's clock (recorded; the scorer holds it to 1710), G5 provenance
+    (every row carries its histogram label, counts sha256 and a bincount equal
+    to its request)."""
+    clocks = [r["sm_clock_load_mhz"] for r in rows if r.get("sm_clock_load_mhz") is not None]
+    drift = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows
+             if any(s.excluded for s in samples_by_cell.get(
+                 (r["histogram"], r["tiles"], r["arm"]), []))]
+    unread = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows
+              if r.get("sm_clock_load_mhz") is None]
+    top = max(clocks) if clocks else None
+    low = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows
+           if top is not None and r.get("sm_clock_load_mhz") is not None
+           and r["sm_clock_load_mhz"] < top - HIST_CLOCK_STEP_MHZ]
+    g1 = PASS if clocks and not drift and not unread and not low else FAIL
+    host = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows if r.get("host_bound")]
+    prov_bad = [f"{r.get('histogram')}/{r.get('arm')}/n{r.get('tiles')}" for r in rows
+                if not (r.get("histogram") and r.get("counts_sha256") and r.get("bincount_ok"))]
+    return {
+        "G1_lock_thermal": {"verdict": g1, "clock_unread": unread, "drift": drift,
+                            "below_top_by_a_step": low, "top_mhz": top},
+        "G2_host_bound": {"verdict": PASS, "excluded": host,
+                          "rule": "a cell the timer called host-bound is excluded, not voided"},
+        "G3_uniform_control": {"verdict": "SCORED OFFLINE",
+                               "rule": "the rental-5 scorer's TOST over the page pair"},
+        "G4_worst_cell_clock": {"verdict": "RECORDED", "worst_mhz": min(clocks) if clocks else None,
+                                "rule": "the scorer holds the worst cell to the 1710 lock"},
+        "G5_provenance": {"verdict": PASS if rows and not prov_bad else FAIL, "missing": prov_bad},
+    }
+
+
+def _histogram_mode(args, cfg) -> int:
+    """A `--histogram` page: per-expert histograms timed on R3's own kernel, pin and
+    call (rental 5, SCAFFOLDING). Refuses before the card on everything the run would
+    meet; `--dry-run` prints the cells and refuses. The page's rows are cells, not a
+    ladder: no slope, no ratio and no ladder-shaped gate is scored on it."""
+    b = dtype_bytes(args.dtype)
+    block_m = args.block_m
+    if args.self_test is not None or args.replicate_of or args.byte_reference is not None:
+        print("REFUSED: a histogram page takes no --self-test, --replicate-of or "
+              "--byte-reference (they score the balanced ladder's ratio)")
+        return exit_codes.REFUSED
+    try:
+        arms = parse_arms(args.arms)
+        if PRIVATE in arms:
+            raise HistogramRefused(PRIVATE_SKEW_REFUSAL)
+        page = load_histogram_page(args.histogram, cfg, block_m, args.model)
+        cells = histogram_cells(page, arms)
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    seed = page.shuffle_seed if args.shuffle_seed is None else int(args.shuffle_seed)
+    if seed < 0:
+        print(f"REFUSED: --shuffle-seed {seed}: a whole number")
+        return exit_codes.REFUSED
+    if seed != page.shuffle_seed:
+        # build-r5-review (optional fix): the counter route draws its shuffle from the file's
+        # seed only, so a timed page under another seed could not be paired with its byte page
+        print(f"REFUSED: --shuffle-seed {seed} differs from the page's own shuffle_seed "
+              f"{page.shuffle_seed}; the counter route reads the file's seed, so this timed page "
+              "could not be paired with its byte-leg page (give the seed in the file instead)")
+        return exit_codes.REFUSED
+    if args.declared_copies < 1:
+        print("REFUSED: a histogram page names its declaration: --declared-copies N (the "
+              "counter pages' 9). S4: with no PRIVATE arm the copies-per-tread rule is "
+              "lifted, since SHARED reads copy 0 only")
+        return exit_codes.REFUSED
+    copies = int(args.declared_copies)
+    treads = page.treads
+    deepest = treads[-1]
+    declared_by_arm = {arm: declared_experts(arm, cfg.num_experts, copies) for arm in ARMS}
+    tokens = {n: SWEEP.tokens_for_rows(cfg, n * block_m) for n in treads}
+    refusals = []
+    for c, a in cells:
+        numel, d = tokens[c.n] * cfg.top_k, declared_by_arm[a]
+        padded = -(-d // ALIGN_WARP) * ALIGN_WARP
+        if align_path(numel, d) == BLOCK_SCAN and padded >= ALIGN_MAX_PADDED_EXPERTS:
+            refusals.append(f"{c.label} {a} n={c.n}: {d} declared experts pad to {padded}, "
+                            f"and the scan kernel refuses {ALIGN_MAX_PADDED_EXPERTS} or more")
+        if numel * NAIVE_ASSIGNMENT_SPARSITY <= d:
+            refusals.append(f"{c.label} {a} n={c.n}: {numel} ids x "
+                            f"{NAIVE_ASSIGNMENT_SPARSITY} <= {d} puts vLLM on its naive path")
+    try:
+        rr = SWEEP.resolve_ridge(args, synthetic=args.dry_run)
+    except SWEEP.RidgeUnavailable as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    bw = SWEEP.resolve_bandwidth(args, synthetic=args.dry_run)
+    why = config_refusal(cfg, block_m=block_m, block_n=args.block_n, block_k=args.block_k,
+                         num_stages=args.num_stages, elem_bytes=b)
+    if why:
+        refusals.append(why)
+    free_bytes, mem_source = _device_memory(args)
+    mem = memory_plan(cfg, args.dtype, b, copies, tokens[deepest], free_bytes, mem_source,
+                      copies_read=1, pad_rows=args.slot_pad_rows)
+    card = detect_card_slug()
+    pinned = pinned_config(args.block_n, args.group_m, args.num_stages,
+                           **block_k_kw(args.block_k))
+    run_id = args.run_id or default_run_id(args, card)
+    out_dir = (args.out or SWEEP.results_root()) / "private_weight_reference" / run_id
+    header = [
+        f"experiment  private_weight_reference / {run_id}",
+        f"model       {args.model} E={cfg.num_experts} k={cfg.top_k}  {args.dtype} ({b} bytes)",
+        f"tile        BLOCK_M={block_m}, one tile per run and in the run id",
+        f"pinned      {pinned}",
+        f"histogram   {args.histogram} (sha256 {page.file_sha256[:16]}...), page "
+        f"{page.page or '-'}, {len(page.cells)} cells x arms = {len(cells)} timed cells, "
+        f"token-row shuffle seed {seed}; R3's balanced ladder is NOT run (--treads ignored)",
+        "arms        " + ", ".join(arms) + "; PRIVATE cannot run skewed",
+        f"  ridge       {rr.ridge:.2f} Op/B, {rr.source or 'source not stated'}",
+        f"experts     native declares E={cfg.num_experts}; shared declares E x n_decl = "
+        f"{expert_space(cfg.num_experts, copies)} at every cell",
+        f"            n_decl = {copies} against n_max = {deepest} read: --declared-copies "
+        f"{copies}; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule "
+        "is lifted",
+        f"depth       retracted tread {deepest} against the {deepest} planned (a histogram "
+        "page has no depth table: its deepest cell's tread)",
+        f"repeats     {args.repeats}, repeats OUTER, the page's cells REVERSED on odd "
+        "repeats, arms rotated within a cell",
+        f"duty        {args.duty:.2f}",
+        "session     " + (args.session_tag or "(none: a bare run, keyed on its arguments "
+                                              "and card alone)"),
+        f"WRITES TO   {out_dir}",
+        "cells (n, label, arms, path, counts sha256):",
+    ]
+    for c in page.ordered():
+        ca = cell_arms(page, c, arms)
+        paths = sorted({align_path(tokens[c.n] * cfg.top_k, declared_by_arm[a]) for a in ca})
+        header.append(f"  n={c.n:<3d} {c.label:<16s} {','.join(ca):<14s} {'/'.join(paths):<12s} "
+                      f"{counts_sha256(c.counts)[:16]}")
+    print("\n".join(header))
+    if refusals:
+        print("\nREFUSED: the histogram page cannot run as asked.")
+        for r in refusals:
+            print(f"  {r}")
+        return exit_codes.REFUSED
+    if mem.fits is False:
+        print(f"\nREFUSED: the weight copies do not fit: predicted peak "
+              f"{mem.predicted_peak_bytes / 1e9:.2f} GB against {mem.headroom:.0%} of "
+              f"{mem.device_free_bytes / 1e9:.2f} GB ({mem.device_source})")
+        return exit_codes.REFUSED
+    if args.dry_run:
+        print("\n".join(["", "=" * 72, "REFUSED. Nothing was measured and nothing was "
+                         "written.", "  reason: --dry-run was given", "=" * 72]))
+        return exit_codes.REFUSED
+    missing = SWEEP.missing_gpu_stack()
+    if missing:
+        print("\n" + missing)
+        return exit_codes.REFUSED
+    unreadable = clock_sampler_refusal()
+    if unreadable:
+        print(f"\nREFUSED: {unreadable}")
+        return exit_codes.REFUSED
+    out_dir.mkdir(parents=True, exist_ok=True)
+    wrong_card = device_guard(out_dir, device_identity())
+    if wrong_card:
+        print(f"\nREFUSED: {wrong_card}")
+        return exit_codes.REFUSED
+    prov = PV.provenance_block(
+        instrument=ladder_instrument(args.duty), ridge=rr.ridge, ridge_source=rr.source,
+        bandwidth=bw.gbps, bandwidth_source=bw.detail, warmup_ms=args.warmup, iters=None,
+        target_ms=args.cell_budget_ms)
+    try:
+        store = Store(out_dir / "cells.csv", CSV_FIELDS + PROVENANCE_COLUMNS)
+    except SchemaCollision as exc:
+        print(f"\nREFUSED: {exc}")
+        return exit_codes.REFUSED
+    samples_by_cell, bincounts = run_histogram_page(
+        args, cfg, page=page, cells=cells, arms=arms, seed=seed, copies=copies,
+        pinned=pinned, block_m=block_m, store=store, prov=prov,
+        cache_root=out_dir / "triton-cache", declared_by_arm=declared_by_arm)
+    rows = []
+    for c, a in cells:
+        # the ladder's own predicate: a drifted repeat is out, as on every R3 page
+        got = [s for s in samples_by_cell.get((c.label, c.n, a), []) if s.usable]
+        clk = [s.sm_clock_load_mhz for s in got if s.sm_clock_load_mhz is not None]
+        numel = tokens[c.n] * cfg.top_k
+        bc = bincounts.get((c.label, c.n))
+        rows.append({"arm": a, "tiles": c.n, "tokens": tokens[c.n],
+                     "ms_p50": statistics.median(s.ms_p50 for s in got) if got else None,
+                     "sm_clock_load_mhz": statistics.median(clk) if clk else None,
+                     "experts_declared": declared_by_arm[a], "repeats": len(got),
+                     "host_bound": any(bool(s.host_bound) for s in got),
+                     "histogram": c.label, "counts_sha256": counts_sha256(c.counts),
+                     "shuffle_seed": seed if c.counts is not None else None,
+                     "bincount": bc,
+                     "bincount_ok": bc is not None and (c.counts is None
+                                                         or list(bc) == list(c.counts)),
+                     "align_path": align_path(numel, declared_by_arm[a])})
+    gates = histogram_gates(rows, samples_by_cell)
+    payload = {
+        "experiment": "private_weight_reference", "kind": "histogram-page", "run_id": run_id,
+        "session_tag": args.session_tag, "card": card, "model": args.model,
+        "dtype": args.dtype, "block_m": block_m, "pinned": pinned, "duty": args.duty,
+        "repeats": args.repeats, "copies_declared": copies, "arms": list(arms),
+        "declared_by_arm": declared_by_arm, "treads": treads,
+        "bandwidth_gbps": bw.gbps, "ridge": rr.ridge,
+        "histogram": histogram_provenance(page, arms, seed),
+        "histogram_gates": gates, "treads_table": rows,
+        "path_census": {"rows": [[a, c.n, tokens[c.n] * cfg.top_k, declared_by_arm[a], None,
+                                  align_path(tokens[c.n] * cfg.top_k, declared_by_arm[a])]
+                                 for c, a in cells]},
+        "ladder": "NOT APPLICABLE: histogram page (no slope, ratio or ladder-shaped gate)",
+        "gates": [{"kind": "VALIDITY", "tag": k, "verdict": v["verdict"]}
+                  for k, v in gates.items() if v["verdict"] in (PASS, FAIL)],
+    }
+    (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
+    lines = [f"  {k}: {v['verdict']}" for k, v in gates.items()]
+    (out_dir / "report.txt").write_text("\n".join(header + ["", "HISTOGRAM GATES:", *lines]) + "\n")
+    print("\n".join(["", "HISTOGRAM GATES:", *lines]))
+    print(f"json     {out_dir / 'report.json'}")
+    bad = [k for k, v in gates.items() if v["verdict"] == FAIL]
+    rc = exit_codes.INVALID if bad else exit_codes.DONE
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+def run_histogram_page(args, cfg, *, page: HistogramPage, cells, arms, seed: int,
+                       copies: int, pinned: dict, block_m: int, store, prov,
+                       cache_root: Path, declared_by_arm: dict):
+    """The metered part of a histogram page: one weight build, then per repeat every
+    cell (reversed on odd repeats), each cell's inputs built once through
+    `arm_inputs(cell=...)` and shared by its arms, arms rotated. Every cell lands in
+    cells.csv as it is timed (its label in `detail`), so locked_r3 reads its clock."""
+    import torch
+
+    cache_root.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_CACHE_DIR"] = str(cache_root)
+    reference_clock, _src = SWEEP.reference_clock_mhz()
+    override_config, _where = SWEEP.find_override()
+    from vllm.model_executor.layers.fused_moe import fused_experts
+    w1, w2, _delta = build_private_weights(cfg, args.dtype, copies, args.seed,
+                                           pad_rows=int(args.slot_pad_rows or 0))
+    native_w1, native_w2 = w1[::copies], w2[::copies]
+    conf = dict(pinned, BLOCK_SIZE_M=block_m)
+    order = page.ordered()
+    out: dict = {}
+    bincounts: dict = {}
+    for rep in range(args.repeats):
+        for c in (order if rep % 2 == 0 else list(reversed(order))):
+            ca = cell_arms(page, c, arms)
+            tokens, x, ids_by_arm, weights, kw = arm_inputs(
+                cfg, c.n, block_m, copies, args.seed, args.dtype, w1.dtype, arms=ca,
+                cell=c, shuffle_seed=seed)
+            bincounts[(c.label, c.n)] = realised_bincount(ids_by_arm[NATIVE], cfg.num_experts)
+            rot = [ca[(i + rep) % len(ca)] for i in range(len(ca))]
+            for a in rot:
+                call = arm_call(fused_experts, a, w1, w2, native_w1, native_w2,
+                                declared_by_arm, x, ids_by_arm, weights, kw)
+                tag = f"histogram={c.label}"
+                try:
+                    with override_config(conf):
+                        call()
+                        torch.cuda.synchronize()
+                        t = time_cell(call, duty=args.duty, warmup_ms=args.warmup,
+                                      cell_budget_ms=args.cell_budget_ms, trials=args.trials,
+                                      l2_flush=not args.no_l2_flush,
+                                      reference_clock_mhz=reference_clock)
+                    sample = sample_from_timing(
+                        t, arm=a, repeat=rep, block_m=block_m, tiles=c.n,
+                        rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
+                        experts_declared=declared_by_arm[a])
+                    sample = replace(sample, detail=tag + (f"; {sample.detail}" if sample.detail else ""))
+                except Exception as exc:                  # noqa: BLE001
+                    sample = Sample(arm=a, repeat=rep, block_m=block_m, tiles=c.n,
+                                    rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
+                                    experts_declared=declared_by_arm[a], ms_p50=0.0,
+                                    status="failed", duty=args.duty,
+                                    detail=f"{tag}; {type(exc).__name__}: {exc}")
+                store.append(sample, prov)
+                out.setdefault((c.label, c.n, a), []).append(sample)
+                print(f"  rep{rep:2d} {c.label:<14s} {a:8s} n={c.n:3d} T={tokens:7d} "
+                      f"{sample.ms_p50:9.4f} ms", flush=True)
+    return out, bincounts
 
 
 def _read_mode(args) -> int:

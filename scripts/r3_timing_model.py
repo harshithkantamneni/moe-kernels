@@ -475,24 +475,58 @@ Refused = PTF.Refused
 # The schedule: card-free, from vLLM's pid mapping.
 # --------------------------------------------------------------------------
 
-def grid_rows(declared: int, n: int) -> int:
+def numel_of(n: int, counts: tuple | None = None) -> int:
+    """topk_ids.numel(): E BLOCK_M n on R3's balanced ladder, sum_e c_e on a histogram."""
+    return IDS_PER_TREAD * n if counts is None else int(sum(counts))
+
+
+def grid_rows(declared: int, n: int, counts: tuple | None = None) -> int:
     """M-rows of the launch grid: the sorted ids padded per declared expert,
-    ceil((256 n + D (BLOCK_M - 1)) / BLOCK_M)."""
-    return -(-(IDS_PER_TREAD * n + declared * (BLOCK_M - 1)) // BLOCK_M)
+    ceil((numel + D (BLOCK_M - 1)) / BLOCK_M), numel = 256 n on mixtral's ladder."""
+    return -(-(numel_of(n, counts) + declared * (BLOCK_M - 1)) // BLOCK_M)
 
 
-def live_rows(n: int) -> int:
-    return E * n
+def expert_tiles(counts) -> np.ndarray:
+    """t_e = ceil(c_e / BLOCK_M): the M-tiles moe_align_block_size gives expert e
+    (an expert with no row gets none)."""
+    c = np.asarray(counts, dtype=np.int64)
+    return -(-c // BLOCK_M)
+
+
+def live_rows(n: int, counts: tuple | None = None) -> int:
+    """Live M-rows: E n on R3's balanced ladder; sum_e ceil(c_e / BLOCK_M) on a
+    histogram (rental 5, MODEL M2: a partly filled M-tile is a whole live row)."""
+    if counts is None:
+        return E * n
+    return int(expert_tiles(counts).sum())
+
+
+def uniform_counts(n: int) -> tuple:
+    """R3's balanced histogram at tread n: every expert BLOCK_M n rows."""
+    return tuple([BLOCK_M * n] * E)
 
 
 @cache
-def schedule(arm: str, declared: int, G: int, n: int, gemm: str) -> tuple[np.ndarray, int]:
+def schedule(arm: str, declared: int, G: int, n: int, gemm: str,
+             counts: tuple | None = None) -> tuple[np.ndarray, int]:
     """r_i (bytes) for every live CTA of one GEMM in launch order, and how
-    many of them lead (fetch a weight slab). Read-only: it is cached."""
+    many of them lead (fetch a weight slab). Read-only: it is cached.
+
+    `counts` (rental 5, MODEL M2): a per-expert histogram (a tuple of E ints). The live
+    rows are sum_e t_e, the owner of M-row pid_m is the expert whose tile range holds it
+    (searchsorted on the prefix sums of t_e; an expert with no row owns nothing), and a
+    CTA's A share is its tile's actual rows over BLOCK_M. At the uniform histogram every
+    array is bitwise today's (tests hold it at every integer n). PRIVATE refuses a
+    histogram: its copies are one per M-tile of a balanced expert."""
     if arm not in ARMS:
         raise ValueError(f"no arm {arm!r}")
+    if counts is not None and arm == "private":
+        raise Refused("PRIVATE has no histogram schedule: its relabelling needs exactly "
+                      "n BLOCK_M rows an expert (private_topk_ids)")
+    if counts is not None and len(counts) != E:
+        raise ValueError(f"a histogram of {len(counts)} experts on a model of {E}")
     geo = GEOMETRY[gemm]
-    R = grid_rows(declared, n)
+    R = grid_rows(declared, n, counts)
     P = geo.npn
     pid = np.arange(R * P, dtype=np.int64)
     in_group = G * P
@@ -501,13 +535,24 @@ def schedule(arm: str, declared: int, G: int, n: int, gemm: str) -> tuple[np.nda
     size = np.minimum(R - first, G)
     pid_m = first + (pid % in_group) % size
     pid_n = (pid % in_group) // size
-    live = pid_m < live_rows(n)
+    live = pid_m < live_rows(n, counts)
     pid_m, pid_n, gid = pid_m[live], pid_n[live], gid[live]
-    key = pid_m * P + pid_n if arm == "private" else (pid_m // n) * P + pid_n
+    if counts is None:
+        owner = pid_m if arm == "private" else pid_m // n
+        share = None
+    else:
+        t = expert_tiles(counts)
+        ends = np.cumsum(t)
+        owner = np.searchsorted(ends, pid_m, side="right")
+        c = np.asarray(counts, dtype=np.int64)
+        rows = np.minimum(BLOCK_M, c[owner] - (pid_m - (ends[owner] - t[owner])) * BLOCK_M)
+        share = rows / BLOCK_M
+    key = owner * P + pid_n
     _, first_seen = np.unique(gid * (R * P) + key, return_index=True)
     lead = np.zeros(pid_m.size, dtype=bool)
     lead[first_seen] = True
-    r = lead * float(geo.slab) + geo.arow / P
+    r = (lead * float(geo.slab) + geo.arow / P if share is None
+         else lead * float(geo.slab) + geo.arow / P * share)
     r.setflags(write=False)
     return r, int(lead.sum())
 
@@ -549,8 +594,9 @@ class Window:
 
 
 @cache
-def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int) -> Window:
-    r, leads = schedule(arm, declared, G, n, gemm)
+def window(arm: str, declared: int, G: int, n: int, gemm: str, w: int,
+           counts: tuple | None = None) -> Window:
+    r, leads = schedule(arm, declared, G, n, gemm, counts)
     m = box_mean(r, w)
     s = np.sort(m)
     m.setflags(write=False)
@@ -671,6 +717,36 @@ def cores(on: bool):
 DEAD_CTA_NS = 1.333
 DEAD = True
 
+#: MODEL v2 (rental 5, 2026-10-07; docs/registered/2026-10-07-rental5-v2-gh200). The dead
+#: term with D's constants: d = V2_DEAD_NS per dead CTA and kappa = V2_KAPPA in the hidden
+#: window, hidden = kappa occ_g S'_g c (in place of DEAD_CTA_NS and k_w). Both are FITTED on
+#: the in-kernel SHARED - NATIVE gap of the CAL-counters set (8x7B, 8x22B, Qwen2-57B and
+#: OLMoE counter pages: scripts/scoring/rental4/register.py fit_D, 0.995 / 0.325), and D
+#: held blind at rental 4 (A1, A2). Three of those four models are held-out time-test models,
+#: so a re-prediction of their timed pages under v2 is IN-SAMPLE for (d, kappa). Rental 4's
+#: per-GEMM d (d_w2 1.10 A1, d_w1 0.95 A2) is printed only, never a model. `--dead-model v2`
+#: (or the `dead_model` block) turns it on; the default stays "m", so every scorer written
+#: before it reads the same bytes.
+DEAD_MODELS = ("m", "v2")
+DEAD_MODEL = "m"
+V2_DEAD_NS = 0.995
+V2_KAPPA = 0.325
+#: the timing model's version string, printed on every rental-5 registration
+MODEL_VERSION = {"m": "M (DEAD_CTA_NS 1.333, k_w 0.5)", "v2": "v2 (d 0.995 ns, kappa 0.325)"}
+
+
+@contextlib.contextmanager
+def dead_model(name: str):
+    """Hold DEAD_MODEL at `name` ("m" or "v2") for a block, then restore it."""
+    global DEAD_MODEL
+    if name not in DEAD_MODELS:
+        raise Refused(f"--dead-model {name!r}: one of {DEAD_MODELS}")
+    saved, DEAD_MODEL = DEAD_MODEL, name
+    try:
+        yield
+    finally:
+        DEAD_MODEL = saved
+
 #: THE PER-CTA FIXED COST (2026-09-29). A CTA on the floor costs S_g + PHI_g
 #: k-steps of c, not S_g: the prologue (offsets, the sorted ids, num_stages - 1 = 3
 #: stages of cp.async issued before the first MMA and 72 predicated-off ldgsts past
@@ -754,17 +830,24 @@ def gemm_const(on: bool):
         GEMM_CONST = saved
 
 
-def dead_ctas(declared: int, n: int, gemm: str) -> int:
-    """CTAs of one GEMM's grid past the live rows: they exit after one load."""
-    return (grid_rows(declared, n) - live_rows(n)) * GEOMETRY[gemm].npn
+def dead_ctas(declared: int, n: int, gemm: str, counts: tuple | None = None) -> int:
+    """CTAs of one GEMM's grid past the live rows: they exit after one load. With
+    `counts` (a per-expert histogram, rental 5) the rows are sum_e ceil(c_e / BLOCK_M)
+    and the grid is sized by numel = sum c_e."""
+    return (grid_rows(declared, n, counts) - live_rows(n, counts)) * GEOMETRY[gemm].npn
 
 
-def dead_ms(declared: int, n: int, gemm: str, c_ns: float, k_w: float, occ: int) -> float:
-    """The dead CTAs' exposed dispatch time, in ms (0 under --no-dead)."""
+def dead_ms(declared: int, n: int, gemm: str, c_ns: float, k_w: float, occ: int,
+            counts: tuple | None = None) -> float:
+    """The dead CTAs' exposed dispatch time, in ms (0 under --no-dead). Model M: dead x
+    DEAD_CTA_NS less k_w occ S' c; model v2: dead x V2_DEAD_NS less V2_KAPPA occ S' c."""
     if not DEAD:
         return 0.0
+    if DEAD_MODEL == "v2":
+        hidden = V2_KAPPA * occ * floor_ksteps(gemm) * c_ns
+        return max(0.0, dead_ctas(declared, n, gemm, counts) * V2_DEAD_NS - hidden) * 1e-6
     hidden = k_w * occ * floor_ksteps(gemm) * c_ns
-    return max(0.0, dead_ctas(declared, n, gemm) * DEAD_CTA_NS - hidden) * 1e-6
+    return max(0.0, dead_ctas(declared, n, gemm, counts) * DEAD_CTA_NS - hidden) * 1e-6
 
 
 def gemm_ms(win: Window, gemm: str, sigma: float, c_ns: float, bw: float, sms: int,
@@ -908,6 +991,11 @@ class TimedPage:
     bandwidth_gbps: float | None = None
     tile: tuple = ()
     note: str = ""
+    #: rental 5 (S7): a histogram page's cells, (arm, label, n) -> (ms_p50, clock, declared,
+    #: counts_sha256). Never in `rows`: a histogram page is a target only and is never fitted.
+    hist_rows: dict = field(default_factory=dict)
+    #: the page's top-level "histogram" provenance block (file sha256, shuffle seed, cells)
+    histogram: dict | None = None
 
     @property
     def clocks(self) -> set:
@@ -942,10 +1030,17 @@ def load_timed_page(path: Path) -> TimedPage:
     page.bandwidth_gbps = report.get("bandwidth_gbps")
     page.tile = (report.get("model"), report.get("dtype"), report.get("block_m"),
                  pinned.get("BLOCK_SIZE_N"), pinned.get("BLOCK_SIZE_K"))
+    page.histogram = report.get("histogram")
     for r in report.get("treads_table") or []:
         if r.get("ms_p50") is None:
             continue
         n = int(r["tiles"])
+        if r.get("histogram") is not None:
+            clk = r.get("sm_clock_load_mhz")
+            page.hist_rows[(r["arm"], str(r["histogram"]), n)] = (
+                float(r["ms_p50"]), None if clk is None else float(clk),
+                int(r["experts_declared"]), r.get("counts_sha256"))
+            continue
         if r.get("tokens") is not None and int(r["tokens"]) * CFG.top_k != IDS_PER_TREAD * n:
             page.note = (f"{r['arm']} n={n} ran {r['tokens']} tokens, not "
                          f"{IDS_PER_TREAD * n // CFG.top_k}: another ladder")
@@ -1172,6 +1267,8 @@ class Cell:
     reads: dict | None
     sigma: dict
     fit: bool
+    #: a per-expert histogram (rental 5, MODEL M2), None on R3's balanced ladder
+    counts: tuple | None = None
 
     @property
     def key(self) -> str:
@@ -1237,13 +1334,15 @@ def call_ms(x, cell: Cell, ctx: Context, k_w: float, *, c_scale: float = 1.0,
             w2_scale: float = 1.0) -> float:
     """T for one cell at parameters x = (T0, c, bw, s_small, s_block)."""
     T0, c_ns, bw, s_small, s_block = (float(v) for v in x)
-    t = T0 + cell.n * B_OTHER / (bw * 1e6)
+    counts = getattr(cell, "counts", None)
+    treads = cell.n if counts is None else numel_of(cell.n, counts) / IDS_PER_TREAD
+    t = T0 + treads * B_OTHER / (bw * 1e6)
     for g in GEMMS:
         win = window(cell.arm, cell.declared, cell.G, cell.n, g,
-                     window_width(k_w, ctx.sms, ctx.occupancy[g]))
+                     window_width(k_w, ctx.sms, ctx.occupancy[g]), counts)
         sigma = cell.sigma[g] * (w2_scale if g == "w2" else 1.0)
         t += gemm_ms(win, g, sigma, c_ns * c_scale, bw, ctx.sms, occ=ctx.occupancy[g])
-        t += dead_ms(cell.declared, cell.n, g, c_ns * c_scale, k_w, ctx.occupancy[g])
+        t += dead_ms(cell.declared, cell.n, g, c_ns * c_scale, k_w, ctx.occupancy[g], counts)
         t += gemm_const_ms(g, c_ns * c_scale)
     if cell.arm == "native":
         t += s_small if cell.path == SMALL_BATCH else s_block
@@ -1780,8 +1879,16 @@ def build(args) -> dict:
     saved_lead, CORES_PER_LEAD = CORES_PER_LEAD, bool(getattr(args, "cores_per_lead", False))
     saved_dead, DEAD = DEAD, not getattr(args, "no_dead", False)
     saved_fixed, CTA_FIXED = CTA_FIXED, not getattr(args, "no_cta_fixed", False)
+    global DEAD_MODEL
+    saved_dm, DEAD_MODEL = DEAD_MODEL, getattr(args, "dead_model", None) or DEAD_MODEL
     saved_model = MODEL
+    if DEAD_MODEL not in DEAD_MODELS:
+        bad, DEAD_MODEL = DEAD_MODEL, saved_dm
+        P_KNEE, TAIL, DEAD, CTA_FIXED = saved, saved_tail, saved_dead, saved_fixed
+        CORES, CORES_PER_LEAD, GEMM_CONST = saved_cores, saved_lead, saved_const
+        raise Refused(f"--dead-model {bad!r}: one of {DEAD_MODELS}")
     if not P_KNEE >= 1:
+        DEAD_MODEL = saved_dm
         P_KNEE, TAIL, DEAD, CTA_FIXED = saved, saved_tail, saved_dead, saved_fixed
         CORES, CORES_PER_LEAD, GEMM_CONST = saved_cores, saved_lead, saved_const
         raise Refused(f"--p-knee {args.p_knee}: the knee exponent must be at least 1 (inf is "
@@ -1793,6 +1900,7 @@ def build(args) -> dict:
         TAIL = saved_tail
         CORES, CORES_PER_LEAD = saved_cores, saved_lead
         DEAD = saved_dead
+        DEAD_MODEL = saved_dm
         CTA_FIXED = saved_fixed
         GEMM_CONST = saved_const
         if MODEL != saved_model:
@@ -1901,6 +2009,7 @@ def _build(args) -> dict:
 
     return {"all_pages": all_pages, "use": use, "ctx": ctx, "source": source, "cells": cells,
             "notes": notes, "k_w": k_w, "main": main, "score": sc, "logo": lg,
+            "dead_model": DEAD_MODEL,
             "private_line": pline, "gates": gt, "F": f_table(cells, sc["pred"]),
             "rho_star": rho_star(main.x, ctx), "t3": t3_scores, "reference": ref,
             "reference_score": ref_sc, "ptx": ptx, "predictions": preds}
@@ -2204,6 +2313,7 @@ def doc_of(R: dict) -> dict:
         "occupancy": ctx.occupancy, "occupancy_source": ctx.occupancy_source,
         "clock_mhz": ctx.clock_mhz, "locked": ctx.locked, "bytes": ctx.byte_label,
         "k_w": R["k_w"],
+        **({"dead_model": MODEL_VERSION[R["dead_model"]]} if R.get("dead_model", "m") != "m" else {}),
         "pages": [{"path": str(p.path), "run": p.run, "label": p.label, "failed": list(p.failed),
                    "G": p.G, "duty": p.duty, "locked": p.locked, "fitted": p in R["use"]}
                   for p in R["all_pages"]],
@@ -2257,6 +2367,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="price the grid's dead CTAs at zero (the judge's pins); by default "
                         f"each costs {DEAD_CTA_NS} ns of dispatch past one effective lifetime "
                         "(DEAD_CTA_NS)")
+    p.add_argument("--dead-model", choices=DEAD_MODELS, default=None,
+                   help="the dead-CTA term: m (default, DEAD_CTA_NS and k_w) or v2 (rental 5: "
+                        f"d {V2_DEAD_NS} ns, kappa {V2_KAPPA}, MODEL_VERSION)")
     p.add_argument("--no-cta-fixed", action="store_true",
                    help="price a floor-bound CTA at S_g k-steps of c (every pin before "
                         "2026-09-29); by default it costs S_g + CTA_FIXED_KSTEPS "

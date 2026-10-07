@@ -3033,6 +3033,14 @@ def run_id_for(mode: str, args, card: str) -> str:
         # Rental 4 (2026-10-06): the instrumented copy's eviction hints, a knob only when given
         if getattr(args, "instr", None):
             knobs["instr"] = str(args.instr)
+        # Rental 5 (2026-10-07): a histogram page's file and arms, knobs only when given
+        if getattr(args, "histogram", None) is not None:
+            import hashlib
+            try:
+                knobs["histogram"] = hashlib.sha256(Path(args.histogram).read_bytes()).hexdigest()[:16]
+            except OSError:
+                knobs["histogram"] = "unreadable"
+            knobs["arms"] = str(args.arms or "native,shared")
         if mode == "r3-run" and getattr(args, "partition_metrics", False):
             knobs["partition_metrics"] = list(R3_PARTITION_METRICS)
         if mode == "r3-floor" and getattr(args, "floor_shape_metrics", False):
@@ -5547,7 +5555,7 @@ def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: i
             group_m: int, treads, kind: str, arms, calls: int, warmups: int,
             profile_dir: Path, stem: str, block_k: int | None = None,
             slot_pad_rows: int = 0, null_kernel: bool = False,
-            instr: str | None = None) -> dict:
+            instr: str | None = None, histogram=None) -> dict:
     """The plan the child runs, validated by R3 before anything touches a box.
 
     The declaration is R3's own (`counter_declaration`, over R3's whole ladder
@@ -5578,6 +5586,22 @@ def r3_plan(*, model: str, dtype: str, block_m: int, block_n: int, num_stages: i
         plan["null_kernel"] = True
     if instr:
         plan["instr"] = str(instr)
+    if histogram is not None:
+        # Rental 5: a histogram page (an r3.HistogramPage); its cells replace arms x treads
+        run_arms = tuple(a for a in r3.ARMS if a in arms)
+        plan["treads"] = histogram.treads
+        plan["arms"] = list(run_arms)
+        try:
+            plan["cells"] = r3.histogram_plan_cells(histogram, run_arms)
+        except r3.HistogramRefused as exc:
+            raise r3.CounterPlanRefused(str(exc)) from None
+        plan["histogram"] = {
+            "schema": histogram.schema, "file_sha256": histogram.file_sha256,
+            "page": histogram.page, "shuffle_seed": histogram.shuffle_seed,
+            "cells": [{"label": c.label, "n": c.n,
+                       "counts": None if c.counts is None else list(c.counts),
+                       **({"arms": list(c.arms)} if c.arms else {})}
+                      for c in histogram.cells]}
     r3.validate_counter_plan(plan)
     r3.counter_schedule(plan)
     return plan
@@ -5598,6 +5622,11 @@ def r3_design(plan: dict) -> dict:
         extra["null_kernel"] = True
     if plan.get("instr"):
         extra["instr"] = r3.counter_instr_spec(plan).as_dict()
+    if plan.get("histogram"):
+        h = plan["histogram"]
+        extra["histogram"] = {"file_sha256": h.get("file_sha256"), "page": h.get("page"),
+                              "shuffle_seed": h.get("shuffle_seed")}
+        extra["histogram_page"] = True
     return {**extra, "model": plan["model"], "dtype": plan["dtype"],
             "block_m": int(plan["block_m"]), "block_n": pinned["BLOCK_SIZE_N"],
             "block_k": pinned["BLOCK_SIZE_K"], "num_warps": pinned["num_warps"],
@@ -5683,19 +5712,24 @@ def r3_launch_sequence(manifest: dict) -> list[tuple[str, int, str, bool]]:
         raise CounterRunRefused(
             f"the manifest says {manifest['gemms_per_call']} GEMMs per call and the "
             f"attribution knows {len(gemms)}")
-    order = [(str(a), int(n)) for a, n in manifest["order"]]
+    order = [r3_order_key(e) for e in manifest["order"]]
     # A floor plan with the null kernel (rental 2): each call is its GEMMs,
     # then one spin_kernel, in the slot NULL_SLOT.
     slots = tuple(gemms) + ((NULL_SLOT,) if manifest.get("null_kernel") else ())
     seq: list[tuple[str, int, str, bool]] = []
     if manifest.get("launch_count") is None:
-        for a, n in order:
+        for key in order:
             for u in range(int(manifest["warmup_calls"])):
-                seq += [(f"{a}/{n}", u, g, True) for g in slots]
-    for a, n in order:
+                seq += [(key, u, g, True) for g in slots]
+    for key in order:
         for k in range(int(manifest["calls_per_cell"])):
-            seq += [(f"{a}/{n}", k, g, False) for g in slots]
+            seq += [(key, k, g, False) for g in slots]
     return seq
+
+
+def r3_order_key(entry) -> str:
+    """A manifest order entry's cell key: "arm/n", or "arm/n/label" on a histogram page."""
+    return "/".join(str(x) for x in entry)
 
 
 def _launch_order(launches: list[Launch]) -> list[Launch]:
@@ -5790,8 +5824,10 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
         by_key.setdefault(rec["key"], {}).setdefault(rec["call"], {})[rec["gemm"]] = \
             rec["launch"]
     cells = []
-    for arm, n in manifest["order"]:
-        key = f"{arm}/{n}"
+    hist = (manifest.get("histogram") or {}).get("cells") or {}
+    for entry in manifest["order"]:
+        arm, n = entry[0], entry[1]
+        key = r3_order_key(entry)
         calls = by_key.get(key, {})
         if sorted(calls) != list(range(k)) or any(set(c) != set(gemms)
                                                    for c in calls.values()):
@@ -5848,7 +5884,9 @@ def r3_reduce_cells(attributed: list[dict], manifest: dict, metrics_asked) -> li
             "grid": {g: int(manifest["grids"][key][g]) for g in gemms},
             "per_call": per_call, "per_gemm": per_gemm,
             "per_call_values": per_call_values, "per_gemm_values": per_gemm_values,
-            "spread_rel": r3_spread(per_call_values), "recorded": recorded})
+            "spread_rel": r3_spread(per_call_values), "recorded": recorded,
+            **({"histogram": entry[2], "counts_sha256": hist.get(key, {}).get("counts_sha256"),
+                "bincount": hist.get(key, {}).get("bincount")} if len(entry) == 3 else {})})
     return cells
 
 
@@ -7000,6 +7038,10 @@ def build_r3_page(*, plan: dict, manifest: dict, cells: list[dict], card, stack:
                             "q": {str(n): group_reads(cfg.num_experts, int(n), g_m)
                                   for n in plan["treads"]}},
             "estimates": None, "gates": []}
+    if plan.get("histogram"):
+        page["estimates"] = {"not_applicable": "histogram page: cells are (arm, n, label), "
+                                               "not a balanced ladder; the rental-5 scorer reads them"}
+        return page
     try:
         page["estimates"] = r3_estimates(page)
     except (KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
@@ -7187,7 +7229,55 @@ def r3_cost_s(launch_count: int, per_launch_s: float = R3_COST_PER_LAUNCH_S) -> 
     return sum(R3_COST_S.values()) + launch_count * per_launch_s
 
 
+def r3_histogram_args(args):
+    """(the HistogramPage, the arms) of a --histogram page, or (None, R3's three arms).
+    Refusals are CounterPlanRefused, as every plan's."""
+    r3 = _r3()
+    if getattr(args, "histogram", None) is None:
+        return None, r3.ARMS
+    cfg = MODEL_CONFIGS[args.model]
+    try:
+        arms = r3.parse_arms(args.arms or "native,shared")
+        if r3.PRIVATE in arms:
+            raise r3.HistogramRefused(r3.PRIVATE_SKEW_REFUSAL)
+        page = r3.load_histogram_page(args.histogram, cfg, args.block_m, args.model)
+    except r3.HistogramRefused as exc:
+        raise r3.CounterPlanRefused(str(exc)) from None
+    return page, arms
+
+
+def do_dry_run_r3_histogram(args) -> int:
+    """The plan of one histogram page per G the driver would ask (--group-m, else 8)."""
+    r3 = _r3()
+    try:
+        hist, arms = r3_histogram_args(args)
+        g = args.group_m if getattr(args, "group_m_given", False) else 8
+        plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
+                       block_n=args.block_n, num_stages=args.num_stages, group_m=g,
+                       treads=args.tiles, kind="measure", arms=arms, histogram=hist,
+                       calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
+                       profile_dir=Path("$R") / f"r3c-g{g}.profiles", stem=f"g{g}",
+                       block_k=getattr(args, "block_k", None),
+                       slot_pad_rows=int(getattr(args, "slot_pad_rows", 0) or 0),
+                       instr=getattr(args, "instr", None))
+    except r3.CounterPlanRefused as exc:
+        print(f"REFUSE: {exc}")
+        return exit_codes.REFUSED
+    sched = r3.counter_schedule(plan)
+    print(f"DRAM COUNTER RUN -- PLAN  family {R3_FAMILY}: a HISTOGRAM page (rental 5), "
+          f"G={g}, {len(plan['cells'])} cells (arm, n, label), arms {','.join(arms)}, "
+          f"copies declared {plan['copies_declared']}, {sched.launch_count} profiled launches")
+    print(f"  histogram {args.histogram} sha256 {hist.file_sha256[:16]}..., page "
+          f"{hist.page or '-'}, shuffle seed {hist.shuffle_seed}; --tiles ignored")
+    for a, n, label in plan["cells"]:
+        print(f"  {label:<16s} {a:<7s} n={n}")
+    print("DRY RUN: nothing ran (exit 2)")
+    return exit_codes.REFUSED
+
+
 def do_dry_run_r3(args) -> int:
+    if getattr(args, "histogram", None) is not None:
+        return do_dry_run_r3_histogram(args)
     r3 = _r3()
     cfg = MODEL_CONFIGS[args.model]
     bm, treads = args.block_m, list(args.tiles)
@@ -7935,9 +8025,10 @@ def do_run_r3(args) -> int:
         metrics += tuple(m for m in offered if m not in metrics)
     g_m, stem = args.group_m, f"g{args.group_m}"
     try:
+        hist, run_arms = r3_histogram_args(args)
         plan = r3_plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
                        block_n=args.block_n, num_stages=args.num_stages, group_m=g_m,
-                       treads=args.tiles, kind="measure", arms=r3.ARMS,
+                       treads=args.tiles, kind="measure", arms=run_arms, histogram=hist,
                        calls=R3_CALLS_PER_CELL, warmups=R3_WARMUP_CALLS,
                        profile_dir=profiles, stem=stem,
                        block_k=getattr(args, "block_k", None),
@@ -8028,17 +8119,25 @@ def _r3_write_page(args, *, plan: dict, capture: dict, census_path: Path, census
              "capture_commit": capture.get("commit")},
         census={"path": str(census_path), "sha256": _sha256(census_path),
                 "gemms_per_call": census.get("gemms_per_call_measured")})
-    gates, summary = score_r3_page(page)
+    # A HISTOGRAM PAGE (rental 5) scores none of the balanced page's gates: they read
+    # (arm, n) ladders. The page is data for the rental-5 byte-leg scorer.
+    hist = bool(plan.get("histogram"))
+    gates, summary = ([], {}) if hist else score_r3_page(page)
     page["gates"] = [asdict(g) for g in gates]
     payload = stamped(page, mode="r3-run", args=args, card=card["name"],
                       instrument=R3_RUN_INSTRUMENT_AT.format(clock=clock))
     check_r3_page(payload)
     out.write_text(json.dumps(payload, indent=2))
-    for line in r3_page_lines(payload, gates, summary):
-        print(line)
-    print(f"wrote {out}")
+    if hist:
+        for c in payload["cells"]:
+            print(f"  {c['histogram']:<16s} {c['arm']:<7s} n={c['n']:<3d} DRAM read "
+                  + " ".join(f"{g} {c['per_gemm'][g].get('dram_bytes_read')}" for g in c["per_gemm"]))
+    else:
+        for line in r3_page_lines(payload, gates, summary):
+            print(line)
+    print(f"wrote {out}" + (" (histogram page: no gate scored here)" if hist else ""))
     print(f"git   {git_visibility(out)}")
-    return exit_codes.classify(g.scored() for g in gates)
+    return exit_codes.DONE if hist else exit_codes.classify(g.scored() for g in gates)
 
 
 def do_reduce_r3(args) -> int:
@@ -8820,6 +8919,16 @@ def build_parser() -> argparse.ArgumentParser:
                          "nothing on, is refused; the child refuses the page (no manifest) unless "
                          "the compiled PTX carries L2::cache_hint. In the page's design and run "
                          "id only when given")
+    ap.add_argument("--histogram", type=Path, default=None, metavar="FILE",
+                    help="with --run or --dry-run --family r3-arms, a page (rental 5's byte "
+                         "leg): the cells of an R3 histogram file (private_weight_reference "
+                         "--histogram's schema) instead of arms x --tiles, built through the "
+                         "timed page's own arm_inputs(cell=...); NATIVE cells to tread 16, "
+                         "SHARED cells to 9, PRIVATE refused. The page's design says "
+                         "histogram_page; in its run id only when given")
+    ap.add_argument("--arms", default=None,
+                    help="with --histogram: the arms the histogram page runs (default "
+                         "native,shared; PRIVATE cannot run skewed)")
     ap.add_argument("--partition-metrics", action="store_true",
                     help="with --run --family r3-arms, a page (rental 2): also ask the "
                          "L2 fabric's own read, hit and miss sectors "
@@ -9001,6 +9110,15 @@ def main(argv=None) -> int:
                   "--reduce-only (the ladder family's sweep has no such knob, and a "
                   "census or floor runs R3's default tile)")
             return exit_codes.REFUSED
+    if (args.histogram is not None or args.arms is not None) and not (
+            args.family == R3_FAMILY and (args.run or args.dry_run) and not args.floor
+            and not args.census_only and not args.reduce_only):
+        print("REFUSE: --histogram and --arms belong to --run or --dry-run --family "
+              "r3-arms, for a page (not the census, the floor or --reduce-only)")
+        return exit_codes.REFUSED
+    if args.arms is not None and args.histogram is None:
+        print("REFUSE: --arms rides with --histogram; a balanced page counts R3's three arms")
+        return exit_codes.REFUSED
     if args.instr and not (args.family == R3_FAMILY and (args.run or args.dry_run)
                            and not args.floor and not args.census_only and not args.reduce_only):
         print("REFUSE: --instr belongs to a page: --run or --dry-run --family r3-arms, not "

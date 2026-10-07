@@ -588,7 +588,8 @@ def _previous(key: np.ndarray):
 
 
 def stack_distance(G: int, n: int, P: int, live_m: int, slab_bytes: int, atile_bytes: int,
-                   gid: np.ndarray, pid_n: np.ndarray) -> np.ndarray:
+                   gid: np.ndarray, pid_n: np.ndarray,
+                   tile_owner: np.ndarray | None = None) -> np.ndarray:
     """The LRU reuse distance of a SHARED/NATIVE cross-group slab re-read: the
     distinct bytes the launch touches between the two reads, CTAs in launch
     order, each reading its A tile and then its slab.
@@ -605,15 +606,31 @@ def stack_distance(G: int, n: int, P: int, live_m: int, slab_bytes: int, atile_b
     groups = -(-live_m // G)
     L = np.minimum(G, live_m - np.arange(groups) * G)
     first = np.arange(groups) * G
-    owners = (first + L - 1) // n - first // n + 1
+    if tile_owner is None:
+        owners = (first + L - 1) // n - first // n + 1
+    else:   # rental 5 (MODEL M3): the distinct owners of each group's tiles, per expert
+        owners = np.array([np.unique(tile_owner[f:f + c]).size for f, c in zip(first, L, strict=True)])
     k = gid
     return (slab_bytes * (owners[k - 1] * (P - 1 - pid_n) + owners[k] * pid_n)
             + atile_bytes * (np.where(pid_n < P - 1, L[k - 1], 0)
                              + np.where(pid_n > 0, L[k], 1))).astype(float)
 
 
+def tile_owners(counts, block_m: int) -> tuple[np.ndarray, np.ndarray]:
+    """(owner, rows) per live M-tile of a per-expert histogram (rental 5, MODEL M3): expert e
+    owns t_e = ceil(c_e / BLOCK_M) consecutive tiles in expert order (moe_align_block_size's
+    sort), the last one holding c_e - (t_e - 1) BLOCK_M rows; an expert with no row owns none."""
+    c = np.asarray(counts, dtype=np.int64)
+    t = -(-c // block_m)
+    owner = np.repeat(np.arange(c.size), t)
+    start = np.repeat(np.cumsum(t) - t, t)
+    j = np.arange(owner.size) - start
+    rows = np.minimum(block_m, c[owner] - j * block_m)
+    return owner, rows
+
+
 def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: int, *,
-         slab_bytes: int = 0, atile_bytes: int = 0) -> Events:
+         slab_bytes: int = 0, atile_bytes: int = 0, counts=None, block_m: int = 0) -> Events:
     """Walk every pid of the launch grid through the pid mapping, dead CTAs
     skipped (they exit at once and take no slot time), and list every re-read.
 
@@ -627,7 +644,21 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
     if min(G, n, P, num_pid_m, experts) < 1:
         raise ValueError(f"walk needs G, n, P, num_pid_m and E >= 1, got {G}, {n}, {P}, "
                          f"{num_pid_m}, {experts}")
-    live_m = experts * n
+    t_owner = t_rows = None
+    if counts is not None:
+        # rental 5, MODEL M3: the per-expert walk. The owner of tile m is the expert whose
+        # tile range holds it; the cross-group distance takes each group's distinct owners
+        # (stack_distance with tile_owner, equal to an exact LRU walk: the tests); an A
+        # re-read counts its tile's actual rows over BLOCK_M. No closed form is checked.
+        if arm == "private":
+            raise Refused("PRIVATE has no per-expert walk: its copies are one per M-tile of a "
+                          "balanced expert")
+        if len(counts) != experts or block_m < 1:
+            raise ValueError(f"a histogram of {len(counts)} experts on E={experts}, BLOCK_M {block_m}")
+        t_owner, t_rows = tile_owners(counts, block_m)
+        live_m = int(t_owner.size)
+    else:
+        live_m = experts * n
     if num_pid_m < live_m:
         raise ValueError(f"num_pid_m {num_pid_m} is below the {live_m} live M-tiles")
     pid = np.arange(num_pid_m * P, dtype=np.int64)
@@ -635,7 +666,10 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
     keep = pid_m < live_m
     gid, pid_m, pid_n = gid[keep], pid_m[keep], pid_n[keep]
     live = int(pid_m.size)
-    owner = pid_m if arm == "private" else pid_m // n
+    if t_owner is not None:
+        owner = t_owner[pid_m]
+    else:
+        owner = pid_m if arm == "private" else pid_m // n
     key = owner * P + pid_n
     cur, prev = _previous(key)
     slabs = live - int(cur.size)
@@ -643,7 +677,7 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
     inside = gid[cur] == gid[prev]
     win1 = cur < W_c
     xc = cur[~inside]
-    S = (stack_distance(G, n, P, live_m, slab_bytes, atile_bytes, gid[xc], pid_n[xc])
+    S = (stack_distance(G, n, P, live_m, slab_bytes, atile_bytes, gid[xc], pid_n[xc], t_owner)
          if xc.size else np.zeros(0))
     x = Counter(zip(D[~inside].tolist(), win1[~inside].tolist(), S.tolist(), strict=True))
     in_win1 = int(np.sum(inside & win1))
@@ -654,12 +688,22 @@ def walk(arm: str, G: int, n: int, P: int, W_c: int, num_pid_m: int, experts: in
     for g in range(groups):
         first = g * G
         tiles = range(first, min(first + G, live_m)) if first < live_m else range(0)
-        owners = len(tiles) if arm == "private" else len({m // n for m in tiles})
+        if t_owner is not None:
+            owners = len({int(t_owner[m]) for m in tiles})
+        else:
+            owners = len(tiles) if arm == "private" else len({m // n for m in tiles})
         ws[g] = len(tiles) * atile_bytes + owners * slab_bytes
     cur_a, prev_a = _previous(pid_m)
     da = cur_a - prev_a
     wa = cur_a < W_c
-    a = Counter(zip(da.tolist(), wa.tolist(), ws[gid[cur_a]].tolist(), strict=True))
+    if t_rows is None:
+        a = Counter(zip(da.tolist(), wa.tolist(), ws[gid[cur_a]].tolist(), strict=True))
+    else:
+        a = Counter()
+        frac = (t_rows[pid_m[cur_a]] / block_m).tolist()
+        for key_a, f in zip(zip(da.tolist(), wa.tolist(), ws[gid[cur_a]].tolist(), strict=True),
+                            frac, strict=True):
+            a[key_a] += f
 
     def arrays(counter, width):
         if not counter:
@@ -728,14 +772,30 @@ def closed_form(arm: str, G: int, n: int, P: int, W_c: int, experts: int) -> dic
             "slabs": live * P if arm == "private" else experts * P}
 
 
-def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str) -> Events:
+def cell_events(geom: Geometry, arm: str, G: int, n: int, gemm: str, counts=None) -> Events:
     """The walk of one cell on `geom`'s grid, checked against the closed form,
     and its largest WS_col against `DCR.r3_exposure`'s fullest-group working
     set (the ws view's distance must be the repo's quantity); a disagreement
-    refuses."""
+    refuses. With `counts` (rental 5, MODEL M3: a per-expert histogram whose numel is
+    the tread's, E n BLOCK_M) the per-expert walk, which has no closed form: the tests
+    hold it to an exact LRU walk and to the balanced walk at the uniform histogram."""
     P = geom.get("P", gemm)
     Wc = geom.get("W_c", gemm)
     npm = geom.num_pid_m(arm, n)
+    if counts is not None:
+        if int(sum(counts)) != geom.experts * n * geom.block_m:
+            raise Refused(f"a histogram of {int(sum(counts))} rows at n={n}: the tread holds "
+                          f"{geom.experts * n * geom.block_m}")
+        ev = walk(arm, G, n, P, Wc, npm, geom.experts, slab_bytes=geom.slab(gemm),
+                  atile_bytes=geom.atile(gemm), counts=counts, block_m=geom.block_m)
+        if LATER_MISS and G >= 2 and ev.x_D.size:
+            later = ~ev.x_win1 & (ev.x_S > geom.l2_bytes)
+            ev = dataclasses.replace(ev, slabs=ev.slabs + int(ev.x_k[later].sum()),
+                                     x_D=ev.x_D[~later], x_win1=ev.x_win1[~later],
+                                     x_k=ev.x_k[~later], x_S=ev.x_S[~later])
+        return dataclasses.replace(ev, gemm=gemm, per_set=geom.per_set(gemm),
+                                   weight_bytes=geom.get("W", gemm), atile=geom.atile(gemm),
+                                   ksteps=geom.get("K", gemm) // max(1, geom.block_k))
     ev = walk(arm, G, n, P, Wc, npm, geom.experts, slab_bytes=geom.slab(gemm),
               atile_bytes=geom.atile(gemm))
     cf = closed_form(arm, G, n, P, Wc, geom.experts)
@@ -1150,11 +1210,12 @@ class Model:
         self.content_a = bool(content_a)
         self._events: dict = {}
 
-    def events(self, arm: str, G: int, n: int, gemm: str) -> Events:
-        key = (arm, G, n, gemm)
+    def events(self, arm: str, G: int, n: int, gemm: str, counts=None) -> Events:
+        """`counts` (rental 5, MODEL M3): a per-expert histogram tuple, the per-expert walk."""
+        key = (arm, G, n, gemm, None if counts is None else tuple(int(v) for v in counts))
         if key not in self._events:
-            ev = cell_events(self.geom, arm, G, n, gemm)
-            if self.content_a:
+            ev = cell_events(self.geom, arm, G, n, gemm, key[4])
+            if self.content_a and counts is None:
                 ev = content_events(self.geom, ev)
             self._events[key] = ev
         return self._events[key]
@@ -1184,8 +1245,9 @@ class Model:
         through `shown`."""
         cells = list(cells)
         extra = []
-        for arm, G, n, gemm in cells:
-            if G == 1:
+        for c in cells:
+            arm, G, n, gemm = c[:4]
+            if G == 1 and len(c) == 4:
                 extra += [(arm, 1, m, gemm) for m in range(1, n)]
         allc = list(dict.fromkeys(cells + extra))
         b = self.batch(allc)
@@ -1196,13 +1258,13 @@ class Model:
         out = []
         for c in cells:
             i = at[c]
-            arm, G, n, gemm = c
+            arm, G, n, gemm = c[:4]
             why = []
             if kap[i] > KAPPA_MAX:
                 why.append(f"kappa {kap[i]:.1f} > {KAPPA_MAX:g}")
             if abs(qh[i] - q[i]) > ROOT_GAP_MAX:
                 why.append(f"roots {q[i]:.3f} and {qh[i]:.3f}")
-            if G == 1 and n > 1:
+            if G == 1 and n > 1 and len(c) == 4:
                 below = [(q[at[(arm, 1, m, gemm)]], m) for m in range(1, n)]
                 top, m_top = max(below)
                 if q[i] < top:
