@@ -483,3 +483,26 @@ def test_every_scorer_writes_its_files_on_an_empty_tree(tmp_path):
         out = tmp_path / "out"
         assert mod.main([str(REPO), str(tmp_path), str(out)]) == 0
         assert (out / f"{mod.PART}.score.json").exists() and (out / f"{mod.PART}.score.txt").exists()
+
+
+def test_a_refused_stamps_unit_reads_not_run_with_its_gate_numbers(tmp_path):
+    """Rental 4's post-page fix (reading code): a unit the driver refused has no stamps.json;
+    the scorer names it NOT RUN with the gate's numbers off gate.env, the verdict NOT SCORED."""
+    pd = tmp_path / f"{DAY}-{CARD}-perturb-pt"
+    pd.mkdir(parents=True)
+    (pd / "gate.env").write_text("GATE_u8_stf=FAIL median=0.0168 worst=0.0222\n"
+                                 "GATE_u13_sttail=FAIL median=0.0753 worst=0.1668\n"
+                                 "GATE_u14_sttail=PASS median=0.001 worst=0.002\n")
+    drv = tmp_path / "session" / "gh200-driver"
+    drv.mkdir(parents=True)
+    (drv / "instr-variants.json").write_text(json.dumps([
+        {"id": "u8-stf", "kind": "stamps", "model": "mixtral-8x7b"},
+        {"id": "u13-sttail", "kind": "stamps", "model": "mixtral-8x22b"},
+        {"id": "u14-sttail", "kind": "stamps", "model": "mixtral-8x7b"}]))
+    u = SST.score(REPO, tmp_path)["units"]
+    assert u["stf"]["use"] == ("NOT SCORED: NOT RUN (gate FAIL: median 1.68%, worst 2.22%; "
+                               "variant u8-stf, refused by the driver)")
+    assert "NOT RUN (gate FAIL: median 7.53%, worst 16.68%" in u["sttail-mixtral-8x22b"]["use"]
+    # a PASS gate with no page is not a refusal: the old reading stands
+    assert u["sttail-mixtral-8x7b"]["use"] == "NOT SCORED: 0 stamps.json for mixtral-8x7b sttail"
+    assert u["stk64s4"]["use"] == "NOT SCORED: 0 stamps.json for olmoe-1b-7b stk64s4"

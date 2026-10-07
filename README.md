@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 6051 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 6052 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty-one further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty-two further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and fourteen Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and fifteen Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -251,9 +251,12 @@ launch floor, 14 units on one GH200, and rental 2 of 2026-10-02: the TP-shard fl
 captures at unseen treads and 1005 MHz, the num_stages / BLOCK_K / slot-pad knob pages and
 the two-process launch-floor rerun, 24 units on one GH200, and rental 3 of 2026-10-06: the
 Qwen2-57B TP=8 end-to-end test, the floor at four clocks with a same-clock replicate, the stage /
-BLOCK_K pages and the flush ladder, 24 units on one GH200), kept so every verdict they printed can be
+BLOCK_K pages and the flush ladder, 24 units on one GH200, and rental 4 of 2026-10-07: the dead-CTA
+cost at 9 and 15 declared copies on Qwen2-57B TP=8 and OLMoE, the OLMoE BLOCK_K / num_stages
+counter pages, the hardware rulers and RRZE's gpu-benches, and the instrumented copy's perturbation
+gate, which failed, 25 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 14 GH200 sessions ran on ten distinct boards (counted by
+sessions rather than arms. The 15 GH200 sessions ran on ten distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,

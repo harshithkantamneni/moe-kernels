@@ -880,6 +880,66 @@
    "number": "3 cells; +27 to +42 us per 33.8 us step",
    "label": "band SEEN (rental 2); E360 on no page (reg: seen_data)",
    "scored_in": "`SC3/flush.score.txt`; `SC3/SCORES.md` part D"
+  },
+  {
+   "row": 89,
+   "section": "3.2",
+   "test": "R4 dead-CTA cost, 15 against 9 copies: D (candidate d 0.995 ns, kappa 0.325) and D2, |z| <= 3 at sigma_noise 0.9 us",
+   "registration": "`D/2026-10-06-rental4-dead-gh200.json`",
+   "verdict": "D HOLDS on A1 and A2; D2 HOLDS (D / D2 NOT SEPARATED by design)",
+   "number": "A1 qwen2-57b-a14b-tp8 Delta 22.93 us (D 20.73, z +1.79); A2 olmoe-1b-7b 24.45 us (D 23.69, z +0.58); NATIVE null PASS",
+   "label": "BLIND: no page at 15 copies existed; D's fit CAL, D2 SEEN-fitted (reg: seen_data)",
+   "scored_in": "`SC4/dead.score.txt`; `SC4/SCORES.md` part A; `F` Rental 4 table"
+  },
+  {
+   "row": 90,
+   "section": "3.2",
+   "test": "R4 dead-CTA rivals: M (current DEAD_CTA_NS 1.333 ns, k_w 0.5), SLOT, K0, FIXED",
+   "registration": "same",
+   "verdict": "M EXCLUDED on A1 and A2; SLOT EXCLUDED on A2; K0 NOT EXCLUDED; FIXED EXCLUDED",
+   "number": "M z -5.38, -8.10; SLOT z +2.04, +3.06; per-GEMM d printed: w2 1.10 ns, w1 0.95 ns",
+   "label": "BLIND, as row 89 (reg: rules)",
+   "scored_in": "`SC4/dead.score.json` verdicts; `SC4/SCORES.md` part A"
+  },
+  {
+   "row": 91,
+   "section": "3.2",
+   "test": "R4 part B' the k-step law at BLOCK_K / num_stages, OLMoE G = 64: MVA2, LK, PS, LITTLE, OCC, 2% per (page, GEMM)",
+   "registration": "`D/2026-10-06-rental4-occlaw-gh200.json`",
+   "verdict": "UNDECIDED, no survivor: MVA2, LK, PS, LITTLE, OCC each FALSIFIED",
+   "number": "12 (page, GEMM) scored; rms MVA2 2.56%, OCC 2.51% (8 BK 64 cells), LK 7.9%, PS 16.5%, LITTLE 21.9%; k64s2 re-keyed",
+   "label": "law parameters SEEN-fitted; k64s4 base SEEN, six knob pages BLIND-CALMODEL (reg: labels)",
+   "scored_in": "`SC4/occlaw.score.txt`; `SC4/SCORES.md` part B'"
+  },
+  {
+   "row": 92,
+   "section": "3.2",
+   "test": "R4 perturbation gate of the instrumented copy (decision 2): median <= 1%, worst <= 2%, identical occupancy, all-off SASS equal",
+   "registration": "`D/2026-10-06-rental4-perturb-gh200.json`",
+   "verdict": "FAIL on 9 of 9 variants",
+   "number": "median 1.45 to 9.51%, worst 2.22 to 16.68%; registers differ in every variant (w2 BK 64 s4 55 -> 45 / 48); all-off SASS equal on 18 of 18 configs",
+   "label": "a gate, no verdict of the study's own; the tolerance is the owner's (reg: seen_data)",
+   "scored_in": "`SC4/perturb.score.txt`; `SC4/SCORES.md` perturbation gate; `F` Rental 4 methods finding"
+  },
+  {
+   "row": 93,
+   "section": "3.2",
+   "test": "R4 stamps: F (w2 epilogue), K (per-iteration law), T (tail wave), D (dead life and dispatch)",
+   "registration": "`D/2026-10-06-rental4-stamps-gh200.json`",
+   "verdict": "NOT SCORED: NOT RUN (gate FAIL) on all nine units",
+   "number": "refused in 0 minutes by the driver; each unit's gate median and worst recorded",
+   "label": "no stamp page exists (reg: missing)",
+   "scored_in": "`SC4/stamps.score.txt`; `SC4/SCORES.md` stamps"
+  },
+  {
+   "row": 94,
+   "section": "3.2",
+   "test": "R4 hardware constants against RRZE's published GH200: far L2 within 5%, DRAM within 10%, triad within 3%, L2 size",
+   "registration": "`D/2026-10-06-rental4-hw-gh200.json`",
+   "verdict": "far L2 DIFFERS; DRAM NOT SCORED; triad CONSISTENT; L2 size CONSISTENT",
+   "number": "far L2 275.0 against 253.4 ns (+8.5%); gpu-latency stopped at 1.46 L; triad 3781 against 3783 GB/s",
+   "label": "the comparison values SEEN third-party (RRZE-HPC/gpu-benches 23e586dd, GPL-3.0) (reg: seen_data)",
+   "scored_in": "`SC4/hw.score.txt`; `SC4/SCORES.md` hardware constants"
   }
  ]
 }

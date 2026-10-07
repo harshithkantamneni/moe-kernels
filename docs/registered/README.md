@@ -1016,3 +1016,24 @@ rulers, against RRZE's published GH200 (far L2 253.4 ns within 5%, DRAM 346.4 wi
 published pages were seen (each labelled); no rental-4 page exists. OLMoE and Qwen2-57B are CAL
 models, so B' and the stamps are BLIND-CALMODEL apart from the SEEN k64s4 configuration; the
 15-copy contrasts are on no page.
+
+**Scored 2026-10-07** on `results/published/2026-10-07-nvidia_gh200_480gb-rental4-session`
+(board bb7a34, rental 3's; 25 units at 85ef38c in 95 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental4/` and `SCORES.md`). No page is dropped
+by either view: the four timed pages pass V0 to V8 (worst cell 1710.0 MHz) and the seven byte pages
+V0 to V10. **dead**: D, the candidate d 0.995 ns, HOLDS on both contrasts (A1 qwen2-tp8 Delta 22.93
+us, z +1.79; A2 OLMoE 24.45 us, z +0.58); M, the current 1.333 ns, is EXCLUDED on both (z -5.38,
+-8.10); D2 HOLDS; SLOT EXCLUDED on A2 (z +3.06, at the line; D / SLOT and D / D2 are printed NOT
+SEPARATED by the registration's own rule, which the scorer does not print: `SCORES.md`); K0 NOT
+EXCLUDED; FIXED EXCLUDED; the NATIVE null control passes (+0.77, 0.00 us); per-GEMM d printed 1.10
+ns (w2) and 0.95 ns (w1). **occlaw**: UNDECIDED with no survivor, every law FALSIFIED on at least
+one of 12 (page, GEMM) cells (MVA2 rms 2.56%, OCC 2.51% on its 8); k64s2 re-keyed (5 / 5 CTAs per
+SM recorded against 4 / 4). **perturb**: FAIL on 9 of 9 variants (median 1.45 to 9.51%, worst 2.22
+to 16.68%, registers differ in every variant; the all-off copy's SASS equals the plain kernel's on
+18 of 18 configs), so **stamps** is NOT SCORED: NOT RUN on all nine units, as registered. **hw**: far
+L2 DIFFERS (275.0 against 253.4 ns, +8.5%), DRAM NOT SCORED (gpu-latency stopped at its 420 s
+timeout at 1.46 L), triad and the L2 size CONSISTENT. **nativegates** scores nothing (rental 5's).
+One post-page scorer fix to reading code, changing no verdict (`SCORES.md`, end): `score_stamps.py`
+reads a refused unit's gate line and prints NOT RUN with its median and worst, where it printed "0
+stamps.json". The gate's diagnosis (ptxas reallocates the whole kernel around the stamps; the
+stamps' cost at equal occupancy) is in `docs/FINDINGS.md`, rental 4. The files above are unchanged.

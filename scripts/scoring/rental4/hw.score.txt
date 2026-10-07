@@ -1,0 +1,11 @@
+RENTAL 4 HARDWARE CONSTANTS, 2026-10-06-rental4-hw-gh200
+  far_l2: DIFFERS (275 against 253.4, +8.5%)
+  dram: NOT SCORED
+  triad: CONSISTENT (3781 against 3783, -0.1%)
+  l2_cache_size: CONSISTENT (6.291e+07 against 6.291e+07, +0.0%)
+  cycles_at_lock: {"near_l2_ns": 260.6000000000001, "far_l2_ns": 470.30000000000007, "dram_ns": null}
+  near_l2_ns: 152.3976608187135
+  l2_half_way_over_L: 0.8148250451399838
+  triad_knee_occupancy: 0.7190000000000001
+  eta_mix: {"read2d": 0.9431305016960323, "copy": 0.9795078657615085, "add": 0.9650588285910663, "gpubench_triad": 0.9516001057921185}
+  tau_mma_flop_per_clk_per_sm: 3054.077096521022

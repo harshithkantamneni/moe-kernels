@@ -449,6 +449,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-10-02-nvidia_gh200_480gb-rental2-session": SESSION,
         # Rental 3 of 2026-10-06: one GH200, 24 units of six registrations.
         "2026-10-06-nvidia_gh200_480gb-rental3-session": SESSION,
+        # Rental 4 of 2026-10-07: one GH200, 25 units of five scored registrations.
+        "2026-10-07-nvidia_gh200_480gb-rental4-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

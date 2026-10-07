@@ -42,6 +42,12 @@ G = 8 timed page against the e2e G = 8 page (qwen2-57b-a14b-tp8, board bb7a34); 
 (a) the same-clock repeat capture of RK, the tp4 floorrep 1710 capture against the tp4
 floor unit's 1710 capture, for K1's L, K4's D_imb and the part-4 per-cell cycles.
 
+Added 2026-10-07 (rental 4): (c) NATIVE's same call on two pages of one board, the 9- and
+15-copy timed pages of qwen2-57b-a14b-tp8 and of olmoe-1b-7b (G = 8, board bb7a34; NATIVE
+declares E slots on both, so only SHARED and PRIVATE change between them); and (b) the OLMoE
+G = 64 counter page at BLOCK_K 64 s4 on two boards (2026-09-29, d663f7, against rental 4's
+k64s4, bb7a34), for bytes per arm and for sm__cycles_elapsed.avg, part B''s input.
+
 Added 2026-10-05 (gradefix4): NATIVE bytes, (a) and (b) as for PRIVATE and SHARED;
 and the launch offsets P2 (E240 - GR), P3 (E0 - E240), P4 (E480 - E240), P8
 (H - I_E240), each the SE of the offset from repeat-paired differences over the
@@ -253,6 +259,16 @@ RK_PAIR = (f"{R3}/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floor-r
            f"{R3}/results/2026-10-06-nvidia_gh200_480gb-mixtral-8x7b-tp4-floorrep-r3-counters/r3f-g64-lock1710.json")
 FLOORLAW = ROOT / "docs/registered/2026-10-05-rental3-floorlaw-gh200.json"
 
+R4 = "2026-10-07-nvidia_gh200_480gb-rental4-session"
+#: Rental 4: the 9- and 15-copy G = 8 timed pages per model (NATIVE is the same call on both).
+R4_NATIVE = [("qwen2-57b-a14b-tp8", "94e2fecb", "7f595452"), ("olmoe-1b-7b", "183ddc17", "a71cd9a0")]
+#: the registered treads of the dead contrast (docs/registered/2026-10-06-rental4-dead-gh200)
+R4_TREADS = range(3, 10)
+#: OLMoE G = 64 at BLOCK_K 64 s4 on two boards (2026-09-29 d663f7, rental 4 bb7a34).
+OLMOE_G64_BOARDS = ("2026-09-29-nvidia_gh200_480gb-olmoe-session/results/"
+                    "2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
+                    f"{R4}/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s4-r3-counters/lock1710/r3c-g64.json")
+
 #: G = 1 counter pages carrying s, by (model and GEMM, board): the L2-survival cells.
 SURVIVAL = [
     ("8x7B w2", "mixtral-8x7b", "w2", [
@@ -330,6 +346,31 @@ def time_rep8() -> dict:
     return {"reg_cells": len(reg), "reg_rms": rms(reg), "all_cells": len(allc), "all_rms": rms(allc),
             "worst": max(allc, key=abs),
             "sources": [rel(timed_dir(sess, ra) / "report.json"), rel(timed_dir(sess, rb) / "report.json")]}
+
+
+def time_native_r4() -> dict:
+    """(c) NATIVE at 15 copies over NATIVE at 9, per model, n = 3..9 (and every tread)."""
+    out, srcs = {}, []
+    for model, ra, rb in R4_NATIVE:
+        a, b = cell_values(timed_dir(R4, ra)), cell_values(timed_dir(R4, rb))
+        d = [b[("native", n)] / a[("native", n)] - 1 for n in R4_TREADS]
+        dall = [b[k] / a[k] - 1 for k in sorted(set(a) & set(b)) if k[0] == "native"]
+        out[model] = {"cells": len(d), "rms": rms(d), "mean": st.mean(d), "all_cells": len(dall),
+                      "worst_all": max(dall, key=abs)}
+        srcs += [rel(timed_dir(R4, ra) / "report.json"), rel(timed_dir(R4, rb) / "report.json")]
+    return {"models": out, "sources": srcs}
+
+
+def olmoe_g64_board() -> dict:
+    """(b) the OLMoE G = 64 BK 64 s4 counter page on two boards: bytes per arm (every cell
+    and GEMM) and sm__cycles_elapsed.avg on part B''s cells (NATIVE and SHARED, n = 4..9)."""
+    a, b = (ccells(counter(PUB / f)) for f in OLMOE_G64_BOARDS)
+    keys = sorted(set(a) & set(b))
+    byt = {arm: [b[k]["per_gemm"][g]["dram_bytes_read"] / a[k]["per_gemm"][g]["dram_bytes_read"] - 1
+                 for k in keys if k[0] == arm for g in ("w1", "w2")] for arm in ("native", "shared", "private")}
+    cyc = {g: [b[k]["recorded"][g]["sm__cycles_elapsed.avg"] / a[k]["recorded"][g]["sm__cycles_elapsed.avg"] - 1
+               for k in keys if k[0] in ("native", "shared") and 4 <= k[1] <= 9] for g in ("w1", "w2")}
+    return {"bytes": byt, "cycles": cyc, "sources": [f"results/published/{f}" for f in OLMOE_G64_BOARDS]}
 
 
 def rk_floor() -> dict:
@@ -721,7 +762,18 @@ def build() -> list[dict]:
     add("time per cell, between pages on one board: OLMoE, Qwen1.5, Phi-3.5, JetMoE",
         "as above", "none", NONE, 0, "",
         "none of these four has two pages at one G and clock; the only retakes are 8x22B, "
-        "Qwen2-57B and Granite-3B (above), and the only board-to-board time pair is 8x7B")
+        "Qwen2-57B and Granite-3B (above), and the only board-to-board time pair is 8x7B; "
+        "rental 4 adds OLMoE's NATIVE arm at G = 8 on one board (the next row)")
+    tn = time_native_r4()
+    for model, v in tn["models"].items():
+        add(f"time per cell, NATIVE, same call on two pages of one board, {model} G=8 (rental 4)",
+            "dead null control: |median| <= 3 sqrt 2 x 0.18% x T",
+            "c: the 9- and 15-copy timed pages, board bb7a34, both VALID; NATIVE declares E slots on both",
+            f"rms difference {100 * v['rms']:.3f}% over n = 3..9 (single-page sigma "
+            f"{100 * v['rms'] / math.sqrt(2):.3f}%), mean {100 * v['mean']:+.3f}%; every tread worst "
+            f"{100 * v['worst_all']:+.2f}%", v["cells"], "; ".join(tn["sources"]),
+            "n = 1, 2 are host-bound on qwen2-tp8 (+5.9%, +7.9%) and outside the dead contrast's "
+            "treads; added 2026-10-07")
 
     br = bytes_repeat()
     add("byte error % (PRIVATE per GEMM)", "0.17 to 3.02% rms; bar 5% per cell",
@@ -741,6 +793,18 @@ def build() -> list[dict]:
         f"rms difference {100 * rms(bb['private']):.2f}%, worst "
         f"{100 * max(bb['private'], key=abs):+.2f}%", len(bb["private"]),
         "; ".join(sorted(set(bb["sources"]))), "single-board sigma = rms / sqrt 2")
+    ob = olmoe_g64_board()
+    for arm, d in ob["bytes"].items():
+        add(f"bytes per cell, OLMoE G=64 {arm}, board to board (BK 64 s4)", "as above",
+            "b: 2026-09-29 (d663f7) against rental 4's k64s4 (bb7a34), both lock 1710",
+            f"rms difference {100 * rms(d):.3f}%, worst {100 * max(d, key=abs):+.3f}%", len(d),
+            "; ".join(ob["sources"]), "single-board sigma = rms / sqrt 2; added 2026-10-07")
+    for g, d in ob["cycles"].items():
+        add(f"sm__cycles_elapsed.avg per cell, OLMoE G=64 {g}, board to board (part B' input)",
+            "B' 2% per (page, GEMM)",
+            "b: 2026-09-29 (d663f7) against rental 4's k64s4 (bb7a34), NATIVE and SHARED n = 4..9",
+            f"rms difference {100 * rms(d):.3f}%, worst {100 * max(d, key=abs):+.3f}%", len(d),
+            "; ".join(ob["sources"]), "the cells part B''s c is fitted on; added 2026-10-07")
     nr = bytes_repeat("native")
     add("byte error % (NATIVE per GEMM)",
         "printed in the w1 all-arms and SHARED+NATIVE w2 G<=16 n<=4 sets (8x22B, Qwen2-57B); bar 5% per cell",

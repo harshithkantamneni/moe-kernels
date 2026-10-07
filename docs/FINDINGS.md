@@ -1033,7 +1033,8 @@ the bare UUID, `dram_counter_route.board`). Counted by board hash over every pub
 the 13 GH200 sessions ran on nine distinct boards: 1310e2 (2026-09-25 and Granite), 9b6d01
 (2026-09-27), 435984 (8x22B), 50e61f (Qwen2-57B), d663f7 (OLMoE), d67185 (Qwen1.5, Phi-3.5,
 JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (rental 1) and
-4da056 (rental 2). Rental 3 (2026-10-06) ran on a tenth, bb7a34: 14 GH200 sessions.
+4da056 (rental 2). Rental 3 (2026-10-06) ran on a tenth, bb7a34: 14 GH200 sessions. Rental 4
+(2026-10-07) ran on bb7a34 again: 15 GH200 sessions on ten boards.
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
 each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
@@ -1613,6 +1614,128 @@ them. The e2e G = 32 timed page is INVALID on V5 alone (UNKNOWN: b 3.09% of the 
 band 2.42 to 3.64% against 3%), which does not gate timed pages; both views count it. Every
 timed page's worst cell clock is 1710.0 MHz. Every page carries its card's UUID, as every
 published session does.
+
+## Rental 4 (2026-10-07): the dead-CTA cost at 9 and 15 copies, the k-step law at BLOCK_K and num_stages, the hardware constants, and an instrumented copy that failed its gate
+
+One Lambda GH200 480GB (instance 11fcccbb, 2026-10-06 22:45Z to 2026-10-07 00:26Z, 1 h 41 min,
+about $3.85; board `bb7a34`, rental 3's) ran `scripts/plans/rental4-2026-10.plan` unattended at
+85ef38c: 25 units in 95 minutes against 144 estimated, none dropped, no automatic retake. Six
+registrations and their scorers were committed before any page; five score this rental
+(nativegates is rental 5's). Published at
+`results/published/2026-10-07-nvidia_gh200_480gb-rental4-session`; every verdict is the committed
+scorers' output in `scripts/scoring/rental4/` (`SCORES.md` has each prediction's ALL, CLEAN and
+registered reading), with one post-page fix to reading code that changes no verdict (the refused
+stamps units now read NOT RUN with their gate numbers).
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| dead, 15 against 9 copies | D, the candidate d 0.995 ns (kappa 0.325) | HOLDS on A1 and A2 | A1 qwen2-57b-a14b-tp8 Delta 22.93 us (D 20.73, z +1.79); A2 olmoe-1b-7b 24.45 us (D 23.69, z +0.58) |
+| | M, the current DEAD_CTA_NS 1.333 ns | EXCLUDED on A1 and A2 | M 27.77 and 31.74 us, z -5.38 and -8.10 |
+| | D2, SLOT, K0, FIXED | D2 HOLDS; SLOT EXCLUDED on A2 (z +3.06); K0 NOT EXCLUDED; FIXED EXCLUDED | D / D2 and D / SLOT not separable by design; NATIVE null control PASS (+0.77, 0.00 us) |
+| | per-GEMM d (printed) | not a verdict | d_w2 1.10 ns (A1), d_w1 0.95 ns (A2) |
+| occlaw (B'), OLMoE G = 64 | MVA2, LK, PS, LITTLE, OCC | UNDECIDED, no survivor: every law FALSIFIED | 12 (page, GEMM) scored; best rms MVA2 2.56%, OCC 2.51% (BK 64 only) |
+| perturb | the instrumented copy's gate (decision 2) | FAIL on 9 of 9 variants | median 1.45 to 9.51%, worst 2.22 to 16.68%; registers differ in every variant; all-off SASS equal on 18 of 18 configs |
+| stamps | F, K, T, D | NOT SCORED: NOT RUN (gate FAIL) | the nine units refused in 0 minutes, as designed |
+| hw, against RRZE's GH200 | far L2, DRAM, triad, L2 size | far L2 DIFFERS (+8.5%); DRAM NOT SCORED; triad and L2 size CONSISTENT | 275.0 against 253.4 ns; gpu-latency stopped at 1.46 L; 3781 against 3783 GB/s |
+
+**What each test separated, and what it did not.**
+
+- The dead-CTA cost is the candidate's, not the current model's. Going from 576 to 960 declared
+  slots adds 20,832 dead w2 CTAs on qwen2-tp8 (its w1 dead CTAs stay hidden under every rival)
+  and 11,904 dead CTAs on each OLMoE GEMM. SHARED - NATIVE grows by 22.93 us on A1 and 24.45 us on
+  A2, flat in n over 3..9 (A1 22.1 to 23.3, A2 23.3 to 25.1 us per tread), as a dead count that does
+  not depend on n should. D (0.995 ns a dead CTA, the CAL refit of the offset study) sits 2.2 and 0.8
+  us under the two readings; M (1.333 ns, the timing model's DEAD_CTA_NS) sits 4.8 and 7.3 us over
+  them and is excluded at 5.4 and 8.1 sigma. Read per GEMM (printed, not a test), w2's d is 1.10
+  ns and w1's 0.95 ns. Both 15-copy contrasts were BLIND (no 15-copy page existed). What it does
+  not separate: D from D2 (0.93 / 1.03 ns) and from SLOT (4.05 ns per slot over occupancy), which the
+  registration says no reading can split; SLOT's exclusion on A2 rests on z 3.06 against a bar of 3.
+- Part B' measured c, the per-CTA k-step, on seven OLMoE G = 64 configurations and no registered
+  law fits all of them within 2%. The pages say: c doubles from BLOCK_K 64 to 128 (1.98x, 1.99x),
+  falls only to 0.71x and 0.68x at BLOCK_K 32, and at BLOCK_K 64 rises as occupancy falls (345 at 4
+  to 5 CTAs per SM, 366 at 3, 410 to 420 at 2). The base k64s4 reproduces PS's CAL c64 (344.1) to
+  0.6%. MVA2 and OCC miss by at most 5.3% and 6.0% (both at k64s8 w2); LK, PS and LITTLE miss by
+  up to 19, 40 and 50%. k64s2 compiled to 5 CTAs per SM where the SEEN cubins said 4, and was
+  re-keyed as registered.
+- The hardware constants: triad (3781 GB/s) and the L2 size match RRZE's GH200 run; the far-L2
+  latency does not (275.0 ns against 253.4). In cycles the comparison reverses (470 against 502):
+  both L2 latencies are partly in the SM clock's domain and partly fixed in time, so neither
+  "fixed in ns" (the registration's comparison) nor "fixed in cycles" holds between 1710 and 1980
+  MHz. The DRAM latency was not measured: gpu-latency ran into its 420 s timeout at a 91.5 MB
+  buffer, short of the 150 MiB window. The torch rulers read 3673 to 3815 GB/s (eta_mix 0.94 to
+  0.98 against the CAL 3598); the bf16 matmul ran at 1395 MHz, not the lock, at 700 W.
+
+**A methods finding: the instrumented copy is not the plain kernel once a stamp is compiled in.**
+The perturbation gate (owner decision 2: median |plain / copy - 1| at most 1%, worst at most 2%,
+identical occupancy) failed every one of the nine stamps variants, and the gate's own records say
+why.
+
+- The copy's launch path is the plain kernel's. The gate's SASS leg ran on all 18 configs (9
+  variants x w1 and w2): the all-off copy, launched through the same `install` wrapper with every
+  instrument off, compiles to SASS identical to the installed upstream kernel's (cuobjdump,
+  addresses and line info stripped, 464 to 696 instructions), and to the same registers. Every
+  Triton cache entry of the unit records num_warps 8, the variant's num_stages, Triton 3.7.1, no
+  maxnreg and no ptxas options, plain and copy alike; the copy's TTGIR equals the plain kernel's
+  up to the stamp operations (same layouts, the same 3-buffer pipelining, the same divisibility
+  specialisation), and for stamps=cta the PTX of the k-loop is identical up to register numbering. So none of
+  a constexpr, warps or stages, MUL_ROUTED_WEIGHT, top_k, compute_type, the use_* flags, a stride,
+  the Triton build or a wrapper path differs.
+- The stamped copy differs in ptxas's register allocation, not in its source loop. With five
+  per-CTA stamp sites and nothing in the loop (stamps=cta), w1 at BLOCK_K 64 s4 drops from 48 to
+  44 registers and w2 from 55 to 48, which lifts w2 from 4 to 5 CTAs per SM. With per-iteration
+  stamps w2 lands at 45. In the SASS the plain w2 kernel keeps the loop's scalars (K remaining,
+  the stage indices, the trip count) in vector registers (R36, R37, R45 to R50; K read by LDC) and
+  issues four ldmatrix ahead of the first MMA; the copy keeps the same values on the uniform
+  datapath (UR4 to UR14; K read by ULDC; 58 uniform instructions against 31) and issues three. The
+  input the copy hands ptxas is the plain kernel's plus the stamps; ptxas allocates the whole kernel
+  again around them, so adding instructions can and here does reduce the register count. The
+  identical-registers leg of the gate is therefore unreachable for this copy by construction,
+  whatever the stamps cost.
+- The stamps' own cost, where registers and occupancy are equal. Per-iteration stamps (a clock64
+  read and a predicated st.global at the top and the end of every k-iteration) cost 9.8 to 10.8% on
+  OLMoE w1 at BLOCK_K 64 (48 = 48 registers, at 5 and at 2 CTAs per SM) and 7.5 to 10.4% on the
+  equal-occupancy cells of BLOCK_K 128 and s8: four to ten times the 1% median. Per-CTA stamps cost
+  1.1 to 1.8% on NATIVE w1 at equal occupancy (5 CTAs per SM, 48 -> 44 registers), 3.0 to 3.7% on
+  SHARED w1 (its dead CTAs pay two stamps each) and 2.9 to 6.0% on w2 at s8 (55 -> 48 registers, 2
+  = 2 CTAs per SM). Where the per-CTA copy gained a CTA per SM (NATIVE w2 at BLOCK_K 64 s4, 4 -> 5)
+  it ran 0.4 to 2.2% faster than the plain kernel. Per-iteration stamping does not fit within 1% or 2%. At about 5% of
+  an iteration per stamp event, one mark every 8 iterations would cost about 0.6% and every 16
+  about 0.3%, plus the per-iteration test and branch, which these pages do not separate; CTA
+  start and end only (three events, none next to the k-loop) about 0.7 to 1.1% on live CTAs.
+  These are estimates scaled from the measured cells, not measurements, and none of them answers
+  the register reallocation, which any stamp may trigger. The proposed patch (a "stamps=ends"
+  level, top-only marks past every 1, and a compile-only `instr_probe.py --mode regcheck` that
+  tabulates registers and CTAs per SM per stamp level before any timed unit) is outside this
+  repository; an occupancy leg on CTAs per SM rather than raw registers would be a change to
+  decision 2, the owner's.
+- A second, smaller asymmetry in the gate's method: the copy's wrapper allocates its stamp buffer
+  with `torch.full` inside the call, after the L2 flush and before the launch, so a stamped launch
+  starts with 11 to 16 MB of freshly written lines in L2 (OLMoE w1 at n = 4 and 6, 138 int64 a
+  CTA) that the plain launch does not have. It is
+  outside the event pair and small against the 7 to 11% above.
+
+**Diagnosis, not tests.**
+
+- Every byte page exits 1 on claim C1 (SHARED w1's weight reads sit 1 to 11% under the group
+  model, worst at n = 8 and 9) and passes every validity gate.
+- On qwen2-tp8 NATIVE, the call that is the same at 9 and 15 copies, the two pages differ by +0.06
+  to +0.27% at n = 3..9 (rms 0.14%), and by +5.9 and +7.9% at n = 1 and 2, the host-bound cells.
+  OLMoE's NATIVE pages agree to 0.04% rms at n = 3..9.
+
+**Operations.** The driver ends with exit 3: unit 7's exit 1 (the gate) and the nine refusals
+(exit 2, nothing launched). gpu-latency's 420 s cap is too short for the latency sweep to reach
+the DRAM window on this card; the stream and l2-cache benches completed.
+
+**What the paper can claim, after rental 4.** The dead-CTA cost on the 64-expert family is
+d = 0.995 ns (D holds on two blind 15-copy contrasts and M, 1.333 ns, is excluded on both), within
+a band no reading separates from D2 or SLOT. Not claimed: any k-step law (every registered law
+falsified), anything from the stamps (not run), a DRAM latency, or the far-L2 latency as RRZE's.
+
+**Instrument.** Every timed page passes V0 to V8 at a worst cell clock of 1710.0 MHz; every byte
+page passes V0 to V10 (V10 on the nvidia-smi bracket). No page is dropped by either view. Every
+page carries its card's UUID, as every published session does.
 
 ---
 

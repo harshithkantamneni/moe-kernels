@@ -1,0 +1,12 @@
+RENTAL 4 STAMPS, 2026-10-06-rental4-stamps-gh200
+  F rivals: {'cycles': {'NEAR': 242.16336, 'FAR': 433.28664, 'DRAM': 592.36794}, 'source': 'the published RRZE GH200 plateaus (SEEN third-party)'}
+  stf: NOT SCORED: NOT RUN (gate FAIL: median 1.68%, worst 2.22%; variant u8-stf, refused by the driver)
+  stk64s4: NOT SCORED: NOT RUN (gate FAIL: median 7.27%, worst 9.06%; variant u9-stk64s4, refused by the driver)
+  stk32s4: NOT SCORED: NOT RUN (gate FAIL: median 8.10%, worst 8.62%; variant u10-stk32s4, refused by the driver)
+  stk128s4: NOT SCORED: NOT RUN (gate FAIL: median 7.29%, worst 7.84%; variant u11-stk128s4, refused by the driver)
+  stk64s8: NOT SCORED: NOT RUN (gate FAIL: median 9.51%, worst 9.76%; variant u12-stk64s8, refused by the driver)
+  sttail-mixtral-8x22b: NOT SCORED: NOT RUN (gate FAIL: median 7.53%, worst 16.68%; variant u13-sttail, refused by the driver)
+  sttail-mixtral-8x7b: NOT SCORED: NOT RUN (gate FAIL: median 5.90%, worst 14.65%; variant u14-sttail, refused by the driver)
+  stdead4: NOT SCORED: NOT RUN (gate FAIL: median 1.45%, worst 3.58%; variant u15-stdead4, refused by the driver)
+  stdead2: NOT SCORED: NOT RUN (gate FAIL: median 2.14%, worst 5.64%; variant u16-stdead2, refused by the driver)
+  K verdict: NOT SCORED

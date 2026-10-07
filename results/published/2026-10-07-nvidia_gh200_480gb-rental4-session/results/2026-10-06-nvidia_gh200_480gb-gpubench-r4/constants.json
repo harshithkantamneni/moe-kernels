@@ -1,0 +1,258 @@
+{
+ "l2_bytes": 62914560.0,
+ "lock_mhz": 1710.0,
+ "parsed": {
+  "gpu-latency": {
+   "rows": 207,
+   "clock_mhz_read": [
+    1710.0
+   ],
+   "max_bytes": 93736448.0,
+   "near_l2_ns": 152.3976608187135,
+   "far_l2_ns": 275.0292397660819,
+   "dram_ns": null,
+   "cells": {
+    "near": 44,
+    "far": 12,
+    "dram": 0
+   }
+  },
+  "gpu-stream": {
+   "rows": 39,
+   "peak_gbps": {
+    "init": 3947.0,
+    "read": 2651.0,
+    "scale": 3147.0,
+    "triad": 3781.0,
+    "3pt": 3102.0,
+    "5pt": 3068.0
+   },
+   "at_full_occupancy_gbps": {
+    "init": 3944.0,
+    "read": 2651.0,
+    "scale": 3147.0,
+    "triad": 3781.0,
+    "3pt": 3102.0,
+    "5pt": 3068.0
+   },
+   "triad_knee_occupancy": 0.7190000000000001,
+   "bandwidth_vs_occupancy": [
+    {
+     "occupancy": 0.008,
+     "triad": 102.0,
+     "read": 30.0
+    },
+    {
+     "occupancy": 0.016,
+     "triad": 205.0,
+     "read": 59.0
+    },
+    {
+     "occupancy": 0.023,
+     "triad": 293.0,
+     "read": 87.0
+    },
+    {
+     "occupancy": 0.031,
+     "triad": 398.0,
+     "read": 116.0
+    },
+    {
+     "occupancy": 0.039,
+     "triad": 471.0,
+     "read": 143.0
+    },
+    {
+     "occupancy": 0.047,
+     "triad": 567.0,
+     "read": 171.0
+    },
+    {
+     "occupancy": 0.055,
+     "triad": 635.0,
+     "read": 199.0
+    },
+    {
+     "occupancy": 0.062,
+     "triad": 768.0,
+     "read": 232.0
+    },
+    {
+     "occupancy": 0.078,
+     "triad": 877.0,
+     "read": 279.0
+    },
+    {
+     "occupancy": 0.094,
+     "triad": 1061.0,
+     "read": 344.0
+    },
+    {
+     "occupancy": 0.125,
+     "triad": 1360.0,
+     "read": 460.0
+    },
+    {
+     "occupancy": 0.156,
+     "triad": 1588.0,
+     "read": 560.0
+    },
+    {
+     "occupancy": 0.188,
+     "triad": 1838.0,
+     "read": 668.0
+    },
+    {
+     "occupancy": 0.21899999999999997,
+     "triad": 2067.0,
+     "read": 766.0
+    },
+    {
+     "occupancy": 0.25,
+     "triad": 2299.0,
+     "read": 888.0
+    },
+    {
+     "occupancy": 0.281,
+     "triad": 2478.0,
+     "read": 962.0
+    },
+    {
+     "occupancy": 0.312,
+     "triad": 2651.0,
+     "read": 1062.0
+    },
+    {
+     "occupancy": 0.344,
+     "triad": 2799.0,
+     "read": 1154.0
+    },
+    {
+     "occupancy": 0.375,
+     "triad": 2932.0,
+     "read": 1256.0
+    },
+    {
+     "occupancy": 0.406,
+     "triad": 3036.0,
+     "read": 1333.0
+    },
+    {
+     "occupancy": 0.43799999999999994,
+     "triad": 3136.0,
+     "read": 1424.0
+    },
+    {
+     "occupancy": 0.469,
+     "triad": 3222.0,
+     "read": 1504.0
+    },
+    {
+     "occupancy": 0.5,
+     "triad": 3299.0,
+     "read": 1627.0
+    },
+    {
+     "occupancy": 0.531,
+     "triad": 3356.0,
+     "read": 1661.0
+    },
+    {
+     "occupancy": 0.562,
+     "triad": 3408.0,
+     "read": 1742.0
+    },
+    {
+     "occupancy": 0.594,
+     "triad": 3449.0,
+     "read": 1817.0
+    },
+    {
+     "occupancy": 0.625,
+     "triad": 3482.0,
+     "read": 1912.0
+    },
+    {
+     "occupancy": 0.6559999999999999,
+     "triad": 3513.0,
+     "read": 1977.0
+    },
+    {
+     "occupancy": 0.688,
+     "triad": 3548.0,
+     "read": 2047.0
+    },
+    {
+     "occupancy": 0.7190000000000001,
+     "triad": 3608.0,
+     "read": 2115.0
+    },
+    {
+     "occupancy": 0.75,
+     "triad": 3659.0,
+     "read": 2205.0
+    },
+    {
+     "occupancy": 0.7809999999999999,
+     "triad": 3693.0,
+     "read": 2249.0
+    },
+    {
+     "occupancy": 0.812,
+     "triad": 3717.0,
+     "read": 2308.0
+    },
+    {
+     "occupancy": 0.8440000000000001,
+     "triad": 3735.0,
+     "read": 2371.0
+    },
+    {
+     "occupancy": 0.875,
+     "triad": 3750.0,
+     "read": 2436.0
+    },
+    {
+     "occupancy": 0.9059999999999999,
+     "triad": 3762.0,
+     "read": 2486.0
+    },
+    {
+     "occupancy": 0.938,
+     "triad": 3770.0,
+     "read": 2546.0
+    },
+    {
+     "occupancy": 0.9690000000000001,
+     "triad": 3776.0,
+     "read": 2600.0
+    },
+    {
+     "occupancy": 1.0,
+     "triad": 3781.0,
+     "read": 2651.0
+    }
+   ]
+  },
+  "gpu-l2-cache": {
+   "rows": 85,
+   "plateau_gbps": 10224.0,
+   "floor_gbps": 3891.0,
+   "half_way_bytes": 51264359.19196222,
+   "half_way_over_l2": 0.8148250451399838
+  }
+ },
+ "errors": {},
+ "cycles_at_lock": {
+  "near_l2_ns": 260.6000000000001,
+  "far_l2_ns": 470.30000000000007,
+  "dram_ns": null
+ },
+ "pin": {
+  "repo": "https://github.com/RRZE-HPC/gpu-benches",
+  "commit": "23e586dd8d8a19e72abd9d385a088623cefabfae",
+  "committed": "2025-10-24T09:08:33+02:00",
+  "licence": "GPL-3.0",
+  "note": "third-party; fetched on the VM at this commit, never vendored into moe-kernels"
+ }
+}

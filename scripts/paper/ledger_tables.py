@@ -10,8 +10,8 @@ assembled from committed files.
 Inputs: scripts/paper/ledger_rows.json (the ledger as the outline types it) and the
 committed scorer outputs (scripts/scoring/crossmodel/*.json and *.txt,
 scripts/scoring/rental1/*.score.json, scripts/scoring/rental2/*.score.json,
-scripts/scoring/rental3/*.score.json, scripts/scoring/session0927/score.json). Nothing is
-fitted, measured or rescored here.
+scripts/scoring/rental3/*.score.json, scripts/scoring/rental4/*.score.json,
+scripts/scoring/session0927/score.json). Nothing is fitted, measured or rescored here.
 
 APPENDIX A. One line per ledger row: the typed verdict and, where a committed
 scorer output carries a verdict or the numbers that decide one, the verdict read
@@ -35,7 +35,8 @@ capture (rows 10, 15, 22, 26, 30, 34, 38, 39, 42, 43, 47), PRIVATE byte tests pe
 GEMM on the five 2026-09-29 GH200 registrations (rows 23, 28, 32, 36, 40), each
 from the scorer output's own verdict or stats against the registered bar, and the
 code-docstring tests of the 2026-09-27 board (rows 1 to 8) from session0927/score.json,
-and the floor-law verdicts of rental 2 part 4 (row 60) and rental 3 part B (row 83).
+and the floor-law verdicts of rental 2 part 4 (row 60) and rental 3 part B (row 83), and
+rental 4's dead-CTA D (row 89) and k-step law B' (row 91).
 """
 from __future__ import annotations
 
@@ -51,6 +52,7 @@ XM = ROOT / "scripts/scoring/crossmodel"
 SC1 = ROOT / "scripts/scoring/rental1"
 SC2 = ROOT / "scripts/scoring/rental2"
 SC3 = ROOT / "scripts/scoring/rental3"
+SC4 = ROOT / "scripts/scoring/rental4"
 PUB = ROOT / "results/published"
 ROWS = ROOT / "scripts/paper/ledger_rows.json"
 BAR_RMS, LIMIT = 0.02, 0.05
@@ -189,6 +191,16 @@ FLW = SC3 / "floorlaw.score.json"
 ZF = SC3 / "zform.score.json"
 STG = SC3 / "stages.score.json"
 FLU = SC3 / "flush.score.json"
+DEAD = SC4 / "dead.score.json"
+OCL = SC4 / "occlaw.score.json"
+PERT = SC4 / "perturb.score.json"
+STMP = SC4 / "stamps.score.json"
+HW = SC4 / "hw.score.json"
+#: rental 4's nine stamps units and gate variants (the plan's ids)
+R4_UNITS = ("stf", "stk64s4", "stk32s4", "stk128s4", "stk64s8", "sttail-mixtral-8x22b",
+            "sttail-mixtral-8x7b", "stdead4", "stdead2")
+R4_VARIANTS = ("u8-stf", "u9-stk64s4", "u10-stk32s4", "u11-stk128s4", "u12-stk64s8", "u13-sttail",
+               "u14-sttail", "u15-stdead4", "u16-stdead2")
 
 def session0927(row: int) -> tuple[str, str, dict]:
     v = _j(SESS)["rows"][str(row)]["verdict"]
@@ -254,6 +266,13 @@ CHECKS = {
     87: lambda: many(STG, [("verdict",)] + [("hypotheses", h, "status")
                                          for h in ("DEPTH", "WIDTH", "U-OCC", "U-DEPTH")]),
     88: lambda: many(FLU, [("hypotheses", "OVERLAP"), ("hypotheses", "SAT")]),
+    89: lambda: many(DEAD, [("verdicts", "D", "verdict"), ("verdicts", "D2", "verdict")]),
+    90: lambda: many(DEAD, [("verdicts", r, "verdict") for r in ("M", "SLOT", "K0", "FIXED")]),
+    91: lambda: many(OCL, [("verdict",)] + [("laws", law, "status")
+                                         for law in ("MVA2", "LK", "PS", "LITTLE", "OCC")]),
+    92: lambda: many(PERT, [("variants", v, "verdict") for v in R4_VARIANTS]),
+    93: lambda: many(STMP, [("units", u, "use") for u in R4_UNITS]),
+    94: lambda: key(HW, "verdict"),
 }
 # 68 returns a bare string; wrap it with its source.
 _c68 = CHECKS[68]
@@ -265,7 +284,9 @@ TYPED = {55: "scripts/scoring/rental1/l2.score.json rules.secondary_G2 and READM
 
 WORDS = re.compile(r"NOT SCORABLE|NOT SCORED|NOT RUN|NOT HELD|INCONCLUSIVE|FALSIFIED|NEITHER|"
                    r"SELECTED|FAILED|HOLDS|HOLD|HELD|PASS|H1|NL|refuted|RECORD|UNDECIDED|"
-                   r"NOT ANSWERED|not answered")
+                   r"NOT ANSWERED|not answered|"
+                   # rental 4's verdict words (dead's rivals, the gate, hw's checks)
+                   r"NOT EXCLUDED|EXCLUDED|\bFAIL\b|\bCONSISTENT\b|DIFFERS")
 NORM = {"HOLDS": "HELD", "HOLD": "HELD", "PASS": "HELD", "refuted": "FALSIFIED",
         "not answered": "NOT ANSWERED"}
 
@@ -341,6 +362,9 @@ def summary() -> list[tuple]:
     out.append(("floor law, rental 2 part 4 (row 60)", key(W1, "base (PRIMARY)", "families",
                                                           "verdict")[0], 1, "60"))
     out.append(("floor law, rental 3 part B (row 83)", key(FLW, "verdict")[0], 1, "83"))
+    out.append(("dead-CTA cost d 0.995 ns, rental 4 (row 89)", key(DEAD, "verdicts", "D", "verdict")[0],
+                1, "89"))
+    out.append(("k-step law, rental 4 part B' (row 91)", key(OCL, "verdict")[0], 1, "91"))
     return out
 
 

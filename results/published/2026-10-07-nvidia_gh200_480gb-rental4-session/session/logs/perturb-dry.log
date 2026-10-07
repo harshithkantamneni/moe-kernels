@@ -1,0 +1,12 @@
+INSTRUMENTED KERNEL (perturb): 9 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u8-stf           stamps mixtral-8x7b           BK 64 s4 cells 3 spec stamps=cta,evict_a=none,evict_b=none
+  u9-stk64s4       stamps olmoe-1b-7b            BK 64 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u10-stk32s4      stamps olmoe-1b-7b            BK 32 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u11-stk128s4     stamps olmoe-1b-7b            BK 128 s4 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u12-stk64s8      stamps olmoe-1b-7b            BK 64 s8 cells 2 spec stamps=iter,every=1,marks=64,evict_a=none,evict_b=none
+  u13-sttail       stamps mixtral-8x22b          BK 64 s4 cells 2 spec stamps=iter,every=1,marks=112,evict_a=none,evict_b=none
+  u14-sttail       stamps mixtral-8x7b           BK 64 s4 cells 2 spec stamps=iter,every=1,marks=112,evict_a=none,evict_b=none
+  u15-stdead4      stamps olmoe-1b-7b            BK 64 s4 cells 4 spec stamps=cta,evict_a=none,evict_b=none
+  u16-stdead2      stamps olmoe-1b-7b            BK 64 s8 cells 4 spec stamps=cta,evict_a=none,evict_b=none
+  gate (decision 2): median |plain/copy - 1| <= 1%, worst <= 2%, identical occupancy; 8 bursts of 10 calls each way
+DRY RUN: nothing launched (exit 2)

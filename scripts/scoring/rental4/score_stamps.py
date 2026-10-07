@@ -38,8 +38,60 @@ def gates(tree: Path) -> dict:
     return out
 
 
+def gate_numbers(tree: Path) -> dict:
+    """{GATE_<id>: {"verdict", "median", "worst"}} off every gate.env line (the numbers kept)."""
+    out = {}
+    for env in sorted(Path(tree).rglob(f"*-{C4.CARD}-perturb-*/gate.env")):
+        for line in env.read_text().splitlines():
+            k, _, v = line.partition("=")
+            parts = v.split()
+            if not parts:
+                continue
+            rec = {"verdict": parts[0]}
+            for p in parts[1:]:
+                kk, _, vv = p.partition("=")
+                try:
+                    rec[kk] = float(vv)
+                except ValueError:
+                    pass
+            out[k] = rec
+    return out
+
+
+def variant_id(tree: Path, model: str, label: str) -> str | None:
+    """The plan's variant id of a stamps unit (the driver's instr-variants.json), else None."""
+    for p in sorted(Path(tree).rglob("instr-variants.json")):
+        try:
+            vs = json.loads(p.read_text())
+        except ValueError:
+            continue
+        ids = [v.get("id") for v in vs if v.get("kind") == "stamps" and v.get("model") == model
+               and str(v.get("id", "")).endswith(f"-{label}")]
+        if len(ids) == 1:
+            return ids[0]
+    return None
+
+
+def not_run(tree: Path, model: str, label: str) -> str | None:
+    """A unit with no stamps.json whose gate line reads other than PASS was refused by the
+    driver, as registered: NOT RUN (gate FAIL), with the gate's numbers (post-page fix to
+    reading code: the verdict stays NOT SCORED; only the reason is read off gate.env)."""
+    vid = variant_id(tree, model, label)
+    if vid is None:
+        return None
+    rec = gate_numbers(tree).get("GATE_" + "".join(c if c.isalnum() else "_" for c in vid))
+    if rec is None or rec["verdict"] == "PASS":
+        return None
+    nums = ", ".join(f"{k} {100 * rec[k]:.2f}%" for k in ("median", "worst") if k in rec)
+    return f"NOT SCORED: NOT RUN (gate {rec['verdict']}{': ' + nums if nums else ''}; variant {vid}, refused by the driver)"
+
+
 def unit(tree: Path, model: str, label: str, gate: dict, block: str):
     hits = sorted(Path(tree).rglob(f"*-{C4.CARD}-instr-{model}-{label}/stamps.json"))
+    if not hits:
+        why = not_run(tree, model, label)
+        if why:
+            return None, None, why
     if len(hits) != 1:
         return None, None, f"NOT SCORED: {len(hits)} stamps.json for {model} {label}"
     man, launches = C4.load_stamps(hits[0].parent)

@@ -1,0 +1,35 @@
+2026-10-06T22:46:55Z the branch's first commit: the VM can push
+2026-10-06T22:48:59Z setup_vm.sh: READY
+2026-10-06T22:49:01Z prelude (unit 1/25 -): exit 0 (0 min)
+2026-10-06T22:49:28Z calibrate (unit 2/25 mixtral-8x7b r4): exit 0 (0 min)
+2026-10-06T22:49:40Z rulers (unit 3/25 - r4): exit 0 (0 min)
+2026-10-06T22:59:29Z gpubench (unit 4/25 - r4): exit 0 (10 min)
+2026-10-06T23:15:40Z timed (unit 5/25 qwen2-57b-a14b-tp8 c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)
+2026-10-06T23:31:51Z timed (unit 6/25 qwen2-57b-a14b-tp8 c15 timed-groups=8 timed-treads=9 declared-copies=15): exit 0 (16 min)
+2026-10-06T23:32:46Z perturb (unit 7/25 - pt): exit 1 (1 min)
+2026-10-06T23:32:50Z stamps (unit 8/25 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-stamps=cta): exit 2 (0 min)
+2026-10-06T23:32:53Z stamps (unit 9/25 olmoe-1b-7b stk64s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64): exit 2 (0 min)
+2026-10-06T23:32:56Z stamps (unit 10/25 olmoe-1b-7b stk32s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=32 num-stages=4): exit 2 (0 min)
+2026-10-06T23:32:59Z stamps (unit 11/25 olmoe-1b-7b stk128s4 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 block-k=128): exit 2 (0 min)
+2026-10-06T23:33:02Z stamps (unit 12/25 olmoe-1b-7b stk64s8 stamp-groups=64 stamp-treads=4,6 stamp-arms=native instr-stamps=iter instr-marks=64 num-stages=8): exit 2 (0 min)
+2026-10-06T23:33:05Z stamps (unit 13/25 mixtral-8x22b sttail stamp-groups=8 stamp-treads=1 stamp-arms=native,private instr-stamps=iter instr-marks=112): exit 2 (0 min)
+2026-10-06T23:33:08Z stamps (unit 14/25 mixtral-8x7b sttail stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-stamps=iter instr-marks=112): exit 2 (0 min)
+2026-10-06T23:33:11Z stamps (unit 15/25 olmoe-1b-7b stdead4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta): exit 2 (0 min)
+2026-10-06T23:33:14Z stamps (unit 16/25 olmoe-1b-7b stdead2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-stamps=cta num-stages=8): exit 2 (0 min)
+2026-10-06T23:35:54Z bytes: G=64 page exit 1
+2026-10-06T23:36:05Z bytes (unit 17/25 olmoe-1b-7b k64s4 byte-groups=64): exit 0 (3 min)
+2026-10-06T23:38:30Z bytes: G=64 page exit 1
+2026-10-06T23:38:40Z bytes (unit 18/25 olmoe-1b-7b k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (3 min)
+2026-10-06T23:41:05Z bytes: G=64 page exit 1
+2026-10-06T23:41:16Z bytes (unit 19/25 olmoe-1b-7b k128s4 byte-groups=64 block-k=128): exit 0 (3 min)
+2026-10-06T23:43:41Z bytes: G=64 page exit 1
+2026-10-06T23:43:51Z bytes (unit 20/25 olmoe-1b-7b k64s6 byte-groups=64 num-stages=6): exit 0 (3 min)
+2026-10-06T23:46:16Z bytes: G=64 page exit 1
+2026-10-06T23:46:27Z bytes (unit 21/25 olmoe-1b-7b k64s2 byte-groups=64 num-stages=2): exit 0 (3 min)
+2026-10-06T23:48:52Z bytes: G=64 page exit 1
+2026-10-06T23:49:02Z bytes (unit 22/25 olmoe-1b-7b k64s3 byte-groups=64 num-stages=3): exit 0 (3 min)
+2026-10-06T23:51:28Z bytes: G=64 page exit 1
+2026-10-06T23:51:39Z bytes (unit 23/25 olmoe-1b-7b k64s8 byte-groups=64 num-stages=8): exit 0 (3 min)
+2026-10-07T00:07:52Z timed (unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9): exit 0 (16 min)
+2026-10-07T00:24:09Z timed (unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15): exit 0 (16 min)
+2026-10-07T00:24:13Z the session ended: driver exit 3

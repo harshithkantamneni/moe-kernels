@@ -41,6 +41,12 @@ def test_key_numbers():
     assert t8["reg_cells"] == 9 and abs(t8["reg_rms"] - 0.001802) < 2e-6
     rk = NF.rk_floor()["per_gemm"]  # rental 3 RK, as score_replicate computes it
     assert round(rk["w1"]["sigma_L"]) == 3888 and round(rk["w2"]["sigma_D_imb"]) == 471
+    tn = NF.time_native_r4()["models"]  # rental 4: NATIVE at 15 over 9 copies, n = 3..9
+    assert tn["qwen2-57b-a14b-tp8"]["cells"] == 7 and abs(tn["qwen2-57b-a14b-tp8"]["rms"] - 0.001446) < 2e-6
+    assert abs(tn["olmoe-1b-7b"]["rms"] - 0.000426) < 2e-6
+    ob = NF.olmoe_g64_board()  # OLMoE G = 64 k64s4 on boards d663f7 and bb7a34
+    assert len(ob["bytes"]["private"]) == 18 and NF.rms(ob["bytes"]["private"]) < 0.001
+    assert len(ob["cycles"]["w1"]) == 12 and NF.rms(ob["cycles"]["w1"]) < 0.001
 
 
 def test_cli_runs(tmp_path):

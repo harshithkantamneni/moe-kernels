@@ -1,0 +1,21 @@
+Third-party measurements: RRZE-HPC/gpu-benches
+
+gpu-latency.txt, gpu-stream.txt and gpu-l2-cache.txt in this directory are the printed outputs of
+three benchmarks of RRZE-HPC/gpu-benches:
+
+  tool     RRZE-HPC/gpu-benches, https://github.com/RRZE-HPC/gpu-benches
+  commit   23e586dd8d8a19e72abd9d385a088623cefabfae (committed 2025-10-24T09:08:33+02:00)
+  licence  GPL-3.0 (the tool's code)
+  benches  gpu-latency (cuda-latency), gpu-stream (cuda-stream), gpu-l2-cache (cuda-l2-cache)
+
+They were fetched at that commit, built with SM=90 and run on the rented GH200 at the 1710 MHz lock
+by scripts/gpubench.py (rental 4, unit 4; owner decision 3 of 2026-10-06), in $MOE_HOME/ext on the
+VM, outside the repository checkout. Only their outputs are published here, as measurements
+attributed to the tool. None of the tool's source code is part of moe-kernels.
+
+constants.json is scripts/gpubench.py's parse of those outputs by the registered windows
+(docs/registered/2026-10-06-rental4-hw-gh200). gpubench-log.json records the fetch, build and run
+steps with each step's console tail; the gpu-l2-cache build tail quotes one compiler warning that
+names one line of the tool's main.cu.
+
+gpu-latency ran into its 420 s timeout (rc 124) at a 91.5 MB buffer, so its output ends there.
