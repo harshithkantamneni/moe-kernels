@@ -177,3 +177,4 @@
 2026-10-07T00:24:06Z timed: 2026-10-07T00:24:01Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n6-a71cd9a0
 2026-10-07T00:24:06Z timed END: exit 0 after 16 min [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15]
 2026-10-07T00:24:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-07T00:24:10Z driver end: exit 3
