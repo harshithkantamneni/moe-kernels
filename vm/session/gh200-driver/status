@@ -169,3 +169,11 @@
 2026-10-07T00:07:49Z timed: 2026-10-07T00:07:43Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n64-183ddc17
 2026-10-07T00:07:49Z timed END: exit 0 after 16 min [unit 24/25 olmoe-1b-7b c9 timed-groups=8 timed-treads=9 declared-copies=9]
 2026-10-07T00:07:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-07T00:07:58Z timed START: 3c.3 timed R3 at 1710: G=8 (treads 9), no G=3 page [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15] (estimate 16 min, cap 45 min, 309 min left)
+2026-10-07T00:07:58Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-07T00:07:58Z timed: G = 8 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-07T00:24:06Z timed: P2 locked_r3 exit 0
+2026-10-07T00:24:06Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-07T00:24:06Z timed: 2026-10-07T00:24:01Z G=8 held at lock 1710: R3 exit 1 CLAIM_FAIL, cells=243 worst=1710.0 MHz, 961 s, dir nvidia_gh200_480gb-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-l2flushtrue-modelolmoe_1b_7b-n6-a71cd9a0
+2026-10-07T00:24:06Z timed END: exit 0 after 16 min [unit 25/25 olmoe-1b-7b c15 timed-groups=8 timed-treads=9 declared-copies=15]
+2026-10-07T00:24:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
