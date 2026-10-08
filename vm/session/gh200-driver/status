@@ -19,3 +19,17 @@
 2026-10-08T23:31:07Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-10-08T23:31:07Z calibrate END: exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
 2026-10-08T23:31:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-08T23:31:09Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/22 - rc instr-variants=v1,v2,v3] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-08T23:31:36Z regcheck: REGCHECK_u14_stf_v1=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u14_stf_v2=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u14_stf_v3=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u15_stt8x22_v1=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u15_stt8x22_v2=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u16_stt_v1=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u16_stt_v2=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u17_std4_v2=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u17_std4_v3=FAIL 32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4
+2026-10-08T23:31:36Z regcheck: REGCHECK_u18_std2_v2=PASS
+2026-10-08T23:31:36Z regcheck: REGCHECK_u18_std2_v3=PASS
+2026-10-08T23:31:36Z regcheck END: exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]
+2026-10-08T23:31:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

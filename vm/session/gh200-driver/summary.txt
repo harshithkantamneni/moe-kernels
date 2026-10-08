@@ -1,2 +1,3 @@
 prelude    exit 0 after 0 min [unit 1/22 -]
 calibrate  exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
+regcheck   exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]

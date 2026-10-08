@@ -10,3 +10,7 @@
 2026-10-08T23:30:42Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/22 mixtral-8x7b r5] (estimate 2 min, cap 30 min, 388 min left)
 2026-10-08T23:31:07Z calibrate END: exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
 2026-10-08T23:31:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9e5d8d2 to run-gh200-rental5-20261008t2326: calibrate (unit 2/22 mixtral-8x7b r5): exit 0 (0 min)
+2026-10-08T23:31:09Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/22 - rc instr-variants=v1,v2,v3] (estimate 3 min, cap 10 min, 387 min left)
+2026-10-08T23:31:36Z regcheck END: exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]
+2026-10-08T23:31:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
