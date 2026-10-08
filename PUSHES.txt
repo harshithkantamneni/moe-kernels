@@ -6,3 +6,4 @@
 2026-10-08T23:43:52Z timed (unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (12 min)
 2026-10-08T23:53:25Z timed (unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (9 min)
 2026-10-08T23:57:06Z bytes: G=8 page exit 0
+2026-10-08T23:57:17Z bytes (unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8): exit 0 (4 min)
