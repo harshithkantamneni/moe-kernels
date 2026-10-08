@@ -9,3 +9,13 @@
 2026-10-08T23:30:40Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261008T233040Z
 2026-10-08T23:30:40Z prelude END: exit 0 after 0 min [unit 1/22 -]
 2026-10-08T23:30:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-08T23:30:42Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/22 mixtral-8x7b r5] (estimate 2 min, cap 30 min, 388 min left)
+2026-10-08T23:31:07Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-08T23:31:07Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3727.6 GB/s
+2026-10-08T23:31:07Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.4 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-08T23:31:07Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.4 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-08T23:31:07Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-08T23:31:07Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1425 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-08T23:31:07Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-08T23:31:07Z calibrate END: exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
+2026-10-08T23:31:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
