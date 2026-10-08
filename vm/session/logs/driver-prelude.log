@@ -1,0 +1,22 @@
+== 2026-10-08T23:30:40Z step prelude: 3c.1 supported clocks, persistence, 700 W
+base tag gh200-20261008T233040Z (every locked run adds its own suffix)
+d4d1767e5b2460a15228bfd986c304aecf6526a1
+110 graphics clocks, 345 to 1980 MHz
+1710 supported
+1605 supported
+1590 supported
+1500 supported
+1410 supported
+LOCK_ETA_A 1410 (registered)
+LOCK_ETA_B 1500 (registered)
+LOCK_ETA_C 1605 (registered)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_C 1605 (registered)
+Persistence mode is already Enabled for GPU 00000000:DD:00.0.
+All done.
+Power limit for GPU 00000000:DD:00.0 was set to 700.00 W from 700.00 W.
+All done.
+persistence_mode, clocks.current.sm [MHz], clocks.max.sm [MHz], power.limit [W], power.default_limit [W], clocks_event_reasons.active
+Enabled, 345 MHz, 1980 MHz, 700.00 W, 900.00 W, 0x0000000000000001
+2026-10-08T23:30:40Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261008T233040Z

@@ -1,2 +1,11 @@
 2026-10-08T23:28:54Z setup_vm.sh start: commit d4d1767e5b2460a15228bfd986c304aecf6526a1 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-09T06:06:58Z
 2026-10-08T23:30:39Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-08T23:30:40Z driver start: commit d4d1767e5b2460a15228bfd986c304aecf6526a1, steps of the plan scripts/plans/rental5-2026-10.plan, deadline 2026-10-09T06:06:58Z (388 min of work left)
+2026-10-08T23:30:40Z plan: /home/ubuntu/moe/repo/scripts/plans/rental5-2026-10.plan (sha256 b23536c51ea889308f59cf634825f1a40fa7ccb07bbe37261f773f5a7437d9b5), 22 units
+2026-10-08T23:30:40Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/22 -] (estimate 3 min, cap 15 min, 388 min left)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-08T23:30:40Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-08T23:30:40Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261008T233040Z
+2026-10-08T23:30:40Z prelude END: exit 0 after 0 min [unit 1/22 -]
+2026-10-08T23:30:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
