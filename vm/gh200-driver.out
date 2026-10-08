@@ -18,3 +18,7 @@
 2026-10-08T23:31:40Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 387 min left)
 2026-10-08T23:43:50Z timed END: exit 1 after 12 min [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
 2026-10-08T23:43:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b63fe48 to run-gh200-rental5-20261008t2326: timed (unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 1 (12 min)
+2026-10-08T23:43:54Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json, arms native,shared, 9 copies [unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 11 min, cap 30 min, 375 min left)
+2026-10-08T23:53:23Z timed END: exit 1 after 9 min [unit 5/22 mixtral-8x7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-08T23:53:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
