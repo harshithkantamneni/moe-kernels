@@ -33,3 +33,12 @@
 2026-10-08T23:31:36Z regcheck: REGCHECK_u18_std2_v3=PASS
 2026-10-08T23:31:36Z regcheck END: exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]
 2026-10-08T23:31:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-08T23:31:40Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 387 min left)
+2026-10-08T23:31:40Z timed: declared-copies 9 on every page of this unit
+2026-10-08T23:31:40Z timed: histogram page docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json, arms native,shared, deepest tread 32
+2026-10-08T23:31:41Z timed: G = 8 at treads 32, no G=3 page (timed-groups / timed-treads)
+2026-10-08T23:43:50Z timed: P2 locked_r3 exit 1
+2026-10-08T23:43:50Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-08T23:43:50Z timed: 2026-10-08T23:43:44Z G=8 slipped at lock 1710: R3 exit 1 CLAIM_FAIL, cells=186 worst=1635.0 MHz, 722 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist9cc371ef8a-06f9754b; a timed cell read 1635 MHz, more than 15 MHz under the 1710 MHz lock
+2026-10-08T23:43:50Z timed END: exit 1 after 12 min [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-08T23:43:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

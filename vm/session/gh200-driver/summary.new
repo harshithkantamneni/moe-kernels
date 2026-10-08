@@ -1,3 +1,4 @@
 prelude    exit 0 after 0 min [unit 1/22 -]
 calibrate  exit 0 after 0 min [unit 2/22 mixtral-8x7b r5]
 regcheck   exit 1 after 0 min [unit 3/22 - rc instr-variants=v1,v2,v3]
+timed      exit 1 after 12 min [unit 4/22 mixtral-8x7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
