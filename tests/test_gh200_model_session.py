@@ -1639,6 +1639,39 @@ def test_the_driver_resolves_a_plan_from_the_checkout_then_beside_itself(tmp_pat
     assert got.returncode == exit_codes.REFUSED and "a PLAN of 14 units" in got.stdout, got.stderr
 
 
+def test_start_copies_every_histogram_page_a_plan_names_even_when_ssh_reads_stdin(tmp_path):
+    """Rental 5's second start (2026-10-08) copied only the first page: ssh reads stdin, and
+    a `while read` loop calling `vm` lost the rest of the list. Here the stub ssh drains stdin
+    as the real one does, and the stub scp logs its destinations; every page must arrive."""
+    plan_src = REPO / "scripts" / "plans" / "rental5-2026-10.plan"
+    pages = sorted(set(re.findall(r"histogram=(\S+)", plan_src.read_text())))
+    assert len(pages) >= 2
+    lap = Laptop(tmp_path)
+    (lap.clone / "scripts" / "plans").mkdir()
+    shutil.copy(plan_src, lap.clone / "scripts" / "plans" / plan_src.name)
+    for p in pages:
+        (lap.clone / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / p, lap.clone / p)
+    g = ["git", "-C", str(lap.clone)]
+    subprocess.run([*g, "add", "-A"], check=True)
+    subprocess.run([*g, "commit", "-qm", "plan"], check=True)
+    subprocess.run([*g, "push", "-q", "origin", "HEAD:refs/heads/model-t"], check=True,
+                   capture_output=True)
+    lap.make_branch()
+    assert lap.run("prepare", "--ip", "1.2.3.4", "--run-id", "r",
+                   "--branch", "run-gh200-t").returncode == 0
+    real = lap.bin / "ssh.real"
+    (lap.bin / "ssh").rename(real)
+    _exe(lap.bin / "ssh", f'#!/bin/bash\ncat > /dev/null\nexec "{real}" "$@"\n')
+    log = tmp_path / "scp.log"
+    _exe(lap.bin / "scp", f'#!/bin/bash\nprintf "%s\\n" "${{@: -1}}" >> "{log}"\nexit 0\n')
+    lap.run("start", "--ip", "1.2.3.4", "--run-id", "r", "--deadline", "2000000000",
+            "--plan", f"scripts/plans/{plan_src.name}")
+    sent = log.read_text().split() if log.exists() else []
+    for p in pages:
+        assert f"ubuntu@1.2.3.4:{p}" in sent, (p, sent)
+
+
 def test_a_plan_naming_histogram_pages_prints_before_setup_from_the_files_beside_it(tmp_path):
     """Rental 5 (2026-10-07) failed its start: the pre-setup dry run runs in the VM's home,
     where only the driver and the plan were copied, so every histogram= page read 'no such

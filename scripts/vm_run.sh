@@ -211,15 +211,19 @@ cmd_start() {
     "$SCP" "${SSH_OPTS[@]}" "$ROOT/$PLAN_ARG" "ubuntu@$IP:" >/dev/null
     # the files a plan names (rental 5's histogram pages) go beside it at their repo-relative
     # paths: the pre-setup dry run runs in the VM's home before setup clones the checkout
-    local hf
-    while IFS= read -r hf; do
+    # The list is read into an array first: ssh reads stdin, so a `while read` loop feeding
+    # `vm` copied only the first page (rental 5's second start, 2026-10-08).
+    local hf hfs=()
+    while IFS= read -r hf; do hfs+=("$hf"); done \
+      < <(grep -oE 'histogram=[^[:space:]]+' "$ROOT/$PLAN_ARG" | sed 's/^histogram=//' | sort -u)
+    for hf in ${hfs[@]+"${hfs[@]}"}; do
       [[ "$hf" =~ ^[A-Za-z0-9._/-]+[.]json$ && "$hf" != /* && "$hf" != *..* ]] \
         || refuse "--plan $PLAN_ARG names histogram=$hf: a repo-relative .json path"
       git -C "$ROOT" ls-files --error-unmatch "$hf" >/dev/null 2>&1 \
         || refuse "--plan $PLAN_ARG names $hf, which is not tracked"
-      vm mkdir -p "$(dirname "$hf")"
-      "$SCP" "${SSH_OPTS[@]}" "$ROOT/$hf" "ubuntu@$IP:$hf" >/dev/null
-    done < <(grep -oE 'histogram=[^[:space:]]+' "$ROOT/$PLAN_ARG" | sed 's/^histogram=//' | sort -u)
+      vm mkdir -p "$(dirname "$hf")" < /dev/null
+      "$SCP" "${SSH_OPTS[@]}" "$ROOT/$hf" "ubuntu@$IP:$hf" >/dev/null < /dev/null
+    done
     model+=(--plan "$PLAN_ARG")
   fi
   vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
