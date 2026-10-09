@@ -78,3 +78,8 @@
 2026-10-09T00:25:29Z timed: 2026-10-09T00:25:23Z G=8 held at lock 1710: R3 exit 0 DONE, cells=162 worst=1710.0 MHz, 631 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist44ae712688-afa06c53
 2026-10-09T00:25:29Z timed END: exit 0 after 11 min [unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
 2026-10-09T00:25:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-09T00:25:33Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json --arms native,shared [unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 333 min left)
+2026-10-09T00:25:48Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-09T00:25:48Z bytes: rental 2 knobs --histogram docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json --arms native,shared on every page of this unit
+2026-10-09T00:25:48Z bytes: the registered list G = 8 (olmoe-1b-7b, skc): no tail drop, no re-price, no base-clock control
+2026-10-09T00:27:35Z bytes: G=8 page exit 0 after 105 s
