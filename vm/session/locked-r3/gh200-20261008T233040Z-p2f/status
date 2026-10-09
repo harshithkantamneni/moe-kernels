@@ -1,0 +1,12 @@
+2026-10-09T00:45:14Z locked_r3 start: tag gh200-20261008T233040Z-p2f, locks [1710], G [8], R3 args --model qwen1.5-moe-a2.7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json --arms native,shared, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-skb/private_weight_reference
+2026-10-09T00:45:14Z card: NVIDIA GH200 480GB, GPU-11564448-b00b-c0d7-a72b-2fb5c11ec856, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-09T00:45:14Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-09T00:45:14Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-10-09T00:45:14Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 151.07 W, 700.00 W
+2026-10-09T00:45:14Z G=8 start at lock 1710: pid 62022, tag gh200-20261008T233040Z-p2f-lock1710, log r3-g8-lock1710.log
+2026-10-09T00:45:25Z G=8 at lock 1710: R3 named its run directory nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histfc7efc9d7a-ca07df25
+2026-10-09T00:55:35Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histfc7efc9d7a-ca07df25
+2026-10-09T00:55:35Z all G held at lock 1710 MHz
+2026-10-09T00:55:36Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-10-09T00:55:36Z read back after the reset: 1830 MHz, 1980 MHz, 0x0000000000000024, 144.07 W, 700.00 W
+2026-10-09T00:55:36Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
