@@ -50,3 +50,7 @@
 2026-10-09T00:55:45Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json, arms native,shared, 15 copies [unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8] (estimate 7 min, cap 25 min, 303 min left)
 2026-10-09T01:01:53Z timed END: exit 0 after 6 min [unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8]
 2026-10-09T01:01:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4826dd8 to run-gh200-rental5-20261008t2326: timed (unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8): exit 0 (6 min)
+2026-10-09T01:01:57Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 13/22 - pt instr-variants=v1,v2,v3] (estimate 12 min, cap 30 min, 297 min left)
+2026-10-09T01:02:54Z perturb END: exit 1 after 1 min [unit 13/22 - pt instr-variants=v1,v2,v3]
+2026-10-09T01:02:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
