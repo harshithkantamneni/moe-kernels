@@ -8,3 +8,4 @@
 2026-10-08T23:57:06Z bytes: G=8 page exit 0
 2026-10-08T23:57:17Z bytes (unit 6/22 mixtral-8x7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/mixtral-8x7b-C.json arms=native,shared byte-groups=8): exit 0 (4 min)
 2026-10-09T00:14:49Z timed (unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:25:31Z timed (unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (11 min)

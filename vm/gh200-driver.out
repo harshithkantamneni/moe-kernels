@@ -30,3 +30,7 @@
 2026-10-08T23:57:18Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json, arms native,shared, 9 copies [unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 18 min, cap 45 min, 361 min left)
 2026-10-09T00:14:47Z timed END: exit 0 after 17 min [unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8]
 2026-10-09T00:14:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3ce17ed to run-gh200-rental5-20261008t2326: timed (unit 7/22 olmoe-1b-7b ska histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (17 min)
+2026-10-09T00:14:50Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json, arms native,shared, 9 copies [unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8] (estimate 11 min, cap 30 min, 344 min left)
+2026-10-09T00:25:29Z timed END: exit 0 after 11 min [unit 8/22 olmoe-1b-7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
+2026-10-09T00:25:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
