@@ -78,3 +78,5 @@
 2026-10-09T01:03:23Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64] (estimate 3 min, cap 20 min, 295 min left)
 2026-10-09T01:05:36Z bytes END: exit 0 after 2 min [unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64]
 2026-10-09T01:05:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2c5fcb6 to run-gh200-rental5-20261008t2326: bytes (unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64): exit 0 (2 min)
+2026-10-09T01:05:41Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 3 min, cap 20 min, 293 min left)
