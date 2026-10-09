@@ -81,3 +81,24 @@ wrote /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-
 git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json: '/home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json' is outside repository at '/home/ubuntu/moe/repo')
 G=8 exit 0 00:27:35 105 s
 2026-10-09T00:27:35Z bytes: G=8 page exit 0 after 105 s
+[push] pushed d40b59d to run-gh200-rental5-20261008t2326: bytes: G=8 page exit 0
+2026-10-09T00:27:39Z bytes: lock block exit 0 (G=8 exit 0 23:57:04 215 s;G=8 exit 0 00:27:35 105 s;)
+clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, persistence_mode
+345 MHz, 2619 MHz, 1980 MHz, 0x0000000000000001, Enabled
+2026-10-09T00:27:44Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-09T00:27:44Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 1cd741, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 ARMS UNDER A DRAM COUNTER  G=8  olmoe-1b-7b bf16 BLOCK_M=32 BLOCK_N=64 BLOCK_K=64 num_warps=8 num_stages=4
+  arms ['native', 'shared'] x treads [2, 4, 16]; 3 measured calls per cell after 2 warmups; 120 profiled launches; declared 9 copies ({'native': 64, 'shared': 576, 'private': 576})
+  counted at an nvidia-smi lock of 1710 MHz (ncu --clock-control none); V10 reads the lock back by independent clocks (lock_gate)
+
+RESULT: VALIDITY V0 PASS the page names the live card it was measured on: CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 1cd741, sm_90, 132 SMs, 60 MiB L2): every number here is THI
+GATE V0  VALIDITY PASS   the page names the live card it was measured on
+              measured CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 1cd741, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.   gate a card block with ['name', 'uuid', 'sm_count', 'l2_bytes', 'capability', 'driver']
+RESULT: VALIDITY V1 FAIL every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL: cells missing ['shared/16'], extra []; 3 tr
+GATE V1  VALIDITY FAIL   every launch is attributed: exact count, every grid equal to the child's, and a census that measured GEMMS_PER_CALL
+              measured cells missing ['shared/16'], extra []; 3 treads; the scorer needs four for an OLS residual; arms ['native', 'shared'], not R3's ['native', 'shared', 'private']; 30 launches attributed against the planned 120   gate exact count; grids equal; census GEMMS_PER_CALL = 2
+              a FAIL here invalidates: every byte on the page: a launch counted twice or into the wrong cell is the per-call trap in another form, and it still fits a line
+wrote /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/summary.json
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/summary.json: '/home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/summary.json' is outside repository at '/home/ubuntu/moe/repo')
+2026-10-09T00:27:45Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/summary.json)

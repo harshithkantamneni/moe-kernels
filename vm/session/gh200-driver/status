@@ -83,3 +83,9 @@
 2026-10-09T00:25:48Z bytes: rental 2 knobs --histogram docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json --arms native,shared on every page of this unit
 2026-10-09T00:25:48Z bytes: the registered list G = 8 (olmoe-1b-7b, skc): no tail drop, no re-price, no base-clock control
 2026-10-09T00:27:35Z bytes: G=8 page exit 0 after 105 s
+2026-10-09T00:27:39Z bytes: lock block exit 0 (G=8 exit 0 23:57:04 215 s;G=8 exit 0 00:27:35 105 s;)
+2026-10-09T00:27:44Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-09T00:27:44Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-09T00:27:45Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/summary.json)
+2026-10-09T00:27:45Z bytes END: exit 0 after 2 min [unit 9/22 olmoe-1b-7b skc histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-C.json arms=native,shared byte-groups=8]
+2026-10-09T00:27:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
