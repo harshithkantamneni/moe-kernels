@@ -117,6 +117,21 @@ next stops before it measures on a card left locked (clock_elasticity's rule).
 A caught kill: 128 + the signal (143 SIGTERM, 129 SIGHUP, 130 Ctrl-C), after
 the reset and the summary, outside the table as in clock_elasticity's lock
 mode. A crash: ERROR (4), after the reset.
+
+SLIP POLICY (rental 6, 2026-10-09). `--slip-policy page`, the default, is
+everything above, unchanged: the first slipped cell stops the page. Rental 5
+lost two Mixtral pages that way (one repeat at 1635 and 1680 MHz ended each,
+and R3 writes report.json only at the end of a page, so nothing was kept).
+`--slip-policy cell` (histogram pages only) hands R3 the lock (`--lock-mhz`),
+the policy and `--min-clean-repeats`; R3 flags each repeat under the lock by
+more than one step (`lock_slip`, the same predicate as `off_lock` on the same
+`sm_clock_load_mhz`), keeps it out of the cell median, drops a cell that can
+no longer reach the minimum and stops the page once no cell can. This driver
+then does not stop R3 on a slip: it records every slipped row in the attempt's
+`slipped_cells` and lets the page finish. A page that ends with slips is
+HELD_WITH_SLIPS, a held page (exit 0, kept in summary.json's pages, the ladder
+goes on); the scorer decides what its slips void. A cell more than one step
+OVER the lock still stops the ladder under either policy.
 """
 from __future__ import annotations
 
@@ -168,6 +183,9 @@ OWNED_FLAGS = {
     "--rescore": "a re-score measures nothing",
     "--probe-check": "the probe check writes no page",
     "--counter-child": "the counter child is dram_counter_route's, not a timed page",
+    "--slip-policy": "the driver's own --slip-policy hands it to R3 with the lock",
+    "--lock-mhz": "the driver sets the lock R3's slip predicate reads, per attempt",
+    "--min-clean-repeats": "the driver's own --min-clean-repeats rides with --slip-policy cell",
 }
 #: The two lines of R3's plan (`plan_lines`) that name the attempt's session
 #: and directory, anchored at column zero. tests/test_locked_r3.py holds this
@@ -186,6 +204,10 @@ SAMPLER_QUERY = ("--query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,power.li
                  "temperature.gpu,utilization.gpu,clocks_event_reasons.active")
 
 HELD, SLIPPED = "held", "slipped"
+#: Rental 6: a page that held under --slip-policy cell with at least one slipped repeat.
+#: A held page everywhere HELD is (`kept`).
+HELD_WITH_SLIPS = "held-with-slips"
+KEPT = (HELD, HELD_WITH_SLIPS)
 #: Attempt states that stop the ladder without a verdict: V2 FAILS on each.
 NOT_OWN_DIR, NO_PAGE, OFF_LOCK_HIGH = "not-own-dir", "no-page", "lock-not-in-force"
 TIMEOUT, LADDER_CAP, GPU_BUSY = "timeout", "ladder-cap", "gpu-busy"
@@ -243,6 +265,33 @@ def off_lock(clocks: list[float], lock: int) -> tuple[float | None, float | None
     under = next((v for v in clocks if v < lock - STEP_MHZ), None)
     over = next((v for v in clocks if v > lock + STEP_MHZ), None)
     return under, over
+
+
+def slipped_rows(csv_path: Path, lock: int) -> list[dict]:
+    """Every complete row of `cells.csv` more than one step under the lock (`off_lock`'s
+    predicate), as {row, arm, tiles, repeat, label, mhz}: what --slip-policy cell records
+    in place of stopping. The label is the histogram page's (`detail` begins
+    `histogram=<label>`), empty elsewhere."""
+    try:
+        text = csv_path.read_text(errors="replace")
+    except OSError:
+        return []
+    text = text[:text.rfind("\n") + 1]
+    out: list[dict] = []
+    try:
+        for i, row in enumerate(csv.DictReader(io.StringIO(text))):
+            try:
+                v = float(row.get("sm_clock_load_mhz") or "nan")
+            except ValueError:
+                continue
+            if v == v and v > 0 and v < lock - STEP_MHZ:
+                m = re.match(r"histogram=([^;]+)", row.get("detail") or "")
+                out.append({"row": i, "arm": row.get("arm") or "", "tiles": row.get("tiles") or "",
+                            "repeat": row.get("repeat") or "", "label": m.group(1) if m else "",
+                            "mhz": v})
+    except csv.Error:
+        pass
+    return out
 
 
 def recorded_tag(run_dir: Path) -> str | None:
@@ -598,6 +647,9 @@ class Attempt:
     seconds: float = 0.0
     log: str = ""
     argv: list[str] = field(default_factory=list)
+    #: rental 6, --slip-policy cell only: every row more than one step under the lock
+    #: (`slipped_rows`), recorded in place of a stop; dropped from summary.json under page
+    slipped_cells: list[dict] = field(default_factory=list)
 
     def r3_exit(self) -> str:
         """R3's exit through the shared table; a run this driver stopped ends
@@ -615,6 +667,7 @@ class Attempt:
         name = Path(self.dir).name if self.dir else "(none named)"
         return (f"G={self.G} {self.state} at lock {self.lock}: R3 exit {self.r3_exit()}, "
                 f"cells={self.cells} worst={worst} MHz, {self.seconds:.0f} s, dir {name}"
+                + (f"; {len(self.slipped_cells)} slipped rows" if self.slipped_cells else "")
                 + (f"; {self.why}" if self.why else ""))
 
 
@@ -656,9 +709,20 @@ class Run:
     def tag(self, lock: int) -> str:
         return f"{self.base}-lock{lock}"
 
+    @property
+    def cell_policy(self) -> bool:
+        return getattr(self.args, "slip_policy", "page") == "cell"
+
+    def slip_argv(self, lock: int) -> list[str]:
+        """R3's slip arguments under --slip-policy cell (none under page: unchanged argv)."""
+        if not self.cell_policy:
+            return []
+        return ["--slip-policy", "cell", "--lock-mhz", str(lock),
+                "--min-clean-repeats", str(self.args.min_clean_repeats)]
+
     def r3_argv(self, lock: int, G: int) -> list[str]:
-        return [self.python, str(self.r3_script), *self.r3_args, "--group-m", str(G),
-                "--session-tag", self.tag(lock)]
+        return [self.python, str(self.r3_script), *self.r3_args, *self.slip_argv(lock),
+                "--group-m", str(G), "--session-tag", self.tag(lock)]
 
     def plan_lines(self) -> list[str]:
         sudo = "sudo -n " if self.smi.prefix else ""
@@ -690,6 +754,11 @@ class Run:
             f"attempts    at most {len(self.locks) * len(self.groups)}, in this order until "
             "one lock holds at every G:",
         ]
+        if self.cell_policy:
+            lines.insert(-1, "slips       --slip-policy cell: a slipped repeat does NOT stop R3; "
+                             "R3 flags it (lock_slip), keeps it out of the cell median, drops a "
+                             f"cell under {self.args.min_clean_repeats} clean repeats and stops "
+                             "once none can reach it; the page ends HELD_WITH_SLIPS")
         n = 0
         for lock in self.locks:
             for G in self.groups:
@@ -711,15 +780,23 @@ class Run:
     def summary_payload(self, outcome: Outcome | None, gates: list[Gate], code: int | None,
                         stopped_by: str) -> dict:
         held = outcome.held if outcome else None
-        pages = [asdict(a) for a in self.attempts if a.lock == held and a.state == HELD]
+        pages = [self._dict(a) for a in self.attempts if a.lock == held and a.state in KEPT]
         return {"schema": 1, "utc_start": self.utc_start, "utc_end": utc(),
                 "session_tag": self.base, "locks_asked": self.locks, "groups": self.groups,
                 "r3_args": self.r3_args, "python": self.python,
                 "results_dir": str(self.results_dir), "card": self.card,
-                "attempts": [asdict(a) for a in self.attempts], "lock": held,
+                "attempts": [self._dict(a) for a in self.attempts], "lock": held,
                 "pages": pages, "outcome": asdict(outcome) if outcome else None,
                 "stopped_by": stopped_by, "gates": [asdict(g) for g in gates],
                 "exit": code, "reset": self.guard.reset_record, "smi_log": self.smi.log}
+
+    def _dict(self, a: Attempt) -> dict:
+        """An attempt as summary.json holds it; under --slip-policy page without the
+        rental-6 `slipped_cells` key, so a page-policy summary is the one written before."""
+        d = asdict(a)
+        if not self.cell_policy:
+            d.pop("slipped_cells", None)
+        return d
 
     def save(self, payload: dict) -> None:
         with contextlib.suppress(OSError):
@@ -760,7 +837,7 @@ class Run:
         stop is REFUSED (2), whatever stopped the ladder: nothing was measured,
         which is the table's REFUSED, not its INVALID ("measured; a VALIDITY
         gate failed after measuring")."""
-        return any(a.cells or a.state == HELD for a in self.attempts)
+        return any(a.cells or a.state in KEPT for a in self.attempts)
 
     def preflight(self) -> str:
         """"" when every lock is a supported graphics clock here, else why not.
@@ -828,6 +905,15 @@ class Run:
                     att.cells = len(clocks)
                     att.worst_mhz = min(clocks) if clocks else None
                     att.slip_mhz, att.over_mhz = off_lock(clocks, lock)
+                    if self.cell_policy and att.slip_mhz is not None:
+                        # rental 6: recorded, not stopped; R3 excludes the repeat itself
+                        rows = slipped_rows(named.path / "cells.csv", lock)
+                        for r in rows[len(att.slipped_cells):]:
+                            self.say(f"G={G} at lock {lock}: slipped row {r['row']} "
+                                     f"{r['label'] or '-'} {r['arm']} n={r['tiles']} rep "
+                                     f"{r['repeat']} at {r['mhz']:.0f} MHz (recorded, R3 runs on)")
+                        att.slipped_cells = rows
+                        att.slip_mhz = None
                     if att.over_mhz is not None:
                         att.state = OFF_LOCK_HIGH
                         att.why = (f"a timed cell read {att.over_mhz:.0f} MHz, more than "
@@ -876,6 +962,10 @@ class Run:
             return NOT_OWN_DIR, f"report.json records session tag {recorded!r}, not {att.tag!r}"
         if att.rc not in exit_codes.MEASURED_CODES:
             return NO_PAGE, f"R3 exited {exit_codes.describe(att.rc)}"
+        if att.slipped_cells:
+            low = min(r["mhz"] for r in att.slipped_cells)
+            return HELD_WITH_SLIPS, (f"{len(att.slipped_cells)} slipped rows, lowest {low:.0f} "
+                                     "MHz, recorded and kept out of their cell medians by R3")
         return HELD, ""
 
     # ---- the ladder -------------------------------------------------------
@@ -920,7 +1010,7 @@ class Run:
                     return Outcome(stopped=att.line())
                 att = self.attempt(lock, G)
                 self.record(att)
-                if att.state == HELD:
+                if att.state in KEPT:
                     continue
                 if att.state == SLIPPED:
                     nxt = self.locks[i + 1] if i + 1 < len(self.locks) else None
@@ -970,11 +1060,15 @@ class Run:
                   "the verdict: the ladder stopped for a reason a lower lock would not fix")
         if reached:
             held = outcome.held is not None
+            slips = sum(len(a.slipped_cells) for a in self.attempts if a.lock == outcome.held)
             c1 = Gate(CLAIM, "1", "a lock on the ladder held at every G",
                       PASS if held else FAIL,
                       (f"{outcome.held} MHz held at G = {' '.join(map(str, self.groups))}"
+                       + (f", {slips} slipped rows recorded (--slip-policy cell)" if slips else "")
                        if held else f"every lock slipped: {' '.join(map(str, self.locks))} MHz"),
-                      f"no timed cell more than {STEP_MHZ} MHz under the lock at any G")
+                      f"no timed cell more than {STEP_MHZ} MHz under the lock at any G"
+                      + (" (under --slip-policy cell a slipped repeat is R3's to exclude, "
+                         "not a stop)" if self.cell_policy else ""))
         else:
             c1 = Gate(CLAIM, "1", "a lock on the ladder held at every G", UNKNOWN,
                       "not established: " + why,
@@ -1005,8 +1099,9 @@ class Run:
         held = outcome.held if outcome else None
         if held is not None:
             out.append(f"pages kept, all at {held} MHz (each verdict is R3's own):")
-            out += [f"  G={a.G:<3} {a.r3_exit():<13} {a.dir}" for a in self.attempts
-                    if a.lock == held and a.state == HELD]
+            out += [f"  G={a.G:<3} {a.r3_exit():<13} {a.dir}"
+                    + (f" ({len(a.slipped_cells)} slipped rows)" if a.slipped_cells else "")
+                    for a in self.attempts if a.lock == held and a.state in KEPT]
         for g in gates:
             out += g.render()
         rec = self.guard.reset_record or {}
@@ -1126,6 +1221,14 @@ def build_parser() -> argparse.ArgumentParser:
                          "two G")
     ap.add_argument("--stop-grace-s", type=float, default=90.0,
                     help="how long a stopped R3 gets to end on SIGINT before SIGKILL")
+    ap.add_argument("--slip-policy", choices=("page", "cell"), default="page",
+                    help="page (default): the first slipped cell stops the page and the lock "
+                         "steps down; cell (rental 6, histogram pages): R3 gets --lock-mhz, "
+                         "flags and excludes each slipped repeat and runs on, and the page "
+                         "ends HELD_WITH_SLIPS")
+    ap.add_argument("--min-clean-repeats", type=int, default=6,
+                    help="with --slip-policy cell: R3 drops a cell that cannot reach this many "
+                         "clean repeats and stops the page once none can (default 6, of 9)")
     ap.add_argument("--sample-ms", type=int, default=500,
                     help="nvidia-smi's sampling period into smi.csv; 0 for none")
     return ap
@@ -1179,6 +1282,12 @@ def prepare(argv: list[str]) -> Run:
                       "steps DOWN the ladder")
     if any(g <= 0 for g in args.groups) or len(set(args.groups)) != len(args.groups):
         raise Refusal(f"--groups {args.groups} must be distinct positive integers")
+    if args.slip_policy == "cell":
+        if "--histogram" not in r3_args:
+            raise Refusal("--slip-policy cell runs a histogram page only (R3 refuses --lock-mhz "
+                          "on its balanced ladder)")
+        if args.min_clean_repeats < 0:
+            raise Refusal(f"--min-clean-repeats {args.min_clean_repeats}: 0 or more")
     owned = [(t, owned_flag(t)) for t in r3_args if owned_flag(t)]
     if owned:
         raise Refusal("R3 arguments this driver owns: " + "; ".join(

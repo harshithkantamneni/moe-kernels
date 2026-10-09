@@ -2094,7 +2094,7 @@ def probe_cells(cfg, *, block_m: int, treads: list[int],
                 declared_by_arm: dict[str, int], copies_declared: int,
                 reference_clock: float | None, repeats: int,
                 calls_per_replay: int, op, sync, graph_timer, eager_timer,
-                device: str = "cuda") -> AlignProbe:
+                device: str = "cuda", arms: tuple[str, ...] = ARMS) -> AlignProbe:
     """The probe's loop with its op and instrument injected, so the plumbing
     runs off-GPU with fakes: `op(ids, block_m, declared)` is the alignment
     call, `sync` the device synchronise.
@@ -2106,8 +2106,14 @@ def probe_cells(cfg, *, block_m: int, treads: list[int],
     would have escaped to main's catch-all as ERROR with the graph cells
     lost, and a mix that was merely recorded is what `AlignProbe.graph_calls`
     refuses at fit time. The eager instrument plus NATIVE's control is still
-    a probe, which is why the fallback is a fallback and not a refusal."""
+    a probe, which is why the fallback is a fallback and not a refusal.
+
+    `arms` (rental 6, S3): the declarations to time, in ARMS order. A histogram page
+    runs NATIVE and SHARED only, and PRIVATE's id set refuses a tread deeper than the
+    declaration, so its probe times the page's own arms; the ladder's default is all
+    three. Each cell is the same call at the same numel and declaration either way."""
     from moe.bench.timing import NotCapturable
+    arms = tuple(a for a in ARMS if a in arms)
 
     def collect(mode: int) -> list[ProbeCell]:
         cells = []
@@ -2125,10 +2131,11 @@ def probe_cells(cfg, *, block_m: int, treads: list[int],
                 use_by_arm = {
                     NATIVE: ids,
                     SHARED: shared_topk_ids(ids, copies_declared),
-                    PRIVATE: private_topk_ids(ids, cfg.num_experts, block_m,
-                                              n * block_m, copies_declared),
                 }
-                for arm in ARMS:
+                if PRIVATE in arms:
+                    use_by_arm[PRIVATE] = private_topk_ids(ids, cfg.num_experts, block_m,
+                                                           n * block_m, copies_declared)
+                for arm in arms:
                     d = declared_by_arm[arm]
                     use = use_by_arm[arm]
 
@@ -2159,7 +2166,8 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                     reference_clock: float | None,
                     repeats: int = PROBE_REPEATS,
                     calls_per_replay: int = PROBE_CALLS_PER_REPLAY,
-                    graph_timer=None, eager_timer=None) -> AlignProbe:
+                    graph_timer=None, eager_timer=None,
+                    arms: tuple[str, ...] = ARMS) -> AlignProbe:
     """Time vLLM's alignment op ALONE, once per ARM, along the ladder, on the
     attached build, UNDER A CUDA GRAPH (`PROBE_CALLS_PER_REPLAY` calls per
     replay, so each cell is GPU time; eager is the fallback when the capture
@@ -2192,7 +2200,7 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                        reference_clock=reference_clock, repeats=repeats,
                        calls_per_replay=calls_per_replay,
                        op=moe_align_block_size, sync=torch.cuda.synchronize,
-                       graph_timer=graph_timer, eager_timer=eager_timer)
+                       graph_timer=graph_timer, eager_timer=eager_timer, arms=arms)
 
 
 #: The one gate `--probe-check` scores. Not a V number: it is scored before a
@@ -9249,6 +9257,11 @@ def default_run_id(args, card: str) -> str:
     re-score the cells on disk into the same directory and overwrite a page
     that read INVALID, which is the reason it never will be.
 
+    `--slip-policy`, `--lock-mhz` and `--min-clean-repeats` (rental 6) are out too: they
+    ride only with `--histogram`, whose page is never resumed (its loop is
+    `range(--repeats)`), and they decide which timed repeats a cell median reads, not
+    what is timed; report.json carries all three.
+
     AND `--probe-repeats`, WHICH IS OUT ON PURPOSE AND IS THE ONE THAT LOOKS
     LIKE IT SHOULD BE IN. It changes the probe's cells and so can change V8's
     verdict. But the probe is re-timed on every invocation and is never
@@ -9466,6 +9479,19 @@ def build_parser() -> argparse.ArgumentParser:
                          "run id, because the probe is never resumed (see "
                          "default_run_id) -- report.json's align_probe carries "
                          "the count")
+    ap.add_argument("--slip-policy", choices=("page", "cell"), default="page",
+                    help="rental 6 (S1/S2), with --histogram only: page (the default, "
+                         "every earlier page) leaves a lock slip to locked_r3, which stops "
+                         "the page; cell flags each repeat whose under-load clock reads "
+                         "more than one 15 MHz step under --lock-mhz (lock_slip), keeps it "
+                         "out of the cell median and runs on. Set by locked_r3.py")
+    ap.add_argument("--lock-mhz", type=int, default=None,
+                    help="rental 6: the SM clock lock locked_r3 holds, the slip "
+                         "predicate's reference (needs --slip-policy cell)")
+    ap.add_argument("--min-clean-repeats", type=int, default=0,
+                    help="rental 6: under --slip-policy cell, a cell that can no longer "
+                         "reach this many clean repeats is LOST and not timed again, and the "
+                         "page stops once every cell is lost (0: never)")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, and "
                          "REFUSE: nothing is measured and no gate is scored")
@@ -9576,6 +9602,11 @@ def _main(argv=None) -> int:
         return exit_codes.REFUSED
     if args.histogram is not None:
         return _histogram_mode(args, cfg)
+    if args.slip_policy != "page" or args.lock_mhz is not None or args.min_clean_repeats:
+        print("REFUSED: --slip-policy cell, --lock-mhz and --min-clean-repeats ride with "
+              "--histogram; R3's balanced ladder resumes by (arm, tread, repeat) and a slip "
+              "there is locked_r3's page-level stop")
+        return exit_codes.REFUSED
     if args.shuffle_seed is not None:
         print("REFUSED: --shuffle-seed rides with --histogram; R3's balanced ladder "
               "shuffles nothing")
@@ -10026,6 +10057,77 @@ def _main(argv=None) -> int:
 HIST_CLOCK_STEP_MHZ = 15.0
 
 
+#: rental 6 (S2): a repeat is a LOCK SLIP when its under-load clock reads more than one
+#: 15 MHz step under the lock, locked_r3's own `off_lock` predicate on the same field
+#: (`sm_clock_load_mhz`, the repeat's median over its clock reads: a dip inside a repeat
+#: that leaves the median on the lock is not seen, by either)
+LOCK_SLIP_STEP_MHZ = 15.0
+
+
+def lock_slip(sample, lock_mhz: int | None) -> bool:
+    """True when `sample` read more than one 15 MHz step under `lock_mhz`. An unread clock
+    is not a slip (G1 lists it as unread), and with no lock nothing is."""
+    v = getattr(sample, "sm_clock_load_mhz", None)
+    return lock_mhz is not None and v is not None and v == v and v < lock_mhz - LOCK_SLIP_STEP_MHZ
+
+
+def clean_repeat(sample, lock_mhz: int | None) -> bool:
+    """A CLEAN repeat: usable (status ok, a time, and not drift-excluded: R3's one
+    exclusion, `Sample.excluded`) and not a lock slip. The cell median reads clean
+    repeats only; `--min-clean-repeats` counts them."""
+    return sample.usable and not lock_slip(sample, lock_mhz)
+
+
+def histogram_schedule(order, arms_of, repeats: int, run_cell, *, lock_mhz: int | None = None,
+                       min_clean: int = 0, say=print):
+    """The histogram page's repeat loop, the GPU work injected (`run_cell(cell, rep, arms)`
+    times the cell's arms in that order and returns their Samples), so the slip and
+    early-stop logic runs off the card. Repeats OUTER, the page's cells reversed on odd
+    repeats, arms rotated within a cell: exactly the rental-5 loop when `lock_mhz` is None.
+
+    Under a lock (`--slip-policy cell`): every slipped repeat is printed with its clock and
+    stays in the cell's samples, flagged by `lock_slip`. After each repeat a (cell, arm)
+    whose clean repeats so far plus the repeats left fall under `min_clean` is LOST: it is
+    not timed again. The page stops early once every (cell, arm) is lost with repeats
+    left. Returns (samples by (label, n, arm), {lost key: why}, the early-stop reason or
+    None)."""
+    out: dict = {}
+    lost: dict = {}
+    early = None
+    keys = [(c.label, c.n, a) for c in order for a in arms_of(c)]
+    for rep in range(repeats):
+        for c in (order if rep % 2 == 0 else list(reversed(order))):
+            ca = arms_of(c)
+            rot = [ca[(i + rep) % len(ca)] for i in range(len(ca))]
+            rot = [a for a in rot if (c.label, c.n, a) not in lost]
+            if not rot:
+                continue
+            for sample in run_cell(c, rep, rot):
+                out.setdefault((c.label, c.n, sample.arm), []).append(sample)
+                if lock_slip(sample, lock_mhz):
+                    say(f"  LOCK SLIP rep{rep:2d} {c.label:<14s} {sample.arm:8s} n={c.n:3d} "
+                        f"{sample.sm_clock_load_mhz:.1f} MHz, more than "
+                        f"{LOCK_SLIP_STEP_MHZ:.0f} MHz under the {lock_mhz} MHz lock: "
+                        "excluded from the cell median")
+        if lock_mhz is None or min_clean <= 0:
+            continue
+        left = repeats - rep - 1
+        for key in keys:
+            if key in lost:
+                continue
+            got = sum(clean_repeat(x, lock_mhz) for x in out.get(key, []))
+            if got + left < min_clean:
+                lost[key] = (f"{got} clean of {rep + 1} repeats with {left} left cannot reach "
+                             f"{min_clean}")
+                say(f"  LOST {key[0]} {key[2]} n={key[1]}: {lost[key]}; not timed again")
+        if left and len(lost) == len(keys):
+            early = (f"after repeat {rep} of {repeats}: no cell can reach {min_clean} clean "
+                     "repeats")
+            say(f"  EARLY STOP {early}")
+            break
+    return out, lost, early
+
+
 def histogram_gates(rows: list[dict], samples_by_cell: dict) -> dict:
     """The native-only gate set of a histogram page (rental 4's registration
     2026-10-06-rental4-nativegates, decision 1), less G3, which the rental-5
@@ -10035,6 +10137,12 @@ def histogram_gates(rows: list[dict], samples_by_cell: dict) -> dict:
     worst cell's clock (recorded; the scorer holds it to 1710), G5 provenance
     (every row carries its histogram label, counts sha256 and a bincount equal
     to its request)."""
+    # rental 6: under --slip-policy cell a LOST row (too few clean repeats) is listed in
+    # lock_slips and read by the scorer's G1 rule; it is not an unread clock here. Rows
+    # with no `lost` key (every page before rental 6) score exactly as before.
+    slip_mode = any("lost" in r for r in rows)
+    lost = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows if r.get("lost")]
+    rows_all, rows = rows, [r for r in rows if not r.get("lost")]
     clocks = [r["sm_clock_load_mhz"] for r in rows if r.get("sm_clock_load_mhz") is not None]
     drift = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows
              if any(s.excluded for s in samples_by_cell.get(
@@ -10047,11 +10155,19 @@ def histogram_gates(rows: list[dict], samples_by_cell: dict) -> dict:
            and r["sm_clock_load_mhz"] < top - HIST_CLOCK_STEP_MHZ]
     g1 = PASS if clocks and not drift and not unread and not low else FAIL
     host = [f"{r['histogram']}/{r['arm']}/n{r['tiles']}" for r in rows if r.get("host_bound")]
-    prov_bad = [f"{r.get('histogram')}/{r.get('arm')}/n{r.get('tiles')}" for r in rows
+    prov_bad = [f"{r.get('histogram')}/{r.get('arm')}/n{r.get('tiles')}" for r in rows_all
                 if not (r.get("histogram") and r.get("counts_sha256") and r.get("bincount_ok"))]
+    g1d = {"verdict": g1, "clock_unread": unread, "drift": drift,
+           "below_top_by_a_step": low, "top_mhz": top}
+    if slip_mode:
+        g1d["lock_slips"] = {
+            "slipped_repeats": sum(r.get("lock_slip_repeats", 0) for r in rows_all),
+            "repeat_rows": sum(r.get("repeat_rows", 0) for r in rows_all),
+            "lost_cells": lost,
+            "rule": "a lost cell (under --min-clean-repeats clean repeats) is listed, not a "
+                    "FAIL here: the rental-6 scorer's G1 takes the page's slipped-repeat share"}
     return {
-        "G1_lock_thermal": {"verdict": g1, "clock_unread": unread, "drift": drift,
-                            "below_top_by_a_step": low, "top_mhz": top},
+        "G1_lock_thermal": g1d,
         "G2_host_bound": {"verdict": PASS, "excluded": host,
                           "rule": "a cell the timer called host-bound is excluded, not voided"},
         "G3_uniform_control": {"verdict": "SCORED OFFLINE",
@@ -10092,6 +10208,20 @@ def _histogram_mode(args, cfg) -> int:
         print(f"REFUSED: --shuffle-seed {seed} differs from the page's own shuffle_seed "
               f"{page.shuffle_seed}; the counter route reads the file's seed, so this timed page "
               "could not be paired with its byte-leg page (give the seed in the file instead)")
+        return exit_codes.REFUSED
+    slip_lock = None
+    if args.slip_policy == "cell":
+        if args.lock_mhz is None or args.lock_mhz <= 0:
+            print("REFUSED: --slip-policy cell needs --lock-mhz F, the lock the slip "
+                  "predicate reads against (locked_r3 passes it)")
+            return exit_codes.REFUSED
+        if not 0 <= args.min_clean_repeats <= args.repeats:
+            print(f"REFUSED: --min-clean-repeats {args.min_clean_repeats}: 0 to --repeats "
+                  f"{args.repeats}")
+            return exit_codes.REFUSED
+        slip_lock = int(args.lock_mhz)
+    elif args.lock_mhz is not None or args.min_clean_repeats:
+        print("REFUSED: --lock-mhz and --min-clean-repeats ride with --slip-policy cell")
         return exit_codes.REFUSED
     if args.declared_copies < 1:
         print("REFUSED: a histogram page names its declaration: --declared-copies N (the "
@@ -10154,8 +10284,19 @@ def _histogram_mode(args, cfg) -> int:
         "session     " + (args.session_tag or "(none: a bare run, keyed on its arguments "
                                               "and card alone)"),
         f"WRITES TO   {out_dir}",
-        "cells (n, label, arms, path, counts sha256):",
     ]
+    if slip_lock is not None:
+        header.append(
+            f"slips       --slip-policy cell at the {slip_lock} MHz lock: a repeat under "
+            f"{slip_lock - LOCK_SLIP_STEP_MHZ:.0f} MHz is a lock slip, out of its cell median; "
+            + (f"a cell that cannot reach {args.min_clean_repeats} clean repeats is lost, and "
+               "the page stops once every cell is" if args.min_clean_repeats else
+               "no minimum clean count"))
+    header.append(f"probe       the alignment op alone at each tread's numel, arms "
+                  f"{','.join(a for a in ARMS if a in arms)}, {args.probe_repeats} repeats, "
+                  f"about {probe_seconds(treads, len(arms), args.probe_repeats):.0f} s "
+                  "(report.json align_probe; rental 6 S3)")
+    header.append("cells (n, label, arms, path, counts sha256):")
     for c in page.ordered():
         ca = cell_arms(page, c, arms)
         paths = sorted({align_path(tokens[c.n] * cfg.top_k, declared_by_arm[a]) for a in ca})
@@ -10198,18 +10339,33 @@ def _histogram_mode(args, cfg) -> int:
     except SchemaCollision as exc:
         print(f"\nREFUSED: {exc}")
         return exit_codes.REFUSED
-    samples_by_cell, bincounts = run_histogram_page(
+    probe = histogram_probe(cfg, block_m=block_m, treads=treads, arms=arms,
+                            declared_by_arm=declared_by_arm, copies=copies,
+                            repeats=args.probe_repeats)
+    samples_by_cell, bincounts, lost, early = run_histogram_page(
         args, cfg, page=page, cells=cells, arms=arms, seed=seed, copies=copies,
         pinned=pinned, block_m=block_m, store=store, prov=prov,
-        cache_root=out_dir / "triton-cache", declared_by_arm=declared_by_arm)
+        cache_root=out_dir / "triton-cache", declared_by_arm=declared_by_arm,
+        lock_mhz=slip_lock, min_clean=args.min_clean_repeats if slip_lock is not None else 0)
     rows = []
     for c, a in cells:
-        # the ladder's own predicate: a drifted repeat is out, as on every R3 page
-        got = [s for s in samples_by_cell.get((c.label, c.n, a), []) if s.usable]
+        # the ladder's own predicate: a drifted repeat is out, as on every R3 page; under
+        # --slip-policy cell a lock-slipped repeat is out too (clean_repeat)
+        mine = samples_by_cell.get((c.label, c.n, a), [])
+        got = [s for s in mine if clean_repeat(s, slip_lock)]
         clk = [s.sm_clock_load_mhz for s in got if s.sm_clock_load_mhz is not None]
         numel = tokens[c.n] * cfg.top_k
         bc = bincounts.get((c.label, c.n))
-        rows.append({"arm": a, "tiles": c.n, "tokens": tokens[c.n],
+        slip = {}
+        if slip_lock is not None:
+            every = [s.sm_clock_load_mhz for s in mine if s.sm_clock_load_mhz is not None]
+            slip = {"repeat_rows": len(mine),
+                    "lock_slip_repeats": sum(lock_slip(s, slip_lock) for s in mine),
+                    "clean_repeats": len(got),
+                    "worst_repeat_mhz": min(every) if every else None,
+                    "lost": (c.label, c.n, a) in lost
+                    or len(got) < args.min_clean_repeats}
+        rows.append({**slip, "arm": a, "tiles": c.n, "tokens": tokens[c.n],
                      "ms_p50": statistics.median(s.ms_p50 for s in got) if got else None,
                      "sm_clock_load_mhz": statistics.median(clk) if clk else None,
                      "experts_declared": declared_by_arm[a], "repeats": len(got),
@@ -10236,7 +10392,21 @@ def _histogram_mode(args, cfg) -> int:
         "ladder": "NOT APPLICABLE: histogram page (no slope, ratio or ladder-shaped gate)",
         "gates": [{"kind": "VALIDITY", "tag": k, "verdict": v["verdict"]}
                   for k, v in gates.items() if v["verdict"] in (PASS, FAIL)],
+        "align_probe": probe.as_dict() if probe is not None else None,
     }
+    if slip_lock is not None:
+        payload.update({
+            "slip_policy": "cell", "lock_mhz": slip_lock,
+            "min_clean_repeats": args.min_clean_repeats,
+            "repeat_rows": sum(len(v) for v in samples_by_cell.values()),
+            "lock_slip_rows": sum(lock_slip(x, slip_lock) for v in samples_by_cell.values()
+                                  for x in v),
+            "slipped_repeats": [{"histogram": k[0], "n": k[1], "arm": k[2], "repeat": x.repeat,
+                                 "mhz": x.sm_clock_load_mhz}
+                                for k, v in samples_by_cell.items() for x in v
+                                if lock_slip(x, slip_lock)],
+            "lost_cells": {f"{k[0]}/{k[2]}/n{k[1]}": why for k, why in lost.items()},
+            "early_stop": early})
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
     lines = [f"  {k}: {v['verdict']}" for k, v in gates.items()]
     (out_dir / "report.txt").write_text("\n".join(header + ["", "HISTOGRAM GATES:", *lines]) + "\n")
@@ -10248,13 +10418,36 @@ def _histogram_mode(args, cfg) -> int:
     return rc
 
 
+def histogram_probe(cfg, *, block_m: int, treads: list[int], arms, declared_by_arm: dict,
+                    copies: int, repeats: int, probe=None):
+    """Rental 6 (S3): the alignment probe on a histogram page, so the page carries its own
+    `align_probe` (rental 5's histogram pages carried null and model v3 prices the
+    alignment from the page's own probe). The SAME call the balanced ladder makes
+    (`probe_alignment`: balanced ids at each tread's numel, each arm at its own
+    declaration), restricted to the page's arms; the probe does not read the histogram,
+    because the alignment op's kernel choice is a function of numel and the declaration.
+    Recorded only: no V8 is scored on a histogram page. A probe that raises is recorded as
+    absent (None), never a lost page."""
+    reference_clock, _src = SWEEP.reference_clock_mhz()
+    probe = probe or probe_alignment
+    try:
+        return probe(cfg, block_m=block_m, treads=list(treads), declared_by_arm=declared_by_arm,
+                     copies_declared=copies, reference_clock=reference_clock,
+                     repeats=repeats, arms=tuple(a for a in ARMS if a in arms))
+    except Exception as exc:                              # noqa: BLE001
+        print(f"align probe not recorded: {type(exc).__name__}: {exc}", flush=True)
+        return None
+
+
 def run_histogram_page(args, cfg, *, page: HistogramPage, cells, arms, seed: int,
                        copies: int, pinned: dict, block_m: int, store, prov,
-                       cache_root: Path, declared_by_arm: dict):
+                       cache_root: Path, declared_by_arm: dict, lock_mhz: int | None = None,
+                       min_clean: int = 0):
     """The metered part of a histogram page: one weight build, then per repeat every
     cell (reversed on odd repeats), each cell's inputs built once through
     `arm_inputs(cell=...)` and shared by its arms, arms rotated. Every cell lands in
-    cells.csv as it is timed (its label in `detail`), so locked_r3 reads its clock."""
+    cells.csv as it is timed (its label in `detail`), so locked_r3 reads its clock.
+    The loop is `histogram_schedule` (slips, lost cells and the early stop, rental 6)."""
     import torch
 
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -10266,45 +10459,47 @@ def run_histogram_page(args, cfg, *, page: HistogramPage, cells, arms, seed: int
                                            pad_rows=int(args.slot_pad_rows or 0))
     native_w1, native_w2 = w1[::copies], w2[::copies]
     conf = dict(pinned, BLOCK_SIZE_M=block_m)
-    order = page.ordered()
-    out: dict = {}
     bincounts: dict = {}
-    for rep in range(args.repeats):
-        for c in (order if rep % 2 == 0 else list(reversed(order))):
-            ca = cell_arms(page, c, arms)
-            tokens, x, ids_by_arm, weights, kw = arm_inputs(
-                cfg, c.n, block_m, copies, args.seed, args.dtype, w1.dtype, arms=ca,
-                cell=c, shuffle_seed=seed)
-            bincounts[(c.label, c.n)] = realised_bincount(ids_by_arm[NATIVE], cfg.num_experts)
-            rot = [ca[(i + rep) % len(ca)] for i in range(len(ca))]
-            for a in rot:
-                call = arm_call(fused_experts, a, w1, w2, native_w1, native_w2,
-                                declared_by_arm, x, ids_by_arm, weights, kw)
-                tag = f"histogram={c.label}"
-                try:
-                    with override_config(conf):
-                        call()
-                        torch.cuda.synchronize()
-                        t = time_cell(call, duty=args.duty, warmup_ms=args.warmup,
-                                      cell_budget_ms=args.cell_budget_ms, trials=args.trials,
-                                      l2_flush=not args.no_l2_flush,
-                                      reference_clock_mhz=reference_clock)
-                    sample = sample_from_timing(
-                        t, arm=a, repeat=rep, block_m=block_m, tiles=c.n,
-                        rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
-                        experts_declared=declared_by_arm[a])
-                    sample = replace(sample, detail=tag + (f"; {sample.detail}" if sample.detail else ""))
-                except Exception as exc:                  # noqa: BLE001
-                    sample = Sample(arm=a, repeat=rep, block_m=block_m, tiles=c.n,
-                                    rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
-                                    experts_declared=declared_by_arm[a], ms_p50=0.0,
-                                    status="failed", duty=args.duty,
-                                    detail=f"{tag}; {type(exc).__name__}: {exc}")
-                store.append(sample, prov)
-                out.setdefault((c.label, c.n, a), []).append(sample)
-                print(f"  rep{rep:2d} {c.label:<14s} {a:8s} n={c.n:3d} T={tokens:7d} "
-                      f"{sample.ms_p50:9.4f} ms", flush=True)
-    return out, bincounts
+
+    def run_cell(c, rep, rot):
+        tokens, x, ids_by_arm, weights, kw = arm_inputs(
+            cfg, c.n, block_m, copies, args.seed, args.dtype, w1.dtype, arms=cell_arms(page, c, arms),
+            cell=c, shuffle_seed=seed)
+        bincounts[(c.label, c.n)] = realised_bincount(ids_by_arm[NATIVE], cfg.num_experts)
+        got = []
+        for a in rot:
+            call = arm_call(fused_experts, a, w1, w2, native_w1, native_w2,
+                            declared_by_arm, x, ids_by_arm, weights, kw)
+            tag = f"histogram={c.label}"
+            try:
+                with override_config(conf):
+                    call()
+                    torch.cuda.synchronize()
+                    t = time_cell(call, duty=args.duty, warmup_ms=args.warmup,
+                                  cell_budget_ms=args.cell_budget_ms, trials=args.trials,
+                                  l2_flush=not args.no_l2_flush,
+                                  reference_clock_mhz=reference_clock)
+                sample = sample_from_timing(
+                    t, arm=a, repeat=rep, block_m=block_m, tiles=c.n,
+                    rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
+                    experts_declared=declared_by_arm[a])
+                sample = replace(sample, detail=tag + (f"; {sample.detail}" if sample.detail else ""))
+            except Exception as exc:                  # noqa: BLE001
+                sample = Sample(arm=a, repeat=rep, block_m=block_m, tiles=c.n,
+                                rows_per_expert=c.n * block_m, tokens=tokens, copies=1,
+                                experts_declared=declared_by_arm[a], ms_p50=0.0,
+                                status="failed", duty=args.duty,
+                                detail=f"{tag}; {type(exc).__name__}: {exc}")
+            store.append(sample, prov)
+            got.append(sample)
+            print(f"  rep{rep:2d} {c.label:<14s} {a:8s} n={c.n:3d} T={tokens:7d} "
+                  f"{sample.ms_p50:9.4f} ms", flush=True)
+        return got
+
+    out, lost, early = histogram_schedule(
+        page.ordered(), lambda c: cell_arms(page, c, arms), args.repeats, run_cell,
+        lock_mhz=lock_mhz, min_clean=min_clean, say=lambda m: print(m, flush=True))
+    return out, bincounts, lost, early
 
 
 def _read_mode(args) -> int:

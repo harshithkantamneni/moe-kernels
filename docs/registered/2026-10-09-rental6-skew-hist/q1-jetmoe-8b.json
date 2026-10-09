@@ -1,0 +1,36 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "jetmoe-8b",
+ "page": "q1",
+ "shuffle_seed": 20261010,
+ "cells": [
+  {
+   "label": "balanced",
+   "n": 1,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 4,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "balanced cells only (R3's balanced_ids, counts null); no histogram"
+}

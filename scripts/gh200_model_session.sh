@@ -97,6 +97,17 @@
 #              unit runs the FIRST of its variants whose regcheck and perturb lines both read PASS
 #              and writes CHOSEN_VARIANT.txt), depends=GROUP (a unit dropped when any unit of
 #              drop-group GROUP is dropped: rental 5's stT and stD depend on st)
+# RENTAL 6 (2026-10-09): two keys.
+#   slip-policy=page|cell (timed units with histogram= only): locked_r3.py's --slip-policy.
+#              cell: a slipped repeat no longer stops the page; R3 flags it, keeps it out of
+#              the cell median, drops a cell under 6 clean repeats of 9 and stops the page once
+#              none can reach 6; the page ends HELD_WITH_SLIPS (exit 0). page is the default.
+#   nodrop=1   (any unit but the prelude, which is never dropped anyway): the deadline never
+#              drops this unit, and no drop-group sweeps it; refused with drop-group= or
+#              depends=. When dropping every droppable unit still leaves too little time, the
+#              nodrop units are still not dropped: each runs while its own estimate fits the
+#              time left (a unit that no longer fits is SKIPPED, as any step), and the ledger
+#              says so (rental 6's nine skew pages: design-r6-review (g)).
 #
 # WHY UNATTENDED, AND HOW THE DRAFT'S "STOPS" BECAME RULES. The draft of
 # section 3c (2026-09-26) was blocks a person pastes, each with a "Stops"
@@ -220,6 +231,8 @@ VARIANT_ID="${MOE_DRIVER_VARIANT_ID:-}"
 #: unit's registered variants (instr-variants) with their ids in preference order
 HISTOGRAM="${MOE_DRIVER_HISTOGRAM:-}"
 R3_ARMS="${MOE_DRIVER_ARMS:-}"
+#: RENTAL 6 (2026-10-09): a timed unit's slip policy (slip-policy); empty: locked_r3's page
+SLIP_POLICY="${MOE_DRIVER_SLIP_POLICY:-}"
 INSTR_VARIANTS="${MOE_DRIVER_INSTR_VARIANTS:-}"
 VARIANT_IDS="${MOE_DRIVER_VARIANT_IDS:-}"
 #: the registered stamp variants (moe/instrumented R5_VARIANTS; a test holds these to it):
@@ -321,6 +334,8 @@ step_cap() {
 #: locked_r3.py's cap on one R3 run (its default, 1800 s, fits 8x7B's pages);
 #: another model's deep page runs about 27 min, so it takes an hour.
 lr3_cap() { [[ "$MODEL" == "$DEFAULT_MODEL" ]] || printf '%s\n' --run-cap-s 3600; }
+#: rental 6: a timed unit's slip-policy=cell, handed to locked_r3 (nothing under page)
+lr3_slip() { [[ "$SLIP_POLICY" == cell ]] && printf '%s\n' --slip-policy cell; return 0; }
 #: Set an nvidia-smi lock and confirm it by reading it back, once more if the
 #: first read-back is off (2026-09-28: the 8x22B floor's lock capture ran at
 #: 1800 MHz, its own nvidia-smi records reading 1980 before and after, though
@@ -356,7 +371,7 @@ step_what() {
     bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control$(knob_text)"
                else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control$(knob_text)"; fi ;;
     calibrate) echo "3c.3 calibrate (the ruler), no lock in force" ;;
-    timed)     if [[ -n "$HISTOGRAM" ]]; then echo "3c.3 timed R3 histogram page at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ','), $HISTOGRAM, arms ${R3_ARMS:-native,shared}, ${DECLARED_COPIES:-?} copies$(timed_knob_text)"
+    timed)     if [[ -n "$HISTOGRAM" ]]; then echo "3c.3 timed R3 histogram page at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ','), $HISTOGRAM, arms ${R3_ARMS:-native,shared}, ${DECLARED_COPIES:-?} copies$(timed_knob_text)$([[ "$SLIP_POLICY" == cell ]] && echo ', slip-policy cell')"
                elif [[ -n "$TIMED_GROUPS$TIMED_TREADS" ]]; then echo "3c.3 timed R3 at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ',') (treads $(timed_treads)), no G=3 page"
                else echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5"; fi ;;
     eta)       echo "3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1" ;;
@@ -861,7 +876,7 @@ step_timed() {
     trap 'exit 130' INT TERM HUP
     rc2=0; rc5=0
     if (( ${#p2[@]} )); then
-      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" $(lr3_cap) -- "${R6[@]}" 2>&1 \
+      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" $(lr3_cap) $(lr3_slip) -- "${R6[@]}" 2>&1 \
         | tee -i "$S/logs/locked_r3-$T2.log"
       rc2=${PIPESTATUS[0]}
       echo "P2 locked_r3 exit $rc2" >> "$D/timed-results"
@@ -1491,7 +1506,7 @@ print_plan() {
 }
 
 # ---- a plan of several models (--plan FILE) ------------------------------
-U_MODEL=(); U_STEP=(); U_OPTS=(); U_EST=(); U_CAP=(); U_LABEL=(); U_GROUP=(); U_DEPENDS=()
+U_MODEL=(); U_STEP=(); U_OPTS=(); U_EST=(); U_CAP=(); U_LABEL=(); U_GROUP=(); U_DEPENDS=(); U_NODROP=()
 #: The plan file: the checkout's copy once setup has run (the commit measured is
 #: the authority), else the path as given, else the copy vm_run.sh put beside
 #: this driver for the dry run before setup.
@@ -1505,13 +1520,13 @@ resolve_plan() {
 plan_refuse() { echo "--plan: line $1: $2" >&2; return 1; }
 load_plan() {   # FILE
   local f="$1" line ln=0 kv k v model step est cap label opts seen="" key group seen_perturb=0 instr_after=0
-  local depends seen_regcheck=0 seen_timed=0 groups_seen=" "
+  local depends seen_regcheck=0 seen_timed=0 groups_seen=" " nodrop
   local -a w
   while IFS= read -r line || [[ -n "$line" ]]; do
     ln=$(( ln + 1 )); line="${line%%#*}"
     read -r -a w <<< "$line"
     (( ${#w[@]} )) || continue
-    model="${w[0]}"; step="${w[1]:-}"; est=""; cap=""; label=""; opts=""; group=""; depends=""
+    model="${w[0]}"; step="${w[1]:-}"; est=""; cap=""; label=""; opts=""; group=""; depends=""; nodrop=""
     is_step "$step" || { plan_refuse "$ln" "no step '$step' (${STEPS[*]})"; return 1; }
     if [[ "$step" == prelude ]]; then
       [[ "$model" == - && ${#U_STEP[@]} -eq 0 ]] \
@@ -1531,6 +1546,9 @@ load_plan() {   # FILE
         depends) [[ "$v" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { plan_refuse "$ln" "depends $v"; return 1; }
                  [[ "$groups_seen" == *" $v "* ]] || { plan_refuse "$ln" "depends=$v names no drop-group of an earlier unit"; return 1; }
                  depends="$v" ;;
+        nodrop) [[ "$v" == 1 ]] || { plan_refuse "$ln" "nodrop $v: 1 or leave it out"; return 1; }; nodrop=1 ;;
+        slip-policy) [[ "$v" =~ ^(page|cell)$ ]] || { plan_refuse "$ln" "slip-policy $v: page or cell"; return 1; }
+          opts+=" $k=$v" ;;
         histogram)
           [[ "$v" =~ ^[A-Za-z0-9_./-]+[.]json$ && "$v" != /* && "$v" != *..* ]] || { plan_refuse "$ln" "histogram $v: a repo-relative .json path"; return 1; }
           [[ -f "$(dirname "$SELF")/../$v" || -f "$v" || -f "$MOE_HOME/repo/$v" ]] || { plan_refuse "$ln" "histogram $v: no such file"; return 1; }
@@ -1566,7 +1584,7 @@ load_plan() {   # FILE
         partition-metrics|floor-base|floor-shape-metrics|floor-null-kernel)
           [[ "$v" =~ ^[01]$ ]] || { plan_refuse "$ln" "$k $v: 0 or 1"; return 1; }
           opts+=" $k=$v" ;;
-        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group depends histogram arms instr-variants byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m declared-copies instr-evict-a instr-evict-b instr-stamps instr-every instr-marks stamp-groups stamp-treads stamp-arms)"; return 1 ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group depends nodrop slip-policy histogram arms instr-variants byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m declared-copies instr-evict-a instr-evict-b instr-stamps instr-every instr-marks stamp-groups stamp-treads stamp-arms)"; return 1 ;;
       esac
     done
     # rental 2's keys belong to one step each; a floor key needs a registered design
@@ -1596,6 +1614,9 @@ load_plan() {   # FILE
           [[ "$step" == stamps ]] || { plan_refuse "$ln" "$k belongs to a stamps unit, not $step"; return 1; } ;;
         timed-groups|timed-treads)
           [[ "$step" == timed ]] || { plan_refuse "$ln" "$k belongs to a timed unit, not $step"; return 1; } ;;
+        slip-policy)
+          [[ "$step" == timed ]] || { plan_refuse "$ln" "slip-policy belongs to a timed unit, not $step"; return 1; }
+          [[ " $opts " == *" histogram="* || "${kv#*=}" == page ]] || { plan_refuse "$ln" "slip-policy=cell needs histogram=: R3 refuses --lock-mhz on its balanced ladder"; return 1; } ;;
         lf-arms|lf-group-m)
           [[ "$step" == launchfloor ]] || { plan_refuse "$ln" "$k belongs to a launchfloor unit, not $step"; return 1; } ;;
         floor-lock-mhz|floor-base|floor-shape-metrics|floor-null-kernel)
@@ -1640,6 +1661,10 @@ load_plan() {   # FILE
         [[ "$step" == calibrate ]] || seen_timed=1 ;;
       *) plan_refuse "$ln" "step $step writes into shared run directories; a plan runs prelude, bytes, floor, launchfloor, calibrate, timed and deep (rental 4 adds rulers, gpubench, perturb and stamps; rental 5 regcheck)"; return 1 ;;
     esac
+    if [[ -n "$nodrop" ]]; then
+      [[ "$step" != prelude ]] || { plan_refuse "$ln" "nodrop on the prelude: the prelude is never dropped"; return 1; }
+      [[ -z "$group$depends" ]] || { plan_refuse "$ln" "nodrop with drop-group= or depends=: a unit the deadline never drops cannot go with a group"; return 1; }
+    fi
     key="$model|$label|$step"
     [[ "$seen" == *"<$key>"* ]] && { plan_refuse "$ln" "$model $step label=$label twice: two units would write one directory"; return 1; }
     seen+="<$key>"
@@ -1650,7 +1675,7 @@ load_plan() {   # FILE
       MODEL="$keep"
     fi
     (( cap >= est )) || { plan_refuse "$ln" "cap $cap is under the estimate $est"; return 1; }
-    U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label"); U_GROUP+=("$group"); U_DEPENDS+=("$depends")
+    U_MODEL+=("$model"); U_STEP+=("$step"); U_OPTS+=("${opts# }"); U_EST+=("$est"); U_CAP+=("$cap"); U_LABEL+=("$label"); U_GROUP+=("$group"); U_DEPENDS+=("$depends"); U_NODROP+=("$nodrop")
     [[ -n "$group" ]] && groups_seen+="$group "
   done < "$f"
   (( ${#U_STEP[@]} >= 2 )) || { echo "--plan: $f holds no unit after the prelude" >&2; return 1; }
@@ -1673,7 +1698,7 @@ apply_unit() {   # INDEX
   FLOOR_LOCK_MHZ=""; FLOOR_BASE=1; FLOOR_SHAPE=""; FLOOR_NULL=""
   DECLARED_COPIES=""; INSTR_EVICT_A=""; INSTR_EVICT_B=""; INSTR_STAMPS=""; INSTR_EVERY=""; INSTR_MARKS=""
   STAMP_GROUPS=""; STAMP_TREADS=""; STAMP_ARMS=""; VARIANT_ID=""
-  HISTOGRAM=""; R3_ARMS=""; INSTR_VARIANTS=""; VARIANT_IDS=""
+  HISTOGRAM=""; R3_ARMS=""; INSTR_VARIANTS=""; VARIANT_IDS=""; SLIP_POLICY=""
   for kv in ${U_OPTS[$i]}; do
     k="${kv%%=*}"; v="${kv#*=}"
     case "$k" in
@@ -1691,6 +1716,7 @@ apply_unit() {   # INDEX
       instr-stamps) INSTR_STAMPS="$v" ;; instr-every) INSTR_EVERY="$v" ;; instr-marks) INSTR_MARKS="$v" ;;
       stamp-groups) STAMP_GROUPS="$v" ;; stamp-treads) STAMP_TREADS="$v" ;; stamp-arms) STAMP_ARMS="$v" ;;
       histogram) HISTOGRAM="$v" ;; arms) R3_ARMS="$v" ;; instr-variants) INSTR_VARIANTS="$v" ;;
+      slip-policy) SLIP_POLICY="$v" ;;
     esac
   done
   if [[ "${U_STEP[$i]}" == stamps || -n "$INSTR_EVICT_A$INSTR_EVICT_B" ]]; then
@@ -1712,7 +1738,7 @@ apply_unit() {   # INDEX
   export MOE_DRIVER_INSTR_EVICT_A="$INSTR_EVICT_A" MOE_DRIVER_INSTR_EVICT_B="$INSTR_EVICT_B"
   export MOE_DRIVER_INSTR_STAMPS="$INSTR_STAMPS" MOE_DRIVER_INSTR_EVERY="$INSTR_EVERY" MOE_DRIVER_INSTR_MARKS="$INSTR_MARKS"
   export MOE_DRIVER_STAMP_GROUPS="$STAMP_GROUPS" MOE_DRIVER_STAMP_TREADS="$STAMP_TREADS" MOE_DRIVER_STAMP_ARMS="$STAMP_ARMS"
-  export MOE_DRIVER_HISTOGRAM="$HISTOGRAM" MOE_DRIVER_ARMS="$R3_ARMS"
+  export MOE_DRIVER_HISTOGRAM="$HISTOGRAM" MOE_DRIVER_ARMS="$R3_ARMS" MOE_DRIVER_SLIP_POLICY="$SLIP_POLICY"
   export MOE_DRIVER_INSTR_VARIANTS="$INSTR_VARIANTS" MOE_DRIVER_VARIANT_IDS="$VARIANT_IDS"
 }
 #: The plan's instrumented units as instr_probe.py's variants (JSON): every stamps unit and
@@ -1749,7 +1775,9 @@ variants_json() {
 unit_text() { local i="$1"; echo "unit $(( i + 1 ))/${#U_STEP[@]} ${U_MODEL[$i]}${U_LABEL[$i]:+ ${U_LABEL[$i]}}${U_OPTS[$i]:+ ${U_OPTS[$i]}}"; }
 unit_dropped() { [[ -f "$D/plan-drops" ]] && grep -qx -- "$1" "$D/plan-drops"; }
 #: Before unit i: while the units still to run overrun the time left, drop the
-#: LAST one not yet dropped (never the prelude): the file's order is the priority.
+#: LAST one not yet dropped (never the prelude, never a nodrop=1 unit): the file's
+#: order is the priority. With only nodrop units left over the deadline none is
+#: dropped (rental 6): execute_step still skips one whose own estimate no longer fits.
 unit_budget() {   # INDEX
   local i="$1" j need left
   while :; do
@@ -1759,6 +1787,7 @@ unit_budget() {   # INDEX
     (( need <= left )) && return 0
     for (( j = ${#U_STEP[@]} - 1; j >= i; j-- )); do
       [[ "${U_STEP[$j]}" == prelude ]] && continue
+      [[ -n "${U_NODROP[$j]:-}" ]] && continue
       unit_dropped "$j" && continue
       echo "$j" >> "$D/plan-drops"
       ledger "DROPPED $(unit_text "$j") ${U_STEP[$j]}: ${need} min of units left, ${left} min to the deadline"
@@ -1767,6 +1796,7 @@ unit_budget() {   # INDEX
       if [[ -n "${U_GROUP[$j]}" ]]; then
         for (( k = i; k < ${#U_STEP[@]}; k++ )); do
           [[ "$k" != "$j" && "${U_GROUP[$k]}" == "${U_GROUP[$j]}" ]] || continue
+          [[ -n "${U_NODROP[$k]:-}" ]] && continue
           unit_dropped "$k" && continue
           echo "$k" >> "$D/plan-drops"
           ledger "DROPPED $(unit_text "$k") ${U_STEP[$k]}: drop-group ${U_GROUP[$j]} goes with unit $(( j + 1 ))"
@@ -1775,6 +1805,10 @@ unit_budget() {   # INDEX
       fi
       continue 2
     done
+    if ! grep -qx -- "$i" "$D/plan-nodrop-short" 2>/dev/null; then
+      echo "$i" >> "$D/plan-nodrop-short"
+      ledger "NODROP: ${need} min of units left against ${left} min to the deadline, and only nodrop=1 units (or the running one) are left to drop: they are not dropped: each runs while its own estimate still fits the time left (else it is SKIPPED, as any step), under its cap and the deadline"
+    fi
     return 0
   done
 }
@@ -1783,6 +1817,7 @@ drop_dependents() {   # FROM GROUP
   local i="$1" grp="$2" k
   for (( k = i; k < ${#U_STEP[@]}; k++ )); do
     [[ "${U_DEPENDS[$k]:-}" == "$grp" ]] || continue
+    [[ -n "${U_NODROP[$k]:-}" ]] && continue
     unit_dropped "$k" && continue
     echo "$k" >> "$D/plan-drops"
     ledger "DROPPED $(unit_text "$k") ${U_STEP[$k]}: it depends on drop-group $grp"
@@ -1811,15 +1846,15 @@ print_units() {
   for (( i = 0; i < ${#U_STEP[@]}; i++ )); do
     apply_unit "$i"
     printf '  %-3s %-24s %-11s %4s %4s  %s\n' "$(( i + 1 ))" "${U_MODEL[$i]}" "${U_STEP[$i]}" \
-      "${U_EST[$i]}" "${U_CAP[$i]}" "${U_LABEL[$i]:+label=${U_LABEL[$i]} }${U_OPTS[$i]:-}${U_OPTS[$i]:+; }$(unit_dir "$i")${U_GROUP[$i]:+ [drop-group ${U_GROUP[$i]}]}${U_DEPENDS[$i]:+ [depends ${U_DEPENDS[$i]}]}"
+      "${U_EST[$i]}" "${U_CAP[$i]}" "${U_LABEL[$i]:+label=${U_LABEL[$i]} }${U_OPTS[$i]:-}${U_OPTS[$i]:+; }$(unit_dir "$i")${U_GROUP[$i]:+ [drop-group ${U_GROUP[$i]}]}${U_DEPENDS[$i]:+ [depends ${U_DEPENDS[$i]}]}${U_NODROP[$i]:+ [nodrop]}"
     echo "        $(step_what "${U_STEP[$i]}")"
     total=$(( total + U_EST[i] ))
   done
   MODEL="$keep"
   echo "  $total min of units, estimated, plus setup_vm.sh when --setup"
   echo "  deadline: $([[ -n "$DEADLINE" ]] && utc_of "$DEADLINE" || echo 'none given (the run itself needs --deadline)')"
-  echo "  drop order when time runs short: the last unit first, up the file (never the prelude):"
-  local order=""; for (( i = ${#U_STEP[@]} - 1; i >= 1; i-- )); do order+=" $(( i + 1 ))"; done
+  echo "  drop order when time runs short: the last unit first, up the file (never the prelude, never a nodrop unit):"
+  local order=""; for (( i = ${#U_STEP[@]} - 1; i >= 1; i-- )); do [[ -n "${U_NODROP[$i]:-}" ]] || order+=" $(( i + 1 ))"; done
   echo "   ${order}"
   echo "  pushes: after every unit and every byte page, to the run's branch (scripts/vm_results_push.sh)$( (( NO_PUSH )) && echo ': OFF (--no-push)')"
   [[ -z "$PROBE_LOCKS" ]] || echo "  the prelude also probes the floor lock(s) ${PROBE_LOCKS//,/ } MHz (lock, read back, reset)"

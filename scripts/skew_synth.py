@@ -7,6 +7,7 @@ traces' summary statistics, drawn deterministically from registered seeds (owner
     python scripts/skew_synth.py --fit                            # targets -> fitted shapes
     python scripts/skew_synth.py --draw                           # shapes -> histogram pages
     python scripts/skew_synth.py --check                          # recompute both, compare
+    python scripts/skew_synth.py --draw6 | --check6               # rental 6's pages (pages6 below)
 
 WHAT IS COMMITTED, AND WHAT IS NOT. The routing logs (allenai/analysis_mixtral,
 allenai/analysis_olmoe, tkj000/mmlu_Qwen1.5-MoE-A2.7B-Chat_token_patterns shards 0 and 1)
@@ -313,6 +314,89 @@ def pages(fitd: dict) -> dict:
     return out
 
 
+# --------------------------------------------------------------------------
+# RENTAL 6 (design-r6 3.1, owner decision 4 of 2026-10-09): new seeds, new treads
+# --------------------------------------------------------------------------
+
+OUT6 = REPO / "docs" / "registered" / "2026-10-09-rental6-skew-hist"
+#: model -> (the model whose fitted (kind, param) it takes, its skew treads). Phi-3.5 has no
+#: routing statistics: it carries MIXTRAL's fitted shapes to E 16 at Phi's own B (owner decision 4).
+SHAPES6 = {"mixtral-8x7b": ("mixtral-8x7b", (3, 6, 16)),
+           "olmoe-1b-7b": ("olmoe-1b-7b", (3, 6, 12)),
+           "phi-3.5-moe": ("mixtral-8x7b", (2, 4, 12))}
+#: labels drawn per (model, n): PW2 is a second draw of the PW shape
+LABELS6 = ("PT", "PW", "DW", "PW2")
+DRAW6_SEED_BASE = 20261010
+SHUFFLE_SEED6 = 20261010
+#: the Q1 per-call pages: balanced cells only, NATIVE and SHARED (design-r6 3.1)
+Q1_TREADS6 = {"phi-3.5-moe": (1, 2), "qwen1.5-moe-a2.7b": (1, 2), "jetmoe-8b": (1, 2, 4)}
+#: the byte legs (counter pages): OLMoE and Phi; Mixtral's is dropped (design-r6-review (c):
+#: its content_a lever is at most 0.29%, under counter noise)
+BYTES6 = ("olmoe-1b-7b", "phi-3.5-moe")
+
+
+def draw6_seed(model: str, n: int, label: str) -> int:
+    """The registered seed of one rental-6 draw: base + 1000 x shape index + 10 n + label index."""
+    return DRAW6_SEED_BASE + 1000 * list(SHAPES6).index(model) + 10 * n + LABELS6.index(label)
+
+
+def shape_param6(fitd: dict, src: str, shape: str, B: int) -> tuple[str, float, str]:
+    """(kind, param, rule) for `src`'s fitted `shape` at batch B: the parameter interpolated
+    geometrically in log B between the two fitted points that bracket B (clamped to the ends),
+    the kind the fitted points share (a mixed-kind bracket takes the nearest B's kind and param)."""
+    pts = sorted((s["B"], s["kind"], s["param"]) for s in fitd["shapes"]
+                 if s["model"] == src and s["shape"] == shape)
+    if len({k for _, k, _ in pts}) > 1:
+        b = min(pts, key=lambda p: abs(math.log(p[0] / B)))
+        return b[1], float(b[2]), f"nearest fitted B {b[0]} (mixed kinds)"
+    lb = [math.log(p[0]) for p in pts]
+    x = min(max(math.log(B), lb[0]), lb[-1])
+    for i in range(len(pts) - 1):
+        if lb[i] <= x <= lb[i + 1]:
+            t = (x - lb[i]) / (lb[i + 1] - lb[i])
+            prm = math.exp((1 - t) * math.log(pts[i][2]) + t * math.log(pts[i + 1][2]))
+            return pts[i][1], float(f"{prm:.6g}"), f"log-B interpolated between fitted B {pts[i][0]} and {pts[i + 1][0]}"
+    return pts[-1][1], float(pts[-1][2]), f"fitted B {pts[-1][0]}"
+
+
+def pages6(fitd: dict) -> dict:
+    """Every rental-6 histogram page. One deterministic draw per (model, n, label) at its
+    registered seed: there is no trace target at the new B, so no matching loop."""
+    both = ("native", "shared")
+    out = {}
+    syn = "fitted Zipf/Dirichlet shapes (scripts/skew_synth.py, rental 6 draws); no trace count"
+    for model, (src, ns) in SHAPES6.items():
+        E = MODEL_CONFIGS[model].num_experts
+        draws = {}
+        for n in ns:
+            B = tokens_for(model, n)
+            for lab in LABELS6:
+                kind, prm, rule = shape_param6(fitd, src, "PW" if lab == "PW2" else lab, B)
+                seed = draw6_seed(model, n, lab)
+                c = [int(v) for v in _draw(kind, prm, model, B, seed)]
+                st = hist_stats(c)
+                draws[(n, lab)] = (c, dict(kind=kind, param=prm, seed=seed, B=B, source_model=src,
+                                           source_shape="PW" if lab == "PW2" else lab, rule=rule,
+                                           stats={s: round(v, 6) for s, v in st.items()}))
+        A, Bp, C, Y = [], [], [], []
+        for n in ns:
+            uni = [n * BLOCK_M] * E
+            cell = lambda lab, arms=both: _cell(lab, n, draws[(n, lab)][0], arms, **draws[(n, lab)][1])
+            A += [cell("PT"), cell("PW"), _cell("uniform", n, uni, both), _cell("balanced", n, None, both)]
+            Bp += [cell("DW"), _cell("uniform", n, uni, both), _cell("balanced", n, None, both)]
+            C += [cell("PW2"), _cell("uniform", n, uni, both), _cell("balanced", n, None, both)]
+            arms = both if n <= 9 else ("native",)
+            Y += [cell("PT", arms), cell("PW", arms), _cell("uniform", n, uni, arms), _cell("balanced", n, None, arms)]
+        for page, cells in (("A", A), ("B", Bp), ("C", C)) + ((("bytes", Y),) if model in BYTES6 else ()):
+            out[f"{model}-{page}"] = {"schema": SCHEMA, "model": model, "page": page,
+                                      "shuffle_seed": SHUFFLE_SEED6, "cells": cells, "synthetic": syn}
+    for model, ns in Q1_TREADS6.items():
+        out[f"q1-{model}"] = {"schema": SCHEMA, "model": model, "page": "q1", "shuffle_seed": SHUFFLE_SEED6,
+                              "cells": [_cell("balanced", n, None, both) for n in ns],
+                              "synthetic": "balanced cells only (R3's balanced_ids, counts null); no histogram"}
+    return out
+
+
 def dump(d) -> str:
     return json.dumps(d, indent=1) + "\n"
 
@@ -324,7 +408,22 @@ def main(argv=None) -> int:
     g.add_argument("--fit", action="store_true")
     g.add_argument("--draw", action="store_true")
     g.add_argument("--check", action="store_true")
+    g.add_argument("--draw6", action="store_true", help="rental 6's pages (docs/registered/2026-10-09-rental6-skew-hist)")
+    g.add_argument("--check6", action="store_true", help="recompute rental 6's pages, compare")
     a = ap.parse_args(argv)
+    if a.draw6 or a.check6:
+        OUT6.mkdir(parents=True, exist_ok=True)
+        bad = 0
+        for name, doc in pages6(json.loads(FIT.read_text())).items():
+            p = OUT6 / f"{name}.json"
+            if a.draw6:
+                p.write_text(dump(doc))
+                print(f"wrote {p}")
+            else:
+                same = p.exists() and p.read_text() == dump(doc)
+                print(f"{p.name}: {'same' if same else 'DIFFERS'}")
+                bad += not same
+        return 1 if bad else 0
     OUT.mkdir(parents=True, exist_ok=True)
     if a.extract:
         TARGETS.write_text(dump(extract(a.extract)))

@@ -1,0 +1,40 @@
+# RENTAL 6 (2026-10-09), one gpu_1x_gh200 at $2.29/h, run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental6-2026-10.plan --deadline <epoch s>
+# From design-r6/DESIGN.md as corrected by design-r6-review/REVIEW.md (the review wins) and the owner's
+# decisions of 2026-10-09. Registrations (docs/registered/2026-10-09-rental6-*): v3 (model, no unit), skew,
+# q1, secondk, written by scripts/scoring/rental6/register.py before any page.
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together.
+# nodrop=1 units are never dropped (calibrate and the nine skew pages: the 3 x 3 power basis). Each skew
+# page stands alone (no shared drop-group), so one page running short drops no block.
+# Drop order, bottom up: k2 (second K), q1j (JetMoE Q1), byt (byte legs), q1p (Phi Q1), q1q (Qwen1.5 Q1).
+# Mixtral's byte page is dropped from the design (review (c): its content_a lever is at most 0.29%).
+# MINUTES (ledger estimates, the align probe on histogram pages included): 145 of units, about $5.5;
+# rentals 3-5 ran at 0.66-0.75x of estimate. The guardian cap is 180 min of units.
+# Every timed unit: slip-policy=cell (a slipped repeat is recorded and excluded, the page continues).
+# Histograms: SYNTHETIC, new seeds (base 20261010), committed openly before any page
+# (scripts/skew_synth.py --draw6).
+- prelude est=3 cap=15
+mixtral-8x7b calibrate label=r6 nodrop=1 est=2 cap=30
+# PART 3.1, SKEW (rental6-skew). Page A: PT PW uniform balanced; B: DW uniform balanced; C: PW2 uniform balanced.
+mixtral-8x7b timed label=ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=14 cap=40
+mixtral-8x7b timed label=skb histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+mixtral-8x7b timed label=skc histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+olmoe-1b-7b timed label=ska histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=14 cap=40
+olmoe-1b-7b timed label=skb histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+olmoe-1b-7b timed label=skc histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+phi-3.5-moe timed label=ska histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=14 cap=40
+phi-3.5-moe timed label=skb histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+phi-3.5-moe timed label=skc histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=11 cap=30
+# PART 3.1, Q1 per-call cells (rental6-q1): balanced, probe on, c9 (same-board reference) and c15 (SHARED blind; NATIVE repeats c9)
+qwen1.5-moe-a2.7b timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell drop-group=q1q est=3 cap=12
+qwen1.5-moe-a2.7b timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell drop-group=q1q est=3 cap=12
+phi-3.5-moe timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell drop-group=q1p est=3 cap=12
+phi-3.5-moe timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell drop-group=q1p est=3 cap=12
+# PART 3.1, byte legs (rental6-skew B-SKEW, B-CA, E2-SKEW): counter pages, clock rule = lock_gate.check_page PASS, then cells in [1640, 1710] MHz
+olmoe-1b-7b bytes label=skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json arms=native,shared byte-groups=8 drop-group=byt est=4 cap=20
+phi-3.5-moe bytes label=skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-bytes.json arms=native,shared byte-groups=8 drop-group=byt est=4 cap=20
+jetmoe-8b timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell drop-group=q1j est=3 cap=12
+jetmoe-8b timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell drop-group=q1j est=3 cap=12
+# PART 3.2, second K (rental6-secondk): H_ITER vs H_CTA 16.9% (w1), 22.4% (w2); k64s4 SEEN (rental 1), k32s4 BLIND
+mixtral-8x7b-tp4 bytes label=k64s4 byte-groups=64 drop-group=k2 est=3 cap=20
+mixtral-8x7b-tp4 bytes label=k32s4 byte-groups=64 block-k=32 num-stages=4 drop-group=k2 est=3 cap=20

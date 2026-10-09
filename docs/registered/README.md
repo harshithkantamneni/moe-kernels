@@ -1127,3 +1127,58 @@ from FAIL to INCONCLUSIVE and the rivals U and PW from UNDECIDED to INCONCLUSIVE
 the owner: the unreachable byte-leg clock cut, the Mixtral partial pages (`cells.csv` holds six and
 eight of nine repeats), and the permutation control's printed "voids every histogram cell". The
 files above are unchanged.
+
+## 2026-10-09, before any page: rental 6, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental6-2026-10.plan` through
+`gh200_model_session.sh --plan`. The four files `2026-10-09-rental6-{v3,skew,q1,secondk}-gh200`,
+their scorers (`scripts/scoring/rental6/`, tested on synthetic pages only) and the scaffolding they
+need are committed together before the rental. Every number is written by
+`scripts/scoring/rental6/register.py` from committed files or is a typed-in input with its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r6/DESIGN.md`, corrected by `design-r6-review/REVIEW.md` (the review wins). Labels as rental
+5, plus SEEN-FITTED, SEEN-SELECTED, SEEN-INFORMED and IN-SAMPLE.
+
+**Owner decisions of 2026-10-09** bound here. (1) Model v3's term (b) applies only where NATIVE
+takes block-scan. (2) h = -5.16 us from the four-model S - N gaps, kept and labelled SEEN-FITTED:
+at least 143 of its 178 cells are held-out timing pages, so 8x22B, Qwen2-57B and OLMoE are
+IN-SAMPLE for (b). (3) E1-SKEW at the time bar (rms 2%, worst 5%, |mean| 1%). (4) Phi-3.5 carries
+Mixtral's synthetic shapes. (5) A cell needs 6 of 9 clean repeats and a page at most 10% slipped
+repeats. (6) No permutation cells. content_a is SEEN-SELECTED and the n = 1 exclusion
+SEEN-INFORMED; the v3 file lists every seen-informed choice, carving OLMoE's skewed w1 rows out of
+B-SKEW (after rental 5's +8% / +25%) included. Rental 5's code_pins also list
+`private_weight_reference.py` and `skew_synth.py`, which rental 6 changes; rental 5's scorer checks
+only its three pinned files, which are unchanged (the v3 file says so).
+
+**v3** (no unit): v2 plus (a) MODEL M4 (`scripts/wave_split_bytes_v3.py`, `ModelV3`) and (b) the
+page's own A plus h on SHARED where NATIVE is block-scan (`scripts/r3_timing_model_v3.py`). By the
+owner's decision of 2026-10-09 v3 lives in these new modules, which import the pinned ones:
+`r3_timing_model.py`, `wave_split_bytes.py` and `rental5/skewmodel.py` stay byte-identical to
+rental5-skew's code_pins, and a test checks their sha256. On the rental-5 SEEN skew cells it
+reads 0.90% rms against v2's 1.26%. **skew**: three pages per shape (Mixtral n 3/6/16, OLMoE
+3/6/12, Phi 2/4/12), new draws (`skew_synth.py --draw6`), byte pages for OLMoE and Phi; E1-SKEW,
+the E1 rivals, SKEW-RATIO, G3, B-SKEW, OPEN-L2SKEW (skewed OLMoE w1, with the row-key rival priced
+in `2026-10-09-rental6-skew-hist/rowkey_rival.json`), B-CA, E2-SKEW; counter pages use the clock
+rule (check_page PASS, cells in [1640, 1710] MHz; the published floor1005 and floor1410 pages, under
+the lock, give 0 cells in the band and are its negative control, tested). **G3** keeps rental 5's
+strict rule (a failure with Q not rejecting voids every histogram cell, E1-SKEW NOT SCORED), and by the
+owner's decision of 2026-10-09 E1 is then also printed DESCRIPTIVELY on the voided cells, not a
+verdict; the build review puts the chance that G3 does not pass cleanly at about 21 to 35% against
+the design's 6%, mostly from OLMoE's -0.24% token-order effect (the skew file states it). **q1**: Q1-H on block-scan control pairs (v2 and H8 separated by 4.6 and 7.4 us; P(v3 holds)
+0.993 at the assumed Phi 1.0 us and JetMoE 0.45 us sd, 0.86 with Phi at Mixtral's 2.04 us, 0.72 with
+both there, registered), c15 NATIVE cells SEEN (NATIVE declares E at any copies count) and only c15
+SHARED blind, Q1-P DESCRIPTIVE (JetMoE n 1, 2
+host-bound by rule; the small-batch residual trends with n), Q1-SK open, Q1-C on D = x15 - x9.
+No registered verdict separates v3 from v3_all. **secondk**: mixtral-8x7b-tp4 G = 64, both pages
+new, H_ITER against H_CTA 16.9% (w1) and 22.4% (w2).
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| skew, 9 pages (nodrop) | 9 | 108 |
+| Q1 pages (q1q, q1p, q1j) | 6 | 18 |
+| byte pages OLMoE, Phi (byt) | 2 | 8 |
+| second K (k2) | 2 | 6 |
+
+145 min of units ($5.53 at $2.29/h). The driver drops the last unit first: k2, q1j, byt, q1p,
+q1q; calibrate and the nine skew pages carry nodrop=1.
