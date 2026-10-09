@@ -150,3 +150,7 @@
 2026-10-09T01:03:18Z stamps REFUSED: none of u18-std2-v2 u18-std2-v3 reads PASS on both its regcheck and perturb lines
 2026-10-09T01:03:18Z stamps END: exit 2 after 0 min [unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8]
 2026-10-09T01:03:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-09T01:03:23Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control [unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64] (estimate 3 min, cap 20 min, 295 min left)
+2026-10-09T01:03:38Z census for qwen2-57b-a14b-tp8 written (/home/ubuntu/moe/session/census-qwen2-57b-a14b-tp8.json)
+2026-10-09T01:03:38Z bytes: the registered list G = 64 (qwen2-57b-a14b-tp8, k64s4): no tail drop, no re-price, no base-clock control
+2026-10-09T01:05:25Z bytes: G=64 page exit 3 after 104 s

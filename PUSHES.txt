@@ -20,3 +20,4 @@
 2026-10-09T01:03:12Z stamps (unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
 2026-10-09T01:03:17Z stamps (unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3): exit 2 (0 min)
 2026-10-09T01:03:22Z stamps (unit 18/22 olmoe-1b-7b std2 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3 num-stages=8): exit 2 (0 min)
+2026-10-09T01:05:28Z bytes: G=64 page exit 3
