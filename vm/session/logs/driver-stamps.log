@@ -1,2 +1,4 @@
 == 2026-10-09T01:02:59Z step stamps: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2 v3), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate
 2026-10-09T01:02:59Z stamps REFUSED: none of u14-stf-v1 u14-stf-v2 u14-stf-v3 reads PASS on both its regcheck and perturb lines
+== 2026-10-09T01:03:04Z step stamps: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2), G=8 treads 1 arms native, BK 64 s4; runs only on a PASS gate
+2026-10-09T01:03:04Z stamps REFUSED: none of u15-stt8x22-v1 u15-stt8x22-v2 reads PASS on both its regcheck and perturb lines
