@@ -940,6 +940,86 @@
    "number": "far L2 275.0 against 253.4 ns (+8.5%); gpu-latency stopped at 1.46 L; triad 3781 against 3783 GB/s",
    "label": "the comparison values SEEN third-party (RRZE-HPC/gpu-benches 23e586dd, GPL-3.0) (reg: seen_data)",
    "scored_in": "`SC4/hw.score.txt`; `SC4/SCORES.md` hardware constants"
+  },
+  {
+   "row": 95,
+   "section": "3.2",
+   "test": "R5 G3 token order (owner decision 1): TOST of T(uniform-shuffled) / T(balanced) - 1 - delta_M3 (0 on every cell), 90% cluster-t interval inside +-0.36%, Cochran Q at sigma_page 0.18%; the label-permutation control",
+   "registration": "`D/2026-10-07-rental5-skew-gh200.json`",
+   "verdict": "G3 INCONCLUSIVE (ALL PASS; CLEAN FAIL, which voids every histogram cell in CLEAN); permutation control FAIL (printed, voids nothing)",
+   "number": "ALL 24 cells on 4 pages: mean -0.129%, CI [-0.274, +0.015]%; CLEAN 18 cells on 3 pages (Qwen1.5 skb out on G1): CI [-0.373, +0.044]%; Q p 0.9999 both; OLMoE's 12 cells -0.18 to -0.30%, Qwen1.5's 12 -0.12 to +0.06%",
+   "label": "OLMoE BLIND-CALMODEL, Qwen1.5 BLIND; Mixtral NOT SCORED: no report.json (the lock watchdog stopped each page at its first sub-lock cell) (reg: labels, missing)",
+   "scored_in": "`SC5/skew.score.txt`; `SC5/SCORES.md` (c)"
+  },
+  {
+   "row": 96,
+   "section": "3.2",
+   "test": "R5 SKEW-RATIO: model v2's predicted skew ratio T(h) / T(uniform) (S), rms <= 1.5%, worst <= 4%; rivals U (skew ignored), PW (per-expert waves), LT (S without the last wave's quantisation, the close rival)",
+   "registration": "same",
+   "verdict": "S NOT SCORED (CLEAN has no data; ALL HOLDS); U and PW INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED); LT INCONCLUSIVE (UNDECIDED in both views: 5 lever cells, under 6)",
+   "number": "ALL 36 ratios (OLMoE 18, Qwen1.5 18): rms 1.05%, worst -2.09%, mean -0.85%; U rms 12.95% on 30 lever cells and PW 17.81% on 32, against S's 1.13 / 1.11% there; M1 printed rms 1.14%",
+   "label": "as row 95 (reg: labels)",
+   "scored_in": "`SC5/skew.score.txt`; `SC5/SCORES.md` (a)"
+  },
+  {
+   "row": 97,
+   "section": "3.2",
+   "test": "R5 E1-SKEW, model v2 end to end from predicted bytes: rms <= 2.5%, worst <= 6%, |mean| <= 1.5%; E1-UNI (balanced, n <= 6) and E1-UNI-EXT (balanced past every CAL tread)",
+   "registration": "same",
+   "verdict": "E1-SKEW NOT SCORED (CLEAN has no data; ALL HOLDS); E1-UNI HOLDS; E1-UNI-EXT HOLDS",
+   "number": "ALL 72 cells: rms 1.26%, worst +4.38% (Qwen1.5 DW SHARED n 1), mean +0.40% (NATIVE -0.13%, SHARED +1.14%); calibration slope 1.005, intercept -0.005 (2 clusters, descriptive); gamma 0.98; E1-UNI 16 cells rms 1.80%, E1-UNI-EXT 8 cells rms 0.26%",
+   "label": "as row 95 (reg: labels)",
+   "scored_in": "`SC5/skew.score.txt`; `SC5/SCORES.md` (a)"
+  },
+  {
+   "row": 98,
+   "section": "3.2",
+   "test": "R5 byte legs: B-SKEW (q_pred / q_counted - 1, every PT / PW cell <= 5%, rms <= 3%) and E2-SKEW (v2 time from counted bytes, rms <= 2%, worst <= 5%), Mixtral and OLMoE skc counter pages",
+   "registration": "same",
+   "verdict": "B-SKEW NOT SCORED; E2-SKEW NOT SCORED (the registered 1705 MHz cut on sm__cycles_elapsed.avg / gpu_time_ns drops every byte cell)",
+   "number": "cell clocks 1656 to 1698 MHz on both pages under the held 1710 lock; on the 113 published lock-1710 counter pages 1 of 3646 GEMMs of 0.5 ms or longer reads 1705 MHz or more (page medians 1654 to 1695); printed with the cut lifted: B-SKEW rms 6.9%, worst +25.7% (OLMoE w1 n 16, its uniform control +30.7%), E2 20 OLMoE cells rms 1.32%, worst +3.10%",
+   "label": "as row 95; the byte model's parameters CAL (8x7B) (reg: seen_data)",
+   "scored_in": "`SC5/skew.score.txt`; `SC5/SCORES.md` (b)"
+  },
+  {
+   "row": 99,
+   "section": "3.2",
+   "test": "R5 c15: the dead-CTA increment from 9 to 15 declared copies under skew, OLMoE SHARED: D (d 0.995 ns), M (1.333 ns), FIXED, |z| 3 at sigma_noise 1.29 us",
+   "registration": "`D/2026-10-07-rental5-c15-gh200.json`",
+   "verdict": "D HOLDS; M EXCLUDED; FIXED EXCLUDED; SKEW-DEAD not shown",
+   "number": "median Delta 25.39 us over 8 cells (D 23.69, z +1.32; M 31.74, z -4.93; FIXED z +19.7); skewed minus uniform -0.46 us; two-regressor d 0.84 ns (VIF 1.00, printed)",
+   "label": "BLIND-CALMODEL; A2's uniform c15 level SEEN (rental 4) (reg: labels)",
+   "scored_in": "`SC5/c15.score.txt`; `SC5/SCORES.md` (d)"
+  },
+  {
+   "row": 100,
+   "section": "3.2",
+   "test": "R5 second K, qwen2-57b-a14b-tp8 G = 64 counter pages k64s4 and k32s4: H_ITER (the BK 32 excess per k-step) against H_CTA (per CTA), |e| <= 3% per GEMM",
+   "registration": "`D/2026-10-07-rental5-secondk-gh200.json`",
+   "verdict": "NOT SCORED (CLEAN has no data: V5 FAIL on both pages); ALL UNDECIDED (w1 H_ITER, w2 NEITHER)",
+   "number": "w1 r 1.427 (H_ITER +1.5%, H_CTA +15.9%); w2 r 1.169 (H_ITER -5.0%, H_CTA -32.8%); c64 346.9 / 332.7, c32 249.6 / 211.0 cycles per k-step",
+   "label": "k64s4 SEEN, k32s4 BLIND (reg: labels)",
+   "scored_in": "`SC5/secondk.score.txt`; `SC5/SCORES.md` (e)"
+  },
+  {
+   "row": 101,
+   "section": "3.2",
+   "test": "R5 BK 128 timed, OLMoE G = 64 NATIVE n = 4..9: q = T128 / T64 against H_C (the occupancy-3 floor, rms <= 1%) and SYNC (the floor halves)",
+   "registration": "`D/2026-10-07-rental5-bk128-gh200.json`",
+   "verdict": "H_C HOLDS; SYNC EXCLUDED",
+   "number": "q 0.9946 to 0.9958; H_C rms 0.13%; SYNC +71 to +75% on 6 of 6 cells; PS rms 0.15% (printed)",
+   "label": "time BLIND-CALMODEL, counters SEEN (reg: labels)",
+   "scored_in": "`SC5/bk128.score.txt`; `SC5/SCORES.md` (e)"
+  },
+  {
+   "row": 102,
+   "section": "3.2",
+   "test": "R5 stamps v2 (sample level, 1-in-17 sampling): F2, K2, D2 on five units, each gated by regcheck (CTAs/SM equal) and the perturbation gate (median <= 1%, worst <= 2%)",
+   "registration": "`D/2026-10-07-rental5-stamps2-gh200.json`",
+   "verdict": "NOT SCORED: NOT RUN on all five units; regcheck FAIL on 9 of 11 variants (PASS only on std2's two), the perturbation gate FAIL on 11 of 11",
+   "number": "regcheck: 5 CTAs/SM against the plain 4 (w2, BK 64 s4); gate median 2.2 to 6.6%, worst 2.7 to 14.7% (std2 2.8 / 3.2%, 5.9 / 6.6%); v3, every site at 1 in 17, still 2.2 to 2.8% median",
+   "label": "no stamp page exists (reg: missing)",
+   "scored_in": "`SC5/stamps2.score.txt`; `SC5/SCORES.md` (f); `F` Rental 5 methods finding"
   }
  ]
 }

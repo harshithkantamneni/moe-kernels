@@ -1,0 +1,27 @@
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 1cd741, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 COUNTER RUN  G=8  20 cells, 120 profiled launches after 80 skipped, at an nvidia-smi lock of 1710 MHz (ncu --clock-control none)
+  ncu        /usr/local/cuda-13.0/bin/ncu  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  metrics    17 asked: dram__bytes_read.sum, dram__bytes_write.sum, lts__t_sectors_srcunit_tex_op_read.sum, launch__grid_size, gpu__time_duration.sum, lts__d_sectors_fill_device.sum, lts__t_sectors_op_read_lookup_miss.sum, lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum, lts__t_sector_op_read_hit_rate.pct, launch__occupancy_limit_blocks, launch__occupancy_limit_registers, launch__occupancy_limit_shared_mem, launch__occupancy_limit_warps, launch__registers_per_thread, launch__waves_per_multiprocessor, lts__t_sectors_srcunit_ltcfabric.sum, sm__cycles_elapsed.avg
+  profiles   /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.profiles
+  PT               native  n=2   DRAM read w1 578615637.3333334 w2 277069056.0
+  PT               shared  n=2   DRAM read w1 579080021.3333334 w2 277053269.3333333
+  PW               native  n=2   DRAM read w1 562906026.6666666 w2 272803328.0
+  PW               shared  n=2   DRAM read w1 564311125.3333334 w2 272801194.6666667
+  uniform          native  n=2   DRAM read w1 539097600.0 w2 276906069.3333333
+  uniform          shared  n=2   DRAM read w1 539098368.0 w2 276901120.0
+  balanced         native  n=2   DRAM read w1 539099562.6666666 w2 276890112.0
+  balanced         shared  n=2   DRAM read w1 539091797.3333334 w2 276896597.3333333
+  PT               native  n=4   DRAM read w1 553284608.0 w2 285364394.6666667
+  PT               shared  n=4   DRAM read w1 553645568.0 w2 285366528.0
+  PW               native  n=4   DRAM read w1 544583082.6666666 w2 281160448.0
+  PW               shared  n=4   DRAM read w1 544419498.6666666 w2 281160533.3333333
+  uniform          native  n=4   DRAM read w1 541130410.6666666 w2 285346645.3333333
+  uniform          shared  n=4   DRAM read w1 541145600.0 w2 285338453.3333333
+  balanced         native  n=4   DRAM read w1 541136128.0 w2 285314133.3333333
+  balanced         shared  n=4   DRAM read w1 541145088.0 w2 285313877.3333333
+  PT               native  n=16  DRAM read w1 578066602.6666666 w2 336110762.6666667
+  PW               native  n=16  DRAM read w1 581385557.3333334 w2 336069973.3333333
+  uniform          native  n=16  DRAM read w1 553872640.0 w2 335942741.3333333
+  balanced         native  n=16  DRAM read w1 553870080.0 w2 335844181.3333333
+wrote /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json (histogram page: no gate scored here)
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json: '/home/ubuntu/moe/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json' is outside repository at '/home/ubuntu/moe/repo')

@@ -1,0 +1,12 @@
+SCORED against 2026-10-07-rental5-c15-gh200 (ALL view; CLEAN beside it in the JSON)
+  page sk15: counted
+  page ska: counted
+  page skb: counted
+verdict: HOLDS; Delta median 25.391981 us; z {'D': 1.32376, 'M': -4.931262, 'FIXED': 19.737211}
+  M: EXCLUDED
+  FIXED: EXCLUDED
+  SKEW-DEAD: {'gap_us': -0.464007, 'verdict': 'NOT SHOWN'}
+  alignment: RAW (no align_probe on the pages)
+  two_regressor: {'a_us': 24.794528, 'd_ns': 0.844117, 'b_us_per_row': 0.148176, 'r_dead_live': -0.01818, 'VIF': 1.000331, 'printed': 'not a verdict'}
+  two views (ALL, CLEAN):
+    0 of 2 verdicts differ between ALL and CLEAN

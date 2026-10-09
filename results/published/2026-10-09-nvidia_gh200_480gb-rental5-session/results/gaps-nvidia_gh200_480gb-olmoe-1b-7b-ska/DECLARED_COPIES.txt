@@ -1,0 +1,1 @@
+declared-copies 9 (plan key, rental 4): R3 --declared-copies 9

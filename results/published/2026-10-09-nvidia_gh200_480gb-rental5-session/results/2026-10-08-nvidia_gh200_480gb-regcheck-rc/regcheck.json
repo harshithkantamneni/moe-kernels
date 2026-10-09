@@ -1,0 +1,2298 @@
+{
+ "tool": "scripts/instr_probe.py --mode regcheck",
+ "versions": {
+  "python": "3.12.15",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ },
+ "specs": [
+  "stamps=cta",
+  "stamps=ends",
+  "stamps=iter,every=1,marks=64",
+  "stamps=iter,every=8,marks=8",
+  "stamps=iter,every=16,marks=4",
+  "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1",
+  "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17",
+  "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17"
+ ],
+ "variants": {
+  "u14-stf-v1": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u14-stf-v2": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u14-stf-v3": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u15-stt8x22-v1": {
+   "cell": [
+    8,
+    "native",
+    1
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u15-stt8x22-v2": {
+   "cell": [
+    8,
+    "native",
+    1
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u16-stt-v1": {
+   "cell": [
+    8,
+    "native",
+    1
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u16-stt-v2": {
+   "cell": [
+    8,
+    "native",
+    1
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      2
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u17-std4-v2": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      8
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u17-std4-v3": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      false,
+      8
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "off": {
+      "regs": 48,
+      "shared": 36864,
+      "ctas_per_sm": 5
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      4,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "off": {
+      "regs": 55,
+      "shared": 36864,
+      "ctas_per_sm": 4
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 45,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 36864,
+        "ctas_per_sm": 5
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": false
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": false,
+   "why": "32-64-64-8-4-8-True-1: stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none at 5 CTAs/SM against the plain 4",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u18-std2-v2": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      8,
+      8,
+      false,
+      8
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "off": {
+      "regs": 48,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 45,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      8,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "off": {
+      "regs": 55,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 47,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": true,
+   "why": "",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  },
+  "u18-std2-v3": {
+   "cell": [
+    8,
+    "native",
+    2
+   ],
+   "own_spec": "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none",
+   "rows": [
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      8,
+      8,
+      false,
+      8
+     ],
+     "plain": {
+      "regs": 48,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "off": {
+      "regs": 48,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 46,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": true,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 45,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 44,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    },
+    {
+     "config": [
+      32,
+      64,
+      64,
+      8,
+      8,
+      8,
+      true,
+      1
+     ],
+     "plain": {
+      "regs": 55,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "off": {
+      "regs": 55,
+      "shared": 86016,
+      "ctas_per_sm": 2
+     },
+     "specs": {
+      "stamps=sample,every=16,cta_mod=17,iter_mod=17,dead_mod=17,evict_a=none,evict_b=none": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=cta": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=ends": {
+       "copy": {
+        "regs": 47,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=1,marks=64": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=8,marks=8": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=iter,every=16,marks=4": {
+       "copy": {
+        "regs": 47,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=1,dead_mod=1": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      },
+      "stamps=sample,every=16,cta_mod=1,iter_mod=17,dead_mod=17": {
+       "copy": {
+        "regs": 48,
+        "shared": 86016,
+        "ctas_per_sm": 2
+       },
+       "same_regs": false,
+       "same_ctas_per_sm": true
+      }
+     },
+     "off_same": true
+    }
+   ],
+   "own_spec_keeps_occupancy": true,
+   "why": "",
+   "rule": "CTAs per SM identical to the plain kernel's (registers printed)"
+  }
+ }
+}

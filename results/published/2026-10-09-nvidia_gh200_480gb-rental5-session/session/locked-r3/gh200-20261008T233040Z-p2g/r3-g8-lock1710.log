@@ -1,0 +1,122 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hist1c5e18c7e-3df289ad
+model       olmoe-1b-7b E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json (sha256 1c5e18c7e3434858...), page c15, 8 cells x arms = 10 timed cells, token-row shuffle seed 20261007; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       174.87 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 651.8 TFLOP/s bf16 over 3727.6 GB/s (triad pattern); calibrated 2026-10-08 at d4d1767e
+experts     native declares E=64; shared declares E x n_decl = 960 at every cell
+            n_decl = 15 against n_max = 4 read: --declared-copies 15; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 4 against the 4 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261008T233040Z-p2g-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-sk15/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hist1c5e18c7e-3df289ad
+cells (n, label, arms, path, counts sha256):
+  n=2   PT               shared         block-scan   bd205712cdd05e00
+  n=2   PW               shared         block-scan   1a033d9b95c0026f
+  n=2   DW               shared         block-scan   dbb9ee40935f7513
+  n=2   uniform          native,shared  block-scan   e0f6f9c8b4e72640
+  n=4   PT               shared         block-scan   751455652ca2d5e4
+  n=4   PW               shared         block-scan   e3cc6f43beddc75b
+  n=4   DW               shared         block-scan   47812379ffb4c389
+  n=4   uniform          native,shared  block-scan   23b7c3e32dbde7b8
+  rep 0 PT             shared   n=  2 T=    512    0.5038 ms
+  rep 0 PW             shared   n=  2 T=    512    0.5133 ms
+  rep 0 DW             shared   n=  2 T=    512    0.5078 ms
+  rep 0 uniform        native   n=  2 T=    512    0.3808 ms
+  rep 0 uniform        shared   n=  2 T=    512    0.4285 ms
+  rep 0 PT             shared   n=  4 T=   1024    0.8506 ms
+  rep 0 PW             shared   n=  4 T=   1024    0.8556 ms
+  rep 0 DW             shared   n=  4 T=   1024    0.8407 ms
+  rep 0 uniform        native   n=  4 T=   1024    0.7187 ms
+  rep 0 uniform        shared   n=  4 T=   1024    0.7649 ms
+  rep 1 uniform        shared   n=  4 T=   1024    0.7652 ms
+  rep 1 uniform        native   n=  4 T=   1024    0.7193 ms
+  rep 1 DW             shared   n=  4 T=   1024    0.8405 ms
+  rep 1 PW             shared   n=  4 T=   1024    0.8568 ms
+  rep 1 PT             shared   n=  4 T=   1024    0.8504 ms
+  rep 1 uniform        shared   n=  2 T=    512    0.4278 ms
+  rep 1 uniform        native   n=  2 T=    512    0.3810 ms
+  rep 1 DW             shared   n=  2 T=    512    0.5077 ms
+  rep 1 PW             shared   n=  2 T=    512    0.5130 ms
+  rep 1 PT             shared   n=  2 T=    512    0.5036 ms
+  rep 2 PT             shared   n=  2 T=    512    0.5035 ms
+  rep 2 PW             shared   n=  2 T=    512    0.5133 ms
+  rep 2 DW             shared   n=  2 T=    512    0.5076 ms
+  rep 2 uniform        native   n=  2 T=    512    0.3811 ms
+  rep 2 uniform        shared   n=  2 T=    512    0.4278 ms
+  rep 2 PT             shared   n=  4 T=   1024    0.8513 ms
+  rep 2 PW             shared   n=  4 T=   1024    0.8557 ms
+  rep 2 DW             shared   n=  4 T=   1024    0.8405 ms
+  rep 2 uniform        native   n=  4 T=   1024    0.7189 ms
+  rep 2 uniform        shared   n=  4 T=   1024    0.7656 ms
+  rep 3 uniform        shared   n=  4 T=   1024    0.7652 ms
+  rep 3 uniform        native   n=  4 T=   1024    0.7190 ms
+  rep 3 DW             shared   n=  4 T=   1024    0.8410 ms
+  rep 3 PW             shared   n=  4 T=   1024    0.8564 ms
+  rep 3 PT             shared   n=  4 T=   1024    0.8508 ms
+  rep 3 uniform        shared   n=  2 T=    512    0.4280 ms
+  rep 3 uniform        native   n=  2 T=    512    0.3812 ms
+  rep 3 DW             shared   n=  2 T=    512    0.5081 ms
+  rep 3 PW             shared   n=  2 T=    512    0.5134 ms
+  rep 3 PT             shared   n=  2 T=    512    0.5042 ms
+  rep 4 PT             shared   n=  2 T=    512    0.5043 ms
+  rep 4 PW             shared   n=  2 T=    512    0.5134 ms
+  rep 4 DW             shared   n=  2 T=    512    0.5080 ms
+  rep 4 uniform        native   n=  2 T=    512    0.3817 ms
+  rep 4 uniform        shared   n=  2 T=    512    0.4278 ms
+  rep 4 PT             shared   n=  4 T=   1024    0.8514 ms
+  rep 4 PW             shared   n=  4 T=   1024    0.8560 ms
+  rep 4 DW             shared   n=  4 T=   1024    0.8411 ms
+  rep 4 uniform        native   n=  4 T=   1024    0.7190 ms
+  rep 4 uniform        shared   n=  4 T=   1024    0.7652 ms
+  rep 5 uniform        shared   n=  4 T=   1024    0.7653 ms
+  rep 5 uniform        native   n=  4 T=   1024    0.7188 ms
+  rep 5 DW             shared   n=  4 T=   1024    0.8408 ms
+  rep 5 PW             shared   n=  4 T=   1024    0.8565 ms
+  rep 5 PT             shared   n=  4 T=   1024    0.8507 ms
+  rep 5 uniform        shared   n=  2 T=    512    0.4282 ms
+  rep 5 uniform        native   n=  2 T=    512    0.3812 ms
+  rep 5 DW             shared   n=  2 T=    512    0.5077 ms
+  rep 5 PW             shared   n=  2 T=    512    0.5133 ms
+  rep 5 PT             shared   n=  2 T=    512    0.5039 ms
+  rep 6 PT             shared   n=  2 T=    512    0.5042 ms
+  rep 6 PW             shared   n=  2 T=    512    0.5133 ms
+  rep 6 DW             shared   n=  2 T=    512    0.5079 ms
+  rep 6 uniform        native   n=  2 T=    512    0.3810 ms
+  rep 6 uniform        shared   n=  2 T=    512    0.4282 ms
+  rep 6 PT             shared   n=  4 T=   1024    0.8511 ms
+  rep 6 PW             shared   n=  4 T=   1024    0.8557 ms
+  rep 6 DW             shared   n=  4 T=   1024    0.8414 ms
+  rep 6 uniform        native   n=  4 T=   1024    0.7187 ms
+  rep 6 uniform        shared   n=  4 T=   1024    0.7649 ms
+  rep 7 uniform        shared   n=  4 T=   1024    0.7655 ms
+  rep 7 uniform        native   n=  4 T=   1024    0.7189 ms
+  rep 7 DW             shared   n=  4 T=   1024    0.8411 ms
+  rep 7 PW             shared   n=  4 T=   1024    0.8567 ms
+  rep 7 PT             shared   n=  4 T=   1024    0.8509 ms
+  rep 7 uniform        shared   n=  2 T=    512    0.4279 ms
+  rep 7 uniform        native   n=  2 T=    512    0.3810 ms
+  rep 7 DW             shared   n=  2 T=    512    0.5079 ms
+  rep 7 PW             shared   n=  2 T=    512    0.5132 ms
+  rep 7 PT             shared   n=  2 T=    512    0.5041 ms
+  rep 8 PT             shared   n=  2 T=    512    0.5041 ms
+  rep 8 PW             shared   n=  2 T=    512    0.5132 ms
+  rep 8 DW             shared   n=  2 T=    512    0.5080 ms
+  rep 8 uniform        native   n=  2 T=    512    0.3813 ms
+  rep 8 uniform        shared   n=  2 T=    512    0.4279 ms
+  rep 8 PT             shared   n=  4 T=   1024    0.8508 ms
+  rep 8 PW             shared   n=  4 T=   1024    0.8561 ms
+  rep 8 DW             shared   n=  4 T=   1024    0.8408 ms
+  rep 8 uniform        native   n=  4 T=   1024    0.7191 ms
+  rep 8 uniform        shared   n=  4 T=   1024    0.7650 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-sk15/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hist1c5e18c7e-3df289ad/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

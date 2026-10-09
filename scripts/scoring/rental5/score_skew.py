@@ -52,7 +52,13 @@ def page_report(tree: Path, model: str, label: str, tview, reg_file: dict | None
             return None, f"NOT SCORED (G5): row {k} carries another counts sha256 or no exact bincount"
         if k[0] != "balanced" and row.get("shuffle_seed") is None:
             return None, f"NOT SCORED (G5): row {k} records no shuffle seed"
-    if (r.get("histogram_gates") or {}).get("G1_lock_thermal", {}).get("verdict") != "PASS":
+    # G1 (V7, the lock / thermal gate) is a VALIDITY gate the page records in `gates`: the
+    # registration's `views` rule rules on it (ALL counts the page, CLEAN excludes it, rental
+    # 2's rule 3 combines). Only a page that records G1 nowhere in `gates` is refused here.
+    # Post-page fix 2026-10-09: this check used to refuse a G1-failed page in both views.
+    g1 = (r.get("histogram_gates") or {}).get("G1_lock_thermal", {}).get("verdict")
+    in_gates = any(str(g.get("tag") or g.get("number")) == "G1_lock_thermal" for g in r.get("gates") or [])
+    if g1 != "PASS" and not in_gates:
         return None, "NOT SCORED (G1): the page's lock / thermal gate is not PASS"
     r = tview.admit(f"{model}-{label}", r)
     if r is None:

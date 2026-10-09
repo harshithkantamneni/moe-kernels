@@ -1,0 +1,36 @@
+{
+ "registration": "2026-10-07-rental5-stamps2-gh200",
+ "units": {
+  "stf": {
+   "use": "NOT SCORED: NOT RUN (no listed variant passes regcheck and the gate: {'u14-stf-v1': ('FAIL', 'FAIL'), 'u14-stf-v2': ('FAIL', 'FAIL'), 'u14-stf-v3': ('FAIL', 'FAIL')})"
+  },
+  "stt8x22": {
+   "use": "NOT SCORED: NOT RUN (no listed variant passes regcheck and the gate: {'u15-stt8x22-v1': ('FAIL', 'FAIL'), 'u15-stt8x22-v2': ('FAIL', 'FAIL')})"
+  },
+  "stt": {
+   "use": "NOT SCORED: NOT RUN (no listed variant passes regcheck and the gate: {'u16-stt-v1': ('FAIL', 'FAIL'), 'u16-stt-v2': ('FAIL', 'FAIL')})"
+  },
+  "std4": {
+   "use": "NOT SCORED: NOT RUN (no listed variant passes regcheck and the gate: {'u17-std4-v2': ('FAIL', 'FAIL'), 'u17-std4-v3': ('FAIL', 'FAIL')})"
+  },
+  "std2": {
+   "use": "NOT SCORED: NOT RUN (no listed variant passes regcheck and the gate: {'u18-std2-v2': ('FAIL', 'PASS'), 'u18-std2-v3': ('FAIL', 'PASS')})"
+  }
+ },
+ "F2": {
+  "verdict": "NOT SCORED"
+ },
+ "K2": {
+  "bins": {},
+  "verdict": "NOT SCORED: no R(j) bin (no V1 / V2 unit, or every bin under the minimum)"
+ },
+ "D2": {
+  "std4": {
+   "verdict": "NOT SCORED"
+  },
+  "std2": {
+   "verdict": "NOT SCORED"
+  }
+ },
+ "secondary": "calibration line and gamma: NOT APPLICABLE on every block here (fewer than 3 predicted values per block: Delta_epi, T_fix, R(j), life, dispatch, kappa); top-1 regret NOT APPLICABLE (one tile)"
+}

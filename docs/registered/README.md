@@ -1096,3 +1096,34 @@ was CUT by the owner on 2026-10-07; kappa is read from the stamps only.
 
 152 min of units (2.5 h, $5.80 at $2.29/h). The driver drops the last unit first: BK 128, then
 second K, std, stt, st, c15, skq.
+
+**Scored 2026-10-09** on `results/published/2026-10-09-nvidia_gh200_480gb-rental5-session`
+(board 1cd741, new; 22 units at d4d1767 in 108 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental5/` and `SCORES.md`). The two Mixtral
+timed pages wrote no report (`locked_r3` stopped each at its first sub-lock cell, 1635 and 1680
+MHz), so every Mixtral timed cell is NOT SCORED (`missing`); Qwen1.5 skb fails G1 (drift on three n
+= 2 cells) and is counted in ALL, excluded from CLEAN; the qwen2-tp8 byte pages fail V5 and leave
+CLEAN for secondk. **skew**: G3 INCONCLUSIVE (ALL, 4 pages: CI [-0.274, +0.015]% inside +-0.36%;
+CLEAN, 3 pages: [-0.373, +0.044]%, which voids every histogram cell in CLEAN), so SKEW-RATIO S and
+E1-SKEW are NOT SCORED (CLEAN has no data) with ALL reading HOLDS (S rms 1.05%, worst -2.09%, 36
+ratios; E1-SKEW rms 1.26%, worst +4.38%, bias +0.40%, 72 cells); U and PW INCONCLUSIVE (ALL
+EXCLUDED, 12.95% and 17.81% rms on their lever cells), LT INCONCLUSIVE (5 lever cells, under 6);
+B-SKEW and E2-SKEW NOT SCORED: the 1705 MHz cut on sm__cycles_elapsed.avg / gpu_time_ns drops
+every byte cell (1656 to 1698 MHz under the held lock; 1 of 3646 GEMMs on the 113 published
+lock-1710 counter pages reaches 1705, so the cut is unreachable on this card as written); E1-UNI
+and E1-UNI-EXT HOLD (rms 1.80%, 0.26%); the permutation control FAILS on two clusters (printed,
+voids nothing). OLMoE's 12 G3 cells all read the shuffled rows 0.18 to 0.30% faster than the
+balanced rows; Qwen1.5's read zero. **c15**: D HOLDS (median Delta 25.39 us against 23.69, z
++1.32); M EXCLUDED (z -4.93); FIXED EXCLUDED; skewed and uniform increments agree (-0.46 us).
+**secondk**: NOT SCORED (CLEAN has no data); ALL UNDECIDED (w1 H_ITER +1.5%, w2 NEITHER).
+**bk128**: H_C HOLDS (rms 0.13%), SYNC EXCLUDED. **stamps2**: NOT SCORED: NOT RUN on all five
+units: regcheck FAIL on 9 of 11 variants (the copy compiles w2 at 48 registers against 55, 5
+CTAs/SM against 4; std2 at s8 passes), the perturbation gate FAIL on 11 of 11 (median 2.2 to 6.6%,
+worst 2.7 to 14.7%; std2, equal occupancy, 2.8 to 3.2%). **v2** scores nothing new (its SEEN
+diagnostic is unchanged). One post-page scorer fix to reading code, following the registration's
+`views` text and flagged because it changes a verdict (`SCORES.md`, end): `score_skew.py` leaves a
+page whose G1 is recorded in its `gates` to the two views instead of refusing it in both; G3 goes
+from FAIL to INCONCLUSIVE and the rivals U and PW from UNDECIDED to INCONCLUSIVE. Readings left to
+the owner: the unreachable byte-leg clock cut, the Mixtral partial pages (`cells.csv` holds six and
+eight of nine repeats), and the permutation control's printed "voids every histogram cell". The
+files above are unchanged.

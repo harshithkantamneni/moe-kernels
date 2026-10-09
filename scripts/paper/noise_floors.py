@@ -48,6 +48,11 @@ declares E slots on both, so only SHARED and PRIVATE change between them); and (
 G = 64 counter page at BLOCK_K 64 s4 on two boards (2026-09-29, d663f7, against rental 4's
 k64s4, bb7a34), for bytes per arm and for sm__cycles_elapsed.avg, part B''s input.
 
+Added 2026-10-09 (rental 5): (c) the same histogram cells on the A and B skew pages of one
+model on one board: the uniform-shuffled and balanced cells of both arms carry the same
+counts sha256 on both pages, so each pair is one call timed twice about ten minutes apart
+(olmoe-1b-7b and qwen1.5-moe-a2.7b, G = 8, rental 5's board).
+
 Added 2026-10-05 (gradefix4): NATIVE bytes, (a) and (b) as for PRIVATE and SHARED;
 and the launch offsets P2 (E240 - GR), P3 (E0 - E240), P4 (E480 - E240), P8
 (H - I_E240), each the SE of the offset from repeat-paired differences over the
@@ -269,6 +274,12 @@ OLMOE_G64_BOARDS = ("2026-09-29-nvidia_gh200_480gb-olmoe-session/results/"
                     "2026-09-29-nvidia_gh200_480gb-r3-counters/lock1710/r3c-g64.json",
                     f"{R4}/results/2026-10-06-nvidia_gh200_480gb-olmoe-1b-7b-k64s4-r3-counters/lock1710/r3c-g64.json")
 
+R5 = "2026-10-09-nvidia_gh200_480gb-rental5-session"
+#: Rental 5: the A and B skew pages per model (run suffixes); their uniform and balanced cells
+#: carry the same counts on both pages. Qwen1.5's B page failed G1 (drift on three n = 2 cells).
+R5_PAIRS = [("olmoe-1b-7b", "9502e43f", "afa06c53", "both VALID"),
+            ("qwen1.5-moe-a2.7b", "fa3b60d5", "ca07df25", "B page G1 FAIL (drift flag on three n = 2 cells)")]
+
 #: G = 1 counter pages carrying s, by (model and GEMM, board): the L2-survival cells.
 SURVIVAL = [
     ("8x7B w2", "mixtral-8x7b", "w2", [
@@ -358,6 +369,28 @@ def time_native_r4() -> dict:
         out[model] = {"cells": len(d), "rms": rms(d), "mean": st.mean(d), "all_cells": len(dall),
                       "worst_all": max(dall, key=abs)}
         srcs += [rel(timed_dir(R4, ra) / "report.json"), rel(timed_dir(R4, rb) / "report.json")]
+    return {"models": out, "sources": srcs}
+
+
+def hist_cells(page_dir: Path) -> dict:
+    """(histogram, n, arm) -> (ms_p50, counts_sha256) of a histogram page's treads_table."""
+    rep = json.loads((page_dir / "report.json").read_text())
+    return {(str(r["histogram"]), int(r["tiles"]), str(r["arm"])): (float(r["ms_p50"]), r.get("counts_sha256"))
+            for r in rep["treads_table"] if r.get("ms_p50") is not None}
+
+
+def time_skew_pair_r5() -> dict:
+    """(c) B page over A page on the cells both carry with one counts sha256 (uniform and
+    balanced, NATIVE and SHARED, every n): one call timed on two pages of one board."""
+    out, srcs = {}, []
+    for model, ra, rb, note in R5_PAIRS:
+        a, b = hist_cells(timed_dir(R5, ra)), hist_cells(timed_dir(R5, rb))
+        keys = sorted(k for k in set(a) & set(b) if k[0] in ("uniform", "balanced"))
+        if any(a[k][1] != b[k][1] for k in keys):
+            raise ValueError(f"{model}: a shared cell carries two counts")
+        d = [b[k][0] / a[k][0] - 1 for k in keys]
+        out[model] = {"cells": len(d), "rms": rms(d), "mean": st.mean(d), "worst": max(d, key=abs), "note": note}
+        srcs += [rel(timed_dir(R5, ra) / "report.json"), rel(timed_dir(R5, rb) / "report.json")]
     return {"models": out, "sources": srcs}
 
 
@@ -774,6 +807,14 @@ def build() -> list[dict]:
             f"{100 * v['worst_all']:+.2f}%", v["cells"], "; ".join(tn["sources"]),
             "n = 1, 2 are host-bound on qwen2-tp8 (+5.9%, +7.9%) and outside the dead contrast's "
             "treads; added 2026-10-07")
+    ts = time_skew_pair_r5()
+    for model, v in ts["models"].items():
+        add(f"time per cell, same histogram call on the A and B skew pages of one board, {model} G=8 (rental 5)",
+            "G3 margin 0.36% (2 x sigma_page 0.18%); SKEW-RATIO rms 1.5%",
+            f"c: uniform and balanced cells, NATIVE and SHARED, same counts sha256 on both pages; {v['note']}",
+            f"rms difference {100 * v['rms']:.3f}% (single-page sigma {100 * v['rms'] / math.sqrt(2):.3f}%), "
+            f"mean {100 * v['mean']:+.3f}%, worst {100 * v['worst']:+.3f}%", v["cells"],
+            "; ".join(s for s in ts["sources"] if model in s), "added 2026-10-09")
 
     br = bytes_repeat()
     add("byte error % (PRIVATE per GEMM)", "0.17 to 3.02% rms; bar 5% per cell",

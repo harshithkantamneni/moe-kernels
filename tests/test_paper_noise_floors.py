@@ -47,6 +47,9 @@ def test_key_numbers():
     ob = NF.olmoe_g64_board()  # OLMoE G = 64 k64s4 on boards d663f7 and bb7a34
     assert len(ob["bytes"]["private"]) == 18 and NF.rms(ob["bytes"]["private"]) < 0.001
     assert len(ob["cycles"]["w1"]) == 12 and NF.rms(ob["cycles"]["w1"]) < 0.001
+    ts = NF.time_skew_pair_r5()["models"]  # rental 5: the A and B skew pages' shared cells
+    assert ts["olmoe-1b-7b"]["cells"] == 12 and abs(ts["olmoe-1b-7b"]["rms"] - 0.001124) < 2e-6
+    assert ts["qwen1.5-moe-a2.7b"]["cells"] == 12 and abs(ts["qwen1.5-moe-a2.7b"]["rms"] - 0.002583) < 2e-6
 
 
 def test_cli_runs(tmp_path):

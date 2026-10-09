@@ -200,6 +200,28 @@ def test_a_page_with_another_histogram_file_is_not_scored(tmp_path):
     assert res["G3"]["verdict"].startswith("NOT SCORED")
 
 
+def test_a_g1_failed_page_is_ruled_by_the_two_views(tmp_path):
+    """Post-page fix 2026-10-09 (rental 5's Qwen1.5 skb, G1 FAIL on a drift flag): G1 is a
+    VALIDITY gate the page records in `gates`, so ALL counts the page and CLEAN excludes it
+    (the registration's `views`); a page that records G1 nowhere in `gates` is still refused."""
+    tree = _tree(tmp_path, _ms_S(), counters=False)
+    page = next((tree / "results").glob(f"gaps-{CARD}-qwen1.5-moe-a2.7b-skb/*/*/report.json"))
+    rep = json.loads(page.read_text())
+    rep["histogram_gates"]["G1_lock_thermal"] = {"verdict": "FAIL"}
+    rep["gates"] = [{"kind": "VALIDITY", "tag": "G1_lock_thermal", "verdict": "FAIL"}]
+    page.write_text(json.dumps(rep))
+    res = SK.score(REPO, tree)
+    rec = res["addendum"]["pages"]["qwen1.5-moe-a2.7b-skb"]
+    assert rec["ALL"]["use"] == "counted" and rec["CLEAN"]["use"] == "excluded"
+    assert res["pages"]["qwen1.5-moe-a2.7b-B"] == "counted"
+    assert res["G3"]["pooled"]["clusters"] == 6
+    assert res["addendum"]["CLEAN"]["G3"]["pooled"]["clusters"] == 5
+    rep["gates"] = []
+    page.write_text(json.dumps(rep))
+    res = SK.score(REPO, tree)
+    assert res["pages"]["qwen1.5-moe-a2.7b-B"].startswith("NOT SCORED (G1)")
+
+
 def test_no_pages_score_nothing(tmp_path):
     res = SK.score(REPO, tmp_path)
     assert res["G3"]["verdict"].startswith("NOT SCORED") and res["SKEW-RATIO"]["S"].startswith("NOT SCORED")

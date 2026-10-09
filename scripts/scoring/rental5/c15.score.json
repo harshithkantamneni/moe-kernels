@@ -1,0 +1,377 @@
+{
+ "pages": {
+  "sk15": "counted",
+  "ska": "counted",
+  "skb": "counted"
+ },
+ "rows": [
+  {
+   "h": "PT",
+   "n": 2,
+   "Delta_raw_us": 27.071953,
+   "A_us": null,
+   "Delta_us": 27.071953,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33856,
+   "dead15": 57664,
+   "live": 157
+  },
+  {
+   "h": "PW",
+   "n": 2,
+   "Delta_raw_us": 26.943952,
+   "A_us": null,
+   "Delta_us": 26.943952,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33600,
+   "dead15": 57408,
+   "live": 161
+  },
+  {
+   "h": "DW",
+   "n": 2,
+   "Delta_raw_us": 27.551979,
+   "A_us": null,
+   "Delta_us": 27.551979,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33728,
+   "dead15": 57536,
+   "live": 159
+  },
+  {
+   "h": "uniform",
+   "n": 2,
+   "Delta_raw_us": 27.487993,
+   "A_us": null,
+   "Delta_us": 27.487993,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 35712,
+   "dead15": 59520,
+   "live": 128
+  },
+  {
+   "h": "PT",
+   "n": 4,
+   "Delta_raw_us": 22.240043,
+   "A_us": null,
+   "Delta_us": 22.240043,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33600,
+   "dead15": 57408,
+   "live": 289
+  },
+  {
+   "h": "PW",
+   "n": 4,
+   "Delta_raw_us": 23.232043,
+   "A_us": null,
+   "Delta_us": 23.232043,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33472,
+   "dead15": 57280,
+   "live": 291
+  },
+  {
+   "h": "DW",
+   "n": 4,
+   "Delta_raw_us": 23.456037,
+   "A_us": null,
+   "Delta_us": 23.456037,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 33856,
+   "dead15": 57664,
+   "live": 285
+  },
+  {
+   "h": "uniform",
+   "n": 4,
+   "Delta_raw_us": 23.84001,
+   "A_us": null,
+   "Delta_us": 23.84001,
+   "pred": {
+    "D": 23.68896,
+    "M": 31.736064,
+    "FIXED": 0.0
+   },
+   "dead9": 35712,
+   "dead15": 59520,
+   "live": 256
+  }
+ ],
+ "Delta_median_us": 25.391981,
+ "z": {
+  "D": 1.32376,
+  "M": -4.931262,
+  "FIXED": 19.737211
+ },
+ "alignment": "RAW (no align_probe on the pages)",
+ "D": "HOLDS",
+ "M": "EXCLUDED",
+ "FIXED": "EXCLUDED",
+ "SKEW-DEAD": {
+  "gap_us": -0.464007,
+  "verdict": "NOT SHOWN"
+ },
+ "at_sigma_alt": {
+  "D": 2.382768,
+  "M": -8.876271,
+  "FIXED": 35.52698
+ },
+ "two_regressor": {
+  "a_us": 24.794528,
+  "d_ns": 0.844117,
+  "b_us_per_row": 0.148176,
+  "r_dead_live": -0.01818,
+  "VIF": 1.000331,
+  "printed": "not a verdict"
+ },
+ "verdict": "HOLDS",
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "olmoe-1b-7b-sk15": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2g-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2g-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2c-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2c-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2d-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2d-lock1710",
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "SKEW-DEAD / verdict",
+    "ALL": "NOT SHOWN",
+    "CLEAN": "NOT SHOWN",
+    "registered": "NOT SHOWN"
+   },
+   {
+    "path": "verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   }
+  ],
+  "CLEAN": {
+   "pages": {
+    "sk15": "counted",
+    "ska": "counted",
+    "skb": "counted"
+   },
+   "rows": [
+    {
+     "h": "PT",
+     "n": 2,
+     "Delta_raw_us": 27.071953,
+     "A_us": null,
+     "Delta_us": 27.071953,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33856,
+     "dead15": 57664,
+     "live": 157
+    },
+    {
+     "h": "PW",
+     "n": 2,
+     "Delta_raw_us": 26.943952,
+     "A_us": null,
+     "Delta_us": 26.943952,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33600,
+     "dead15": 57408,
+     "live": 161
+    },
+    {
+     "h": "DW",
+     "n": 2,
+     "Delta_raw_us": 27.551979,
+     "A_us": null,
+     "Delta_us": 27.551979,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33728,
+     "dead15": 57536,
+     "live": 159
+    },
+    {
+     "h": "uniform",
+     "n": 2,
+     "Delta_raw_us": 27.487993,
+     "A_us": null,
+     "Delta_us": 27.487993,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 35712,
+     "dead15": 59520,
+     "live": 128
+    },
+    {
+     "h": "PT",
+     "n": 4,
+     "Delta_raw_us": 22.240043,
+     "A_us": null,
+     "Delta_us": 22.240043,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33600,
+     "dead15": 57408,
+     "live": 289
+    },
+    {
+     "h": "PW",
+     "n": 4,
+     "Delta_raw_us": 23.232043,
+     "A_us": null,
+     "Delta_us": 23.232043,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33472,
+     "dead15": 57280,
+     "live": 291
+    },
+    {
+     "h": "DW",
+     "n": 4,
+     "Delta_raw_us": 23.456037,
+     "A_us": null,
+     "Delta_us": 23.456037,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 33856,
+     "dead15": 57664,
+     "live": 285
+    },
+    {
+     "h": "uniform",
+     "n": 4,
+     "Delta_raw_us": 23.84001,
+     "A_us": null,
+     "Delta_us": 23.84001,
+     "pred": {
+      "D": 23.68896,
+      "M": 31.736064,
+      "FIXED": 0.0
+     },
+     "dead9": 35712,
+     "dead15": 59520,
+     "live": 256
+    }
+   ],
+   "Delta_median_us": 25.391981,
+   "z": {
+    "D": 1.32376,
+    "M": -4.931262,
+    "FIXED": 19.737211
+   },
+   "alignment": "RAW (no align_probe on the pages)",
+   "D": "HOLDS",
+   "M": "EXCLUDED",
+   "FIXED": "EXCLUDED",
+   "SKEW-DEAD": {
+    "gap_us": -0.464007,
+    "verdict": "NOT SHOWN"
+   },
+   "at_sigma_alt": {
+    "D": 2.382768,
+    "M": -8.876271,
+    "FIXED": 35.52698
+   },
+   "two_regressor": {
+    "a_us": 24.794528,
+    "d_ns": 0.844117,
+    "b_us_per_row": 0.148176,
+    "r_dead_live": -0.01818,
+    "VIF": 1.000331,
+    "printed": "not a verdict"
+   },
+   "verdict": "HOLDS"
+  }
+ },
+ "registration": "2026-10-07-rental5-c15-gh200",
+ "part": "c15"
+}

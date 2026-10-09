@@ -1,0 +1,149 @@
+{
+ "registration": "2026-10-07-rental5-secondk-gh200",
+ "pages": {
+  "k64s4": "counted",
+  "k32s4": "counted"
+ },
+ "gemms": {
+  "w1": {
+   "c64": 346.9176450326322,
+   "c32": 249.5759527586415,
+   "S64": 56,
+   "S32": 112,
+   "r_meas": 1.4273801930896328,
+   "e": {
+    "H_ITER": 0.015464957001592783,
+    "H_CTA": 0.15877969492483568
+   },
+   "reading": "H_ITER"
+  },
+  "w2": {
+   "c64": 332.71740406605386,
+   "c32": 211.02749738501734,
+   "S64": 5,
+   "S32": 10,
+   "r_meas": 1.1690343402443857,
+   "e": {
+    "H_ITER": -0.05020340791924638,
+    "H_CTA": -0.32761718888721003
+   },
+   "reading": "NEITHER"
+  }
+ },
+ "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})",
+ "secondary": {
+  "calibration": {
+   "cells": 2,
+   "clusters": 1,
+   "fit": "OLS ln(meas) on ln(pred)",
+   "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+   "seed": 20261007,
+   "resamples": 2000,
+   "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT APPLICABLE (2 cells)"
+  },
+  "gamma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 0,
+   "discordant": 0,
+   "resolved_threshold_ln": 0.005091,
+   "gamma": null,
+   "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)"
+  },
+  "gamma_alt_sigma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 0,
+   "discordant": 0,
+   "resolved_threshold_ln": 0.002828,
+   "gamma": null,
+   "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)"
+  },
+  "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+ },
+ "addendum": {
+  "rule": "rental 2's addendum rule 3",
+  "pages": {
+   "2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k64s4-r3-counters/lock1710/r3c-g64.json": {
+    "ALL": {
+     "failed_gates": [
+      "V5"
+     ],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [
+      "V5"
+     ],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "V5"
+     ],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [
+      "V5"
+     ],
+     "use": "excluded"
+    }
+   },
+   "2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k32s4-r3-counters/lock1710/r3c-g64.json": {
+    "ALL": {
+     "failed_gates": [
+      "V5"
+     ],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [
+      "V5"
+     ],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "V5"
+     ],
+     "failed_but_not_gating": [],
+     "dropped_above_lock": [],
+     "clean_failed": [
+      "V5"
+     ],
+     "use": "excluded"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "verdict",
+    "ALL": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})",
+    "CLEAN": "NOT SCORED: the k64s4 / k32s4 pair is incomplete",
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})"
+   },
+   {
+    "path": "secondary / calibration / verdict",
+    "ALL": "NOT APPLICABLE (2 cells)",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT APPLICABLE (2 cells)"
+   },
+   {
+    "path": "secondary / gamma / verdict",
+    "ALL": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)"
+   },
+   {
+    "path": "secondary / gamma_alt_sigma / verdict",
+    "ALL": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-07-rental5-secondk-gh200",
+   "pages": {
+    "k64s4": "NOT SCORED: missing or out of this view",
+    "k32s4": "NOT SCORED: missing or out of this view"
+   },
+   "verdict": "NOT SCORED: the k64s4 / k32s4 pair is incomplete"
+  }
+ }
+}

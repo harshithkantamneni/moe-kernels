@@ -1034,7 +1034,8 @@ the 13 GH200 sessions ran on nine distinct boards: 1310e2 (2026-09-25 and Granit
 (2026-09-27), 435984 (8x22B), 50e61f (Qwen2-57B), d663f7 (OLMoE), d67185 (Qwen1.5, Phi-3.5,
 JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (rental 1) and
 4da056 (rental 2). Rental 3 (2026-10-06) ran on a tenth, bb7a34: 14 GH200 sessions. Rental 4
-(2026-10-07) ran on bb7a34 again: 15 GH200 sessions on ten boards.
+(2026-10-07) ran on bb7a34 again: 15 GH200 sessions on ten boards. Rental 5 (2026-10-09) ran on an
+eleventh, 1cd741: 16 GH200 sessions on eleven boards.
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
 each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
@@ -1736,6 +1737,143 @@ falsified), anything from the stamps (not run), a DRAM latency, or the far-L2 la
 **Instrument.** Every timed page passes V0 to V8 at a worst cell clock of 1710.0 MHz; every byte
 page passes V0 to V10 (V10 on the nvidia-smi bracket). No page is dropped by either view. Every
 page carries its card's UUID, as every published session does.
+
+---
+
+## Rental 5 (2026-10-09): model v2 under synthetic skew, token order, the dead-CTA cost under skew, BLOCK_K 128, second K, and sampled stamps that failed their gate
+
+One Lambda GH200 480GB (instance 0e169708, 2026-10-08 23:26Z to 2026-10-09 01:21Z, 1 h 55 min,
+about $4.40; board `1cd741`, new to the study) ran `scripts/plans/rental5-2026-10.plan` unattended
+at d4d1767: 22 units in 108 minutes against 152 estimated, none dropped, no automatic retake. Two
+earlier launches (instances e7f6783d on 2026-10-07 and b44558da on 2026-10-08) were terminated at
+start by `vm_run.sh` plan-print refusals, fixed in c384cd7 and d4d1767, before any unit (about
+$0.20). Six registrations, their scorers and the SYNTHETIC histograms were committed before any page
+(d1a81d7); five score this rental (v2 is the model change, its SEEN diagnostic scored at
+registration). Published at `results/published/2026-10-09-nvidia_gh200_480gb-rental5-session`;
+every verdict is the committed scorers' output in `scripts/scoring/rental5/` (`SCORES.md` has each
+prediction's ALL, CLEAN and registered reading), with one flagged post-page fix to reading code
+that follows the registration's text and changes one verdict (G3 FAIL to INCONCLUSIVE: a G1-failed
+page is now ruled by the two views instead of being refused in both).
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| skew | G3, token order (TOST, cluster-t, Cochran Q) | INCONCLUSIVE (ALL PASS; CLEAN FAIL) | ALL 24 cells, 4 pages, CI [-0.274, +0.015]%; CLEAN 18 cells, 3 pages, CI [-0.373, +0.044]%; margin +-0.36%; Q p 0.9999 |
+| | SKEW-RATIO S | NOT SCORED (CLEAN has no data); ALL HOLDS | 36 ratios: rms 1.05%, worst -2.09%, mean -0.85% |
+| | rivals U, PW, LT | U, PW INCONCLUSIVE (ALL EXCLUDED); LT INCONCLUSIVE (UNDECIDED in both: 5 lever cells) | U 12.95%, PW 17.81% rms on their lever cells |
+| | E1-SKEW, v2 from predicted bytes | NOT SCORED (CLEAN has no data); ALL HOLDS | 72 cells: rms 1.26%, worst +4.38%, mean +0.40% |
+| | B-SKEW, E2-SKEW (the byte legs) | NOT SCORED | the registered 1705 MHz cut drops every byte cell (1656 to 1698 MHz) |
+| | E1-UNI, E1-UNI-EXT (balanced) | HOLDS, HOLDS | rms 1.80% (16 cells), 0.26% (8) |
+| | permutation control | FAIL, printed, voids nothing | 12 cells -0.39 to +0.13%; two clusters (df 1) |
+| c15 | D (d 0.995 ns) under skew | HOLDS | median Delta 25.39 us against 23.69, z +1.32 |
+| | M (1.333 ns), FIXED | EXCLUDED, EXCLUDED | z -4.93, +19.7 |
+| secondk | H_ITER against H_CTA, qwen2-tp8 | NOT SCORED (CLEAN has no data: V5 FAIL on both pages); ALL UNDECIDED | w1 H_ITER (+1.5%), w2 NEITHER (H_ITER -5.0%) |
+| bk128 | H_C (occupancy-3 floor), SYNC | H_C HOLDS; SYNC EXCLUDED | q 0.9946 to 0.9958, rms 0.13%; SYNC +71 to +75% |
+| stamps2 | F2, K2, D2 | NOT SCORED: NOT RUN on all five units | regcheck FAIL on 9 of 11 variants; the gate FAIL on 11 of 11 |
+
+Mixtral 8x7B has no timed skew page: `locked_r3` stopped both pages at their first cell more than
+one 15 MHz step under the lock (1635 and 1680 MHz, after six and eight of nine repeats), by design,
+so neither wrote a report and the registration's `missing` rule applies. Every number above for the
+timed skew tests is OLMoE's (BLIND-CALMODEL) and Qwen1.5's (BLIND). Qwen1.5 skb failed G1 (a drift
+flag on three n = 2 cells, every cell at 1710 MHz), so ALL counts it and CLEAN does not, and with
+three pages CLEAN's G3 interval (t 2.92 at df 2) crosses the margin by 0.013 point.
+
+**What each test separated, and what it did not.**
+
+- Model v2 prices skewed routing to the study's time bar in the ALL view, and no registered verdict
+  says so. From predicted bytes, 72 OLMoE and Qwen1.5 cells read rms 1.26%, worst +4.38%, bias
+  +0.40% (calibration slope 1.005, intercept -0.005, two clusters, descriptive; gamma 0.98). The
+  registered readings are NOT SCORED because G3 fails in CLEAN and the byte leg's clock cut is
+  unreachable (below). Against the time bar (rms at most 2%, no cell beyond 5%) v2 meets it on
+  these two models but is not certified, and the registration says this R3 tile is not vLLM's, so
+  this is not the working bar on vLLM's own tile.
+- Which term misses. Not the skew term: the residual that matters is SHARED's at each shape's first
+  tread (OLMoE n 2, Qwen1.5 n 1), mean +2.64%, rms 2.84%, and it is there on the balanced cells
+  (+2.84 to +3.79%) and the uniform cells (+3.1 to +3.9%) as much as on the skewed ones (+1.1 to
+  +4.4%). From the second tread on SHARED is within 1% and NATIVE within 1.1% rms at every tread.
+  The skew ratio is under-predicted by 0.85 point on average: a skewed histogram's measured penalty
+  over uniform is about 1 point larger than S says. LT, S without the last wave's quantisation,
+  reads closer than S on all 36 ratios (0.85% against 1.05%) and on its own 5 lever cells (0.70%
+  against 1.66%); it is UNDECIDED because the registration needs 6 lever cells, and 12 of its 17
+  were Mixtral's.
+- U and PW, the rivals that ignore skew or quantise per expert, are an order of magnitude off
+  (12.95% and 17.81% rms on their lever cells), so the predicted 3 to 22% skew penalty is real in
+  size: what is left between S and LT is under 1 point.
+- The byte legs, printed with the clock cut lifted (not verdicts): the byte model misses OLMoE w1
+  by +8% at n 4 and +25% at n 16 on the skewed cells and by +6% and +31% on the uniform and
+  balanced controls, so it is the L2 law's miss at OLMoE w1, not skew's; Mixtral's skewed cells are
+  within 1.8%. On these floor-bound G = 8 cells the decomposition puts at most 0.0002 of
+  ln(T_pred / T_meas) on the bytes: the time does not see the byte miss, and the time residual is
+  the timing model's (E2 from counted bytes, 20 OLMoE cells, rms 1.32%, worst +3.10%).
+- Token order is not zero on OLMoE. All 12 OLMoE G3 cells read the shuffled rows faster than the
+  balanced rows, by 0.18 to 0.30%, on both pages and both arms; Qwen1.5 reads -0.12 to +0.06%.
+  The A / B same-call replicate puts OLMoE's single-page sigma at 0.08%, 0.11% for a ratio of two
+  cells, so each OLMoE cell is 1.6 to 2.7 of those and all 12 share a sign; every cell is inside
+  the registered +-0.36% margin. No
+  registered model prices token order (delta_M3 is 0 by construction: a row permutation keeps
+  every expert's token set).
+- The dead-CTA cost carries to skewed routing. Going from 9 to 15 declared copies on OLMoE SHARED,
+  the increment reads 25.39 us (median of 8 cells) against D's 23.69 (z +1.32) and M's 31.74
+  (z -4.93), and the skewed histograms' increments match uniform's to 0.46 us. Rental 4's D holds a
+  third time, blind on the skew cells.
+- BLOCK_K 128 at G = 64 is the occupancy-3 floor: q = T128 / T64 reads 0.9946 to 0.9958 at n 4..9,
+  H_C within 0.2% of every cell, and SYNC (the floor halving if c held at BK 64) is 71 to 75% off.
+- Second K is not decided. Both qwen2-tp8 pages fail V5 (PRIVATE w1 at 0.957 n, as on rental 3's
+  qwen2-tp8 pages), so CLEAN has no data; in ALL, w1 reads H_ITER (the BK 32 excess is per k-step,
+  +1.5%) and w2 reads neither (H_ITER -5.0%, H_CTA -32.8%; w2 runs 5 k-steps a CTA at K 320).
+
+**A methods finding: in-kernel timestamps cannot meet 1% / 2% on this kernel, even at 1-in-17
+sampling (two rentals).** Rental 4's copy failed its gate on every per-CTA and per-iteration
+variant. Rental 5 rebuilt the instrument (a sample level: CTA start, a dead CTA's exit, the end,
+and phase-aligned iteration tops every 16 k-steps; constexpr sampling at pid mod 17; buffers
+allocated before the L2 flush) and gated it twice: regcheck (compile only, CTAs/SM equal to the
+plain kernel's) and the perturbation gate (median at most 1%, worst at most 2%).
+
+- regcheck failed 9 of 11 variants for the reason rental 4 diagnosed: ptxas allocates the whole
+  kernel again around any stamp, and the copy compiles w2 at 48 registers against the plain 55 and
+  w1 at 44 against 48, in every variant including v3, where every site fires on 1 CTA in 17. At
+  BLOCK_K 64 s4 that is 5 CTAs/SM against 4. Only std2 (s8, held to 2 CTAs/SM by shared memory on
+  both) passed.
+- The gate then failed all 11 variants: median 2.2 to 6.6%, worst 2.7 to 14.7%. std2, the one
+  equal-occupancy unit, reads 2.8 to 3.2% median and 5.9 to 6.6% worst: that is the stamps' own
+  cost at the sample level, three times the bar. Sampling did not buy it back: on each unit the
+  1-in-17 variants read within 0.6 point of the unit's first variant (v3 2.2 to 2.8% median).
+- Across two rentals, then, the instrument fails in both of the ways the gate can see: the
+  register reallocation moves occupancy whatever is sampled, and at equal occupancy the cost is 2
+  to 3% at the sparsest sampling the design allows. An occupancy-matched instrument would need a
+  register pin (maxnreg) on the copy, which changes the kernel the gate compares, or a timer outside
+  the kernel; neither is in this repository, and the owner's tolerance is unchanged.
+
+**Diagnosis, not tests.**
+
+- The byte-leg G4 cut reads the SM clock as sm__cycles_elapsed.avg / gpu_time_ns on GEMMs of 0.5 ms
+  or longer. On the 113 published lock-1710 counter pages, 1 of 3646 such GEMMs reads 1705 MHz or
+  more (page medians 1654 to 1695 MHz), so the registered B-SKEW and E2-SKEW cannot be scored on
+  this card as written. The skew byte pages themselves record no gates (R3's histogram byte mode);
+  their lock held (V10 re-gated PASS by `scripts/lock_gate.py`).
+- The A and B skew pages carry the same uniform and balanced calls: on OLMoE they agree to 0.11%
+  rms (12 cells, B 0.10% faster on average), on Qwen1.5 to 0.26% (B, the G1 page, 0.20% faster).
+  OLMoE's sk15 NATIVE uniform cells read 0.2 to 0.4% faster than the same call on ska and skb.
+- The permutation control fails on cluster count alone (two pages, df 1, t 6.31): its 12 cells sit
+  within -0.39 to +0.13%.
+
+**Operations.** The driver ends with exit 3: regcheck and the gate (exit 1), the two Mixtral
+slips (exit 1), the five refusals (exit 2, nothing launched). The lock watchdog's slip rule (one
+15 MHz step) and the skew registration's G4 (1705 MHz per cell, exclude the cell) disagree in
+effect: the watchdog ends the page where G4 would drop one cell.
+
+**What the paper can claim, after rental 5.** The dead-CTA cost d = 0.995 ns holds on skewed
+routing (blind c15, M excluded again), and BLOCK_K 128 at G = 64 runs at the occupancy-3 floor
+(blind, SYNC excluded). Not claimed: v2's skew accuracy (it reads 1.26% rms in the ALL view; G3 is
+INCONCLUSIVE and the byte leg is unscoreable as registered), anything on Mixtral under skew,
+second K, or any stamp reading.
+
+**Instrument.** Every timed page that wrote a report reads its worst cell at 1710.0 MHz; Qwen1.5
+skb fails G1 on drift flags. The second-K byte pages pass every validity gate but V5; V10 holds on
+all four byte pages. Every page carries its card's UUID, as every published session does; the
+histograms are the registered synthetic files (G5 PASS on every page) and no trace-derived count
+is on any page.
 
 ---
 

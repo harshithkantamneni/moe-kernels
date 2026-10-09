@@ -1,0 +1,1632 @@
+{
+ "pages": {
+  "mixtral-8x7b-A": "NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-ska",
+  "mixtral-8x7b-B": "NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-skb",
+  "olmoe-1b-7b-A": "counted",
+  "olmoe-1b-7b-B": "counted",
+  "qwen1.5-moe-a2.7b-A": "counted",
+  "qwen1.5-moe-a2.7b-B": "counted"
+ },
+ "dropped_rows": {
+  "olmoe-1b-7b-A": [],
+  "olmoe-1b-7b-B": [],
+  "qwen1.5-moe-a2.7b-A": [],
+  "qwen1.5-moe-a2.7b-B": []
+ },
+ "cells_measured": 96,
+ "G3": {
+  "Q": {
+   "Q": 4.969355,
+   "df": 23,
+   "p": 0.999973,
+   "sigma": 0.0018,
+   "cells": 24,
+   "heterogeneous": false
+  },
+  "pooled": {
+   "verdict": "INCONCLUSIVE (ALL EQUIVALENT; CLEAN NOT EQUIVALENT)",
+   "mean": -0.001293,
+   "se": 0.000613,
+   "ci": [
+    -0.002737,
+    0.00015
+   ],
+   "df": 3,
+   "t": 2.353363,
+   "margin": 0.0036,
+   "clusters": 4,
+   "cells": 24,
+   "cluster_means": {
+    "olmoe-1b-7b-A": -0.002502,
+    "olmoe-1b-7b-B": -0.002198,
+    "qwen1.5-moe-a2.7b-A": -0.000226,
+    "qwen1.5-moe-a2.7b-B": -0.000247
+   }
+  },
+  "rows": 24,
+  "verdict": "INCONCLUSIVE (ALL PASS; CLEAN FAIL (voids every histogram cell of the board))",
+  "void_strata": [],
+  "d": [
+   {
+    "cell": "olmoe-1b-7b/A/2/uniform/native",
+    "d": -0.003001
+   },
+   {
+    "cell": "olmoe-1b-7b/A/2/uniform/shared",
+    "d": -0.002699
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/uniform/native",
+    "d": -0.0027
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/uniform/shared",
+    "d": -0.002405
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/uniform/native",
+    "d": -0.002103
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/uniform/shared",
+    "d": -0.002107
+   },
+   {
+    "cell": "olmoe-1b-7b/B/2/uniform/native",
+    "d": -0.002087
+   },
+   {
+    "cell": "olmoe-1b-7b/B/2/uniform/shared",
+    "d": -0.002226
+   },
+   {
+    "cell": "olmoe-1b-7b/B/4/uniform/native",
+    "d": -0.002615
+   },
+   {
+    "cell": "olmoe-1b-7b/B/4/uniform/shared",
+    "d": -0.002624
+   },
+   {
+    "cell": "olmoe-1b-7b/B/16/uniform/native",
+    "d": -0.001792
+   },
+   {
+    "cell": "olmoe-1b-7b/B/16/uniform/shared",
+    "d": -0.001844
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/uniform/native",
+    "d": 0.000565
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/uniform/shared",
+    "d": -0.000714
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/uniform/native",
+    "d": -0.001245
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/uniform/shared",
+    "d": -0.000575
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/uniform/native",
+    "d": 0.000471
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/uniform/shared",
+    "d": 0.000143
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/1/uniform/native",
+    "d": -0.000755
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/1/uniform/shared",
+    "d": -0.000807
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/2/uniform/native",
+    "d": 0.000101
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/2/uniform/shared",
+    "d": -0.000128
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/8/uniform/native",
+    "d": 0.000426
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/8/uniform/shared",
+    "d": -0.000321
+   }
+  ],
+  "mean_by_shape": {
+   "olmoe-1b-7b": -0.00235,
+   "qwen1.5-moe-a2.7b": -0.000237
+  },
+  "mean_by_arm": {
+   "native": -0.001228,
+   "shared": -0.001359
+  },
+  "at_sigma_alt": "PASS"
+ },
+ "perm_control": {
+  "Q": {
+   "Q": 3.006591,
+   "df": 11,
+   "p": 0.990638,
+   "sigma": 0.0018,
+   "cells": 12,
+   "heterogeneous": false
+  },
+  "pooled": {
+   "verdict": "NOT EQUIVALENT",
+   "mean": -0.000197,
+   "se": 0.000539,
+   "ci": [
+    -0.0036,
+    0.003207
+   ],
+   "df": 1,
+   "t": 6.313752,
+   "margin": 0.0036,
+   "clusters": 2,
+   "cells": 12,
+   "cluster_means": {
+    "olmoe-1b-7b-A": 0.000342,
+    "qwen1.5-moe-a2.7b-A": -0.000736
+   }
+  },
+  "rows": 12,
+  "verdict": "FAIL (voids every histogram cell of the board)",
+  "void_strata": "ALL",
+  "d": [
+   {
+    "cell": "olmoe-1b-7b/A/2/PW-hotfirst/native",
+    "d": 0.001327
+   },
+   {
+    "cell": "olmoe-1b-7b/A/2/PW-rand1/native",
+    "d": 0.000701
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PW-hotfirst/native",
+    "d": 0.000939
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PW-rand1/native",
+    "d": -0.000176
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PW-hotfirst/native",
+    "d": -0.000257
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PW-rand1/native",
+    "d": -0.00048
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PW-hotfirst/native",
+    "d": -0.003915
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PW-rand1/native",
+    "d": 0.000699
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PW-hotfirst/native",
+    "d": 0.000178
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PW-rand1/native",
+    "d": -0.000489
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PW-hotfirst/native",
+    "d": -0.000487
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PW-rand1/native",
+    "d": -0.000401
+   }
+  ]
+ },
+ "SKEW-RATIO": {
+  "cells": 36,
+  "S": {
+   "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS",
+   "stats": {
+    "cells": 36,
+    "rms": 0.010458,
+    "worst": -0.020907,
+    "mean": -0.008462
+   }
+  },
+  "rivals": {
+   "U": {
+    "verdict": "INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)",
+    "lever_cells": 30,
+    "rms_rival": 0.129524,
+    "rms_S_on_levers": 0.011254
+   },
+   "PW": {
+    "verdict": "INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)",
+    "lever_cells": 32,
+    "rms_rival": 0.178077,
+    "rms_S_on_levers": 0.01106
+   },
+   "LT": {
+    "verdict": "INCONCLUSIVE (ALL UNDECIDED: 5 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)"
+   },
+   "M1": {
+    "printed": {
+     "cells": 36,
+     "rms": 0.011378,
+     "worst": -0.023788,
+     "mean": -0.009344
+    }
+   }
+  },
+  "per_arm": {
+   "native": {
+    "cells": 18,
+    "rms": 0.010998,
+    "worst": -0.0172,
+    "mean": -0.009188
+   },
+   "shared": {
+    "cells": 18,
+    "rms": 0.009889,
+    "worst": -0.020907,
+    "mean": -0.007737
+   }
+  },
+  "per_shape": {
+   "mixtral-8x7b": {
+    "cells": 0,
+    "rms": null,
+    "worst": null,
+    "mean": null
+   },
+   "olmoe-1b-7b": {
+    "cells": 18,
+    "rms": 0.011355,
+    "worst": -0.020907,
+    "mean": -0.010148
+   },
+   "qwen1.5-moe-a2.7b": {
+    "cells": 18,
+    "rms": 0.009477,
+    "worst": -0.0172,
+    "mean": -0.006777
+   }
+  },
+  "rows": [
+   {
+    "cell": "olmoe-1b-7b/A/2/PT/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.20694,
+    "e": {
+     "S": -0.012891,
+     "U": -0.171458,
+     "LT": -0.007962,
+     "PW": -0.171453,
+     "M1": -0.012891
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/2/PT/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.190529,
+    "e": {
+     "S": -0.013344,
+     "U": -0.160037,
+     "LT": -0.00903,
+     "PW": -0.160514,
+     "M1": -0.016165
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/2/PW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.239298,
+    "e": {
+     "S": -0.016647,
+     "U": -0.193091,
+     "LT": -0.011956,
+     "PW": -0.205507,
+     "M1": -0.016647
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/2/PW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.213689,
+    "e": {
+     "S": -0.011639,
+     "U": -0.176066,
+     "LT": -0.00756,
+     "PW": -0.189176,
+     "M1": -0.014794
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PT/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.131952,
+    "e": {
+     "S": -0.013724,
+     "U": -0.11657,
+     "LT": -0.012298,
+     "PW": -0.112367,
+     "M1": -0.013724
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PT/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.117424,
+    "e": {
+     "S": -0.00706,
+     "U": -0.105085,
+     "LT": -0.00575,
+     "PW": -0.101443,
+     "M1": -0.00848
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.134348,
+    "e": {
+     "S": -0.015807,
+     "U": -0.118436,
+     "LT": -0.008079,
+     "PW": -0.127757,
+     "M1": -0.015807
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": true
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/4/PW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.123106,
+    "e": {
+     "S": -0.012233,
+     "U": -0.109612,
+     "LT": -0.004789,
+     "PW": -0.119562,
+     "M1": -0.013694
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": true
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PT/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.032425,
+    "e": {
+     "S": -0.005493,
+     "U": -0.031406,
+     "LT": -0.004405,
+     "PW": 0.221368,
+     "M1": -0.005493
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PT/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.02961,
+    "e": {
+     "S": -0.003683,
+     "U": -0.028759,
+     "LT": -0.002605,
+     "PW": 0.222108,
+     "M1": -0.003948
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.037207,
+    "e": {
+     "S": -0.006393,
+     "U": -0.035873,
+     "LT": -0.006308,
+     "PW": 0.31688,
+     "M1": -0.006393
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/A/16/PW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.033063,
+    "e": {
+     "S": -0.003415,
+     "U": -0.032005,
+     "LT": -0.003333,
+     "PW": 0.318701,
+     "M1": -0.003707
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/2/DW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.209773,
+    "e": {
+     "S": -0.015423,
+     "U": -0.173399,
+     "LT": 0.00059,
+     "PW": -0.17342,
+     "M1": -0.015423
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": true
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/2/DW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.199156,
+    "e": {
+     "S": -0.020907,
+     "U": -0.16608,
+     "LT": -0.006172,
+     "PW": -0.166612,
+     "M1": -0.023788
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": true
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/4/DW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.111037,
+    "e": {
+     "S": -0.008255,
+     "U": -0.09994,
+     "LT": -0.006583,
+     "PW": -0.09994,
+     "M1": -0.008255
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/4/DW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.103234,
+    "e": {
+     "S": -0.006709,
+     "U": -0.093574,
+     "LT": -0.005158,
+     "PW": -0.094091,
+     "M1": -0.007969
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/16/DW/native",
+    "model": "olmoe-1b-7b",
+    "arm": "native",
+    "r_meas": 1.032152,
+    "e": {
+     "S": -0.00523,
+     "U": -0.03115,
+     "LT": -0.004142,
+     "PW": 0.308811,
+     "M1": -0.00523
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "olmoe-1b-7b/B/16/DW/shared",
+    "model": "olmoe-1b-7b",
+    "arm": "shared",
+    "r_meas": 1.02974,
+    "e": {
+     "S": -0.003809,
+     "U": -0.028881,
+     "LT": -0.002731,
+     "PW": 0.308577,
+     "M1": -0.004074
+    },
+    "lever": {
+     "U": false,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PT/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.120015,
+    "e": {
+     "S": -0.014722,
+     "U": -0.107155,
+     "LT": -0.016186,
+     "PW": -0.125082,
+     "M1": -0.014722
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PT/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.107054,
+    "e": {
+     "S": -0.016066,
+     "U": -0.096701,
+     "LT": -0.01743,
+     "PW": -0.115286,
+     "M1": -0.018992
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.132524,
+    "e": {
+     "S": -0.008836,
+     "U": -0.117017,
+     "LT": -0.014993,
+     "PW": -0.133049,
+     "M1": -0.008836
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/1/PW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.1225,
+    "e": {
+     "S": -0.013833,
+     "U": -0.109131,
+     "LT": -0.019559,
+     "PW": -0.125743,
+     "M1": -0.016869
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PT/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.229711,
+    "e": {
+     "S": -0.010119,
+     "U": -0.186801,
+     "LT": -0.012088,
+     "PW": -0.186856,
+     "M1": -0.010119
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PT/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.206303,
+    "e": {
+     "S": -0.004962,
+     "U": -0.171021,
+     "LT": -0.00698,
+     "PW": -0.171624,
+     "M1": -0.007818
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.22041,
+    "e": {
+     "S": -0.011287,
+     "U": -0.180603,
+     "LT": -0.010635,
+     "PW": -0.18066,
+     "M1": -0.011287
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/2/PW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.198632,
+    "e": {
+     "S": -0.006824,
+     "U": -0.165716,
+     "LT": -0.006322,
+     "PW": -0.166304,
+     "M1": -0.009576
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PT/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.06243,
+    "e": {
+     "S": -0.0039,
+     "U": -0.058762,
+     "LT": -0.003069,
+     "PW": -0.058762,
+     "M1": -0.0039
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PT/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.060142,
+    "e": {
+     "S": -0.003831,
+     "U": -0.056731,
+     "LT": -0.003015,
+     "PW": -0.057366,
+     "M1": -0.004381
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.06099,
+    "e": {
+     "S": -0.002548,
+     "U": -0.057484,
+     "LT": -0.005434,
+     "PW": -0.042218,
+     "M1": -0.002548
+    },
+    "lever": {
+     "U": true,
+     "PW": false,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/A/8/PW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.056911,
+    "e": {
+     "S": -0.000706,
+     "U": -0.053847,
+     "LT": -0.003559,
+     "PW": -0.03925,
+     "M1": -0.001231
+    },
+    "lever": {
+     "U": true,
+     "PW": false,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/1/DW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.062535,
+    "e": {
+     "S": 0.006256,
+     "U": -0.058855,
+     "LT": 0.004049,
+     "PW": -0.072536,
+     "M1": 0.006256
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/1/DW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.054355,
+    "e": {
+     "S": 0.004847,
+     "U": -0.051552,
+     "LT": 0.002794,
+     "PW": -0.065664,
+     "M1": 0.002731
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/2/DW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.213106,
+    "e": {
+     "S": -0.0172,
+     "U": -0.17567,
+     "LT": -0.010894,
+     "PW": -0.175733,
+     "M1": -0.0172
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": true
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/2/DW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.192123,
+    "e": {
+     "S": -0.012651,
+     "U": -0.16116,
+     "LT": -0.006725,
+     "PW": -0.16174,
+     "M1": -0.015264
+    },
+    "lever": {
+     "U": true,
+     "PW": true,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/8/DW/native",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "native",
+    "r_meas": 1.061649,
+    "e": {
+     "S": -0.003167,
+     "U": -0.058069,
+     "LT": -0.004193,
+     "PW": -0.033236,
+     "M1": -0.003167
+    },
+    "lever": {
+     "U": true,
+     "PW": false,
+     "LT": false
+    }
+   },
+   {
+    "cell": "qwen1.5-moe-a2.7b/B/8/DW/shared",
+    "model": "qwen1.5-moe-a2.7b",
+    "arm": "shared",
+    "r_meas": 1.058703,
+    "e": {
+     "S": -0.002437,
+     "U": -0.055448,
+     "LT": -0.003453,
+     "PW": -0.031377,
+     "M1": -0.002975
+    },
+    "lever": {
+     "U": true,
+     "PW": false,
+     "LT": false
+    }
+   }
+  ]
+ },
+ "E1-SKEW": {
+  "verdict": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS",
+  "stats": {
+   "cells": 72,
+   "rms": 0.012636,
+   "worst": 0.043777,
+   "mean": 0.003977
+  }
+ },
+ "E1-UNI-EXT": {
+  "verdict": "HOLDS",
+  "stats": {
+   "cells": 8,
+   "rms": 0.002594,
+   "worst": 0.00363,
+   "mean": 0.00253
+  }
+ },
+ "E1-UNI": {
+  "verdict": "HOLDS",
+  "stats": {
+   "cells": 16,
+   "rms": 0.018049,
+   "worst": 0.037904,
+   "mean": 0.013342
+  }
+ },
+ "secondary": {
+  "calibration": {
+   "cells": 60,
+   "clusters": 2,
+   "fit": "OLS ln(meas) on ln(pred)",
+   "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+   "seed": 20261007,
+   "resamples": 2000,
+   "intercept": -0.00478,
+   "slope": 1.005446,
+   "verdict": "INCONCLUSIVE (ALL NOT RESOLVED (2 clusters, under 6): descriptive only; CLEAN NOT APPLICABLE (0 cells))"
+  },
+  "gamma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 92,
+   "discordant": 1,
+   "resolved_threshold_ln": 0.005091,
+   "gamma": 0.978495,
+   "ci": [
+    0.957447,
+    1.0
+   ],
+   "clusters": 4,
+   "verdict": "INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))"
+  },
+  "gamma_alt_sigma": {
+   "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+   "concordant": 96,
+   "discordant": 3,
+   "resolved_threshold_ln": 0.002828,
+   "gamma": 0.939394,
+   "ci": [
+    0.92,
+    0.959184
+   ],
+   "clusters": 2,
+   "verdict": "INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))"
+  },
+  "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+ },
+ "byte_pages": {
+  "mixtral-8x7b": "counted",
+  "mixtral-8x7b-dropped": [
+   "PT/native/n2: G4 clock 1666.8649583144766",
+   "PT/shared/n2: G4 clock 1669.1629311360466",
+   "PW/native/n2: G4 clock 1664.9807731217202",
+   "PW/shared/n2: G4 clock 1665.9516363281468",
+   "uniform/native/n2: G4 clock 1660.9507088873938",
+   "uniform/shared/n2: G4 clock 1658.3215638356396",
+   "balanced/native/n2: G4 clock 1655.9736365683486",
+   "balanced/shared/n2: G4 clock 1658.52568606819",
+   "PT/native/n8: G4 clock 1694.6227576744427",
+   "PT/shared/n8: G4 clock 1695.4016079462122",
+   "PW/native/n8: G4 clock 1693.3050319534796",
+   "PW/shared/n8: G4 clock 1694.4678087723203",
+   "uniform/native/n8: G4 clock 1696.3853443244327",
+   "uniform/shared/n8: G4 clock 1698.3937371426387",
+   "balanced/native/n8: G4 clock 1696.7842379498998",
+   "balanced/shared/n8: G4 clock 1697.5436481674756"
+  ],
+  "olmoe-1b-7b": "counted",
+  "olmoe-1b-7b-dropped": [
+   "PT/native/n2: G4 clock 1691.7755902940314",
+   "PT/shared/n2: G4 clock 1691.7755902940314",
+   "PW/native/n2: G4 clock 1691.7755902940314",
+   "PW/shared/n2: G4 clock 1691.7755902940314",
+   "uniform/native/n2: G4 clock 1691.7755902940314",
+   "uniform/shared/n2: G4 clock 1691.7755902940314",
+   "balanced/native/n2: G4 clock 1691.7755902940314",
+   "balanced/shared/n2: G4 clock 1691.7755902940314",
+   "PT/native/n4: G4 clock 1691.7755902940314",
+   "PT/shared/n4: G4 clock 1672.3743751994045",
+   "PW/native/n4: G4 clock 1670.7741183677815",
+   "PW/shared/n4: G4 clock 1668.6614096983626",
+   "uniform/native/n4: G4 clock 1691.7755902940314",
+   "uniform/shared/n4: G4 clock 1691.7755902940314",
+   "balanced/native/n4: G4 clock 1691.7755902940314",
+   "balanced/shared/n4: G4 clock 1691.7755902940314",
+   "PT/native/n16: G4 clock 1696.3712766745139",
+   "PW/native/n16: G4 clock 1695.7112941361727",
+   "uniform/native/n16: G4 clock 1693.528509643716",
+   "balanced/native/n16: G4 clock 1694.7089069277158"
+  ]
+ },
+ "B-SKEW": {
+  "verdict": "NOT SCORED: no skewed byte cell",
+  "rows": []
+ },
+ "E2-SKEW": {
+  "verdict": "NOT SCORED: no valid cell",
+  "stats": {
+   "cells": 0,
+   "rms": null,
+   "worst": null,
+   "mean": null
+  }
+ },
+ "DECOMPOSITION": [],
+ "addendum": {
+  "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+  "pages": {
+   "olmoe-1b-7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2c-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2c-lock1710",
+     "use": "counted"
+    }
+   },
+   "olmoe-1b-7b-skb": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2d-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2d-lock1710",
+     "use": "counted"
+    }
+   },
+   "qwen1.5-moe-a2.7b-ska": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2e-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2e-lock1710",
+     "use": "counted"
+    }
+   },
+   "qwen1.5-moe-a2.7b-skb": {
+    "ALL": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2f-lock1710",
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [
+      "G1_lock_thermal"
+     ],
+     "failed_but_not_gating": [],
+     "session_tag": "gh200-20261008T233040Z-p2f-lock1710",
+     "use": "excluded"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "G3 / pooled / verdict",
+    "ALL": "EQUIVALENT",
+    "CLEAN": "NOT EQUIVALENT",
+    "registered": "INCONCLUSIVE (ALL EQUIVALENT; CLEAN NOT EQUIVALENT)"
+   },
+   {
+    "path": "G3 / verdict",
+    "ALL": "PASS",
+    "CLEAN": "FAIL (voids every histogram cell of the board)",
+    "registered": "INCONCLUSIVE (ALL PASS; CLEAN FAIL (voids every histogram cell of the board))"
+   },
+   {
+    "path": "perm_control / pooled / verdict",
+    "ALL": "NOT EQUIVALENT",
+    "CLEAN": "NOT EQUIVALENT",
+    "registered": "NOT EQUIVALENT"
+   },
+   {
+    "path": "perm_control / verdict",
+    "ALL": "FAIL (voids every histogram cell of the board)",
+    "CLEAN": "FAIL (voids every histogram cell of the board)",
+    "registered": "FAIL (voids every histogram cell of the board)"
+   },
+   {
+    "path": "SKEW-RATIO / S / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": null,
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS"
+   },
+   {
+    "path": "SKEW-RATIO / rivals / U / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "UNDECIDED: 0 lever cells survive, under 6",
+    "registered": "INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)"
+   },
+   {
+    "path": "SKEW-RATIO / rivals / PW / verdict",
+    "ALL": "EXCLUDED",
+    "CLEAN": "UNDECIDED: 0 lever cells survive, under 6",
+    "registered": "INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)"
+   },
+   {
+    "path": "SKEW-RATIO / rivals / LT / verdict",
+    "ALL": "UNDECIDED: 5 lever cells survive, under 6",
+    "CLEAN": "UNDECIDED: 0 lever cells survive, under 6",
+    "registered": "INCONCLUSIVE (ALL UNDECIDED: 5 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)"
+   },
+   {
+    "path": "E1-SKEW / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "NOT SCORED: no valid cell",
+    "registered": "NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS"
+   },
+   {
+    "path": "E1-UNI-EXT / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "E1-UNI / verdict",
+    "ALL": "HOLDS",
+    "CLEAN": "HOLDS",
+    "registered": "HOLDS"
+   },
+   {
+    "path": "secondary / calibration / verdict",
+    "ALL": "NOT RESOLVED (2 clusters, under 6): descriptive only",
+    "CLEAN": "NOT APPLICABLE (0 cells)",
+    "registered": "INCONCLUSIVE (ALL NOT RESOLVED (2 clusters, under 6): descriptive only; CLEAN NOT APPLICABLE (0 cells))"
+   },
+   {
+    "path": "secondary / gamma / verdict",
+    "ALL": "CONSISTENT",
+    "CLEAN": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "registered": "INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))"
+   },
+   {
+    "path": "secondary / gamma_alt_sigma / verdict",
+    "ALL": "CONSISTENT",
+    "CLEAN": "NOT RESOLVED (0 resolved pairs, under 10)",
+    "registered": "INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))"
+   },
+   {
+    "path": "B-SKEW / verdict",
+    "ALL": "NOT SCORED: no skewed byte cell",
+    "CLEAN": "NOT SCORED: no skewed byte cell",
+    "registered": "NOT SCORED: no skewed byte cell"
+   },
+   {
+    "path": "E2-SKEW / verdict",
+    "ALL": "NOT SCORED: no valid cell",
+    "CLEAN": "NOT SCORED: no valid cell",
+    "registered": "NOT SCORED: no valid cell"
+   }
+  ],
+  "CLEAN": {
+   "pages": {
+    "mixtral-8x7b-A": "NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-ska",
+    "mixtral-8x7b-B": "NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-skb",
+    "olmoe-1b-7b-A": "counted",
+    "olmoe-1b-7b-B": "counted",
+    "qwen1.5-moe-a2.7b-A": "counted",
+    "qwen1.5-moe-a2.7b-B": "NOT SCORED: the page is out of this view"
+   },
+   "dropped_rows": {
+    "olmoe-1b-7b-A": [],
+    "olmoe-1b-7b-B": [],
+    "qwen1.5-moe-a2.7b-A": []
+   },
+   "cells_measured": 78,
+   "G3": {
+    "Q": {
+     "Q": 3.438671,
+     "df": 17,
+     "p": 0.999817,
+     "sigma": 0.0018,
+     "cells": 18,
+     "heterogeneous": false
+    },
+    "pooled": {
+     "verdict": "NOT EQUIVALENT",
+     "mean": -0.001642,
+     "se": 0.000713,
+     "ci": [
+      -0.003725,
+      0.000441
+     ],
+     "df": 2,
+     "t": 2.919986,
+     "margin": 0.0036,
+     "clusters": 3,
+     "cells": 18,
+     "cluster_means": {
+      "olmoe-1b-7b-A": -0.002502,
+      "olmoe-1b-7b-B": -0.002198,
+      "qwen1.5-moe-a2.7b-A": -0.000226
+     }
+    },
+    "rows": 18,
+    "verdict": "FAIL (voids every histogram cell of the board)",
+    "void_strata": "ALL",
+    "d": [
+     {
+      "cell": "olmoe-1b-7b/A/2/uniform/native",
+      "d": -0.003001
+     },
+     {
+      "cell": "olmoe-1b-7b/A/2/uniform/shared",
+      "d": -0.002699
+     },
+     {
+      "cell": "olmoe-1b-7b/A/4/uniform/native",
+      "d": -0.0027
+     },
+     {
+      "cell": "olmoe-1b-7b/A/4/uniform/shared",
+      "d": -0.002405
+     },
+     {
+      "cell": "olmoe-1b-7b/A/16/uniform/native",
+      "d": -0.002103
+     },
+     {
+      "cell": "olmoe-1b-7b/A/16/uniform/shared",
+      "d": -0.002107
+     },
+     {
+      "cell": "olmoe-1b-7b/B/2/uniform/native",
+      "d": -0.002087
+     },
+     {
+      "cell": "olmoe-1b-7b/B/2/uniform/shared",
+      "d": -0.002226
+     },
+     {
+      "cell": "olmoe-1b-7b/B/4/uniform/native",
+      "d": -0.002615
+     },
+     {
+      "cell": "olmoe-1b-7b/B/4/uniform/shared",
+      "d": -0.002624
+     },
+     {
+      "cell": "olmoe-1b-7b/B/16/uniform/native",
+      "d": -0.001792
+     },
+     {
+      "cell": "olmoe-1b-7b/B/16/uniform/shared",
+      "d": -0.001844
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/1/uniform/native",
+      "d": 0.000565
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/1/uniform/shared",
+      "d": -0.000714
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/2/uniform/native",
+      "d": -0.001245
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/2/uniform/shared",
+      "d": -0.000575
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/8/uniform/native",
+      "d": 0.000471
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/8/uniform/shared",
+      "d": 0.000143
+     }
+    ],
+    "mean_by_shape": {
+     "olmoe-1b-7b": -0.00235,
+     "qwen1.5-moe-a2.7b": -0.000226
+    },
+    "mean_by_arm": {
+     "native": -0.001612,
+     "shared": -0.001672
+    },
+    "at_sigma_alt": "FAIL (voids every histogram cell of the board)"
+   },
+   "perm_control": {
+    "Q": {
+     "Q": 3.006591,
+     "df": 11,
+     "p": 0.990638,
+     "sigma": 0.0018,
+     "cells": 12,
+     "heterogeneous": false
+    },
+    "pooled": {
+     "verdict": "NOT EQUIVALENT",
+     "mean": -0.000197,
+     "se": 0.000539,
+     "ci": [
+      -0.0036,
+      0.003207
+     ],
+     "df": 1,
+     "t": 6.313752,
+     "margin": 0.0036,
+     "clusters": 2,
+     "cells": 12,
+     "cluster_means": {
+      "olmoe-1b-7b-A": 0.000342,
+      "qwen1.5-moe-a2.7b-A": -0.000736
+     }
+    },
+    "rows": 12,
+    "verdict": "FAIL (voids every histogram cell of the board)",
+    "void_strata": "ALL",
+    "d": [
+     {
+      "cell": "olmoe-1b-7b/A/2/PW-hotfirst/native",
+      "d": 0.001327
+     },
+     {
+      "cell": "olmoe-1b-7b/A/2/PW-rand1/native",
+      "d": 0.000701
+     },
+     {
+      "cell": "olmoe-1b-7b/A/4/PW-hotfirst/native",
+      "d": 0.000939
+     },
+     {
+      "cell": "olmoe-1b-7b/A/4/PW-rand1/native",
+      "d": -0.000176
+     },
+     {
+      "cell": "olmoe-1b-7b/A/16/PW-hotfirst/native",
+      "d": -0.000257
+     },
+     {
+      "cell": "olmoe-1b-7b/A/16/PW-rand1/native",
+      "d": -0.00048
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/1/PW-hotfirst/native",
+      "d": -0.003915
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/1/PW-rand1/native",
+      "d": 0.000699
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/2/PW-hotfirst/native",
+      "d": 0.000178
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/2/PW-rand1/native",
+      "d": -0.000489
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/8/PW-hotfirst/native",
+      "d": -0.000487
+     },
+     {
+      "cell": "qwen1.5-moe-a2.7b/A/8/PW-rand1/native",
+      "d": -0.000401
+     }
+    ]
+   },
+   "SKEW-RATIO": {
+    "cells": 0,
+    "S": "NOT SCORED: no valid ratio",
+    "rivals": {
+     "U": {
+      "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+     },
+     "PW": {
+      "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+     },
+     "LT": {
+      "verdict": "UNDECIDED: 0 lever cells survive, under 6"
+     },
+     "M1": {
+      "printed": {
+       "cells": 0,
+       "rms": null,
+       "worst": null,
+       "mean": null
+      }
+     }
+    },
+    "per_arm": {
+     "native": {
+      "cells": 0,
+      "rms": null,
+      "worst": null,
+      "mean": null
+     },
+     "shared": {
+      "cells": 0,
+      "rms": null,
+      "worst": null,
+      "mean": null
+     }
+    },
+    "per_shape": {
+     "mixtral-8x7b": {
+      "cells": 0,
+      "rms": null,
+      "worst": null,
+      "mean": null
+     },
+     "olmoe-1b-7b": {
+      "cells": 0,
+      "rms": null,
+      "worst": null,
+      "mean": null
+     },
+     "qwen1.5-moe-a2.7b": {
+      "cells": 0,
+      "rms": null,
+      "worst": null,
+      "mean": null
+     }
+    },
+    "rows": []
+   },
+   "E1-SKEW": {
+    "verdict": "NOT SCORED: no valid cell",
+    "stats": {
+     "cells": 0,
+     "rms": null,
+     "worst": null,
+     "mean": null
+    }
+   },
+   "E1-UNI-EXT": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 6,
+     "rms": 0.002427,
+     "worst": 0.003218,
+     "mean": 0.002383
+    }
+   },
+   "E1-UNI": {
+    "verdict": "HOLDS",
+    "stats": {
+     "cells": 12,
+     "rms": 0.017521,
+     "worst": 0.033274,
+     "mean": 0.013732
+    }
+   },
+   "secondary": {
+    "calibration": {
+     "cells": 0,
+     "clusters": 0,
+     "fit": "OLS ln(meas) on ln(pred)",
+     "ci": "wild cluster bootstrap, Webb weights, 95% percentile",
+     "seed": 20261007,
+     "resamples": 2000,
+     "verdict": "NOT APPLICABLE (0 cells)"
+    },
+    "gamma": {
+     "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+     "concordant": 0,
+     "discordant": 0,
+     "resolved_threshold_ln": 0.005091,
+     "gamma": null,
+     "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+    },
+    "gamma_alt_sigma": {
+     "name": "Goodman-Kruskal gamma (prediction ties dropped), stratified",
+     "concordant": 0,
+     "discordant": 0,
+     "resolved_threshold_ln": 0.002828,
+     "gamma": null,
+     "verdict": "NOT RESOLVED (0 resolved pairs, under 10)"
+    },
+    "top1_regret": "NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)"
+   },
+   "byte_pages": {
+    "mixtral-8x7b": "counted",
+    "mixtral-8x7b-dropped": [
+     "PT/native/n2: G3 void",
+     "PT/shared/n2: G3 void",
+     "PW/native/n2: G3 void",
+     "PW/shared/n2: G3 void",
+     "uniform/native/n2: G3 void",
+     "uniform/shared/n2: G3 void",
+     "balanced/native/n2: G3 void",
+     "balanced/shared/n2: G3 void",
+     "PT/native/n8: G3 void",
+     "PT/shared/n8: G3 void",
+     "PW/native/n8: G3 void",
+     "PW/shared/n8: G3 void",
+     "uniform/native/n8: G3 void",
+     "uniform/shared/n8: G3 void",
+     "balanced/native/n8: G3 void",
+     "balanced/shared/n8: G3 void"
+    ],
+    "olmoe-1b-7b": "counted",
+    "olmoe-1b-7b-dropped": [
+     "PT/native/n2: G3 void",
+     "PT/shared/n2: G3 void",
+     "PW/native/n2: G3 void",
+     "PW/shared/n2: G3 void",
+     "uniform/native/n2: G3 void",
+     "uniform/shared/n2: G3 void",
+     "balanced/native/n2: G3 void",
+     "balanced/shared/n2: G3 void",
+     "PT/native/n4: G3 void",
+     "PT/shared/n4: G3 void",
+     "PW/native/n4: G3 void",
+     "PW/shared/n4: G3 void",
+     "uniform/native/n4: G3 void",
+     "uniform/shared/n4: G3 void",
+     "balanced/native/n4: G3 void",
+     "balanced/shared/n4: G3 void",
+     "PT/native/n16: G3 void",
+     "PW/native/n16: G3 void",
+     "uniform/native/n16: G3 void",
+     "balanced/native/n16: G3 void"
+    ]
+   },
+   "B-SKEW": {
+    "verdict": "NOT SCORED: no skewed byte cell",
+    "rows": []
+   },
+   "E2-SKEW": {
+    "verdict": "NOT SCORED: no valid cell",
+    "stats": {
+     "cells": 0,
+     "rms": null,
+     "worst": null,
+     "mean": null
+    }
+   },
+   "DECOMPOSITION": []
+  }
+ },
+ "registration": "2026-10-07-rental5-skew-gh200",
+ "part": "skew"
+}

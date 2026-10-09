@@ -1,0 +1,18 @@
+RENTAL 5 SECOND K (per-CTA fixed vs main loop), 2026-10-07-rental5-secondk-gh200
+  page k64s4: counted
+  page k32s4: counted
+  w1: r 1.4274 (c64 346.9, c32 249.6) | H_ITER +1.5%  H_CTA +15.9% -> H_ITER
+  w2: r 1.1690 (c64 332.7, c32 211.0) | H_ITER -5.0%  H_CTA -32.8% -> NEITHER
+  verdict: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})
+  calibration (ln meas on ln pred): NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT APPLICABLE (2 cells)
+  gamma: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10); gamma None (C 0, D 0)
+  gamma at sigma 0.10%: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)
+  top-1 regret: NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)
+  two views (ALL, CLEAN):
+    page 2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k32s4-r3-counters/lock1710/r3c-g64.json: failed ['V5']; ALL counted, CLEAN excluded
+    page 2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k64s4-r3-counters/lock1710/r3c-g64.json: failed ['V5']; ALL counted, CLEAN excluded
+    4 of 4 verdicts differ between ALL and CLEAN
+    verdict: ALL UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'}) | CLEAN NOT SCORED: the k64s4 / k32s4 pair is incomplete -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})
+    secondary / calibration / verdict: ALL NOT APPLICABLE (2 cells) | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT APPLICABLE (2 cells)
+    secondary / gamma / verdict: ALL NOT RESOLVED (0 resolved pairs, under 10) | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)
+    secondary / gamma_alt_sigma / verdict: ALL NOT RESOLVED (0 resolved pairs, under 10) | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: NOT RESOLVED (0 resolved pairs, under 10)

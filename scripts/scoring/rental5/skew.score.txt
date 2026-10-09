@@ -1,0 +1,36 @@
+SCORED against 2026-10-07-rental5-skew-gh200 (ALL view; CLEAN beside it in the JSON)
+  page mixtral-8x7b-A: NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-ska
+  page mixtral-8x7b-B: NOT SCORED: 0 G = 8 pages under gaps-mixtral-8x7b-skb
+  page olmoe-1b-7b-A: counted
+  page olmoe-1b-7b-B: counted
+  page qwen1.5-moe-a2.7b-A: counted
+  page qwen1.5-moe-a2.7b-B: counted
+G3: INCONCLUSIVE (ALL PASS; CLEAN FAIL (voids every histogram cell of the board)); pooled INCONCLUSIVE (ALL EQUIVALENT; CLEAN NOT EQUIVALENT) CI [-0.002737, 0.00015]; Q p 0.999973; at sigma 0.10% PASS
+perm control: FAIL (voids every histogram cell of the board)
+SKEW-RATIO S: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS (36 ratios)
+  rival U: INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+  rival PW: INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+  rival LT: INCONCLUSIVE (ALL UNDECIDED: 5 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+  rival M1: {'printed': {'cells': 36, 'rms': 0.011378, 'worst': -0.023788, 'mean': -0.009344}}
+E1-SKEW: NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS {'cells': 72, 'rms': 0.012636, 'worst': 0.043777, 'mean': 0.003977}
+E1-UNI-EXT: HOLDS {'cells': 8, 'rms': 0.002594, 'worst': 0.00363, 'mean': 0.00253}
+E1-UNI: HOLDS {'cells': 16, 'rms': 0.018049, 'worst': 0.037904, 'mean': 0.013342}
+B-SKEW: NOT SCORED: no skewed byte cell 
+E2-SKEW: NOT SCORED: no valid cell {'cells': 0, 'rms': None, 'worst': None, 'mean': None}
+  calibration (ln meas on ln pred): INCONCLUSIVE (ALL NOT RESOLVED (2 clusters, under 6): descriptive only; CLEAN NOT APPLICABLE (0 cells)); slope 1.0054 intercept -0.0048
+  gamma: INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10)); gamma 0.978495 (C 92, D 1) CI [0.957447, 1.0]
+  gamma at sigma 0.10%: INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))
+  top-1 regret: NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)
+  two views (ALL, CLEAN):
+    page qwen1.5-moe-a2.7b-skb: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    10 of 16 verdicts differ between ALL and CLEAN
+    G3 / pooled / verdict: ALL EQUIVALENT | CLEAN NOT EQUIVALENT -> INCONCLUSIVE (ALL EQUIVALENT; CLEAN NOT EQUIVALENT)
+    G3 / verdict: ALL PASS | CLEAN FAIL (voids every histogram cell of the board) -> INCONCLUSIVE (ALL PASS; CLEAN FAIL (voids every histogram cell of the board))
+    SKEW-RATIO / S / verdict: ALL HOLDS | CLEAN None -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS
+    SKEW-RATIO / rivals / U / verdict: ALL EXCLUDED | CLEAN UNDECIDED: 0 lever cells survive, under 6 -> INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+    SKEW-RATIO / rivals / PW / verdict: ALL EXCLUDED | CLEAN UNDECIDED: 0 lever cells survive, under 6 -> INCONCLUSIVE (ALL EXCLUDED; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+    SKEW-RATIO / rivals / LT / verdict: ALL UNDECIDED: 5 lever cells survive, under 6 | CLEAN UNDECIDED: 0 lever cells survive, under 6 -> INCONCLUSIVE (ALL UNDECIDED: 5 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+    E1-SKEW / verdict: ALL HOLDS | CLEAN NOT SCORED: no valid cell -> NOT SCORED (CLEAN has no data); ALL, reading only gate-failed pages: HOLDS
+    secondary / calibration / verdict: ALL NOT RESOLVED (2 clusters, under 6): descriptive only | CLEAN NOT APPLICABLE (0 cells) -> INCONCLUSIVE (ALL NOT RESOLVED (2 clusters, under 6): descriptive only; CLEAN NOT APPLICABLE (0 cells))
+    secondary / gamma / verdict: ALL CONSISTENT | CLEAN NOT RESOLVED (0 resolved pairs, under 10) -> INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))
+    secondary / gamma_alt_sigma / verdict: ALL CONSISTENT | CLEAN NOT RESOLVED (0 resolved pairs, under 10) -> INCONCLUSIVE (ALL CONSISTENT; CLEAN NOT RESOLVED (0 resolved pairs, under 10))

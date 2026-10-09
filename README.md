@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 6171 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 6172 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty-two further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty-three further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and fifteen Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and sixteen Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -254,13 +254,18 @@ Qwen2-57B TP=8 end-to-end test, the floor at four clocks with a same-clock repli
 BLOCK_K pages and the flush ladder, 24 units on one GH200, and rental 4 of 2026-10-07: the dead-CTA
 cost at 9 and 15 declared copies on Qwen2-57B TP=8 and OLMoE, the OLMoE BLOCK_K / num_stages
 counter pages, the hardware rulers and RRZE's gpu-benches, and the instrumented copy's perturbation
-gate, which failed, 25 units on one GH200), kept so every verdict they printed can be
+gate, which failed, 25 units on one GH200, and rental 5 of 2026-10-09: model v2 under synthetic
+skewed routing on OLMoE and Qwen1.5 (Mixtral's pages stopped at a clock slip), token order, the
+dead-CTA cost at 15 copies under skew, BLOCK_K 128 and second-K pages, and sampled stamps that
+failed their gate again, 22 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 15 GH200 sessions ran on ten distinct boards (counted by
+sessions rather than arms. The 16 GH200 sessions ran on eleven distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
-Rental 3) failed. Every other held-out model was timed from its own counted bytes, which tests
+Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
+and Qwen1.5 in its ALL view and is NOT SCORED as registered (docs/FINDINGS.md, Rental 5). Every
+other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
