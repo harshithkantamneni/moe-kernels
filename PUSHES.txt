@@ -17,3 +17,4 @@
 2026-10-09T01:02:57Z perturb (unit 13/22 - pt instr-variants=v1,v2,v3): exit 1 (1 min)
 2026-10-09T01:03:02Z stamps (unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3): exit 2 (0 min)
 2026-10-09T01:03:07Z stamps (unit 15/22 mixtral-8x22b stt8x22 stamp-groups=8 stamp-treads=1 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:12Z stamps (unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
