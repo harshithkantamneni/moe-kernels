@@ -66,3 +66,7 @@
 2026-10-09T01:03:08Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2), G=8 treads 1 2 arms native, BK 64 s4; runs only on a PASS gate [unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2] (estimate 2 min, cap 8 min, 295 min left)
 2026-10-09T01:03:08Z stamps END: exit 2 after 0 min [unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2]
 2026-10-09T01:03:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6d8bfea to run-gh200-rental5-20261008t2326: stamps (unit 16/22 mixtral-8x7b stt stamp-groups=8 stamp-treads=1,2 stamp-arms=native instr-variants=v1,v2): exit 2 (0 min)
+2026-10-09T01:03:13Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v2 v3), G=8 treads 2 4 arms native shared, BK 64 s4; runs only on a PASS gate [unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3] (estimate 3 min, cap 8 min, 295 min left)
+2026-10-09T01:03:13Z stamps END: exit 2 after 0 min [unit 17/22 olmoe-1b-7b std4 stamp-groups=8 stamp-treads=2,4 stamp-arms=native,shared instr-variants=v2,v3]
+2026-10-09T01:03:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
