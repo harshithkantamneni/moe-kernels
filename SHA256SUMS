@@ -1,5 +1,5 @@
 daa9be471e820e585975fc15429e8f5e8b6b868e4d52bff90ec5a4cb73fc923d  vm/driver580.log
-419e887d9651bd860a29514cb7c870a4bd953c02a77798ebad30900e1d792024  vm/gh200-driver.out
+e804bbf23f69ba1c24dcb29031be81a588315669323b37ffd67e99b36790b555  vm/gh200-driver.out
 7b1cef4551d9d4c9c36d65eaeb19a1ce7b9afb519033ebfd49e8343911f23b6d  vm/results/2026-10-08-nvidia_gh200_480gb-mixtral-8x7b-skc-r3-counters/lock1710/r3c-g8.json
 ecaff0f33e6132805abc2d0c4577f2c39775eaa6eb868f6325840a4daf74c08d  vm/results/2026-10-08-nvidia_gh200_480gb-mixtral-8x7b-skc-r3-counters/lock1710/r3c-g8.profiles/g8.capture.json
 d862175ac392ae3d59859bea668c1e86c6c50b9fced9eec78799b81e8a95768d  vm/results/2026-10-08-nvidia_gh200_480gb-mixtral-8x7b-skc-r3-counters/lock1710/r3c-g8.profiles/g8.csv
@@ -1102,9 +1102,9 @@ ee0beaf86514fc5c58c2b4337585b029d538062c8ec19a7c1c1fa58f9cbc50d9  vm/session/gh2
 14955ecad31c665ca2e0dc8609b0045d2bdc8148a31696c66b102037e66db57a  vm/session/gh200-driver/instr-variants.json
 d8f0a3d833621a416064a1c276e64f237dc2ccc220dff8afc706da93bc0b516b  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-0138c7ef0dad1986fe3e22cd62562e9824b736e95963d3e4dfb00a19d0d7c31c  vm/session/gh200-driver/status
-cafde858405f77b13009884ca101d124df8da683b1055be2679beb0418e45529  vm/session/gh200-driver/summary.new
-cafde858405f77b13009884ca101d124df8da683b1055be2679beb0418e45529  vm/session/gh200-driver/summary.txt
+b061743c349302faa3ebb7358ae407a800b290f381e4a47f9fc6194299f5ba18  vm/session/gh200-driver/status
+331dc0c4d8e114ad7fa30861402c73d1a6f6626447289b16497a57503f7d784d  vm/session/gh200-driver/summary.new
+331dc0c4d8e114ad7fa30861402c73d1a6f6626447289b16497a57503f7d784d  vm/session/gh200-driver/summary.txt
 f4c905f7e17df14f38ff8c77922df67cf375f0a6dcb770642ed4a330859dd682  vm/session/gh200-driver/tags-used
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/gh200-driver/timed-results
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt
@@ -1146,6 +1146,7 @@ b64075a1d2524adf438fa13eaaba7f0f5906f3b05a7511e6e8831c3867cf9f17  vm/session/log
 b1f92829f7d7d1324876bf1f6f7d23bfec4c8a999089503c278021682aed553f  vm/session/logs/driver-perturb.log
 7fb350d883bc65de2d7b420aab45cade9e3dc5a803d032d77f95ab582e02c6cb  vm/session/logs/driver-prelude.log
 fd55008a39b8d642fd7e235ded71006d13cf2d53f95381395b733d57371df7ec  vm/session/logs/driver-regcheck.log
+d625cd957079b7fdebe9c338aee0bb0fa52c9c4a79a1426405ea149b0f9be163  vm/session/logs/driver-stamps.log
 cce7a0d1d5afbbd5faa2e93ab8c21cc721ab9838a210bacef30f828a9e9c0a2e  vm/session/logs/driver-timed.log
 d2f7d53bee39483d995736c46ed02142558f4a5cbea9a544f9143168f5e28fc9  vm/session/logs/lock1710-pages.status
 6d81379f47e95185872e7e18dd57056f0265e9fc8af67578cf38d6a5b8896eb4  vm/session/logs/locked_r3-gh200-20261008T233040Z-p2.log

@@ -11,3 +11,4 @@ timed      exit 0 after 17 min [unit 10/22 qwen1.5-moe-a2.7b ska histogram=docs/
 timed      exit 0 after 10 min [unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8]
 timed      exit 0 after 6 min [unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8]
 perturb    exit 1 after 1 min [unit 13/22 - pt instr-variants=v1,v2,v3]
+stamps     exit 2 after 0 min [unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3]

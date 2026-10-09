@@ -15,3 +15,4 @@
 2026-10-09T00:55:44Z timed (unit 11/22 qwen1.5-moe-a2.7b skb histogram=docs/registered/2026-10-07-rental5-skew-hist/qwen1.5-moe-a2.7b-B.json arms=native,shared declared-copies=9 timed-groups=8): exit 0 (10 min)
 2026-10-09T01:01:56Z timed (unit 12/22 olmoe-1b-7b sk15 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-c15.json arms=native,shared declared-copies=15 timed-groups=8): exit 0 (6 min)
 2026-10-09T01:02:57Z perturb (unit 13/22 - pt instr-variants=v1,v2,v3): exit 1 (1 min)
+2026-10-09T01:03:02Z stamps (unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3): exit 2 (0 min)

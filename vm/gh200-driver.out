@@ -54,3 +54,7 @@
 2026-10-09T01:01:57Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 13/22 - pt instr-variants=v1,v2,v3] (estimate 12 min, cap 30 min, 297 min left)
 2026-10-09T01:02:54Z perturb END: exit 1 after 1 min [unit 13/22 - pt instr-variants=v1,v2,v3]
 2026-10-09T01:02:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ec787a8 to run-gh200-rental5-20261008t2326: perturb (unit 13/22 - pt instr-variants=v1,v2,v3): exit 1 (1 min)
+2026-10-09T01:02:59Z stamps START: stamps at the 1710 lock: the instrumented copy (the first passing of v1 v2 v3), G=8 treads 2 4 6 arms native, BK 64 s4; runs only on a PASS gate [unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3] (estimate 6 min, cap 15 min, 295 min left)
+2026-10-09T01:02:59Z stamps END: exit 2 after 0 min [unit 14/22 mixtral-8x7b stf stamp-groups=8 stamp-treads=2,4,6 stamp-arms=native instr-variants=v1,v2,v3]
+2026-10-09T01:02:59Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
