@@ -179,3 +179,12 @@
 2026-10-09T01:13:13Z timed: 2026-10-09T01:13:08Z G=64 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 320 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g64-hist83d5f80ae595ca4a-940a4b5d
 2026-10-09T01:13:13Z timed END: exit 0 after 5 min [unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4]
 2026-10-09T01:13:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-09T01:13:19Z timed START: 3c.3 timed R3 histogram page at 1710: G=64, docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json, arms native, 9 copies; knobs --num-stages 4 --block-k 128 [unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4] (estimate 4 min, cap 15 min, 285 min left)
+2026-10-09T01:13:19Z timed: declared-copies 9 on every page of this unit
+2026-10-09T01:13:19Z timed: histogram page docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json, arms native, deepest tread 9, knobs --num-stages 4 --block-k 128
+2026-10-09T01:13:20Z timed: G = 64 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-10-09T01:18:48Z timed: P2 locked_r3 exit 0
+2026-10-09T01:18:48Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-09T01:18:48Z timed: 2026-10-09T01:18:42Z G=64 held at lock 1710: R3 exit 0 DONE, cells=81 worst=1710.0 MHz, 320 s, dir nvidia_gh200_480gb-armsnative-bk128-bm32-budget200.0-decl9-dtypebf16-duty0.25-g64-hist83d5f80ae5-5fc978fd
+2026-10-09T01:18:48Z timed END: exit 0 after 5 min [unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4]
+2026-10-09T01:18:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

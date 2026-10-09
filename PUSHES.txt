@@ -25,3 +25,4 @@
 2026-10-09T01:07:32Z bytes: G=64 page exit 3
 2026-10-09T01:07:44Z bytes (unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
 2026-10-09T01:13:18Z timed (unit 21/22 olmoe-1b-7b bk64 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 num-stages=4): exit 0 (5 min)
+2026-10-09T01:18:52Z timed (unit 22/22 olmoe-1b-7b bk128 histogram=docs/registered/2026-10-07-rental5-skew-hist/olmoe-1b-7b-bk.json arms=native declared-copies=9 timed-groups=64 block-k=128 num-stages=4): exit 0 (5 min)
