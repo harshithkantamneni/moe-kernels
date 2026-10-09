@@ -23,3 +23,4 @@
 2026-10-09T01:05:28Z bytes: G=64 page exit 3
 2026-10-09T01:05:40Z bytes (unit 19/22 qwen2-57b-a14b-tp8 k64s4 byte-groups=64): exit 0 (2 min)
 2026-10-09T01:07:32Z bytes: G=64 page exit 3
+2026-10-09T01:07:44Z bytes (unit 20/22 qwen2-57b-a14b-tp8 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
