@@ -25,3 +25,4 @@
 2026-10-13T12:53:08Z bytes (unit 20/21 mixtral-8x7b-tp4 k64s4 byte-groups=64): exit 0 (3 min)
 2026-10-13T12:55:19Z bytes: G=64 page exit 3
 2026-10-13T12:55:29Z bytes (unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
+2026-10-13T12:55:32Z the session ended: driver exit 3

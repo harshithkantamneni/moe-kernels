@@ -86,3 +86,5 @@
 2026-10-13T12:53:09Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 4 --block-k 32 [unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4] (estimate 3 min, cap 20 min, 48 min left)
 2026-10-13T12:55:27Z bytes END: exit 0 after 2 min [unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4]
 2026-10-13T12:55:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c05828c to run-gh200-rental6-20261013t1050: bytes (unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4): exit 0 (2 min)
+2026-10-13T12:55:30Z driver end: exit 3

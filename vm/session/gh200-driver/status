@@ -196,3 +196,4 @@
 2026-10-13T12:55:27Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/summary.json)
 2026-10-13T12:55:27Z bytes END: exit 0 after 2 min [unit 21/21 mixtral-8x7b-tp4 k32s4 byte-groups=64 block-k=32 num-stages=4]
 2026-10-13T12:55:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-13T12:55:30Z driver end: exit 3

@@ -1,5 +1,5 @@
 73c246e18657c22e45d4124d170938f6a2ebb8aa6d0cb12ab737cebb96223df4  vm/driver580.log
-60362dc457fa23981ee6f14346a15d4c916288cf5e182474c3176a3fcbf299cf  vm/gh200-driver.out
+95508b85ccf1d6e60ab1d28eb9f83f2d01b6de9b7877038ad5824de3c758eef9  vm/gh200-driver.out
 77570940911d466a2ec58dd2c6fd8cf592d09fda2b003d513cfd9644569f0373  vm/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/r3c-g64.json
 a57baac5bc9dc69426b94fad85acd181cc42ed557d06171b46b50253503e2e8e  vm/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/r3c-g64.profiles/g64.capture.json
 a3ec797eb3e7247dc27790a2a825c8e022d5fd705e5d07d8b97f27ef1edf34f3  vm/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/r3c-g64.profiles/g64.csv
@@ -433,7 +433,7 @@ b2add7436ee83d4b19aa070d94eda3164308851d51cc031e5a6e8cf7e80a120b  vm/session/cou
 3fbbd4c6d76130399b0c79cdf41758669224a91e05b7b216953f0c9728750865  vm/session/gh200-driver/instr-variants.json
 d8f0a3d833621a416064a1c276e64f237dc2ccc220dff8afc706da93bc0b516b  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-f567d9ec85f421e12d3107b24dafe127e31e9da7cc9e97f1a900ed69b08816e4  vm/session/gh200-driver/status
+5b8e4b995aba7a2fb422fd99d6231731f439f67545e21fbeebe047518ccd7d7e  vm/session/gh200-driver/status
 919ed4309742b96f17bd430380e24ff6ac310973655b3eecc1b735ee2edfbc42  vm/session/gh200-driver/summary.new
 919ed4309742b96f17bd430380e24ff6ac310973655b3eecc1b735ee2edfbc42  vm/session/gh200-driver/summary.txt
 ed8c454e1ba9b06859a233ef90e59eb0c74c1f8dadda62f6e0f365dc9256384d  vm/session/gh200-driver/tags-used
