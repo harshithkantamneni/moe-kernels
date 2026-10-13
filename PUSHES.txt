@@ -21,3 +21,4 @@
 2026-10-13T12:50:14Z bytes (unit 17/21 phi-3.5-moe skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-bytes.json arms=native,shared byte-groups=8): exit 0 (5 min)
 2026-10-13T12:50:23Z timed (unit 18/21 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 3 (0 min)
 2026-10-13T12:50:32Z timed (unit 19/21 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell): exit 3 (0 min)
+2026-10-13T12:52:58Z bytes: G=64 page exit 3
