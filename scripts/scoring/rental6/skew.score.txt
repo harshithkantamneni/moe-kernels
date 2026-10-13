@@ -1,0 +1,41 @@
+SCORED against 2026-10-09-rental6-skew-gh200 (ALL view; CLEAN beside it in the JSON)
+  page mixtral-8x7b-A: counted in ALL only (G1: R3 G1 FAIL)
+  page mixtral-8x7b-B: counted in ALL only (G1: R3 G1 FAIL)
+  page mixtral-8x7b-C: counted in ALL only (G1: R3 G1 FAIL)
+  page olmoe-1b-7b-A: counted
+  page olmoe-1b-7b-B: counted
+  page olmoe-1b-7b-C: counted
+  page phi-3.5-moe-A: counted in ALL only (G1: R3 G1 FAIL)
+  page phi-3.5-moe-B: counted in ALL only (G1: R3 G1 FAIL)
+  page phi-3.5-moe-C: counted in ALL only (G1: R3 G1 FAIL)
+  slips mixtral-8x7b-A: 1 of 216: PT/shared/n3 r7 1620.0 MHz
+G3: PASS; pooled EQUIVALENT CI [-0.001397, -2.7e-05]
+E1-SKEW: HOLDS {'cells': 122, 'rms': 0.005455, 'worst': -0.015493, 'mean': -1e-05}
+E1-UNI: HOLDS {'cells': 54, 'rms': 0.004589, 'worst': -0.009041, 'mean': 0.001407}
+E2-SKEW: HOLDS {'cells': 39, 'rms': 0.00618, 'worst': -0.015634, 'mean': -0.000585}
+B-SKEW: HOLDS {'cells': 30, 'rms': 0.026648, 'worst': 0.043442, 'mean': 0.021096}
+  E1 rival v2: EXCLUDED
+  E1 rival LT3: INCONCLUSIVE (ALL EXCLUDED; CLEAN NOT EXCLUDED)
+  E1 rival H8: INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN EXCLUDED)
+  E1 rival v3_all: INCONCLUSIVE (ALL UNDECIDED: 4 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+  E1 rival v3_noca: UNDECIDED: 0 lever cells survive, under 6
+SKEW-RATIO v3: HOLDS (68 ratios); LT3 INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN UNDECIDED: 4 lever cells); U EXCLUDED
+OPEN-L2SKEW: OPEN v3 FAILS rowkey NOT BETTER
+B-CA: v3 FAILS; v3_noca EXCLUDED
+  calibration (ln meas on ln pred): INCONCLUSIVE (ALL NOT RESOLVED (3 clusters, under 6): descriptive only; CLEAN NOT RESOLVED (1 clusters, under 6): descriptive only); slope 0.9976 intercept +0.0020
+  gamma: CONSISTENT; gamma 0.954717 (C 259, D 6) CI [0.866667, 1.0]
+  gamma at sigma 0.10%: CONSISTENT
+  top-1 regret: NOT APPLICABLE (one tile on every rental-5 page; saved for the tile stage)
+  two views (ALL, CLEAN):
+    page mixtral-8x7b-ska: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page mixtral-8x7b-skb: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page mixtral-8x7b-skc: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-ska: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-skb: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    page phi-3.5-moe-skc: failed ['G1_lock_thermal']; ALL counted, CLEAN excluded
+    5 of 18 verdicts differ between ALL and CLEAN
+    E1-rivals / LT3 / verdict: ALL EXCLUDED | CLEAN NOT EXCLUDED -> INCONCLUSIVE (ALL EXCLUDED; CLEAN NOT EXCLUDED)
+    E1-rivals / H8 / verdict: ALL NOT EXCLUDED | CLEAN EXCLUDED -> INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN EXCLUDED)
+    E1-rivals / v3_all / verdict: ALL UNDECIDED: 4 lever cells survive, under 6 | CLEAN UNDECIDED: 0 lever cells survive, under 6 -> INCONCLUSIVE (ALL UNDECIDED: 4 lever cells survive, under 6; CLEAN UNDECIDED: 0 lever cells survive, under 6)
+    SKEW-RATIO / LT3 / verdict: ALL NOT EXCLUDED | CLEAN UNDECIDED: 4 lever cells -> INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN UNDECIDED: 4 lever cells)
+    secondary / calibration / verdict: ALL NOT RESOLVED (3 clusters, under 6): descriptive only | CLEAN NOT RESOLVED (1 clusters, under 6): descriptive only -> INCONCLUSIVE (ALL NOT RESOLVED (3 clusters, under 6): descriptive only; CLEAN NOT RESOLVED (1 clusters, under 6): descriptive only)

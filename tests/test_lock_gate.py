@@ -382,16 +382,20 @@ PINNED = """
 2026-10-09-nvidia_gh200_480gb-rental5-session/results/2026-10-09-nvidia_gh200_480gb-olmoe-1b-7b-skc-r3-counters/lock1710/r3c-g8.json V10 None PASS
 2026-10-09-nvidia_gh200_480gb-rental5-session/results/2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k32s4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
 2026-10-09-nvidia_gh200_480gb-rental5-session/results/2026-10-09-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-k64s4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k64s4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-olmoe-1b-7b-skbytes-r3-counters/lock1710/r3c-g8.json V10 None PASS
+2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-phi-3.5-moe-skbytes-r3-counters/lock1710/r3c-g8.json V10 None PASS
 """
 
 
 def test_the_regate_of_every_published_lock_page_is_pinned():
-    """147 lock pages (summary.json files repeat their pages' gates and are
-    not pages; 19 of them rental 3's, 2026-10-06, 7 rental 4's, 2026-10-07, and 4 rental 5's,
-    2026-10-09, all PASS). The 8x22B floor, the lock not in force, fails; every other
-    page passes, 78 stored FAILs among them; rental 5's two histogram byte pages store no
-    gate (R3's histogram byte mode records none), so 80 verdicts change. The published
-    JSONs are read, never written."""
+    """151 lock pages (summary.json files repeat their pages' gates and are
+    not pages; 19 of them rental 3's, 2026-10-06, 7 rental 4's, 2026-10-07, 4 rental 5's,
+    2026-10-09, and 4 rental 6's, 2026-10-13, all PASS). The 8x22B floor, the lock not in force,
+    fails; every other page passes, 78 stored FAILs among them; rental 5's and rental 6's two
+    histogram byte pages each store no gate (R3's histogram byte mode records none), so 82
+    verdicts change. The published JSONs are read, never written."""
     want = [tuple(line.split()) for line in PINNED.strip().splitlines()]
     before = {p: p.stat().st_mtime_ns for p in LG.published_lock_pages()}
     got = [(str(Path(r["path"]).relative_to(LG.PUBLISHED)), r["gate"], str(r["stored"]),
@@ -402,7 +406,7 @@ def test_the_regate_of_every_published_lock_page_is_pinned():
     assert fails == [("2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-"
                       "nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json", "FL1", "FAIL",
                       "FAIL")]
-    assert sum(1 for g in got if g[2] != g[3]) == 80
+    assert sum(1 for g in got if g[2] != g[3]) == 82
 
 
 def test_the_8x22b_floor_fails_on_two_independent_readings():
@@ -416,7 +420,7 @@ def test_the_8x22b_floor_fails_on_two_independent_readings():
 def test_the_cli_prints_the_table(capsys):
     assert LG.main([]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[-1].startswith("147 lock pages; 80 verdicts change; new verdict "
+    assert out.splitlines()[-1].startswith("151 lock pages; 82 verdicts change; new verdict "
                                            "not PASS on 1: 2026-09-28-nvidia_gh200_480gb-8x22b")
 
 

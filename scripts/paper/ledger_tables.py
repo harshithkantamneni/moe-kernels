@@ -11,7 +11,8 @@ Inputs: scripts/paper/ledger_rows.json (the ledger as the outline types it) and 
 committed scorer outputs (scripts/scoring/crossmodel/*.json and *.txt,
 scripts/scoring/rental1/*.score.json, scripts/scoring/rental2/*.score.json,
 scripts/scoring/rental3/*.score.json, scripts/scoring/rental4/*.score.json,
-scripts/scoring/rental5/*.score.json, scripts/scoring/session0927/score.json). Nothing is fitted, measured or rescored here.
+scripts/scoring/rental5/*.score.json, scripts/scoring/rental6/*.score.json,
+scripts/scoring/session0927/score.json). Nothing is fitted, measured or rescored here.
 
 APPENDIX A. One line per ledger row: the typed verdict and, where a committed
 scorer output carries a verdict or the numbers that decide one, the verdict read
@@ -37,7 +38,8 @@ from the scorer output's own verdict or stats against the registered bar, and th
 code-docstring tests of the 2026-09-27 board (rows 1 to 8) from session0927/score.json,
 and the floor-law verdicts of rental 2 part 4 (row 60) and rental 3 part B (row 83), and
 rental 4's dead-CTA D (row 89) and k-step law B' (row 91), and rental 5's skew end to end
-(row 97, E1-SKEW) and the dead-CTA increment under skew (row 99, c15 D).
+(row 97, E1-SKEW) and the dead-CTA increment under skew (row 99, c15 D), and rental 6's skew end
+to end under model v3 (row 104, E1-SKEW).
 """
 from __future__ import annotations
 
@@ -55,6 +57,7 @@ SC2 = ROOT / "scripts/scoring/rental2"
 SC3 = ROOT / "scripts/scoring/rental3"
 SC4 = ROOT / "scripts/scoring/rental4"
 SC5 = ROOT / "scripts/scoring/rental5"
+SC6 = ROOT / "scripts/scoring/rental6"
 PUB = ROOT / "results/published"
 ROWS = ROOT / "scripts/paper/ledger_rows.json"
 BAR_RMS, LIMIT = 0.02, 0.05
@@ -210,6 +213,9 @@ BK = SC5 / "bk128.score.json"
 ST2 = SC5 / "stamps2.score.json"
 #: rental 5's five stamps units (docs/registered/2026-10-07-rental5-stamps2-gh200)
 R5_UNITS = ("stf", "stt8x22", "stt", "std4", "std2")
+SKW6 = SC6 / "skew.score.json"
+Q16 = SC6 / "q1.score.json"
+SK6 = SC6 / "secondk.score.json"
 
 def session0927(row: int) -> tuple[str, str, dict]:
     v = _j(SESS)["rows"][str(row)]["verdict"]
@@ -291,6 +297,14 @@ CHECKS = {
     100: lambda: key(SK2, "verdict"),
     101: lambda: key(BK, "verdict"),
     102: lambda: many(ST2, [("units", u, "use") for u in R5_UNITS]),
+    103: lambda: key(SKW6, "G3", "verdict"),
+    104: lambda: many(SKW6, [("E1-SKEW", "verdict"), ("E1-UNI", "verdict")]),
+    105: lambda: many(SKW6, [("E1-rivals", r, "verdict") for r in ("v2", "LT3", "H8", "v3_all", "v3_noca")]),
+    106: lambda: many(SKW6, [("SKEW-RATIO", r, "verdict") for r in ("v3", "LT3", "U")]),
+    107: lambda: many(SKW6, [("B-SKEW", "verdict"), ("E2-SKEW", "verdict")]),
+    108: lambda: many(SKW6, [("OPEN-L2SKEW", "ROWKEY", "verdict"), ("B-CA", "v3_noca")]),
+    109: lambda: many(Q16, [("Q1-H", "verdict"), ("Q1-C", "verdict")]),
+    110: lambda: key(SK6, "verdict"),
 }
 # 68 returns a bare string; wrap it with its source.
 _c68 = CHECKS[68]
@@ -386,6 +400,8 @@ def summary() -> list[tuple]:
     out.append(("skew end to end, model v2 from predicted bytes, rental 5 E1-SKEW (row 97)",
                 key(SKW, "E1-SKEW", "verdict")[0], 1, "97"))
     out.append(("dead-CTA increment under skew, rental 5 c15 D (row 99)", key(C15, "D")[0], 1, "99"))
+    out.append(("skew end to end, model v3 from predicted bytes, rental 6 E1-SKEW (row 104)",
+                key(SKW6, "E1-SKEW", "verdict")[0], 1, "104"))
     return out
 
 

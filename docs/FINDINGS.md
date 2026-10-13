@@ -1035,7 +1035,8 @@ the 13 GH200 sessions ran on nine distinct boards: 1310e2 (2026-09-25 and Granit
 JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (rental 1) and
 4da056 (rental 2). Rental 3 (2026-10-06) ran on a tenth, bb7a34: 14 GH200 sessions. Rental 4
 (2026-10-07) ran on bb7a34 again: 15 GH200 sessions on ten boards. Rental 5 (2026-10-09) ran on an
-eleventh, 1cd741: 16 GH200 sessions on eleven boards.
+eleventh, 1cd741: 16 GH200 sessions on eleven boards. Rental 6 (2026-10-13) ran on a twelfth,
+ff9942: 17 GH200 sessions on twelve boards.
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
 each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
@@ -1874,6 +1875,111 @@ skb fails G1 on drift flags. The second-K byte pages pass every validity gate bu
 all four byte pages. Every page carries its card's UUID, as every published session does; the
 histograms are the registered synthetic files (G5 PASS on every page) and no trace-derived count
 is on any page.
+
+## Rental 6 (2026-10-13): model v3 under skew holds the time bar, the byte model misses OLMoE w1, Q1 lost to a driver defect, second K undecided
+
+One Lambda GH200 480GB (instance 19aa9f52, 2026-10-13 10:50Z to 12:57Z, 2 h 8 min, about $4.90;
+board `ff9942`, new to the study) ran `scripts/plans/rental6-2026-10.plan` unattended at 650d295:
+21 units in 122 minutes against 145 estimated, none dropped. Four registrations, their scorers,
+the SYNTHETIC histograms and the plan were committed before any page (650d295); three score this
+rental (v3 is the model and its rivals). Published at
+`results/published/2026-10-13-nvidia_gh200_480gb-rental6-session`; every verdict is the committed
+scorers' output in `scripts/scoring/rental6/` (`SCORES.md` has each test's ALL, CLEAN and
+registered reading). No post-page fix: the reading code was checked against the pages and nothing
+in it changes a verdict.
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| skew | G3, token order | PASS | ALL 51 cells, 9 pages, CI [-0.140, -0.003]%; CLEAN 18 cells, 3 pages, CI [-0.227, -0.208]%; margin +-0.36% |
+| | E1-SKEW, v3 from predicted bytes (rms <= 2%, worst <= 5%, \|mean\| <= 1%) | HOLDS | ALL 122 cells, 3 models: rms 0.55%, worst -1.55%, mean -0.00%; CLEAN 42 OLMoE cells: rms 0.54%, worst -1.47%, mean +0.16% |
+| | E1-UNI, SKEW-RATIO v3 | HOLDS, HOLDS | balanced 54 cells rms 0.46%; 68 ratios rms 0.55%, worst -1.40% |
+| | E2-SKEW, v3 from counted bytes | HOLDS | ALL 39 cells rms 0.62%, worst -1.56%; CLEAN 20 rms 0.55% |
+| | B-SKEW (PT / PW bytes, OLMoE w1 apart) | HOLDS | 30 rows rms 2.66%, worst +4.34% |
+| | OPEN-L2SKEW (OLMoE w1 skewed) | v3 FAILS; row-key rival NOT BETTER | v3 rms 11.76%, worst +20.56%; rival (39.5 MiB) rms 7.30%, worst +9.95% |
+| | B-CA (w1 controls) | v3 FAILS; v3_noca EXCLUDED | v3 worst +3.62% (OLMoE n 6) against 3%; v3_noca rms 9.87% |
+| | E1 rivals | v2 EXCLUDED; LT3, H8, v3_all INCONCLUSIVE; v3_noca UNDECIDED | v2 0.96% against v3's 0.45% on 7 lever cells (OLMoE n 3 SHARED) |
+| | SKEW-RATIO rivals | U EXCLUDED; LT3 INCONCLUSIVE | U 11.90% against 0.65% |
+| q1 | Q1-H (term b on control pairs) | UNDECIDED | no c15 page; ALL 10 pairs mean g -0.98 us (se 1.07) |
+| | Q1-C, Q1-P, Q1-SK | NOT SCORED; DESCRIPTIVE; OPEN | Q1-P Mixtral n 3 mean g -6.38 us |
+| secondk | H_ITER against H_CTA, mixtral-8x7b-tp4 | UNDECIDED | w1 H_ITER +0.78% (H_CTA +17.8%); w2 H_ITER +3.17%, NEITHER (H_CTA +26.3%) |
+
+CLEAN drops the six Mixtral and Phi timed pages (G1, below), so every CLEAN skew number is OLMoE's.
+
+**What each test separated, and what it did not.**
+
+- Model v3 meets the time bar under skew on three models, as a registered verdict: E1-SKEW HOLDS
+  in both views. CLEAN certifies it on OLMoE's 42 cells alone; Mixtral (42 cells, rms 0.44%, worst
+  -1.01%) and Phi (38 cells, rms 0.65%, worst -1.55%) meet it in ALL. Rental 5's largest residual,
+  SHARED at each shape's first tread (+2.64% under v2), does not recur: OLMoE SHARED n 3 reads
+  +0.13%. The largest residual is now Phi n 2, about 1% too little time on both arms. Every cell is
+  R3's tile 32 x 64 x 64 w8 s4 at G = 8, not vLLM's.
+- The bytes do not reach time on these cells. The decomposition puts at most 0.06% of ln T in the
+  byte term (under 0.002% on every OLMoE cell); scaling a cell's counted reads by +-20% moves its
+  predicted time by under 0.03%. So E1 and E2 test the timing model, and the byte tests are the
+  only tests of the byte model.
+- The byte model holds on the skewed rows it is scored on and misses OLMoE w1. B-SKEW HOLDS
+  (Phi w1 within 0.6%, OLMoE w2 +3.2 to +4.3%, Phi w2 up to +3.5%); OLMoE's skewed w1 reads are
+  over-predicted by +4.8% at n 3, +10.5 to +11.9% at n 6 and +18.9 to +20.6% at n 12 (OPEN, as
+  registered). The registered row-key rival at 39.5 MiB fixes n 12 (-0.8 to -1.1%) and not n 3 or
+  6 (+6.6 to +10.0%). Priced at 60 MiB, the card's L2, it reads every row within 1.8%: a SEEN
+  reading on these pages, a candidate for the next registration and not a result.
+- content_a is what holds OLMoE's w1 controls: without it they read +6.5% to +23.4%, with it +2.0
+  to +3.6% (B-CA: v3_noca EXCLUDED, v3 FAILS the 3% bar on six rows by up to 0.62 point).
+- Term (b) is separated from its absence only on OLMoE n 3 SHARED (v2 EXCLUDED on 7 lever cells,
+  which are IN-SAMPLE for h). Its registered test on control pairs, Q1-H, is UNDECIDED because the
+  c15 pages were lost; on the pairs that ran, v2's and H8's gap predictions sit 5.5 and 8.4 us off
+  against 3 se of 3.2 us (descriptive: the scorer reads no rival when the copies clause is
+  undecided, and whether it should is left to the owner). The path condition (v3 against v3_all)
+  shows only in Q1-P, registered descriptive: the Mixtral n 3 pairs read -6.4 us against v3_all's
+  -10.4 us.
+- Token order: OLMoE's shuffled rows run 0.18 to 0.25% faster than balanced on all 18 cells (rental
+  5 read 0.18 to 0.30%); Mixtral NATIVE n 3 reads +0.12 to +0.15% on all three pages, every other
+  Mixtral and Phi cell within 0.06%. Inside the margin in both views.
+- Second K on mixtral-8x7b-tp4: the BK 32 excess is per k-step, not per CTA. H_CTA misses by 17.8
+  and 26.3 points; H_ITER is within 0.8% on w1 and 3.17% on w2, 0.17 point outside the registered
+  3%, so the rule reads UNDECIDED.
+
+**Two apparatus defects.**
+
+- **The driver lost five units to a ten-letter tag list.** `fresh_tag` in
+  `scripts/gh200_model_session.sh` had ten suffixes ("", b to j). Units 3 to 12 used them; the
+  eleventh timed unit (13, Qwen1.5 q15) got an empty tag, its dry run read
+  `--session-tag -lock1710`, argparse refused it, and units 14, 15, 18 and 19 failed the same way.
+  Five of the six Q1 pages were never timed, so Q1-H's copies clause, Q1-C and Q1-P's Phi n 1 pairs
+  have no data. Fixed after the session (the tag counts on: `$B-p2-11`, ...; every caller refuses
+  its step on a failed tag; the first ten names are unchanged), with a test that plans twelve timed
+  units. No other fixed-size suffix list is in the driver or `vm_run.sh`. A smaller defect of the
+  same family: the dry-run logs are named by G, tread and label, not model, so Phi's overwrote
+  OLMoE's and Qwen1.5's (outcomes are intact in the ledger and the per-tag `locked_r3` logs).
+- **The histogram G1 fails a page for one drift-flagged repeat.** R3's `histogram_gates` fails G1
+  if any repeat anywhere is drift-excluded; the same flag on a ladder page fails V0 only past 20% of
+  the timed cells (`MAX_DRIFT_FRACTION`), and the rental-4 registration the histogram G1 implements
+  says "the thermal gate, as every timed page". Rental 6's CLEAN rule includes R3's G1, so the six
+  Mixtral and Phi pages, every cell at 1710.0 MHz, were dropped from CLEAN for 67 flagged repeats of
+  1,078 (3.7 to 10.6% per page, nearly all at the smallest tread), each already out of its cell
+  median. The flag compares the first and the last of a repeat's 15 per-burst NVML reads against 5%;
+  every flagged repeat on the 17 held-lock histogram pages of rentals 5 and 6 has its median read
+  at the lock and a dip (1500 to 1620 MHz) at an endpoint, while 297 clean repeats carry the same
+  dips in their interior. The 72 flagged repeats' times match their cells' clean repeats to +0.004%
+  (sd 0.058%; page-cluster bootstrap 95% [-0.013, +0.022]%). A rule that drops a flagged repeat like
+  a slip and fails the page past 20% non-clean rows would pass all 17 held histogram pages and all
+  67 held GH200 ladder pages; it is a proposal to the owner, not applied.
+
+**What the paper can claim, after rental 6.** Model v3 prices skewed routing to the time bar on R3's
+tile (blind draws; registered E1-SKEW HOLDS, CLEAN on OLMoE, ALL on Mixtral, OLMoE and Phi), and
+v2 is excluded where term (b) acts. The byte model's skewed reads hold on Phi and on OLMoE w2,
+and miss OLMoE w1 (open). Not claimed: term (b) on control pairs (Q1-H undecided, pages lost), the
+n = 1 SHARED residual (Q1-C not scored), second K, the 60 MiB row-key reading (SEEN), or anything on
+vLLM's own tile.
+
+**Instrument.** Every timed page reads every cell's median clock at 1710.0 MHz; one slipped repeat
+in the session (Mixtral ska, 1620 MHz), kept out of its cell median by `--slip-policy cell`. The
+four counter pages pass lock_gate.check_page with every cell in [1640, 1710] MHz (the counter-page
+clock rule that replaced rental 5's unmeetable 1705 MHz cut). The second-K pages fail V7 (arm clock
+match) and are read off NATIVE cells, as registered. Every page carries its card's UUID, as every
+published session does; the histograms are the registered synthetic files (G5 PASS on every page).
 
 ---
 

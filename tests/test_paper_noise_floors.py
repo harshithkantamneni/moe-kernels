@@ -50,6 +50,9 @@ def test_key_numbers():
     ts = NF.time_skew_pair_r5()["models"]  # rental 5: the A and B skew pages' shared cells
     assert ts["olmoe-1b-7b"]["cells"] == 12 and abs(ts["olmoe-1b-7b"]["rms"] - 0.001124) < 2e-6
     assert ts["qwen1.5-moe-a2.7b"]["cells"] == 12 and abs(ts["qwen1.5-moe-a2.7b"]["rms"] - 0.002583) < 2e-6
+    t6 = NF.time_skew_triple_r6()["models"]  # rental 6: the A, B and C skew pages' shared cells
+    assert {m: v["cells"] for m, v in t6.items()} == {"mixtral-8x7b": 12, "olmoe-1b-7b": 12, "phi-3.5-moe": 11}
+    assert abs(t6["olmoe-1b-7b"]["rms"] - 0.001256) < 2e-6 and abs(t6["mixtral-8x7b"]["rms"] - 0.000585) < 2e-6
 
 
 def test_cli_runs(tmp_path):

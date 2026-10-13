@@ -1,0 +1,129 @@
+{
+ "registration": "2026-10-09-rental6-secondk-gh200",
+ "pages": {
+  "k64s4": "counted (V7 FAILED: NATIVE cells only)",
+  "k32s4": "counted (V7 FAILED: NATIVE cells only)"
+ },
+ "clocks_mhz": {
+  "k64s4": 1670.5989147210457,
+  "k32s4": 1683.4489681930477
+ },
+ "gemms": {
+  "w1": {
+   "c64": 338.39855996963576,
+   "c32": 241.61505525683202,
+   "S64": 64,
+   "S32": 128,
+   "r_meas": 1.4179558543053155,
+   "e": {
+    "H_ITER": 0.007807448984602727,
+    "H_CTA": 0.17820718671036917
+   },
+   "reading": "H_ITER"
+  },
+  "w2": {
+   "c64": 346.7701631675035,
+   "c32": 243.92050722653266,
+   "S64": 56,
+   "S32": 112,
+   "r_meas": 1.3872888351076538,
+   "e": {
+    "H_ITER": 0.03167776346379236,
+    "H_CTA": 0.2629133405866577
+   },
+   "reading": "NEITHER"
+  }
+ },
+ "verdict": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})",
+ "addendum": {
+  "rule": "rental 2's addendum rule 3",
+  "pages": {
+   "2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k64s4-r3-counters/lock1710/r3c-g64.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [
+      "V7"
+     ],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [
+      "V7"
+     ],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   },
+   "2026-10-13-nvidia_gh200_480gb-mixtral-8x7b-tp4-k32s4-r3-counters/lock1710/r3c-g64.json": {
+    "ALL": {
+     "failed_gates": [],
+     "failed_but_not_gating": [
+      "V7"
+     ],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    },
+    "CLEAN": {
+     "failed_gates": [],
+     "failed_but_not_gating": [
+      "V7"
+     ],
+     "dropped_above_lock": [],
+     "clean_failed": [],
+     "use": "counted"
+    }
+   }
+  },
+  "verdicts": [
+   {
+    "path": "verdict",
+    "ALL": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})",
+    "CLEAN": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})",
+    "registered": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})"
+   }
+  ],
+  "CLEAN": {
+   "registration": "2026-10-09-rental6-secondk-gh200",
+   "pages": {
+    "k64s4": "counted (V7 FAILED: NATIVE cells only)",
+    "k32s4": "counted (V7 FAILED: NATIVE cells only)"
+   },
+   "clocks_mhz": {
+    "k64s4": 1670.5989147210457,
+    "k32s4": 1683.4489681930477
+   },
+   "gemms": {
+    "w1": {
+     "c64": 338.39855996963576,
+     "c32": 241.61505525683202,
+     "S64": 64,
+     "S32": 128,
+     "r_meas": 1.4179558543053155,
+     "e": {
+      "H_ITER": 0.007807448984602727,
+      "H_CTA": 0.17820718671036917
+     },
+     "reading": "H_ITER"
+    },
+    "w2": {
+     "c64": 346.7701631675035,
+     "c32": 243.92050722653266,
+     "S64": 56,
+     "S32": 112,
+     "r_meas": 1.3872888351076538,
+     "e": {
+      "H_ITER": 0.03167776346379236,
+      "H_CTA": 0.2629133405866577
+     },
+     "reading": "NEITHER"
+    }
+   },
+   "verdict": "UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})"
+  }
+ }
+}

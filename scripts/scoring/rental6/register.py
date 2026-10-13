@@ -71,8 +71,30 @@ def txt(part: str, d: dict) -> list[str]:
     return L
 
 
+def _seed_pricer_as_of_registration() -> None:
+    """The SEEN align proxy (`r6model.align_proxy`) is a median over every published GH200 report's
+    probe, so a session published after the registration (rental 6's own, 2026-10-13 on) would
+    change it. `--check` recomputes the registered files, so the pricer reads the published set as
+    of the registration date (rental 3's rule, 2026-10-06): a directory of links to the published
+    sessions dated on or before C6.DATE. reg6.pricer() keeps the first Pricer it is given."""
+    import tempfile
+    import r6model as M6
+    if R6._P:
+        return
+    pub = REPO / "results" / "published"
+    import atexit
+    import shutil
+    tmp = Path(tempfile.mkdtemp(prefix="r6-asof-"))
+    atexit.register(shutil.rmtree, tmp, True)
+    for d in sorted(pub.iterdir()):
+        if d.is_dir() and d.name[:10] <= C6.DATE:
+            (tmp / d.name).symlink_to(d.resolve(), target_is_directory=True)
+    R6._P.append(M6.Pricer(proxy=M6.align_proxy(tmp)))
+
+
 def build(only=None) -> dict:
     parts = [p for p in C6.PARTS if only is None or p in only]
+    _seed_pricer_as_of_registration()
     docs = {p: R6.BUILDERS[p]() for p in parts}
     pins = {p: sha256(REPO / p) for p in PINNED}
     for d in docs.values():

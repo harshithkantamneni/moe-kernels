@@ -1020,6 +1020,86 @@
    "number": "regcheck: 5 CTAs/SM against the plain 4 (w2, BK 64 s4); gate median 2.2 to 6.6%, worst 2.7 to 14.7% (std2 2.8 / 3.2%, 5.9 / 6.6%); v3, every site at 1 in 17, still 2.2 to 2.8% median",
    "label": "no stamp page exists (reg: missing)",
    "scored_in": "`SC5/stamps2.score.txt`; `SC5/SCORES.md` (f); `F` Rental 5 methods finding"
+  },
+  {
+   "row": 103,
+   "section": "3.2",
+   "test": "R6 G3 token order: TOST of T(uniform-shuffled) / T(balanced) - 1 - delta_v3 (0 on every pair), 90% cluster-t interval inside +-0.36%, Cochran Q at sigma_page 0.18%",
+   "registration": "`D/2026-10-09-rental6-skew-gh200.json`",
+   "verdict": "PASS (both views)",
+   "number": "ALL 51 cells on 9 pages: mean -0.071%, CI [-0.140, -0.003]%; CLEAN 18 OLMoE cells on 3 pages: mean -0.217%, CI [-0.227, -0.208]%; OLMoE's 18 cells -0.18 to -0.25%, Mixtral NATIVE n 3 +0.12 to +0.15%",
+   "label": "OLMoE BLIND draws, IN-SAMPLE for term (b); Mixtral BLIND-CALMODEL, Phi BLIND; Mixtral and Phi pages out of CLEAN on R3's G1 drift flag (reg: labels, gates)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (c)"
+  },
+  {
+   "row": 104,
+   "section": "3.2",
+   "test": "R6 E1-SKEW, model v3 end to end from predicted bytes: rms <= 2%, worst <= 5%, |mean| <= 1% (owner decision 3); E1-UNI on the balanced cells at the same bar",
+   "registration": "same",
+   "verdict": "E1-SKEW HOLDS; E1-UNI HOLDS",
+   "number": "ALL 122 cells (Mixtral 42, OLMoE 42, Phi 38): rms 0.55%, worst -1.55%, mean -0.00%; CLEAN 42 OLMoE cells: rms 0.54%, worst -1.47%, mean +0.16%; E1-UNI ALL 54 cells rms 0.46%; byte term of ln T at most 0.06%",
+   "label": "OLMoE BLIND draws, IN-SAMPLE for term (b); Mixtral BLIND-CALMODEL, Phi BLIND; Mixtral and Phi pages out of CLEAN on R3's G1 drift flag (reg: labels, gates)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (a)"
+  },
+  {
+   "row": 105,
+   "section": "3.2",
+   "test": "R6 E1 rivals v2, LT3, H8, v3_all, v3_noca: EXCLUDED if rms on their lever cells >= 2x v3's and >= 0.76%; UNDECIDED under 6 lever cells",
+   "registration": "same",
+   "verdict": "v2 EXCLUDED; LT3 INCONCLUSIVE (ALL EXCLUDED; CLEAN NOT EXCLUDED); H8 INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN EXCLUDED); v3_all INCONCLUSIVE (UNDECIDED in both views); v3_noca UNDECIDED",
+   "number": "v2 0.96% against v3's 0.45% on 7 lever cells (OLMoE n 3 SHARED); LT3 ALL 1.41% against 0.57% (82 cells), CLEAN 0.68% against 0.54% (22); H8 ALL 1.06% against 0.67% (20), CLEAN 1.24% against 0.54% (14); v3_all 4 / 0 lever cells; v3_noca 0",
+   "label": "as row 103; the 7 v2 lever cells IN-SAMPLE for h (reg: v3 in_sample)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (f)"
+  },
+  {
+   "row": 106,
+   "section": "3.2",
+   "test": "R6 SKEW-RATIO: v3's T(h) / T(uniform), rms <= 1.5%, worst <= 4%; rivals LT3 and U by the rival rule on their ratio lever cells",
+   "registration": "same",
+   "verdict": "v3 HOLDS; LT3 INCONCLUSIVE (ALL NOT EXCLUDED; CLEAN UNDECIDED); U EXCLUDED",
+   "number": "ALL 68 ratios: rms 0.55%, worst -1.40%, mean -0.42%; CLEAN 24: rms 0.74%; U 11.90% against 0.65% on 40 lever ratios; LT3 1.03% against 0.79% on 7",
+   "label": "as row 103 (reg: labels)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (a)"
+  },
+  {
+   "row": 107,
+   "section": "3.2",
+   "test": "R6 byte legs: B-SKEW (q_v3 / q_counted - 1 on PT / PW rows, every |e| <= 5%, rms <= 3%, OLMoE w1 apart) and E2-SKEW (v3 time from counted bytes, rms <= 2%, worst <= 5%, |mean| <= 1.5%) on the OLMoE and Phi skbytes pages under the counter-page clock rule",
+   "registration": "same",
+   "verdict": "B-SKEW HOLDS; E2-SKEW HOLDS",
+   "number": "B-SKEW 30 rows: rms 2.66%, worst +4.34% (OLMoE w2 n 12); E2-SKEW ALL 39 cells rms 0.62%, worst -1.56%, CLEAN 20 rms 0.55%; clock rule: 20 of 20 cells in [1640, 1710] MHz on each page",
+   "label": "as row 103; the byte model's parameters CAL (8x7B), content_a SEEN-SELECTED (reg: seen_data)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (b)"
+  },
+  {
+   "row": 108,
+   "section": "3.2",
+   "test": "R6 OPEN-L2SKEW (OLMoE w1 skewed rows, scored apart; the row-key rival at 39.5 MiB BETTER iff every |e| <= 5% and rms <= 0.5 x v3's) and B-CA (w1 uniform / balanced rows, v3 every |e| <= 3%; v3_noca EXCLUDED at 2x and 3%)",
+   "registration": "same",
+   "verdict": "OPEN-L2SKEW: v3 FAILS, row-key NOT BETTER; B-CA: v3 FAILS, v3_noca EXCLUDED",
+   "number": "OLMoE w1 skewed v3 +4.8% (n 3) to +20.6% (n 12), rms 11.76%; row-key rms 7.30%, worst +9.95% (printed at 60 MiB: rms 1.04%, SEEN); B-CA v3 worst +3.62% (OLMoE n 6), v3_noca rms 9.87%",
+   "label": "OPEN (no model change follows); the 60 MiB reading SEEN on these pages (reg: OPEN-L2SKEW)",
+   "scored_in": "`SC6/skew.score.txt`; `SC6/SCORES.md` (b)"
+  },
+  {
+   "row": 109,
+   "section": "3.2",
+   "test": "R6 Q1: Q1-H (term b on block-scan control pairs: |mean g| <= 1.5 us and |g(c15) - g(c9)| <= 1.5 us; rivals v2, v3_all, H8), Q1-C (CALL against DEAD on D = x15 - x9), Q1-P (DESCRIPTIVE), Q1-SK (OPEN)",
+   "registration": "`D/2026-10-09-rental6-q1-gh200.json`",
+   "verdict": "Q1-H UNDECIDED (no c15 pair); Q1-C NOT SCORED; Q1-P DESCRIPTIVE; Q1-SK OPEN",
+   "number": "5 of 6 Q1 pages lost to the driver's fresh_tag; Q1-H ALL 10 pairs mean g -0.98 us (se 1.07), CLEAN 7 pairs -1.67 us; Q1-P Mixtral n 3 -6.38 us; Q1-SK OLMoE -1.57 us, Phi -2.53 us",
+   "label": "c9 SEEN replicates, c15 SHARED BLIND (never run); OLMoE n 3 pairs IN-SAMPLE for h (reg: labels)",
+   "scored_in": "`SC6/q1.score.txt`; `SC6/SCORES.md` (d)"
+  },
+  {
+   "row": 110,
+   "section": "3.2",
+   "test": "R6 second K, mixtral-8x7b-tp4 G = 64 counter pages k64s4 and k32s4 (both new, one board): H_ITER against H_CTA, |e| <= 3% per GEMM",
+   "registration": "`D/2026-10-09-rental6-secondk-gh200.json`",
+   "verdict": "UNDECIDED (w1 H_ITER, w2 NEITHER)",
+   "number": "w1 r 1.4180 (H_ITER +0.78%, H_CTA +17.8%); w2 r 1.3873 (H_ITER +3.17%, H_CTA +26.3%); V7 FAIL on both, NATIVE cells only; page clocks 1670.6 / 1683.4 MHz",
+   "label": "k64s4 SEEN configuration, k32s4 BLIND; c64 / c32 SEEN (OLMoE) (reg: labels)",
+   "scored_in": "`SC6/secondk.score.txt`; `SC6/SCORES.md` (e)"
   }
  ]
 }

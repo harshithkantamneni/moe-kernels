@@ -1182,3 +1182,30 @@ new, H_ITER against H_CTA 16.9% (w1) and 22.4% (w2).
 
 145 min of units ($5.53 at $2.29/h). The driver drops the last unit first: k2, q1j, byt, q1p,
 q1q; calibrate and the nine skew pages carry nodrop=1.
+
+**Scored 2026-10-13** on `results/published/2026-10-13-nvidia_gh200_480gb-rental6-session`
+(board ff9942, new; 21 units at 650d295 in 122 minutes; the scorers' outputs and the
+per-prediction ALL / CLEAN table in `scripts/scoring/rental6/` and `SCORES.md`; no post-page fix).
+Units 13 to 15, 18 and 19 (Qwen1.5 q15, Phi q9 and q15, JetMoE q9 and q15) wrote no page: the
+driver's `fresh_tag` ran out of its ten suffixes and handed the eleventh timed unit an empty tag,
+which argparse refused at the dry run (fixed after the session). The six Mixtral and Phi skew
+pages fail R3's G1 on drift flags (every cell at 1710.0 MHz; 3.7 to 10.6% of repeats flagged,
+each already out of its cell median) and count in ALL, not CLEAN, as the G1 rule is written; CLEAN
+is OLMoE's three pages. **skew**: G3 PASS (ALL 51 cells, 9 pages, CI [-0.140, -0.003]%; CLEAN 18
+cells, CI [-0.227, -0.208]%). E1-SKEW HOLDS (ALL 122 cells rms 0.55%, worst -1.55%, mean -0.00%;
+CLEAN 42 OLMoE cells rms 0.54%, worst -1.47%, mean +0.16%); E1-UNI, SKEW-RATIO v3, E2-SKEW (39
+cells rms 0.62%) and B-SKEW (30 rows rms 2.66%, worst +4.34%) HOLD. E1 rivals: v2 EXCLUDED (7 OLMoE
+n 3 SHARED lever cells, IN-SAMPLE for h); LT3 and H8 INCONCLUSIVE (the views disagree); v3_all
+INCONCLUSIVE and v3_noca UNDECIDED (too few lever cells). SKEW-RATIO: U EXCLUDED, LT3 INCONCLUSIVE.
+OPEN-L2SKEW: v3 FAILS OLMoE's skewed w1 (rms 11.76%, worst +20.56% at n 12) and the 39.5 MiB
+row-key rival is NOT BETTER (rms 7.30%; printed at 60 MiB, not registered, rms 1.04%). B-CA: v3
+FAILS (OLMoE w1 controls up to +3.62% against 3%), v3_noca EXCLUDED (rms 9.87%). On these
+floor-bound cells the byte term of ln T is at most 0.06%, so E1 and E2 test the timing model.
+**q1**: Q1-H UNDECIDED (no c15 page for the copies clause; ALL 10 pairs mean g -0.98 us, CLEAN 7
+pairs -1.67 us); Q1-C NOT SCORED; Q1-P DESCRIPTIVE (Mixtral n 3 -6.38 us); Q1-SK printed.
+**secondk**: UNDECIDED (w1 H_ITER +0.78%, H_CTA +17.8%; w2 H_ITER +3.17%, 0.17 point past the 3%
+tolerance, H_CTA +26.3%; V7 fails on both pages, read off NATIVE cells as registered). **v3**
+scores nothing of its own. Readings left to the owner: Q1-H's rivals when the copies clause is
+undecided (the scorer reads none; on the pairs that ran v2 and H8 sit 5.5 and 8.4 us off against 3
+se of 3.2 us), and the histogram G1 drift rule (one flagged repeat fails a page; the ladder pages'
+V0 allows 20%). The files above are unchanged.

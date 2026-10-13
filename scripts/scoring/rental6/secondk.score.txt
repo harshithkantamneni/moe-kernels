@@ -1,0 +1,9 @@
+RENTAL 6 SECOND K (per-CTA fixed vs main loop), 2026-10-09-rental6-secondk-gh200
+  page k64s4: counted (V7 FAILED: NATIVE cells only)
+  page k32s4: counted (V7 FAILED: NATIVE cells only)
+  clocks: {'k64s4': 1670.5989147210457, 'k32s4': 1683.4489681930477}
+  w1: r 1.4180 | H_ITER +0.8%  H_CTA +17.8% -> H_ITER
+  w2: r 1.3873 | H_ITER +3.2%  H_CTA +26.3% -> NEITHER
+  verdict: UNDECIDED ({'w1': 'H_ITER', 'w2': 'NEITHER'})
+  two views (ALL, CLEAN):
+    0 of 1 verdicts differ between ALL and CLEAN
