@@ -64,3 +64,5 @@
 2026-10-13T12:43:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed 3a112a9 to run-gh200-rental6-20261013t1050: timed (unit 15/21 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell): exit 3 (0 min)
 2026-10-13T12:43:26Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json --arms native,shared [unit 16/21 olmoe-1b-7b skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 58 min left)
+2026-10-13T12:45:37Z bytes END: exit 0 after 2 min [unit 16/21 olmoe-1b-7b skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json arms=native,shared byte-groups=8]
+2026-10-13T12:45:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
