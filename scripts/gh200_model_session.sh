@@ -472,9 +472,17 @@ dropped() { [[ -f "$D/drops" ]] && grep -qx -- "$1" "$D/drops"; }
 #: A session tag no earlier run of this driver used: BASE, else BASEb, BASEc...
 #: locked_r3.py refuses a tag whose ledger or pages exist, so a rerun of a step
 #: takes the next letter rather than being refused.
+#: After the ten letter suffixes ("", b to j, the names every session through
+#: rental 6 used) it counts on, BASE-11, BASE-12, ..., to 100000: rental
+#: 6's eleventh timed unit found the ten taken, got an empty tag, and its dry run
+#: read `--session-tag -lock1710`, which argparse refused, as it did for every
+#: timed unit after it (units 13 to 15, 18 and 19). Every caller checks the
+#: return, so a tag can never be empty.
 fresh_tag() {
-  local base="$1" s t
-  for s in "" b c d e f g h i j; do
+  local base="$1" s t i=0 letters=("" b c d e f g h i j)
+  while (( i < 100000 )); do
+    if (( i < ${#letters[@]} )); then s="${letters[i]}"; else s="-$(( i + 1 ))"; fi
+    i=$(( i + 1 ))
     t="$base$s"
     if ! grep -qx -- "$t" "$D/tags-used" 2>/dev/null && [[ ! -e "$SESSION_ROOT/locked-r3/$t" ]]; then
       printf '%s\n' "$t" >> "$D/tags-used"
@@ -860,7 +868,11 @@ step_timed() {
     ledger "timed: histogram page $HISTOGRAM, arms ${R3_ARMS:-native,shared}, deepest tread $TT$( (( ${#tk[@]} )) && echo ", knobs ${tk[*]}")"
   fi
   local R8=("${R3_BASE[@]}" --treads 8 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
-  local T2 T5=""; T2="$(fresh_tag "$B-p2")"; (( own )) || T5="$(fresh_tag "$B-p5")"
+  local T2 T5=""
+  T2="$(fresh_tag "$B-p2")" || { ledger "timed REFUSED: no fresh session tag for $B-p2"; return "$EXIT_REFUSED"; }
+  if (( ! own )); then
+    T5="$(fresh_tag "$B-p5")" || { ledger "timed REFUSED: no fresh session tag for $B-p5"; return "$EXIT_REFUSED"; }
+  fi
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "timed REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   moe_counter ncu --clock-control reset; sudo -n nvidia-smi -rgc
@@ -1073,7 +1085,7 @@ step_deep() {
   export MOE_RESULTS_DIR="$(results_dir)"
   load_ruler
   local R9=("${R3_BASE[@]}" --treads 9 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
-  local T; T="$(fresh_tag "$B-deep")"
+  local T; T="$(fresh_tag "$B-deep")" || { ledger "deep REFUSED: no fresh session tag for $B-deep"; return "$EXIT_REFUSED"; }
   moe_counter ncu --clock-control reset; sudo -n nvidia-smi -rgc
   local busy; busy="$(gpu_busy)"
   [[ -z "$busy" ]] || { ledger "deep REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
@@ -1148,7 +1160,7 @@ step_r1lock() {
   dropped r1_g4 && ledger "r1lock: R1 at G=4 is dropped (deadline)" || gs+=(4)
   dropped r1_g1 && ledger "r1lock: R1 at G=1 is dropped (deadline)" || gs+=(1)
   (( ${#gs[@]} )) || return "$EXIT_INVALID"
-  local tag; tag="$(fresh_tag "$B-r1lock")"
+  local tag; tag="$(fresh_tag "$B-r1lock")" || { ledger "r1lock REFUSED: no fresh session tag for $B-r1lock"; return "$EXIT_REFUSED"; }
   local R1=("${R1_BASE[@]}" --session-tag "$tag")
   for G in "${gs[@]}"; do
     "$PY_VLLM" scripts/clock_elasticity.py --dry-run --group-m "$G" --lock-clocks "${locks[@]}" "${R1[@]}" \

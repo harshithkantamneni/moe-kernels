@@ -253,3 +253,41 @@ def test_the_pre_setup_dry_run_prints_the_rental6_plan_from_the_files_vm_run_cop
                          capture_output=True, text=True, timeout=60, cwd=home, env=env)
     assert got.returncode == exit_codes.REFUSED and "THE GH200 MODEL-TEST SESSION" in got.stdout, (
         got.stdout[-2000:] + got.stderr[-2000:])
+
+
+# --------------------------------------------------------------------------
+# fresh_tag past ten timed units (rental 6 lost units 13-15, 18, 19 to it)
+# --------------------------------------------------------------------------
+
+PLAN_MANY = "- prelude\nmixtral-8x7b calibrate label=r6 nodrop=1 est=1 cap=5\n" + "".join(
+    f"olmoe-1b-7b timed label=t{i} histogram={H6}/olmoe-1b-7b-{'ABC'[i % 3]}.json arms=native,shared "
+    f"declared-copies=9 timed-groups=8 slip-policy=cell nodrop=1 est=1 cap=5\n" for i in range(12))
+
+
+def _tag(argv):
+    i = argv.index("--session-tag")
+    return argv[i + 1] if i + 1 < len(argv) else ""
+
+
+def test_twelve_timed_units_each_get_a_fresh_nonempty_session_tag(tmp_path):
+    """fresh_tag had ten suffixes ("", b..j): rental 6's 11th timed unit got an empty tag, its
+    dry run read `--session-tag -lock1710` and argparse refused it, and so did every timed unit
+    after it. Every dry run and every locked_r3 call now carries a non-empty tag of its own; the
+    first ten keep the names earlier sessions used, so their ledgers and pages are unchanged."""
+    box, got = T5.box5(tmp_path, PLAN_MANY, {"retracted": 40})
+    led = box.ledger()
+    assert got.returncode == exit_codes.DONE, got.stdout[-3000:] + got.stderr[-3000:] + led
+    base = box.base()
+    lr = [a[:a.index("--")] for a in box.tool("locked_r3")]
+    dry = box.tool("private_weight_reference", dry=True)
+    assert len(lr) == 12 and len(dry) == 12, (len(lr), len(dry))
+    tags = [_tag(a) for a in lr]
+    assert all(t and not t.startswith("-") for t in tags), tags
+    assert len(set(tags)) == 12, tags
+    assert tags[:10] == [f"{base}-p2{s}" for s in ("", *"bcdefghij")]
+    assert tags[10:] == [f"{base}-p2-11", f"{base}-p2-12"]
+    dtags = [_tag(a) for a in dry]
+    assert all(t and not t.startswith("-") for t in dtags), dtags
+    assert dtags == [f"{t}-lock1710" for t in tags]
+    assert (box.session / "gh200-driver" / "tags-used").read_text().split() == tags
+    assert "expected one argument" not in got.stdout + got.stderr + led
