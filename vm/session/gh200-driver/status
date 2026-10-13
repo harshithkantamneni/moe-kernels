@@ -109,3 +109,12 @@
 2026-10-13T12:42:58Z timed: 2026-10-13T12:42:53Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-9ec83f58
 2026-10-13T12:42:58Z timed END: exit 0 after 3 min [unit 12/21 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
 2026-10-13T12:42:59Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-13T12:43:01Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 15 copies, slip-policy cell [unit 13/21 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell] (estimate 3 min, cap 12 min, 59 min left)
+2026-10-13T12:43:01Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-13T12:43:01Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2
+2026-10-13T12:43:01Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-13T12:43:02Z dry run G=8 treads 2 may not lock: no 'n_decl = 15 against n_max' line (/home/ubuntu/moe/session/logs/r3-g8-t2-dry-q15.log)
+2026-10-13T12:43:07Z timed: P2 skipped: no design passed its dry run
+2026-10-13T12:43:07Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-13T12:43:07Z timed END: exit 3 after 0 min [unit 13/21 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell]
+2026-10-13T12:43:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

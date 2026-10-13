@@ -609,3 +609,14 @@ clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power
 2026-10-13T12:42:58Z timed: P2 locked_r3 exit 0
 2026-10-13T12:42:58Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
 2026-10-13T12:42:58Z timed: 2026-10-13T12:42:53Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-9ec83f58
+== 2026-10-13T12:43:01Z step timed: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 15 copies, slip-policy cell
+2026-10-13T12:43:01Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-13T12:43:01Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2
+==PROF== Resetting GPU clocks on device 0.
+All done.
+2026-10-13T12:43:01Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-13T12:43:02Z dry run G=8 treads 2 may not lock: no 'n_decl = 15 against n_max' line (/home/ubuntu/moe/session/logs/r3-g8-t2-dry-q15.log)
+clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power.limit [W]
+345 MHz, 1980 MHz, 0x0000000000000001, 700.00 W
+2026-10-13T12:43:07Z timed: P2 skipped: no design passed its dry run
+2026-10-13T12:43:07Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
