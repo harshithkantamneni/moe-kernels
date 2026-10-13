@@ -9,3 +9,4 @@
 2026-10-13T11:53:55Z timed (unit 7/21 olmoe-1b-7b skb histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
 2026-10-13T12:04:46Z timed (unit 8/21 olmoe-1b-7b skc histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
 2026-10-13T12:18:57Z timed (unit 9/21 phi-3.5-moe ska histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (14 min)
+2026-10-13T12:29:37Z timed (unit 10/21 phi-3.5-moe skb histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (11 min)
