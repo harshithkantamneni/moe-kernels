@@ -18,3 +18,4 @@
 2026-10-13T12:45:29Z bytes: G=8 page exit 0
 2026-10-13T12:45:39Z bytes (unit 16/21 olmoe-1b-7b skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-bytes.json arms=native,shared byte-groups=8): exit 0 (2 min)
 2026-10-13T12:50:04Z bytes: G=8 page exit 0
+2026-10-13T12:50:14Z bytes (unit 17/21 phi-3.5-moe skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-bytes.json arms=native,shared byte-groups=8): exit 0 (5 min)
