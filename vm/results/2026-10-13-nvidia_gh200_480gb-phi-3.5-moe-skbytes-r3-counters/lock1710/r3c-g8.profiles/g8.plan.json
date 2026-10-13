@@ -1,0 +1,394 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "phi-3.5-moe",
+  "dtype": "bf16",
+  "block_m": 32,
+  "block_n": 64,
+  "num_stages": 4,
+  "group_m": 8,
+  "treads": [
+    2,
+    4,
+    12
+  ],
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "cells": [
+    [
+      "native",
+      2,
+      "PT"
+    ],
+    [
+      "shared",
+      2,
+      "PT"
+    ],
+    [
+      "native",
+      2,
+      "PW"
+    ],
+    [
+      "shared",
+      2,
+      "PW"
+    ],
+    [
+      "native",
+      2,
+      "uniform"
+    ],
+    [
+      "shared",
+      2,
+      "uniform"
+    ],
+    [
+      "native",
+      2,
+      "balanced"
+    ],
+    [
+      "shared",
+      2,
+      "balanced"
+    ],
+    [
+      "native",
+      4,
+      "PT"
+    ],
+    [
+      "shared",
+      4,
+      "PT"
+    ],
+    [
+      "native",
+      4,
+      "PW"
+    ],
+    [
+      "shared",
+      4,
+      "PW"
+    ],
+    [
+      "native",
+      4,
+      "uniform"
+    ],
+    [
+      "shared",
+      4,
+      "uniform"
+    ],
+    [
+      "native",
+      4,
+      "balanced"
+    ],
+    [
+      "shared",
+      4,
+      "balanced"
+    ],
+    [
+      "native",
+      12,
+      "PT"
+    ],
+    [
+      "native",
+      12,
+      "PW"
+    ],
+    [
+      "native",
+      12,
+      "uniform"
+    ],
+    [
+      "native",
+      12,
+      "balanced"
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "E x n_max = 144 already clears the expert bound 64: one kernel throughout",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-10-13-nvidia_gh200_480gb-phi-3.5-moe-skbytes-r3-counters/lock1710/r3c-g8.profiles/g8.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-10-13-nvidia_gh200_480gb-phi-3.5-moe-skbytes-r3-counters/lock1710/r3c-g8.profiles/g8.triton-cache",
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "0768c86b76982f76f9a6d428b2d84ddd27cfa5c029467144d34e62b360f59d5a",
+    "page": "bytes",
+    "shuffle_seed": 20261010,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 2,
+        "counts": [
+          60,
+          53,
+          43,
+          79,
+          73,
+          92,
+          37,
+          58,
+          77,
+          83,
+          59,
+          41,
+          58,
+          69,
+          75,
+          67
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 2,
+        "counts": [
+          63,
+          117,
+          115,
+          45,
+          54,
+          70,
+          118,
+          56,
+          47,
+          59,
+          62,
+          59,
+          36,
+          27,
+          64,
+          32
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 2,
+        "counts": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 2,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT",
+        "n": 4,
+        "counts": [
+          156,
+          125,
+          52,
+          83,
+          138,
+          134,
+          90,
+          152,
+          112,
+          182,
+          138,
+          147,
+          112,
+          123,
+          171,
+          133
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 4,
+        "counts": [
+          130,
+          131,
+          135,
+          169,
+          125,
+          43,
+          134,
+          142,
+          276,
+          93,
+          80,
+          88,
+          137,
+          106,
+          148,
+          111
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 4,
+        "counts": [
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 4,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT",
+        "n": 12,
+        "counts": [
+          336,
+          296,
+          347,
+          366,
+          413,
+          261,
+          381,
+          532,
+          362,
+          363,
+          453,
+          400,
+          450,
+          405,
+          411,
+          368
+        ],
+        "arms": [
+          "native"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 12,
+        "counts": [
+          428,
+          105,
+          382,
+          457,
+          469,
+          343,
+          368,
+          268,
+          352,
+          505,
+          333,
+          542,
+          421,
+          396,
+          415,
+          360
+        ],
+        "arms": [
+          "native"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 12,
+        "counts": [
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "arms": [
+          "native"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 12,
+        "counts": null,
+        "arms": [
+          "native"
+        ]
+      }
+    ]
+  }
+}
