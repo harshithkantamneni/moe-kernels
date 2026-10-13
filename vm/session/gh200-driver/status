@@ -158,3 +158,12 @@
 2026-10-13T12:50:12Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-13-nvidia_gh200_480gb-phi-3.5-moe-skbytes-r3-counters/lock1710/summary.json)
 2026-10-13T12:50:12Z bytes END: exit 0 after 5 min [unit 17/21 phi-3.5-moe skbytes histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-bytes.json arms=native,shared byte-groups=8]
 2026-10-13T12:50:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-13T12:50:15Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, 9 copies, slip-policy cell [unit 18/21 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell] (estimate 3 min, cap 12 min, 51 min left)
+2026-10-13T12:50:15Z timed: declared-copies 9 on every page of this unit
+2026-10-13T12:50:15Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, deepest tread 4
+2026-10-13T12:50:16Z timed: G = 8 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-10-13T12:50:16Z dry run G=8 treads 4 may not lock: no 'n_decl = 9 against n_max' line (/home/ubuntu/moe/session/logs/r3-g8-t4-dry-q9.log)
+2026-10-13T12:50:21Z timed: P2 skipped: no design passed its dry run
+2026-10-13T12:50:21Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-13T12:50:21Z timed END: exit 3 after 0 min [unit 18/21 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+2026-10-13T12:50:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
