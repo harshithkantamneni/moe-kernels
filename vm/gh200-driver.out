@@ -10,3 +10,7 @@
 2026-10-13T10:53:35Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/21 mixtral-8x7b r6] (estimate 2 min, cap 30 min, 168 min left)
 2026-10-13T10:54:00Z calibrate END: exit 0 after 0 min [unit 2/21 mixtral-8x7b r6]
 2026-10-13T10:54:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ecd0515 to run-gh200-rental6-20261013t1050: calibrate (unit 2/21 mixtral-8x7b r6): exit 0 (0 min)
+2026-10-13T10:54:02Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies, slip-policy cell [unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell] (estimate 14 min, cap 40 min, 168 min left)
+2026-10-13T11:07:50Z timed END: exit 0 after 14 min [unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+2026-10-13T11:07:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

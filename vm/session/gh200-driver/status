@@ -19,3 +19,12 @@
 2026-10-13T10:54:00Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-10-13T10:54:00Z calibrate END: exit 0 after 0 min [unit 2/21 mixtral-8x7b r6]
 2026-10-13T10:54:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-13T10:54:02Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies, slip-policy cell [unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell] (estimate 14 min, cap 40 min, 168 min left)
+2026-10-13T10:54:02Z timed: declared-copies 9 on every page of this unit
+2026-10-13T10:54:02Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json, arms native,shared, deepest tread 16
+2026-10-13T10:54:03Z timed: G = 8 at treads 16, no G=3 page (timed-groups / timed-treads)
+2026-10-13T11:07:50Z timed: P2 locked_r3 exit 0
+2026-10-13T11:07:50Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-13T11:07:50Z timed: 2026-10-13T11:07:45Z G=8 held-with-slips at lock 1710: R3 exit 3 INVALID, cells=216 worst=1620.0 MHz, 821 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist84267d8ab9-6ea3f043; 1 slipped rows; 1 slipped rows, lowest 1620 MHz, recorded and kept out of their cell medians by R3
+2026-10-13T11:07:50Z timed END: exit 0 after 14 min [unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+2026-10-13T11:07:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

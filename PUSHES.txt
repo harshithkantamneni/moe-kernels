@@ -2,3 +2,4 @@
 2026-10-13T10:53:32Z setup_vm.sh: READY
 2026-10-13T10:53:34Z prelude (unit 1/21 -): exit 0 (0 min)
 2026-10-13T10:54:01Z calibrate (unit 2/21 mixtral-8x7b r6): exit 0 (0 min)
+2026-10-13T11:07:51Z timed (unit 3/21 mixtral-8x7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell): exit 0 (14 min)
