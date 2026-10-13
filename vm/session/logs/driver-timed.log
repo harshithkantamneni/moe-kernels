@@ -620,3 +620,14 @@ clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power
 345 MHz, 1980 MHz, 0x0000000000000001, 700.00 W
 2026-10-13T12:43:07Z timed: P2 skipped: no design passed its dry run
 2026-10-13T12:43:07Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+== 2026-10-13T12:43:09Z step timed: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, 9 copies, slip-policy cell
+2026-10-13T12:43:09Z timed: declared-copies 9 on every page of this unit
+2026-10-13T12:43:09Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, deepest tread 2
+==PROF== Resetting GPU clocks on device 0.
+All done.
+2026-10-13T12:43:10Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-13T12:43:10Z dry run G=8 treads 2 may not lock: no 'n_decl = 9 against n_max' line (/home/ubuntu/moe/session/logs/r3-g8-t2-dry-q9.log)
+clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power.limit [W]
+345 MHz, 1980 MHz, 0x0000000000000001, 700.00 W
+2026-10-13T12:43:15Z timed: P2 skipped: no design passed its dry run
+2026-10-13T12:43:15Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)

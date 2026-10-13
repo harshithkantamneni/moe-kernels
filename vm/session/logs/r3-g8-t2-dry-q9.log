@@ -1,23 +1,35 @@
-experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-9ec83f58
-model       qwen1.5-moe-a2.7b E=60 k=4  bf16 (2 bytes)
-tile        BLOCK_M=32, one tile per run and in the run id
-pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
-histogram   docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json (sha256 f60467c6a99f97eb...), page q1, 2 cells x arms = 4 timed cells, token-row shuffle seed 20261010; R3's balanced ladder is NOT run (--treads ignored)
-arms        native, shared; PRIVATE cannot run skewed
-  ridge       174.72 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 650.9 TFLOP/s bf16 over 3725.7 GB/s (triad pattern); calibrated 2026-10-13 at 650d295c
-experts     native declares E=60; shared declares E x n_decl = 540 at every cell
-            n_decl = 9 against n_max = 2 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
-depth       retracted tread 2 against the 2 planned (a histogram page has no depth table: its deepest cell's tread)
-repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
-duty        0.25
-session     gh200-20261013T105333Z-p2j-lock1710
-WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-q9/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-9ec83f58
-probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 2 s (report.json align_probe; rental 6 S3)
-cells (n, label, arms, path, counts sha256):
-  n=1   balanced         native,shared  block-scan   74234e98afe7498f
-  n=2   balanced         native,shared  block-scan   74234e98afe7498f
-
-========================================================================
-REFUSED. Nothing was measured and nothing was written.
-  reason: --dry-run was given
-========================================================================
+usage: private_weight_reference.py [-h]
+                                   [--model {deepseek-v2-lite,deepseek-v3,deepseek-v3-tp4,deepseek-v3-tp8,granite-3.0-1b-a400m,granite-3.0-3b-a800m,jetmoe-8b,mixtral-8x22b,mixtral-8x7b,mixtral-8x7b-tp2,mixtral-8x7b-tp4,mixtral-8x7b-tp8,olmoe-1b-7b,phi-3.5-moe,qwen1.5-moe-a2.7b,qwen2-57b-a14b,qwen2-57b-a14b-tp8,toy}]
+                                   [--dtype {bf16,fp16}] [--block-m BLOCK_M]
+                                   [--treads TREADS] [--repeats REPEATS]
+                                   [--draws DRAWS] [--seed SEED]
+                                   [--block-n BLOCK_N] [--group-m GROUP_M]
+                                   [--num-stages NUM_STAGES]
+                                   [--block-k BLOCK_K]
+                                   [--slot-pad-rows SLOT_PAD_ROWS]
+                                   [--warmup WARMUP]
+                                   [--cell-budget-ms CELL_BUDGET_MS]
+                                   [--duty DUTY] [--trials TRIALS]
+                                   [--no-l2-flush] [--capability CAPABILITY]
+                                   [--ridge RIDGE] [--ridge-band RIDGE_BAND]
+                                   [--clock-elasticity ETA [ETA ...]]
+                                   [--clock-elasticity-source CLOCK_ELASTICITY_SOURCE]
+                                   [--bandwidth-gbps BANDWIDTH_GBPS]
+                                   [--device-memory-gb DEVICE_MEMORY_GB]
+                                   [--alpha ALPHA] [--out OUT]
+                                   [--run-id RUN_ID]
+                                   [--replicate-of REPORT [REPORT ...]]
+                                   [--byte-reference PAGE] [--read REPORT]
+                                   [--rescore] [--session-tag SESSION_TAG]
+                                   [--histogram HISTOGRAM] [--arms ARMS]
+                                   [--shuffle-seed SHUFFLE_SEED]
+                                   [--declared-copies DECLARED_COPIES]
+                                   [--probe-repeats PROBE_REPEATS]
+                                   [--slip-policy {page,cell}]
+                                   [--lock-mhz LOCK_MHZ]
+                                   [--min-clean-repeats MIN_CLEAN_REPEATS]
+                                   [--dry-run] [--probe-check]
+                                   [--counter-child PLAN]
+                                   [--self-test {aliased,alignment-step,clock-split,clock-split-elastic,compute-bound,faster-than-its-ruler,graph-probe-unresolved,holes,host-bound-controlled,host-bound-probe,issue-bound,machinery,no-byte-page,no-reuse,noisy-identity,on-chip-floor,over-allocated,private-step-alone,ragged,ratio-path-split,ratio-step-over-budget,ratio-step-under-budget,refit}]
+                                   [--plant-noise PLANT_NOISE]
+private_weight_reference.py: error: argument --session-tag: expected one argument

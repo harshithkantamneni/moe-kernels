@@ -118,3 +118,12 @@
 2026-10-13T12:43:07Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
 2026-10-13T12:43:07Z timed END: exit 3 after 0 min [unit 13/21 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell]
 2026-10-13T12:43:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-13T12:43:09Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, 9 copies, slip-policy cell [unit 14/21 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell] (estimate 3 min, cap 12 min, 58 min left)
+2026-10-13T12:43:09Z timed: declared-copies 9 on every page of this unit
+2026-10-13T12:43:09Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, deepest tread 2
+2026-10-13T12:43:10Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-13T12:43:10Z dry run G=8 treads 2 may not lock: no 'n_decl = 9 against n_max' line (/home/ubuntu/moe/session/logs/r3-g8-t2-dry-q9.log)
+2026-10-13T12:43:15Z timed: P2 skipped: no design passed its dry run
+2026-10-13T12:43:15Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-13T12:43:15Z timed END: exit 3 after 0 min [unit 14/21 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+2026-10-13T12:43:16Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
