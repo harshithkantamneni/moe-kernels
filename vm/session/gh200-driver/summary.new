@@ -9,3 +9,4 @@ timed      exit 0 after 11 min [unit 8/21 olmoe-1b-7b skc histogram=docs/registe
 timed      exit 0 after 14 min [unit 9/21 phi-3.5-moe ska histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
 timed      exit 0 after 11 min [unit 10/21 phi-3.5-moe skb histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
 timed      exit 0 after 11 min [unit 11/21 phi-3.5-moe skc histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+timed      exit 0 after 3 min [unit 12/21 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
