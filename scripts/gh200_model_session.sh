@@ -108,6 +108,18 @@
 #              nodrop units are still not dropped: each runs while its own estimate fits the
 #              time left (a unit that no longer fits is SKIPPED, as any step), and the ledger
 #              says so (rental 6's nine skew pages: design-r6-review (g)).
+# RENTAL 7 (2026-10-13): one key, and the log names.
+#   g1-rule=r5-any|r7-median-run3 (timed units with histogram= only; r7-median-run3 also needs
+#              slip-policy=cell). r7-median-run3 is the SCORER's rule (registration
+#              2026-10-13-rental7-g1rule, scripts/scoring/rental7/r7common.py, rebuilt from cells.csv);
+#              R3 and locked_r3 are rental 6's, byte-identical (registered pins), and get no new flag.
+#              The key hands locked_r3 --min-clean-repeats 0, so R3 times every repeat of every cell
+#              and never stops a cell or the page early (under the default 6 its r5-any LOST rule would
+#              stop a cell the scorer's rule keeps: design build review, about 19% of Phi n 1-2 NATIVE
+#              cells truncated at a 30% flag rate); the unit's R3 dry run carries the slip arguments
+#              locked_r3 then adds (--slip-policy cell --lock-mhz F --min-clean-repeats 0). r5-any, or
+#              no key: as before.
+#   logs       every per-unit log under $S/logs carries the unit's model and label (uid below).
 #
 # WHY UNATTENDED, AND HOW THE DRAFT'S "STOPS" BECAME RULES. The draft of
 # section 3c (2026-09-26) was blocks a person pastes, each with a "Stops"
@@ -233,6 +245,8 @@ HISTOGRAM="${MOE_DRIVER_HISTOGRAM:-}"
 R3_ARMS="${MOE_DRIVER_ARMS:-}"
 #: RENTAL 6 (2026-10-09): a timed unit's slip policy (slip-policy); empty: locked_r3's page
 SLIP_POLICY="${MOE_DRIVER_SLIP_POLICY:-}"
+#: RENTAL 7 (2026-10-13): a timed unit's scorer-side G1 rule (g1-rule); r7-median-run3: min-clean 0
+G1_RULE="${MOE_DRIVER_G1_RULE:-}"
 INSTR_VARIANTS="${MOE_DRIVER_INSTR_VARIANTS:-}"
 VARIANT_IDS="${MOE_DRIVER_VARIANT_IDS:-}"
 #: the registered stamp variants (moe/instrumented R5_VARIANTS; a test holds these to it):
@@ -336,6 +350,14 @@ step_cap() {
 lr3_cap() { [[ "$MODEL" == "$DEFAULT_MODEL" ]] || printf '%s\n' --run-cap-s 3600; }
 #: rental 6: a timed unit's slip-policy=cell, handed to locked_r3 (nothing under page)
 lr3_slip() { [[ "$SLIP_POLICY" == cell ]] && printf '%s\n' --slip-policy cell; return 0; }
+#: rental 7: under g1-rule=r7-median-run3 locked_r3 takes --min-clean-repeats 0 (R3 keeps every repeat)
+lr3_minclean() { [[ "$G1_RULE" == r7-median-run3 ]] && printf '%s\n' --min-clean-repeats 0; return 0; }
+#: rental 7: the slip arguments locked_r3 --slip-policy cell --min-clean-repeats 0 hands R3, for the
+#: unit's R3 dry run (so the dry run checks what will run); nothing otherwise
+dry_slip() {
+  [[ "$G1_RULE" == r7-median-run3 ]] && printf '%s\n' --slip-policy cell --lock-mhz "$LOCK_TIMED" --min-clean-repeats 0
+  return 0
+}
 #: Set an nvidia-smi lock and confirm it by reading it back, once more if the
 #: first read-back is off (2026-09-28: the 8x22B floor's lock capture ran at
 #: 1800 MHz, its own nvidia-smi records reading 1980 before and after, though
@@ -358,8 +380,8 @@ census_for() {
   local C="$S/census-$MODEL.json"
   if [[ ! -s "$C" ]]; then
     moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --census-only \
-      --model "$MODEL" --out "$C" > "$S/logs/census-$MODEL.log" 2>&1 \
-      || { ledger "census for $MODEL failed (logs/census-$MODEL.log)" >&2; return 1; }
+      --model "$MODEL" --out "$C" > "$S/logs/census-$(uid).log" 2>&1 \
+      || { ledger "census for $MODEL failed (logs/census-$(uid).log)" >&2; return 1; }
     moe_counter ncu --clock-control reset >/dev/null 2>&1 || true
     ledger "census for $MODEL written ($C)" >&2
   fi
@@ -371,7 +393,7 @@ step_what() {
     bytes)     if [[ -n "$BYTE_GROUPS" ]]; then echo "3c.2 byte pages at the ${LOCK_TIMED} lock, the registered G = ${BYTE_GROUPS//,/ }, treads $TREADS; no base-clock control$(knob_text)"
                else echo "3c.2 byte pages at the ${LOCK_TIMED} lock, G = ${BYTE_GS[*]}, treads $TREADS; base-clock control$(knob_text)"; fi ;;
     calibrate) echo "3c.3 calibrate (the ruler), no lock in force" ;;
-    timed)     if [[ -n "$HISTOGRAM" ]]; then echo "3c.3 timed R3 histogram page at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ','), $HISTOGRAM, arms ${R3_ARMS:-native,shared}, ${DECLARED_COPIES:-?} copies$(timed_knob_text)$([[ "$SLIP_POLICY" == cell ]] && echo ', slip-policy cell')"
+    timed)     if [[ -n "$HISTOGRAM" ]]; then echo "3c.3 timed R3 histogram page at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ','), $HISTOGRAM, arms ${R3_ARMS:-native,shared}, ${DECLARED_COPIES:-?} copies$(timed_knob_text)$([[ "$SLIP_POLICY" == cell ]] && echo ', slip-policy cell')$([[ -n "$G1_RULE" ]] && echo ", g1-rule $G1_RULE")"
                elif [[ -n "$TIMED_GROUPS$TIMED_TREADS" ]]; then echo "3c.3 timed R3 at ${LOCK_TIMED}: G=$(timed_groups | tr ' ' ',') (treads $(timed_treads)), no G=3 page"
                else echo "3c.3 timed R3 at ${LOCK_TIMED}: G=8, 32 (treads 6), G=3 (treads 8): P2, P5"; fi ;;
     eta)       echo "3c.4 timed R3 at held locks 1410 (G=4, 2), 1500 and 1605 (G=4): P1" ;;
@@ -469,6 +491,14 @@ ledger() {
   return 0
 }
 dropped() { [[ -f "$D/drops" ]] && grep -qx -- "$1" "$D/drops"; }
+#: RENTAL 7 (design-r7 S9, design-r7-review (f)): every per-unit log under $S/logs is named by
+#: the unit's model and label (the model alone when a step runs with no label), so no two units
+#: share one. On rental 6 the dry runs of OLMoE and Phi at deepest tread 12 (and of Phi and
+#: Qwen1.5 at t2 and t4) wrote one file, both byte units wrote r3c-g8-lock1710.log (Phi's alone
+#: survived), and both second-K units shared their logs. What the driver itself reads back
+#: (calibrate's RESULT lines, the floor's r3f-g64 replay passes, the byte page's VALIDITY lines,
+#: a dry run's checks) reads the same per-unit name it wrote.
+uid() { printf '%s' "$MODEL${OUT_LABEL:+-$OUT_LABEL}"; }
 #: A session tag no earlier run of this driver used: BASE, else BASEb, BASEc...
 #: locked_r3.py refuses a tag whose ledger or pages exist, so a rerun of a step
 #: takes the next letter rather than being refused.
@@ -716,14 +746,14 @@ step_bytes() {
     reprice_s=$(( BYTE_G1_REPRICE_S * $(model_scale_pct) / 100 ))
     for G in "${gs[@]}"; do
       if [ "$G" = 64 ] && [ -f "$D/bytes-tail-repriced" ]; then continue; fi
-      LOG=$S/logs/r3c-g$G-lock$F.log
+      LOG=$S/logs/r3c-$(uid)-g$G-lock$F.log
       t0=$(date +%s)
       moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m "$G" \
         --model "$MODEL" --tiles "$TREADS" --census "$C" --page-clock none --page-lock-mhz "$F" \
         ${knobs[@]+"${knobs[@]}"} --out "$L/r3c-g$G.json" 2>&1 | tee "$LOG"
       rc=${PIPESTATUS[0]}
       secs=$(( $(date +%s) - t0 ))
-      echo "G=$G exit $rc $(date -u +%T) ${secs} s" | tee -a "$S/logs/lock$F-pages.status"
+      echo "G=$G exit $rc $(date -u +%T) ${secs} s" | tee -a "$S/logs/lock$F-pages-$(uid).status"
       failed=$(grep -E '^RESULT: VALIDITY [^ ]+ FAIL' "$LOG" | awk '{print $3}' | sort -u | tr '\n' ' ')
       case $rc in
         0|1) ;;
@@ -752,7 +782,7 @@ step_bytes() {
       push_results "bytes: G=$G page exit $rc"
     done )
   local rc=$?
-  ledger "bytes: lock block exit $rc ($(tr '\n' ';' < "$S/logs/lock$F-pages.status" 2>/dev/null))"
+  ledger "bytes: lock block exit $rc ($(tr '\n' ';' < "$S/logs/lock$F-pages-$(uid).status" 2>/dev/null))"
   [[ -f "$D/bytes-tail-repriced" ]] && tail_dropped=1 \
     && ledger "bytes: G=1 took over its re-price threshold: the G=64 page and the base-clock control dropped"
   sleep 5
@@ -766,7 +796,7 @@ step_bytes() {
     # the base-clock control: same board, commit and treads, at ncu's base clock
     moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m 2 \
       --model "$MODEL" --tiles "$TREADS" \
-      --census "$C" --out "$R/base/r3c-g2.json" 2>&1 | tee "$S/logs/r3c-g2-base.log"
+      --census "$C" --out "$R/base/r3c-g2.json" 2>&1 | tee "$S/logs/r3c-$(uid)-g2-base.log"
     ledger "bytes: base-clock control G=2 exit ${PIPESTATUS[0]}"
     moe_counter ncu --clock-control reset
   fi
@@ -782,7 +812,7 @@ step_bytes() {
   for p in "$L"/r3c-g*.json; do [[ -f "$p" ]] && pages+=("$p"); done
   if (( ${#pages[@]} )); then
     python3 scripts/dram_counter_route.py --analyse "${pages[@]}" \
-      ${timed[@]+--timed-reference "${timed[@]}"} --out "$L/summary.json" 2>&1 | tee "$S/logs/analyse-lock$F.log"
+      ${timed[@]+--timed-reference "${timed[@]}"} --out "$L/summary.json" 2>&1 | tee "$S/logs/analyse-$(uid)-lock$F.log"
     ledger "bytes: analyse of ${#pages[@]} pages exit ${PIPESTATUS[0]} ($L/summary.json)"
   else
     ledger "bytes: no page written, nothing to analyse"
@@ -799,16 +829,16 @@ step_calibrate() {
   [[ -z "$busy" ]] || { ledger "calibrate REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   moe_counter ncu --clock-control reset; sudo -n nvidia-smi -rgc
   nvidia-smi -q -d POWER > "$S/power-before-calibrate.txt"
-  "$PY_BASE" scripts/calibrate_hardware.py --publish --results-root "$RESULTS_ROOT" 2>&1 | tee "$S/logs/calibrate.log"
+  "$PY_BASE" scripts/calibrate_hardware.py --publish --results-root "$RESULTS_ROOT" 2>&1 | tee "$S/logs/calibrate-$(uid).log"
   local rc=${PIPESTATUS[0]} Y="moe/bench/hardware/measured_$MOE_CARD.yaml" kind why
-  grep '^RESULT:' "$S/logs/calibrate.log" | cut -c1-160 | while IFS= read -r l; do ledger "calibrate: $l"; done
+  grep '^RESULT:' "$S/logs/calibrate-$(uid).log" | cut -c1-160 | while IFS= read -r l; do ledger "calibrate: $l"; done
   if (( rc == EXIT_DONE )) && [[ -f "$Y" ]]; then
     kind=measured; why="calibrate exit 0"
-  elif (( rc == EXIT_CLAIM_FAIL )) && grep -qE '^RESULT: CLAIM not_throttled FAIL' "$S/logs/calibrate.log"; then
+  elif (( rc == EXIT_CLAIM_FAIL )) && grep -qE '^RESULT: CLAIM not_throttled FAIL' "$S/logs/calibrate-$(uid).log"; then
     kind=fallback; why="calibrate exit 1 with not_throttled FAILED"
   elif (( rc == EXIT_CLAIM_FAIL )) && [[ -f "$Y" ]]; then
     kind=measured
-    why="calibrate exit 1, not_throttled did not fail (failed: $(grep -E '^RESULT: [A-Z]+ [^ ]+ FAIL' "$S/logs/calibrate.log" | awk '{print $3}' | tr '\n' ' '))"
+    why="calibrate exit 1, not_throttled did not fail (failed: $(grep -E '^RESULT: [A-Z]+ [^ ]+ FAIL' "$S/logs/calibrate-$(uid).log" | awk '{print $3}' | tr '\n' ' '))"
   else
     kind=fallback; why="calibrate exit $rc$([[ -f "$Y" ]] || echo ', no ruler written')"
   fi
@@ -858,14 +888,18 @@ step_timed() {
   local tk=() x
   while IFS= read -r x; do [[ -n "$x" ]] && tk+=("$x"); done < <(timed_knob_args)
   local R6=("${R3_BASE[@]}" --treads "$TT" ${RULER_ARGS[@]+"${RULER_ARGS[@]}"} ${tk[@]+"${tk[@]}"})
+  local DRY_SLIP=()
   if [[ -n "$HISTOGRAM" ]]; then
     # rental 5: a histogram page (its cells, not a ladder); the dry run's tread is its deepest n
     TT="$(hist_deepest "$HISTOGRAM")"
     [[ -n "$TT" ]] || { ledger "timed REFUSED: the histogram page $HISTOGRAM is unreadable"; return "$EXIT_REFUSED"; }
     own=1
+    local ds=()
+    while IFS= read -r x; do [[ -n "$x" ]] && ds+=("$x"); done < <(dry_slip)
     R6=("${R3_BASE[@]}" --histogram "$HISTOGRAM" --arms "${R3_ARMS:-native,shared}"
         ${RULER_ARGS[@]+"${RULER_ARGS[@]}"} ${tk[@]+"${tk[@]}"})
-    ledger "timed: histogram page $HISTOGRAM, arms ${R3_ARMS:-native,shared}, deepest tread $TT$( (( ${#tk[@]} )) && echo ", knobs ${tk[*]}")"
+    DRY_SLIP=(${ds[@]+"${ds[@]}"})
+    ledger "timed: histogram page $HISTOGRAM, arms ${R3_ARMS:-native,shared}, deepest tread $TT$( (( ${#tk[@]} )) && echo ", knobs ${tk[*]}")$( (( ${#ds[@]} )) && echo ", scorer G1 rule $G1_RULE (locked_r3 --min-clean-repeats 0)")"
   fi
   local R8=("${R3_BASE[@]}" --treads 8 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
   local T2 T5=""
@@ -879,17 +913,17 @@ step_timed() {
   (( own )) && ledger "timed: G = $(timed_groups) at treads $TT, no G=3 page (timed-groups / timed-treads)"
   local p2=() G
   for G in $(timed_groups); do
-    r3_dry "$S/logs/r3-g$G-t$TT-dry${OUT_LABEL:+-$OUT_LABEL}.log" "$TT" "$T2-lock$LOCK_TIMED" "$G" "${R6[@]}" && p2+=("$G")
+    r3_dry "$S/logs/r3-$(uid)-g$G-t$TT-dry.log" "$TT" "$T2-lock$LOCK_TIMED" "$G" "${R6[@]}" ${DRY_SLIP[@]+"${DRY_SLIP[@]}"} && p2+=("$G")
   done
   local p5=0
-  (( own )) || { r3_dry "$S/logs/r3-g3-t8-dry${OUT_LABEL:+-$OUT_LABEL}.log" 8 "$T5-lock$LOCK_TIMED" 3 "${R8[@]}" && p5=1; }
+  (( own )) || { r3_dry "$S/logs/r3-$(uid)-g3-t8-dry.log" 8 "$T5-lock$LOCK_TIMED" 3 "${R8[@]}" && p5=1; }
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
     trap 'exit 130' INT TERM HUP
     rc2=0; rc5=0
     if (( ${#p2[@]} )); then
-      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" $(lr3_cap) $(lr3_slip) -- "${R6[@]}" 2>&1 \
-        | tee -i "$S/logs/locked_r3-$T2.log"
+      python3 scripts/locked_r3.py --session-tag "$T2" --groups "${p2[@]}" --locks "$LOCK_TIMED" $(lr3_cap) $(lr3_slip) $(lr3_minclean) -- "${R6[@]}" 2>&1 \
+        | tee -i "$S/logs/locked_r3-$(uid)-$T2.log"
       rc2=${PIPESTATUS[0]}
       echo "P2 locked_r3 exit $rc2" >> "$D/timed-results"
       (( rc2 >= 4 )) && exit "$rc2"   # a crash, or the card left locked
@@ -900,7 +934,7 @@ step_timed() {
       echo "P5 not run: this unit names its own groups (timed-groups / timed-treads)" >> "$D/timed-results"
     elif (( p5 )); then
       python3 scripts/locked_r3.py --session-tag "$T5" --groups 3 --locks "$LOCK_TIMED" $(lr3_cap) -- "${R8[@]}" 2>&1 \
-        | tee -i "$S/logs/locked_r3-$T5.log"
+        | tee -i "$S/logs/locked_r3-$(uid)-$T5.log"
       rc5=${PIPESTATUS[0]}
       echo "P5 locked_r3 exit $rc5" >> "$D/timed-results"
     else
@@ -925,8 +959,8 @@ step_eta() {
   load_ruler; load_locks
   local R6=("${R3_BASE[@]}" --treads 6 ${RULER_ARGS[@]+"${RULER_ARGS[@]}"})
   local ok4=0 ok2=0
-  r3_dry "$S/logs/r3-eta-g4-dry.log" 6 "$B-eta-check" 4 "${R6[@]}" && ok4=1
-  r3_dry "$S/logs/r3-eta-g2-dry.log" 6 "$B-eta-check" 2 "${R6[@]}" && ok2=1
+  r3_dry "$S/logs/r3-eta-$(uid)-g4-dry.log" 6 "$B-eta-check" 4 "${R6[@]}" && ok4=1
+  r3_dry "$S/logs/r3-eta-$(uid)-g2-dry.log" 6 "$B-eta-check" 2 "${R6[@]}" && ok2=1
   # 1410 first: it alone answers the falsifier. Each lock is its own run, since
   # locked_r3.py stops at the first lock that holds.
   local specs=() gs
@@ -954,7 +988,7 @@ step_eta() {
         tag=$(fresh_tag "$B-eta$F") || { echo "no fresh tag for $B-eta$F"; exit 4; }
         # shellcheck disable=SC2086
         python3 scripts/locked_r3.py --session-tag "$tag" --locks "$F" --groups $GS $(lr3_cap) -- "${R6[@]}" 2>&1 \
-          | tee -i "$S/logs/eta-lock$F-$tag.log"
+          | tee -i "$S/logs/eta-$(uid)-lock$F-$tag.log"
         rc=${PIPESTATUS[0]}
         echo "$F $rc $tag" >> "$D/eta-results.new"
         # Exit 1 this far under 1710 more likely means a lock left over than the
@@ -1017,7 +1051,7 @@ step_floor() {
     capture() {   # NAME, then dram_counter_route.py's arguments
       local name=$1; shift
       moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --model "$MODEL" "$@" 2>&1 \
-        | tee "$S/logs/$name.log"
+        | tee "$S/logs/$name-$(uid).log"
       local rc=${PIPESTATUS[0]}
       echo "$name exit $rc" >> "$D/floor-results"
       (( rc > worst )) && worst=$rc
@@ -1045,7 +1079,7 @@ step_floor() {
       exit "$worst"
     fi
     capture r3f-g64 --group-m 64 --census "$C" --floor --out "$R/r3f-g64.json"
-    passes=$(grep -oE -- '- [0-9]+ pass(es)?' "$S/logs/r3f-g64.log" | awk '{print $2}' | sort -n | tail -1)
+    passes=$(grep -oE -- '- [0-9]+ pass(es)?' "$S/logs/r3f-g64-$(uid).log" | awk '{print $2}' | sort -n | tail -1)
     if [ "$MODEL" != "$DEFAULT_MODEL" ]; then
       # another model's registered floor test reads G=64 at base and at the lock
       echo "r3f-g2 and r3f-g64-unlocked left out: no $MODEL prediction reads them" >> "$D/floor-results"
@@ -1058,7 +1092,7 @@ step_floor() {
     # a RECORD, scoring nothing: P7 is registered for the duty-0.25 timed regime
     if [ "$MODEL" = "$DEFAULT_MODEL" ]; then
       nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks_event_reasons.active \
-        --format=csv,noheader,nounits -lms 100 > "$S/logs/r3f-g64-unlocked.smi.csv" 2>&1 & SMI=$!
+        --format=csv,noheader,nounits -lms 100 > "$S/logs/r3f-g64-unlocked-$(uid).smi.csv" 2>&1 & SMI=$!
       capture r3f-g64-unlocked --group-m 64 --census "$C" --floor --floor-clock none \
         --out "$R/r3f-g64-unlocked.json"
       kill "$SMI" 2>/dev/null; wait "$SMI" 2>/dev/null; SMI=
@@ -1091,14 +1125,14 @@ step_deep() {
   [[ -z "$busy" ]] || { ledger "deep REFUSED: the GPU is in use: $busy"; return "$EXIT_REFUSED"; }
   local gs=() G
   for G in 4 2; do   # G=4 first: a run cut short still answers P4
-    r3_dry "$S/logs/r3-deep-g$G-dry.log" 9 "$T-lock$LOCK_TIMED" "$G" "${R9[@]}" && gs+=("$G")
+    r3_dry "$S/logs/r3-deep-$(uid)-g$G-dry.log" 9 "$T-lock$LOCK_TIMED" "$G" "${R9[@]}" && gs+=("$G")
   done
   (( ${#gs[@]} )) || { ledger "deep: no design passed its dry run"; return "$EXIT_INVALID"; }
   ( set -o pipefail
     trap 'trap "" INT TERM HUP; sudo -n nvidia-smi -rgc >/dev/null' EXIT
     trap 'exit 130' INT TERM HUP
     python3 scripts/locked_r3.py --session-tag "$T" --locks "$LOCK_TIMED" --groups "${gs[@]}" $(lr3_cap) -- "${R9[@]}" 2>&1 \
-      | tee -i "$S/logs/locked_r3-$T.log" )
+      | tee -i "$S/logs/locked_r3-$(uid)-$T.log" )
   local rc=$?
   ledger "deep: locked_r3 exit $rc ($T, G = ${gs[*]})"
   sleep 5
@@ -1106,7 +1140,7 @@ step_deep() {
   local l; while IFS= read -r l; do ledger "deep: $l"; done < <(ledger_lines "$S/locked-r3/$T/status")
   # P3 and P4 off the two pages: read only when both show every VALIDITY gate
   # passing and the 9-copy declaration.
-  "$PY_VLLM" - "$MOE_RESULTS_DIR/private_weight_reference" "$T-lock$LOCK_TIMED" > "$S/logs/deep-check-$T.txt" 2>&1 <<'PY'
+  "$PY_VLLM" - "$MOE_RESULTS_DIR/private_weight_reference" "$T-lock$LOCK_TIMED" > "$S/logs/deep-check-$(uid)-$T.txt" 2>&1 <<'PY'
 import glob, json, statistics, sys
 root, tag = sys.argv[1:3]; ms = {}
 for p in sorted(glob.glob(f"{root}/*/report.json")):
@@ -1131,7 +1165,7 @@ if all((4, n) in ms for n in range(2, 10)):
     print(f"P4 G=4 n=8 to 9: {inc[-1]:.3f} ms against the median of the others, "
           f"{statistics.median(inc[:-1]):.3f}")
 PY
-  while IFS= read -r l; do ledger "deep: $l"; done < "$S/logs/deep-check-$T.txt"
+  while IFS= read -r l; do ledger "deep: $l"; done < "$S/logs/deep-check-$(uid)-$T.txt"
   return "$rc"
 }
 
@@ -1164,7 +1198,7 @@ step_r1lock() {
   local R1=("${R1_BASE[@]}" --session-tag "$tag")
   for G in "${gs[@]}"; do
     "$PY_VLLM" scripts/clock_elasticity.py --dry-run --group-m "$G" --lock-clocks "${locks[@]}" "${R1[@]}" \
-      > "$S/logs/r1lock-g$G.plan.log" 2>&1
+      > "$S/logs/r1lock-$(uid)-g$G.plan.log" 2>&1
     echo "plan G=$G exit $? (2 expected)"
   done
   nvidia-smi -q -d POWER > "$S/power-before-r1lock.txt"
@@ -1177,7 +1211,7 @@ step_r1lock() {
     sudo -n nvidia-smi -rgc
     for G in "${gs[@]}"; do
       "$PY_VLLM" scripts/clock_elasticity.py --group-m "$G" --lock-clocks "${locks[@]}" "${R1[@]}" \
-        2>&1 | tee "$S/logs/r1lock-g$G.log"
+        2>&1 | tee "$S/logs/r1lock-$(uid)-g$G.log"
       rc=${PIPESTATUS[0]}; echo "r1lock G=$G exit $rc (locks ${locks[*]})" >> "$D/r1-results"
       [ "$rc" -le 1 ] || exit "$rc"   # 0 DONE, 1 CLAIM_FAIL: go on; 2, 3, 4: stop
     done )
@@ -1214,11 +1248,11 @@ step_launchfloor() {
   # each phase's own dry run first: 2 is a plan printed, anything else is a refusal
   local ph drc
   for ph in "${phases[@]}"; do
-    if [[ "$ph" == timed ]]; then "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1
-    else "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" --dry-run > "$S/logs/launchfloor-$MODEL-$ph-dry.log" 2>&1; fi
+    if [[ "$ph" == timed ]]; then "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" --dry-run > "$S/logs/launchfloor-$(uid)-$ph-dry.log" 2>&1
+    else "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" --dry-run > "$S/logs/launchfloor-$(uid)-$ph-dry.log" 2>&1; fi
     drc=$?
-    if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$S/logs/launchfloor-$MODEL-$ph-dry.log"; then
-      ledger "launchfloor REFUSED for $MODEL: its $ph dry run exited $drc ($(grep -m1 '^REFUSED:' "$S/logs/launchfloor-$MODEL-$ph-dry.log" | cut -c1-160))"
+    if (( drc != EXIT_REFUSED )) || grep -q '^REFUSED:' "$S/logs/launchfloor-$(uid)-$ph-dry.log"; then
+      ledger "launchfloor REFUSED for $MODEL: its $ph dry run exited $drc ($(grep -m1 '^REFUSED:' "$S/logs/launchfloor-$(uid)-$ph-dry.log" | cut -c1-160))"
       return "$EXIT_REFUSED"
     fi
   done
@@ -1230,17 +1264,17 @@ step_launchfloor() {
     MAX=$(nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits | head -1)
     [ "$LOCK_TIMED" -le "$MAX" ] || { echo "F=$LOCK_TIMED MHz is above this card's maximum, $MAX MHz"; exit 2; }
     lock_and_check "$LOCK_TIMED" || exit 2
-    "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-timed.log"
+    "$PY_VLLM" scripts/launch_floor.py "${TIMED[@]}" 2>&1 | tee "$S/logs/launchfloor-$(uid)-timed.log"
     rt=${PIPESTATUS[0]}
-    echo "timed phase exit $rt" >> "$S/logs/launchfloor-$MODEL.phases"
+    echo "timed phase exit $rt" >> "$S/logs/launchfloor-$(uid).phases"
     (( rt >= 4 )) && exit "$rt"
     rr=0
     if [[ "$LF_TRACE" == 0 ]]; then
-      echo "trace phase not run (lf-trace=0)" >> "$S/logs/launchfloor-$MODEL.phases"
+      echo "trace phase not run (lf-trace=0)" >> "$S/logs/launchfloor-$(uid).phases"
     else
-      "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" 2>&1 | tee "$S/logs/launchfloor-$MODEL-trace.log"
+      "$PY_VLLM" scripts/launch_floor.py "${TRACE[@]}" 2>&1 | tee "$S/logs/launchfloor-$(uid)-trace.log"
       rr=${PIPESTATUS[0]}
-      echo "trace phase exit $rr" >> "$S/logs/launchfloor-$MODEL.phases"
+      echo "trace phase exit $rr" >> "$S/logs/launchfloor-$(uid).phases"
     fi
     exit $(( rt > rr ? rt : rr )) )
   local rc=$?
@@ -1302,8 +1336,8 @@ dry_ok() {   # NAME LOG CMD...
 step_rulers() {
   local R; R="$(unit_out rulers)"
   local T=("$PY_VLLM" scripts/hw_rulers.py --out "$R" --lock-mhz "$LOCK_TIMED")
-  dry_ok rulers "$S/logs/rulers-dry.log" "${T[@]}" || return "$EXIT_REFUSED"
-  locked_run "$S/logs/rulers${OUT_LABEL:+-$OUT_LABEL}.log" "${T[@]}"
+  dry_ok rulers "$S/logs/rulers-$(uid)-dry.log" "${T[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/rulers-$(uid).log" "${T[@]}"
   local rc=$?
   ledger "rulers: exit $rc ($R/rulers.json)"
   return "$rc"
@@ -1313,8 +1347,8 @@ step_gpubench() {
   local R; R="$(unit_out gpubench)"
   local G=("$PY_BASE" scripts/gpubench.py --dest "$GPUBENCH_DEST" --out "$R" --sm 90
            --lock-mhz "$LOCK_TIMED" --l2-mib "$GPUBENCH_L2_MIB")
-  dry_ok gpubench "$S/logs/gpubench-dry.log" "${G[@]}" || return "$EXIT_REFUSED"
-  locked_run "$S/logs/gpubench${OUT_LABEL:+-$OUT_LABEL}.log" "${G[@]}"
+  dry_ok gpubench "$S/logs/gpubench-$(uid)-dry.log" "${G[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/gpubench-$(uid).log" "${G[@]}"
   local rc=$?
   ledger "gpubench: exit $rc (third-party GPL-3.0 code at its pin, outside the checkout; $R/constants.json)"
   return "$rc"
@@ -1325,8 +1359,8 @@ step_perturb() {
   [[ -s "$V" ]] || { ledger "perturb REFUSED: no $V (no instrumented unit after this one)"; return "$EXIT_REFUSED"; }
   # its own Triton cache (build-r4-review G1): env.sh's shared one would hide this unit's compiles
   local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode perturb --variants "$V" --out "$R")
-  dry_ok perturb "$S/logs/perturb-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
-  locked_run "$S/logs/perturb${OUT_LABEL:+-$OUT_LABEL}.log" "${P[@]}"
+  dry_ok perturb "$S/logs/perturb-$(uid)-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/perturb-$(uid).log" "${P[@]}"
   local rc=$?
   if [[ -s "$R/gate.env" ]]; then
     cat "$R/gate.env" >> "$D/instr-gate.env"
@@ -1341,9 +1375,9 @@ step_regcheck() {
   local R V="$D/instr-variants.json"; R="$(unit_out regcheck)"
   [[ -s "$V" ]] || { ledger "regcheck REFUSED: no $V (no instrumented unit in the plan)"; return "$EXIT_REFUSED"; }
   local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode regcheck --variants "$V" --out "$R")
-  dry_ok regcheck "$S/logs/regcheck-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+  dry_ok regcheck "$S/logs/regcheck-$(uid)-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
   # compile only: no lock, nothing timed (each variant's kernels are built, never measured)
-  "${P[@]}" 2>&1 | tee "$S/logs/regcheck${OUT_LABEL:+-$OUT_LABEL}.log"
+  "${P[@]}" 2>&1 | tee "$S/logs/regcheck-$(uid).log"
   local rc=${PIPESTATUS[0]}
   if [[ -s "$R/regcheck.env" ]]; then
     cat "$R/regcheck.env" >> "$D/instr-regcheck.env"
@@ -1376,8 +1410,8 @@ step_stamps() {
     ledger "stamps: $chosen chosen (the first of $VARIANT_IDS passing regcheck and perturb)"
     local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode stamps --variants "$D/instr-variants.json"
              --variant "$chosen" --gate "$D/instr-gate.env" --regcheck "$D/instr-regcheck.env" --out "$R")
-    dry_ok stamps "$S/logs/stamps-$chosen-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
-    locked_run "$S/logs/stamps-$chosen.log" "${P[@]}"
+    dry_ok stamps "$S/logs/stamps-$(uid)-$chosen-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+    locked_run "$S/logs/stamps-$(uid)-$chosen.log" "${P[@]}"
     local rc=$?
     ledger "stamps: $chosen exit $rc ($R)"
     return "$rc"
@@ -1386,8 +1420,8 @@ step_stamps() {
   local R; R="$(unit_out "instr-$MODEL")"
   local P=(env "TRITON_CACHE_DIR=$R/triton-cache" "$PY_VLLM" scripts/instr_probe.py --mode stamps --variants "$D/instr-variants.json"
            --variant "$VARIANT_ID" --gate "$D/instr-gate.env" --out "$R")
-  dry_ok stamps "$S/logs/stamps-$VARIANT_ID-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
-  locked_run "$S/logs/stamps-$VARIANT_ID.log" "${P[@]}"
+  dry_ok stamps "$S/logs/stamps-$(uid)-$VARIANT_ID-dry.log" "${P[@]}" || return "$EXIT_REFUSED"
+  locked_run "$S/logs/stamps-$(uid)-$VARIANT_ID.log" "${P[@]}"
   local rc=$?
   ledger "stamps: $VARIANT_ID exit $rc ($R)"
   return "$rc"
@@ -1472,7 +1506,7 @@ on_signal() {
 
 run_step() {   # NAME CAP_S
   local name="$1" cap="$2" rc
-  local log="$S/logs/driver-$name.log"
+  local log="$S/logs/driver-$name-$(uid).log"
   timeout -k 240 "$cap" bash "$SELF" --step "$name" >> "$log" 2>&1 < /dev/null &
   STEP_PID=$!
   wait "$STEP_PID"; rc=$?
@@ -1561,6 +1595,8 @@ load_plan() {   # FILE
         nodrop) [[ "$v" == 1 ]] || { plan_refuse "$ln" "nodrop $v: 1 or leave it out"; return 1; }; nodrop=1 ;;
         slip-policy) [[ "$v" =~ ^(page|cell)$ ]] || { plan_refuse "$ln" "slip-policy $v: page or cell"; return 1; }
           opts+=" $k=$v" ;;
+        g1-rule) [[ "$v" =~ ^(r5-any|r7-median-run3)$ ]] || { plan_refuse "$ln" "g1-rule $v: r5-any or r7-median-run3"; return 1; }
+          opts+=" $k=$v" ;;
         histogram)
           [[ "$v" =~ ^[A-Za-z0-9_./-]+[.]json$ && "$v" != /* && "$v" != *..* ]] || { plan_refuse "$ln" "histogram $v: a repo-relative .json path"; return 1; }
           [[ -f "$(dirname "$SELF")/../$v" || -f "$v" || -f "$MOE_HOME/repo/$v" ]] || { plan_refuse "$ln" "histogram $v: no such file"; return 1; }
@@ -1596,7 +1632,7 @@ load_plan() {   # FILE
         partition-metrics|floor-base|floor-shape-metrics|floor-null-kernel)
           [[ "$v" =~ ^[01]$ ]] || { plan_refuse "$ln" "$k $v: 0 or 1"; return 1; }
           opts+=" $k=$v" ;;
-        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group depends nodrop slip-policy histogram arms instr-variants byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m declared-copies instr-evict-a instr-evict-b instr-stamps instr-every instr-marks stamp-groups stamp-treads stamp-arms)"; return 1 ;;
+        *) plan_refuse "$ln" "no key '$k' (label est cap drop-group depends nodrop slip-policy g1-rule histogram arms instr-variants byte-groups floor-groups floor-treads lf-treads lf-modes lf-trace num-stages block-k slot-pad-rows partition-metrics floor-lock-mhz floor-base floor-shape-metrics floor-null-kernel timed-groups timed-treads lf-arms lf-group-m declared-copies instr-evict-a instr-evict-b instr-stamps instr-every instr-marks stamp-groups stamp-treads stamp-arms)"; return 1 ;;
       esac
     done
     # rental 2's keys belong to one step each; a floor key needs a registered design
@@ -1629,6 +1665,10 @@ load_plan() {   # FILE
         slip-policy)
           [[ "$step" == timed ]] || { plan_refuse "$ln" "slip-policy belongs to a timed unit, not $step"; return 1; }
           [[ " $opts " == *" histogram="* || "${kv#*=}" == page ]] || { plan_refuse "$ln" "slip-policy=cell needs histogram=: R3 refuses --lock-mhz on its balanced ladder"; return 1; } ;;
+        g1-rule)
+          [[ "$step" == timed ]] || { plan_refuse "$ln" "g1-rule belongs to a timed unit, not $step: it is the histogram pages' G1 rule"; return 1; }
+          [[ " $opts " == *" histogram="* ]] || { plan_refuse "$ln" "g1-rule needs histogram=: the rule reads a histogram page's cells.csv"; return 1; }
+          [[ "${kv#*=}" == r5-any || " $opts " == *" slip-policy=cell "* ]] || { plan_refuse "$ln" "g1-rule=r7-median-run3 needs slip-policy=cell: locked_r3 takes --min-clean-repeats with --slip-policy cell only"; return 1; } ;;
         lf-arms|lf-group-m)
           [[ "$step" == launchfloor ]] || { plan_refuse "$ln" "$k belongs to a launchfloor unit, not $step"; return 1; } ;;
         floor-lock-mhz|floor-base|floor-shape-metrics|floor-null-kernel)
@@ -1710,7 +1750,7 @@ apply_unit() {   # INDEX
   FLOOR_LOCK_MHZ=""; FLOOR_BASE=1; FLOOR_SHAPE=""; FLOOR_NULL=""
   DECLARED_COPIES=""; INSTR_EVICT_A=""; INSTR_EVICT_B=""; INSTR_STAMPS=""; INSTR_EVERY=""; INSTR_MARKS=""
   STAMP_GROUPS=""; STAMP_TREADS=""; STAMP_ARMS=""; VARIANT_ID=""
-  HISTOGRAM=""; R3_ARMS=""; INSTR_VARIANTS=""; VARIANT_IDS=""; SLIP_POLICY=""
+  HISTOGRAM=""; R3_ARMS=""; INSTR_VARIANTS=""; VARIANT_IDS=""; SLIP_POLICY=""; G1_RULE=""
   for kv in ${U_OPTS[$i]}; do
     k="${kv%%=*}"; v="${kv#*=}"
     case "$k" in
@@ -1729,6 +1769,7 @@ apply_unit() {   # INDEX
       stamp-groups) STAMP_GROUPS="$v" ;; stamp-treads) STAMP_TREADS="$v" ;; stamp-arms) STAMP_ARMS="$v" ;;
       histogram) HISTOGRAM="$v" ;; arms) R3_ARMS="$v" ;; instr-variants) INSTR_VARIANTS="$v" ;;
       slip-policy) SLIP_POLICY="$v" ;;
+      g1-rule) G1_RULE="$v" ;;
     esac
   done
   if [[ "${U_STEP[$i]}" == stamps || -n "$INSTR_EVICT_A$INSTR_EVICT_B" ]]; then
@@ -1751,6 +1792,7 @@ apply_unit() {   # INDEX
   export MOE_DRIVER_INSTR_STAMPS="$INSTR_STAMPS" MOE_DRIVER_INSTR_EVERY="$INSTR_EVERY" MOE_DRIVER_INSTR_MARKS="$INSTR_MARKS"
   export MOE_DRIVER_STAMP_GROUPS="$STAMP_GROUPS" MOE_DRIVER_STAMP_TREADS="$STAMP_TREADS" MOE_DRIVER_STAMP_ARMS="$STAMP_ARMS"
   export MOE_DRIVER_HISTOGRAM="$HISTOGRAM" MOE_DRIVER_ARMS="$R3_ARMS" MOE_DRIVER_SLIP_POLICY="$SLIP_POLICY"
+  export MOE_DRIVER_G1_RULE="$G1_RULE"
   export MOE_DRIVER_INSTR_VARIANTS="$INSTR_VARIANTS" MOE_DRIVER_VARIANT_IDS="$VARIANT_IDS"
 }
 #: The plan's instrumented units as instr_probe.py's variants (JSON): every stamps unit and

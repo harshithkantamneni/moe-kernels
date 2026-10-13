@@ -1,0 +1,368 @@
+{
+ "registered": "2026-10-13, before any rental-7 page",
+ "name": "2026-10-13-rental7-g1rule-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)",
+ "tool": "the scorer: scripts/scoring/rental7/r7common.py (rebuild, g1_rule, repeat_rows, dip_run, run_guard, lock_slip, clean_r7, clean_p20, p20_report, page_report), which rebuilds every histogram page from its cells.csv; scripts/gh200_model_session.sh plan key g1-rule (locked_r3 --min-clean-repeats 0). R3 (scripts/private_weight_reference.py) and scripts/locked_r3.py are rental 6's, byte-identical to its registered pins (R3 sha256 daa40706...), and get no new flag",
+ "label": "SEEN-DERIVED: the run length and the cap were read off the published held-lock pages (design-r7 1.1, 1.2; design-r7-review (a)); they are gate thresholds, not model constants",
+ "rule": {
+  "where": "the SCORER applies the rule to the page's cells.csv (one row per timed repeat: status, ms_p50, sm_clock_load_mhz, clock_drift_ok, host_bound and the repeat's clock_samples_mhz reads); it never reads R3's stored G1 or the stored row medians; a page whose cells.csv rows per cell differ from its report's repeat_rows, or with no cells.csv, no report or no lock_mhz, is NOT SCORED",
+  "read_cadence": "one NVML SM-clock read per burst, taken as the host finishes enqueueing it; bursts 140 to 166 ms apart at duty 0.25, 15 reads per repeat (5 bursts x 3 trials); so a run of 3 reads spans about 0.46 s and a repeat about 2.3 s",
+  "dipped_read": "a read more than one 15 MHz step under the lock: 1694 MHz or less at the 1710 lock (reads are integer MHz)",
+  "clean_repeat": "status ok, ms_p50 > 0, NOT lock-slipped (the repeat's median clock, sm_clock_load_mhz, more than one 15 MHz step under the lock, rental 6's lock_slip) and NOT run-guarded (RUN_GUARD_READS = 3 or more CONSECUTIVE dipped reads of its 15); an isolated dipped read, at an end or inside the repeat, stays in; the endpoint DRIFT flag (first and last read more than 5% apart) is recorded only",
+  "cell": "time, clock and host_bound: the median (any) over its clean repeats; VALID with at least 6 clean of its timed repeats, else LOST (rental 6's 6 of 9)",
+  "LOST_and_early_stop": "R3 runs --slip-policy cell --min-clean-repeats 0 (the plan key): it times every repeat of every cell and never stops a cell or the page early, so R3's own r5-any LOST rule cannot cut a cell the scorer's rule keeps; the scorer applies 6 of 9 (design build review: at a 30% flag rate R3 at min-clean 6 truncates about 19% of cells and leaves 3.1% under 6 timed repeats; 0 at min-clean 0)",
+  "G1_drift_clause": "G1 FAILS when the page's non-clean timed repeat rows (lock-slipped, run-guarded or not ok) exceed 10% of its timed repeat rows, every row counted (lost cells too); rental 6's 10% slipped-row cap is inside it",
+  "G1_clock_clauses": "every kept cell's clock read and every kept cell within one 15 MHz step of the page's top kept clock (R3's G1 clock clauses, on the rebuilt cells)",
+  "views": "a page whose G1 FAILS counts in ALL and is dropped in CLEAN (rental 2's rule 3)",
+  "constants": {
+   "RUN_GUARD_READS": 3,
+   "NON_CLEAN_CAP": 0.1,
+   "LOCK_STEP_MHZ": 15.0,
+   "P20_CEILING": 0.2,
+   "MIN_CLEAN": 6,
+   "READ_PERIOD_MS": [
+    140,
+    166
+   ]
+  }
+ },
+ "p20_side_view": {
+  "status": "DESCRIPTIVE, printed beside every rental-7 verdict; never a verdict",
+  "what": "the owner's P20 proposal (publish-r6 DRIFT.md), rebuilt from the same cells.csv: today's exclusions (status ok, ms_p50 > 0, not drift-flagged, not slipped), its own cell medians, clocks, host flags and lost cells (6 of 9), and G1 with the same clock clauses on ITS kept cells and its own clocks, failing past 20% non-clean rows"
+ },
+ "old_pages": {
+  "rule": "R3 is byte-identical to rental 6's pin: every earlier page and every R3 output is unchanged",
+  "reproduction": "R3's own r5-any histogram_gates on each published page's stored rows and cells.csv reproduces the stored G1 on 17 of 17 report pages",
+  "rental6_scorers": "rental 6's three scorers on the published rental-6 session write their committed score files byte for byte (tests/test_rental7_g1rule.py)"
+ },
+ "evidence_seen": {
+  "pages": [
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-olmoe-1b-7b-bk128",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 81",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-olmoe-1b-7b-bk64",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 81",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-olmoe-1b-7b-sk15",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 90",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-olmoe-1b-7b-ska",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 270",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-olmoe-1b-7b-skb",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ska",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 270",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-09 gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-skb",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 5,
+    "p20": "PASS",
+    "p20_share_pct": 3.0864,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-mixtral-8x7b-ska",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "1 / 216",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 10,
+    "p20": "PASS",
+    "p20_share_pct": 5.0926,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-mixtral-8x7b-skb",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 6,
+    "p20": "PASS",
+    "p20_share_pct": 3.7037,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-mixtral-8x7b-skc",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 9,
+    "p20": "PASS",
+    "p20_share_pct": 5.5556,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-olmoe-1b-7b-ska",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 216",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-olmoe-1b-7b-skb",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-olmoe-1b-7b-skc",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 162",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-phi-3.5-moe-ska",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "1 / 216",
+    "r7_run_guarded": 1,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 14,
+    "p20": "PASS",
+    "p20_share_pct": 6.4815,
+    "p20_lost_cells": 1
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-phi-3.5-moe-skb",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 161",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 11,
+    "p20": "PASS",
+    "p20_share_pct": 6.8323,
+    "p20_lost_cells": 1
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-phi-3.5-moe-skc",
+    "stored_G1": "FAIL",
+    "r5_any_rebuilt": "FAIL",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 161",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 17,
+    "p20": "PASS",
+    "p20_share_pct": 10.559,
+    "p20_lost_cells": 2
+   },
+   {
+    "page": "2026-10-13 gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-q9",
+    "stored_G1": "PASS",
+    "r5_any_rebuilt": "PASS",
+    "r7": "PASS",
+    "r7_non_clean": "0 / 36",
+    "r7_run_guarded": 0,
+    "r7_lost_cells": 0,
+    "endpoint_flagged_recorded": 0,
+    "p20": "PASS",
+    "p20_share_pct": 0.0,
+    "p20_lost_cells": 0
+   }
+  ],
+  "summary": {
+   "report_pages": 17,
+   "stored_equals_rebuilt_r5": 17,
+   "r5_any_pass": 10,
+   "r7_pass": 17,
+   "p20_pass": 17,
+   "r7_lost_cells": 0,
+   "p20_lost_cells": 4,
+   "r7_run_guarded_repeats": 1,
+   "flagged_repeats_kept": 72,
+   "cell_medians_moved_by_keeping_them": {
+    "cells": 39,
+    "rms_pct": 0.016327,
+    "worst_pct": -0.052852
+   }
+  }
+ },
+ "positive_control": {
+  "what": "design-r7-review (a): real sags injected into the 17 held pages' cells.csv (the design had no positive control: only 3 held repeats have a median under the lock)",
+  "results": {
+   "endpoint: last 5 reads, every 3rd repeat": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 0,
+    "slip predicate alone keeps at least 80% of the sags": 17,
+    "inflation of a sagged repeat %": 2.291667
+   },
+   "endpoint: first 3 reads, every 3rd repeat": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 0,
+    "slip predicate alone keeps at least 80% of the sags": 17,
+    "inflation of a sagged repeat %": 1.375
+   },
+   "interior: reads 4 to 10, every 3rd repeat": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 0,
+    "slip predicate alone keeps at least 80% of the sags": 11,
+    "inflation of a sagged repeat %": 3.208333
+   },
+   "interior: reads 6 to 8, every 3rd repeat": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 0,
+    "slip predicate alone keeps at least 80% of the sags": 17,
+    "inflation of a sagged repeat %": 1.375
+   },
+   "interior: reads 5 to 9, repeat 0 of every cell": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 0,
+    "slip predicate alone keeps at least 80% of the sags": 16,
+    "inflation of a sagged repeat %": 2.291667
+   },
+   "board: reads 3 to 5 in every repeat": {
+    "pages": 17,
+    "every sagged repeat out of its median (r7)": 17,
+    "G1 FAILS (r7)": 17,
+    "every cell lost": 17,
+    "slip predicate alone keeps at least 80% of the sags": 17,
+    "inflation of a sagged repeat %": 1.375
+   }
+  },
+  "review_sag_sim": "design-r7-review work/sag_sim.py (R 4000 per scenario per page): S_med alone passes 'last 5 reads at 1600 MHz in 30% of repeats' with P 1.000 and a kept cell biased over 0.54% with P 0.79; S_run3 0.000 in every scenario"
+ },
+ "limits": [
+  "a sag shorter than RUN_GUARD_READS consecutive reads (about 0.45 s) is seen by no rule (r5-any included, unless it touches an end): 2 consecutive reads at 1600 MHz in EVERY repeat bias a cell by up to 0.916667% and pass; in a minority of repeats the median does not move",
+  "the reads are one NVML read per burst after the host enqueues it; under the held lock they do not price the trials (design-r7 1.1: slope +0.005, 95% [-0.005, +0.013]); a real sag is assumed to show in 3 or more consecutive reads",
+  "the cap is rental 6's slip cap carried over; the held pages read at most 0.46% non-clean under r7"
+ ],
+ "plumbing": {
+  "R3_and_locked_r3": "unchanged (registered pins); a rental-7 page is R3 at --slip-policy cell --min-clean-repeats 0, so its own G1 (r5-any) and medians are written as always and the scorer ignores both",
+  "driver": "plan key g1-rule=r7-median-run3 (timed units with histogram= and slip-policy=cell only): locked_r3 --min-clean-repeats 0; the unit's R3 dry run carries --slip-policy cell --lock-mhz 1710 --min-clean-repeats 0, what locked_r3 hands R3",
+  "page_check": "the scorer refuses (NOT SCORED) a page that did not run --slip-policy cell --min-clean-repeats 0"
+ },
+ "seen_data": [
+  "every held-lock histogram page through rental 6 (17 with reports) is SEEN; the rule was chosen on them"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b"
+ }
+}

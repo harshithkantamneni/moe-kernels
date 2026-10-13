@@ -1,0 +1,157 @@
+REGISTERED 2026-10-13, before any rental-7 page: rental 7, 2026-10-13-rental7-skew-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)
+tool: scorer scripts/scoring/rental7/score_skew.py; predictions reg6.priced via reg7.py (model v3 unchanged); histograms scripts/skew_synth7.py --draw7
+
+mixtral-8x7b: r_v3 - 1 [2.454, 16.1469] %; T_v3 [1714.051, 9144.206] us
+phi-3.5-moe: r_v3 - 1 [2.6863, 26.4946] %; T_v3 [1035.058, 6185.672] us
+rival v2: rms gap 0.138363%, worst 0.457993%, lever cells 0
+rival LT3: rms gap 1.095654%, worst -2.405221%, lever cells 62
+rival H8: rms gap 0.222041%, worst 0.657191%, lever cells 5
+rival v3_all: rms gap 0.163321%, worst -0.6085%, lever cells 3
+rival v3_noca: rms gap 0.001053%, worst 0.003865%, lever cells 0
+rival v3_nob: rms gap 0.137895%, worst 0.45416%, lever cells None
+power SEEN-anchored: {'cells': 84, 'P(E1-SKEW HOLDS: pooled and each shape)': 0.99997, 'P(pooled bar)': 1.0, 'P(mixtral-8x7b bar)': 0.99999, 'P(phi-3.5-moe bar)': 0.99997, 'E[rms] %': 0.61954, 'LT3 lever cells': 62, 'P(LT3 EXCLUDED)': 0.9997, 'ratios': 48, 'P(SKEW-RATIO HOLDS)': 1.0, 'U lever ratios': 32, 'P(U EXCLUDED)': 1.0}
+power zero bias: {'cells': 84, 'P(E1-SKEW HOLDS: pooled and each shape)': 0.99999, 'P(pooled bar)': 1.0, 'P(mixtral-8x7b bar)': 0.99999, 'P(phi-3.5-moe bar)': 1.0, 'E[rms] %': 0.29001, 'LT3 lever cells': 62, 'P(LT3 EXCLUDED)': 0.99848, 'ratios': 48, 'P(SKEW-RATIO HOLDS)': 1.0, 'U lever ratios': 32, 'P(U EXCLUDED)': 1.0}
+power harsh (bias x1.5, board 0.3%): {'cells': 84, 'P(E1-SKEW HOLDS: pooled and each shape)': 0.97745, 'P(pooled bar)': 0.99993, 'P(mixtral-8x7b bar)': 0.99897, 'P(phi-3.5-moe bar)': 0.97845, 'E[rms] %': 0.90087, 'LT3 lever cells': 62, 'P(LT3 EXCLUDED)': 0.7954, 'ratios': 48, 'P(SKEW-RATIO HOLDS)': 1.0, 'U lever ratios': 32, 'P(U EXCLUDED)': 1.0}
+
+model: docs/registered/2026-10-09-rental6-v3-gh200.json (model v3, unchanged; no term added); every cell carries v2, v3, v3_nob, v3_noca, LT3, v3_all and H8 (ms)
+what: the certification rental 6 could not give: Mixtral and Phi in CLEAN, on fresh draws at rental 6's treads, under the drift rule of rental7-g1rule
+histograms:
+  synthetic: SYNTHETIC: rental 6's rule exactly (skew_synth.pages6), seed base 20261020 instead of 20261010: seed = 20261020 + 1000 x shape index (rental 6's: Mixtral 0, OLMoE 1, Phi 2) + 10 n + label index (PT 0, PW 1, DW 2, PW2 3), so seed(n) is rental 6's seed(n + 1); shuffle seed 20261020 (owner decision 5: fresh seeds, same treads)
+  files: (in the JSON)
+leakage:
+  skewed_cells: 48
+  skewed_cells_whose_counts_sha256_is_published: 0
+  control_cells: 72
+  control_cells_whose_counts_sha256_is_published: 72
+  skewed_v3_against_rental6_draws_pct:
+    rms: 2.293525
+    worst: 7.830504
+  controls_v3_against_rental6_max_rel: 3.9e-05
+  key: a cell is published when a published page or an earlier registered histogram file carries the same (model, n, counts sha256)
+  note: the controls' counts are rental 6's; only the uniform cells' token-row shuffle moves (content keys)
+cells:
+  common: R3's tile 32x64x64 w8 s4 at G = 8; NATIVE and SHARED at 9 copies (not vLLM's tile: nothing here is the working bar on vLLM's tile)
+  pages:
+    A: PT, PW, uniform, balanced
+    B: DW, uniform, balanced
+    C: PW2, uniform, balanced
+  treads:
+    mixtral-8x7b: [3, 6, 16]
+    phi-3.5-moe: [2, 4, 12]
+  n_stratum: G3's stratum is the tread's rank within its shape
+  count: 120 cells, 84 E1 cells (skewed and uniform); 120 pass the host rule
+summary:
+  mixtral-8x7b:
+    r_v3_minus_1_pct: [2.454, 16.1469]
+    T_v3_us: [1714.051, 9144.206]
+  phi-3.5-moe:
+    r_v3_minus_1_pct: [2.6863, 26.4946]
+    T_v3_us: [1035.058, 6185.672]
+rival_gaps_on_E1:
+  v2:
+    cells: 84
+    rms_pct: 0.138363
+    worst_pct: 0.457993
+    lever_cells_0.18: 0
+    lever_by_model: {"mixtral-8x7b": 0, "phi-3.5-moe": 0}
+  LT3:
+    cells: 84
+    rms_pct: 1.095654
+    worst_pct: -2.405221
+    lever_cells_0.18: 62
+    lever_by_model: {"mixtral-8x7b": 34, "phi-3.5-moe": 28}
+  H8:
+    cells: 84
+    rms_pct: 0.222041
+    worst_pct: 0.657191
+    lever_cells_0.18: 5
+    lever_by_model: {"mixtral-8x7b": 0, "phi-3.5-moe": 5}
+  v3_all:
+    cells: 84
+    rms_pct: 0.163321
+    worst_pct: -0.6085
+    lever_cells_0.18: 3
+    lever_by_model: {"mixtral-8x7b": 3, "phi-3.5-moe": 0}
+  v3_noca:
+    cells: 84
+    rms_pct: 0.001053
+    worst_pct: 0.003865
+    lever_cells_0.18: 0
+    lever_by_model: {"mixtral-8x7b": 0, "phi-3.5-moe": 0}
+  v3_nob:
+    cells: 84
+    rms_pct: 0.137895
+    worst_pct: 0.45416
+    lever_cells_0.18: null
+    lever_by_model: null
+levers:
+  rule: |T_R / T_v3 - 1| > 3 sigma_page = 0.54% (sigma_page 0.18%, rental 3 rep8)
+  cells:
+    v2: []
+    LT3: ["mixtral-8x7b/A/16/uniform/native", "mixtral-8x7b/A/16/uniform/shared", "mixtral-8x7b/A/3/PT/native", "mixtral-8x7b/A/3/PT/shared", "mixtral-8x7b/A/3/PW/native", "mixtral-8x7b/A/3/PW/shared", "mixtral-8x7b/A/3/uniform/native", "mixtral-8x7b/A/3/uniform/shared", "mixtral-8x7b/A/6/PT/native", "mixtral-8x7b/A/6/PT/shared", "mixtral-8x7b/A/6/PW/native", "mixtral-8x7b/A/6/PW/shared", "mixtral-8x7b/A/6/uniform/native", "mixtral-8x7b/A/6/uniform/shared", "mixtral-8x7b/B/16/uniform/native", "mixtral-8x7b/B/16/uniform/shared", "mixtral-8x7b/B/3/DW/native", "mixtral-8x7b/B/3/DW/shared", "mixtral-8x7b/B/3/uniform/native", "mixtral-8x7b/B/3/uniform/shared", "mixtral-8x7b/B/6/DW/native", "mixtral-8x7b/B/6/DW/shared", "mixtral-8x7b/B/6/uniform/native", "mixtral-8x7b/B/6/uniform/shared", "mixtral-8x7b/C/16/uniform/native", "mixtral-8x7b/C/16/uniform/shared", "mixtral-8x7b/C/3/PW2/native", "mixtral-8x7b/C/3/PW2/shared", "mixtral-8x7b/C/3/uniform/native", "mixtral-8x7b/C/3/uniform/shared", "mixtral-8x7b/C/6/PW2/native", "mixtral-8x7b/C/6/PW2/shared", "mixtral-8x7b/C/6/uniform/native", "mixtral-8x7b/C/6/uniform/shared", "phi-3.5-moe/A/2/PT/native", "phi-3.5-moe/A/2/PT/shared", "phi-3.5-moe/A/2/PW/native", "phi-3.5-moe/A/2/PW/shared", "phi-3.5-moe/A/2/uniform/native", "phi-3.5-moe/A/2/uniform/shared", "phi-3.5-moe/A/4/PT/native", "phi-3.5-moe/A/4/PT/shared", "phi-3.5-moe/A/4/PW/native", "phi-3.5-moe/A/4/PW/shared", "phi-3.5-moe/A/4/uniform/native", "phi-3.5-moe/A/4/uniform/shared", "phi-3.5-moe/B/2/DW/native", "phi-3.5-moe/B/2/DW/shared", "phi-3.5-moe/B/2/uniform/native", "phi-3.5-moe/B/2/uniform/shared", "phi-3.5-moe/B/4/DW/native", "phi-3.5-moe/B/4/DW/shared", "phi-3.5-moe/B/4/uniform/native", "phi-3.5-moe/B/4/uniform/shared", "phi-3.5-moe/C/2/PW2/native", "phi-3.5-moe/C/2/PW2/shared", "phi-3.5-moe/C/2/uniform/native", "phi-3.5-moe/C/2/uniform/shared", "phi-3.5-moe/C/4/PW2/native", "phi-3.5-moe/C/4/PW2/shared", "phi-3.5-moe/C/4/uniform/native", "phi-3.5-moe/C/4/uniform/shared"]
+    H8: ["phi-3.5-moe/A/2/PT/shared", "phi-3.5-moe/A/2/uniform/shared", "phi-3.5-moe/B/2/uniform/shared", "phi-3.5-moe/C/2/PW2/shared", "phi-3.5-moe/C/2/uniform/shared"]
+    v3_all: ["mixtral-8x7b/A/3/uniform/shared", "mixtral-8x7b/B/3/uniform/shared", "mixtral-8x7b/C/3/uniform/shared"]
+    v3_noca: []
+gates:
+  G1_lock_thermal: rental7-g1rule: the scorer rebuilds the page from its cells.csv under r7-median-run3 (R3's stored G1 and medians are never read); a page whose cells.csv counts differ from its report, or that did not run --slip-policy cell --min-clean-repeats 0, is NOT SCORED; a page failing the rebuilt G1 counts in ALL and is dropped in CLEAN (rental 2's rule 3)
+  repeats: a cell is VALID with at least 6 clean repeats of its timed repeats under r7-median-run3 (R3 times all 9: min-clean 0); its time, clock and host flag are the scorer's medians over its clean repeats
+  G2_host_bound: rental 3's registered host rule (T_v3 + F240 >= 0.40 ms on the REGISTERED prediction) AND the page's timer flag host_bound
+  G4_cell_clock: the cell's clean-repeat median clock at least 1705 MHz, else the CELL is dropped
+  G5_provenance: as rental 6: histogram file sha256, every row's counts_sha256, bincount_ok, the shuffle seed; else NOT SCORED
+  G3: rental 5's text verbatim (rental 6's, with delta_v3), clusters = the six pages (df 5)
+  G3_void_all: rental 6's owner decision kept: a G3 FAIL with Q not rejecting voids every histogram cell; E1 printed DESCRIPTIVELY on the voided cells
+  no_report: a page with no report.json or no cells.csv is NOT SCORED; the scorer reads both (cells.csv for every repeat, the report for provenance, lock_mhz and repeat_rows)
+  views: ALL and CLEAN (rental 2's rule 3); the registered verdict holds only if both views hold
+  p20_view: DESCRIPTIVE: every test re-read on the P20 rebuild (its own medians, clocks, lost cells and G1 with the 20% ceiling), printed beside
+tests:
+  E1-SKEW:
+    statistic: e = T_v3 / T_meas - 1 (T_v3 the registered prediction carried to the page's own A) over every valid histogram cell (PT PW PW2 DW uniform)
+    rule: HOLDS iff the POOLED valid cells meet rms <= 2%, max |e| <= 5% and |mean e| <= 1%, AND each shape's valid cells meet the same bar (the new per-shape clause), in each view; the registered verdict holds only if both views hold
+    certification: a shape is CERTIFIED in CLEAN iff its CLEAN cells meet the bar and at least 2 of its 3 pages are in CLEAN; with fewer it reads NOT CERTIFIED
+    rms_max: 0.02
+    max_abs: 0.05
+    mean_max: 0.01
+    rental5_bands_printed: {"rms_max": 0.012, "max_abs": 0.03, "mean_max": 0.006}
+    on_G3_void_all: NOT SCORED; E1 printed DESCRIPTIVELY on the voided cells
+  E1-UNI:
+    statistic: e on the balanced cells
+    rule: the E1-SKEW bar, printed
+  E1-rivals:
+    rule: rental 5's: a rival is EXCLUDED if its rms on its registered lever cells is at least 2x v3's there and at least 0.76%; UNDECIDED below 6 surviving lever cells
+    rivals: ["v2", "LT3", "H8", "v3_all", "v3_noca"]
+    rival_factor: 2.0
+    rival_floor: 0.0076
+    min_lever_cells: 6
+    by_construction: {"v2": "UNDECIDED by construction (0 lever cells)", "LT3": "decidable", "H8": "UNDECIDED by construction (5 lever cells)", "v3_all": "UNDECIDED by construction (3 lever cells)", "v3_noca": "UNDECIDED by construction (0 lever cells)"}
+    term_b: rental 7 does not test term (b) on time: (b) moves no E1 cell past 0.54% on these shapes; Q1-H is (b)'s test
+  SKEW-RATIO:
+    statistic: r = T(h) / T(uniform), same page, n and arm; e = r_v3 / r_meas - 1
+    rule: rental 5's: HOLDS if rms <= 1.5% and max |e| <= 4%; LT3 and U by the rival rule on their ratio lever cells
+    rms_max: 0.015
+    max_abs: 0.04
+noise:
+  sigma_page: 0.0018
+  lever_sigma: 0.18% (rental 3 rep8): threshold 0.54%
+labels:
+  mixtral-8x7b: skewed: BLIND draws, BLIND-CALMODEL; uniform and balanced: SEEN replicates
+  phi-3.5-moe: skewed: BLIND draws; uniform and balanced: SEEN replicates; Phi carries Mixtral's shapes (rental 6 owner decision 4); h SEEN-FITTED, but no rental-7 cell is IN-SAMPLE for h (OLMoE is not timed)
+  rental6: rental 6's verdicts stand and its pages are SEEN
+scorer_ambiguities:
+  1 the registered rule and where it runs: r7-median-run3 (S_med plus the run guard, owner decision 1), applied by the scorer to cells.csv (r7common.rebuild); R3 is unchanged and runs --slip-policy cell --min-clean-repeats 0; a page that ran another min-clean is NOT SCORED
+  2 S_med's G1 drift clause: the run guard excludes a repeat (3 or more consecutive reads a step under the lock); G1 fails on drift only past 10% non-clean repeat rows (slipped, run-guarded or not ok); the endpoint flag is recorded only
+  3 the P20 side view: rebuilt from the same cells.csv with today's exclusions: its own medians, clocks, host flags and lost cells (6 of 9), G1's clock clauses on its kept cells and the 20% ceiling; DESCRIPTIVE, every test printed on it
+  4 per-shape E1: read in each view on that view's cells; the registered verdict holds only if both views hold; a shape is CERTIFIED in CLEAN only with at least 2 of its 3 pages in CLEAN and its CLEAN cells meeting the bar
+  5 Q1-H se with few clusters: CR1 on (model, n) clusters needs at least 3 clusters; fewer is UNDECIDED (no C / (C - 1) with C = 1); the registered population has 5
+  6 pair or cluster weights: pair-weighted mean (rental 6's); the equal-cluster-weight mean is printed
+  7 the copies clause: matched by model: per model with valid Q1 pairs at both c9 and c15, mean g(c15) - mean g(c9), pair-weighted over those models; identical to rental 6's unmatched means when all six Q1 pages are valid
+  8 one copies side only: the copies clause is UNDECIDED; v3 reads UNDECIDED (FAILS if its level clause fails); the rivals are still scored (owner decision 2)
+  9 the share denominator: every timed repeat row of the page in cells.csv (R3 at min-clean 0 times all 9 of every cell); cells.csv's rows per cell must equal the report's repeat_rows, else NOT SCORED
+  10 l2open: rows are (cell, arm) on w1 only for the verdict (PT, PW skewed; uniform and balanced printed), NATIVE and SHARED at n <= 9 and NATIVE at n 16; w2 under v3 printed; rental 6's counter clock rule; one page, one view
+missing: a missing page's cells are NOT SCORED; the six skew pages carry nodrop=1 and no drop-group
+seen_data:
+  - the shapes are SEEN routing statistics
+  - mu and sd_cell SEEN (rental 6)
+  - sigma_page SEEN
+  - h SEEN-FITTED, content_a SEEN-SELECTED (model v3)

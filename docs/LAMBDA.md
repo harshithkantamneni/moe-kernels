@@ -292,7 +292,7 @@ L=$R/lock$F && mkdir -p "$L"
   for G in 64 1 4 2; do
     moe_counter "$PY_VLLM" scripts/dram_counter_route.py --run --family r3-arms --group-m $G \
       --census "$S/census-lock$F.json" --page-clock none --page-lock-mhz "$F" \
-      --out "$L/r3c-g$G.json" 2>&1 | tee "$S/logs/r3c-g$G-lock$F.log" || exit
+      --out "$L/r3c-g$G.json" 2>&1 | tee "$S/logs/r3c-mixtral-8x7b-g$G-lock$F.log" || exit
   done )
 echo "lock block exit $?"; sleep 5
 nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,clocks_event_reasons.active --format=csv | tee "$S/clocks-after-lock-pages.txt"

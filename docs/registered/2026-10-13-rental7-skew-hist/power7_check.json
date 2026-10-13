@@ -1,0 +1,323 @@
+{
+ "what": "rental-7 power points: MPS float32 against CPU float64 (the registered numbers)",
+ "torch": "2.13.0",
+ "R": 200000,
+ "max_abs_diff": 1.0000000000065512e-05,
+ "seconds": {
+  "cpu_float64": 1.34,
+  "mps_float32": 1.96,
+  "pricing_cpu_first_call": 1.7
+ },
+ "cpu_float64": {
+  "E1": {
+   "SEEN-anchored": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.99997,
+    "P(pooled bar)": 1.0,
+    "P(mixtral-8x7b bar)": 0.99999,
+    "P(phi-3.5-moe bar)": 0.99997,
+    "E[rms] %": 0.61954,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.9997,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   },
+   "zero bias": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.99999,
+    "P(pooled bar)": 1.0,
+    "P(mixtral-8x7b bar)": 0.99999,
+    "P(phi-3.5-moe bar)": 1.0,
+    "E[rms] %": 0.29001,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.99848,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   },
+   "harsh (bias x1.5, board 0.3%)": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.97745,
+    "P(pooled bar)": 0.99993,
+    "P(mixtral-8x7b bar)": 0.99897,
+    "P(phi-3.5-moe bar)": 0.97845,
+    "E[rms] %": 0.90087,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.7954,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   }
+  },
+  "Q1-H": {
+   "registered population | v3 | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.98259,
+    "P(level clause)": 0.98259,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.9992,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.01306
+   },
+   "registered population | v3 | tau 1.3": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.92951,
+    "P(level clause)": 0.92951,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.97698,
+    "P(EXCLUDED H8)": 0.99999,
+    "P(EXCLUDED v3_all)": 0.03884
+   },
+   "registered population | v3 | tau 0.9 | anchors 0": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.99879,
+    "P(level clause)": 0.99879,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99996,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.00089
+   },
+   "registered population | v3 | tau 0.9 | c15 effect +1 us": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.91209,
+    "P(level clause)": 0.967,
+    "P(copies clause)": 0.94319,
+    "P(EXCLUDED v2)": 0.99852,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.02483
+   },
+   "registered population | v3 | tau 0.9 | c15 effect +2 us": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.05364,
+    "P(level clause)": 0.94181,
+    "P(copies clause)": 0.05683,
+    "P(EXCLUDED v2)": 0.9972,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.0424
+   },
+   "registered population | v2 true | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.0,
+    "P(level clause)": 0.0,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.01083,
+    "P(EXCLUDED H8)": 0.88522,
+    "P(EXCLUDED v3_all)": 0.99997
+   },
+   "registered population | H8 true | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.0,
+    "P(level clause)": 0.0,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99699,
+    "P(EXCLUDED H8)": 0.01306,
+    "P(EXCLUDED v3_all)": 1.0
+   },
+   "design population only (3 clusters) | v3 | tau 0.9": {
+    "pairs": 12,
+    "clusters": 3,
+    "P(v3 HOLDS)": 0.88704,
+    "P(level clause)": 0.88704,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99613,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.09285
+   },
+   "design population only (3 clusters) | v3 | tau 1.3": {
+    "pairs": 12,
+    "clusters": 3,
+    "P(v3 HOLDS)": 0.79237,
+    "P(level clause)": 0.79237,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.96093,
+    "P(EXCLUDED H8)": 0.99896,
+    "P(EXCLUDED v3_all)": 0.13871
+   }
+  },
+  "Q1-C": {
+   "x9 -5.97 | board 1.0 + replicate 0.45 | CALL true": {
+    "P(correct)": 0.9922,
+    "P(SELECTED and correct)": 0.9495
+   },
+   "x9 -5.97 | board 1.0 + replicate 0.45 | DEAD true": {
+    "P(correct)": 0.9923,
+    "P(SELECTED and correct)": 0.95
+   },
+   "x9 -7.95 | board 1.0 + replicate 0.45 | CALL true": {
+    "P(correct)": 0.9994,
+    "P(SELECTED and correct)": 0.9927
+   },
+   "x9 -7.95 | board 1.0 + replicate 0.45 | DEAD true": {
+    "P(correct)": 0.9993,
+    "P(SELECTED and correct)": 0.9928
+   }
+  }
+ },
+ "mps_float32": {
+  "E1": {
+   "SEEN-anchored": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.99997,
+    "P(pooled bar)": 1.0,
+    "P(mixtral-8x7b bar)": 0.99999,
+    "P(phi-3.5-moe bar)": 0.99998,
+    "E[rms] %": 0.61954,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.9997,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   },
+   "zero bias": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.99999,
+    "P(pooled bar)": 1.0,
+    "P(mixtral-8x7b bar)": 0.99999,
+    "P(phi-3.5-moe bar)": 1.0,
+    "E[rms] %": 0.29001,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.99849,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   },
+   "harsh (bias x1.5, board 0.3%)": {
+    "cells": 84,
+    "P(E1-SKEW HOLDS: pooled and each shape)": 0.97745,
+    "P(pooled bar)": 0.99993,
+    "P(mixtral-8x7b bar)": 0.99897,
+    "P(phi-3.5-moe bar)": 0.97844,
+    "E[rms] %": 0.90087,
+    "LT3 lever cells": 62,
+    "P(LT3 EXCLUDED)": 0.7954,
+    "ratios": 48,
+    "P(SKEW-RATIO HOLDS)": 1.0,
+    "U lever ratios": 32,
+    "P(U EXCLUDED)": 1.0
+   }
+  },
+  "Q1-H": {
+   "registered population | v3 | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.9826,
+    "P(level clause)": 0.9826,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.9992,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.01306
+   },
+   "registered population | v3 | tau 1.3": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.92951,
+    "P(level clause)": 0.92951,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.97698,
+    "P(EXCLUDED H8)": 0.99999,
+    "P(EXCLUDED v3_all)": 0.03884
+   },
+   "registered population | v3 | tau 0.9 | anchors 0": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.99879,
+    "P(level clause)": 0.99879,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99995,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.00088
+   },
+   "registered population | v3 | tau 0.9 | c15 effect +1 us": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.91208,
+    "P(level clause)": 0.967,
+    "P(copies clause)": 0.94318,
+    "P(EXCLUDED v2)": 0.99852,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.02483
+   },
+   "registered population | v3 | tau 0.9 | c15 effect +2 us": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.05364,
+    "P(level clause)": 0.94181,
+    "P(copies clause)": 0.05683,
+    "P(EXCLUDED v2)": 0.9972,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.04241
+   },
+   "registered population | v2 true | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.0,
+    "P(level clause)": 0.0,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.01084,
+    "P(EXCLUDED H8)": 0.88522,
+    "P(EXCLUDED v3_all)": 0.99997
+   },
+   "registered population | H8 true | tau 0.9": {
+    "pairs": 24,
+    "clusters": 5,
+    "P(v3 HOLDS)": 0.0,
+    "P(level clause)": 0.0,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99699,
+    "P(EXCLUDED H8)": 0.01306,
+    "P(EXCLUDED v3_all)": 1.0
+   },
+   "design population only (3 clusters) | v3 | tau 0.9": {
+    "pairs": 12,
+    "clusters": 3,
+    "P(v3 HOLDS)": 0.88704,
+    "P(level clause)": 0.88704,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.99612,
+    "P(EXCLUDED H8)": 1.0,
+    "P(EXCLUDED v3_all)": 0.09285
+   },
+   "design population only (3 clusters) | v3 | tau 1.3": {
+    "pairs": 12,
+    "clusters": 3,
+    "P(v3 HOLDS)": 0.79237,
+    "P(level clause)": 0.79237,
+    "P(copies clause)": 1.0,
+    "P(EXCLUDED v2)": 0.96092,
+    "P(EXCLUDED H8)": 0.99897,
+    "P(EXCLUDED v3_all)": 0.13871
+   }
+  },
+  "Q1-C": {
+   "x9 -5.97 | board 1.0 + replicate 0.45 | CALL true": {
+    "P(correct)": 0.9922,
+    "P(SELECTED and correct)": 0.9495
+   },
+   "x9 -5.97 | board 1.0 + replicate 0.45 | DEAD true": {
+    "P(correct)": 0.9923,
+    "P(SELECTED and correct)": 0.95
+   },
+   "x9 -7.95 | board 1.0 + replicate 0.45 | CALL true": {
+    "P(correct)": 0.9994,
+    "P(SELECTED and correct)": 0.9927
+   },
+   "x9 -7.95 | board 1.0 + replicate 0.45 | DEAD true": {
+    "P(correct)": 0.9993,
+    "P(SELECTED and correct)": 0.9928
+   }
+  }
+ }
+}

@@ -1209,3 +1209,61 @@ scores nothing of its own. Readings left to the owner: Q1-H's rivals when the co
 undecided (the scorer reads none; on the pairs that ran v2 and H8 sit 5.5 and 8.4 us off against 3
 se of 3.2 us), and the histogram G1 drift rule (one flagged repeat fails a page; the ladder pages'
 V0 allows 20%). The files above are unchanged.
+
+## 2026-10-13, before any page: rental 7, four registrations on one GH200
+
+One `gpu_1x_gh200` runs `scripts/plans/rental7-2026-10.plan` through
+`gh200_model_session.sh --plan`. The four files `2026-10-13-rental7-{g1rule,skew,q1,l2open}-gh200`,
+their scorers (`scripts/scoring/rental7/`, tested on synthetic pages only) and the scaffolding they
+need are committed together before the rental. Every number is written by
+`scripts/scoring/rental7/register.py` from committed files or is a typed-in input with its
+provenance and label (`--check` recomputes them, and a test runs it). Design: the scratchpad's
+`design-r7/DESIGN.md`, corrected by `design-r7-review/REVIEW.md` (the review wins). Labels as rental
+6, plus SEEN-DERIVED: a gate rule whose threshold was read off published pages, not a model
+constant. Model v3 is rental 6's, unchanged; no term is added.
+
+**Owner decisions of 2026-10-13** bound here. (1) The histogram drift rule is S_med plus the
+review's run guard, `r7-median-run3`, applied by the SCORER to each page's cells.csv
+(`scripts/scoring/rental7/r7common.py`): a repeat is out of its cell median only when lock-slipped
+or with 3 or more consecutive per-burst clock reads a step under the lock (1694 MHz or less at
+1710; one read per burst, 140 to 166 ms apart, so a run is about 0.45 s); the endpoint DRIFT flag
+is recorded only; a cell needs 6 clean of its timed repeats; G1 fails past 10% non-clean repeat
+rows or on R3's clock clauses over the rebuilt cells. The scorer never reads R3's stored G1 or
+medians, and a page whose cells.csv counts differ from its report is NOT SCORED. R3 and
+`locked_r3.py` stay byte-identical to rental 6's pins (the owner's preference: a registered code
+pin stays byte-identical); the plan key hands locked_r3 `--min-clean-repeats 0`, so R3 times every
+repeat and stops no cell early (at min-clean 6 the build review measured about 19% of cells
+truncated at a 30% flag rate). The owner's 20%-ceiling rule (P20) is rebuilt beside it with its
+own medians, clocks and lost cells. Rebuilt from cells.csv, R3's r5-any gives the stored G1 on all
+17 published report pages; r7-median-run3 passes all 17 and loses no cell; real sags injected into
+those pages (endpoint and interior, 3 to 7 reads) are taken out of every median and fail G1. (2) Q1-H's rivals are scored
+whenever 6 pairs and 3 clusters are valid, whatever the copies clause reads. (3) The OLMoE w1 byte
+page `l2open` is in: its draws are the ones the design priced (seed base 20261030), every row of it
+is priced before any page (`2026-10-13-rental7-skew-hist/l2open_rowkey.json`, MPS float32 checked
+against CPU float64 on every cell), one capacity is registered (C = 60 MiB, SEEN-chosen), and the
+5% clause reads skewed rows only. (4) No second-K rerun. (5) Fresh seeds on rental 6's treads
+(`scripts/skew_synth7.py`, rental 6's rule at seed base 20261020).
+
+**g1rule** (no unit): the rule above, its SEEN evidence on the 17 pages, the sag control, and its
+limits (a sag shorter than 3 consecutive reads is seen by no rule).
+**skew**: Mixtral (n 3/6/16) and Phi (2/4/12), pages A, B, C, 120 cells (84 E1 cells); 0 of the 48
+skewed cells' counts are on any published page, all 72 controls are (SEEN replicates). E1-SKEW
+holds only if the pooled cells AND each shape meet the time bar; a shape is CERTIFIED in CLEAN with
+at least 2 of its 3 pages there. P(holds) about 1.000 SEEN-anchored, 0.977 harsh; LT3 is the one
+decidable E1 rival (62 lever cells). **q1**: all six Q1 units on this board; Q1-H is a REPLICATE
+(21 of its 24 pairs SEEN; only c15 SHARED is blind), its population adds Mixtral n 6 and Phi n 4
+(SEEN-SELECTED) for 5 clusters: P(v3 holds) 0.983 at tau 0.9 us and 0.929 at 1.3 (0.887 and 0.792
+with the design's 3 clusters). Q1-C is rental 6's rule; Q1-P DESCRIPTIVE; Q1-SK open. **l2open**:
+OPEN; the nearest of v3, ROWKEY39.5 and ROWKEY60 is NAMED only when 2x nearer than the next with
+every skewed row within 5%.
+
+| block | units | est. min |
+|---|---|---:|
+| prelude, calibrate | 2 | 5 |
+| skew, 6 pages (nodrop) | 6 | 72 |
+| Q1 pages (q1q, q1p, q1j) | 6 | 18 |
+| l2open byte page (byt) | 1 | 4 |
+
+99 min of units (95 without the byte page), about 83 min actual at rental 6's 0.84x, about $4.1 to
+$4.3. The driver drops the last unit first: byt, q1j, q1p, q1q; calibrate and the six skew pages
+carry nodrop=1. Every per-unit driver log is now named by model and label.

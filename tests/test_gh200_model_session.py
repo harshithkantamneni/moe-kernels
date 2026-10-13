@@ -784,7 +784,7 @@ def test_a_step_refuses_without_the_prelude(tmp_path):
     box = Box(tmp_path, {})
     got = box.run("--from", "bytes")
     assert "the prelude has not passed on this VM" in (
-        box.session / "logs" / "driver-bytes.log").read_text()
+        box.session / "logs" / "driver-bytes-mixtral-8x7b.log").read_text()
     assert not box.tool("dram_counter_route")
     assert got.returncode == exit_codes.INVALID
 
@@ -1962,5 +1962,5 @@ mixtral-8x7b-tp4 launchfloor label=wall lf-arms=native lf-group-m=64 lf-treads=2
         assert "--trace-treads" not in a
         plan = LFM.make_plan(LFM.build_parser().parse_args(a))
         assert plan["timed_cells"] == 11 * 2 * 3 and plan["traces"] == []
-    phases = (box.session / "logs" / "launchfloor-mixtral-8x7b-tp4.phases").read_text()
+    phases = (box.session / "logs" / "launchfloor-mixtral-8x7b-tp4-wall.phases").read_text()
     assert "trace phase not run (lf-trace=0)" in phases

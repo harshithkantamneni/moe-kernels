@@ -1,0 +1,34 @@
+# RENTAL 7 (2026-10-13), one gpu_1x_gh200 at $2.29/h, run as
+#   bash scripts/gh200_model_session.sh --plan scripts/plans/rental7-2026-10.plan --deadline <epoch s>
+# Design: design-r7/DESIGN.md corrected by design-r7-review/REVIEW.md, owner decisions of 2026-10-13.
+# Registrations (all before any page): 2026-10-13-rental7-g1rule (the gate rule, no unit), -skew, -q1 and
+# -l2open. Model v3 is 2026-10-09-rental6-v3, unchanged; no term is added. No second-K unit (owner decision 4).
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together.
+# Drop order, last first: byt (the l2open byte page), q1j (JetMoE), q1p (Phi), q1q (Qwen1.5). Calibrate and the six
+# skew pages carry nodrop=1 and are never dropped.
+# MINUTES (ledger estimates): 99 of units (prelude 3, calibrate 2, skew 72, Q1 18, byte page 4); 95 without the byte
+# page. Rental 6 ran at 0.84x of its estimate (122 of 145 min): about 83 min of units, about 1 h 50 min wall with boot
+# and push, about $4.1 to $4.3 at $2.29/h. Guardian cap 120 min of units; deadline launch + 2 h 15 min.
+# Every timed unit: slip-policy=cell and g1-rule=r7-median-run3 (rental7-g1rule: the scorer's rule, rebuilt from cells.csv;
+# the key hands locked_r3 --min-clean-repeats 0, so R3, unchanged, times every repeat and stops no cell), probe on.
+# Skew histograms: SYNTHETIC, fresh draws on rental 6's treads (scripts/skew_synth7.py: rental 6's rule at seed base
+# 20261020, shuffle seed 20261020). Q1 histograms: rental 6's registered q1-*.json files verbatim (balanced cells only).
+- prelude est=3 cap=15
+mixtral-8x7b calibrate label=r7 nodrop=1 est=2 cap=30
+# rental7-skew. Page A: PT PW uniform balanced; B: DW uniform balanced; C: PW2 uniform balanced.
+mixtral-8x7b timed label=ska histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=40
+mixtral-8x7b timed label=skb histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=11 cap=30
+mixtral-8x7b timed label=skc histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=11 cap=30
+phi-3.5-moe timed label=ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=14 cap=40
+phi-3.5-moe timed label=skb histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=11 cap=30
+phi-3.5-moe timed label=skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=11 cap=30
+# rental7-q1: balanced, probe on, c9 and c15 on THIS board (Q1-C's D = x15 - x9 and the copies clause need both here)
+qwen1.5-moe-a2.7b timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1q est=3 cap=12
+qwen1.5-moe-a2.7b timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1q est=3 cap=12
+phi-3.5-moe timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1p est=3 cap=12
+phi-3.5-moe timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1p est=3 cap=12
+jetmoe-8b timed label=q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1j est=3 cap=12
+jetmoe-8b timed label=q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3 drop-group=q1j est=3 cap=12
+# rental7-l2open (owner decision 3): one OLMoE w1 byte page, the exact page priced; OPEN, drop it first
+olmoe-1b-7b bytes label=l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8 drop-group=byt est=4 cap=20
+# NOT RUN: second K (owner decision 4; design-r7 3.3: a rerun reads noise at the 3% edge)

@@ -1,0 +1,63 @@
+REGISTERED 2026-10-13, before any rental-7 page: rental 7, 2026-10-13-rental7-l2open-gh200
+status: REGISTERED BEFORE ANY PAGE (OPEN: no model change follows)
+design: design-r7 DESIGN.md corrected by design-r7-review REVIEW.md (a)-(h) (the review wins) and the owner's decisions of 2026-10-13 (1 S_med plus the run guard, P20 printed beside; 2 Q1-H rivals scored apart from the copies clause; 3 the l2open byte page in, C 60 MiB, the 5% clause on skewed rows; 4 no second-K rerun; 5 fresh seeds on the same treads)
+tool: scorer scripts/scoring/rental7/score_l2open.py; v3 bytes reg6.priced (MODEL M4, unchanged); rivals scripts/scoring/rental7/rowkeys7.py (rental 6's rowkeys.py, unchanged, at 39.5 and 60 MiB); page scripts/skew_synth7.py
+
+ROWKEY60 vs ROWKEY39.5: {'rms_pct': 8.417891, 'min_abs_pct': 0.94366, 'per_n_pct': {4: [-14.157133, -14.157133, -11.722448, -11.722448], 8: [-0.94366, -0.94366, -3.522473, -3.522473], 16: [-1.679995, -1.87336]}}
+v3 vs ROWKEY60: {'rms_pct': 17.558442, 'min_abs_pct': 9.832316, 'per_n_pct': {4: [10.503089, 10.503089, 9.832316, 9.832316], 8: [15.809337, 15.809337, 16.335083, 16.335083], 16: [29.027572, 28.157949]}}
+v3 vs ROWKEY39.5: {'rms_pct': 14.794956, 'min_abs_pct': 3.042721, 'per_n_pct': {4: [-5.14098, -5.14098, -3.042721, -3.042721], 8: [14.71649, 14.71649, 12.23721, 12.23721], 16: [26.859916, 25.757089]}}
+
+status_note: OPEN-L2SKEW, rental 6's open residual (v3 FAILS skewed OLMoE w1 to +20.6%): a diagnosis, not a model test; it adds nothing to time (bytes do not reach time at G 8); drop it first (drop-group byt)
+page:
+  file: (in the JSON)
+  cells: PT, PW, uniform, balanced at n 4, 8, 16; NATIVE and SHARED at n <= 9, NATIVE only at n 16; G 8, 9 copies declared
+  seed: l2open seed = 20261030 + 10 n + label index (PT 0, PW 1), shuffle seed 20261030: the draws design-r7 work/olmoe_w1.py priced (review (e) fix 1: the page the build emits is the page priced; every row of it is priced here, both arms, controls included)
+  unit: olmoe-1b-7b bytes label=l2open byte-groups=8 (one counter page, about 2 min, est 4)
+rivals:
+  v3: the model (MODEL M4 content keys), unchanged
+  ROWKEY39.5: rental 6's registered rival, row-granular w1 A keys, one exact LRU at 39.5 MiB
+  ROWKEY60: the same rival at C = 60 MiB, the ONE capacity registered here (review (e) fix 2: 55 and 60 sit 1 to 3 points apart, so the 2x rule could never name either); SEEN-chosen (design-r7 3.4: C swept 30 to 80 MiB over the published rental-5 and rental-6 OLMoE byte pages, best at 55 and 60); its numbers on this page are BLIND (new draws)
+  file: (in the JSON)
+separations_on_skewed_w1_rows:
+  ROWKEY60 vs ROWKEY39.5:
+    rms_pct: 8.417891
+    min_abs_pct: 0.94366
+    per_n_pct: {"4": [-14.157133, -14.157133, -11.722448, -11.722448], "8": [-0.94366, -0.94366, -3.522473, -3.522473], "16": [-1.679995, -1.87336]}
+  v3 vs ROWKEY60:
+    rms_pct: 17.558442
+    min_abs_pct: 9.832316
+    per_n_pct: {"4": [10.503089, 10.503089, 9.832316, 9.832316], "8": [15.809337, 15.809337, 16.335083, 16.335083], "16": [29.027572, 28.157949]}
+  v3 vs ROWKEY39.5:
+    rms_pct: 14.794956
+    min_abs_pct: 3.042721
+    per_n_pct: {"4": [-5.14098, -5.14098, -3.042721, -3.042721], "8": [14.71649, 14.71649, 12.23721, 12.23721], "16": [26.859916, 25.757089]}
+noise:
+  counter:
+    within_board_pct: 0.3
+    board_to_board_pct: [0.03, 0.66]
+  note: every registered separation above is many times the counter noise; rowkey 60 against 39.5 separates mainly at n 4 (review (e))
+statistic: per w1 row (cell, arm): q_counted = (dram_bytes_read - n x operand_per_tile_w1) / W_w1; e_R = q_pred_R / q_counted - 1
+rule: the nearest of v3, ROWKEY39.5, ROWKEY60 by rms of e over the SKEWED (PT, PW) w1 rows is NAMED iff the next nearest's rms is at least 2x its rms and every skewed row's |e| of the nearest is at most 5% (the 5% clause on skewed rows only, review (e) fix 3: uniform misses by about +6% under the row key at C 60); else NOT SEPARATED. Uniform and balanced rows, and w2 under v3, are printed
+gates:
+  clock: rental 6's counter-page clock rule (r6common.clock_rule): lock_gate.check_page PASS, then each cell's SM clock in [1640, 1710] MHz (out-of-band cells dropped)
+  G5: the page's histogram sha256 and shuffle seed, every cell's counts sha256; else NOT SCORED
+  views: one view: a counter page has no G1; the clock rule decides what counts
+labels:
+  n4_n16_skewed: SEEN-SELECTED replicate treads (C was tuned on them), BLIND draws
+  n8_skewed: BLIND (new tread)
+  rival_ROWKEY60: SEEN-chosen capacity, BLIND numbers
+scorer_ambiguities:
+  1 the registered rule and where it runs: r7-median-run3 (S_med plus the run guard, owner decision 1), applied by the scorer to cells.csv (r7common.rebuild); R3 is unchanged and runs --slip-policy cell --min-clean-repeats 0; a page that ran another min-clean is NOT SCORED
+  2 S_med's G1 drift clause: the run guard excludes a repeat (3 or more consecutive reads a step under the lock); G1 fails on drift only past 10% non-clean repeat rows (slipped, run-guarded or not ok); the endpoint flag is recorded only
+  3 the P20 side view: rebuilt from the same cells.csv with today's exclusions: its own medians, clocks, host flags and lost cells (6 of 9), G1's clock clauses on its kept cells and the 20% ceiling; DESCRIPTIVE, every test printed on it
+  4 per-shape E1: read in each view on that view's cells; the registered verdict holds only if both views hold; a shape is CERTIFIED in CLEAN only with at least 2 of its 3 pages in CLEAN and its CLEAN cells meeting the bar
+  5 Q1-H se with few clusters: CR1 on (model, n) clusters needs at least 3 clusters; fewer is UNDECIDED (no C / (C - 1) with C = 1); the registered population has 5
+  6 pair or cluster weights: pair-weighted mean (rental 6's); the equal-cluster-weight mean is printed
+  7 the copies clause: matched by model: per model with valid Q1 pairs at both c9 and c15, mean g(c15) - mean g(c9), pair-weighted over those models; identical to rental 6's unmatched means when all six Q1 pages are valid
+  8 one copies side only: the copies clause is UNDECIDED; v3 reads UNDECIDED (FAILS if its level clause fails); the rivals are still scored (owner decision 2)
+  9 the share denominator: every timed repeat row of the page in cells.csv (R3 at min-clean 0 times all 9 of every cell); cells.csv's rows per cell must equal the report's repeat_rows, else NOT SCORED
+  10 l2open: rows are (cell, arm) on w1 only for the verdict (PT, PW skewed; uniform and balanced printed), NATIVE and SHARED at n <= 9 and NATIVE at n 16; w2 under v3 printed; rental 6's counter clock rule; one page, one view
+seen_data:
+  - C = 60 MiB SEEN-chosen
+  - the row-key rule SEEN-SELECTED (rental 6)
+  - OLMoE is CAL-counters (d, kappa)
