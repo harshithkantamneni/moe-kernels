@@ -6,3 +6,4 @@ timed      exit 0 after 10 min [unit 5/21 mixtral-8x7b skc histogram=docs/regist
 timed      exit 0 after 14 min [unit 6/21 olmoe-1b-7b ska histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
 timed      exit 0 after 11 min [unit 7/21 olmoe-1b-7b skb histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
 timed      exit 0 after 11 min [unit 8/21 olmoe-1b-7b skc histogram=docs/registered/2026-10-09-rental6-skew-hist/olmoe-1b-7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
+timed      exit 0 after 14 min [unit 9/21 phi-3.5-moe ska histogram=docs/registered/2026-10-09-rental6-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell]
