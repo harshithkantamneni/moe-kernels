@@ -73,3 +73,12 @@
 2026-10-14T01:57:43Z timed: 2026-10-14T01:57:38Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist4fa647e9d1-812a8576
 2026-10-14T01:57:43Z timed END: exit 0 after 10 min [unit 8/15 phi-3.5-moe skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-14T01:57:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:57:46Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 68 min left)
+2026-10-14T01:57:46Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:57:46Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:57:47Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:00:24Z timed: P2 locked_r3 exit 0
+2026-10-14T02:00:24Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:00:24Z timed: 2026-10-14T02:00:18Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-50dbe037
+2026-10-14T02:00:24Z timed END: exit 0 after 3 min [unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:00:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
