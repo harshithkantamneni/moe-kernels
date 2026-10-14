@@ -46,3 +46,12 @@
 2026-10-14T01:22:50Z timed: 2026-10-14T01:22:45Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist9e1172adec-ee7c32f9
 2026-10-14T01:22:50Z timed END: exit 0 after 10 min [unit 5/15 mixtral-8x7b skc histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-14T01:22:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:22:53Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 6/15 phi-3.5-moe ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 14 min, cap 40 min, 103 min left)
+2026-10-14T01:22:53Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:22:53Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json, arms native,shared, deepest tread 12, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:22:53Z timed: G = 8 at treads 12, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:36:41Z timed: P2 locked_r3 exit 0
+2026-10-14T01:36:41Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:36:41Z timed: 2026-10-14T01:36:36Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1710.0 MHz, 821 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histc0a85a142c-1d763dca
+2026-10-14T01:36:41Z timed END: exit 0 after 14 min [unit 6/15 phi-3.5-moe ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:36:42Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
