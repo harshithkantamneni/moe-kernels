@@ -2075,6 +2075,21 @@ anything on vLLM's own tile, which is the next stage.
 
 ---
 
+## Provenance note (2026-10-14): code pins of rentals 3 to 5
+
+48 `code_pins` entries in the rental 3, 4 and 5 registrations no longer match their files: rental 3's
+`r3_timing_model.py` and `wave_split_bytes.py` (6 files x 2), rental 4's `r3_timing_model.py`,
+`instr_probe.py`, `moe/instrumented/__init__.py` and `fused_moe_instr.py` (6 x 4), and rental 5's
+`private_weight_reference.py` and `skew_synth.py` (6 x 2). They did not match at 80514a6 either: the
+files moved at later registrations (rentals 5 and 6), by design. A pin records the code a
+registration was written against; it is not a lock on the file. The strict rule (a registered pin
+stays byte-identical, new behaviour in new modules) dates from rental 5's build; rental 5's own two
+moved files changed at rental 6, and every pin of rentals 6 and 7 matches today
+(tests/test_pinned_files.py holds every pinned file at its 80514a6 bytes). No verdict depended on the moved files: at today's code,
+`register.py --check` reproduces every rental 3, 4 and 5 registration, and their 16 scorers, re-run
+on the three published sessions, write their committed score files byte for byte (checked
+2026-10-14 for the tile stage's build).
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

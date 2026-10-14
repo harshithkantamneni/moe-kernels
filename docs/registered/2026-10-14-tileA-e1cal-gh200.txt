@@ -1,0 +1,52 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental A, 2026-10-14-tileA-e1cal-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_e1cal.py; tcommon.bar, class_means, stop_rule; v4 at rental A's constants (scripts/scoring/tileA/finalise.py)
+
+olmoe-1b-7b-128g1 PT n1 native: 0.378455 ms nominal
+olmoe-1b-7b-128g1 PT n1 shared: 0.38417 ms nominal
+olmoe-1b-7b-128g1 PW n1 native: 0.403626 ms nominal
+olmoe-1b-7b-128g1 PW n1 shared: 0.40915 ms nominal
+olmoe-1b-7b-128g1 uniform n1 native: 0.318264 ms nominal
+olmoe-1b-7b-128g1 uniform n1 shared: 0.324425 ms nominal
+olmoe-1b-7b-128g1 balanced n1 native: 0.318264 ms nominal
+olmoe-1b-7b-128g1 balanced n1 shared: 0.324425 ms nominal
+olmoe-1b-7b-128g1 PT n2 native: 0.611367 ms nominal
+olmoe-1b-7b-128g1 PT n2 shared: 0.61806 ms nominal
+olmoe-1b-7b-128g1 PW n2 native: 0.611365 ms nominal
+olmoe-1b-7b-128g1 PW n2 shared: 0.618154 ms nominal
+
+what: BLIND-CALMODEL in time: v4 as fixed by tA-census, tA-floor and tA-bytes' registered rules, end to end, on the CAL models' timed pages; the calibration read counters, not time. Its class means are rental B's stop rule (tileB-stop)
+pages:
+  units:
+    - olmoe-1b-7b timed label=e128g1 (histogram olmoe-1b-7b-128g1.json)
+    - mixtral-8x7b timed label=e128g16 (histogram mixtral-8x7b-128g16.json)
+    - mixtral-8x7b timed label=e64g1 (histogram mixtral-8x7b-64g1.json)
+    - qwen2-57b-a14b timed label=e128g1 (histogram qwen2-57b-a14b-128g1.json)
+    - mixtral-8x7b timed label=e128g1 (histogram mixtral-8x7b-128g1.json)
+  files: (in the JSON)
+  classes:
+    64g1: Mixtral 64x128 G 1 (n 1, 2)
+    128g1: OLMoE (n 1, 2, 4), Qwen2-57B (n 1, 2), Mixtral (n 2): three CAL models
+    128g16: Mixtral 128x128 G 16 (n 3, 4, 8)
+  nodrop: every E1-CAL page is nodrop (design-tile-review 4: the Qwen2-57B page and the Mixtral 128 G 1 n 2 tread added for the model-specific check); a SKIPPED, LOST or NOT SCORED page is a STOP
+predictions: COMPUTED AT RENTAL A'S CONSTANTS by scripts/scoring/tileA/finalise.py (mechanical: the census occupancy, c_128 and F_wg, the selected accounting or v4cal, the F form and the A key, all by the registered rules); the DESIGN-NOMINAL numbers below show the scale only
+deviation: the design's OLMoE 128x128 G 1 n 8 tread is removed (build-tile-review 5): M4 rules w2 at G 1 and n >= 6 ILL-POSED on Hopper (wave_split_bytes.HOPPER_G1_N), applied per tread and literally at BLOCK_M 128 (n 4 is already 512 rows per expert, past BLOCK_M 32's n 6 at 192), so an n-8 cell would have no v4 prediction; OLMoE runs n 1, 2, 4, and the deepest A-heavy w1 row (n 8) is lost
+statistic: e = T_v4 / T_meas - 1 per valid NATIVE cell (PT, PW, uniform and balanced); SHARED printed with the page's own A
+rule: the E1 time bar (rms <= 2%, worst <= 5%, |mean| <= 1%) on the pooled NATIVE cells: tA-e1cal HOLDS or FAILS. Per page and per class printed
+gates:
+  G1: rental7-g1rule (r7-median-run3 rebuilt from cells.csv; 6 of 9 clean; 10% non-clean cap)
+  G2: the host rule on the DESIGN-NOMINAL prediction (T + F240 < 0.40 ms is host-bound) AND the timer flag; every CAL cell here passes it
+  G4: cell clock >= 1705 MHz
+  G5: provenance (file, counts, shuffle seed, bincount)
+  tile: the page's recorded tile (BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages) is the unit's
+  G3: rental 7's TOST on uniform minus balanced, strict; a FAIL voids every histogram cell and E1 is printed DESCRIPTIVELY (design-tile 4); a voided tA-e1cal is a STOP (design-tile-review 9.9)
+  views: ALL and CLEAN; the stop rule reads CLEAN
+stop_rule: tileB-stop
+nominal: DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction
+labels:
+  time: BLIND-CALMODEL
+  workload: per cell (SEEN-WORKLOAD on uniform and balanced cells whose counts a published page timed)
+seen_data:
+  - the CAL models' R3-tile pages
+  - v4's carried v3 constants

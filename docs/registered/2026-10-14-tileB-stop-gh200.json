@@ -1,0 +1,144 @@
+{
+ "registered": "2026-10-14, before any tile-stage page",
+ "name": "2026-10-14-tileB-stop-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE (read on rental A's scores)",
+ "design": "design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4",
+ "tool": "scripts/scoring/tileA/score_e1cal.py (tcommon.stop_rule), on rental A's CLEAN view",
+ "rule (D6; design-tile-review 4 and 8; owner fixes 6 and 10)": {
+  "A1": "tA-e1cal's pooled NATIVE bar HOLDS",
+  "A2": "every tile class's mean NATIVE residual (64 G 1, 128 G 1, 128 G 16) within 0.75%",
+  "A3": "at 128 G 1, the CAL models' means (OLMoE, Qwen2-57B, Mixtral n 2) within 1% of each other (the model-specific check, design-tile-review 4)",
+  "pages": "every E1-CAL page ran and was scored: a SKIPPED, LOST or NOT SCORED E1-CAL page is a STOP",
+  "G3": "a G3 void of the E1-CAL cells is a STOP",
+  "census": "rental A's census refused (an MMA path mismatch) or missing is a STOP (build-tile-review 9)",
+  "finalise": "scripts/scoring/tileA/finalise.py refuses (exit 2, nothing written) unless this rule reads GO",
+  "verdict": "GO only when every clause holds; otherwise STOP: rental B does not run (D6), and the owner is told why"
+ },
+ "power (from tileB-e1tile, CPU float64)": {
+  "common 0 / model-specific 0": {
+   "P(E1-TILE)": 0.96835,
+   "P(E1-TILE, deepseek in each-model clause)": 0.95729,
+   "P(stop rule A2 passes)": 0.92455,
+   "P(stop rule A2 and A3 pass)": 0.8977,
+   "P(E1-TILE | A2 passes)": 0.96836,
+   "P(E1-TILE | A2 and A3 pass)": 0.96834
+  },
+  "common 0.005 / model-specific 0": {
+   "P(E1-TILE)": 0.89002,
+   "P(E1-TILE, deepseek in each-model clause)": 0.80602,
+   "P(stop rule A2 passes)": 0.48735,
+   "P(stop rule A2 and A3 pass)": 0.47291,
+   "P(E1-TILE | A2 passes)": 0.92566,
+   "P(E1-TILE | A2 and A3 pass)": 0.92569
+  },
+  "common 0.01 / model-specific 0": {
+   "P(E1-TILE)": 0.62433,
+   "P(E1-TILE, deepseek in each-model clause)": 0.47108,
+   "P(stop rule A2 passes)": 0.14217,
+   "P(stop rule A2 and A3 pass)": 0.13705,
+   "P(E1-TILE | A2 passes)": 0.88345,
+   "P(E1-TILE | A2 and A3 pass)": 0.88526
+  },
+  "common 0.02 / model-specific 0": {
+   "P(E1-TILE)": 0.2248,
+   "P(E1-TILE, deepseek in each-model clause)": 0.14397,
+   "P(stop rule A2 passes)": 0.02367,
+   "P(stop rule A2 and A3 pass)": 0.02262,
+   "P(E1-TILE | A2 passes)": 0.85467,
+   "P(E1-TILE | A2 and A3 pass)": 0.85853
+  },
+  "common 0 / model-specific 0.005": {
+   "P(E1-TILE)": 0.86869,
+   "P(E1-TILE, deepseek in each-model clause)": 0.77077,
+   "P(stop rule A2 passes)": 0.48728,
+   "P(stop rule A2 and A3 pass)": 0.4052,
+   "P(E1-TILE | A2 passes)": 0.8683,
+   "P(E1-TILE | A2 and A3 pass)": 0.86745
+  },
+  "common 0 / model-specific 0.01": {
+   "P(E1-TILE)": 0.47618,
+   "P(E1-TILE, deepseek in each-model clause)": 0.30995,
+   "P(stop rule A2 passes)": 0.1426,
+   "P(stop rule A2 and A3 pass)": 0.08807,
+   "P(E1-TILE | A2 passes)": 0.47518,
+   "P(E1-TILE | A2 and A3 pass)": 0.47366
+  },
+  "common 0 / model-specific 0.015": {
+   "P(E1-TILE)": 0.17205,
+   "P(E1-TILE, deepseek in each-model clause)": 0.08331,
+   "P(stop rule A2 passes)": 0.05266,
+   "P(stop rule A2 and A3 pass)": 0.02524,
+   "P(E1-TILE | A2 passes)": 0.16977,
+   "P(E1-TILE | A2 and A3 pass)": 0.17496
+  },
+  "common 0.005 / model-specific 0.005": {
+   "P(E1-TILE)": 0.74621,
+   "P(E1-TILE, deepseek in each-model clause)": 0.60367,
+   "P(stop rule A2 passes)": 0.29035,
+   "P(stop rule A2 and A3 pass)": 0.23551,
+   "P(E1-TILE | A2 passes)": 0.78025,
+   "P(E1-TILE | A2 and A3 pass)": 0.78358
+  },
+  "common 0.01 / model-specific 0.01": {
+   "P(E1-TILE)": 0.25288,
+   "P(E1-TILE, deepseek in each-model clause)": 0.14239,
+   "P(stop rule A2 passes)": 0.06157,
+   "P(stop rule A2 and A3 pass)": 0.03385,
+   "P(E1-TILE | A2 passes)": 0.32727,
+   "P(E1-TILE | A2 and A3 pass)": 0.33501
+  }
+ },
+ "reading": "at zero drift the rule stops about 1 rental in 10 for noise alone; at 1% common-mode drift it stops most; the model-specific drift passes it as often as not (no rental-A page sees a blind model's bias)",
+ "scorer_ambiguities": {
+  "1 which c is the denominator, and F's units": "c_time = c_card x c_counter(tile) / 344.1 (344.1 the CAL counters' c); F is held in counter cycles and PHI = F / c_counter(tile) in k-steps; at R3's tile v4 is v3 exactly (r3_timing_model_v4.py --check)",
+  "2 F-cyc against F-step": "F-step (v3's form) is registered; F-cyc replaces it only when, on the 64x128 w8 pages, it is nearer the measured F on both GEMMs and F-step misses by more than 3 se on one (tcommon.f_form_rule)",
+  "3 eta_mma": "per clock (Luo Table 11, 0.991), per instruction by Table 9's ratios: 0.983 (m64n128k16, 128x128 w8), 0.965 (m64n64k16, 64x128); H800 PCIe, FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857",
+  "4 tA-floor": "the test statistic is u = S c + F per (model, GEMM), within 3%; cells are the NATIVE and SHARED cells at n 4..9 whose own GEMM reads DRAM at no more than 0.5 x 4022 GB/s; a dropped w4 page changes nothing (printed only); at 128x128 v4cal and v4 are the same model",
+  "5 the NAMED rule's rows, and the default": "every scored w1 row of the G-1 byte pages (uniform, balanced and skewed, NATIVE and SHARED); nothing NAMED gives CLAMP, not v3",
+  "6 E1-TILE's 'each model'": "the three BLIND-TILE models; deepseek-v2-lite is in the pooled bar only (its own bar DESCRIPTIVE, never CERTIFIED); a model left with one page is scored and NOT CERTIFIED",
+  "7 the host cut": "0.40 ms (T + F240), rental 3's registered rule, on the FINALISED v4 prediction",
+  "8 tA-rep dropped": "rental 3's 0.18% feeds the rivals' se, tA-dead's z and the power at finalisation",
+  "9 tA-e1cal 'fails'": "on the CLEAN view: the pooled NATIVE bar, each class mean within 0.75%, the 128 G 1 CAL models within 1%; a SKIPPED, LOST or NOT SCORED E1-CAL page, or a G3 void, is a STOP (tileB-stop)",
+  "10 the OLS rival": "one ridge OLS over every valid NATIVE E1-CAL cell (features waves, bytes / bw, ln(1 + CTAs); lambda 1e-3 x trace(X'X) / 3 on standardised features); NOT SCORED under 12 cells or condition number over 1e6",
+  "11 census against counter occupancy": "integers, exact; a counter page at another occupancy is scored at its recorded one (rental 4's re-key, score_floor: Z_wg at the 128x128 pages' recorded occupancy, each 64x128 page's c at its own); on rental B a (model, tile) at another occupancy than rental A's census is NOT SCORED on every page of that (model, tile), and a missing or refused rental-B census leaves every page NOT SCORED (score_tileB.census_check); a refused rental-A census is a STOP",
+  "12 tA-dead": "tread n 1 (uniform and balanced); align growth = (A_S - A_N) at c15 minus at c9 off each page's align_probe; se = 2 sigma_page mean(T) / sqrt(cells), sigma_page tA-rep's or 0.18%",
+  "13 the 30 MiB row key": "one of the card's two L2 partitions of its measured 60 MiB (rental 4's rulers, CONSISTENT with RRZE's GH200; Hopper's partitioned L2, NVIDIA H100 whitepaper); the 'Fan et al.' attribution is withdrawn",
+  "14 byte pages and timed pages": "one histogram file per (model, tile, G): a byte page and a timed page of the same (model, tile, G) read the same file, so their counts are identical (the files' sha256 above)"
+ },
+ "seen_data": [
+  "the noise model's SEEN inputs (rentals 3 and 7)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0"
+ }
+}

@@ -1,0 +1,18 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental A, 2026-10-14-tileA-rep-gh200
+status: REGISTERED BEFORE ANY PAGE
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_rep.py; tcommon.rep_sigma, sigma_page_of
+
+sigma_page = rms over the cells valid on both pages of (T_2 / T_1 - 1), over sqrt 2
+
+what: sigma_page at the 128x128 tile: OLMoE's E1-CAL page run twice (e128g1, e128g1r), the same file
+statistic: sigma_page = rms over the cells valid on both pages of (T_2 / T_1 - 1), over sqrt 2
+uses:
+  - rental B's rival se (tcommon.rival_rule)
+  - tA-dead's se
+  - rental B's power, re-run at finalisation
+fallback (design-tile-review 9.8): when the replicate is dropped (drop-group rep), lost, or has fewer than 3 shared cells: rental 3's rep8 sigma_page 0.18% (R3's tile), labelled as such
+labels:
+  pages: SEEN-WORKLOAD replicate (one draw, twice): no model test
+seen_data:
+  - rental 3's 0.18%

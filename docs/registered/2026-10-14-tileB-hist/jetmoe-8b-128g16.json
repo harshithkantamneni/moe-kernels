@@ -1,0 +1,321 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "jetmoe-8b",
+ "page": "jetmoe-8b-128g16",
+ "shuffle_seed": 20261420,
+ "block_m": 128,
+ "group_m": 16,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 3,
+   "counts": [
+    415,
+    410,
+    343,
+    372,
+    329,
+    421,
+    487,
+    295
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 21.7841,
+    "seed": 20276450,
+    "B": 1536,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.149558,
+     "max_mean": 1.268229,
+     "gini": 0.08374
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 3,
+   "counts": [
+    281,
+    295,
+    238,
+    270,
+    469,
+    414,
+    628,
+    477
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.59393,
+    "seed": 20276451,
+    "B": 1536,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.330883,
+     "max_mean": 1.635417,
+     "gini": 0.18099
+    }
+   }
+  },
+  {
+   "label": "PT2",
+   "n": 3,
+   "counts": [
+    382,
+    400,
+    444,
+    374,
+    428,
+    314,
+    404,
+    326
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 21.7841,
+    "seed": 20276452,
+    "B": 1536,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.111098,
+     "max_mean": 1.15625,
+     "gini": 0.062174
+    }
+   }
+  },
+  {
+   "label": "PW2",
+   "n": 3,
+   "counts": [
+    330,
+    809,
+    180,
+    298,
+    252,
+    332,
+    611,
+    260
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 5.59393,
+    "seed": 20276453,
+    "B": 1536,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.520496,
+     "max_mean": 2.106771,
+     "gini": 0.262288
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 3,
+   "counts": [
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384,
+    384
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 3,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 4,
+   "counts": [
+    425,
+    533,
+    538,
+    538,
+    482,
+    450,
+    544,
+    586
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 25.5453,
+    "seed": 20276460,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.099125,
+     "max_mean": 1.144531,
+     "gini": 0.054016
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 4,
+   "counts": [
+    375,
+    471,
+    776,
+    618,
+    516,
+    321,
+    332,
+    687
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 6.05764,
+    "seed": 20276461,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.309513,
+     "max_mean": 1.515625,
+     "gini": 0.174988
+    }
+   }
+  },
+  {
+   "label": "PT2",
+   "n": 4,
+   "counts": [
+    703,
+    634,
+    525,
+    336,
+    429,
+    461,
+    505,
+    503
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 25.5453,
+    "seed": 20276462,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.209597,
+     "max_mean": 1.373047,
+     "gini": 0.115601
+    }
+   }
+  },
+  {
+   "label": "PW2",
+   "n": 4,
+   "counts": [
+    373,
+    420,
+    440,
+    302,
+    324,
+    719,
+    784,
+    734
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 6.05764,
+    "seed": 20276463,
+    "B": 2048,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 1024 and 4096",
+    "stats": {
+     "cv": 0.364436,
+     "max_mean": 1.53125,
+     "gini": 0.197815
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 4,
+   "counts": [
+    512,
+    512,
+    512,
+    512,
+    512,
+    512,
+    512,
+    512
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 4,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes of mixtral-8x7b (Mixtral's (the same E 8 and top_k 2; SEEN-INFORMED)); scripts/skew_synth_tile.py, tile stage rental B; no trace count"
+}

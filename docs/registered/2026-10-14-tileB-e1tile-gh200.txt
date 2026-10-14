@@ -1,0 +1,119 @@
+REGISTERED 2026-10-14, before any tile-stage page: the tile stage, rental B (frozen; finalised mechanically), 2026-10-14-tileB-e1tile-gh200
+status: FROZEN BEFORE ANY TILE PAGE; FINALISED MECHANICALLY FROM RENTAL A'S SELECTIONS (D3): the cells, files, rules, rivals and gates are fixed here; the numeric v4 predictions are written by scripts/scoring/tileA/finalise.py from rental A's scored selections, by the registered rules, before rental B runs, into docs/registered/2026-10-14-tileB-predictions-gh200.json (a test holds finalise.py to synthetic selections)
+design: design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4
+tool: scorer scripts/scoring/tileA/score_tileB.py; tcommon.e1tile_rule, rival_rule, bar; predictions finalise.py
+
+power common 0 / model-specific 0: {'P(E1-TILE)': 0.96835, 'P(E1-TILE, deepseek in each-model clause)': 0.95729, 'P(stop rule A2 passes)': 0.92455, 'P(stop rule A2 and A3 pass)': 0.8977, 'P(E1-TILE | A2 passes)': 0.96836, 'P(E1-TILE | A2 and A3 pass)': 0.96834}
+power common 0.005 / model-specific 0: {'P(E1-TILE)': 0.89002, 'P(E1-TILE, deepseek in each-model clause)': 0.80602, 'P(stop rule A2 passes)': 0.48735, 'P(stop rule A2 and A3 pass)': 0.47291, 'P(E1-TILE | A2 passes)': 0.92566, 'P(E1-TILE | A2 and A3 pass)': 0.92569}
+power common 0.01 / model-specific 0: {'P(E1-TILE)': 0.62433, 'P(E1-TILE, deepseek in each-model clause)': 0.47108, 'P(stop rule A2 passes)': 0.14217, 'P(stop rule A2 and A3 pass)': 0.13705, 'P(E1-TILE | A2 passes)': 0.88345, 'P(E1-TILE | A2 and A3 pass)': 0.88526}
+power common 0.02 / model-specific 0: {'P(E1-TILE)': 0.2248, 'P(E1-TILE, deepseek in each-model clause)': 0.14397, 'P(stop rule A2 passes)': 0.02367, 'P(stop rule A2 and A3 pass)': 0.02262, 'P(E1-TILE | A2 passes)': 0.85467, 'P(E1-TILE | A2 and A3 pass)': 0.85853}
+power common 0 / model-specific 0.005: {'P(E1-TILE)': 0.86869, 'P(E1-TILE, deepseek in each-model clause)': 0.77077, 'P(stop rule A2 passes)': 0.48728, 'P(stop rule A2 and A3 pass)': 0.4052, 'P(E1-TILE | A2 passes)': 0.8683, 'P(E1-TILE | A2 and A3 pass)': 0.86745}
+power common 0 / model-specific 0.01: {'P(E1-TILE)': 0.47618, 'P(E1-TILE, deepseek in each-model clause)': 0.30995, 'P(stop rule A2 passes)': 0.1426, 'P(stop rule A2 and A3 pass)': 0.08807, 'P(E1-TILE | A2 passes)': 0.47518, 'P(E1-TILE | A2 and A3 pass)': 0.47366}
+power common 0 / model-specific 0.015: {'P(E1-TILE)': 0.17205, 'P(E1-TILE, deepseek in each-model clause)': 0.08331, 'P(stop rule A2 passes)': 0.05266, 'P(stop rule A2 and A3 pass)': 0.02524, 'P(E1-TILE | A2 passes)': 0.16977, 'P(E1-TILE | A2 and A3 pass)': 0.17496}
+power common 0.005 / model-specific 0.005: {'P(E1-TILE)': 0.74621, 'P(E1-TILE, deepseek in each-model clause)': 0.60367, 'P(stop rule A2 passes)': 0.29035, 'P(stop rule A2 and A3 pass)': 0.23551, 'P(E1-TILE | A2 passes)': 0.78025, 'P(E1-TILE | A2 and A3 pass)': 0.78358}
+power common 0.01 / model-specific 0.01: {'P(E1-TILE)': 0.25288, 'P(E1-TILE, deepseek in each-model clause)': 0.14239, 'P(stop rule A2 passes)': 0.06157, 'P(stop rule A2 and A3 pass)': 0.03385, 'P(E1-TILE | A2 passes)': 0.32727, 'P(E1-TILE | A2 and A3 pass)': 0.33501}
+rival lever cells (nominal): {'v3own': 74, 'roofline': 84}
+leakage rows: {'SEEN-WORKLOAD': 14, 'BLIND counts': 70}
+
+what: the blind end-to-end test at the tile vLLM picks (D1: prefill, the two reachable wgmma tiles): v4 from CAL models to held-out models at the same tile, the transfer the study claims
+pages:
+  timed_units:
+    - {"unit": "phi-3.5-moe timed label=t64g1", "file": "phi-3.5-moe-64g1.json", "drop": "nodrop", "est": 10}
+    - {"unit": "phi-3.5-moe timed label=t128g1", "file": "phi-3.5-moe-128g1.json", "drop": "nodrop", "est": 14}
+    - {"unit": "phi-3.5-moe timed label=t128g16", "file": "phi-3.5-moe-128g16.json", "drop": "nodrop", "est": 16}
+    - {"unit": "qwen1.5-moe-a2.7b timed label=t128g1", "file": "qwen1.5-moe-a2.7b-128g1.json", "drop": "nodrop", "est": 13}
+    - {"unit": "jetmoe-8b timed label=t128g16", "file": "jetmoe-8b-128g16.json", "drop": "nodrop", "est": 9}
+    - {"unit": "qwen1.5-moe-a2.7b timed label=t128g16", "file": "qwen1.5-moe-a2.7b-128g16.json", "drop": "nodrop", "est": 11}
+    - {"unit": "jetmoe-8b timed label=t128g1", "file": "jetmoe-8b-128g1.json", "drop": "nodrop", "est": 7}
+    - {"unit": "deepseek-v2-lite timed label=t128g1", "file": "deepseek-v2-lite-128g1.json", "drop": "dsv", "est": 12}
+  byte_units:
+    - {"unit": "phi-3.5-moe bytes label=b128g1", "file": "phi-3.5-moe-128g1.json", "drop": "byt", "est": 6}
+    - {"unit": "qwen1.5-moe-a2.7b bytes label=b128g1", "file": "qwen1.5-moe-a2.7b-128g1.json", "drop": "byt", "est": 5}
+    - {"unit": "phi-3.5-moe bytes label=b64g1", "file": "phi-3.5-moe-64g1.json", "drop": "byt", "est": 5}
+  files: (in the JSON)
+  plan:
+    prelude, calibrate, tilecensus (compile only, the blind models' configs on this board): nodrop
+    drop order, last first (design-tile-review 8, owner fix 10): ["byt (the three byte pages)", "dsv"]
+    nodrop: every Phi, Qwen1.5 and JetMoE timed page (jg1 and qg16 included)
+    minutes: about 117 of units, about $5.3 at $2.29/h with boot and pushes
+  cells: (in the JSON)
+  excluded: Granite (D8); every decode tile (D1)
+leakage (design-tile-review 3):
+  blind: time at vLLM's two wgmma tiles on the GH200 for Phi, Qwen1.5, JetMoE and deepseek-v2-lite; the fresh PT and PW draws; deepseek-v2-lite's E 64, k 6 routing
+  seen:
+    - each BLIND-TILE model's GEMM shapes (K, N), timed at R3's tile on GH200 (rentals 5 to 7; v3 is CERTIFIED on Phi)
+    - deepseek-v2-lite: SEEN-SHAPE (D7): results/published/2026-09-01-nvidia_h200-alpha-surface-s4 times it on H200 at BLOCK_M 32 and 64, BN 64, w8 s4, and its H and F (2048 / 1408) equal Qwen1.5's, so its GEMMs are Qwen1.5's at 128x128 (N-tiles 22 and 16); its claim is 'new model, seen shapes'
+    - the tiles: SEEN on the CAL models in rental A, and the blind models' cubins compiled there (compile only)
+    - SEEN-WORKLOAD: on a uniform or balanced cell the routing counts depend only on M, so where a published R3 page timed the model at the same rows per expert (a histogram page's control, or a plain ladder page's balanced_ids at tread n x BLOCK_M / 32) the workload is SEEN and ONLY THE TILE IS BLIND: Phi 64g1 n 1 (M 512), 128g1 n 1 and n 2 (M 1024, 2048) and 128g16 n 3 (M 3072); Qwen1.5 128g1 n 1 and n 2 (M 1920, 3840); JetMoE 128g1 n 2 (M 1024) (build-tile-review 4); every such cell is labelled per row below
+  rows:
+    SEEN-WORKLOAD: 14
+    BLIND counts: 70
+nominal: DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction
+tests:
+  E1-TILE (primary, D2):
+    statistic: e = T_v4 / T_meas - 1 per valid NATIVE cell (all six labels), v4 from predicted bytes at the finalised constants; NATIVE has no term (b) and its dead term is about 1 to 2 us
+    rule: HOLDS iff the POOLED NATIVE cells AND each BLIND-TILE model's (Phi, Qwen1.5, JetMoE; D4: 'each shape' is each model) meet rms <= 2%, worst <= 5%, |mean| <= 1%, in each view; the registered verdict holds only if ALL and CLEAN hold
+    deepseek-v2-lite (design-tile-review 9.6): in the pooled bar; its own bar is printed DESCRIPTIVE (one page: it can never be CERTIFIED); dropped (dsv), it leaves the pool
+    certification: a BLIND-TILE model is CERTIFIED in CLEAN with its cells meeting the bar and at least 2 of its pages in CLEAN (Phi 3 pages, Qwen1.5 2, JetMoE 2: jg1 and qg16 are nodrop for this)
+    a model left with one page: its bar is scored and it is NOT CERTIFIED
+    a model left with no valid cell (build-tile-review 9): E1-TILE reads NOT SCORED (incomplete), not FAILS, unless the pool or another blind model fails
+    G3_void: a strict G3 FAIL voids every histogram cell: E1-TILE NOT SCORED, printed DESCRIPTIVELY
+  E1-TILE-S (secondary): SHARED cells, v4 + term (b) as v3 (the page's own A) + the v2 dead term; the same bar; a registered verdict that certifies nothing
+  E2-TILE: NATIVE time from the byte pages' counted bytes (v4's timing alone) on the cells both pages carry; rental 6's E2 bar (rms <= 2%, worst <= 5%, |mean| <= 1.5%)
+  B-BYTES: byte rows of the byte pages under the finalised key: rms <= 3% and every row <= 5% (B-SKEW's bar), per GEMM
+  G3: rental 7's TOST on uniform minus balanced (clusters the pages, margin 0.36%), strict
+  rivals:
+    v3own: v3 at its own constants, only the geometry moving (c 344.1, R3's PHI)
+    roofline: T0 + sum over GEMMs of max(flops / (4096 x eta_mma x 132 x 1.71 GHz), bytes / bw)
+    OLS (design-tile-review 9.10): ONE ridge regression over every valid NATIVE E1-CAL cell of rental A (classes pooled): T = a + b waves + c bytes / bw + d ln(1 + CTAs), waves = sum over GEMMs of live CTAs / (132 x occ), bytes v4's predicted, CTAs live over both GEMMs; standardised features, ridge lambda 1e-3 x trace(X'X) / 3, intercept unpenalised; NOT SCORED under 12 cells or when the standardised X'X has condition number over 1e6; frozen at finalisation
+    unselected accountings, F-cyc, eta_mma rival: tileA-floor's lever counts: NOT SEPARATED by construction under 6 lever cells
+    v4cal: NOT SEPARATED by construction (the same model at 128x128)
+    exclusion rule: on lever cells (|T_R / T_v4 - 1| >= 2%, at least 6): R's rms over 2% and over v4's rms + 3 se, se = sigma_page / sqrt(cells) (tcommon.rival_rule)
+    lever_cells_nominal: {"v3own": 74, "roofline": 84}
+  split views (DESCRIPTIVE):
+    G-16 cells: E1 on the 128 G 16 cells alone (the floor law)
+    G-1 n-1 cells: E1 on the G 1 n 1 cells alone (the byte model at G 1)
+gates:
+  G1: rental7-g1rule (r7-median-run3 from cells.csv)
+  repeats: 6 of 9 clean
+  G2 host (design-tile-review 9.7): rental 3's registered rule, T + F240 < 0.40 ms is host-bound, on the FINALISED prediction (after rental A's selections), AND the timer flag; the design's 0.3324 ms was a design-script threshold, never registered
+  G4: cell clock >= 1705 MHz
+  G5: provenance
+  tile: the page's recorded tile is the unit's
+  census (tileA-census): a (model, tile) whose rental-B census occupancy differs from rental A's: NOT SCORED
+  views: ALL and CLEAN (rental 2's rule 3)
+power:
+  model: design-tile-review work/power_rb075.py's, re-run on the registered 84 cells (power_tile.py): ln(T_meas / T_v4) = common-mode tile bias + model-specific bias + cell 0.6% + bytes 1.75% x dln T / dln B (each cell's, DESIGN-NOMINAL) + page 0.18% + board 0.26%
+  cells: (in the JSON)
+  blind_models:
+    - phi-3.5-moe
+    - qwen1.5-moe-a2.7b
+    - jetmoe-8b
+  noise:
+    sig_byte: 0.0175
+    sig_cell: 0.006
+    sig_page: 0.0018
+    sig_board: 0.0026
+    cal_cells_per_class: 18
+  R: 200000
+  device: cpu
+  dtype: float64
+  points: (in the JSON)
+  mps_check:
+    path: docs/registered/2026-10-14-tileB-hist/power_tile_check.json
+    sha256: 030e3b8debda7df6afec1a45a76ea0fc19c743ecddd95ba33c2663185d45d6de
+    torch: 2.13.0
+    device: mps
+    dtype: float32
+    R: 200000
+    max_abs_diff: 5.000000000032756e-06
+    seconds: {"device": 4.41, "cpu_float64": 3.83}
+  reading: P(E1-TILE) rests on the model-specific drift, which no rental-A page can bound for a blind model; the common-mode part is what the stop rule catches
+labels:
+  phi-3.5-moe, qwen1.5-moe-a2.7b, jetmoe-8b: BLIND-TILE
+  deepseek-v2-lite: SEEN-SHAPE (D7)
+  uniform and balanced: per row: SEEN-WORKLOAD where a published page timed the counts
+seen_data:
+  - every R3-tile page of the blind models
+  - deepseek-v2-lite's H200 page
+  - the design's sensitivities

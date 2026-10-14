@@ -1,0 +1,3037 @@
+{
+ "registered": "2026-10-14, before any tile-stage page",
+ "name": "2026-10-14-tileA-bytes-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-tile DESIGN.md corrected by design-tile-review REVIEW.md (the review wins) and the owner's decisions of 2026-10-14: D1 prefill now on the reachable wgmma tiles 64x128x64 w8 and 128x128x64 w8 (decode tiles later); D2 NATIVE certifies, SHARED secondary; D3 rental A's selection rules make rental B mechanical; D4 'each shape' is each model; D5 MVA2 is SEEN-fitted for mma.sync; D6 a failed tA-e1cal STOPS rental B; D7 deepseek-v2-lite is SEEN-SHAPE ('new model, seen shapes'); D8 Granite is cut; D9 term (b) not revised first; D10 about $11.4",
+ "tool": "scorer scripts/scoring/tileA/score_bytes.py; tcommon.named_key; bytes scripts/wave_split_bytes_v4.py (M4 at the tile); row keys scripts/scoring/tileA/rowkeys_tile.py",
+ "what": "the A key of v4 (D3): which w1 A accounting prices rental B's G-1 cells, where bytes reach time (design-tile 2.4)",
+ "pages": {
+  "units": [
+   "olmoe-1b-7b bytes label=b128g1 (histogram olmoe-1b-7b-128g1.json)",
+   "mixtral-8x7b bytes label=b64g1 (histogram mixtral-8x7b-64g1.json)",
+   "mixtral-8x7b bytes label=b128g16 (histogram mixtral-8x7b-128g16.json)",
+   "qwen2-57b-a14b bytes label=b128g1 (histogram qwen2-57b-a14b-128g1.json)"
+  ],
+  "files": {
+   "olmoe-1b-7b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json",
+    "sha256": "d3025569ba7c0fdb363befa95e13b8828bc53228956de0ae5180ec6c5759923c",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+      "seed": 20272420,
+      "kind": "zipf",
+      "param": 0.575,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+      "seed": 20272421,
+      "kind": "dirichlet",
+      "param": 1.0772,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+      "seed": 20272430,
+      "kind": "zipf",
+      "param": 0.522614,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+      "seed": 20272431,
+      "kind": "dirichlet",
+      "param": 1.30505,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+      "seed": 20272450,
+      "kind": "zipf",
+      "param": 0.475,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+      "seed": 20272451,
+      "kind": "dirichlet",
+      "param": 1.5811,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-64g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json",
+    "sha256": "9785d07cbda01e3ed311a77cf664858bcc09b4d500fedf0af64f2e4445f3fa23",
+    "shuffle_seed": 20261410,
+    "tile": [
+     64,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+      "seed": 20261420,
+      "kind": "dirichlet",
+      "param": 13.051,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+      "seed": 20261421,
+      "kind": "dirichlet",
+      "param": 3.7495,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+      "seed": 20261430,
+      "kind": "dirichlet",
+      "param": 15.0712,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+      "seed": 20261431,
+      "kind": "dirichlet",
+      "param": 4.32984,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-128g16.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json",
+    "sha256": "cf3da1b8b0224289323b457c40989de3a65646a87c4c13f6e95dbceb1a537431",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 16,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+      "seed": 20271440,
+      "kind": "dirichlet",
+      "param": 21.7841,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+      "seed": 20271441,
+      "kind": "dirichlet",
+      "param": 5.59393,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8"
+     },
+     {
+      "label": "balanced",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+      "seed": 20271450,
+      "kind": "dirichlet",
+      "param": 25.5453,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+      "seed": 20271451,
+      "kind": "dirichlet",
+      "param": 6.05764,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+      "seed": 20271490,
+      "kind": "dirichlet",
+      "param": 37.495,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+      "seed": 20271491,
+      "kind": "dirichlet",
+      "param": 7.339,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "qwen2-57b-a14b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json",
+    "sha256": "bfd3ac6bf0b7f0be16c14cdfe3cedce1a6aeaf45be62933484bc783bc3f28086",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+      "seed": 20273420,
+      "kind": "zipf",
+      "param": 0.575,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+      "seed": 20273421,
+      "kind": "dirichlet",
+      "param": 1.0772,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+      "seed": 20273430,
+      "kind": "zipf",
+      "param": 0.522614,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+      "seed": 20273431,
+      "kind": "dirichlet",
+      "param": 1.30505,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "same_counts (design-tile-review 9.14)": "each byte page reads the SAME file as its (model, tile, G)'s timed page, so their counts are identical by construction"
+ },
+ "keys": {
+  "v3": "M4's content key (rental 6), unchanged",
+  "CLAMP": "v3 with each GEMM's q floored at the active weights once (q_ideal = experts with a row / E): a physical floor, not a fit (design-tile-review 5). M4 prices uniform cells below one weight set at BLOCK_M 128 (Qwen1.5 n 1 w1 q 0.967)",
+  "ROWKEY60": "rental 6's row-granular LRU at 60 MiB (rental 7's NAMED key, SEEN-chosen, OPEN)",
+  "ROWKEY30": "the same at 30 MiB: one of the GH200's two L2 partitions (its L2 read 60 MiB on rental 4's rulers, CONSISTENT with RRZE's GH200 run; Hopper's L2 is two partitions, NVIDIA H100 whitepaper). The design's 'Fan et al.' attribution is withdrawn (no source supports it; design-tile-review 9.13)"
+ },
+ "rowkey_rows": {
+  "path": "docs/registered/2026-10-14-tileA-hist/rowkey_tile.json",
+  "sha256": "6abb298bfe2bb8c0f2b6ac17567b2c85f848c326a080bace7f7911e4867699c6",
+  "device": "cpu",
+  "dtype": "int64 (exact)",
+  "cells": 28,
+  "wall_s": 82.3,
+  "occupancy": {
+   "olmoe-1b-7b-128g1": {
+    "w1": 2,
+    "source": "DESIGN (shared-memory rule; the census replaces it)"
+   },
+   "mixtral-8x7b-64g1": {
+    "w1": 3,
+    "source": "DESIGN (shared-memory rule; the census replaces it)"
+   },
+   "qwen2-57b-a14b-128g1": {
+    "w1": 2,
+    "source": "DESIGN (shared-memory rule; the census replaces it)"
+   }
+  },
+  "method": "streamed (rowkeys_tile.stream_misses): the pinned rival's access order and hit rule with bounded memory (peak 0.25 GB); the pinned rowkeys.simulate's own run on this page was stopped at 19 GB of unified memory on 2026-10-14",
+  "equality_check": "the stream's read bytes EQUAL rowkeys.simulate's (CPU float64, and the MPS float32 run before it was stopped) on all 13 OLMoE 128 G 1 cells that run priced (n 1, 2, 4, 8; 4.2 to 33.8 million accesses each); tests/test_tile_plumbing.py re-runs n 1",
+  "arms": "NATIVE priced, SHARED carried (the same walk at G 1)",
+  "recompute": "re-priced at the census occupancy if it differs from the design occupancy (tileA-census)"
+ },
+ "deviation": "the design's OLMoE 128x128 G 1 n 8 tread is removed (build-tile-review 5): M4 rules w2 at G 1 and n >= 6 ILL-POSED on Hopper (wave_split_bytes.HOPPER_G1_N), applied per tread and literally at BLOCK_M 128 (n 4 is already 512 rows per expert, past BLOCK_M 32's n 6 at 192), so an n-8 cell would have no v4 prediction; OLMoE runs n 1, 2, 4, and the deepest A-heavy w1 row (n 8) is lost",
+ "byte_predictions": [
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.012707,
+     "w2": 1.005303
+    },
+    "CLAMP": {
+     "w1": 1.012707,
+     "w2": 1.005303
+    },
+    "ROWKEY60": {
+     "w1": 0.980094
+    },
+    "ROWKEY30": {
+     "w1": 0.98011
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.4375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.012707,
+     "w2": 1.005303
+    },
+    "CLAMP": {
+     "w1": 1.012707,
+     "w2": 1.005303
+    },
+    "ROWKEY60": {
+     "w1": 0.980094
+    },
+    "ROWKEY30": {
+     "w1": 0.98011
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.4375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.015849,
+     "w2": 1.006562
+    },
+    "CLAMP": {
+     "w1": 1.015849,
+     "w2": 1.006562
+    },
+    "ROWKEY60": {
+     "w1": 0.984895
+    },
+    "ROWKEY30": {
+     "w1": 0.985359
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.015849,
+     "w2": 1.006562
+    },
+    "CLAMP": {
+     "w1": 1.015849,
+     "w2": 1.006562
+    },
+    "ROWKEY60": {
+     "w1": 0.984895
+    },
+    "ROWKEY30": {
+     "w1": 0.985359
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.945867,
+     "w2": 1.000348
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.000348
+    },
+    "ROWKEY60": {
+     "w1": 0.948242
+    },
+    "ROWKEY30": {
+     "w1": 0.948242
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.945867,
+     "w2": 1.000348
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.000348
+    },
+    "ROWKEY60": {
+     "w1": 0.948242
+    },
+    "ROWKEY30": {
+     "w1": 0.948242
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.945867,
+     "w2": 1.000348
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.000348
+    },
+    "ROWKEY60": {
+     "w1": 0.948242
+    },
+    "ROWKEY30": {
+     "w1": 0.948242
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.945867,
+     "w2": 1.000348
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.000348
+    },
+    "ROWKEY60": {
+     "w1": 0.948242
+    },
+    "ROWKEY30": {
+     "w1": 0.948242
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.023449,
+     "w2": 1.009928
+    },
+    "CLAMP": {
+     "w1": 1.023449,
+     "w2": 1.009928
+    },
+    "ROWKEY60": {
+     "w1": 0.990052
+    },
+    "ROWKEY30": {
+     "w1": 1.017014
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.546875,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.023449,
+     "w2": 1.009928
+    },
+    "CLAMP": {
+     "w1": 1.023449,
+     "w2": 1.009928
+    },
+    "ROWKEY60": {
+     "w1": 0.990052
+    },
+    "ROWKEY30": {
+     "w1": 1.017014
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.546875,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.022916,
+     "w2": 1.009706
+    },
+    "CLAMP": {
+     "w1": 1.022916,
+     "w2": 1.009706
+    },
+    "ROWKEY60": {
+     "w1": 0.98617
+    },
+    "ROWKEY30": {
+     "w1": 1.028938
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.453125,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.022916,
+     "w2": 1.009706
+    },
+    "CLAMP": {
+     "w1": 1.022916,
+     "w2": 1.009706
+    },
+    "ROWKEY60": {
+     "w1": 0.98617
+    },
+    "ROWKEY30": {
+     "w1": 1.028938
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.453125,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.908884,
+     "w2": 1.008534
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.008534
+    },
+    "ROWKEY60": {
+     "w1": 0.964539
+    },
+    "ROWKEY30": {
+     "w1": 0.964844
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.908884,
+     "w2": 1.008534
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.008534
+    },
+    "ROWKEY60": {
+     "w1": 0.964539
+    },
+    "ROWKEY30": {
+     "w1": 0.964844
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.908884,
+     "w2": 1.008534
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.008534
+    },
+    "ROWKEY60": {
+     "w1": 0.964539
+    },
+    "ROWKEY30": {
+     "w1": 0.964844
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.908884,
+     "w2": 1.008534
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.008534
+    },
+    "ROWKEY60": {
+     "w1": 0.964539
+    },
+    "ROWKEY30": {
+     "w1": 0.964844
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.025599,
+     "w2": 1.011651
+    },
+    "CLAMP": {
+     "w1": 1.025599,
+     "w2": 1.011651
+    },
+    "ROWKEY60": {
+     "w1": 0.800911
+    },
+    "ROWKEY30": {
+     "w1": 1.124147
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.484375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.025599,
+     "w2": 1.011651
+    },
+    "CLAMP": {
+     "w1": 1.025599,
+     "w2": 1.011651
+    },
+    "ROWKEY60": {
+     "w1": 0.800911
+    },
+    "ROWKEY30": {
+     "w1": 1.124147
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.484375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.025712,
+     "w2": 1.011699
+    },
+    "CLAMP": {
+     "w1": 1.025712,
+     "w2": 1.011699
+    },
+    "ROWKEY60": {
+     "w1": 0.80543
+    },
+    "ROWKEY30": {
+     "w1": 1.103722
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.53125,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.025712,
+     "w2": 1.011699
+    },
+    "CLAMP": {
+     "w1": 1.025712,
+     "w2": 1.011699
+    },
+    "ROWKEY60": {
+     "w1": 0.80543
+    },
+    "ROWKEY30": {
+     "w1": 1.103722
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.53125,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.802805,
+     "w2": 1.011641
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.011641
+    },
+    "ROWKEY60": {
+     "w1": 0.78125
+    },
+    "ROWKEY30": {
+     "w1": 1.021179
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.802805,
+     "w2": 1.011641
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.011641
+    },
+    "ROWKEY60": {
+     "w1": 0.78125
+    },
+    "ROWKEY30": {
+     "w1": 1.021179
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.802805,
+     "w2": 1.011641
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.011641
+    },
+    "ROWKEY60": {
+     "w1": 0.78125
+    },
+    "ROWKEY30": {
+     "w1": 1.021179
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "olmoe-1b-7b-128g1",
+   "model": "olmoe-1b-7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.802805,
+     "w2": 1.011641
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.011641
+    },
+    "ROWKEY60": {
+     "w1": 0.78125
+    },
+    "ROWKEY30": {
+     "w1": 1.021179
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 4.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.312528,
+     "w2": 1.050498
+    },
+    "CLAMP": {
+     "w1": 1.312528,
+     "w2": 1.050498
+    },
+    "ROWKEY60": {
+     "w1": 1.221361
+    },
+    "ROWKEY30": {
+     "w1": 1.221361
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.312528,
+     "w2": 1.050498
+    },
+    "CLAMP": {
+     "w1": 1.312528,
+     "w2": 1.050498
+    },
+    "ROWKEY60": {
+     "w1": 1.221361
+    },
+    "ROWKEY30": {
+     "w1": 1.221361
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.435811,
+     "w2": 1.061234
+    },
+    "CLAMP": {
+     "w1": 1.435811,
+     "w2": 1.061234
+    },
+    "ROWKEY60": {
+     "w1": 1.297324
+    },
+    "ROWKEY30": {
+     "w1": 1.297324
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.5,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.435811,
+     "w2": 1.061234
+    },
+    "CLAMP": {
+     "w1": 1.435811,
+     "w2": 1.061234
+    },
+    "ROWKEY60": {
+     "w1": 1.297324
+    },
+    "ROWKEY30": {
+     "w1": 1.297324
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.5,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.999637,
+     "w2": 1.0
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.0
+    },
+    "ROWKEY60": {
+     "w1": 1.0
+    },
+    "ROWKEY30": {
+     "w1": 1.0
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.999637,
+     "w2": 1.0
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.0
+    },
+    "ROWKEY60": {
+     "w1": 1.0
+    },
+    "ROWKEY30": {
+     "w1": 1.0
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.999637,
+     "w2": 1.0
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.0
+    },
+    "ROWKEY60": {
+     "w1": 1.0
+    },
+    "ROWKEY30": {
+     "w1": 1.0
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.999637,
+     "w2": 1.0
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.0
+    },
+    "ROWKEY60": {
+     "w1": 1.0
+    },
+    "ROWKEY30": {
+     "w1": 1.0
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 2.300244,
+     "w2": 1.378001
+    },
+    "CLAMP": {
+     "w1": 2.300244,
+     "w2": 1.378001
+    },
+    "ROWKEY60": {
+     "w1": 1.54888
+    },
+    "ROWKEY30": {
+     "w1": 1.54888
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 2.300244,
+     "w2": 1.378001
+    },
+    "CLAMP": {
+     "w1": 2.300244,
+     "w2": 1.378001
+    },
+    "ROWKEY60": {
+     "w1": 1.54888
+    },
+    "ROWKEY30": {
+     "w1": 1.54888
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 2.423691,
+     "w2": 1.420283
+    },
+    "CLAMP": {
+     "w1": 2.423691,
+     "w2": 1.420283
+    },
+    "ROWKEY60": {
+     "w1": 1.954973
+    },
+    "ROWKEY30": {
+     "w1": 1.954973
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.5,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 2.423691,
+     "w2": 1.420283
+    },
+    "CLAMP": {
+     "w1": 2.423691,
+     "w2": 1.420283
+    },
+    "ROWKEY60": {
+     "w1": 1.954973
+    },
+    "ROWKEY30": {
+     "w1": 1.954973
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.5,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "CLAMP": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "ROWKEY60": {
+     "w1": 1.546478
+    },
+    "ROWKEY30": {
+     "w1": 1.548087
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "CLAMP": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "ROWKEY60": {
+     "w1": 1.546478
+    },
+    "ROWKEY30": {
+     "w1": 1.548087
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "CLAMP": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "ROWKEY60": {
+     "w1": 1.546478
+    },
+    "ROWKEY30": {
+     "w1": 1.548087
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-64g1",
+   "model": "mixtral-8x7b",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "CLAMP": {
+     "w1": 1.929689,
+     "w2": 1.232933
+    },
+    "ROWKEY60": {
+     "w1": 1.546478
+    },
+    "ROWKEY30": {
+     "w1": 1.548087
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.165626,
+     "w2": 2.113825
+    },
+    "CLAMP": {
+     "w1": 1.165626,
+     "w2": 2.113825
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.165626,
+     "w2": 2.113825
+    },
+    "CLAMP": {
+     "w1": 1.165626,
+     "w2": 2.113825
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.163984,
+     "w2": 2.259141
+    },
+    "CLAMP": {
+     "w1": 1.163984,
+     "w2": 2.259141
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.163984,
+     "w2": 2.259141
+    },
+    "CLAMP": {
+     "w1": 1.163984,
+     "w2": 2.259141
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "CLAMP": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "CLAMP": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "CLAMP": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 3,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "CLAMP": {
+     "w1": 1.14082,
+     "w2": 1.998824
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.165413,
+     "w2": 2.579062
+    },
+    "CLAMP": {
+     "w1": 1.165413,
+     "w2": 2.579062
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.165413,
+     "w2": 2.579062
+    },
+    "CLAMP": {
+     "w1": 1.165413,
+     "w2": 2.579062
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.163541,
+     "w2": 2.551639
+    },
+    "CLAMP": {
+     "w1": 1.163541,
+     "w2": 2.551639
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.163541,
+     "w2": 2.551639
+    },
+    "CLAMP": {
+     "w1": 1.163541,
+     "w2": 2.551639
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "CLAMP": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "CLAMP": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "CLAMP": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "CLAMP": {
+     "w1": 1.009978,
+     "w2": 2.593109
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.424083,
+     "w2": 4.585449
+    },
+    "CLAMP": {
+     "w1": 1.424083,
+     "w2": 4.585449
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.424083,
+     "w2": 4.585449
+    },
+    "CLAMP": {
+     "w1": 1.424083,
+     "w2": 4.585449
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.556004,
+     "w2": 4.732683
+    },
+    "CLAMP": {
+     "w1": 1.556004,
+     "w2": 4.732683
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+   "skewed": true,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 1.556004,
+     "w2": 4.732683
+    },
+    "CLAMP": {
+     "w1": 1.556004,
+     "w2": 4.732683
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 0.997289,
+     "w2": 4.261319
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 4.261319
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 0.997289,
+     "w2": 4.261319
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 4.261319
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 0.997289,
+     "w2": 4.261319
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 4.261319
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "mixtral-8x7b-128g16",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": false,
+   "q_pred": {
+    "v3": {
+     "w1": 0.997289,
+     "w2": 4.261319
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 4.261319
+    },
+    "ROWKEY60": null,
+    "ROWKEY30": null
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": null,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.09352,
+     "w2": 1.03907
+    },
+    "CLAMP": {
+     "w1": 1.09352,
+     "w2": 1.03907
+    },
+    "ROWKEY60": {
+     "w1": 1.044299
+    },
+    "ROWKEY30": {
+     "w1": 1.044299
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.4375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.09352,
+     "w2": 1.03907
+    },
+    "CLAMP": {
+     "w1": 1.09352,
+     "w2": 1.03907
+    },
+    "ROWKEY60": {
+     "w1": 1.044299
+    },
+    "ROWKEY30": {
+     "w1": 1.044299
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.4375,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.127213,
+     "w2": 1.049467
+    },
+    "CLAMP": {
+     "w1": 1.127213,
+     "w2": 1.049467
+    },
+    "ROWKEY60": {
+     "w1": 1.068628
+    },
+    "ROWKEY30": {
+     "w1": 1.068628
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.127213,
+     "w2": 1.049467
+    },
+    "CLAMP": {
+     "w1": 1.127213,
+     "w2": 1.049467
+    },
+    "ROWKEY60": {
+     "w1": 1.068628
+    },
+    "ROWKEY30": {
+     "w1": 1.068628
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.979551,
+     "w2": 1.001588
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.001588
+    },
+    "ROWKEY60": {
+     "w1": 0.981641
+    },
+    "ROWKEY30": {
+     "w1": 0.981641
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.979551,
+     "w2": 1.001588
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.001588
+    },
+    "ROWKEY60": {
+     "w1": 0.981641
+    },
+    "ROWKEY30": {
+     "w1": 0.981641
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.979551,
+     "w2": 1.001588
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.001588
+    },
+    "ROWKEY60": {
+     "w1": 0.981641
+    },
+    "ROWKEY30": {
+     "w1": 0.981641
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 0.979551,
+     "w2": 1.001588
+    },
+    "CLAMP": {
+     "w1": 1.0,
+     "w2": 1.001588
+    },
+    "ROWKEY60": {
+     "w1": 0.981641
+    },
+    "ROWKEY30": {
+     "w1": 0.981641
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 1.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.19782,
+     "w2": 1.073671
+    },
+    "CLAMP": {
+     "w1": 1.19782,
+     "w2": 1.073671
+    },
+    "ROWKEY60": {
+     "w1": 1.203836
+    },
+    "ROWKEY30": {
+     "w1": 1.203836
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.5625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.19782,
+     "w2": 1.073671
+    },
+    "CLAMP": {
+     "w1": 1.19782,
+     "w2": 1.073671
+    },
+    "ROWKEY60": {
+     "w1": 1.203836
+    },
+    "ROWKEY30": {
+     "w1": 1.203836
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.5625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.194875,
+     "w2": 1.072011
+    },
+    "CLAMP": {
+     "w1": 1.194875,
+     "w2": 1.072011
+    },
+    "ROWKEY60": {
+     "w1": 1.213388
+    },
+    "ROWKEY30": {
+     "w1": 1.213388
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.515625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+   "skewed": true,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.194875,
+     "w2": 1.072011
+    },
+    "CLAMP": {
+     "w1": 1.194875,
+     "w2": 1.072011
+    },
+    "ROWKEY60": {
+     "w1": 1.213388
+    },
+    "ROWKEY30": {
+     "w1": 1.213388
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.515625,
+   "label_blind": "BLIND-CALMODEL (CAL model); BLIND counts (no published page carries them)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "CLAMP": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "ROWKEY60": {
+     "w1": 1.126172
+    },
+    "ROWKEY30": {
+     "w1": 1.126172
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "CLAMP": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "ROWKEY60": {
+     "w1": 1.126172
+    },
+    "ROWKEY30": {
+     "w1": 1.126172
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "CLAMP": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "ROWKEY60": {
+     "w1": 1.126172
+    },
+    "ROWKEY30": {
+     "w1": 1.126172
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "page": "qwen2-57b-a14b-128g1",
+   "model": "qwen2-57b-a14b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "skewed": false,
+   "scored_for_key": true,
+   "q_pred": {
+    "v3": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "CLAMP": {
+     "w1": 1.115953,
+     "w2": 1.063398
+    },
+    "ROWKEY60": {
+     "w1": 1.126172
+    },
+    "ROWKEY30": {
+     "w1": 1.126172
+    }
+   },
+   "q_ideal": 1.0,
+   "q_group_G1": 2.0,
+   "label_blind": "BLIND-CALMODEL (CAL model); SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  }
+ ],
+ "separations_on_scored_w1_rows": {
+  "v3 vs CLAMP": {
+   "rows": 56,
+   "rms_pct": 6.00813,
+   "max_abs_pct": 19.7195
+  },
+  "CLAMP vs ROWKEY60": {
+   "rows": 56,
+   "rms_pct": 16.502324,
+   "max_abs_pct": 48.510149
+  },
+  "ROWKEY60 vs ROWKEY30": {
+   "rows": 56,
+   "rms_pct": 9.793547,
+   "max_abs_pct": 28.753891
+  },
+  "v3 vs ROWKEY60": {
+   "rows": 56,
+   "rms_pct": 14.693979,
+   "max_abs_pct": 48.510149
+  }
+ },
+ "statistic": "per (cell, arm, GEMM): q_counted = (dram_bytes_read - n x operand_per_tile_g) / W_g at the tile's BYTE_MODEL; e_K = q_pred_K / q_counted - 1",
+ "rule (D3; design-tile-review 5)": "over EVERY scored w1 row (the G-1 pages: OLMoE 128 G 1, Mixtral 64 G 1, Qwen2-57B 128 G 1; uniform, balanced and skewed, NATIVE and SHARED): the key nearest by rms is NAMED iff the next is at least 2x farther and every row of the nearest is within 5%; if none is NAMED v4 takes CLAMP (the physical floor), not v3. The NAMED key or CLAMP becomes rental B's w1 A key. Mixtral's G-16 rows and every w2 row are printed",
+ "brackets_printed": "q_group (every M-tile re-reads its expert's slabs, G 1) and q_ideal (active weights once)",
+ "B_BYTES_bar_printed": "rms <= 3% and every row <= 5% per key on the scored rows",
+ "gates": {
+  "clock": "rental 6's counter clock rule (lock_gate.check_page PASS, each cell in [1640, 1710] MHz)",
+  "G5": "histogram sha256, shuffle seed, every cell's counts sha256",
+  "tile": "the page's recorded block_m, block_n, block_k, num_warps, num_stages must be the unit's"
+ },
+ "noise": {
+  "counter": {
+   "within_board_pct": 0.3,
+   "board_to_board_pct": [
+    0.03,
+    0.66
+   ]
+  }
+ },
+ "labels": {
+  "rows": "BLIND-CALMODEL (CAL models); uniform and balanced rows may be SEEN-WORKLOAD (per row)",
+  "ROWKEY60": "SEEN-chosen capacity",
+  "ROWKEY30": "derived from the measured L2"
+ },
+ "scorer_ambiguities": {
+  "1 which c is the denominator, and F's units": "c_time = c_card x c_counter(tile) / 344.1 (344.1 the CAL counters' c); F is held in counter cycles and PHI = F / c_counter(tile) in k-steps; at R3's tile v4 is v3 exactly (r3_timing_model_v4.py --check)",
+  "2 F-cyc against F-step": "F-step (v3's form) is registered; F-cyc replaces it only when, on the 64x128 w8 pages, it is nearer the measured F on both GEMMs and F-step misses by more than 3 se on one (tcommon.f_form_rule)",
+  "3 eta_mma": "per clock (Luo Table 11, 0.991), per instruction by Table 9's ratios: 0.983 (m64n128k16, 128x128 w8), 0.965 (m64n64k16, 64x128); H800 PCIe, FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857",
+  "4 tA-floor": "the test statistic is u = S c + F per (model, GEMM), within 3%; cells are the NATIVE and SHARED cells at n 4..9 whose own GEMM reads DRAM at no more than 0.5 x 4022 GB/s; a dropped w4 page changes nothing (printed only); at 128x128 v4cal and v4 are the same model",
+  "5 the NAMED rule's rows, and the default": "every scored w1 row of the G-1 byte pages (uniform, balanced and skewed, NATIVE and SHARED); nothing NAMED gives CLAMP, not v3",
+  "6 E1-TILE's 'each model'": "the three BLIND-TILE models; deepseek-v2-lite is in the pooled bar only (its own bar DESCRIPTIVE, never CERTIFIED); a model left with one page is scored and NOT CERTIFIED",
+  "7 the host cut": "0.40 ms (T + F240), rental 3's registered rule, on the FINALISED v4 prediction",
+  "8 tA-rep dropped": "rental 3's 0.18% feeds the rivals' se, tA-dead's z and the power at finalisation",
+  "9 tA-e1cal 'fails'": "on the CLEAN view: the pooled NATIVE bar, each class mean within 0.75%, the 128 G 1 CAL models within 1%; a SKIPPED, LOST or NOT SCORED E1-CAL page, or a G3 void, is a STOP (tileB-stop)",
+  "10 the OLS rival": "one ridge OLS over every valid NATIVE E1-CAL cell (features waves, bytes / bw, ln(1 + CTAs); lambda 1e-3 x trace(X'X) / 3 on standardised features); NOT SCORED under 12 cells or condition number over 1e6",
+  "11 census against counter occupancy": "integers, exact; a counter page at another occupancy is scored at its recorded one (rental 4's re-key, score_floor: Z_wg at the 128x128 pages' recorded occupancy, each 64x128 page's c at its own); on rental B a (model, tile) at another occupancy than rental A's census is NOT SCORED on every page of that (model, tile), and a missing or refused rental-B census leaves every page NOT SCORED (score_tileB.census_check); a refused rental-A census is a STOP",
+  "12 tA-dead": "tread n 1 (uniform and balanced); align growth = (A_S - A_N) at c15 minus at c9 off each page's align_probe; se = 2 sigma_page mean(T) / sqrt(cells), sigma_page tA-rep's or 0.18%",
+  "13 the 30 MiB row key": "one of the card's two L2 partitions of its measured 60 MiB (rental 4's rulers, CONSISTENT with RRZE's GH200; Hopper's partitioned L2, NVIDIA H100 whitepaper); the 'Fan et al.' attribution is withdrawn",
+  "14 byte pages and timed pages": "one histogram file per (model, tile, G): a byte page and a timed page of the same (model, tile, G) read the same file, so their counts are identical (the files' sha256 above)"
+ },
+ "seen_data": [
+  "M4 (v3's bytes) SEEN-fitted on 8x7B CAL",
+  "C 60 MiB SEEN-chosen",
+  "the 60 MiB L2 (rental 4)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0"
+ }
+}

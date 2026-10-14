@@ -1,0 +1,96 @@
+{
+ "what": "E1-TILE and stop-rule power on rental B's registered cells, laptop GPU against CPU float64",
+ "torch": "2.13.0",
+ "device": "mps",
+ "dtype": "float32",
+ "R": 200000,
+ "settings": 9,
+ "max_abs_diff": 5.000000000032756e-06,
+ "seconds": {
+  "device": 4.41,
+  "cpu_float64": 3.83
+ },
+ "device_results": {
+  "common 0 / model-specific 0": {
+   "P(E1-TILE)": 0.96835,
+   "P(E1-TILE, deepseek in each-model clause)": 0.957285,
+   "P(stop rule A2 passes)": 0.92455,
+   "P(stop rule A2 and A3 pass)": 0.897705,
+   "P(E1-TILE | A2 passes)": 0.968358,
+   "P(E1-TILE | A2 and A3 pass)": 0.968341,
+   "seconds_on_device": 0.284861
+  },
+  "common 0.005 / model-specific 0": {
+   "P(E1-TILE)": 0.890025,
+   "P(E1-TILE, deepseek in each-model clause)": 0.806015,
+   "P(stop rule A2 passes)": 0.487355,
+   "P(stop rule A2 and A3 pass)": 0.472905,
+   "P(E1-TILE | A2 passes)": 0.92566,
+   "P(E1-TILE | A2 and A3 pass)": 0.925693,
+   "seconds_on_device": 0.085832
+  },
+  "common 0.01 / model-specific 0": {
+   "P(E1-TILE)": 0.624325,
+   "P(E1-TILE, deepseek in each-model clause)": 0.47108,
+   "P(stop rule A2 passes)": 0.14217,
+   "P(stop rule A2 and A3 pass)": 0.137045,
+   "P(E1-TILE | A2 passes)": 0.883449,
+   "P(E1-TILE | A2 and A3 pass)": 0.885257,
+   "seconds_on_device": 0.082996
+  },
+  "common 0.02 / model-specific 0": {
+   "P(E1-TILE)": 0.2248,
+   "P(E1-TILE, deepseek in each-model clause)": 0.143965,
+   "P(stop rule A2 passes)": 0.02367,
+   "P(stop rule A2 and A3 pass)": 0.02262,
+   "P(E1-TILE | A2 passes)": 0.854668,
+   "P(E1-TILE | A2 and A3 pass)": 0.858532,
+   "seconds_on_device": 0.08159
+  },
+  "common 0 / model-specific 0.005": {
+   "P(E1-TILE)": 0.868695,
+   "P(E1-TILE, deepseek in each-model clause)": 0.770775,
+   "P(stop rule A2 passes)": 0.487275,
+   "P(stop rule A2 and A3 pass)": 0.405205,
+   "P(E1-TILE | A2 passes)": 0.868298,
+   "P(E1-TILE | A2 and A3 pass)": 0.86745,
+   "seconds_on_device": 0.089799
+  },
+  "common 0 / model-specific 0.01": {
+   "P(E1-TILE)": 0.47618,
+   "P(E1-TILE, deepseek in each-model clause)": 0.309955,
+   "P(stop rule A2 passes)": 0.1426,
+   "P(stop rule A2 and A3 pass)": 0.08807,
+   "P(E1-TILE | A2 passes)": 0.475175,
+   "P(E1-TILE | A2 and A3 pass)": 0.473657,
+   "seconds_on_device": 0.087315
+  },
+  "common 0 / model-specific 0.015": {
+   "P(E1-TILE)": 0.17205,
+   "P(E1-TILE, deepseek in each-model clause)": 0.083315,
+   "P(stop rule A2 passes)": 0.05266,
+   "P(stop rule A2 and A3 pass)": 0.025235,
+   "P(E1-TILE | A2 passes)": 0.169768,
+   "P(E1-TILE | A2 and A3 pass)": 0.174955,
+   "seconds_on_device": 0.08199
+  },
+  "common 0.005 / model-specific 0.005": {
+   "P(E1-TILE)": 0.746215,
+   "P(E1-TILE, deepseek in each-model clause)": 0.603665,
+   "P(stop rule A2 passes)": 0.290355,
+   "P(stop rule A2 and A3 pass)": 0.23551,
+   "P(E1-TILE | A2 passes)": 0.780252,
+   "P(E1-TILE | A2 and A3 pass)": 0.783576,
+   "seconds_on_device": 0.087212
+  },
+  "common 0.01 / model-specific 0.01": {
+   "P(E1-TILE)": 0.252875,
+   "P(E1-TILE, deepseek in each-model clause)": 0.142385,
+   "P(stop rule A2 passes)": 0.06157,
+   "P(stop rule A2 and A3 pass)": 0.03385,
+   "P(E1-TILE | A2 passes)": 0.32727,
+   "P(E1-TILE | A2 and A3 pass)": 0.335007,
+   "seconds_on_device": 0.080159
+  }
+ }
+}

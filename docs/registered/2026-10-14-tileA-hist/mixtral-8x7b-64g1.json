@@ -1,0 +1,193 @@
+{
+ "schema": "moe-kernels/histogram-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-64g1",
+ "shuffle_seed": 20261410,
+ "block_m": 64,
+ "group_m": 1,
+ "cells": [
+  {
+   "label": "PT",
+   "n": 1,
+   "counts": [
+    65,
+    41,
+    62,
+    66,
+    63,
+    46,
+    105,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 13.051,
+    "seed": 20261420,
+    "B": 256,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.278634,
+     "max_mean": 1.640625,
+     "gini": 0.13623
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 1,
+   "counts": [
+    77,
+    47,
+    51,
+    73,
+    48,
+    31,
+    95,
+    90
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 3.7495,
+    "seed": 20261421,
+    "B": 256,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.335574,
+     "max_mean": 1.484375,
+     "gini": 0.188477
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 1,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 1,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "PT",
+   "n": 2,
+   "counts": [
+    123,
+    144,
+    111,
+    123,
+    173,
+    128,
+    92,
+    130
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 15.0712,
+    "seed": 20261430,
+    "B": 512,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PT",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.172937,
+     "max_mean": 1.351562,
+     "gini": 0.092529
+    }
+   }
+  },
+  {
+   "label": "PW",
+   "n": 2,
+   "counts": [
+    86,
+    109,
+    98,
+    225,
+    131,
+    110,
+    114,
+    151
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ],
+   "provenance": {
+    "kind": "dirichlet",
+    "param": 4.32984,
+    "seed": 20261431,
+    "B": 512,
+    "source_model": "mixtral-8x7b",
+    "source_shape": "PW",
+    "rule": "log-B interpolated between fitted B 256 and 1024",
+    "stats": {
+     "cv": 0.320836,
+     "max_mean": 1.757812,
+     "gini": 0.159668
+    }
+   }
+  },
+  {
+   "label": "uniform",
+   "n": 2,
+   "counts": [
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128,
+    128
+   ],
+   "arms": [
+    "native",
+    "shared"
+   ]
+  },
+  {
+   "label": "balanced",
+   "n": 2,
+   "counts": null,
+   "arms": [
+    "native",
+    "shared"
+   ]
+  }
+ ],
+ "synthetic": "fitted Zipf/Dirichlet shapes of mixtral-8x7b (its own fitted shapes); scripts/skew_synth_tile.py, tile stage rental A; no trace count"
+}

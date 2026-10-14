@@ -1295,3 +1295,79 @@ rental 7's pages published, `reg7.published_counts_sha` read them as SEEN, and t
 the skew and l2open files (leakage labels only). `register.py` now seeds that set as of 2026-10-13,
 as `seed_pricer` does; `reg7.py` (pinned) is unchanged, and the check reads `same` on all eight
 files. The files above are unchanged.
+
+## 2026-10-14, before any page: the tile stage, rental A's six registrations and rental B's two (frozen)
+
+Rental A (one `gpu_1x_gh200`) runs `scripts/plans/rentalA-tile-2026-10.plan` through the tile stage's
+driver, `scripts/gh200_tile_session.sh` (`vm_run.sh start ... --driver gh200_tile_session.sh`): the
+pinned `gh200_model_session.sh` copied with the tile keys added, every changed hunk marked `TILE` and
+held to the pinned file by tests/test_tile_plan.py. The six files `2026-10-14-tileA-{census,floor,
+bytes,e1cal,dead,rep}-gh200` and rental B's `2026-10-14-tileB-{e1tile,stop}-gh200` are written by
+`scripts/scoring/tileA/register.py` (`--check` recomputes all eight; a test runs it). Rental B's two
+are FROZEN now: cells, files, rules, rivals and gates are fixed; its numeric predictions are written
+by `scripts/scoring/tileA/finalise.py` from rental A's scored selections, by the registered rules,
+before rental B runs (owner decision D3). Scorers in `scripts/scoring/tileA/`, tested on synthetic
+pages only. Design: the scratchpad's `design-tile/DESIGN.md`, corrected by `design-tile-review/REVIEW.md`
+(the review wins), with the owner's decisions D1 to D10 of 2026-10-14.
+
+**Model v4** (`scripts/r3_timing_model_v4.py`, `scripts/wave_split_bytes_v4.py`, new modules over the
+pinned v3 modules): v3 with every tile-dependent quantity read from the tile. c_time = c_card x
+c_counter(tile) / 344.1 and PHI = F / c_counter(tile), so at R3's tile v4 is v3 exactly:
+`r3_timing_model_v4.py --check` re-prices all 300 registered v3 predictions of rental6-skew and
+rental7-skew and equals the registered numbers and rental 6's pricer bit for bit. c_counter is c_128
+measured on the 128x128x64 w8 s3 counter pages of OLMoE and Mixtral 8x7B (with F_wg,w1 and F_wg,w2,
+one joint fit, CAL-A); at 64x128 a closed MVA whose delay Z_wg puts 128x128 at c_128, under one of
+three shared-byte accountings (B, W, T); on mma.sync, rental 4's MVA2 as a ratio to R3's tile (D5).
+F-step (v3's form) is registered; F-cyc replaces it only by the registered rule. eta_mma is per
+clock (v4 counts cycles at a locked clock): Luo et al. (arXiv 2501.12084) Table 11's 0.991
+(m64n256k16, the only wgmma rate with a measured clock), carried by Table 9's within-table ratios to
+0.983 for m64n128k16 (128x128) and 0.965 for m64n64k16 (64x128); measured on an H800 PCIe in FP16,
+BF16 on the GH200 assumed equal. Table 9's chip-relative 0.872 / 0.857 is the rival. It moves no
+128x128 cell, at most 1.31% of the six Phi 64x128 cells (c_128 600 to 1300), and c_64 by up to
+5.5%, beyond the 3% band, so it can change which accounting is selected (registered). MVA2's eta as the wgmma shared divisor is an untested
+reuse. Fitted: 6 (MVA2's three SEEN, Z_wg and F_wg x2 CAL-A); selections: 3 (accounting, A key, F
+form). The accounting reading on the 64x128 w8 pages is DESCRIPTIVE: at the design-nominal constants
+B, W and T move rental B's predictions by at most 0.28% (0 lever cells), so they are NOT SEPARATED.
+
+**census**: compile only, every config of both rentals on every model (blind ones included): registers,
+shared, CTAs per SM, MMA path (a mismatch is a STOP), PTX loop counts. Every occupancy is read by one
+function from the census (the shared-memory rule's 2 at 128x128 and 3 at 64x128 w8 until it exists);
+`rowkeys_tile.py --census-score` and `register.py --census-score` are the mechanical rebuild. A
+counter page recording another occupancy is scored at its own; rental B re-reads the census and a
+(model, tile) that differs is NOT SCORED. **floor**: the calibration, the
+descriptive 64x128 test (u = S c + F within 3%), the selection for rental B (the accounting that
+alone holds, else v4cal), the F form. **bytes**: the A key on every scored w1 row of the G-1 byte pages
+(uniform, balanced and skewed; 56 rows): v3, CLAMP (q floored at the active weights once), ROWKEY60,
+ROWKEY30 (one of the card's two 60 MiB L2 partitions; the design's "Fan et al." is withdrawn); NAMED
+when 2x nearer than the next with every row within 5%, else CLAMP. The row keys are streamed
+(`rowkeys_tile.py`, the pinned rival's access order and hit rule at 0.25 GB; the pinned simulate ran
+past 19 GB on this laptop and was stopped) and equal the pinned rival's bytes on every cell checked.
+**e1cal**: v4 end to end on the CAL models' timed pages (BLIND-CALMODEL). **stop** (D6): rental B
+runs only if every tile class's mean NATIVE residual is within 0.75%, the 128 G 1 CAL models agree
+within 1%, every E1-CAL page ran and was scored, the bar holds, G3 voids nothing and the census did
+not refuse. The design's OLMoE n 8 tread is removed (M4's Hopper G-1 rule), a registered deviation. **dead**: D
+against SLOT at occupancy 2 (12 to 17 us apart); kappa only if c_128 >= 900; D2 against D and kappa 0
+against 0.15 NOT SEPARABLE. **rep**: sigma_page at 128x128, else rental 3's 0.18%.
+
+**e1tile (rental B, frozen)**: Phi (64x128 G 1 n 1; 128x128 G 1 n 1, 2; G 16 n 3, 4), Qwen1.5 (G 1 n
+1, 2, 4; G 16 n 5, 6), JetMoE (G 16 n 3, 4; G 1 n 2), deepseek-v2-lite (G 1 n 3): PT, PT2, PW, PW2,
+uniform, balanced, 84 NATIVE cells. E1-TILE holds iff the pooled cells and each BLIND-TILE model meet
+the time bar; CERTIFIED in CLEAN with 2 pages; a model with no valid cell leaves it NOT SCORED;
+deepseek-v2-lite (SEEN-SHAPE, D7: on a published H200 page, its GEMMs Qwen1.5's) is in the pool only.
+14 of the 84 are SEEN-WORKLOAD (uniform and balanced cells whose rows per expert a published R3 page
+timed: Phi 64g1 n 1, 128g1 n 1 and 2, 128g16 n 3; Qwen1.5 128g1 n 1 and 2; JetMoE 128g1 n 2): only
+the tile is blind there. Power (CPU float64; MPS float32 within 5e-6, 4.4 s): P 0.968 at zero
+drift, 0.62 at 1% common-mode drift and 0.48 at 1% model-specific drift; the stop rule passes 92.5%
+at zero drift and 14% at 1% common-mode drift. finalise.py refuses on any STOP and generates rental
+B's plan (14 units, 117 min). Drop order, last first: byt, dsv; every Phi, Qwen1.5 and JetMoE page is
+nodrop.
+
+| rental A block | units | est. min |
+|---|---|---:|
+| prelude, calibrate, census | 3 | 13 |
+| 128x128 and 64x128 w8 counter pages (nodrop) | 4 | 26 |
+| byte pages at vLLM's G (nodrop, Qwen2-57B's included) | 4 | 27 |
+| E1-CAL timed pages (nodrop, Qwen2-57B and Mixtral 128 G 1 n 2 included) | 5 | 51 |
+| rep, w4, ms, dk (dropped last first: dk, ms, w4, rep) | 5 | 30 |
+
+147 min of units (117 nodrop), about $5.6; rental B about 117 min, $5.3: the stage about $11 (D10).

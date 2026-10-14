@@ -3,7 +3,7 @@
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
 #   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b] [--floor-groups G,G --floor-treads n,n]
-#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> --plan scripts/plans/<file>.plan
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> --plan scripts/plans/<file>.plan [--driver gh200_tile_session.sh]
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -20,14 +20,17 @@
 #           owner's decision, 2026-09-26: 580.105.08, as on 2026-09-25; the
 #           newest 580 from Lambda's repository if that build is gone) and
 #           reboots, then checks the driver the box came back with; copies
-#           setup_vm.sh, vm_results_push.sh and gh200_model_session.sh from THIS
+#           setup_vm.sh, vm_results_push.sh and gh200_model_session.sh (and the tile
+#           stage's gh200_tile_session.sh when the checkout has it) from THIS
 #           checkout, which must be clean and at a commit GitHub has (the VM
 #           clones that commit); has the VM make its deploy key and prints
 #           nothing of it but the public half, which it adds to the repo with
 #           write access; and has the VM push the branch's first commit.
 # start     (--plan: copies the checkout's plan file beside the driver, for the
 #           dry run before setup; after setup the driver reads the checkout's own;
-#           every key of a plan line is the driver's, refused by its dry run)
+#           every key of a plan line is the driver's, refused by its dry run;
+#           --driver: which driver runs, gh200_model_session.sh unless named; the tile
+#           stage's keys are gh200_tile_session.sh's, a copy of the pinned driver)
 #           runs the driver's plan (--dry-run) on the VM as a record, then
 #           starts it detached: setup_vm.sh at this checkout's commit, then the
 #           session, pushing after every step. Nothing more goes over ssh.
@@ -67,6 +70,8 @@ WAIT_S="${MOE_VM_WAIT_S:-900}"
 POLL_S="${MOE_VM_POLL_S:-10}"
 #: The owner's driver (2026-09-26): the 2026-09-25 upgrade's exact build.
 DRIVER_PKG="nvidia-driver-580-server-open"
+#: The session drivers start may run (2026-10-14): the pinned one, and the tile stage's copy of it.
+SESSION_DRIVERS=(gh200_model_session.sh gh200_tile_session.sh)
 DRIVER_BUILD="580.105.08-0lambda0.22.04.1"
 MIN_DRIVER=580
 
@@ -164,8 +169,10 @@ cmd_prepare() {
     say "driver $have after the reboot"
   fi
   printf 'driver=%s\n' "$have" >> "$RUN/run.env"
+  local drivers=() d
+  for d in "${SESSION_DRIVERS[@]}"; do [[ -f "$ROOT/scripts/$d" ]] && drivers+=("$ROOT/scripts/$d"); done
   "$SCP" "${SSH_OPTS[@]}" "$ROOT/scripts/setup_vm.sh" "$ROOT/scripts/vm_results_push.sh" \
-    "$ROOT/scripts/gh200_model_session.sh" "ubuntu@$IP:" >/dev/null
+    "${drivers[@]}" "ubuntu@$IP:" >/dev/null
   local name email out
   name="$(git -C "$ROOT" config user.name)"; email="$(git -C "$ROOT" config user.email)"
   out="$(vm bash vm_results_push.sh init --branch "$(printf %q "$BRANCH")" --run-id "$(printf %q "$RUN_ID")" \
@@ -193,6 +200,14 @@ cmd_start() {
   [[ "$sha" == "$(git -C "$ROOT" rev-parse HEAD)" ]] \
     || refuse "this checkout moved since prepare ($sha): the scripts on the VM are that commit's"
   ssh_opts
+  local drv="${DRIVER_ARG:-gh200_model_session.sh}" ok=0 d
+  for d in "${SESSION_DRIVERS[@]}"; do [[ "$drv" == "$d" ]] && ok=1; done
+  (( ok )) || refuse "--driver $drv: one of ${SESSION_DRIVERS[*]}"
+  [[ -f "$ROOT/scripts/$drv" ]] || refuse "--driver $drv: no scripts/$drv in $ROOT"
+  if [[ "$drv" != gh200_model_session.sh ]]; then
+    # prepare copied the drivers this commit has; a start naming another copies it now
+    "$SCP" "${SSH_OPTS[@]}" "$ROOT/scripts/$drv" "ubuntu@$IP:" >/dev/null < /dev/null
+  fi
   local model=()
   [[ -z "${MODEL:-}" ]] || { [[ "$MODEL" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || refuse "--model $MODEL: not a model name"; model=(--model "$MODEL"); }
   # --steps: the driver's own step list (e.g. `floor` for a floor-only session), passed as given
@@ -226,13 +241,14 @@ cmd_start() {
     done
     model+=(--plan "$PLAN_ARG")
   fi
-  vm bash gh200_model_session.sh --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
-    > "$RUN/driver-plan.txt" 2>&1 || true
+  vm bash "$drv" --dry-run --deadline "$DEADLINE" ${model[@]+"${model[@]}"} \
+    > "$RUN/driver-plan.txt" 2>&1 < /dev/null || true
   grep -q '^THE GH200 MODEL-TEST SESSION' "$RUN/driver-plan.txt" \
     || refuse "the driver's plan did not print on the VM: $RUN/driver-plan.txt"
   printf 'deadline=%s\nmodel=%s\n' "$DEADLINE" "${MODEL:-mixtral-8x7b}" >> "$RUN/run.env"
   [[ -z "${PLAN_ARG:-}" ]] || printf 'plan=%s\n' "$PLAN_ARG" >> "$RUN/run.env"
-  vm "nohup setsid bash gh200_model_session.sh --setup --commit $sha --repo https://github.com/$SLUG --deadline $DEADLINE ${model[*]+${model[*]}} >> gh200-driver.out 2>&1 < /dev/null & sleep 2; pgrep -f '[g]h200_model_session.sh --setup' >/dev/null && echo STARTED" \
+  printf 'driver_script=%s\n' "$drv" >> "$RUN/run.env"
+  vm "nohup setsid bash $drv --setup --commit $sha --repo https://github.com/$SLUG --deadline $DEADLINE ${model[*]+${model[*]}} >> gh200-driver.out 2>&1 < /dev/null & sleep 2; pgrep -f '[${drv:0:1}]${drv:1} --setup' >/dev/null && echo STARTED" \
     | grep -q STARTED || refuse "the driver did not start on the VM (read ~/gh200-driver.out there)"
   say "STARTED: setup_vm.sh at $sha, then the session; deadline $(date -u -r "$DEADLINE" +%FT%TZ 2>/dev/null || date -u -d "@$DEADLINE" +%FT%TZ)"
 }
@@ -290,7 +306,7 @@ cmd_forget() {
 }
 
 sub="${1:-}"; [[ -n "$sub" ]] && shift
-IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""; FLOOR_GROUPS_ARG=""; FLOOR_TREADS_ARG=""; PLAN_ARG=""
+IP=""; RUN_ID=""; BRANCH=""; DEADLINE=""; MODEL=""; STEPS_ARG=""; FLOOR_GROUPS_ARG=""; FLOOR_TREADS_ARG=""; PLAN_ARG=""; DRIVER_ARG=""
 while (( $# )); do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
@@ -302,6 +318,7 @@ while (( $# )); do
     --floor-groups) FLOOR_GROUPS_ARG="${2:-}"; shift 2 ;;
     --floor-treads) FLOOR_TREADS_ARG="${2:-}"; shift 2 ;;
     --plan) PLAN_ARG="${2:-}"; shift 2 ;;
+    --driver) DRIVER_ARG="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) refuse "unknown argument $1" ;;
   esac
