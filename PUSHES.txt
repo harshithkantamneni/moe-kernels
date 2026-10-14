@@ -16,3 +16,4 @@
 2026-10-14T02:16:09Z timed (unit 14/15 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
 2026-10-14T02:18:13Z bytes: G=8 page exit 0
 2026-10-14T02:18:23Z bytes (unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8): exit 0 (2 min)
+2026-10-14T02:18:25Z the session ended: driver exit 0

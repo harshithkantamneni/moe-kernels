@@ -138,3 +138,4 @@
 2026-10-14T02:18:21Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/summary.json)
 2026-10-14T02:18:21Z bytes END: exit 0 after 2 min [unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8]
 2026-10-14T02:18:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:18:24Z driver end: exit 0
