@@ -109,3 +109,12 @@
 2026-10-14T02:08:25Z timed: 2026-10-14T02:08:20Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hista78973617-32bc794a
 2026-10-14T02:08:25Z timed END: exit 0 after 3 min [unit 12/15 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-14T02:08:26Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:08:28Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 13/15 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 57 min left)
+2026-10-14T02:08:28Z timed: declared-copies 9 on every page of this unit
+2026-10-14T02:08:28Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, deepest tread 4, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:08:29Z timed: G = 8 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:12:16Z timed: P2 locked_r3 exit 0
+2026-10-14T02:12:16Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:12:16Z timed: 2026-10-14T02:12:10Z G=8 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 220 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0a131f4a19-49984b34
+2026-10-14T02:12:16Z timed END: exit 0 after 4 min [unit 13/15 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:12:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
