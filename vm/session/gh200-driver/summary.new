@@ -1,2 +1,3 @@
 prelude    exit 0 after 0 min [unit 1/15 -]
 calibrate  exit 0 after 0 min [unit 2/15 mixtral-8x7b r7]
+timed      exit 0 after 14 min [unit 3/15 mixtral-8x7b ska histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
