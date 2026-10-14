@@ -1,0 +1,4253 @@
+{
+ "registered": "2026-10-14, before any decode-stage page",
+ "name": "2026-10-14-decodeC-cal-gh200",
+ "status": "REGISTERED BEFORE ANY PAGE",
+ "design": "design-decode DESIGN.md (2026-10-14, design only, read-only against 80514a6) and the owner's decisions of 2026-10-14: DD1 NATIVE alone certifies, SHARED's declaration arm (DECL) an optional lever on CAL models; DD2 vLLM's naive path (T 1 to 3) in scope; DD3 a summary-statistics-only extraction at B 1 to 128, or the design's fallback (rental 5's fitted shapes extrapolated) when the raw traces are unavailable, registered; DD4 the multi-call CUDA graph (GRR) is the primary timer, a one-call graph (GR1) the control; DD5 provisional bars rms <= 3%, worst <= 8%, |mean| <= 1.5%; DD6 decode runs after the tile stage (built now, rented after tile rental B)",
+ "tool": "scorer scripts/scoring/decode/score_cal.py (dcommon: fit_and_select, g3d, gd2_band, gd3, stop_rule); pages scripts/decode_synth.py; model scripts/r3_timing_model_v4d.py",
+ "what": "the decode stage's CAL rental on OLMoE-1B-7B and Mixtral-8x7B: v4d's three CAL constants and its rho selection, the instruments' agreement (GD2, GD3), G3-D, the DECL lever, the counter pages, the replicate (sigma_page and the blind bars), and the STOP rule for the blind rental",
+ "units": [
+  {
+   "label": "dm",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 17
+  },
+  {
+   "label": "dm",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 16
+  },
+  {
+   "label": "dc",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-ctl.json",
+   "step": "r3decode",
+   "inst": "GR1",
+   "drop": "nodrop",
+   "est_min": 9
+  },
+  {
+   "label": "dc",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-ctl.json",
+   "step": "r3decode",
+   "inst": "GR1",
+   "drop": "nodrop",
+   "est_min": 9
+  },
+  {
+   "label": "de",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-e240.json",
+   "step": "r3decode",
+   "inst": "E240",
+   "drop": "e240",
+   "est_min": 6
+  },
+  {
+   "label": "dn",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-ctl.json",
+   "step": "decodebytes",
+   "inst": null,
+   "drop": "ncu",
+   "est_min": 5
+  },
+  {
+   "label": "dn",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-ctl.json",
+   "step": "decodebytes",
+   "inst": null,
+   "drop": "ncu",
+   "est_min": 6
+  },
+  {
+   "label": "dd",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-decl.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "decl",
+   "est_min": 5
+  },
+  {
+   "label": "dd",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-decl.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "decl",
+   "est_min": 5
+  },
+  {
+   "label": "dr",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "rep",
+   "est_min": 17
+  }
+ ],
+ "drop_order": "last first: rep, decl, ncu, e240; every main and ctl unit is nodrop",
+ "census": {
+  "tiles": [
+   "16x64x128w4s4",
+   "32x64x128w4s3",
+   "32x128x64w4s3",
+   "64x128x64w4s3"
+  ],
+  "models": [
+   "olmoe-1b-7b",
+   "mixtral-8x7b",
+   "phi-3.5-moe",
+   "qwen1.5-moe-a2.7b",
+   "jetmoe-8b",
+   "deepseek-v2-lite",
+   "granite-3.0-3b-a800m"
+  ],
+  "rule": "the tile stage's tile_census.py, compile only; its occupancy replaces the shared-memory rule in v4d (tcommon.use_census); a path mismatch is a STOP"
+ },
+ "pages": {
+  "dir": "docs/registered/2026-10-14-decode-pages",
+  "files": {
+   "olmoe-1b-7b-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json",
+    "sha256": "92c27e4c581295055564a91b0e92f8ca5db5df85dd8901c612cf5d49d0bd23f3",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A8",
+      "T": 1,
+      "counts_sha256": "381ab77977b0690b3cebd9264fedc4fb0cbdf7f263ada0c7b64ee6924fef968e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "fd0951b1158140d8401457258a93efb71e0e99c16b365021cd6c9f3f4ba49fe1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "3f8cc4a873f04aade9294e3eb38063b411bf9196ecfe0d3a0fddc99d0fd120d1",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A11",
+      "T": 2,
+      "counts_sha256": "d36b5d36ed17d7f3b4e3b21b0091a4de1a354c77852bd7a39b5d47f4bdff3c1a",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A13",
+      "T": 2,
+      "counts_sha256": "f69f66d17104246e20b381ea1aba3ada458fe046fe706710d860e49422de59cf",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A16",
+      "T": 2,
+      "counts_sha256": "725a18b75fb16a46872e92decb12a759126c0e7d38ca14cf0e6bc2bde0a59997",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "9b2997d4cf6305c67711af77b0d96dc3f1f24ba4ba9032d37ab0cd5bea0de378",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "5bc048af8560e1e1689b16665c6ade2f25c074dcaaac364b8c3c0ad5fa78c9e6",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A16",
+      "T": 4,
+      "counts_sha256": "739e5dee90ce02c8b9f80d205cc74077c9c2fe8639d083a7a63f2d92c69cada6",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A24",
+      "T": 4,
+      "counts_sha256": "19ff067905c3c8a891c62073b95ce97651fc04d77c364be0c22e676b7be76031",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A32",
+      "T": 4,
+      "counts_sha256": "7b49c8d97e094ebdf2b13b76862a93a2daa0cbdb72b1c93b99ce96065d2b3caa",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "496b904549a19ed5261d7be0d639793a603fe4e61e5207e714efa707b9a1581d",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "8e83af620a436fc39e5d26f5ad64d3d21b4a93d41e57dabdc3d3bf53a1419130",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T4",
+      "T": 4,
+      "counts_sha256": "26d5bd3d15227d2dee75d26ff4a6c497213a3f963ad32b2c703b654420ebf130",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "4c3609a59121b2b0fc14f469c3c5fc96ae482464db64280976794549f4174f96",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A27",
+      "T": 8,
+      "counts_sha256": "fc070b508d263c626649f2b8bf5899da7dccd001b8523b2bacb1b3cc0acbe38d",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A45",
+      "T": 8,
+      "counts_sha256": "5fa877fa572ce3f577da1c01e64ddf1edebd72799f1d2a1b3cd2ae1644006ff5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A64",
+      "T": 8,
+      "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T8",
+      "T": 8,
+      "counts_sha256": "05f7b317c08be0de3a9ecc4e4ddc330f6be5c591e627332e2283e4307c4d7d8d",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "7eb087db778ee6694d2a3ad472deee803a733c6305c487eedbe948c463f81a39",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A27",
+      "T": 16,
+      "counts_sha256": "f09dec225b0ced6ffa0f7442f54a9a0ea6afc9135267216b38fba65a41573b1f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A45",
+      "T": 16,
+      "counts_sha256": "fe725fd7b21c777a46b7ad12d72d569dcc5a4dad45d0facb274cd9c08ee5dfc7",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A64",
+      "T": 16,
+      "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "42ad03810cc66d7837170e8349d7c84fbd4dfe4ce3ff94c001b9135bd9bd622b",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "ac1de53d3a5551d17b3581b04c9507fa77cf306e98b4e4cfefb6b9d59ac88ed1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T16",
+      "T": 16,
+      "counts_sha256": "0a38f7c116fbbd7bb301a92035f2dda6a386036410183b8c83ca0fa5108a307c",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "90b8267d482f51080e7e7caf92a84300d8168f7099335c158332d940d1534ff3",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A27",
+      "T": 32,
+      "counts_sha256": "b1fae91b12ccb5f689bc6639396a57594c6ac69d0cbdda8e018b9f841a66514d",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A45",
+      "T": 32,
+      "counts_sha256": "5fc881c4737f47567a9cfbb74ee6a1cc54267893882751d757e66e3f325db5d0",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A64",
+      "T": 32,
+      "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T32",
+      "T": 32,
+      "counts_sha256": "667a1c343ad12af708cb2619c08ae88e92cbe608e7a57a893b12c8b1452d4a80",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "936fa3103ea9faf82c398f6f44a93349c879af794e4a6e2aa19340218b86d01a",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A27",
+      "T": 64,
+      "counts_sha256": "ed34710d4b6172839b4d0352d1185c0e31bff0d2f67d3d2612cf98cead0c4856",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A45",
+      "T": 64,
+      "counts_sha256": "38b7dec08ae94c1b6863d36d7c14760faaf40aae13c7bd62de73999fae4df7a1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A64",
+      "T": 64,
+      "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "a6299574e983959cb7315203e17f0266291aaeda692186d87c2e4e7ee7f943f8",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "dab014c3ffe62b784fe4c008c7fa816d59b49ba08d9ac2a267f198955d97af49",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "2a98dde3abd10d83aae11cd2e70c078822b85c60732ef26fd521d0d7ae6b6ed4",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A27",
+      "T": 96,
+      "counts_sha256": "6c1f09b7d523697bd7b969852a2a1fe2b96666a432a8ae6cb9a33e8dab7e0483",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A45",
+      "T": 96,
+      "counts_sha256": "7030de8f12df3ff9bf387fac1eb9410eb9856d2954eabf2786cbe15575cf83dd",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A64",
+      "T": 96,
+      "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "529f72191d1e2a4f762adeeb66c16f24078b9ca2f711ba5ef16e5f9dad0031ef",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "51c9c42ab12c49b667d2096fb18510e54751dc2e87cc7882e53f817e4d74163c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A27",
+      "T": 128,
+      "counts_sha256": "97c59737776a3728b879764198a95c2722bed0a1312ab82229456e6dd17d98b5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A45",
+      "T": 128,
+      "counts_sha256": "52f86d578280efd321eaf4c4b9ecd96158c2381601f847e68a48c3f31f39c526",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A64",
+      "T": 128,
+      "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "mixtral-8x7b-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json",
+    "sha256": "c1320600307128d1932445006ea3acbb457ff8bdefdb06578283d07017467ffd",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A2",
+      "T": 1,
+      "counts_sha256": "253ff23b9516b32e7ce49150f62b5b3775681175ef0e49ac37b1234d17847a67",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "8b538013fc2e24005fcd5ca673f013e611ba9dadb6ebccd1715cdf4116fe104f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A2",
+      "T": 2,
+      "counts_sha256": "f5255c6400d937fb2c7cae2c02c7c1bdb72e211095dd4864b2302aea4b3c2895",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A3",
+      "T": 2,
+      "counts_sha256": "c6aa4040a176e34b8d2b2f1125ef12fae28a18d642cb9f3ae45034e13a80d7a2",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "275ca98ac7ce3e8ec597f11a5afe06c11f50c588d5277787e2e7f11729a6d460",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "0367fc81edfd90be4d890b22821c91b92870006be93a221d487f941e0649128d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A2",
+      "T": 4,
+      "counts_sha256": "482f365f32e10f4cd555430ea652f897e106a1625bb8c2c8fd6db70ec180a7ea",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A4",
+      "T": 4,
+      "counts_sha256": "93e771f360399bce43d67e1e201babe3767a577ed9de0cbcae3f10c76fb632a9",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A6",
+      "T": 4,
+      "counts_sha256": "9d0ee2468f6ac2080a3d6d4866a0c8b4e6e6eed4699cfb6501213e8b30ec0b9e",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T4",
+      "T": 4,
+      "counts_sha256": "17e64fc23209ff707d2462d30a7eb646a1bf98089b675a477b833827b1df3087",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A2",
+      "T": 8,
+      "counts_sha256": "6559371c0d62f29680f4fcd1e7aa4bb08a82e892d26d732a8b48c32e7b24fdba",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A4",
+      "T": 8,
+      "counts_sha256": "dbcb61d8be2cdbf297a77b857ba4f99d928f914d7af6a51020f0ef24051e7a37",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A6",
+      "T": 8,
+      "counts_sha256": "51db11970825f306004982eb910592c860352a2387ec4bf7330f5b5038cf2e65",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T8",
+      "T": 8,
+      "counts_sha256": "219a9adb2f8d89e7310522319c997e037eca7770b9ee37b0d198d1c0718d5340",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A2",
+      "T": 16,
+      "counts_sha256": "9102afde8653741e5dc07e580b7bd38455419c5a53fde9494977269e40fb0fd9",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A4",
+      "T": 16,
+      "counts_sha256": "e23eaa5ce7238a2442e8c5e254a6e3f78ec19a22b132f57033482bf9c2c9e2b0",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A6",
+      "T": 16,
+      "counts_sha256": "3a7486d91387d7acc12fbab39ecfe820ef440811c6ed962daec6d7089be753c0",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "87ae52f91d993510d3ba97ab61e9ea63966d44e9838111859f3a10a427006aae",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T16",
+      "T": 16,
+      "counts_sha256": "650e5448de5a76e6fc256d8c3d4b99cb3302f36197d1a0ed2a1757695ba65675",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A2",
+      "T": 32,
+      "counts_sha256": "8f40d61b99937c6200ef289dffd3fada95376ccf865d22f2b13b3dc6ff8bb7c7",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A4",
+      "T": 32,
+      "counts_sha256": "ee9776002578df8bc34652598546973c48f42fd7baf61f9024923aefb64d938d",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A6",
+      "T": 32,
+      "counts_sha256": "c8063e86155e0b8bd6d650e37377721352e5dfb84a764251ce5157986a1e7ca8",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T32",
+      "T": 32,
+      "counts_sha256": "52be2821046069cbc4016c7e57fe62fca7891688880e8d67efebd07e65f48340",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A2",
+      "T": 64,
+      "counts_sha256": "17c38b625fb1d02521dd4762880e4c87969cafae668ab4f6246cb45e6e838e74",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A4",
+      "T": 64,
+      "counts_sha256": "520899c5c3eadc0b3ba4690277efb53d582e3116c7a511b267319455f32eafa1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A6",
+      "T": 64,
+      "counts_sha256": "b615104a242575757b55ee55012af5d50346aacf5164a2647ea5aaf233f1d27f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "20592ddc3ffe20daeebcf5ab2110c34457de5bfd05fbeacf067a7c9f8436bbcd",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A2",
+      "T": 96,
+      "counts_sha256": "1759edda5ab355c232aed75a6b5cb455220b4debacd589de627ece80e6124e06",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A4",
+      "T": 96,
+      "counts_sha256": "e0ab75bef40a3864cc58f3137bb78e4b2cb582863a8c8a531f942531df9563ec",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A6",
+      "T": 96,
+      "counts_sha256": "a076f32356cb6fdbb90f172e6b23c04d9e85401180907eb72e42bc139c8bfa36",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A2",
+      "T": 128,
+      "counts_sha256": "ae5d33b4d1bc52211061a06daf6ea50f9a900b415943f5f05073793ddc4ff1fe",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A4",
+      "T": 128,
+      "counts_sha256": "7458ff354d493e713047530905eccba68e78cdde21b9aaf75af53cf1beb41f7d",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A6",
+      "T": 128,
+      "counts_sha256": "b3818575258510e34baff6069436e664b340bbdfa65d0fd848a7ec7f1a4fc91f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "olmoe-1b-7b-ctl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json",
+    "sha256": "04cef1e719baa42d256476a3440bd4a2892980f7be6ea6d9067633f61593d32b",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A8",
+      "T": 1,
+      "counts_sha256": "381ab77977b0690b3cebd9264fedc4fb0cbdf7f263ada0c7b64ee6924fef968e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "fd0951b1158140d8401457258a93efb71e0e99c16b365021cd6c9f3f4ba49fe1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A16",
+      "T": 2,
+      "counts_sha256": "725a18b75fb16a46872e92decb12a759126c0e7d38ca14cf0e6bc2bde0a59997",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "3f8cc4a873f04aade9294e3eb38063b411bf9196ecfe0d3a0fddc99d0fd120d1",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "9b2997d4cf6305c67711af77b0d96dc3f1f24ba4ba9032d37ab0cd5bea0de378",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A32",
+      "T": 4,
+      "counts_sha256": "7b49c8d97e094ebdf2b13b76862a93a2daa0cbdb72b1c93b99ce96065d2b3caa",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "5bc048af8560e1e1689b16665c6ade2f25c074dcaaac364b8c3c0ad5fa78c9e6",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "8e83af620a436fc39e5d26f5ad64d3d21b4a93d41e57dabdc3d3bf53a1419130",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A64",
+      "T": 8,
+      "counts_sha256": "ba1e52e365a6fa132081a7bef3fe2800e0a5a907bbdcb8f183b7f1783905ea31",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "4c3609a59121b2b0fc14f469c3c5fc96ae482464db64280976794549f4174f96",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "e5c9db5cbfac9cf78cc1778be4c955a7b6af3cae471006bb841121419af5f3b0",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A64",
+      "T": 16,
+      "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "7eb087db778ee6694d2a3ad472deee803a733c6305c487eedbe948c463f81a39",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "ac1de53d3a5551d17b3581b04c9507fa77cf306e98b4e4cfefb6b9d59ac88ed1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A64",
+      "T": 32,
+      "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "90b8267d482f51080e7e7caf92a84300d8168f7099335c158332d940d1534ff3",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "f0e30e4d545e926620b6d1c628ad07b8718d86d098b87d93a0e5353ea97baac2",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A64",
+      "T": 64,
+      "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "936fa3103ea9faf82c398f6f44a93349c879af794e4a6e2aa19340218b86d01a",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "dab014c3ffe62b784fe4c008c7fa816d59b49ba08d9ac2a267f198955d97af49",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A64",
+      "T": 96,
+      "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "2a98dde3abd10d83aae11cd2e70c078822b85c60732ef26fd521d0d7ae6b6ed4",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "529f72191d1e2a4f762adeeb66c16f24078b9ca2f711ba5ef16e5f9dad0031ef",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A64",
+      "T": 128,
+      "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "51c9c42ab12c49b667d2096fb18510e54751dc2e87cc7882e53f817e4d74163c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "20e3473c19f4c264561d147494dee88369c6decbd86596f9804fae88cae48627",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ]
+   },
+   "mixtral-8x7b-ctl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json",
+    "sha256": "e9e6747db12d9663bc11948c14d61c3cf917809955f72bfca386e4458ec696ab",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A2",
+      "T": 1,
+      "counts_sha256": "253ff23b9516b32e7ce49150f62b5b3775681175ef0e49ac37b1234d17847a67",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "8b538013fc2e24005fcd5ca673f013e611ba9dadb6ebccd1715cdf4116fe104f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "275ca98ac7ce3e8ec597f11a5afe06c11f50c588d5277787e2e7f11729a6d460",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A2",
+      "T": 2,
+      "counts_sha256": "f5255c6400d937fb2c7cae2c02c7c1bdb72e211095dd4864b2302aea4b3c2895",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "0367fc81edfd90be4d890b22821c91b92870006be93a221d487f941e0649128d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A2",
+      "T": 4,
+      "counts_sha256": "482f365f32e10f4cd555430ea652f897e106a1625bb8c2c8fd6db70ec180a7ea",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A2",
+      "T": 8,
+      "counts_sha256": "6559371c0d62f29680f4fcd1e7aa4bb08a82e892d26d732a8b48c32e7b24fdba",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A2",
+      "T": 16,
+      "counts_sha256": "9102afde8653741e5dc07e580b7bd38455419c5a53fde9494977269e40fb0fd9",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A2",
+      "T": 32,
+      "counts_sha256": "8f40d61b99937c6200ef289dffd3fada95376ccf865d22f2b13b3dc6ff8bb7c7",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A2",
+      "T": 64,
+      "counts_sha256": "17c38b625fb1d02521dd4762880e4c87969cafae668ab4f6246cb45e6e838e74",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A2",
+      "T": 96,
+      "counts_sha256": "1759edda5ab355c232aed75a6b5cb455220b4debacd589de627ece80e6124e06",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A2",
+      "T": 128,
+      "counts_sha256": "ae5d33b4d1bc52211061a06daf6ea50f9a900b415943f5f05073793ddc4ff1fe",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ]
+   },
+   "mixtral-8x7b-e240.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json",
+    "sha256": "4592840f337ca20131921847135a8ff94fcb38b2c195e155466503dd86df2a49",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ]
+   },
+   "olmoe-1b-7b-decl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json",
+    "sha256": "eed346a79afcf8850c8305f17bb942d25d8272234a566c950008695093f060d4",
+    "shuffle_seed": 20261014,
+    "decl_copies": 9,
+    "cells": [
+     {
+      "label": "L-T16-A64",
+      "T": 16,
+      "counts_sha256": "e87f401f581f58b11782ec39b5c53427f8ad7f15f3a0a82c367f626747d00cb0",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A64",
+      "T": 32,
+      "counts_sha256": "6380508c114457d6de07b96413a804755262dda074b078dd362bcd5cbef4ee54",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A64",
+      "T": 64,
+      "counts_sha256": "ae1eeef26c1a9f56fc53a03e4f8a309e9102fc22fae8746e21bab73860a78b5d",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A64",
+      "T": 96,
+      "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A64",
+      "T": 128,
+      "counts_sha256": "eb520d9e4e041941ec8dbf3665a8c1bc138e087f02580cb3e1385526283c9e68",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     }
+    ]
+   },
+   "mixtral-8x7b-decl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json",
+    "sha256": "74dfe3957a403befb5889ab03d45af4277c4ae8166198e06c65bf1769cf67330",
+    "shuffle_seed": 20261014,
+    "decl_copies": 9,
+    "cells": [
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "BALANCED",
+      "arms": [
+       "native",
+       "decl"
+      ],
+      "shuffle": true
+     }
+    ]
+   }
+  },
+  "label": "SYNTHETIC (decode_synth.py); DW cells EXTRAPOLATED"
+ },
+ "instruments": {
+  "GRR": "one CUDA graph of `calls` calls, call j on copy j mod R, no flush; per call = replay / calls (launch_floor.graph_call, launch_floor.mirror_time_cell at duty 0.25, lock 1710)",
+  "GR1": "a one-call graph, the 240 MiB flush outside it",
+  "E240": "the eager call, the 240 MiB flush",
+  "timing": {
+   "duty": 0.25,
+   "warmup_ms": 100.0,
+   "cell_budget_ms": 100.0,
+   "trials": 3,
+   "repeats": 9,
+   "lock_mhz": 1710
+  }
+ },
+ "model": {
+  "name": "v4d (scripts/r3_timing_model_v4d.py) over v4 and the pinned v3 machinery",
+  "formula": "T = T0_GR + s_path + sum_g [gemm_g + dead_g] + B_other / bw",
+  "card_constants": {
+   "c_ns": 202.54764415793517,
+   "bw_gbps": 3597.800853079132,
+   "T0_eager_ms": 0.04323024982488314,
+   "s_small_eager_ms": 0.012986935170298423,
+   "s_block_eager_ms": -0.0070686230486082914,
+   "k_w": 0.5,
+   "sms": 132,
+   "source": "rental 6's CAL 8x7B v2 fit (scripts/scoring/rental6/reg6.pricer().f2.x)"
+  },
+  "card_constants_label": "SEEN (rental 6's CAL 8x7B v2 fit)",
+  "cal_constants": [
+   "T0_GR_ms",
+   "s_naive_GR_ms",
+   "s_block_GR_ms"
+  ],
+  "fit": "v4d.fit_constants: weighted least squares on the relative error over the valid NATIVE cells of the two CAL main pages (the replicate excluded), cells the wgmma tile cannot price excluded",
+  "rho_forms": {
+   "fixed": "11.48 GB/s per resident CTA (v3's CORES rho)",
+   "scaled": "x the tile's weight bytes in flight per CTA over R3's (16x64x128 s4: 2.0)"
+  },
+  "rho_selection": "the lower CAL rms on sub-wave cells; fixed unless scaled's rms is lower by 0.1 percentage points of rms (ABSOLUTE, 0.001)",
+  "fill": "FILL0: padded and masked rows cost 0 (G3-D fill tests it)",
+  "tile_stage": "v4's finalised Params (tileA/finalise.selections), census occupancy per decode tile; REQUIRED: score_cal.py refuses without --tile-scores",
+  "struck_rivals": "L2-survival and FILL-r, struck before any page (build-decode review 5)"
+ },
+ "gates": {
+  "V-BIN": "bincount(ids) == counts, k distinct experts per token (feasible, realize_counts); a failure refuses the cell",
+  "V-ALIGN": "the spy's readback of one eager call (sorted ids None iff naive; num_tokens_post_padded; sentinel count P; expert_ids[:L] ascending; sorted length the capped buffer; the launch grid fused_moe_grid's; USE_TD False) equals r3_decode.expected_readback; a mismatch refuses the cell; any refused CAL cell is a STOP",
+  "GD5": "the config the kernel received is tile_resolve.default_config(T, E), vLLM finds no tuned file and no override",
+  "GD4": "every captured call's output equals the eager output bit for bit; a failure VOIDS the page. It covers the CHECK-PHASE capture only: each timed repeat recaptures the same calls on the same tensors and is not compared again",
+  "COPIES": "(GRR) calls 0..R-1 are each spied in the check phase and must read R distinct w1 copies (r3_decode.check_copies); a failure refuses the cell. At R = 1 the call is cold by volume only (see coldness)",
+  "GD1": "GPU per replay >= 3 x the host enqueue per replay (launch_floor's host probe, before and after); a failing cell is excluded (G2)",
+  "GD2": "GR1 - GRR per call on matched cells; the CAL band [p05 - 1 us, p95 + 1 us] is frozen into the blind registration; a STOP when CAL's median is outside [-1, 10] us, the band is wider than 8 us, or the band leaves [-2, 11] us; a blind GR1 page with over 20% of its cells outside the band VOIDS that model's GRR page",
+  "GD3": "E240 - GR1 in [0, 10] us on cells GPU-bound eager (C + F240 > 1.25 H): DESCRIPTIVE",
+  "G1": "rental 7's r7-median-run3 rebuilt from cells.csv (6 of 9 clean; the 10% non-clean cap); a FAIL puts the page out (NOT SCORED)",
+  "G2": "GD1, and the duty timer's host flag",
+  "G4": "the cell's clock >= 1705 MHz",
+  "G5": "the page's decode-page sha256 and every row's counts sha256 are the registered ones",
+  "V-SRC": "the VM's installed fused_moe.py and moe_align_block_size.py are v0.27.1's bytes (moe/instrumented/UPSTREAM_DECODE.json); else the page is refused before any cell"
+ },
+ "coldness": {
+  "olmoe-1b-7b": {
+   "R": 3,
+   "calls_per_graph": 9,
+   "A_min": 8,
+   "W_e_MiB": 12.0,
+   "reuse_distance_MiB": 288.0,
+   "l2_MiB": 60,
+   "how": "COLD BY ROTATION: call j reads copy j mod 3 (COPIES checks 3 distinct addresses); 288 MiB between two reads of one copy"
+  },
+  "mixtral-8x7b": {
+   "R": 1,
+   "calls_per_graph": 8,
+   "A_min": 2,
+   "W_e_MiB": 336.0,
+   "reuse_distance_MiB": 672.0,
+   "l2_MiB": 60,
+   "how": "COLD BY VOLUME ONLY: R = 1, every call reads copy 0; between two reads of a slab the call streams at least A_min x W_e = 672 MiB, 11x the L2"
+  }
+ },
+ "tests": {
+  "E1-CAL-IN-SAMPLE": {
+   "label": "IN-SAMPLE (the CAL constants are fitted on these cells)",
+   "rule": "e_dec on every valid NATIVE main-page cell at the selected rho, against the provisional bars; a FAIL is a STOP",
+   "bars": {
+    "rms_max": 0.03,
+    "max_abs": 0.08,
+    "mean_max": 0.015
+   }
+  },
+  "G3-D shuffle": "UNIFORM counts with rows shuffled (U-T) against unshuffled (US-T), T 8, 32, 128",
+  "G3-D label": "the same count multiset on another active set: MIN-T (experts 0..k-1) against L-T-A<k>, T 4, 16, 64",
+  "G3-D fill (FILL0, a model test)": "BALANCED cells of one A at two T in one tile band",
+  "G3-D margin": "max(0.3 us, 0.36% x the median reference time); TOST at 90%, clusters (model, T)",
+  "rep": "OLMoE's main page again: sigma_page = rms(rep / main - 1) / sqrt 2 over valid NATIVE pairs; the blind bars are tightened from it (dcommon.tighten), never loosened",
+  "DECL (DESCRIPTIVE)": "DECL - NATIVE per BALANCED cell at T >= BM against v4d's dead-CTA difference",
+  "BYTES-D (DESCRIPTIVE)": "the counter pages' dram__bytes_read per GEMM against v4d's read bytes"
+ },
+ "stop_rule": "STOP (the blind rental does not run) when any: a nodrop CAL unit not counted (missing, NOT SCORED, G1 FAIL or GD4 VOID); the fit NOT FITTED under both rho forms; the tile stage's selections missing or any valid CAL NATIVE cell NOT PRICED; E1-CAL-IN-SAMPLE fails the provisional bars; G3-D shuffle or label not EQUIVALENT; any CAL cell refused by V-ALIGN, GD5 or COPIES; GD2 FAIL (median outside [-1, 10] us, band over 8 us wide or leaving [-2, 11] us). Else GO. Refused and failed cells are taken out of G1's non-clean share before it is counted (dcommon.drop_dead_cells), so a refusal cannot fail the page",
+ "trace_statistics": {
+  "primary": "NOT RUN: rental 5's three routing logs are gone (scratchpad reanalysis/data empty on 2026-10-14, no copy under moe-kernels-work); the design's fallback is used and registered (owner decision DD3)",
+  "fallback": "rental 5's fitted DW shapes (synth_fit.json, fitted at B >= 256) EXTRAPOLATED to B 1 to 128 (coverage_stats.json, DW-T cells)",
+  "coverage_stats_sha256": "be3cc337f8cc131643c9123f7e707b0ba193c34b9606405d5195038df02d7435",
+  "finding": "the DW shapes cut coverage by at most about 9 points against uniform (OLMoE B 16 0.80 against 0.89); the ladder, not the trace draws, is the lever"
+ },
+ "upstream": {
+  "record": "moe/instrumented/UPSTREAM_DECODE.json",
+  "sha256": "098f8999afd2f3b4457df5f2612b85f888971af4480eb82c703da0386bccec2a",
+  "files": {
+   "fused_moe.py": "d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28",
+   "moe_align_block_size.py": "c3f7fc2087836f0160a32ab99ceb1d8f6e87c793679da34dd672e225cb7fa31b",
+   "moe_align_sum_kernels.cu": "72d1f17f7a5e3e3bdfce8ae8e62b97bd330c3d272973f3915b46e32984c6798d",
+   "utils.py": "09856c1e68a9069caaa5942e9e3d3effff847e8d213b877b7b5d8db981c30f64"
+  },
+  "design_check": "every decode rule of design-decode DESIGN.md sections 1 and 5 agrees with these lines: naive iff T k 4 <= E; max_num_tokens_padded = numel + E (BM - 1), capped at numel BM when numel < E; EM cut when A rows < BM; grid cdiv(EM, BM) x cdiv(N, BN); dead CTAs past num_tokens_post_padded; live tiles sum ceil(c_e / BM), expert_ids ascending; sentinel numel; small-batch at numel < 1024 and E <= 64; default tiles 16x64x128 w4 s4 (T <= 32), 32x64x128 w4 s3 (33..64), 32x128x64 w4 s3 (65..96), 64x128x64 w4 s3 (97..128), GROUP_SIZE_M 1. The fused_moe.py sha256 equals moe/instrumented/UPSTREAM.json's file_sha256 (design-r4's copy). One addition the design did not name: invoke_fused_moe_triton_kernel's USE_TD flag (resolve_moe_use_td, an environment switch); the spy records it and V-ALIGN requires it False"
+ },
+ "nominal": "DESIGN-NOMINAL: v4d at the tile stage's nominal wgmma constants (c_128 900, F_wg 520 / 979) and T0_GR 25 us, s 0; for scale, levers and power only",
+ "nominal_cells": [
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T1-A8",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.05965,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053308
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.05965,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053308
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T2-A8",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.063735,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.055871
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T2-A11",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.082318,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.067958
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T2-A13",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.089568,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 13,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 156.0,
+   "ms_nominal_scaled": 0.075208
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T2-A16",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.103426,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 192.0,
+   "ms_nominal_scaled": 0.086113
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.092873,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 15,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.080285
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.059772,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    768,
+    768
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053421
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T4-A16",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.103511,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 224,
+   "dead_ctas": [
+    512,
+    512
+   ],
+   "sub_wave": false,
+   "weight_MiB": 192.0,
+   "ms_nominal_scaled": 0.08619
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T4-A24",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.109963,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 24,
+   "L": 24,
+   "P": 352,
+   "dead_ctas": [
+    256,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 288.0,
+   "ms_nominal_scaled": 0.109963
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T4-A32",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.138233,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 32,
+   "L": 32,
+   "P": 480,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 384.0,
+   "ms_nominal_scaled": 0.138233
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.059772,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    768,
+    768
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053421
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.120563,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 400,
+   "dead_ctas": [
+    160,
+    160
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.120563
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "DW-T4",
+   "T": 4,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.106429,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 23,
+   "L": 23,
+   "P": 336,
+   "dead_ctas": [
+    288,
+    288
+   ],
+   "sub_wave": false,
+   "weight_MiB": 276.0,
+   "ms_nominal_scaled": 0.106429
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T8-A8",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.059934,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    1792
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053571
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T8-A27",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.120714,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 368,
+   "dead_ctas": [
+    1184,
+    1184
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.120714
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T8-A45",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.184322,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 45,
+   "L": 45,
+   "P": 656,
+   "dead_ctas": [
+    608,
+    608
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.184322
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T8-A64",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.251465,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 64,
+   "L": 64,
+   "P": 960,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.251465
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.170187,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 41,
+   "L": 41,
+   "P": 592,
+   "dead_ctas": [
+    736,
+    736
+   ],
+   "sub_wave": false,
+   "weight_MiB": 492.0,
+   "ms_nominal_scaled": 0.170187
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.170187,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 41,
+   "L": 41,
+   "P": 592,
+   "dead_ctas": [
+    736,
+    736
+   ],
+   "sub_wave": false,
+   "weight_MiB": 492.0,
+   "ms_nominal_scaled": 0.170187
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "DW-T8",
+   "T": 8,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.170188,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 41,
+   "L": 41,
+   "P": 592,
+   "dead_ctas": [
+    736,
+    736
+   ],
+   "sub_wave": false,
+   "weight_MiB": 492.0,
+   "ms_nominal_scaled": 0.170188
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T16-A8",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.060259,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    1920,
+    1920
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053872
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T16-A27",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.121015,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 304,
+   "dead_ctas": [
+    1312,
+    1312
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.121015
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T16-A45",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.184623,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 45,
+   "L": 45,
+   "P": 592,
+   "dead_ctas": [
+    736,
+    736
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.184623
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T16-A64",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.251766,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 64,
+   "L": 64,
+   "P": 896,
+   "dead_ctas": [
+    128,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.251766
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.060259,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    1920,
+    1920
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.053872
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.227029,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 57,
+   "L": 57,
+   "P": 784,
+   "dead_ctas": [
+    352,
+    352
+   ],
+   "sub_wave": false,
+   "weight_MiB": 684.0,
+   "ms_nominal_scaled": 0.227029
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "DW-T16",
+   "T": 16,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.198758,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 49,
+   "L": 49,
+   "P": 656,
+   "dead_ctas": [
+    608,
+    608
+   ],
+   "sub_wave": false,
+   "weight_MiB": 588.0,
+   "ms_nominal_scaled": 0.198758
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T32-A8",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.104711,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    1920,
+    1920
+   ],
+   "sub_wave": false,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.087273
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T32-A27",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.121616,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 176,
+   "dead_ctas": [
+    1568,
+    1568
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.121616
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T32-A45",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.185224,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 45,
+   "L": 45,
+   "P": 464,
+   "dead_ctas": [
+    992,
+    992
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.185224
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T32-A64",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.252367,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 64,
+   "L": 64,
+   "P": 768,
+   "dead_ctas": [
+    384,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.252367
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.248832,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 63,
+   "L": 63,
+   "P": 752,
+   "dead_ctas": [
+    416,
+    416
+   ],
+   "sub_wave": false,
+   "weight_MiB": 756.0,
+   "ms_nominal_scaled": 0.248832
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.248832,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 63,
+   "L": 63,
+   "P": 752,
+   "dead_ctas": [
+    416,
+    416
+   ],
+   "sub_wave": false,
+   "weight_MiB": 756.0,
+   "ms_nominal_scaled": 0.248832
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "DW-T32",
+   "T": 32,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.241768,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 61,
+   "L": 61,
+   "P": 720,
+   "dead_ctas": [
+    480,
+    480
+   ],
+   "sub_wave": false,
+   "weight_MiB": 732.0,
+   "ms_nominal_scaled": 0.241768
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T64-A8",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.084537,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    1984,
+    1984
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.084537
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T64-A27",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.123828,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 27,
+   "L": 27,
+   "P": 352,
+   "dead_ctas": [
+    1632,
+    1632
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.123828
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T64-A45",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.188086,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 928,
+   "dead_ctas": [
+    1056,
+    1056
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.188086
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T64-A64",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.255941,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1536,
+   "dead_ctas": [
+    448,
+    448
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.255941
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.084537,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    1984,
+    1984
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.084537
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.255941,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1536,
+   "dead_ctas": [
+    448,
+    448
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.255941
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T96-A8",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.114293,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 24,
+   "P": 0,
+   "dead_ctas": [
+    992,
+    992
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.114293
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T96-A27",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.125005,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 27,
+   "L": 27,
+   "P": 96,
+   "dead_ctas": [
+    944,
+    944
+   ],
+   "sub_wave": true,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.125005
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T96-A45",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.246271,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 672,
+   "dead_ctas": [
+    656,
+    656
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.228646
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T96-A64",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.257103,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1280,
+   "dead_ctas": [
+    352,
+    352
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.257103
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.257101,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1280,
+   "dead_ctas": [
+    352,
+    352
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.257101
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T128-A8",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.10156,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    1008,
+    1008
+   ],
+   "sub_wave": true,
+   "weight_MiB": 96.0,
+   "ms_nominal_scaled": 0.088099
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T128-A27",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.192464,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 27,
+   "L": 27,
+   "P": 704,
+   "dead_ctas": [
+    832,
+    832
+   ],
+   "sub_wave": false,
+   "weight_MiB": 324.0,
+   "ms_nominal_scaled": 0.156149
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T128-A45",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.193751,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 1856,
+   "dead_ctas": [
+    544,
+    544
+   ],
+   "sub_wave": false,
+   "weight_MiB": 540.0,
+   "ms_nominal_scaled": 0.193751
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "L-T128-A64",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.262969,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3072,
+   "dead_ctas": [
+    240,
+    240
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.262969
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.262975,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3072,
+   "dead_ctas": [
+    240,
+    240
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.262975
+  },
+  {
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.262975,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3072,
+   "dead_ctas": [
+    240,
+    240
+   ],
+   "sub_wave": false,
+   "weight_MiB": 768.0,
+   "ms_nominal_scaled": 0.262975
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T1-A2",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.3162,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.236169
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.3162,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.236169
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T2-A2",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.316298,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 28,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.236248
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T2-A3",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.381812,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 3,
+   "L": 3,
+   "P": 44,
+   "dead_ctas": [
+    448,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1008.0,
+   "ms_nominal_scaled": 0.319808
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T2-A4",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.447338,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.418024
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.381812,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 3,
+   "L": 3,
+   "P": 44,
+   "dead_ctas": [
+    448,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1008.0,
+   "ms_nominal_scaled": 0.319805
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T4-A2",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.316494,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    2688,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.236405
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T4-A4",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.447496,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 56,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.418174
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T4-A6",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.614612,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 88,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.614612
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.911864,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.831834
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.316494,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    2688,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.236405
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.614611,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 88,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.614611
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "DW-T4",
+   "T": 4,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.516395,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 5,
+   "L": 5,
+   "P": 72,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1680.0,
+   "ms_nominal_scaled": 0.516395
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T8-A2",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.316887,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 16,
+   "dead_ctas": [
+    3136,
+    448
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.23672
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T8-A4",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.447811,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 48,
+   "dead_ctas": [
+    2240,
+    320
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.418475
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T8-A6",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.614914,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 80,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.614914
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T8-A8",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.912189,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    448,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.832139
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.912232,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    448,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83215
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.912232,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    448,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83215
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "DW-T8",
+   "T": 8,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.846629,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 7,
+   "P": 96,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2352.0,
+   "ms_nominal_scaled": 0.766598
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T16-A2",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.317673,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.23735
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T16-A4",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.44844,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 32,
+   "dead_ctas": [
+    2688,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.419076
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T16-A6",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.615514,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.615514
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T16-A8",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.91284,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83275
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.317673,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.23735
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.912841,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83275
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "DW-T16",
+   "T": 16,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.91281,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.832742
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T32-A2",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.4497,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.420278
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T32-A4",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.4497,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.420278
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T32-A6",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.616717,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 32,
+   "dead_ctas": [
+    2688,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.616717
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T32-A8",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.91414,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.833973
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.914097,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83396
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.914097,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83396
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "DW-T32",
+   "T": 32,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.914155,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.83397
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T64-A2",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.453422,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.423855
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T64-A4",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.453422,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.423855
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T64-A6",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.62088,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 64,
+   "dead_ctas": [
+    2688,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.62088
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T64-A8",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.817901,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 128,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.817901
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.453422,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3584,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.423855
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.817898,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 128,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.817898
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T96-A2",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.748351,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 2,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.667626
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T96-A4",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.879316,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 4,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.820293
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T96-A6",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.748351,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.667626
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T96-A8",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.879316,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.820293
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.879316,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.820295
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T128-A2",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.623908,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 672.0,
+   "ms_nominal_scaled": 0.460853
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T128-A4",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.623908,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1792,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1344.0,
+   "ms_nominal_scaled": 0.460853
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T128-A6",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.754855,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 128,
+   "dead_ctas": [
+    1344,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2016.0,
+   "ms_nominal_scaled": 0.629235
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "L-T128-A8",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.88663,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.827364
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.88663,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.827364
+  },
+  {
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.88663,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    896,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2688.0,
+   "ms_nominal_scaled": 0.827364
+  }
+ ],
+ "power": {
+  "draws": 4000,
+  "seed": 20261014,
+  "cells": 103,
+  "sigma_cell": 0.0018,
+  "sigma_cell_under_50us": 0.0036,
+  "p_holds": {
+   "the model is the truth": 1.0,
+   "T0_GR off by +5 us (the riskiest assumption)": 0.0,
+   "T0_GR off by +1 us": 1.0,
+   "+1% everywhere": 1.0,
+   "+2% everywhere": 0.0,
+   "+5% on sub-wave cells": 0.0
+  },
+  "computed": "CPU float64 (numpy)",
+  "label": "DESIGN-NOMINAL predictions; sigma ASSUMED"
+ },
+ "rental": {
+  "units_min": 106,
+  "wall_min": 141,
+  "cost_usd": 5.38,
+  "rate": "gpu_1x_gh200 at $2.29/h",
+  "rule": "units plus prelude 3 and calibrate 2 (and the CAL census 6), x 1/0.84 (rentals 4 to 7) plus 15 min boot and setup"
+ },
+ "labels": {
+  "time": "IN-SAMPLE (CAL)",
+  "pages": "SYNTHETIC",
+  "trace draws": "EXTRAPOLATED",
+  "card constants": "SEEN",
+  "everything published": "SEEN"
+ },
+ "scorer_ambiguities": {
+  "1 'each relative error floored at 1 us'": "read as: an absolute error at or under 1 us counts as 0; otherwise e = (pred - meas) / meas (v4d.rel_err)",
+  "2 T0_GR + s_path": "s_small_GR is folded into T0_GR: every cell has exactly one path, so the three CAL constants are T0_GR (the small-batch constant), s_naive_GR and s_block_GR (offsets); block-scan occurs on OLMoE at T 128 in CAL, so s_block_GR is fitted, not assumed",
+  "3 the wgmma decode tile (T 97..128, 64x128x64 w4)": "v4d prices it with the tile stage's finalised v4 constants (c_128, F_wg, accounting, F form, census occupancy; scripts/scoring/tileA/finalise.selections). With none, those cells are NOT PRICED and out of E1-DEC and the fit",
+  "4 the hot expert's second tile": "priced at a full slab re-read (sigma 1). The L2-survival rival and the FILL-r rival are STRUCK before any page (build-decode review 5): neither is priced; G3-D fill is FILL0's test and MINCOVER past BM shows the second tile's cost as a residual",
+  "5 naive repeats": "vLLM launches the naive path token-major (expert_ids = topk_ids.view(-1)); v4d lists the rows expert-ascending, which leaves the read total and the throughput sum unchanged and moves only the window means and the tail set. A repeated expert's slab is fetched once (the later CTA in launch order hits L2); NAIVE-NODEDUP is the rival",
+  "6 G3-D clusters": "(model, T) for shuffle and label, (model, tile band) for fill; d in microseconds net of v4d's own predicted difference",
+  "7 GD2's void": "a blind GR1 page outside the band voids the model's GRR page (the instruments disagree on that model, so the primary cannot be trusted there)",
+  "8 GRR rotation": "R = ceil(240 MiB / (A_min W_e)) copies per page, A_min the page's least coverage; calls per graph the least multiple of R at or over 8",
+  "9 CERTIFIED": "a blind model is CERTIFIED when its own E1-DEC bar holds and the pooled bar holds",
+  "10 the rho margin": "ABSOLUTE: scaled is selected only when its sub-wave rms is lower than fixed's by at least 0.001, i.e. 0.1 percentage points of rms (not 0.1% of fixed's rms)",
+  "11 an unfitted offset": "never 0: a path with no valid CAL row has no offset, its cells are NOT PRICED, and any NOT PRICED CAL cell is a STOP",
+  "12 NOT PRICED is never silent": "the CAL scorer REFUSES without --tile-scores (the tile stage's selections; every CAL main page holds T 97..128 cells), STOPs on any NOT PRICED CAL cell, and the blind scorer lists NOT PRICED cells per model",
+  "13 the pooled blind bar": "computed over the models that survive (not voided by GD2 or G3-D, with at least one valid priced cell); the score names them (pooled_over)",
+  "14 blind G3-D INCONCLUSIVE": "a TOST that is NOT EQUIVALENT (the interval leaves the margin, whether by a shift or by width) voids the model's cells; NOT SCORED (under 2 clusters) voids nothing",
+  "15 the 1 us floor": "kept as a STEP and stated: |pred - meas| <= 1 us counts 0, above it the full relative error counts (at a 12 us cell an 8% error, 0.96 us, counts 0; 9%, 1.08 us, counts 9%)",
+  "16 sub-wave": "a cell is sub-wave when some GEMM's live CTAs are under SMs x its occupancy, the occupancy the census's (tile rental A's census score) where it exists, else the shared-memory rule: the rho selection's cell set moves with the census"
+ },
+ "seen_data": [
+  "every published page (rentals 1 to 7) is SEEN",
+  "rental 6's CAL fit (c, bw, eager T0)",
+  "rental 2's host enqueue 0.33 to 0.36 ms per R3 call (GD1's motivation)"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/r3_decode.py": "f043e438d50287162bfb55644b7b1998cfffad8d50d50fcf1dad4afb189c1db8",
+  "scripts/decode_synth.py": "45fa76a8a1edfa72351f90505a6a93214138ac5c709165f73455b3032e33ffbd",
+  "scripts/r3_timing_model_v4d.py": "52a8f6fefcc93d3f0bc2d8efd45f774efe2833d6101c0a322fce8c14b7028c70",
+  "scripts/dram_counter_route_decode.py": "710186fe66e174e1e14a3ef7b2bda7956d5e9b0fee3088d530f3315f0cab366b",
+  "scripts/gh200_decode_session.sh": "a4a906a229c41153ae8a736919430da371a94c90ddf863f4adf37c2d2e52076d",
+  "scripts/scoring/decode/dcommon.py": "4cade228054581ac533aa799af9025cda6fa56e322e3e33f4f92ae3f2a65622c",
+  "scripts/scoring/decode/regdecode.py": "e39a7eccc52811933473da1c9e23b81e9aed7f24406b30c2d72d2f482bcd2e28",
+  "scripts/scoring/decode/finalise_decode.py": "78b8e7fae8603313c4098d2fd1fe7ed7110c3410103230d11b50f584271e8812",
+  "moe/instrumented/UPSTREAM_DECODE.json": "098f8999afd2f3b4457df5f2612b85f888971af4480eb82c703da0386bccec2a"
+ }
+}

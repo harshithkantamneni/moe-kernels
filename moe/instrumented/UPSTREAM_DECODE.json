@@ -1,0 +1,173 @@
+{
+ "what": "vLLM v0.27.1 sources the decode stage reads (fetched 2026-10-14 from raw.githubusercontent.com at tag v0.27.1); the decode rules r3_decode.py encodes, each quoted from its line. The files themselves are not vendored: their sha256 is the record, and r3_decode checks the VM's installed fused_moe.py and moe_align_block_size.py against it before any decode page",
+ "tag": "v0.27.1",
+ "licence": "Apache-2.0 (SPDX headers of the upstream files)",
+ "fetched": "2026-10-14 by the build-decode session (scratchpad build-decode/upstream/, copied to moe-kernels-work/2026-10-14/build-decode/upstream/)",
+ "files": {
+  "fused_moe.py": {
+   "path": "vllm/model_executor/layers/fused_moe/fused_moe.py",
+   "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.27.1/vllm/model_executor/layers/fused_moe/fused_moe.py",
+   "sha256": "d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28",
+   "lines": 1853
+  },
+  "moe_align_block_size.py": {
+   "path": "vllm/model_executor/layers/fused_moe/moe_align_block_size.py",
+   "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.27.1/vllm/model_executor/layers/fused_moe/moe_align_block_size.py",
+   "sha256": "c3f7fc2087836f0160a32ab99ceb1d8f6e87c793679da34dd672e225cb7fa31b",
+   "lines": 192
+  },
+  "moe_align_sum_kernels.cu": {
+   "path": "csrc/libtorch_stable/moe/moe_align_sum_kernels.cu",
+   "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.27.1/csrc/libtorch_stable/moe/moe_align_sum_kernels.cu",
+   "sha256": "72d1f17f7a5e3e3bdfce8ae8e62b97bd330c3d272973f3915b46e32984c6798d",
+   "lines": 1089
+  },
+  "utils.py": {
+   "path": "vllm/model_executor/layers/fused_moe/utils.py",
+   "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.27.1/vllm/model_executor/layers/fused_moe/utils.py",
+   "sha256": "09856c1e68a9069caaa5942e9e3d3effff847e8d213b877b7b5d8db981c30f64",
+   "lines": 668
+  }
+ },
+ "rules": {
+  "NAIVE": {
+   "file": "fused_moe.py",
+   "line": 1558,
+   "text": "and num_tokens * top_k_num * 4 <= global_num_experts",
+   "rule": "the naive assignment (no moe_align_block_size) when T k 4 <= E declared, no expert map"
+  },
+  "NAIVE_POST": {
+   "file": "fused_moe.py",
+   "line": 1572,
+   "text": "topk_ids.numel() * config[\"BLOCK_SIZE_M\"],",
+   "rule": "naive: num_tokens_post_padded = numel x BLOCK_M, so every M-tile of the grid is live"
+  },
+  "NAIVE_EM": {
+   "file": "fused_moe.py",
+   "line": 835,
+   "text": "EM = num_tokens * config[\"BLOCK_SIZE_M\"]",
+   "rule": "naive: EM = (A rows x top_k) x BLOCK_M, one M-tile per (token, expert) row"
+  },
+  "EM_CUT": {
+   "file": "fused_moe.py",
+   "line": 826,
+   "text": "if A.size(0) < config[\"BLOCK_SIZE_M\"]:",
+   "rule": "aligned: EM cut to A rows x top_k x BLOCK_M when A has fewer rows than BLOCK_M"
+  },
+  "GRID": {
+   "file": "fused_moe.py",
+   "line": 837,
+   "text": "triton.cdiv(EM, META[\"BLOCK_SIZE_M\"])",
+   "rule": "grid = cdiv(EM, BLOCK_M) x cdiv(N, BLOCK_N)"
+  },
+  "DEAD": {
+   "file": "fused_moe.py",
+   "line": 406,
+   "text": "if pid_m * BLOCK_SIZE_M >= num_tokens_post_padded:",
+   "rule": "a CTA with pid_m x BLOCK_M >= num_tokens_post_padded returns (a dead CTA)"
+  },
+  "NAIVE_FLAG": {
+   "file": "fused_moe.py",
+   "line": 898,
+   "text": "naive_block_assignment=(sorted_token_ids is None),",
+   "rule": "the kernel's naive_block_assignment constexpr is sorted_token_ids is None"
+  },
+  "BM_LADDER": {
+   "file": "fused_moe.py",
+   "line": 1371,
+   "text": "if M <= 32:",
+   "rule": "default config: BLOCK_M 16 at M <= 32 (then 32, 64, 128)"
+  },
+  "BN": {
+   "file": "fused_moe.py",
+   "line": 1380,
+   "text": "block_n = 64 if M <= 64 else 128",
+   "rule": "default config: BLOCK_N 64 at M <= 64, else 128"
+  },
+  "BK": {
+   "file": "fused_moe.py",
+   "line": 1385,
+   "text": "block_k = 128 if dtype == \"fp8_w8a8\" or M <= 64 else 64",
+   "rule": "default config: BLOCK_K 128 at M <= 64 (bf16), else 64"
+  },
+  "GROUP": {
+   "file": "fused_moe.py",
+   "line": 1391,
+   "text": "group_m = 16 if tokens_per_expert > 128 else 1",
+   "rule": "default config: GROUP_SIZE_M 16 only when M // E > 128"
+  },
+  "WARPS": {
+   "file": "fused_moe.py",
+   "line": 1395,
+   "text": "num_warps = 4 if M <= 128 else 8",
+   "rule": "default config: num_warps 4 at M <= 128"
+  },
+  "STAGES": {
+   "file": "fused_moe.py",
+   "line": 1400,
+   "text": "num_stages = 4",
+   "rule": "default config: num_stages 4 at M <= 32, else 3 (CUDA)"
+  },
+  "TUNED": {
+   "file": "fused_moe.py",
+   "line": 1436,
+   "text": "configs = get_moe_configs(E, N, dtype, block_n, block_k)",
+   "rule": "a tuned config file, when one exists for (E, N, dtype), replaces the default"
+  },
+  "MAXPAD": {
+   "file": "moe_align_block_size.py",
+   "line": 74,
+   "text": "max_num_tokens_padded = topk_ids.numel() + num_experts * (block_size - 1)",
+   "rule": "max_num_tokens_padded = numel + E (BLOCK_M - 1)"
+  },
+  "MAXPAD_CAP_IF": {
+   "file": "moe_align_block_size.py",
+   "line": 77,
+   "text": "if topk_ids.numel() < num_experts:",
+   "rule": "capped when numel < E ..."
+  },
+  "MAXPAD_CAP": {
+   "file": "moe_align_block_size.py",
+   "line": 79,
+   "text": "topk_ids.numel() * block_size, max_num_tokens_padded",
+   "rule": "... at numel x BLOCK_M"
+  },
+  "SMALL_BATCH": {
+   "file": "moe_align_sum_kernels.cu",
+   "line": 657,
+   "text": "(topk_ids.numel() < 1024) && (num_experts <= 64);",
+   "rule": "the small-batch align kernel at numel < 1024 and E <= 64, else the block scan"
+  },
+  "SENTINEL": {
+   "file": "moe_align_sum_kernels.cu",
+   "line": 219,
+   "text": "sorted_token_ids[sorted_token_ids_offset + it] = numel;",
+   "rule": "sorted_token_ids is filled with numel (the sentinel) before the scatter (small-batch kernel)"
+  },
+  "SENTINEL_SCAN": {
+   "file": "moe_align_sum_kernels.cu",
+   "line": 124,
+   "text": "sorted_token_ids[sorted_token_ids_offset + it] = numel;",
+   "rule": "the same fill in the block-scan kernel"
+  },
+  "PAD_PER_EXPERT": {
+   "file": "moe_align_sum_kernels.cu",
+   "line": 167,
+   "text": "expert_count = CEILDIV(expert_count, block_size) * block_size;",
+   "rule": "each expert's rows padded to a multiple of BLOCK_M: live tiles sum ceil(c_e / BLOCK_M)"
+  },
+  "INACTIVE": {
+   "file": "moe_align_sum_kernels.cu",
+   "line": 283,
+   "text": "expert_ids[expert_ids_offset + i] = inactive_expert_id;",
+   "rule": "expert_ids past the live tiles are the inactive id"
+  },
+  "USE_TD": {
+   "file": "utils.py",
+   "line": 627,
+   "text": "return current_platform.is_xpu()",
+   "rule": "VLLM_TRITON_USE_TD unset: the tensor-descriptor path only on XPU, so the pointer path on the GH200"
+  }
+ },
+ "design_check": "every decode rule of design-decode DESIGN.md sections 1 and 5 agrees with these lines: naive iff T k 4 <= E; max_num_tokens_padded = numel + E (BM - 1), capped at numel BM when numel < E; EM cut when A rows < BM; grid cdiv(EM, BM) x cdiv(N, BN); dead CTAs past num_tokens_post_padded; live tiles sum ceil(c_e / BM), expert_ids ascending; sentinel numel; small-batch at numel < 1024 and E <= 64; default tiles 16x64x128 w4 s4 (T <= 32), 32x64x128 w4 s3 (33..64), 32x128x64 w4 s3 (65..96), 64x128x64 w4 s3 (97..128), GROUP_SIZE_M 1. The fused_moe.py sha256 equals moe/instrumented/UPSTREAM.json's file_sha256 (design-r4's copy). One addition the design did not name: invoke_fused_moe_triton_kernel's USE_TD flag (resolve_moe_use_td, an environment switch); the spy records it and V-ALIGN requires it False"
+}

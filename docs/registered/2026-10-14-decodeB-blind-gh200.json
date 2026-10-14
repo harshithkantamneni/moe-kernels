@@ -1,0 +1,8262 @@
+{
+ "registered": "2026-10-14, before any decode-stage page",
+ "name": "2026-10-14-decodeB-blind-gh200",
+ "status": "FROZEN; FINALISED MECHANICALLY from the CAL score (scripts/scoring/decode/finalise_decode.py), which refuses unless the CAL stop rule reads GO",
+ "design": "design-decode DESIGN.md (2026-10-14, design only, read-only against 80514a6) and the owner's decisions of 2026-10-14: DD1 NATIVE alone certifies, SHARED's declaration arm (DECL) an optional lever on CAL models; DD2 vLLM's naive path (T 1 to 3) in scope; DD3 a summary-statistics-only extraction at B 1 to 128, or the design's fallback (rental 5's fitted shapes extrapolated) when the raw traces are unavailable, registered; DD4 the multi-call CUDA graph (GRR) is the primary timer, a one-call graph (GR1) the control; DD5 provisional bars rms <= 3%, worst <= 8%, |mean| <= 1.5%; DD6 decode runs after the tile stage (built now, rented after tile rental B)",
+ "tool": "scorer scripts/scoring/decode/score_blind.py; finalisation scripts/scoring/decode/finalise_decode.py",
+ "what": "E1-DEC BLIND: v4d with its CAL constants frozen, on five models no decode page has timed",
+ "units": [
+  {
+   "label": "dm",
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 15
+  },
+  {
+   "label": "dm",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 18
+  },
+  {
+   "label": "dm",
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 15
+  },
+  {
+   "label": "dm",
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 15
+  },
+  {
+   "label": "dm",
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main.json",
+   "step": "r3decode",
+   "inst": "GRR",
+   "drop": "nodrop",
+   "est_min": 15
+  },
+  {
+   "label": "dc",
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-ctl.json",
+   "step": "r3decode",
+   "inst": "GR1",
+   "drop": "gr1",
+   "est_min": 9
+  },
+  {
+   "label": "dc",
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-ctl.json",
+   "step": "r3decode",
+   "inst": "GR1",
+   "drop": "gr1",
+   "est_min": 9
+  }
+ ],
+ "drop_order": "last first: the two GR1 control pages (gr1); every main page is nodrop",
+ "pages": {
+  "dir": "docs/registered/2026-10-14-decode-pages",
+  "files": {
+   "phi-3.5-moe-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/phi-3.5-moe-main.json",
+    "sha256": "039cc6f6d520c7577c87aa914e08fefb2da3739008fd61a62c063bbb6a0d8c28",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A2",
+      "T": 1,
+      "counts_sha256": "11714a9c0e2fa78c37b8e3b18692971f87d8cce8cb01f1a2ac11fcdc12dbbd1b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "7643bf293d2db181905c74a94d5563a45d72f47527a850516e081c3065dbbc8d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A2",
+      "T": 2,
+      "counts_sha256": "1acde8f682d9646f3c10ab028f1abe3252762aa5958ff628a7faa93a361a1b57",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A3",
+      "T": 2,
+      "counts_sha256": "8fedd9c4480fbc85267176d140e885eda6c81ee0665271de7cf16f7c3bdd2385",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "634cee7984dde150485b10517f10f12b1d99179b5a66b88dfce777fcc0cdb425",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "fd0e9ac80c6a8fedb51c9dad2dd27dc5e4fd1bff0449c299c306c8cb62681e27",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A2",
+      "T": 4,
+      "counts_sha256": "874215bebf7d4b1c0fa3acf0dc7658367bbdda31bab44ab890b5bc8ab546e5e4",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A4",
+      "T": 4,
+      "counts_sha256": "b610e2ff334b3d13c063ba7a9827c3f7941e608891360220de56e26ef6817712",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A6",
+      "T": 4,
+      "counts_sha256": "a10a220c98ba706911f1ff0c3fb2371ccc13d5a3f56b15343dbb60a971af55e2",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "4fb75c58ed45921642849cc93f88d78f0c9b359c63b651cea559f76e1677314f",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "c7c4738f7b625b1aec27e03e2abd523c058fc3af31de2f360e44d8b55a886b80",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "bd09247be06b2df21b51c01c18e6e8d0790ac2dd13e42ad96fda6727e729fc23",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A2",
+      "T": 8,
+      "counts_sha256": "54c5174b30986cfc9979a5b0b400850fb689a3e2b7775f46e965c2d34915a970",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A7",
+      "T": 8,
+      "counts_sha256": "86fd62607bc4b41583cea2bfcd1be42c386d2db205b5acc1325c554b02d7b5b9",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A11",
+      "T": 8,
+      "counts_sha256": "84df3c7dd95735898a3b1e549a6934cab19bdd61f459a2aef611c4096d5d3581",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A16",
+      "T": 8,
+      "counts_sha256": "0f17d63a5efc37fe8a08818e64026e3b7a602fc57826dfe9ac52f57bb9f4749b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "2f0956bad49102cd3a7dee8cbb4e22141e03f64d65b54ed698f730e140fe9a13",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "2f0956bad49102cd3a7dee8cbb4e22141e03f64d65b54ed698f730e140fe9a13",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T16-A2",
+      "T": 16,
+      "counts_sha256": "af8d3e6b1f05eabe62ca93f88cad3d871ef39368ca553b98eb10cd09a05271ab",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A7",
+      "T": 16,
+      "counts_sha256": "20d28d22ca91139927b23b8a933a08f98f954f6f4aa88fb0700480b74599eb99",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A11",
+      "T": 16,
+      "counts_sha256": "a8909149adf95ee51fa4ac8a01696290ea68744bef1229bbdcd950276674e5a8",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A16",
+      "T": 16,
+      "counts_sha256": "1ce2b747a3a5f702da8249a953ec29eeefd40a5c3116f9e0530cd9326d078bd5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "5aa28f21452c555c1d74c63863be1d7780f055dd81468f8bc5f93b65491fdd3e",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "a649120beea94545eb17c03dc1c3a902caa3ac7d698022450c1177593fed06f8",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A2",
+      "T": 32,
+      "counts_sha256": "83ac945ad71237c4526dcd4467f54e3b0503c2b087112c3d38e75b8e4ea979c3",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A7",
+      "T": 32,
+      "counts_sha256": "e934b991a2db7d11ac95c805d9370858c7c8fd4d82194b129a0ee69a15a376ce",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A11",
+      "T": 32,
+      "counts_sha256": "8fd56fdbb95df5bbab3233df53616a25b1e268241c85914076d075b71783993c",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A16",
+      "T": 32,
+      "counts_sha256": "7d7d8a8403584089a42119438c531b8540a87a4219ede85eef208b2250dc3760",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "d1f90cf325718e819863d79ace397f4235390a8110cd8d534ff1c3e9227aa728",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "d1f90cf325718e819863d79ace397f4235390a8110cd8d534ff1c3e9227aa728",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T64-A2",
+      "T": 64,
+      "counts_sha256": "8b851451da4ad21a0ae35452d8b205f94ebb30262ca0572b579fd477a1b69dba",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A7",
+      "T": 64,
+      "counts_sha256": "3a4151c3b5de58056dc8623c96f06a03b426edda6d0519797d85095937788040",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A11",
+      "T": 64,
+      "counts_sha256": "6294289bfa12756357a9c143445ec22d01398204786a77f144e45cfc31bc8572",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A16",
+      "T": 64,
+      "counts_sha256": "fe6b101a2a634b986225e6461378ec8ec13b80e09576b0736d1f6198e1a69fd0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "e80e70a75ff84145dbfe2b3742fcf72ab68610c462793a741c0a05e55b91fce7",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "0efd612272cbb9520ec61275257fb3e0498e673e0c73995cd605761d72a9fe71",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A2",
+      "T": 96,
+      "counts_sha256": "655a030df2a32ee072c4336021303cb953d3475de0b3f20afe1b475e360bd4a4",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A7",
+      "T": 96,
+      "counts_sha256": "0b4e579bdb494e45deb26bd512fe92d43ce380e0170da832cd0dc384c92d6fb1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A11",
+      "T": 96,
+      "counts_sha256": "47e5089c4969c1ef208619f4093873b0b9da26e691b75fd4c5c7c77370953fa5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A16",
+      "T": 96,
+      "counts_sha256": "aff7922df793678d9978d1d4113bdd9ea75d1c080838a93f39b9c0a606aadab7",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "991c2833fd4d3b0ba02833107a63f1e019fda5097e7e97438e2df15dddbcc55f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A2",
+      "T": 128,
+      "counts_sha256": "b918b4ec74f915c30e161dbf6799a39c09ff087901cbf4c15c3c095e35590bed",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A7",
+      "T": 128,
+      "counts_sha256": "aeca47a2bc17832fa22b56527fbbc1f801d81a53dc9204df71043b26c19ac72e",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A11",
+      "T": 128,
+      "counts_sha256": "3c27a113a345db09c74913f287762879e152f00b7b8fdcc53c547424dbfd31a8",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A16",
+      "T": 128,
+      "counts_sha256": "3a550bc22d3154030f0353f9580b4f40cba4bfe827abcd4898322f871b404d40",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "110d2324b72105ff1ac65bb4b4837982495efee75ce2c7ede8a8d8d7492c72ec",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "110d2324b72105ff1ac65bb4b4837982495efee75ce2c7ede8a8d8d7492c72ec",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "qwen1.5-moe-a2.7b-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-main.json",
+    "sha256": "9965c124f72ce91242f395825079d3f51bcdff029f417407dab91a3f0b94ab5a",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A4",
+      "T": 1,
+      "counts_sha256": "6200a7bdc54fff18a498af8429f3ce3ed341df38d3841aa10d64a67793065b63",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "38798a23a242ca1571487ee29aea003ada56649cf527dadb91a9214f7293325d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "15365582fa9f6284aa9b51d787457b8d67744578526b8f41d15f98d3452153cd",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A5",
+      "T": 2,
+      "counts_sha256": "274edb69eab5f5afdd7f017c1b2575677edd3d3f057cbe3dee93791bc6ff7e1b",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A7",
+      "T": 2,
+      "counts_sha256": "878288503d84bc89b81a602e7386da219815d64202677f519e22d7e6584f3a85",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "9d98bd18f5cb63d72216b0b9ba054f0173b47a13c8cc6ab70e2b16df0d0028b4",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "4360e1d58794a1a67fcc36809da917b9300e9fdc73aae8c635cf34c884795b5a",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T3-A4",
+      "T": 3,
+      "counts_sha256": "19975e7e3ff7bc4cd712e7bce22e8d3e4fc09408b62ae2174b5dcf4afc624cf0",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T3-A7",
+      "T": 3,
+      "counts_sha256": "073c0ffdaadaffd1644fcfd67c9c7061278eb9e30a54460714dc18d79ff46168",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T3-A9",
+      "T": 3,
+      "counts_sha256": "22bd558b975c24fa892d0195408f653b15dbeff89ac02f358d7ce36237977791",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T3-A12",
+      "T": 3,
+      "counts_sha256": "321d222fda3af5c98e23bc26832d67993b40d0abb984714c972ee84614cd1881",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T3",
+      "T": 3,
+      "counts_sha256": "ade71423013ea181701985b611ea32799056d0bdc5bba4777754b28a5c0496dd",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A4",
+      "T": 4,
+      "counts_sha256": "62fdda971ed5887b6e0db767844192e6d093454a31f8460ad02ede03d98354ed",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "1acf77d14950156b025f98167c09bc7a39bfeba3071f18173cbd5a4882a5205c",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A12",
+      "T": 4,
+      "counts_sha256": "28dc08624918f525dc9d02354db0db342dd3aa9efcc914baaf42249fdb135a7a",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A16",
+      "T": 4,
+      "counts_sha256": "0fe5c2fa3535cdd8b31237a86c7d16b75bc46e8496e3533d883dde787d9d4c0c",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "be064232101d9671bc7ad56feb5f1f216f7fc837c457a5941ce0326dbb9dcd60",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "f4acc4ea51573fd8b69525eab4a499d37e152156ca52864e317228a00ae288af",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T4",
+      "T": 4,
+      "counts_sha256": "6999b193632b94cdaf155a29aafae987add297e7ac5f7564e9a42fa22413196b",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A4",
+      "T": 8,
+      "counts_sha256": "6d454ef9be20b2423a6d8a78c3113d24770fdb864d76a7a4a755e6b5c2a5c40c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A13",
+      "T": 8,
+      "counts_sha256": "05ef1b85dcc02b7f51621ed55489a76f731abf42029338d81fb28ddeebdaac1f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A23",
+      "T": 8,
+      "counts_sha256": "7e8ed73b8d7ceb5ba86d8fabccf37c3b8240b673485bc9a8a268a48ea295a3cb",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A32",
+      "T": 8,
+      "counts_sha256": "016c7128214edca0223368a578faf23f91ca69003da0b1dec67b07bacbe56f43",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "689c9265e0abdd360ae25fa16cd922ef2936740aaa1bec59a5764eeeab3b1288",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "689c9265e0abdd360ae25fa16cd922ef2936740aaa1bec59a5764eeeab3b1288",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T8",
+      "T": 8,
+      "counts_sha256": "55d6dd4473ebee582e690f59993db019c7ec7b3061e6611d9494150106023129",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A4",
+      "T": 16,
+      "counts_sha256": "a5016a4ec8d66ec7b09ffe7222d4ee2e650516d47a25071119d295ca3416ec3a",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A23",
+      "T": 16,
+      "counts_sha256": "654528d7e12c2ed3dcc1cee9dcfcbf8a7ba42bd00af79bd0724c5602b36e99a3",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A41",
+      "T": 16,
+      "counts_sha256": "d1e0ff048421f3e960119684652c78ad14e6e2c8472c4e0dc14f436544d219f4",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A60",
+      "T": 16,
+      "counts_sha256": "a3cdcfefa4888ca7ce003b8a5c9c8f17d5bf46915ac60f6ea5f4198d391feff9",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "18d136eece872f009b324e0a3aa78b4e41df488824663158823b27e10043a87f",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "962ec6e3c1940629f2b103caca249c2fa07c5a9fc6c781d3e92eb77d4953c90c",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "DW-T16",
+      "T": 16,
+      "counts_sha256": "641833b8a60e29e5c7d2b23a0ac6ba7a4a85e7085e0f0bd9cb6ffd917646c0a9",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A4",
+      "T": 32,
+      "counts_sha256": "d6a6fc8b4b4a5346ddef775ec19786cb5c5df4ac7304d21f49e05872ba32f314",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A23",
+      "T": 32,
+      "counts_sha256": "7d2acbb117578a61d2d397179ce86291e9a0a61bd72fa65c63a8753e33e37ec7",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A41",
+      "T": 32,
+      "counts_sha256": "33368147a3a2d795dad269478099ca17cf54b3b18f8fa6ed52f7ad34b08cb4fa",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A60",
+      "T": 32,
+      "counts_sha256": "ef12800c7f2c5ac5379ea1c2cbb32a9372ab645937ba2d2a095c9e7ca52ab62d",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "b39278460d23e137af84fa4706eec2e5abdfd731a95e9172064456f4ba8aa904",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "b39278460d23e137af84fa4706eec2e5abdfd731a95e9172064456f4ba8aa904",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "DW-T32",
+      "T": 32,
+      "counts_sha256": "761c877e81b884368838886252ea79b8c07c1d7deaa74e18b68dea39d12cebfb",
+      "role": "TRACE-DW EXTRAPOLATED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A4",
+      "T": 64,
+      "counts_sha256": "492417b2c831d4e9ab7ac8033b19c42f86cb1c19aaef2166e3a388c461616681",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A23",
+      "T": 64,
+      "counts_sha256": "c56f1dbede2215675825e0671220d597382a9982b7310c4c0d4fe520b955ae7e",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A41",
+      "T": 64,
+      "counts_sha256": "58922e9e31165871b660789f0c6dab1ac883acddc71165108d7f4df56946b739",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A60",
+      "T": 64,
+      "counts_sha256": "2bb9c577ac19538878ba2dc0b3625a262081deccf0f2a9830e9e05d5ae8fb0eb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "352626c0814baf6a36c8e808519e2374acf7ec36d50085df81dffe9f4806b2cc",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "20072c083a88eeaf3457e8a0bbf70fc7fde346d150811383bffbee4ccc951223",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A4",
+      "T": 96,
+      "counts_sha256": "4f06b9178be119686df92043d35b9f5493e605f7c2a7242a7b96a18a598e3d49",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A23",
+      "T": 96,
+      "counts_sha256": "00059603488d5348fb88d2c52d55f57a2868e7115164e921786a943cf66a3011",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A41",
+      "T": 96,
+      "counts_sha256": "5464dfc6430ab7438338dfcec00724c85b386072e487a2ec4de1c1bee53f3581",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A60",
+      "T": 96,
+      "counts_sha256": "7383e9dd666a8825812887021204da8aee227b29d420d74c8fa25598708edf8e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "42c828be24fd1e156acd9a267676c9dce419b4969e5b3bf37a16b722ed0bfe57",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A4",
+      "T": 128,
+      "counts_sha256": "8190b342f92dbd7a0e474e3d59e26732f7837f14edaa9e5475faa1130180326c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A23",
+      "T": 128,
+      "counts_sha256": "bd8d152f48cc65c01387117b213fafbcd9e31de49385ce432901a5f375c1fc81",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A41",
+      "T": 128,
+      "counts_sha256": "5d89c5bc4d931d966b281b6f7364f3a30a413966cf281d69267c2efbd6b1251b",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A60",
+      "T": 128,
+      "counts_sha256": "ddde281128b293dff0d6875738c3df79ae00177731f3d5df3abed53d0ae3a190",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "06f6cc9e737bc213b4d03613521f31fb6fdd4926511ad8a893110060cfd285e6",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "06f6cc9e737bc213b4d03613521f31fb6fdd4926511ad8a893110060cfd285e6",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "jetmoe-8b-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/jetmoe-8b-main.json",
+    "sha256": "e55b8163f46aa42c05bba0db4db24da584824e82e48d2c0424d802e21194b5cb",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A2",
+      "T": 1,
+      "counts_sha256": "e0c9d78b1b3091787bc9bb7608697b37899a86e34674248d6f31fd37672a74de",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "8b538013fc2e24005fcd5ca673f013e611ba9dadb6ebccd1715cdf4116fe104f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A2",
+      "T": 2,
+      "counts_sha256": "aaf27c849ba5f7a380c1e968d0943917548f7601fee272b2199bd5a6f5b9a829",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A3",
+      "T": 2,
+      "counts_sha256": "1e9803f8a5ae3a25384f44893a711aabe9455e01497dcd8d2697baa618c083c5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "99c93d39c76674d5abae74ec93246f25ba1b0ba32f669cbb9b4767d2b15688a9",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "0367fc81edfd90be4d890b22821c91b92870006be93a221d487f941e0649128d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A2",
+      "T": 4,
+      "counts_sha256": "cf21f793a6bbcd04e8914f5a2097655a8c2784a4373ee941e690ad63df1a4040",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A4",
+      "T": 4,
+      "counts_sha256": "e2d55be56715e7f6c06fca14d18c24159f867d1ec2d826cf8545f4d86c86c8e1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A6",
+      "T": 4,
+      "counts_sha256": "a21f66de9930796109a93d8ea12ab17c67ab8dba23d0835c8cd1bdab35fe6859",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "3c1425b38d52d1967a20a1ce4abe58b11af7d5260e368e378cbbc12574a967e8",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "40a4c6be6a75489ad92fdaaaa05c2397f41394bf66eecd7e273d8f0a47e3e3cc",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "c65458dddd927fd7d6f41524a4b94775ae969a92340776b61146c71d018f9981",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A2",
+      "T": 8,
+      "counts_sha256": "159901e92af87e4e255138f05cfcdba70aef49821168aaf810dfaf8df009a642",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A4",
+      "T": 8,
+      "counts_sha256": "59777ec2efba2252018eea092f9ae08700ab21f1a0f15a676d230319f9c298bb",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A6",
+      "T": 8,
+      "counts_sha256": "a7a72cbd2d90b0c2bb0fcf7c92e6bbcb19fa6c059651c8f0e61bced42173b06d",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "7d179ef22f20b3110950a8b8133fab4552fe8ffc4c97531fe8592b0ec0b0899b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "01ba3a67b4dea16263dc77f6f08c9a717863b9d5b625bcb505a74b127da23b22",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T16-A2",
+      "T": 16,
+      "counts_sha256": "4b8789ff5fb0fd6fa62086556891a564473c0206c58f1cf0c5bcf65594abaeaa",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A4",
+      "T": 16,
+      "counts_sha256": "904a72994cebe420821cf93f911e078791e9e72eeb962ef73a9444faffed8a38",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A6",
+      "T": 16,
+      "counts_sha256": "68db6e2f7334eba73f5ed60740eb329fe48358a40b482708fe017ce6851f582b",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "59211373337588b744c63af0b382307a79936287d29a27508fa2302d4cb373cb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "87ae52f91d993510d3ba97ab61e9ea63966d44e9838111859f3a10a427006aae",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "29114c9dea0f015473848d7256703399990709813ec6f640dd1fad2fa209c5fa",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A2",
+      "T": 32,
+      "counts_sha256": "04b25c00af45f3e926fc73dbf1bb62ef7d820b17ca30227f51f56f44c09f7141",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A4",
+      "T": 32,
+      "counts_sha256": "1b307ef757182b98013bb33d2f45ccb209e53166989d2729111456c7654551d3",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A6",
+      "T": 32,
+      "counts_sha256": "59ef1ef07079f5ada8cb41a4dd8da099e5ec4c97c26404da050cb4f71ec9f379",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "355d07fa606531f96bb17ecb89e9e60344810958b45fe43a61e659bed52a4a21",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "72dab1b882a0cc18c176465ad81e9ed58fe95f9736c9b965e0fe7cc866116f62",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T64-A2",
+      "T": 64,
+      "counts_sha256": "0fc76c78a6b04084566a9a3ab81f7a59842b1bdab617e30a484a3d40cf5c6923",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A4",
+      "T": 64,
+      "counts_sha256": "1a7466968952a3996f823b21a61af84485d4aa2cdddfb4a77a35d57ab091027a",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A6",
+      "T": 64,
+      "counts_sha256": "fb6e656c142b2ea12d6144837b5ecde9cc8ef2c171caa8a97901a1a714ecf64c",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "11dd4ec278ee5eab93a656ac72b451eaeca19ae76d7157eb09354ea24ff87199",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "20592ddc3ffe20daeebcf5ab2110c34457de5bfd05fbeacf067a7c9f8436bbcd",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "6fa4213ae3f2d8551b113f68dc4a71b6248715263fac917479903e5bd7d6ab4f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A2",
+      "T": 96,
+      "counts_sha256": "182947f9274a56fc56eea8d8e80014d7befdfd58757c51cd67f44d6e4d5ef7e3",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A4",
+      "T": 96,
+      "counts_sha256": "083c9ed969c2747aa78508c8e5cb0b286ef8b518c6ec08d7232b267f9b457735",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A6",
+      "T": 96,
+      "counts_sha256": "82c791ecf82652271ecf2d72d552df0c67e05553a2ce5a46bac520aea550014a",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "54e757860bcb19328cfa39d1f668f4c6410d0c134fe777f610d97c4363a572a0",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "0654e358f6e22874cf45c4b1f7425f3a76a26524e0e87ee6f95a3a89c251a891",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A2",
+      "T": 128,
+      "counts_sha256": "725079e116ad7537f81105276ac563934994c8bccb6e78b352b11914ed76816f",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A4",
+      "T": 128,
+      "counts_sha256": "10d5e3009ced2dbb7b7d135ee19cce290e04824f2dd6963d01d558170d5256e4",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A6",
+      "T": 128,
+      "counts_sha256": "e3d6d5e25dedbef7474bbca3864db61339e8bddd14f599d4bc259950f137d6a6",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "44035caa00110293ec5bb36494dc46dc179a0ff98ce22b30293db2754c36dc2f",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "7c071e86dcc255b7ac17e1d0e359a102286da150ebef74d4184df737cd8b65c5",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "deepseek-v2-lite-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/deepseek-v2-lite-main.json",
+    "sha256": "da3b530903a06e78570acdbb869ac3d25db904044ee2a27588457ac0f5fbce9c",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A6",
+      "T": 1,
+      "counts_sha256": "9d2e88b4e94fed23c35635e311e3d5dcf2dc8a7a1ab79aa0bce9decce13fea34",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "861fafda14a84d59a907878e231b8c3c3e000e70d76e8ff8db1ed6e4080f5d3c",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A6",
+      "T": 2,
+      "counts_sha256": "b0553c3b4e66fbf12b964d4217a6bbd521874f646995974212b9e63cbd5408ab",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "3c177a82b77e543e0a696525ddcabd5f0f26c62e7bd510ab29dda6fe27dc23ff",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A10",
+      "T": 2,
+      "counts_sha256": "9809dfbbbf1dc324353fac2c71d7845cb1315387f345a59ec88f6774b945d115",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A12",
+      "T": 2,
+      "counts_sha256": "e942a913145287be8537ad6462a7221969844c6759f4eff1333a566b2cc43a7c",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "865408caf4ffe4cf9af9bd8bfaa08f3797190d7132add73ff28daf38caee868b",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A6",
+      "T": 4,
+      "counts_sha256": "4a46db846874df421ecace50ba5ffabb03956f8048ead1b0ed3e2320d20caec5",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A12",
+      "T": 4,
+      "counts_sha256": "d1f4a6a009393195b77971cdab91188c402798900673e586978580e55f19a486",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A18",
+      "T": 4,
+      "counts_sha256": "4aef9f718819f5cb7fa318540e9937f28e06bc153beebf0e07854c6a0a47d355",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A24",
+      "T": 4,
+      "counts_sha256": "545faa6bfe89106dfa5c789f0c38f57e81f6d68c2a03bec6d93ed3e810a20cf5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "870426131c800cf258dca416d65c95b61b354a2fae93b7e09bf90032db942fd2",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "f61b782f67eb6eae72824fbc9da5d9078d8eae32c46c4cce3be17a5499a81ef8",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A6",
+      "T": 8,
+      "counts_sha256": "ce4481a6718da3a94e6a4c6beaf6abb2939904259ace51586043d50ec4261de9",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A20",
+      "T": 8,
+      "counts_sha256": "4a9a522b64cf39906eba189a6849041af720685414a8daee97f87421341c75bc",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A34",
+      "T": 8,
+      "counts_sha256": "859397f0c066134bbf7e97e236acb89e040c1b5f5607fba4cc76550d5362619b",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A48",
+      "T": 8,
+      "counts_sha256": "2eeab73bd8b6e548f1a11e8ee9fff43db8c32ba4bdf8335ac3514fc88026fff2",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "03a7efe83d9422214dc2a8822b01c0410523c639927a177591b26fa4a1ba8a1f",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "03a7efe83d9422214dc2a8822b01c0410523c639927a177591b26fa4a1ba8a1f",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T16-A6",
+      "T": 16,
+      "counts_sha256": "87de8ebe0851ab811358cfb4779914537fbbf19ff757035a83793598993da718",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A25",
+      "T": 16,
+      "counts_sha256": "bbeb982a32c4934e09f847abadc0ea6ea979103af1593714971e09703738120f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A45",
+      "T": 16,
+      "counts_sha256": "7ff28aa5fd5491b132fbc9d4b13db796e8168d7b25480530cd952ecc87689bd9",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A64",
+      "T": 16,
+      "counts_sha256": "d1de4d4cf3af45ecd72f724311f91fd52a600fa701ef8197da1f7e6102b3c884",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "b976fc2d8529c4edd39b2a0a554ea9faaa6eae7a0efc2a39686e42abfd5644d1",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "27b86cb2531fe91f9fd3291e58b326af229acdc5cc581bb0d1d7cdfdcbc2346d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A6",
+      "T": 32,
+      "counts_sha256": "bd2231cb858b077ee51b96bc6d773d9079658fad896e73d670366a9e18794bd4",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A25",
+      "T": 32,
+      "counts_sha256": "67eb6c3f004fab6e13f4ec452bc86bba65f61e4f945a82d77db105f0e46c01af",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A45",
+      "T": 32,
+      "counts_sha256": "96d3982490625b49d529ef258fe5b77b12f63fee9de628175eb15e26737e2cd1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A64",
+      "T": 32,
+      "counts_sha256": "042389ffa1c4cd736335c2f057bc49d2ad63d5d5f0ff2d8563eae77eebe1a0e4",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "32d3897809db2bc2e1c66bacc80450f802dc0faedad79df2b4ba0ffd491d9e10",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "32d3897809db2bc2e1c66bacc80450f802dc0faedad79df2b4ba0ffd491d9e10",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T64-A6",
+      "T": 64,
+      "counts_sha256": "7012570c2c8ecb32c31a825244e26167562d4acc26022ef6b22f75ef52b770ac",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A25",
+      "T": 64,
+      "counts_sha256": "a4c0b94b05201ac70f41da54e41cf646bdcb11f6794481e9734e87063873fee9",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A45",
+      "T": 64,
+      "counts_sha256": "16fd8e9ccbcf28f05da2d410619b67cc0993ad4c46ae5f47dbb4f9cfb6fa6eb0",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A64",
+      "T": 64,
+      "counts_sha256": "808fa281ef721c7f4b6589da3e9dd75bd5aea0bd03f5962ff506f04098580dcd",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "82358e9e62deb85b90481d8c23055ccbf8de495b89227e5e1ddd7298dc499a28",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "aa563ea5fe643ffcb6820c7da2c405f0983905ea8b5c8efd86171e46a741b189",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A6",
+      "T": 96,
+      "counts_sha256": "db4d830798a179e761960889c7eb01e4b1b6f6485be10c7ccf51f0dcc944f785",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A25",
+      "T": 96,
+      "counts_sha256": "16c2256dafe9a758ff254be8ad17a0813ffd4c91cd14d3f75c368a766b3e1332",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A45",
+      "T": 96,
+      "counts_sha256": "055986b406fa1c00fc2c4baf35cd76cb967a69354347998ff92ffad395d69320",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A64",
+      "T": 96,
+      "counts_sha256": "79f2ff0e0d05e93e6fdff92c069a467d00ef5200d1f5d79d8bdb3188c0af00b6",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "0ed1933a32717b133cf96c6cd7b53f0f7e9566080956d7bfa81a97767110f64d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A6",
+      "T": 128,
+      "counts_sha256": "a335a67b82bd0a9029be07d42d52790d827276f442b8d8e38bab14f4c6005373",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A25",
+      "T": 128,
+      "counts_sha256": "ce0820b14fd40dd9bd2d3883595421e7441c1831cf1ff8eb3e3ff1051239317a",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A45",
+      "T": 128,
+      "counts_sha256": "7ecb8fe7d2112183668aa02e7701ab4768c94f6de4ff0abae4a804d920aac282",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A64",
+      "T": 128,
+      "counts_sha256": "68f5d9290a067800723f258a586438e30119bc67603bf633270b126f4b0f40c5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "b0be3de0a144fd8978ff39b7b4f9513cf9766f1077701e7094a5287983b85860",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "b0be3de0a144fd8978ff39b7b4f9513cf9766f1077701e7094a5287983b85860",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "granite-3.0-3b-a800m-main.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-main.json",
+    "sha256": "4f733111ec7b3ef41816d10f15af493c52d2c487909b37101d5b2989d90692f5",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A8",
+      "T": 1,
+      "counts_sha256": "df3e45e34847d2b2d56551c8f9daac7bd5d120fe66dba4cc6a0d099fe96e8a18",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "2229164c17afed06b775a398e88b28736bb6a1d15a2e96af7f33ce493860bf0d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "c829a4ec01da7b34fb4c5025e9c7afcdace691186677c7f80d67f27e520c836b",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A11",
+      "T": 2,
+      "counts_sha256": "3180dfef3e5608e3c4ee130d708488932de53e5d8f918208bb526ae1591a4353",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A13",
+      "T": 2,
+      "counts_sha256": "da8304e84b6c50a8f2aed02eb6c22f2dff0f03d868078916fcce219cabaa6f56",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A16",
+      "T": 2,
+      "counts_sha256": "9ec8f262233472820735e7c7bed6d6074edf8fd3d575a8b310c30f86b02e17db",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "7490a54e6486743ec3126c2e041004ab9a5378eb5679aec0583051cdf7743276",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "33f77e5afe356c6a9c1f807f38ebdd2cfa2a65d3a354f4d61cf3df32c8da8f42",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A16",
+      "T": 4,
+      "counts_sha256": "bf40898129a4470d0eb62eff9984d7dc5ea94b4d9e2c728eb7f29e66b5479a18",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A24",
+      "T": 4,
+      "counts_sha256": "fbf8c34840a5b0c3ffea1f0f85e92a880c12e76752be158af561f9e402016bf5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A32",
+      "T": 4,
+      "counts_sha256": "85cc9d99908f8637c4fed98ff90c4e53c9d80cf9aaac99a832aa65dfb088834b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T4",
+      "T": 4,
+      "counts_sha256": "9e17351e46bebd6afc258ce46d82da209261a9bc5384c7810c39cff94997a053",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "d33160abb7e501f35a720ebe4f138e73788f47463300d616d23e6ddf0fd766e1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "d5ce48147f6efaa6bcbc655af0b1f4354279b25572ea0fc431be06b45aabdb53",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A19",
+      "T": 8,
+      "counts_sha256": "9a3ca8f2f4e6dfaa41cbd9f075129ef20e2f605b1186b7600a4ac3c23489f4c7",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A29",
+      "T": 8,
+      "counts_sha256": "4cf702560b271c5aeff27112e4e50e3f572e30fd3e2a2a624c0633cf4f312ed1",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A40",
+      "T": 8,
+      "counts_sha256": "5b702b845dc3315fd6aa49def215b4dc7ac7c9c0d7206375422923a4d3f23d82",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "7384a51a56831fa48b525752fdbc19004a624f918c9fff7e907ce07ac7629b52",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T8",
+      "T": 8,
+      "counts_sha256": "7384a51a56831fa48b525752fdbc19004a624f918c9fff7e907ce07ac7629b52",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "01f7d4dc0918cb87402a74bc4531665f45f8b2223dcd8a05286490237a07ca2c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A19",
+      "T": 16,
+      "counts_sha256": "7b695e737ccb560defaaa482a8a037a842611e911e5ed02d1a0c9bf56cefcd15",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A29",
+      "T": 16,
+      "counts_sha256": "23a5d95f047eed28461932b908cf6158db8ea10f13b9f8eed82c7cc4426bcde9",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A40",
+      "T": 16,
+      "counts_sha256": "eb8efe0e0e63e05fc6d9aaa2338344ae82e53bfa9c958274be91f55b74f11e50",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T16",
+      "T": 16,
+      "counts_sha256": "5ad93ce490da69d27ef7abadf4482c367a30e503e639eab2aec8bd3ed0649cb9",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "e7cc436cb61b7138e42a55ac7f9f42ec3e86ba86ab2fe56a401331ef763d4b5d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "fd6b3f75ef756675d77c9476d36f5a09bc699dac297a91ca78e668b9b93a498d",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A19",
+      "T": 32,
+      "counts_sha256": "9d782b3256ae0df910a7ba9f74c2570c212759ae929e0a44ea0864d56e6d8faa",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A29",
+      "T": 32,
+      "counts_sha256": "65e11c06bb2c4859736c48ddfb8c90975165eda2aef9fef7af4d01fe0dc4c422",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A40",
+      "T": 32,
+      "counts_sha256": "1071933e1cc2745e3a43e08794667f4026583a7954aa679a73c19e01da1f2a5e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "e547c489e0a8d9458ddc7beaddf074708ec05f5976f6b0a397654fa86d325460",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T32",
+      "T": 32,
+      "counts_sha256": "e547c489e0a8d9458ddc7beaddf074708ec05f5976f6b0a397654fa86d325460",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "a15c86f1dc3b6777756ee2638d77549d90e36076f1285a98b7df5af5d2da77a9",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A19",
+      "T": 64,
+      "counts_sha256": "1bf86a2080b176d1385133fd890804aaf0fc98642a2fd17af29856f1ab56470f",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A29",
+      "T": 64,
+      "counts_sha256": "b818fe1b077c356614d3c11ff08ce7060d182d70c0f83092245fb55a190b30d5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A40",
+      "T": 64,
+      "counts_sha256": "f225cf89c32a47040aebfa9e3b248c9e97429117bba89addf89c574e4b3efc12",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "MIN-T64",
+      "T": 64,
+      "counts_sha256": "14e6d256cbf1f7114f1289fe68514694b024f84b57ce09fecc8a90d80e37e72f",
+      "role": "MINCOVER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "728067670fe08006bd56af7bc0d6287d3e8f09ba6077df9a0b514307a64a7769",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "cccc0ec63ddc721f1a4e940e01ab73c2e90e240622a7b34b9b9ad813846feeda",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A19",
+      "T": 96,
+      "counts_sha256": "6f0efd9df8d220fd32487aed456b37c942636fb7ee6a8e3e2a3d4123c3998270",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A29",
+      "T": 96,
+      "counts_sha256": "cc164100abb7534ddee28edf4f28ee9d450f38b91a790a2dba67c16db87e93f5",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A40",
+      "T": 96,
+      "counts_sha256": "e5c703ce64ec61f9c430af5608837f7a520370c9722ebdd7d4a73078819f474b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "d17f0a0b9ed15b6f56d75a38d40af334eb60381a388b9a1082b15938e01acab4",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "165238ac1a804363a6e405c3fc09e00eff2742ac12f8b37f1db9f088e8243121",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A19",
+      "T": 128,
+      "counts_sha256": "c12e7898b51da187f4e93fef4d08f34c86c6e4286d1228905698b761019ad3c0",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A29",
+      "T": 128,
+      "counts_sha256": "f76811b10052d28e945abbd08fe4a5f313f3ac1871b606c853c17b39248dd629",
+      "role": "LADDER",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A40",
+      "T": 128,
+      "counts_sha256": "afb49aef01d24cb0b58253fe940d98920a8db257fac5f78e1b19ece7d5ded0f5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "240714ee44eb51e4ee8049cbbfc09f11597f90c77236703e069e04d3cd536b28",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "US-T128",
+      "T": 128,
+      "counts_sha256": "240714ee44eb51e4ee8049cbbfc09f11597f90c77236703e069e04d3cd536b28",
+      "role": "UNIFORM-UNSHUFFLED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": false
+     }
+    ]
+   },
+   "qwen1.5-moe-a2.7b-ctl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json",
+    "sha256": "6cd28d0d9c6e1eae8dc5c61c3e54e70092225858eb83b54a4c64796aff2d54bc",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A4",
+      "T": 1,
+      "counts_sha256": "6200a7bdc54fff18a498af8429f3ce3ed341df38d3841aa10d64a67793065b63",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "38798a23a242ca1571487ee29aea003ada56649cf527dadb91a9214f7293325d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "9d98bd18f5cb63d72216b0b9ba054f0173b47a13c8cc6ab70e2b16df0d0028b4",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A4",
+      "T": 2,
+      "counts_sha256": "15365582fa9f6284aa9b51d787457b8d67744578526b8f41d15f98d3452153cd",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "4360e1d58794a1a67fcc36809da917b9300e9fdc73aae8c635cf34c884795b5a",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A16",
+      "T": 4,
+      "counts_sha256": "0fe5c2fa3535cdd8b31237a86c7d16b75bc46e8496e3533d883dde787d9d4c0c",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A4",
+      "T": 4,
+      "counts_sha256": "62fdda971ed5887b6e0db767844192e6d093454a31f8460ad02ede03d98354ed",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "f4acc4ea51573fd8b69525eab4a499d37e152156ca52864e317228a00ae288af",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A32",
+      "T": 8,
+      "counts_sha256": "016c7128214edca0223368a578faf23f91ca69003da0b1dec67b07bacbe56f43",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A4",
+      "T": 8,
+      "counts_sha256": "6d454ef9be20b2423a6d8a78c3113d24770fdb864d76a7a4a755e6b5c2a5c40c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "689c9265e0abdd360ae25fa16cd922ef2936740aaa1bec59a5764eeeab3b1288",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A60",
+      "T": 16,
+      "counts_sha256": "a3cdcfefa4888ca7ce003b8a5c9c8f17d5bf46915ac60f6ea5f4198d391feff9",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A4",
+      "T": 16,
+      "counts_sha256": "a5016a4ec8d66ec7b09ffe7222d4ee2e650516d47a25071119d295ca3416ec3a",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "962ec6e3c1940629f2b103caca249c2fa07c5a9fc6c781d3e92eb77d4953c90c",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A60",
+      "T": 32,
+      "counts_sha256": "ef12800c7f2c5ac5379ea1c2cbb32a9372ab645937ba2d2a095c9e7ca52ab62d",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A4",
+      "T": 32,
+      "counts_sha256": "d6a6fc8b4b4a5346ddef775ec19786cb5c5df4ac7304d21f49e05872ba32f314",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "b39278460d23e137af84fa4706eec2e5abdfd731a95e9172064456f4ba8aa904",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A60",
+      "T": 64,
+      "counts_sha256": "2bb9c577ac19538878ba2dc0b3625a262081deccf0f2a9830e9e05d5ae8fb0eb",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A4",
+      "T": 64,
+      "counts_sha256": "492417b2c831d4e9ab7ac8033b19c42f86cb1c19aaef2166e3a388c461616681",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "20072c083a88eeaf3457e8a0bbf70fc7fde346d150811383bffbee4ccc951223",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A60",
+      "T": 96,
+      "counts_sha256": "7383e9dd666a8825812887021204da8aee227b29d420d74c8fa25598708edf8e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A4",
+      "T": 96,
+      "counts_sha256": "4f06b9178be119686df92043d35b9f5493e605f7c2a7242a7b96a18a598e3d49",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "42c828be24fd1e156acd9a267676c9dce419b4969e5b3bf37a16b722ed0bfe57",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A60",
+      "T": 128,
+      "counts_sha256": "ddde281128b293dff0d6875738c3df79ae00177731f3d5df3abed53d0ae3a190",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A4",
+      "T": 128,
+      "counts_sha256": "8190b342f92dbd7a0e474e3d59e26732f7837f14edaa9e5475faa1130180326c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "06f6cc9e737bc213b4d03613521f31fb6fdd4926511ad8a893110060cfd285e6",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ]
+   },
+   "granite-3.0-3b-a800m-ctl.json": {
+    "path": "docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-ctl.json",
+    "sha256": "47a000713b4fe933f1557b4603e475547436431cf43cf22be7aaaf09fb594c20",
+    "shuffle_seed": 20261014,
+    "decl_copies": null,
+    "cells": [
+     {
+      "label": "L-T1-A8",
+      "T": 1,
+      "counts_sha256": "df3e45e34847d2b2d56551c8f9daac7bd5d120fe66dba4cc6a0d099fe96e8a18",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T1",
+      "T": 1,
+      "counts_sha256": "2229164c17afed06b775a398e88b28736bb6a1d15a2e96af7f33ce493860bf0d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A16",
+      "T": 2,
+      "counts_sha256": "9ec8f262233472820735e7c7bed6d6074edf8fd3d575a8b310c30f86b02e17db",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T2-A8",
+      "T": 2,
+      "counts_sha256": "c829a4ec01da7b34fb4c5025e9c7afcdace691186677c7f80d67f27e520c836b",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T2",
+      "T": 2,
+      "counts_sha256": "7490a54e6486743ec3126c2e041004ab9a5378eb5679aec0583051cdf7743276",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A32",
+      "T": 4,
+      "counts_sha256": "85cc9d99908f8637c4fed98ff90c4e53c9d80cf9aaac99a832aa65dfb088834b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T4-A8",
+      "T": 4,
+      "counts_sha256": "33f77e5afe356c6a9c1f807f38ebdd2cfa2a65d3a354f4d61cf3df32c8da8f42",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T4",
+      "T": 4,
+      "counts_sha256": "d33160abb7e501f35a720ebe4f138e73788f47463300d616d23e6ddf0fd766e1",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A40",
+      "T": 8,
+      "counts_sha256": "5b702b845dc3315fd6aa49def215b4dc7ac7c9c0d7206375422923a4d3f23d82",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T8-A8",
+      "T": 8,
+      "counts_sha256": "d5ce48147f6efaa6bcbc655af0b1f4354279b25572ea0fc431be06b45aabdb53",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T8",
+      "T": 8,
+      "counts_sha256": "7384a51a56831fa48b525752fdbc19004a624f918c9fff7e907ce07ac7629b52",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A40",
+      "T": 16,
+      "counts_sha256": "eb8efe0e0e63e05fc6d9aaa2338344ae82e53bfa9c958274be91f55b74f11e50",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T16-A8",
+      "T": 16,
+      "counts_sha256": "01f7d4dc0918cb87402a74bc4531665f45f8b2223dcd8a05286490237a07ca2c",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T16",
+      "T": 16,
+      "counts_sha256": "e7cc436cb61b7138e42a55ac7f9f42ec3e86ba86ab2fe56a401331ef763d4b5d",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A40",
+      "T": 32,
+      "counts_sha256": "1071933e1cc2745e3a43e08794667f4026583a7954aa679a73c19e01da1f2a5e",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T32-A8",
+      "T": 32,
+      "counts_sha256": "fd6b3f75ef756675d77c9476d36f5a09bc699dac297a91ca78e668b9b93a498d",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T32",
+      "T": 32,
+      "counts_sha256": "e547c489e0a8d9458ddc7beaddf074708ec05f5976f6b0a397654fa86d325460",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A40",
+      "T": 64,
+      "counts_sha256": "f225cf89c32a47040aebfa9e3b248c9e97429117bba89addf89c574e4b3efc12",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T64-A8",
+      "T": 64,
+      "counts_sha256": "a15c86f1dc3b6777756ee2638d77549d90e36076f1285a98b7df5af5d2da77a9",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T64",
+      "T": 64,
+      "counts_sha256": "728067670fe08006bd56af7bc0d6287d3e8f09ba6077df9a0b514307a64a7769",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A40",
+      "T": 96,
+      "counts_sha256": "e5c703ce64ec61f9c430af5608837f7a520370c9722ebdd7d4a73078819f474b",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T96-A8",
+      "T": 96,
+      "counts_sha256": "cccc0ec63ddc721f1a4e940e01ab73c2e90e240622a7b34b9b9ad813846feeda",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T96",
+      "T": 96,
+      "counts_sha256": "d17f0a0b9ed15b6f56d75a38d40af334eb60381a388b9a1082b15938e01acab4",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A40",
+      "T": 128,
+      "counts_sha256": "afb49aef01d24cb0b58253fe940d98920a8db257fac5f78e1b19ece7d5ded0f5",
+      "role": "BALANCED",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "L-T128-A8",
+      "T": 128,
+      "counts_sha256": "165238ac1a804363a6e405c3fc09e00eff2742ac12f8b37f1db9f088e8243121",
+      "role": "LADDER-BOTTOM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     },
+     {
+      "label": "U-T128",
+      "T": 128,
+      "counts_sha256": "240714ee44eb51e4ee8049cbbfc09f11597f90c77236703e069e04d3cd536b28",
+      "role": "UNIFORM",
+      "arms": [
+       "native"
+      ],
+      "shuffle": true
+     }
+    ]
+   }
+  },
+  "label": "SYNTHETIC (decode_synth.py); DW cells EXTRAPOLATED"
+ },
+ "finalisation": {
+  "refuses": "unless cal.score.json's STOP reads GO",
+  "frozen_from_cal": [
+   "T0_GR_ms",
+   "s_naive_GR_ms",
+   "s_block_GR_ms",
+   "the selected rho form",
+   "the GD2 band",
+   "sigma_page and the tightened bars",
+   "the tile stage's v4 Params"
+  ],
+  "writes": "the blind predictions per cell (v4d and every rival) and scripts/plans/rentalD-blind-2026-10.plan"
+ },
+ "statistic": "e_dec = (T_v4d - T_meas) / T_meas per valid NATIVE cell, 0 at or under 1 us absolute",
+ "rule": "E1-DEC: pooled over the five models AND per model at the bars finalised from the CAL replicate (the provisional rms <= 3%, worst <= 8%, |mean| <= 1.5% when there is no replicate); a model is CERTIFIED when its own bar and the pooled bar hold",
+ "bars_provisional": {
+  "rms_max": 0.03,
+  "max_abs": 0.08,
+  "mean_max": 0.015
+ },
+ "rivals": {
+  "eager": "v4d at v3's eager constants (T0 43 us, s_small, s_block)",
+  "roofline": "T0_GR + A W_e / bw",
+  "line": "a + b (T k), fitted on the CAL NATIVE cells (pooled)",
+  "OLS": "ridge on standardised [A W_e / bw, waves w1 + w2, ln(1 + dead CTAs), naive, block-scan] over the CAL NATIVE cells (the tile stage's ols_fit rule)",
+  "NAIVE-NODEDUP": "v4d with every naive row's slab fetched",
+  "rho other": "v4d at the unselected rho form",
+  "exclusion": "rental 7's rule (tcommon.rival_rule): lever cells |T_R / T_v4d - 1| >= 2%, at least 6; EXCLUDED when R's rms there is over 2% and over v4d's + 3 se"
+ },
+ "gates": {
+  "V-BIN": "bincount(ids) == counts, k distinct experts per token (feasible, realize_counts); a failure refuses the cell",
+  "V-ALIGN": "the spy's readback of one eager call (sorted ids None iff naive; num_tokens_post_padded; sentinel count P; expert_ids[:L] ascending; sorted length the capped buffer; the launch grid fused_moe_grid's; USE_TD False) equals r3_decode.expected_readback; a mismatch refuses the cell; any refused CAL cell is a STOP",
+  "GD5": "the config the kernel received is tile_resolve.default_config(T, E), vLLM finds no tuned file and no override",
+  "GD4": "every captured call's output equals the eager output bit for bit; a failure VOIDS the page. It covers the CHECK-PHASE capture only: each timed repeat recaptures the same calls on the same tensors and is not compared again",
+  "COPIES": "(GRR) calls 0..R-1 are each spied in the check phase and must read R distinct w1 copies (r3_decode.check_copies); a failure refuses the cell. At R = 1 the call is cold by volume only (see coldness)",
+  "GD1": "GPU per replay >= 3 x the host enqueue per replay (launch_floor's host probe, before and after); a failing cell is excluded (G2)",
+  "GD2": "GR1 - GRR per call on matched cells; the CAL band [p05 - 1 us, p95 + 1 us] is frozen into the blind registration; a STOP when CAL's median is outside [-1, 10] us, the band is wider than 8 us, or the band leaves [-2, 11] us; a blind GR1 page with over 20% of its cells outside the band VOIDS that model's GRR page",
+  "GD3": "E240 - GR1 in [0, 10] us on cells GPU-bound eager (C + F240 > 1.25 H): DESCRIPTIVE",
+  "G1": "rental 7's r7-median-run3 rebuilt from cells.csv (6 of 9 clean; the 10% non-clean cap); a FAIL puts the page out (NOT SCORED)",
+  "G2": "GD1, and the duty timer's host flag",
+  "G4": "the cell's clock >= 1705 MHz",
+  "G5": "the page's decode-page sha256 and every row's counts sha256 are the registered ones",
+  "V-SRC": "the VM's installed fused_moe.py and moe_align_block_size.py are v0.27.1's bytes (moe/instrumented/UPSTREAM_DECODE.json); else the page is refused before any cell"
+ },
+ "coldness": {
+  "phi-3.5-moe": {
+   "R": 1,
+   "calls_per_graph": 8,
+   "A_min": 2,
+   "W_e_MiB": 150.0,
+   "reuse_distance_MiB": 300.0,
+   "l2_MiB": 60,
+   "how": "COLD BY VOLUME ONLY: R = 1, every call reads copy 0; between two reads of a slab the call streams at least A_min x W_e = 300 MiB, 5x the L2"
+  },
+  "qwen1.5-moe-a2.7b": {
+   "R": 4,
+   "calls_per_graph": 8,
+   "A_min": 4,
+   "W_e_MiB": 16.5,
+   "reuse_distance_MiB": 264.0,
+   "l2_MiB": 60,
+   "how": "COLD BY ROTATION: call j reads copy j mod 4 (COPIES checks 4 distinct addresses); 264 MiB between two reads of one copy"
+  },
+  "jetmoe-8b": {
+   "R": 2,
+   "calls_per_graph": 8,
+   "A_min": 2,
+   "W_e_MiB": 66.0,
+   "reuse_distance_MiB": 264.0,
+   "l2_MiB": 60,
+   "how": "COLD BY ROTATION: call j reads copy j mod 2 (COPIES checks 2 distinct addresses); 264 MiB between two reads of one copy"
+  },
+  "deepseek-v2-lite": {
+   "R": 3,
+   "calls_per_graph": 9,
+   "A_min": 6,
+   "W_e_MiB": 16.5,
+   "reuse_distance_MiB": 297.0,
+   "l2_MiB": 60,
+   "how": "COLD BY ROTATION: call j reads copy j mod 3 (COPIES checks 3 distinct addresses); 297 MiB between two reads of one copy"
+  },
+  "granite-3.0-3b-a800m": {
+   "R": 7,
+   "calls_per_graph": 14,
+   "A_min": 8,
+   "W_e_MiB": 4.5,
+   "reuse_distance_MiB": 252.0,
+   "l2_MiB": 60,
+   "how": "COLD BY ROTATION: call j reads copy j mod 7 (COPIES checks 7 distinct addresses); 252 MiB between two reads of one copy"
+  }
+ },
+ "g3d_blind": "shuffle and label on every blind main page at the CAL's margin rule; a FAIL voids that model's cells",
+ "riskiest_assumption": "T0_GR + s_path is one card constant that transfers across models; on the small models it is 20 to 60% of the call, and the CAL's two models cannot separate it from H, I or the kernel count",
+ "nominal": "DESIGN-NOMINAL as in decodeC-cal",
+ "nominal_cells": [
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T1-A2",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.200372,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.141668
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.200372,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.141668
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T2-A2",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.134145,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.128065
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T2-A3",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.175661,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 3,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 450.0,
+   "ms_nominal_scaled": 0.168072
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T2-A4",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.213655,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 600.0,
+   "ms_nominal_scaled": 0.20055
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.213655,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 600.0,
+   "ms_nominal_scaled": 0.20055
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T4-A2",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.200533,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    1200,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.141798
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T4-A4",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.213738,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 56,
+   "dead_ctas": [
+    800,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 600.0,
+   "ms_nominal_scaled": 0.20063
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T4-A6",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.288365,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 88,
+   "dead_ctas": [
+    400,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 900.0,
+   "ms_nominal_scaled": 0.288365
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.42117,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1200.0,
+   "ms_nominal_scaled": 0.385393
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.200533,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    1200,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.141798
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.391931,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 7,
+   "P": 104,
+   "dead_ctas": [
+    200,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.356144
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T8-A2",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.200747,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 16,
+   "dead_ctas": [
+    2800,
+    896
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.141971
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T8-A7",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.392105,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 7,
+   "P": 96,
+   "dead_ctas": [
+    1800,
+    576
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.35631
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T8-A11",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.509096,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 11,
+   "P": 160,
+   "dead_ctas": [
+    1000,
+    320
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.507863
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T8-A16",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.727201,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.727201
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.47984,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 10,
+   "L": 10,
+   "P": 144,
+   "dead_ctas": [
+    1200,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1500.0,
+   "ms_nominal_scaled": 0.463995
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.47984,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 10,
+   "L": 10,
+   "P": 144,
+   "dead_ctas": [
+    1200,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1500.0,
+   "ms_nominal_scaled": 0.463995
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T16-A2",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.201177,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    3000,
+    960
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.142316
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T16-A7",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.392451,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 7,
+   "P": 80,
+   "dead_ctas": [
+    2000,
+    640
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.356639
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T16-A11",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.509416,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 11,
+   "P": 144,
+   "dead_ctas": [
+    1200,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.508183
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T16-A16",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.72752,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 224,
+   "dead_ctas": [
+    200,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.72752
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.201177,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    3000,
+    960
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.142316
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.639786,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 14,
+   "L": 14,
+   "P": 192,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2100.0,
+   "ms_nominal_scaled": 0.639786
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T32-A2",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.214899,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3000,
+    960
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.201746
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T32-A7",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.393162,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 7,
+   "P": 48,
+   "dead_ctas": [
+    2400,
+    768
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.357307
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T32-A11",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.510054,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 11,
+   "P": 112,
+   "dead_ctas": [
+    1600,
+    512
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.50882
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T32-A16",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.728158,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 192,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.728158
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.728159,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 192,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.728159
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.728159,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 192,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.728159
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T64-A2",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.22296,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3200,
+    1024
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.203634
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T64-A7",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.335693,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 7,
+   "L": 7,
+   "P": 96,
+   "dead_ctas": [
+    2600,
+    832
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.335693
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T64-A11",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.54329,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 11,
+   "L": 11,
+   "P": 224,
+   "dead_ctas": [
+    1800,
+    576
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.525311
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T64-A16",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.731851,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 384,
+   "dead_ctas": [
+    800,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.731851
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.22296,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    3200,
+    1024
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.203634
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.731853,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 384,
+   "dead_ctas": [
+    800,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.731853
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T96-A2",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.348925,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 2,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    1600,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.312788
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T96-A7",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.458616,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 7,
+   "L": 7,
+   "P": 32,
+   "dead_ctas": [
+    1500,
+    480
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.399456
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T96-A11",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.513023,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 11,
+   "L": 11,
+   "P": 160,
+   "dead_ctas": [
+    1100,
+    352
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.513023
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T96-A16",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.733113,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 320,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.733113
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.73311,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 320,
+   "dead_ctas": [
+    600,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.73311
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T128-A2",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.386017,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1600,
+    512
+   ],
+   "sub_wave": true,
+   "weight_MiB": 300.0,
+   "ms_nominal_scaled": 0.266218
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T128-A7",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.384602,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 7,
+   "L": 7,
+   "P": 192,
+   "dead_ctas": [
+    1300,
+    416
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1050.0,
+   "ms_nominal_scaled": 0.340335
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T128-A11",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.517608,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 11,
+   "L": 11,
+   "P": 448,
+   "dead_ctas": [
+    900,
+    288
+   ],
+   "sub_wave": true,
+   "weight_MiB": 1650.0,
+   "ms_nominal_scaled": 0.517608
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "L-T128-A16",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.830344,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 768,
+   "dead_ctas": [
+    400,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.757993
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.830354,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 768,
+   "dead_ctas": [
+    400,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.757993
+  },
+  {
+   "model": "phi-3.5-moe",
+   "page": "phi-3.5-moe-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.830354,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 16,
+   "L": 16,
+   "P": 768,
+   "dead_ctas": [
+    400,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 2400.0,
+   "ms_nominal_scaled": 0.757993
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T1-A4",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.063921,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.045887
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.063921,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.045887
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T2-A4",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.046447,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.045155
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T2-A5",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.051664,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 5,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 82.5,
+   "ms_nominal_scaled": 0.049882
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T2-A7",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.062249,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 115.5,
+   "ms_nominal_scaled": 0.06007
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T2-A8",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.066772,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.063863
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.066772,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.063863
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T3-A4",
+   "T": 3,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.053838,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.049939
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T3-A7",
+   "T": 3,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.062734,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 7,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 115.5,
+   "ms_nominal_scaled": 0.059762
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T3-A9",
+   "T": 3,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.072389,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 9,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 148.5,
+   "ms_nominal_scaled": 0.069442
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T3-A12",
+   "T": 3,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.096619,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 12,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.085109
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T3",
+   "T": 3,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.09181,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 181.5,
+   "ms_nominal_scaled": 0.0803
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T4-A4",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064014,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 48,
+   "dead_ctas": [
+    528,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.045957
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.066819,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    352,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.063908
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T4-A12",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.096645,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 12,
+   "L": 12,
+   "P": 176,
+   "dead_ctas": [
+    176,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.085132
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T4-A16",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.113128,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.104789
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.064014,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 48,
+   "dead_ctas": [
+    528,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.045957
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.113132,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 14,
+   "L": 14,
+   "P": 208,
+   "dead_ctas": [
+    88,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 231.0,
+   "ms_nominal_scaled": 0.098328
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "DW-T4",
+   "T": 4,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.113132,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 15,
+   "L": 15,
+   "P": 224,
+   "dead_ctas": [
+    44,
+    32
+   ],
+   "sub_wave": false,
+   "weight_MiB": 247.5,
+   "ms_nominal_scaled": 0.10156
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T8-A4",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064137,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 32,
+   "dead_ctas": [
+    1232,
+    896
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.046051
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T8-A13",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.113245,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 13,
+   "L": 13,
+   "P": 176,
+   "dead_ctas": [
+    836,
+    608
+   ],
+   "sub_wave": false,
+   "weight_MiB": 214.5,
+   "ms_nominal_scaled": 0.095196
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T8-A23",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.136783,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 23,
+   "L": 23,
+   "P": 336,
+   "dead_ctas": [
+    396,
+    288
+   ],
+   "sub_wave": false,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.136783
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T8-A32",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.180452,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 32,
+   "L": 32,
+   "P": 480,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180452
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.156191,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 400,
+   "dead_ctas": [
+    220,
+    160
+   ],
+   "sub_wave": false,
+   "weight_MiB": 445.5,
+   "ms_nominal_scaled": 0.156191
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.156191,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 27,
+   "L": 27,
+   "P": 400,
+   "dead_ctas": [
+    220,
+    160
+   ],
+   "sub_wave": false,
+   "weight_MiB": 445.5,
+   "ms_nominal_scaled": 0.156191
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "DW-T8",
+   "T": 8,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.136782,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 23,
+   "L": 23,
+   "P": 336,
+   "dead_ctas": [
+    396,
+    288
+   ],
+   "sub_wave": false,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.136782
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T16-A4",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064384,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    2508,
+    1824
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.046239
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T16-A23",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.136965,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 23,
+   "L": 23,
+   "P": 304,
+   "dead_ctas": [
+    1672,
+    1216
+   ],
+   "sub_wave": false,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.136965
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T16-A41",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.224304,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 41,
+   "L": 41,
+   "P": 592,
+   "dead_ctas": [
+    880,
+    640
+   ],
+   "sub_wave": false,
+   "weight_MiB": 676.5,
+   "ms_nominal_scaled": 0.224304
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T16-A60",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.316495,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 60,
+   "L": 60,
+   "P": 896,
+   "dead_ctas": [
+    44,
+    32
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.316495
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.064384,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    2508,
+    1824
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.046239
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.204896,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 37,
+   "L": 37,
+   "P": 528,
+   "dead_ctas": [
+    1056,
+    768
+   ],
+   "sub_wave": false,
+   "weight_MiB": 610.5,
+   "ms_nominal_scaled": 0.204896
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "DW-T16",
+   "T": 16,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.204895,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 37,
+   "L": 37,
+   "P": 528,
+   "dead_ctas": [
+    1056,
+    768
+   ],
+   "sub_wave": false,
+   "weight_MiB": 610.5,
+   "ms_nominal_scaled": 0.204895
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T32-A4",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.067476,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    2508,
+    1824
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.064546
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T32-A23",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.137329,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 23,
+   "L": 23,
+   "P": 240,
+   "dead_ctas": [
+    1848,
+    1344
+   ],
+   "sub_wave": false,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.137329
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T32-A41",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.224668,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 41,
+   "L": 41,
+   "P": 528,
+   "dead_ctas": [
+    1056,
+    768
+   ],
+   "sub_wave": false,
+   "weight_MiB": 676.5,
+   "ms_nominal_scaled": 0.224668
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T32-A60",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.316859,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 60,
+   "L": 60,
+   "P": 832,
+   "dead_ctas": [
+    220,
+    160
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.316859
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.292598,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 55,
+   "L": 55,
+   "P": 752,
+   "dead_ctas": [
+    440,
+    320
+   ],
+   "sub_wave": false,
+   "weight_MiB": 907.5,
+   "ms_nominal_scaled": 0.292598
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.292598,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 55,
+   "L": 55,
+   "P": 752,
+   "dead_ctas": [
+    440,
+    320
+   ],
+   "sub_wave": false,
+   "weight_MiB": 907.5,
+   "ms_nominal_scaled": 0.292598
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "DW-T32",
+   "T": 32,
+   "role": "TRACE-DW EXTRAPOLATED",
+   "ms_nominal_fixed": 0.297451,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 56,
+   "L": 56,
+   "P": 768,
+   "dead_ctas": [
+    396,
+    288
+   ],
+   "sub_wave": false,
+   "weight_MiB": 924.0,
+   "ms_nominal_scaled": 0.297451
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T64-A4",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.068609,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 4,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    2596,
+    1888
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.065625
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T64-A23",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.144493,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 23,
+   "L": 23,
+   "P": 480,
+   "dead_ctas": [
+    1936,
+    1408
+   ],
+   "sub_wave": false,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.140457
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T64-A41",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.227183,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 41,
+   "L": 41,
+   "P": 1056,
+   "dead_ctas": [
+    1144,
+    832
+   ],
+   "sub_wave": false,
+   "weight_MiB": 676.5,
+   "ms_nominal_scaled": 0.227183
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T64-A60",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.320206,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 1664,
+   "dead_ctas": [
+    308,
+    224
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.320206
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.068609,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 4,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    2596,
+    1888
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.065625
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.320205,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 1664,
+   "dead_ctas": [
+    308,
+    224
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.320205
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T96-A4",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.105952,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 4,
+   "L": 12,
+   "P": 0,
+   "dead_ctas": [
+    1298,
+    944
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.090409
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T96-A23",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.139781,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 23,
+   "L": 23,
+   "P": 352,
+   "dead_ctas": [
+    1056,
+    768
+   ],
+   "sub_wave": true,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.139781
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T96-A41",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.2385,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 41,
+   "L": 41,
+   "P": 928,
+   "dead_ctas": [
+    660,
+    480
+   ],
+   "sub_wave": true,
+   "weight_MiB": 676.5,
+   "ms_nominal_scaled": 0.227899
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T96-A60",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.322289,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 1536,
+   "dead_ctas": [
+    242,
+    176
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.320913
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.322289,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 1536,
+   "dead_ctas": [
+    242,
+    176
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.320912
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T128-A4",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.108872,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 4,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    1320,
+    960
+   ],
+   "sub_wave": true,
+   "weight_MiB": 66.0,
+   "ms_nominal_scaled": 0.070883
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T128-A23",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.1733,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 23,
+   "L": 23,
+   "P": 960,
+   "dead_ctas": [
+    990,
+    720
+   ],
+   "sub_wave": true,
+   "weight_MiB": 379.5,
+   "ms_nominal_scaled": 0.149572
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T128-A41",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.237801,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 41,
+   "L": 41,
+   "P": 2112,
+   "dead_ctas": [
+    594,
+    432
+   ],
+   "sub_wave": false,
+   "weight_MiB": 676.5,
+   "ms_nominal_scaled": 0.232176
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "L-T128-A60",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.326834,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 3328,
+   "dead_ctas": [
+    176,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.326834
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.326835,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 3328,
+   "dead_ctas": [
+    176,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.326835
+  },
+  {
+   "model": "qwen1.5-moe-a2.7b",
+   "page": "qwen1.5-moe-a2.7b-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.326835,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 60,
+   "L": 60,
+   "P": 3328,
+   "dead_ctas": [
+    176,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.326835
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T1-A2",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.113877,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082375
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.113877,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 30,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082375
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T2-A2",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.113932,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 28,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082415
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T2-A3",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.140159,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 3,
+   "L": 3,
+   "P": 44,
+   "dead_ctas": [
+    176,
+    32
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.097142
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T2-A4",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.140146,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 60,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.108247
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.140157,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 3,
+   "L": 3,
+   "P": 44,
+   "dead_ctas": [
+    176,
+    32
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.097142
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T4-A2",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.114043,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    1056,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082494
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T4-A4",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.140226,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 56,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.108312
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T4-A6",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.165657,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 88,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.141248
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.191494,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.179955
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.114043,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 24,
+   "dead_ctas": [
+    1056,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082494
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.165657,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 88,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.141247
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T8-A2",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.114263,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 16,
+   "dead_ctas": [
+    1232,
+    224
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082653
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T8-A4",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.140385,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 48,
+   "dead_ctas": [
+    880,
+    160
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.10844
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T8-A6",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.165796,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 80,
+   "dead_ctas": [
+    528,
+    96
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.141371
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T8-A8",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.191623,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    176,
+    32
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180078
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.191623,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    176,
+    32
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180078
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.191623,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    176,
+    32
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180078
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T16-A2",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.114704,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082972
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T16-A4",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.140704,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 32,
+   "dead_ctas": [
+    1056,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.108697
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T16-A6",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.166073,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 64,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.141617
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T16-A8",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.19188,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180324
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.114704,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 2,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.082972
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.19188,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180324
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T32-A2",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.141341,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.109211
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T32-A4",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.141341,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.109211
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T32-A6",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.166628,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 32,
+   "dead_ctas": [
+    1056,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.142109
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T32-A8",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.192394,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180816
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.192394,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180825
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.192394,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.180825
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T64-A2",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.152997,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.131149
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T64-A4",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.152997,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.131149
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T64-A6",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.16852,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 64,
+   "dead_ctas": [
+    1056,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.152568
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T64-A8",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.194406,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 128,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.182751
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.152997,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    1408,
+    256
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.131149
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.194406,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 128,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.18275
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T96-A2",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.233762,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 2,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.201695
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T96-A4",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.299243,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 4,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    528,
+    96
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.255687
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T96-A6",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.233762,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.201695
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T96-A8",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.299275,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    528,
+    96
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.255711
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.299275,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    528,
+    96
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.255711
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T128-A2",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.211975,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 2,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.146504
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T128-A4",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.211975,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 4,
+   "L": 4,
+   "P": 0,
+   "dead_ctas": [
+    704,
+    128
+   ],
+   "sub_wave": true,
+   "weight_MiB": 264.0,
+   "ms_nominal_scaled": 0.146504
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T128-A6",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.264475,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 6,
+   "L": 6,
+   "P": 128,
+   "dead_ctas": [
+    528,
+    96
+   ],
+   "sub_wave": true,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.176023
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "L-T128-A8",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.263725,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.198421
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.263723,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.19842
+  },
+  {
+   "model": "jetmoe-8b",
+   "page": "jetmoe-8b-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.263723,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 8,
+   "P": 256,
+   "dead_ctas": [
+    352,
+    64
+   ],
+   "sub_wave": true,
+   "weight_MiB": 528.0,
+   "ms_nominal_scaled": 0.19842
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T1-A6",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.063928,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 90,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054147
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.063928,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 90,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054147
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T2-A6",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.058294,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054811
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T2-A8",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.072258,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 132.0,
+   "ms_nominal_scaled": 0.064553
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T2-A10",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.088154,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 10,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 165.0,
+   "ms_nominal_scaled": 0.076644
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T2-A12",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.096618,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 12,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.085108
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.086989,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 12,
+   "P": 180,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 181.5,
+   "ms_nominal_scaled": 0.079284
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T4-A6",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064042,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 72,
+   "dead_ctas": [
+    792,
+    576
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054248
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T4-A12",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.09669,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 12,
+   "L": 12,
+   "P": 168,
+   "dead_ctas": [
+    528,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 198.0,
+   "ms_nominal_scaled": 0.085175
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T4-A18",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.119235,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 18,
+   "L": 18,
+   "P": 264,
+   "dead_ctas": [
+    264,
+    192
+   ],
+   "sub_wave": false,
+   "weight_MiB": 297.0,
+   "ms_nominal_scaled": 0.112474
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T4-A24",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.141587,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 24,
+   "L": 24,
+   "P": 360,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 396.0,
+   "ms_nominal_scaled": 0.141587
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.064042,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 72,
+   "dead_ctas": [
+    792,
+    576
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054248
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.125696,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 20,
+   "L": 20,
+   "P": 296,
+   "dead_ctas": [
+    176,
+    128
+   ],
+   "sub_wave": false,
+   "weight_MiB": 330.0,
+   "ms_nominal_scaled": 0.122178
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T8-A6",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064193,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 48,
+   "dead_ctas": [
+    1848,
+    1344
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054382
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T8-A20",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.125832,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 20,
+   "L": 20,
+   "P": 272,
+   "dead_ctas": [
+    1232,
+    896
+   ],
+   "sub_wave": false,
+   "weight_MiB": 330.0,
+   "ms_nominal_scaled": 0.122313
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T8-A34",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.190243,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 34,
+   "L": 34,
+   "P": 496,
+   "dead_ctas": [
+    616,
+    448
+   ],
+   "sub_wave": false,
+   "weight_MiB": 561.0,
+   "ms_nominal_scaled": 0.190243
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T8-A48",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.258173,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 48,
+   "L": 48,
+   "P": 720,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 792.0,
+   "ms_nominal_scaled": 0.258173
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.190243,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 34,
+   "L": 34,
+   "P": 496,
+   "dead_ctas": [
+    616,
+    448
+   ],
+   "sub_wave": false,
+   "weight_MiB": 561.0,
+   "ms_nominal_scaled": 0.190243
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.190243,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 34,
+   "L": 34,
+   "P": 496,
+   "dead_ctas": [
+    616,
+    448
+   ],
+   "sub_wave": false,
+   "weight_MiB": 561.0,
+   "ms_nominal_scaled": 0.190243
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T16-A6",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.064496,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    2640,
+    1920
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054651
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T16-A25",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.146842,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 25,
+   "L": 25,
+   "P": 304,
+   "dead_ctas": [
+    1804,
+    1312
+   ],
+   "sub_wave": false,
+   "weight_MiB": 412.5,
+   "ms_nominal_scaled": 0.146842
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T16-A45",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.243885,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 45,
+   "L": 45,
+   "P": 624,
+   "dead_ctas": [
+    924,
+    672
+   ],
+   "sub_wave": false,
+   "weight_MiB": 742.5,
+   "ms_nominal_scaled": 0.243885
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T16-A64",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.336076,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 64,
+   "L": 64,
+   "P": 928,
+   "dead_ctas": [
+    88,
+    64
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.336076
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.064496,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 6,
+   "P": 0,
+   "dead_ctas": [
+    2640,
+    1920
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054651
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.263295,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 49,
+   "L": 49,
+   "P": 688,
+   "dead_ctas": [
+    748,
+    544
+   ],
+   "sub_wave": false,
+   "weight_MiB": 808.5,
+   "ms_nominal_scaled": 0.263295
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T32-A6",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.097696,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 6,
+   "L": 12,
+   "P": 0,
+   "dead_ctas": [
+    2640,
+    1920
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.086125
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T32-A25",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.147379,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 25,
+   "L": 25,
+   "P": 208,
+   "dead_ctas": [
+    2068,
+    1504
+   ],
+   "sub_wave": false,
+   "weight_MiB": 412.5,
+   "ms_nominal_scaled": 0.147379
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T32-A45",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.244423,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 45,
+   "L": 45,
+   "P": 528,
+   "dead_ctas": [
+    1188,
+    864
+   ],
+   "sub_wave": false,
+   "weight_MiB": 742.5,
+   "ms_nominal_scaled": 0.244423
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T32-A64",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.336614,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 64,
+   "L": 64,
+   "P": 832,
+   "dead_ctas": [
+    352,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.336614
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.317204,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 60,
+   "L": 60,
+   "P": 768,
+   "dead_ctas": [
+    528,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.317204
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.317204,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 60,
+   "L": 60,
+   "P": 768,
+   "dead_ctas": [
+    528,
+    384
+   ],
+   "sub_wave": false,
+   "weight_MiB": 990.0,
+   "ms_nominal_scaled": 0.317204
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T64-A6",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.085899,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 6,
+   "L": 12,
+   "P": 0,
+   "dead_ctas": [
+    2728,
+    1984
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.085899
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T64-A25",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.1517,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 25,
+   "L": 25,
+   "P": 416,
+   "dead_ctas": [
+    2156,
+    1568
+   ],
+   "sub_wave": false,
+   "weight_MiB": 412.5,
+   "ms_nominal_scaled": 0.149575
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T64-A45",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.247457,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 1056,
+   "dead_ctas": [
+    1276,
+    928
+   ],
+   "sub_wave": false,
+   "weight_MiB": 742.5,
+   "ms_nominal_scaled": 0.247457
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T64-A64",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.340483,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1664,
+   "dead_ctas": [
+    440,
+    320
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.340483
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.085899,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 6,
+   "L": 12,
+   "P": 0,
+   "dead_ctas": [
+    2728,
+    1984
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.085899
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.340484,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1664,
+   "dead_ctas": [
+    440,
+    320
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.340484
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T96-A6",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.118984,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 6,
+   "L": 18,
+   "P": 0,
+   "dead_ctas": [
+    1364,
+    992
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.116347
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T96-A25",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.150615,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 25,
+   "L": 25,
+   "P": 224,
+   "dead_ctas": [
+    1210,
+    880
+   ],
+   "sub_wave": true,
+   "weight_MiB": 412.5,
+   "ms_nominal_scaled": 0.150615
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T96-A45",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.274646,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 864,
+   "dead_ctas": [
+    770,
+    560
+   ],
+   "sub_wave": false,
+   "weight_MiB": 742.5,
+   "ms_nominal_scaled": 0.266568
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T96-A64",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.341533,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1472,
+   "dead_ctas": [
+    352,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.341533
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.341527,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 1472,
+   "dead_ctas": [
+    352,
+    256
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.341527
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T128-A6",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.109764,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 6,
+   "L": 12,
+   "P": 0,
+   "dead_ctas": [
+    1386,
+    1008
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.089087
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T128-A25",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.210941,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 25,
+   "L": 25,
+   "P": 832,
+   "dead_ctas": [
+    1100,
+    800
+   ],
+   "sub_wave": false,
+   "weight_MiB": 412.5,
+   "ms_nominal_scaled": 0.170492
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T128-A45",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.253489,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 45,
+   "L": 45,
+   "P": 2112,
+   "dead_ctas": [
+    660,
+    480
+   ],
+   "sub_wave": false,
+   "weight_MiB": 742.5,
+   "ms_nominal_scaled": 0.253489
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "L-T128-A64",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.348146,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3328,
+   "dead_ctas": [
+    242,
+    176
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.348146
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.348152,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3328,
+   "dead_ctas": [
+    242,
+    176
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.348152
+  },
+  {
+   "model": "deepseek-v2-lite",
+   "page": "deepseek-v2-lite-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.348152,
+   "path": "small-batch",
+   "tile": "64x128x64w4s3",
+   "A": 64,
+   "L": 64,
+   "P": 3328,
+   "dead_ctas": [
+    242,
+    176
+   ],
+   "sub_wave": false,
+   "weight_MiB": 1056.0,
+   "ms_nominal_scaled": 0.348152
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T1-A8",
+   "T": 1,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.048227,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037297
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T1",
+   "T": 1,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.048227,
+   "path": "naive",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 120,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037297
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T2-A8",
+   "T": 2,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.048262,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 112,
+   "dead_ctas": [
+    128,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037322
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T2-A11",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.04825,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 11,
+   "L": 11,
+   "P": 160,
+   "dead_ctas": [
+    80,
+    120
+   ],
+   "sub_wave": true,
+   "weight_MiB": 49.5,
+   "ms_nominal_scaled": 0.039725
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T2-A13",
+   "T": 2,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.048246,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 13,
+   "L": 13,
+   "P": 192,
+   "dead_ctas": [
+    48,
+    72
+   ],
+   "sub_wave": true,
+   "weight_MiB": 58.5,
+   "ms_nominal_scaled": 0.0424
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T2-A16",
+   "T": 2,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.049569,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 240,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": true,
+   "weight_MiB": 72.0,
+   "ms_nominal_scaled": 0.046396
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T2",
+   "T": 2,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.048671,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 14,
+   "L": 14,
+   "P": 208,
+   "dead_ctas": [
+    32,
+    48
+   ],
+   "sub_wave": true,
+   "weight_MiB": 63.0,
+   "ms_nominal_scaled": 0.04373
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T4-A8",
+   "T": 4,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.048331,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    384,
+    576
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037372
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T4-A16",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.049619,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 16,
+   "L": 16,
+   "P": 224,
+   "dead_ctas": [
+    256,
+    384
+   ],
+   "sub_wave": true,
+   "weight_MiB": 72.0,
+   "ms_nominal_scaled": 0.046444
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T4-A24",
+   "T": 4,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.059628,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 24,
+   "L": 24,
+   "P": 352,
+   "dead_ctas": [
+    128,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 108.0,
+   "ms_nominal_scaled": 0.05712
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T4-A32",
+   "T": 4,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.078703,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 32,
+   "L": 32,
+   "P": 480,
+   "dead_ctas": [
+    0,
+    0
+   ],
+   "sub_wave": false,
+   "weight_MiB": 144.0,
+   "ms_nominal_scaled": 0.070042
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "MIN-T4",
+   "T": 4,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.048331,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 96,
+   "dead_ctas": [
+    384,
+    576
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037372
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T4",
+   "T": 4,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.05786,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 22,
+   "L": 22,
+   "P": 320,
+   "dead_ctas": [
+    160,
+    240
+   ],
+   "sub_wave": true,
+   "weight_MiB": 99.0,
+   "ms_nominal_scaled": 0.054913
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T8-A8",
+   "T": 8,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.048471,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 64,
+   "dead_ctas": [
+    544,
+    816
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037472
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T8-A19",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.055834,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 19,
+   "L": 19,
+   "P": 240,
+   "dead_ctas": [
+    368,
+    552
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.052363
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T8-A29",
+   "T": 8,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.077714,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 29,
+   "L": 29,
+   "P": 400,
+   "dead_ctas": [
+    208,
+    312
+   ],
+   "sub_wave": false,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.068794
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T8-A40",
+   "T": 8,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.082401,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 576,
+   "dead_ctas": [
+    32,
+    48
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.078564
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T8",
+   "T": 8,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.080155,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 35,
+   "L": 35,
+   "P": 496,
+   "dead_ctas": [
+    112,
+    168
+   ],
+   "sub_wave": false,
+   "weight_MiB": 157.5,
+   "ms_nominal_scaled": 0.071892
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "US-T8",
+   "T": 8,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.080155,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 35,
+   "L": 35,
+   "P": 496,
+   "dead_ctas": [
+    112,
+    168
+   ],
+   "sub_wave": false,
+   "weight_MiB": 157.5,
+   "ms_nominal_scaled": 0.071892
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T16-A8",
+   "T": 16,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.048751,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    608,
+    912
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037673
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T16-A19",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.056034,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 19,
+   "L": 19,
+   "P": 176,
+   "dead_ctas": [
+    432,
+    648
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.052556
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T16-A29",
+   "T": 16,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.077936,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 29,
+   "L": 29,
+   "P": 336,
+   "dead_ctas": [
+    272,
+    408
+   ],
+   "sub_wave": false,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.068995
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T16-A40",
+   "T": 16,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.082597,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 512,
+   "dead_ctas": [
+    96,
+    144
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.078753
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "MIN-T16",
+   "T": 16,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.048751,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 8,
+   "P": 0,
+   "dead_ctas": [
+    608,
+    912
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.037673
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T16",
+   "T": 16,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.082596,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 512,
+   "dead_ctas": [
+    96,
+    144
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.078753
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T32-A8",
+   "T": 32,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.050323,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    608,
+    912
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.047105
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T32-A19",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.056437,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 19,
+   "L": 19,
+   "P": 48,
+   "dead_ctas": [
+    560,
+    840
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.052942
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T32-A29",
+   "T": 32,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.07837,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 29,
+   "L": 29,
+   "P": 208,
+   "dead_ctas": [
+    400,
+    600
+   ],
+   "sub_wave": false,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.069392
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T32-A40",
+   "T": 32,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.082986,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 384,
+   "dead_ctas": [
+    224,
+    336
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.07913
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T32",
+   "T": 32,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.082984,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 384,
+   "dead_ctas": [
+    224,
+    336
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.07913
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "US-T32",
+   "T": 32,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.082984,
+   "path": "small-batch",
+   "tile": "16x64x128w4s4",
+   "A": 40,
+   "L": 40,
+   "P": 384,
+   "dead_ctas": [
+    224,
+    336
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.07913
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T64-A8",
+   "T": 64,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.051571,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    624,
+    936
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.048272
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T64-A19",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.053085,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 19,
+   "L": 19,
+   "P": 96,
+   "dead_ctas": [
+    576,
+    864
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.052562
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T64-A29",
+   "T": 64,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.068967,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 29,
+   "L": 29,
+   "P": 416,
+   "dead_ctas": [
+    416,
+    624
+   ],
+   "sub_wave": true,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.067434
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T64-A40",
+   "T": 64,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.092477,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 768,
+   "dead_ctas": [
+    240,
+    360
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.088054
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "MIN-T64",
+   "T": 64,
+   "role": "MINCOVER",
+   "ms_nominal_fixed": 0.051571,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    624,
+    936
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.048272
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T64",
+   "T": 64,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.092495,
+   "path": "small-batch",
+   "tile": "32x64x128w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 768,
+   "dead_ctas": [
+    240,
+    360
+   ],
+   "sub_wave": false,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.088066
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T96-A8",
+   "T": 96,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.074799,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 8,
+   "L": 24,
+   "P": 0,
+   "dead_ctas": [
+    312,
+    468
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.064799
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T96-A19",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.079907,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 19,
+   "L": 38,
+   "P": 448,
+   "dead_ctas": [
+    200,
+    300
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.078839
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T96-A29",
+   "T": 96,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.075935,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 29,
+   "L": 29,
+   "P": 160,
+   "dead_ctas": [
+    272,
+    408
+   ],
+   "sub_wave": true,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.066972
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T96-A40",
+   "T": 96,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.081551,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 512,
+   "dead_ctas": [
+    184,
+    276
+   ],
+   "sub_wave": true,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.081551
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T96",
+   "T": 96,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.081551,
+   "path": "small-batch",
+   "tile": "32x128x64w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 512,
+   "dead_ctas": [
+    184,
+    276
+   ],
+   "sub_wave": true,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.081551
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T128-A8",
+   "T": 128,
+   "role": "LADDER-BOTTOM",
+   "ms_nominal_fixed": 0.077999,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 8,
+   "L": 16,
+   "P": 0,
+   "dead_ctas": [
+    320,
+    480
+   ],
+   "sub_wave": true,
+   "weight_MiB": 36.0,
+   "ms_nominal_scaled": 0.05393
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T128-A19",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.077585,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 19,
+   "L": 19,
+   "P": 192,
+   "dead_ctas": [
+    296,
+    444
+   ],
+   "sub_wave": true,
+   "weight_MiB": 85.5,
+   "ms_nominal_scaled": 0.055235
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T128-A29",
+   "T": 128,
+   "role": "LADDER",
+   "ms_nominal_fixed": 0.078273,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 29,
+   "L": 29,
+   "P": 832,
+   "dead_ctas": [
+    216,
+    324
+   ],
+   "sub_wave": true,
+   "weight_MiB": 130.5,
+   "ms_nominal_scaled": 0.068699
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "L-T128-A40",
+   "T": 128,
+   "role": "BALANCED",
+   "ms_nominal_fixed": 0.09367,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 1536,
+   "dead_ctas": [
+    128,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.087153
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "U-T128",
+   "T": 128,
+   "role": "UNIFORM",
+   "ms_nominal_fixed": 0.093666,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 1536,
+   "dead_ctas": [
+    128,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.087151
+  },
+  {
+   "model": "granite-3.0-3b-a800m",
+   "page": "granite-3.0-3b-a800m-main",
+   "label": "US-T128",
+   "T": 128,
+   "role": "UNIFORM-UNSHUFFLED",
+   "ms_nominal_fixed": 0.093666,
+   "path": "block-scan",
+   "tile": "64x128x64w4s3",
+   "A": 40,
+   "L": 40,
+   "P": 1536,
+   "dead_ctas": [
+    128,
+    192
+   ],
+   "sub_wave": true,
+   "weight_MiB": 180.0,
+   "ms_nominal_scaled": 0.087151
+  }
+ ],
+ "power": {
+  "draws": 4000,
+  "seed": 20261014,
+  "cells": 247,
+  "sigma_cell": 0.0018,
+  "sigma_cell_under_50us": 0.0036,
+  "p_holds": {
+   "the model is the truth": 1.0,
+   "T0_GR off by +5 us (the riskiest assumption)": 0.0,
+   "T0_GR off by +1 us": 1.0,
+   "+1% everywhere": 1.0,
+   "+2% everywhere": 0.0,
+   "+5% on sub-wave cells": 0.0
+  },
+  "computed": "CPU float64 (numpy)",
+  "label": "DESIGN-NOMINAL predictions; sigma ASSUMED"
+ },
+ "rental": {
+  "units_min": 101,
+  "wall_min": 135,
+  "cost_usd": 5.15,
+  "rate": "gpu_1x_gh200 at $2.29/h",
+  "rule": "units plus prelude 3 and calibrate 2 (and the CAL census 6), x 1/0.84 (rentals 4 to 7) plus 15 min boot and setup"
+ },
+ "labels": {
+  "time": "BLIND (the decode call, its tile and its instrument: no decode page exists)",
+  "pages": "SYNTHETIC",
+  "everything published": "SEEN",
+  "per_model": {
+   "phi-3.5-moe": "SEEN-MODEL: R3 pages published (rental 7, R3's tile); the decode call, tile and instrument BLIND",
+   "qwen1.5-moe-a2.7b": "SEEN-MODEL: R3 pages published (R3's tile); the decode call, tile and instrument BLIND",
+   "jetmoe-8b": "SEEN-MODEL: R3 pages published (R3's tile); the decode call, tile and instrument BLIND",
+   "granite-3.0-3b-a800m": "SEEN-MODEL: R3 pages published (R3's tile, the launch floor); the decode call, tile and instrument BLIND",
+   "deepseek-v2-lite": "SEEN-SHAPE (the tile stage's D7: on a published H200 page, its GEMMs Qwen1.5's); the decode call, tile and instrument BLIND"
+  }
+ },
+ "scorer_ambiguities": {
+  "1 'each relative error floored at 1 us'": "read as: an absolute error at or under 1 us counts as 0; otherwise e = (pred - meas) / meas (v4d.rel_err)",
+  "2 T0_GR + s_path": "s_small_GR is folded into T0_GR: every cell has exactly one path, so the three CAL constants are T0_GR (the small-batch constant), s_naive_GR and s_block_GR (offsets); block-scan occurs on OLMoE at T 128 in CAL, so s_block_GR is fitted, not assumed",
+  "3 the wgmma decode tile (T 97..128, 64x128x64 w4)": "v4d prices it with the tile stage's finalised v4 constants (c_128, F_wg, accounting, F form, census occupancy; scripts/scoring/tileA/finalise.selections). With none, those cells are NOT PRICED and out of E1-DEC and the fit",
+  "4 the hot expert's second tile": "priced at a full slab re-read (sigma 1). The L2-survival rival and the FILL-r rival are STRUCK before any page (build-decode review 5): neither is priced; G3-D fill is FILL0's test and MINCOVER past BM shows the second tile's cost as a residual",
+  "5 naive repeats": "vLLM launches the naive path token-major (expert_ids = topk_ids.view(-1)); v4d lists the rows expert-ascending, which leaves the read total and the throughput sum unchanged and moves only the window means and the tail set. A repeated expert's slab is fetched once (the later CTA in launch order hits L2); NAIVE-NODEDUP is the rival",
+  "6 G3-D clusters": "(model, T) for shuffle and label, (model, tile band) for fill; d in microseconds net of v4d's own predicted difference",
+  "7 GD2's void": "a blind GR1 page outside the band voids the model's GRR page (the instruments disagree on that model, so the primary cannot be trusted there)",
+  "8 GRR rotation": "R = ceil(240 MiB / (A_min W_e)) copies per page, A_min the page's least coverage; calls per graph the least multiple of R at or over 8",
+  "9 CERTIFIED": "a blind model is CERTIFIED when its own E1-DEC bar holds and the pooled bar holds",
+  "10 the rho margin": "ABSOLUTE: scaled is selected only when its sub-wave rms is lower than fixed's by at least 0.001, i.e. 0.1 percentage points of rms (not 0.1% of fixed's rms)",
+  "11 an unfitted offset": "never 0: a path with no valid CAL row has no offset, its cells are NOT PRICED, and any NOT PRICED CAL cell is a STOP",
+  "12 NOT PRICED is never silent": "the CAL scorer REFUSES without --tile-scores (the tile stage's selections; every CAL main page holds T 97..128 cells), STOPs on any NOT PRICED CAL cell, and the blind scorer lists NOT PRICED cells per model",
+  "13 the pooled blind bar": "computed over the models that survive (not voided by GD2 or G3-D, with at least one valid priced cell); the score names them (pooled_over)",
+  "14 blind G3-D INCONCLUSIVE": "a TOST that is NOT EQUIVALENT (the interval leaves the margin, whether by a shift or by width) voids the model's cells; NOT SCORED (under 2 clusters) voids nothing",
+  "15 the 1 us floor": "kept as a STEP and stated: |pred - meas| <= 1 us counts 0, above it the full relative error counts (at a 12 us cell an 8% error, 0.96 us, counts 0; 9%, 1.08 us, counts 9%)",
+  "16 sub-wave": "a cell is sub-wave when some GEMM's live CTAs are under SMs x its occupancy, the occupancy the census's (tile rental A's census score) where it exists, else the shared-memory rule: the rho selection's cell set moves with the census"
+ },
+ "seen_data": [
+  "every published page (rentals 1 to 7) is SEEN",
+  "the CAL rental's pages, once scored"
+ ],
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/r3_decode.py": "f043e438d50287162bfb55644b7b1998cfffad8d50d50fcf1dad4afb189c1db8",
+  "scripts/decode_synth.py": "45fa76a8a1edfa72351f90505a6a93214138ac5c709165f73455b3032e33ffbd",
+  "scripts/r3_timing_model_v4d.py": "52a8f6fefcc93d3f0bc2d8efd45f774efe2833d6101c0a322fce8c14b7028c70",
+  "scripts/dram_counter_route_decode.py": "710186fe66e174e1e14a3ef7b2bda7956d5e9b0fee3088d530f3315f0cab366b",
+  "scripts/gh200_decode_session.sh": "a4a906a229c41153ae8a736919430da371a94c90ddf863f4adf37c2d2e52076d",
+  "scripts/scoring/decode/dcommon.py": "4cade228054581ac533aa799af9025cda6fa56e322e3e33f4f92ae3f2a65622c",
+  "scripts/scoring/decode/regdecode.py": "e39a7eccc52811933473da1c9e23b81e9aed7f24406b30c2d72d2f482bcd2e28",
+  "scripts/scoring/decode/finalise_decode.py": "78b8e7fae8603313c4098d2fd1fe7ed7110c3410103230d11b50f584271e8812",
+  "moe/instrumented/UPSTREAM_DECODE.json": "098f8999afd2f3b4457df5f2612b85f888971af4480eb82c703da0386bccec2a"
+ }
+}

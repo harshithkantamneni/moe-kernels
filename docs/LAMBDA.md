@@ -648,7 +648,8 @@ locked_r3.py's own logs and ledgers, and every page, carry the card's UUID,
 so read those through a grep, never whole into a chat. To stop the driver on
 the VM: `pkill -TERM -f '[g]h200_(model|tile)_session.sh'` (an extended regex that
 stops the pinned driver and the tile stage's copy; each layer resets the clock,
-then the driver pushes and exits 143). To resume at a step:
+then the driver pushes and exits 143); the decode stage's copy (2026-10-14) stops with
+`pkill -TERM -f '[g]h200_decode_session.sh'`. To resume at a step:
 `bash ~/moe/repo/scripts/gh200_model_session.sh --from <step> --deadline <epoch s>`;
 a rerun takes a fresh session tag (`...b`), since locked_r3.py refuses one
 already used.

@@ -1371,3 +1371,47 @@ nodrop.
 | rep, w4, ms, dk (dropped last first: dk, ms, w4, rep) | 5 | 30 |
 
 147 min of units (117 nodrop), about $5.6; rental B about 117 min, $5.3: the stage about $11 (D10).
+
+## The decode stage (2026-10-14): `2026-10-14-decodeC-cal-gh200`, `2026-10-14-decodeB-blind-gh200`
+
+Registered before any decode page, from design-decode DESIGN.md and the owner's decisions DD1 to DD6
+of 2026-10-14. Built by `scripts/scoring/decode/register_decode.py` (`--check` recomputes both files;
+`--check-card` recomputes v4d's card constants from rental 6's pricer; `--mps-check` re-runs the power
+simulation on the laptop GPU in float32: equal to the CPU float64 result at every scenario). The pages
+are SYNTHETIC (`scripts/decode_synth.py`, `docs/registered/2026-10-14-decode-pages/`); the call is
+vLLM's own at T 1 to 128 (its default tile, its naive path at T 1 to 3), timed by `scripts/r3_decode.py`
+under locked_r3's `--r3-script`.
+
+**decodeC-cal**: OLMoE-1B-7B and Mixtral-8x7B. The GRR main pages (one CUDA graph of back-to-back calls
+on rotating weight copies, cold with no flush) fit v4d's three CAL constants (T0_GR, s_naive_GR,
+s_block_GR) and select rho (fixed 11.48 GB/s per CTA against scaled by bytes in flight) on the sub-wave
+cells. The GR1 control pages set GD2's band (GR1 - GRR per call), frozen for the blind rental; the
+E240 page reads GD3 (DESCRIPTIVE); G3-D's shuffle and label TOSTs must be EQUIVALENT (time a function
+of counts alone) and fill tests FILL0; the DECL lever and the counter pages (every launch's grid held to
+the spy's readback) are DESCRIPTIVE; the replicate sets sigma_page and tightens the blind bars from the
+provisional rms <= 3%, worst <= 8%, |mean| <= 1.5% (DD5), never loosening them. The STOP rule: a nodrop
+unit not counted, no fit, the in-sample E1-DEC over the provisional bars, G3-D shuffle or label not
+EQUIVALENT, any CAL cell refused by V-ALIGN or GD5, or GD2's median outside [-1, 10] us.
+
+**decodeB-blind (frozen)**: Phi-3.5-MoE, Qwen1.5-MoE, JetMoE-8B, deepseek-v2-lite and Granite-3B on GRR
+main pages, GR1 control pages on Qwen1.5 and Granite. `finalise_decode.py` refuses on a STOP, freezes the
+CAL constants, rho, the bars and the GD2 band, prices every blind cell (v4d and the rivals eager,
+roofline, line, OLS, NAIVE-NODEDUP, the other rho) and writes the blind plan. A model is CERTIFIED when
+its own E1-DEC bar and the pooled bar hold.
+
+**Before any page (build-decode review, 2026-10-14).** Refused and failed cells are taken out of G1's
+non-clean share, so a refusal cannot fail the page; `score_cal.py` refuses without `--tile-scores` and
+STOPs on any NOT PRICED CAL cell; an unfitted path offset is never 0 (its cells are NOT PRICED); the rho
+margin is absolute (0.1 percentage points of rms); the L2-survival and FILL-r rivals are struck; GRR's
+calls 0..R-1 must read R distinct weight copies (Mixtral and Phi, R = 1, are cold by volume, 300 to 672
+MiB between reads against the 60 MiB L2); GD4 covers the check-phase capture only; the GD2 band is capped
+at 8 us; per-model SEEN labels on the blind models; seven more scorer ambiguities written down.
+
+**The trace statistics (DD3)**: rental 5's routing logs are gone, so the primary extraction did not
+run; the trace-like cells are rental 5's fitted DW shapes EXTRAPOLATED to decode B, registered as such
+(`coverage_stats.json`). They cut coverage by at most about 9 points; the coverage ladder is the lever.
+
+| rental | units | est. min of units | wall | cost |
+|---|---:|---:|---:|---:|
+| decode CAL (after tile rental B) | 13 | 106 | about 2 h 21 min | about $5.4 |
+| decode blind (generated at finalisation) | 9 | 101 | about 2 h 15 min | about $5.2 |
