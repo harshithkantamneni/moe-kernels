@@ -1,0 +1,61 @@
+== 2026-10-14T02:00:26Z step timed: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 15 copies, slip-policy cell, g1-rule r7-median-run3
+2026-10-14T02:00:26Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-14T02:00:26Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+==PROF== Resetting GPU clocks on device 0.
+All done.
+2026-10-14T02:00:27Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+  ridge       173.02 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 644.6 TFLOP/s bf16 over 3725.6 GB/s (triad pattern); calibrated 2026-10-14 at
+            n_decl = 15 against n_max = 2 read: --declared-copies 15; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 2 against the 2 planned (a histogram page has no depth table: its deepest cell's tread)
+LOCKED R3: the timed R3 arm under an nvidia-smi SM clock lock, top lock first
+session tag gh200-20261014T004743Z-p2h; each lock's pages carry gh200-20261014T004743Z-p2h-lock<F>
+locks       1710 MHz, top down; a slip (a timed cell more than 15 MHz under the lock) stops that lock, steps down one and restarts at G=8; a cell more than 15 MHz over it means the lock is not in force and stops the ladder
+groups      G = 8, in this order at every lock
+R3          /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model qwen1.5-moe-a2.7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 15 --histogram docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json --arms native,shared --group-m G --session-tag <tag>-lock<F>
+results     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-q15/private_weight_reference/<run id>: each attempt's directory is the one its own R3 names (the plan's `session` and `WRITES TO` lines) under its own tag, created after the attempt started; never found by time
+lock        sudo -n nvidia-smi -lgc F,F, after `nvidia-smi -q -d SUPPORTED_CLOCKS` (every lock must be a supported graphics clock) and only once `nvidia-smi --query-compute-apps` lists no process on the card
+reset       sudo -n nvidia-smi -rgc on every exit: a return, an exception, SIGTERM, SIGHUP, Ctrl-C. SIGKILL cannot be caught: after one, reset by hand (sudo -n nvidia-smi -rgc)
+ledger      /home/ubuntu/moe/session/locked-r3/gh200-20261014T004743Z-p2h/status (one UTC line per event), summary.json, r3-g<G>-lock<F>.log per attempt, smi.csv every 500 ms
+caps        one R3 run 3600 s, the whole ladder 14400 s, a busy GPU 300 s; polled every 10 s
+slips       --slip-policy cell: a slipped repeat does NOT stop R3; R3 flags it (lock_slip), keeps it out of the cell median, drops a cell under 0 clean repeats and stops once none can reach it; the page ends HELD_WITH_SLIPS
+attempts    at most 1, in this order until one lock holds at every G:
+    1  lock 1710  G=8   /home/ubuntu/moe/venvs/vllm/bin/python /home/ubuntu/moe/repo/scripts/private_weight_reference.py --model qwen1.5-moe-a2.7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 15 --histogram docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json --arms native,shared --slip-policy cell --lock-mhz 1710 --min-clean-repeats 0 --group-m 8 --session-tag gh200-20261014T004743Z-p2h-lock1710
+2026-10-14T02:00:28Z locked_r3 start: tag gh200-20261014T004743Z-p2h, locks [1710], G [8], R3 args --model qwen1.5-moe-a2.7b --block-m 32 --repeats 9 --duty 0.25 --seed 0 --declared-copies 15 --histogram docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json --arms native,shared, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-q15/private_weight_reference
+2026-10-14T02:00:28Z card: NVIDIA GH200 480GB, GPU-e0172ca4-b9ed-dad8-68e7-2def2dac8abc, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-10-14T02:00:29Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-10-14T02:00:29Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-10-14T02:00:29Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 133.52 W, 700.00 W
+2026-10-14T02:00:29Z G=8 start at lock 1710: pid 22687, tag gh200-20261014T004743Z-p2h-lock1710, log r3-g8-lock1710.log
+2026-10-14T02:00:39Z G=8 at lock 1710: R3 named its run directory nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
+2026-10-14T02:02:59Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
+2026-10-14T02:02:59Z all G held at lock 1710 MHz
+2026-10-14T02:02:59Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-10-14T02:02:59Z read back after the reset: 510 MHz, 1980 MHz, 0x0000000000000001, 123.37 W, 700.00 W
+==============================================================================
+LOCKED R3, session tag gh200-20261014T004743Z-p2h: 1710 MHz held at every G (8)
+   lock   G  state              cells worst MHz  R3 exit            s  run directory
+   1710   8  held                  36    1710.0  0 DONE           150  nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
+pages kept, all at 1710 MHz (each verdict is R3's own):
+  G=8   0 DONE        /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-q15/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
+RESULT: VALIDITY V1 PASS every attempt read only the run directory its own R3 named | measured 1 of 1 attempts | gate the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+VALIDITY 1  PASS     every attempt read only the run directory its own R3 named
+           measured 1 of 1 attempts
+           gate     the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag
+RESULT: VALIDITY V2 PASS the lock search reached a verdict | measured lock 1710 MHz held at every G | gate a lock held at every G, or every lock on the ladder slipped
+VALIDITY 2  PASS     the lock search reached a verdict
+           measured lock 1710 MHz held at every G
+           gate     a lock held at every G, or every lock on the ladder slipped
+RESULT: CLAIM C1 PASS a lock on the ladder held at every G | measured 1710 MHz held at G = 8 | gate no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)
+CLAIM 1  PASS     a lock on the ladder held at every G
+           measured 1710 MHz held at G = 8
+           gate     no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)
+SM clock reset: `sudo -n nvidia-smi -rgc` exited 0
+exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+ledger /home/ubuntu/moe/session/locked-r3/gh200-20261014T004743Z-p2h/status; summary /home/ubuntu/moe/session/locked-r3/gh200-20261014T004743Z-p2h/summary.json
+==============================================================================
+2026-10-14T02:02:59Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+clocks.current.sm [MHz], clocks.max.sm [MHz], clocks_event_reasons.active, power.limit [W]
+345 MHz, 1980 MHz, 0x0000000000000001, 700.00 W
+2026-10-14T02:03:04Z timed: P2 locked_r3 exit 0
+2026-10-14T02:03:04Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:03:04Z timed: 2026-10-14T02:02:59Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
