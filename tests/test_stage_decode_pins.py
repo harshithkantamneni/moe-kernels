@@ -7,7 +7,9 @@ The decode registrations' own pins must equal their files."""
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -103,12 +105,13 @@ def test_no_decode_module_shadows_an_earlier_scorer_by_name():
     assert not mine & others, mine & others
 
 
-def test_every_decode_test_collects_after_test_r3_timing_model():
-    """tests/test_r3_timing_model.py replaces sys.modules["r3_timing_model"] when it is collected, so a
-    test module collected before it that imports model v4 (directly or through v4d) binds v4 to the
-    replaced module, and the tile stage's tests then fail by xdist worker order. The decode tests are
-    named test_stage_decode_* so they sort after it; this holds the rule."""
-    names = sorted(p.name for p in (REPO / "tests").glob("test_*.py"))
-    first = min(i for i, n in enumerate(names) if "decode" in n and n.startswith("test_stage_"))
-    assert names.index("test_r3_timing_model.py") < first
-    assert not list((REPO / "tests").glob("test_decode_*.py"))
+def test_models_v4_and_v4d_share_the_one_registered_r3_timing_model():
+    """tests/test_r3_timing_model.py reuses an already-imported r3_timing_model instead of replacing
+    it, so v4 and v4d bind the registered module whatever order the test files collect in."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    import r3_timing_model_v4 as V4
+    import r3_timing_model_v4d as V4D
+    spec = importlib.util.spec_from_file_location("_t_r3tm", REPO / "tests" / "test_r3_timing_model.py")
+    T = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(T)
+    assert T.M is sys.modules["r3_timing_model"] is V4.TM is V4D.TM

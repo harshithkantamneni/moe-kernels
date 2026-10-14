@@ -52,6 +52,11 @@ SCRIPT = ROOT / "scripts" / "r3_timing_model.py"
 
 
 def _load():
+    # Models v3, v4 and v4d bind r3_timing_model at import. Reuse that instance: registering a
+    # second copy under the same name would split them by collection order.
+    have = sys.modules.get("r3_timing_model")
+    if have is not None and Path(have.__file__).resolve() == SCRIPT:
+        return have
     spec = importlib.util.spec_from_file_location("r3_timing_model", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     # Registered before exec: `@dataclass` resolves annotations through it.
