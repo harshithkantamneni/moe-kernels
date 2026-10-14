@@ -10,3 +10,4 @@
 2026-10-14T01:57:45Z timed (unit 8/15 phi-3.5-moe skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
 2026-10-14T02:00:25Z timed (unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
 2026-10-14T02:03:06Z timed (unit 10/15 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-14T02:05:46Z timed (unit 11/15 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
