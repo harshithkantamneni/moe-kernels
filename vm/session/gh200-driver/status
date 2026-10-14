@@ -127,3 +127,8 @@
 2026-10-14T02:16:07Z timed: 2026-10-14T02:16:01Z G=8 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 220 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hist0a131f4a1-926f5adf
 2026-10-14T02:16:07Z timed END: exit 0 after 4 min [unit 14/15 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-14T02:16:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:16:10Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared [unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 49 min left)
+2026-10-14T02:16:25Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-14T02:16:25Z bytes: rental 2 knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared on every page of this unit
+2026-10-14T02:16:25Z bytes: the registered list G = 8 (olmoe-1b-7b, l2open): no tail drop, no re-price, no base-clock control
+2026-10-14T02:18:12Z bytes: G=8 page exit 0 after 104 s

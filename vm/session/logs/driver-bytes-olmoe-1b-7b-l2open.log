@@ -1,0 +1,34 @@
+== 2026-10-14T02:16:10Z step bytes: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared
+2026-10-14T02:16:25Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-14T02:16:25Z bytes: rental 2 knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared on every page of this unit
+2026-10-14T02:16:25Z bytes: the registered list G = 8 (olmoe-1b-7b, l2open): no tail drop, no re-price, no base-clock control
+==PROF== Resetting GPU clocks on device 0.
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 02e86e, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 COUNTER RUN  G=8  20 cells, 120 profiled launches after 80 skipped, at an nvidia-smi lock of 1710 MHz (ncu --clock-control none)
+  ncu        /usr/local/cuda-13.0/bin/ncu  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  metrics    17 asked: dram__bytes_read.sum, dram__bytes_write.sum, lts__t_sectors_srcunit_tex_op_read.sum, launch__grid_size, gpu__time_duration.sum, lts__d_sectors_fill_device.sum, lts__t_sectors_op_read_lookup_miss.sum, lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum, lts__t_sector_op_read_hit_rate.pct, launch__occupancy_limit_blocks, launch__occupancy_limit_registers, launch__occupancy_limit_shared_mem, launch__occupancy_limit_warps, launch__registers_per_thread, launch__waves_per_multiprocessor, lts__t_sectors_srcunit_ltcfabric.sum, sm__cycles_elapsed.avg
+  profiles   /home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/r3c-g8.profiles
+  PT               native  n=4   DRAM read w1 557088000.0 w2 285352021.3333333
+  PT               shared  n=4   DRAM read w1 556895146.6666666 w2 285349973.3333333
+  PW               native  n=4   DRAM read w1 557050368.0 w2 285362176.0
+  PW               shared  n=4   DRAM read w1 557147818.6666666 w2 285353813.3333333
+  uniform          native  n=4   DRAM read w1 541144405.3333334 w2 285327872.0
+  uniform          shared  n=4   DRAM read w1 541150037.3333334 w2 285326848.0
+  balanced         native  n=4   DRAM read w1 541152597.3333334 w2 285312426.6666667
+  balanced         shared  n=4   DRAM read w1 541151488.0 w2 285326421.3333333
+  PT               native  n=8   DRAM read w1 558130261.3333334 w2 302265514.6666667
+  PT               shared  n=8   DRAM read w1 558104576.0 w2 302274389.3333333
+  PW               native  n=8   DRAM read w1 557343829.3333334 w2 302255786.6666667
+  PW               shared  n=8   DRAM read w1 557298944.0 w2 302258005.3333333
+  uniform          native  n=8   DRAM read w1 545370368.0 w2 302190677.3333333
+  uniform          shared  n=8   DRAM read w1 545411072.0 w2 302201685.3333333
+  balanced         native  n=8   DRAM read w1 545365418.6666666 w2 302168149.3333333
+  balanced         shared  n=8   DRAM read w1 545402538.6666666 w2 302160213.3333333
+  PT               native  n=16  DRAM read w1 578307498.6666666 w2 336070400.0
+  PW               native  n=16  DRAM read w1 583576064.0 w2 336072106.6666667
+  uniform          native  n=16  DRAM read w1 553962240.0 w2 335932586.6666667
+  balanced         native  n=16  DRAM read w1 553858560.0 w2 335856042.6666667
+wrote /home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/r3c-g8.json (histogram page: no gate scored here)
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/r3c-g8.json: '/home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/r3c-g8.json' is outside repository at '/home/ubuntu/moe/repo')
+G=8 exit 0 02:18:12 104 s
+2026-10-14T02:18:12Z bytes: G=8 page exit 0 after 104 s
