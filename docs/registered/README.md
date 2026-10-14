@@ -1267,3 +1267,31 @@ every skewed row within 5%.
 99 min of units (95 without the byte page), about 83 min actual at rental 6's 0.84x, about $4.1 to
 $4.3. The driver drops the last unit first: byt, q1j, q1p, q1q; calibrate and the six skew pages
 carry nodrop=1. Every per-unit driver log is now named by model and label.
+
+**Scored 2026-10-14** on `results/published/2026-10-14-nvidia_gh200_480gb-rental7-session`
+(board 02e86e, new; 15 units at ae010ff in 91 minutes, none dropped, driver exit 0; the scorers'
+outputs and the per-prediction ALL / CLEAN table in `scripts/scoring/rental7/` and `SCORES.md`; no
+post-page fix). **g1rule**: R3's own stored G1 fails the six Mixtral and Phi skew pages and Phi q9
+on drift flags, as expected of the pinned R3. The scorers rebuild every page from cells.csv under
+r7-median-run3, and all twelve timed pages pass. 0 of 1,332 repeat rows are non-clean, no cell is
+lost, and every cell median reads 1710.0 MHz. 668 repeats carry a dipped read, but none has 3 in a
+row (longest 2). The P20 view, printed beside every verdict, passes every page too (52 drift-flagged
+rows dropped, one cell lost, Phi skb DW SHARED n 2). CLEAN equals ALL. **skew**: G3 PASS (36 cells,
+6 pages, CI [-0.013, +0.015]%). E1-SKEW HOLDS: 84 cells rms 0.61%, worst -1.61%, mean -0.24%;
+Mixtral 42 cells rms 0.51% and Phi 42 cells rms 0.69%, each CERTIFIED in CLEAN (3 of 3 pages), so
+CLEAN now certifies Mixtral and Phi beside rental 6's OLMoE. E1-UNI (36 cells rms 0.46%) and
+SKEW-RATIO v3 (48 ratios rms 0.45%) HOLD. E1 rivals: LT3 EXCLUDED (1.83% against 0.68% on 62 lever
+cells); v2, H8, v3_all and v3_noca UNDECIDED by construction. SKEW-RATIO: U EXCLUDED, LT3 UNDECIDED
+(4). The residual tracks the tread again: about -1% at each shape's first tread, +0.3% at the third.
+**q1**: all six Q1 pages ran (`fresh_tag` fix). Q1-H FAILS: the level clause holds (24 pairs, 5
+clusters, mean g +0.42 us, se 0.52), and the copies clause fails (c15 minus c9 +2.24 us; Phi n 2
++3.44, Qwen1.5 n 2 +3.05, JetMoE n 4 +0.22; the shift is in SHARED, while NATIVE moves -0.19 and
+-1.12 us between the same two pages). Rivals v2 (g_R +4.52 us) and H8 (+7.44) are EXCLUDED;
+v3_all is NOT EXCLUDED (g_R 0 by construction). Q1-C SELECTED CALL (D +0.58 us, DEAD at -5.47).
+Q1-P DESCRIPTIVE: Mixtral n 3 mean g -10.56 us, against v3_all's -10.61 (rental 6 read -6.38).
+Q1-SK printed. **l2open**: NAMED ROWKEY60 (OPEN). Skewed w1 rms 1.99% (worst -3.21%) against
+ROWKEY39.5 8.10% and v3 15.33% (v3 +7.7% at n 4 to +25.8% at n 16). **register.py --check**: with
+rental 7's pages published, `reg7.published_counts_sha` read them as SEEN, and the check differed on
+the skew and l2open files (leakage labels only). `register.py` now seeds that set as of 2026-10-13,
+as `seed_pricer` does; `reg7.py` (pinned) is unchanged, and the check reads `same` on all eight
+files. The files above are unchanged.

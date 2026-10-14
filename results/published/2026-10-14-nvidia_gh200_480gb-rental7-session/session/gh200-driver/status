@@ -1,0 +1,141 @@
+2026-10-14T00:45:36Z setup_vm.sh start: commit ae010ffebf60be85b3abf7d540e598f7e775b62b from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-14T03:13:53Z
+2026-10-14T00:47:42Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-14T00:47:43Z driver start: commit ae010ffebf60be85b3abf7d540e598f7e775b62b, steps of the plan scripts/plans/rental7-2026-10.plan, deadline 2026-10-14T03:13:53Z (138 min of work left)
+2026-10-14T00:47:43Z plan: /home/ubuntu/moe/repo/scripts/plans/rental7-2026-10.plan (sha256 8d7e07a69857accdb09fb05a870aaaa65572fb983547073d3a095a70ca322628), 15 units
+2026-10-14T00:47:43Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/15 -] (estimate 3 min, cap 15 min, 138 min left)
+2026-10-14T00:47:43Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-14T00:47:43Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-14T00:47:43Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-14T00:47:43Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261014T004743Z
+2026-10-14T00:47:43Z prelude END: exit 0 after 0 min [unit 1/15 -]
+2026-10-14T00:47:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T00:47:45Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/15 mixtral-8x7b r7] (estimate 2 min, cap 30 min, 138 min left)
+2026-10-14T00:48:09Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-14T00:48:09Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3725.6 GB/s
+2026-10-14T00:48:09Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3951.3 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-14T00:48:09Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3951.3 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-14T00:48:09Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-14T00:48:09Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1425 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-14T00:48:09Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-14T00:48:09Z calibrate END: exit 0 after 0 min [unit 2/15 mixtral-8x7b r7]
+2026-10-14T00:48:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T00:48:11Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 3/15 mixtral-8x7b ska histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 14 min, cap 40 min, 137 min left)
+2026-10-14T00:48:11Z timed: declared-copies 9 on every page of this unit
+2026-10-14T00:48:11Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json, arms native,shared, deepest tread 16, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T00:48:12Z timed: G = 8 at treads 16, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:01:49Z timed: P2 locked_r3 exit 0
+2026-10-14T01:01:49Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:01:49Z timed: 2026-10-14T01:01:44Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1710.0 MHz, 811 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0ff9ed8eb0-247ad858
+2026-10-14T01:01:49Z timed END: exit 0 after 14 min [unit 3/15 mixtral-8x7b ska histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:01:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:01:51Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 4/15 mixtral-8x7b skb histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 11 min, cap 30 min, 124 min left)
+2026-10-14T01:01:51Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:01:51Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json, arms native,shared, deepest tread 16, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:01:52Z timed: G = 8 at treads 16, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:12:20Z timed: P2 locked_r3 exit 0
+2026-10-14T01:12:20Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:12:20Z timed: 2026-10-14T01:12:15Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist4853c3f2c1-41eb93f6
+2026-10-14T01:12:20Z timed END: exit 0 after 10 min [unit 4/15 mixtral-8x7b skb histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:12:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:12:22Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 5/15 mixtral-8x7b skc histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 11 min, cap 30 min, 113 min left)
+2026-10-14T01:12:22Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:12:22Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json, arms native,shared, deepest tread 16, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:12:23Z timed: G = 8 at treads 16, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:22:50Z timed: P2 locked_r3 exit 0
+2026-10-14T01:22:50Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:22:50Z timed: 2026-10-14T01:22:45Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist9e1172adec-ee7c32f9
+2026-10-14T01:22:50Z timed END: exit 0 after 10 min [unit 5/15 mixtral-8x7b skc histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:22:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:22:53Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 6/15 phi-3.5-moe ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 14 min, cap 40 min, 103 min left)
+2026-10-14T01:22:53Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:22:53Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json, arms native,shared, deepest tread 12, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:22:53Z timed: G = 8 at treads 12, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:36:41Z timed: P2 locked_r3 exit 0
+2026-10-14T01:36:41Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:36:41Z timed: 2026-10-14T01:36:36Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1710.0 MHz, 821 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histc0a85a142c-1d763dca
+2026-10-14T01:36:41Z timed END: exit 0 after 14 min [unit 6/15 phi-3.5-moe ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:36:42Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:36:43Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 7/15 phi-3.5-moe skb histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 11 min, cap 30 min, 89 min left)
+2026-10-14T01:36:43Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:36:44Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json, arms native,shared, deepest tread 12, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:36:44Z timed: G = 8 at treads 12, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:47:12Z timed: P2 locked_r3 exit 0
+2026-10-14T01:47:12Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:47:12Z timed: 2026-10-14T01:47:07Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist39d2a0f398-2a59104d
+2026-10-14T01:47:12Z timed END: exit 0 after 10 min [unit 7/15 phi-3.5-moe skb histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:47:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:47:15Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 8/15 phi-3.5-moe skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 11 min, cap 30 min, 78 min left)
+2026-10-14T01:47:15Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:47:15Z timed: histogram page docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json, arms native,shared, deepest tread 12, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:47:15Z timed: G = 8 at treads 12, no G=3 page (timed-groups / timed-treads)
+2026-10-14T01:57:43Z timed: P2 locked_r3 exit 0
+2026-10-14T01:57:43Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T01:57:43Z timed: 2026-10-14T01:57:38Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=162 worst=1710.0 MHz, 621 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist4fa647e9d1-812a8576
+2026-10-14T01:57:43Z timed END: exit 0 after 10 min [unit 8/15 phi-3.5-moe skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T01:57:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T01:57:46Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 68 min left)
+2026-10-14T01:57:46Z timed: declared-copies 9 on every page of this unit
+2026-10-14T01:57:46Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T01:57:47Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:00:24Z timed: P2 locked_r3 exit 0
+2026-10-14T02:00:24Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:00:24Z timed: 2026-10-14T02:00:18Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histf60467c6a9-50dbe037
+2026-10-14T02:00:24Z timed END: exit 0 after 3 min [unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:00:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:00:26Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, 15 copies, slip-policy cell, g1-rule r7-median-run3 [unit 10/15 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 65 min left)
+2026-10-14T02:00:26Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-14T02:00:26Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:00:27Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:03:04Z timed: P2 locked_r3 exit 0
+2026-10-14T02:03:04Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:03:04Z timed: 2026-10-14T02:02:59Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-histf60467c6a-ed97800e
+2026-10-14T02:03:04Z timed END: exit 0 after 3 min [unit 10/15 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:03:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:03:07Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 11/15 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 62 min left)
+2026-10-14T02:03:07Z timed: declared-copies 9 on every page of this unit
+2026-10-14T02:03:07Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:03:07Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:05:45Z timed: P2 locked_r3 exit 0
+2026-10-14T02:05:45Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:05:45Z timed: 2026-10-14T02:05:39Z G=8 held at lock 1710: R3 exit 3 INVALID, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hista789736176-80b3a1d5
+2026-10-14T02:05:45Z timed END: exit 0 after 3 min [unit 11/15 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:05:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:05:47Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, 15 copies, slip-policy cell, g1-rule r7-median-run3 [unit 12/15 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 60 min left)
+2026-10-14T02:05:47Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-14T02:05:47Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json, arms native,shared, deepest tread 2, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:05:48Z timed: G = 8 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:08:25Z timed: P2 locked_r3 exit 0
+2026-10-14T02:08:25Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:08:25Z timed: 2026-10-14T02:08:20Z G=8 held at lock 1710: R3 exit 0 DONE, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hista78973617-32bc794a
+2026-10-14T02:08:25Z timed END: exit 0 after 3 min [unit 12/15 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:08:26Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:08:28Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 13/15 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 57 min left)
+2026-10-14T02:08:28Z timed: declared-copies 9 on every page of this unit
+2026-10-14T02:08:28Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, deepest tread 4, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:08:29Z timed: G = 8 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:12:16Z timed: P2 locked_r3 exit 0
+2026-10-14T02:12:16Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:12:16Z timed: 2026-10-14T02:12:10Z G=8 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 220 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0a131f4a19-49984b34
+2026-10-14T02:12:16Z timed END: exit 0 after 4 min [unit 13/15 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:12:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:12:19Z timed START: 3c.3 timed R3 histogram page at 1710: G=8, docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, 15 copies, slip-policy cell, g1-rule r7-median-run3 [unit 14/15 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 12 min, 53 min left)
+2026-10-14T02:12:19Z timed: declared-copies 15 on every page of this unit, labelled NOT JOINABLE TO COUNTER BYTES
+2026-10-14T02:12:19Z timed: histogram page docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json, arms native,shared, deepest tread 4, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-14T02:12:19Z timed: G = 8 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-10-14T02:16:07Z timed: P2 locked_r3 exit 0
+2026-10-14T02:16:07Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-14T02:16:07Z timed: 2026-10-14T02:16:01Z G=8 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 220 s, dir nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl15-dtypebf16-duty0.25-g8-hist0a131f4a1-926f5adf
+2026-10-14T02:16:07Z timed END: exit 0 after 4 min [unit 14/15 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-14T02:16:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:16:10Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 8, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared [unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8] (estimate 4 min, cap 20 min, 49 min left)
+2026-10-14T02:16:25Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-14T02:16:25Z bytes: rental 2 knobs --histogram docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json --arms native,shared on every page of this unit
+2026-10-14T02:16:25Z bytes: the registered list G = 8 (olmoe-1b-7b, l2open): no tail drop, no re-price, no base-clock control
+2026-10-14T02:18:12Z bytes: G=8 page exit 0 after 104 s
+2026-10-14T02:18:15Z bytes: lock block exit 0 (G=8 exit 0 02:18:12 104 s;)
+2026-10-14T02:18:20Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-14T02:18:20Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-14T02:18:21Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/summary.json)
+2026-10-14T02:18:21Z bytes END: exit 0 after 2 min [unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8]
+2026-10-14T02:18:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-14T02:18:24Z driver end: exit 0

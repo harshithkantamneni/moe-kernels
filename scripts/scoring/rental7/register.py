@@ -76,9 +76,35 @@ def txt(part: str, d: dict) -> list[str]:
     return L
 
 
+def _seed_leakage_as_of_registration() -> None:
+    """The leakage keys (`reg7.published_counts_sha`: every (model, n, counts sha256) a published
+    page carries) glob the whole published tree, so rental 7's own session, published after the
+    registration, would turn every rental-7 draw SEEN. `--check` recomputes the registered files, so
+    the set is read as of the registration, as reg7.seed_pricer reads the align proxy: a directory
+    of links to the sessions dated on or before C7.DATE whose name does not carry 'rental7'.
+    published_counts_sha() keeps the first set it computes."""
+    import atexit
+    import shutil
+    import tempfile
+    if R7._PUBSHA:
+        return
+    tmp = Path(tempfile.mkdtemp(prefix="r7-leak-asof-"))
+    atexit.register(shutil.rmtree, tmp, True)
+    for d in sorted(R7.PUB.iterdir()):
+        if d.is_dir() and d.name[:10] <= C7.DATE and "rental7" not in d.name:
+            (tmp / d.name).symlink_to(d.resolve(), target_is_directory=True)
+    pub = R7.PUB
+    R7.PUB = tmp
+    try:
+        R7.published_counts_sha()
+    finally:
+        R7.PUB = pub
+
+
 def build(only=None) -> dict:
     parts = [p for p in C7.PARTS if only is None or p in only]
     R7.seed_pricer()
+    _seed_leakage_as_of_registration()
     docs = {p: R7.BUILDERS[p]() for p in parts}
     pins = {p: sha256(REPO / p) for p in PINNED}
     for d in docs.values():

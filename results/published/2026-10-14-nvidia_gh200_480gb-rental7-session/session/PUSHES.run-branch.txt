@@ -1,0 +1,19 @@
+2026-10-14T00:45:16Z the branch's first commit: the VM can push
+2026-10-14T00:47:42Z setup_vm.sh: READY
+2026-10-14T00:47:44Z prelude (unit 1/15 -): exit 0 (0 min)
+2026-10-14T00:48:10Z calibrate (unit 2/15 mixtral-8x7b r7): exit 0 (0 min)
+2026-10-14T01:01:50Z timed (unit 3/15 mixtral-8x7b ska histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-14T01:12:21Z timed (unit 4/15 mixtral-8x7b skb histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
+2026-10-14T01:22:52Z timed (unit 5/15 mixtral-8x7b skc histogram=docs/registered/2026-10-13-rental7-skew-hist/mixtral-8x7b-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
+2026-10-14T01:36:42Z timed (unit 6/15 phi-3.5-moe ska histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-A.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-14T01:47:13Z timed (unit 7/15 phi-3.5-moe skb histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-B.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
+2026-10-14T01:57:45Z timed (unit 8/15 phi-3.5-moe skc histogram=docs/registered/2026-10-13-rental7-skew-hist/phi-3.5-moe-C.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
+2026-10-14T02:00:25Z timed (unit 9/15 qwen1.5-moe-a2.7b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-14T02:03:06Z timed (unit 10/15 qwen1.5-moe-a2.7b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-qwen1.5-moe-a2.7b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-14T02:05:46Z timed (unit 11/15 phi-3.5-moe q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-14T02:08:27Z timed (unit 12/15 phi-3.5-moe q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-phi-3.5-moe.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-14T02:12:18Z timed (unit 13/15 jetmoe-8b q9 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
+2026-10-14T02:16:09Z timed (unit 14/15 jetmoe-8b q15 histogram=docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json arms=native,shared declared-copies=15 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
+2026-10-14T02:18:13Z bytes: G=8 page exit 0
+2026-10-14T02:18:23Z bytes (unit 15/15 olmoe-1b-7b l2open histogram=docs/registered/2026-10-13-rental7-skew-hist/olmoe-1b-7b-l2open.json arms=native,shared byte-groups=8): exit 0 (2 min)
+2026-10-14T02:18:25Z the session ended: driver exit 0

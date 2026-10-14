@@ -58,6 +58,13 @@ Phi-3.5-MoE (G = 8, rental 6's board): the uniform and balanced cells carry one 
 all three pages, so each cell is one call timed three times about ten minutes apart; the rms is
 over the three page pairs (B/A, C/A, C/B, not independent), cells under 6 clean repeats left out.
 
+Added 2026-10-14 (rental 7): (c) again on the A, B and C skew pages of Mixtral 8x7B and
+Phi-3.5-MoE (G = 8, rental 7's board), each cell's time the median of its clean repeats rebuilt
+from cells.csv under rental 7's registered rule (r7-median-run3, scripts/scoring/rental7/r7common.py;
+R3's stored medians are not read), cells under 6 clean repeats left out; and NATIVE's same call
+on the 9- and 15-copy Q1 pages of Qwen1.5-MoE-A2.7B, Phi-3.5-MoE and JetMoE-8B (NATIVE declares
+E slots on both, as rental 4's pair), every tread, under the same rebuild.
+
 Added 2026-10-05 (gradefix4): NATIVE bytes, (a) and (b) as for PRIVATE and SHARED;
 and the launch offsets P2 (E240 - GR), P3 (E0 - E240), P4 (E480 - E240), P8
 (H - I_E240), each the SE of the offset from repeat-paired differences over the
@@ -292,6 +299,15 @@ R6_TRIPLES = [("mixtral-8x7b", ("6ea3f043", "9b949c4b", "adcd8475"), "G1 FAIL on
               ("olmoe-1b-7b", ("84c755cd", "2a5c9c7c", "7c4fcbb7"), "all three VALID"),
               ("phi-3.5-moe", ("49303721", "b02a8a5b", "5229eb48"), "G1 FAIL on all three (drift flags)")]
 
+R7 = "2026-10-14-nvidia_gh200_480gb-rental7-session"
+#: Rental 7: the A, B and C skew pages per model (run suffixes); every page passes rental 7's
+#: rebuilt G1 (r7-median-run3), though R3's own stored G1 fails all six on drift flags.
+R7_TRIPLES = [("mixtral-8x7b", ("247ad858", "41eb93f6", "ee7c32f9"), "rebuilt G1 PASS on all three"),
+              ("phi-3.5-moe", ("1d763dca", "2a59104d", "812a8576"), "rebuilt G1 PASS on all three")]
+#: Rental 7: the Q1 pages at 9 and 15 declared copies (run suffixes), every one rebuilt G1 PASS.
+R7_NATIVE = [("qwen1.5-moe-a2.7b", "50dbe037", "ed97800e"), ("phi-3.5-moe", "80b3a1d5", "32bc794a"),
+             ("jetmoe-8b", "49984b34", "926f5adf")]
+
 #: G = 1 counter pages carrying s, by (model and GEMM, board): the L2-survival cells.
 SURVIVAL = [
     ("8x7B w2", "mixtral-8x7b", "w2", [
@@ -428,6 +444,58 @@ def time_skew_triple_r6() -> dict:
         out[model] = {"cells": len(keys), "pairs": len(d), "rms": rms(d), "mean": st.mean(d),
                       "worst": max(d, key=abs), "note": note}
         srcs += [rel(x / "report.json") for x in dirs]
+    return {"models": out, "sources": srcs}
+
+
+def hist_cells_r7(page_dir: Path) -> dict:
+    """(histogram, n, arm) -> (ms, counts_sha256) of a rental-7 histogram page, each cell's time
+    rebuilt from cells.csv under r7-median-run3 by the rental-7 scorer's own rebuild; LOST cells
+    (under 6 clean repeats) left out."""
+    import importlib.util
+    name = "r7common"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ROOT / "scripts/scoring/rental7/r7common.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    C7 = sys.modules[name]
+    rep, raw = C7.read_page(page_dir)
+    rb, why = C7.rebuild(rep, raw)
+    if rb is None:
+        raise ValueError(f"{page_dir}: {why}")
+    return {(str(r["histogram"]), int(r["tiles"]), str(r["arm"])): (float(r["ms_p50"]), r.get("counts_sha256"))
+            for r in rb["treads_table"] if r.get("ms_p50") is not None and not r["lost"]}
+
+
+def time_skew_triple_r7() -> dict:
+    """(c) rental 7: as rental 6's triple, on the rebuilt cell medians."""
+    out, srcs = {}, []
+    for model, runs, note in R7_TRIPLES:
+        dirs = [timed_dir(R7, r) for r in runs]
+        c = [hist_cells_r7(d) for d in dirs]
+        keys = sorted(k for k in set(c[0]) & set(c[1]) & set(c[2]) if k[0] in ("uniform", "balanced"))
+        if any(len({x[k][1] for x in c}) != 1 for k in keys):
+            raise ValueError(f"{model}: a shared cell carries two counts")
+        d = [c[j][k][0] / c[i][k][0] - 1 for i, j in ((0, 1), (0, 2), (1, 2)) for k in keys]
+        out[model] = {"cells": len(keys), "pairs": len(d), "rms": rms(d), "mean": st.mean(d),
+                      "worst": max(d, key=abs), "note": note}
+        srcs += [rel(x / "report.json") for x in dirs]
+    return {"models": out, "sources": srcs}
+
+
+def time_native_r7() -> dict:
+    """(c) rental 7: NATIVE at 15 copies over NATIVE at 9 on the Q1 pages, every tread, rebuilt
+    cell medians."""
+    out, srcs = {}, []
+    for model, ra, rb in R7_NATIVE:
+        a, b = hist_cells_r7(timed_dir(R7, ra)), hist_cells_r7(timed_dir(R7, rb))
+        keys = sorted(k for k in set(a) & set(b) if k[2] == "native")
+        d = [b[k][0] / a[k][0] - 1 for k in keys]
+        dus = [1e3 * (b[k][0] - a[k][0]) for k in keys]
+        i = max(range(len(d)), key=lambda j: abs(d[j]))
+        out[model] = {"cells": len(d), "treads": [k[1] for k in keys], "rms": rms(d), "mean": st.mean(d),
+                      "worst": d[i], "worst_us": dus[i], "per_tread_us": {k[1]: dus[j] for j, k in enumerate(keys)}}
+        srcs += [rel(timed_dir(R7, ra) / "report.json"), rel(timed_dir(R7, rb) / "report.json")]
     return {"models": out, "sources": srcs}
 
 
@@ -861,6 +929,27 @@ def build() -> list[dict]:
             f"rms difference {100 * v['rms']:.3f}% over {v['pairs']} page pairs (single-page sigma "
             f"{100 * v['rms'] / math.sqrt(2):.3f}%), mean {100 * v['mean']:+.3f}%, worst {100 * v['worst']:+.3f}%",
             v["cells"], "; ".join(s for s in t6["sources"] if model in s), "added 2026-10-13")
+    t7 = time_skew_triple_r7()
+    for model, v in t7["models"].items():
+        add(f"time per cell, same histogram call on the A, B and C skew pages of one board, {model} G=8 (rental 7)",
+            "G3 margin 0.36% (2 x sigma_page 0.18%); SKEW-RATIO rms 1.5%",
+            f"c: uniform and balanced cells, NATIVE and SHARED, one counts sha256 on all three pages, "
+            f"cell medians rebuilt from cells.csv under r7-median-run3, LOST cells out; {v['note']}",
+            f"rms difference {100 * v['rms']:.3f}% over {v['pairs']} page pairs (single-page sigma "
+            f"{100 * v['rms'] / math.sqrt(2):.3f}%), mean {100 * v['mean']:+.3f}%, worst {100 * v['worst']:+.3f}%",
+            v["cells"], "; ".join(s for s in t7["sources"] if model in s), "added 2026-10-14")
+    tn7 = time_native_r7()
+    for model, v in tn7["models"].items():
+        add(f"time per cell, NATIVE, same call on the 9- and 15-copy Q1 pages of one board, {model} G=8 (rental 7)",
+            "Q1-H band 1.5 us; Q1-C se_D 0.64 us",
+            "c: the 9- and 15-copy Q1 pages, rental 7's board, both rebuilt G1 PASS; NATIVE declares E "
+            "slots on both; cell medians rebuilt under r7-median-run3",
+            f"rms difference {100 * v['rms']:.3f}% over n = {', '.join(map(str, v['treads']))} (single-page "
+            f"sigma {100 * v['rms'] / math.sqrt(2):.3f}%), mean {100 * v['mean']:+.3f}%, worst "
+            f"{100 * v['worst']:+.3f}% ({v['worst_us']:+.2f} us)", v["cells"],
+            "; ".join(s for s in tn7["sources"] if model in s),
+            "per tread c15 - c9: " + ", ".join(f"n {n} {u:+.2f} us" for n, u in v["per_tread_us"].items())
+            + " (cells host-bound by rental 3's rule are out of every Q1 test); added 2026-10-14")
 
     br = bytes_repeat()
     add("byte error % (PRIVATE per GEMM)", "0.17 to 3.02% rms; bar 5% per cell",

@@ -1,0 +1,23 @@
+SCORED against 2026-10-13-rental7-q1-gh200 (ALL view; CLEAN and the P20 view beside it in the JSON)
+  page mixtral-8x7b-ska: counted
+  page mixtral-8x7b-skb: counted
+  page mixtral-8x7b-skc: counted
+  page phi-3.5-moe-ska: counted
+  page phi-3.5-moe-skb: counted
+  page phi-3.5-moe-skc: counted
+  page qwen1.5-moe-a2.7b-q9: counted
+  page qwen1.5-moe-a2.7b-q15: counted
+  page phi-3.5-moe-q9: counted
+  page phi-3.5-moe-q15: counted
+  page jetmoe-8b-q9: counted
+  page jetmoe-8b-q15: counted
+Q1-H (REPLICATE: 21 of its 24 pairs are SEEN replicates (every c9 ...): FAILS mean g 0.420344 us se 0.517073 copies 2.237335 (24 pairs, 5 clusters)
+  rival v2: EXCLUDED (g_R 4.521792 us)
+  rival H8: EXCLUDED (g_R 7.444833 us)
+  rival v3_all: NOT EXCLUDED (g_R 0.0 us)
+Q1-P: DESCRIPTIVE (no verdict, as registered)
+Q1-SK: {'status': 'OPEN (printed)', 'phi-3.5-moe n 2': {'skew_minus_control_us': -0.947576, 'skewed_pairs': 4, 'control_pairs': 6}}
+Q1-C: SELECTED CALL D 0.582005 us positions {'CALL': 0.0, 'DEAD': -5.467715}
+P20 view (DESCRIPTIVE): Q1-H FAILS; Q1-C SELECTED CALL
+  two views (ALL, CLEAN):
+    0 of 14 verdicts differ between ALL and CLEAN

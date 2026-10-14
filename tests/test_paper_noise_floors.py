@@ -53,6 +53,13 @@ def test_key_numbers():
     t6 = NF.time_skew_triple_r6()["models"]  # rental 6: the A, B and C skew pages' shared cells
     assert {m: v["cells"] for m, v in t6.items()} == {"mixtral-8x7b": 12, "olmoe-1b-7b": 12, "phi-3.5-moe": 11}
     assert abs(t6["olmoe-1b-7b"]["rms"] - 0.001256) < 2e-6 and abs(t6["mixtral-8x7b"]["rms"] - 0.000585) < 2e-6
+    t7 = NF.time_skew_triple_r7()["models"]  # rental 7: the A, B and C pages, medians rebuilt under r7-median-run3
+    assert {m: v["cells"] for m, v in t7.items()} == {"mixtral-8x7b": 12, "phi-3.5-moe": 12}
+    assert abs(t7["mixtral-8x7b"]["rms"] - 0.001332) < 2e-6 and abs(t7["phi-3.5-moe"]["rms"] - 0.000740) < 2e-6
+    n7 = NF.time_native_r7()["models"]  # rental 7: NATIVE at 15 copies over 9 on the Q1 pages
+    assert {m: v["treads"] for m, v in n7.items()} == {"qwen1.5-moe-a2.7b": [1, 2], "phi-3.5-moe": [1, 2],
+                                                         "jetmoe-8b": [1, 2, 4]}
+    assert abs(n7["phi-3.5-moe"]["rms"] - 0.000270) < 2e-6
 
 
 def test_cli_runs(tmp_path):

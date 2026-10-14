@@ -1100,6 +1100,66 @@
    "number": "w1 r 1.4180 (H_ITER +0.78%, H_CTA +17.8%); w2 r 1.3873 (H_ITER +3.17%, H_CTA +26.3%); V7 FAIL on both, NATIVE cells only; page clocks 1670.6 / 1683.4 MHz",
    "label": "k64s4 SEEN configuration, k32s4 BLIND; c64 / c32 SEEN (OLMoE) (reg: labels)",
    "scored_in": "`SC6/secondk.score.txt`; `SC6/SCORES.md` (e)"
+  },
+  {
+   "row": 111,
+   "section": "3.2",
+   "test": "R7 G3 token order: TOST of T(uniform-shuffled) / T(balanced) - 1 - delta_v3, 90% cluster-t interval inside +-0.36%, clusters the six pages (df 5), Cochran Q at sigma_page 0.18%",
+   "registration": "`D/2026-10-13-rental7-skew-gh200.json`",
+   "verdict": "PASS (both views)",
+   "number": "36 cells on 6 pages (ALL = CLEAN): mean +0.001%, CI [-0.013, +0.015]%, Q 0.84 (df 35); page means -0.023 to +0.026%",
+   "label": "Mixtral skewed BLIND draws, BLIND-CALMODEL; Phi skewed BLIND; uniform and balanced SEEN replicates; no rental-7 cell IN-SAMPLE for h; every page in CLEAN under the rebuilt G1 r7-median-run3 (reg: labels, gates; D/2026-10-13-rental7-g1rule-gh200.json)",
+   "scored_in": "`SC7/skew.score.txt`; `SC7/SCORES.md` (d)"
+  },
+  {
+   "row": 112,
+   "section": "3.2",
+   "test": "R7 E1-SKEW, model v3 end to end from predicted bytes on fresh Mixtral and Phi draws: pooled AND each shape rms <= 2%, worst <= 5%, |mean| <= 1%; a shape CERTIFIED in CLEAN with >= 2 of 3 pages in CLEAN; E1-UNI on the balanced cells at the same bar",
+   "registration": "same",
+   "verdict": "E1-SKEW HOLDS (Mixtral and Phi CERTIFIED in CLEAN); E1-UNI HOLDS",
+   "number": "84 cells (ALL = CLEAN, 6 of 6 pages): rms 0.61%, worst -1.61%, mean -0.24%; Mixtral 42 rms 0.51%, worst -1.22%; Phi 42 rms 0.69%, worst -1.61%; E1-UNI 36 cells rms 0.46%; P20 view (DESCRIPTIVE) 83 cells rms 0.59%",
+   "label": "Mixtral skewed BLIND draws, BLIND-CALMODEL; Phi skewed BLIND; uniform and balanced SEEN replicates; no rental-7 cell IN-SAMPLE for h; every page in CLEAN under the rebuilt G1 r7-median-run3 (reg: labels, gates; D/2026-10-13-rental7-g1rule-gh200.json)",
+   "scored_in": "`SC7/skew.score.txt`; `SC7/SCORES.md` (a)"
+  },
+  {
+   "row": 113,
+   "section": "3.2",
+   "test": "R7 E1 rivals v2, LT3, H8, v3_all, v3_noca: EXCLUDED if rms on their registered lever cells >= 2x v3's and >= 0.76%; UNDECIDED under 6 lever cells",
+   "registration": "same",
+   "verdict": "LT3 EXCLUDED; v2, H8, v3_all, v3_noca UNDECIDED (0, 5, 3, 0 lever cells, by construction)",
+   "number": "LT3 1.83% against v3's 0.68% on 62 lever cells (both views); DESCRIPTIVE over all 84 cells: v2 0.56%, H8 0.59%, v3_noca 0.61%, v3_all 0.67%, LT3 1.57% against v3's 0.61%",
+   "label": "Mixtral skewed BLIND draws, BLIND-CALMODEL; Phi skewed BLIND; uniform and balanced SEEN replicates; no rental-7 cell IN-SAMPLE for h; every page in CLEAN under the rebuilt G1 r7-median-run3 (reg: labels, gates; D/2026-10-13-rental7-g1rule-gh200.json)",
+   "scored_in": "`SC7/skew.score.txt`; `SC7/SCORES.md` (e)"
+  },
+  {
+   "row": 114,
+   "section": "3.2",
+   "test": "R7 SKEW-RATIO: v3's T(h) / T(uniform), rms <= 1.5%, worst <= 4%; rivals LT3 and U by the rival rule on their ratio lever cells",
+   "registration": "same",
+   "verdict": "v3 HOLDS; LT3 UNDECIDED (4 lever ratios); U EXCLUDED",
+   "number": "48 ratios (ALL = CLEAN): rms 0.45%, worst -1.10%, mean -0.39%; U 12.85% against 0.50% on 32 lever ratios",
+   "label": "Mixtral skewed BLIND draws, BLIND-CALMODEL; Phi skewed BLIND; uniform and balanced SEEN replicates; no rental-7 cell IN-SAMPLE for h; every page in CLEAN under the rebuilt G1 r7-median-run3 (reg: labels, gates; D/2026-10-13-rental7-g1rule-gh200.json)",
+   "scored_in": "`SC7/skew.score.txt`; `SC7/SCORES.md` (a)"
+  },
+  {
+   "row": 115,
+   "section": "3.2",
+   "test": "R7 Q1: Q1-H (term b on block-scan control pairs, REPLICATE: |mean g| <= 1.5 us AND the copies clause |g(c15) - g(c9)| <= 1.5 us; rivals v2, H8, v3_all scored apart), Q1-C (CALL against DEAD on D = x15 - x9, Qwen1.5 SHARED n 1), Q1-P (DESCRIPTIVE), Q1-SK (OPEN)",
+   "registration": "`D/2026-10-13-rental7-q1-gh200.json`",
+   "verdict": "Q1-H FAILS (level clause HOLDS, copies clause FAILS); rivals v2 and H8 EXCLUDED, v3_all NOT EXCLUDED; Q1-C SELECTED CALL; Q1-P DESCRIPTIVE; Q1-SK OPEN",
+   "number": "24 pairs, 5 clusters (ALL = CLEAN): mean g +0.42 us (se 0.52); copies clause d +2.24 us (Phi n 2 +3.44, Qwen1.5 n 2 +3.05, JetMoE n 4 +0.22); g_R v2 +4.52, H8 +7.44, v3_all 0.00 us; Q1-C D +0.58 us (CALL 0, DEAD -5.47, se_D 0.64)",
+   "label": "21 of 24 Q1-H pairs SEEN replicates, the c15 SHARED cells BLIND (the copies clause); Mixtral n 6 and Phi n 4 clusters SEEN-SELECTED (reg: labels)",
+   "scored_in": "`SC7/q1.score.txt`; `SC7/SCORES.md` (b)"
+  },
+  {
+   "row": 116,
+   "section": "3.2",
+   "test": "R7 OPEN-L2SKEW on one OLMoE w1 byte page: the nearest of v3, ROWKEY39.5 and ROWKEY60 by rms over the skewed (PT, PW) w1 rows is NAMED iff the next is >= 2x farther and every skewed row of the nearest is within 5%",
+   "registration": "`D/2026-10-13-rental7-l2open-gh200.json`",
+   "verdict": "NAMED ROWKEY60 (OPEN: no model change follows)",
+   "number": "10 skewed w1 rows: rms ROWKEY60 1.99%, ROWKEY39.5 8.10% (4.06x), v3 15.33%; ROWKEY60 worst -3.21%; v3 +8.0% (n 4), +14.6% (n 8), +24.9% (n 16); controls ROWKEY60 rms 0.03%, v3 0.99%; clock rule 20 of 20 cells",
+   "label": "C = 60 MiB SEEN-chosen, its numbers BLIND (new draws); n 4 and n 16 skewed SEEN-SELECTED treads, n 8 BLIND (reg: labels)",
+   "scored_in": "`SC7/l2open.score.txt`; `SC7/SCORES.md` (c)"
   }
  ]
 }

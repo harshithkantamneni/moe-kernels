@@ -1,0 +1,8 @@
+SCORED against 2026-10-13-rental7-l2open-gh200 (OPEN (no model change follows))
+  page: counted
+  clock: {'check_page': 'PASS', 'cells_in_band': 20, 'cells': 20}
+L2OPEN: NAMED ROWKEY60 rms % {'v3': 15.329526, 'ROWKEY39.5': 8.100604, 'ROWKEY60': 1.994844} worst nearest 3.205888%
+  n 4 skewed mean e %: {'v3': 8.012536, 'ROWKEY39.5': 12.631165, 'ROWKEY60': -1.954594}
+  n 8 skewed mean e %: {'v3': 14.585557, 'ROWKEY39.5': 0.992365, 'ROWKEY60': -1.280958}
+  n 16 skewed mean e %: {'v3': 24.899557, 'ROWKEY39.5': -1.116533, 'ROWKEY60': -2.87314}
+  w2 under v3 (printed): {'cells': 20, 'rms': 0.034847, 'worst': 0.0434, 'mean': 0.033666}

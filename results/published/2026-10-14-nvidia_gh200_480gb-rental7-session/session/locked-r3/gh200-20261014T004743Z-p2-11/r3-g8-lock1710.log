@@ -1,0 +1,83 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0a131f4a19-49984b34
+model       jetmoe-8b E=8 k=2  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-09-rental6-skew-hist/q1-jetmoe-8b.json (sha256 0a131f4a19f24978...), page q1, 3 cells x arms = 6 timed cells, token-row shuffle seed 20261010; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       173.02 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 644.6 TFLOP/s bf16 over 3725.6 GB/s (triad pattern); calibrated 2026-10-14 at ae010ffe
+experts     native declares E=8; shared declares E x n_decl = 72 at every cell
+            n_decl = 9 against n_max = 4 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 4 against the 4 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261014T004743Z-p2-11-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-jetmoe-8b-q9/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0a131f4a19-49984b34
+slips       --slip-policy cell at the 1710 MHz lock: a repeat under 1695 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 3 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=1   balanced         native,shared  block-scan/small-batch 74234e98afe7498f
+  n=2   balanced         native,shared  block-scan/small-batch 74234e98afe7498f
+  n=4   balanced         native,shared  block-scan   74234e98afe7498f
+  rep 0 balanced       native   n=  1 T=    128    0.2599 ms
+  rep 0 balanced       shared   n=  1 T=    128    0.2695 ms
+  rep 0 balanced       native   n=  2 T=    256    0.2719 ms
+  rep 0 balanced       shared   n=  2 T=    256    0.2663 ms
+  rep 0 balanced       native   n=  4 T=    512    0.4869 ms
+  rep 0 balanced       shared   n=  4 T=    512    0.4897 ms
+  rep 1 balanced       shared   n=  4 T=    512    0.4900 ms
+  rep 1 balanced       native   n=  4 T=    512    0.4866 ms
+  rep 1 balanced       shared   n=  2 T=    256    0.2652 ms
+  rep 1 balanced       native   n=  2 T=    256    0.2716 ms
+  rep 1 balanced       shared   n=  1 T=    128    0.2682 ms
+  rep 1 balanced       native   n=  1 T=    128    0.2469 ms
+  rep 2 balanced       native   n=  1 T=    128    0.2483 ms
+  rep 2 balanced       shared   n=  1 T=    128    0.2750 ms
+  rep 2 balanced       native   n=  2 T=    256    0.2717 ms
+  rep 2 balanced       shared   n=  2 T=    256    0.2646 ms
+  rep 2 balanced       native   n=  4 T=    512    0.4859 ms
+  rep 2 balanced       shared   n=  4 T=    512    0.4895 ms
+  rep 3 balanced       shared   n=  4 T=    512    0.4895 ms
+  rep 3 balanced       native   n=  4 T=    512    0.4872 ms
+  rep 3 balanced       shared   n=  2 T=    256    0.2663 ms
+  rep 3 balanced       native   n=  2 T=    256    0.2704 ms
+  rep 3 balanced       shared   n=  1 T=    128    0.2739 ms
+  rep 3 balanced       native   n=  1 T=    128    0.2564 ms
+  rep 4 balanced       native   n=  1 T=    128    0.2529 ms
+  rep 4 balanced       shared   n=  1 T=    128    0.2684 ms
+  rep 4 balanced       native   n=  2 T=    256    0.2717 ms
+  rep 4 balanced       shared   n=  2 T=    256    0.2696 ms
+  rep 4 balanced       native   n=  4 T=    512    0.4863 ms
+  rep 4 balanced       shared   n=  4 T=    512    0.4895 ms
+  rep 5 balanced       shared   n=  4 T=    512    0.4898 ms
+  rep 5 balanced       native   n=  4 T=    512    0.4868 ms
+  rep 5 balanced       shared   n=  2 T=    256    0.2668 ms
+  rep 5 balanced       native   n=  2 T=    256    0.2716 ms
+  rep 5 balanced       shared   n=  1 T=    128    0.2699 ms
+  rep 5 balanced       native   n=  1 T=    128    0.2603 ms
+  rep 6 balanced       native   n=  1 T=    128    0.2522 ms
+  rep 6 balanced       shared   n=  1 T=    128    0.2769 ms
+  rep 6 balanced       native   n=  2 T=    256    0.2717 ms
+  rep 6 balanced       shared   n=  2 T=    256    0.2667 ms
+  rep 6 balanced       native   n=  4 T=    512    0.4865 ms
+  rep 6 balanced       shared   n=  4 T=    512    0.4897 ms
+  rep 7 balanced       shared   n=  4 T=    512    0.4897 ms
+  rep 7 balanced       native   n=  4 T=    512    0.4867 ms
+  rep 7 balanced       shared   n=  2 T=    256    0.2644 ms
+  rep 7 balanced       native   n=  2 T=    256    0.2707 ms
+  rep 7 balanced       shared   n=  1 T=    128    0.2702 ms
+  rep 7 balanced       native   n=  1 T=    128    0.2526 ms
+  rep 8 balanced       native   n=  1 T=    128    0.2599 ms
+  rep 8 balanced       shared   n=  1 T=    128    0.2763 ms
+  rep 8 balanced       native   n=  2 T=    256    0.2704 ms
+  rep 8 balanced       shared   n=  2 T=    256    0.2643 ms
+  rep 8 balanced       native   n=  4 T=    512    0.4864 ms
+  rep 8 balanced       shared   n=  4 T=    512    0.4894 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-jetmoe-8b-q9/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-hist0a131f4a19-49984b34/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

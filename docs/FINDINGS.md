@@ -1983,6 +1983,98 @@ published session does; the histograms are the registered synthetic files (G5 PA
 
 ---
 
+## Rental 7 (2026-10-14): model v3 under skew certified on Mixtral and Phi in CLEAN, the S - N gap fails at 15 copies, the row key at 60 MiB names OLMoE w1
+
+One Lambda GH200 480GB (instance 6c3c7e28, 2026-10-14 00:43Z to about 02:18Z, about 1 h 35 min,
+about $3.65; board `02e86e`, new to the study) ran `scripts/plans/rental7-2026-10.plan` unattended
+at ae010ff. 15 units ran in 91 minutes against 99 estimated; none was dropped, every unit exited 0,
+and so did the driver. Four registrations, their scorers, the SYNTHETIC histograms and the plan were
+committed before any page (ae010ff). Three of them score this rental; g1rule is the drift rule the
+other three apply. Published at `results/published/2026-10-14-nvidia_gh200_480gb-rental7-session`.
+Every verdict is the committed scorers' output in `scripts/scoring/rental7/` (`SCORES.md` has each
+test's ALL, CLEAN, registered and P20 reading). No post-page fix: the reading code was checked
+against the pages and nothing in it changes a verdict.
+
+**Registered outcomes.** ALL and CLEAN are identical (every page passes the rebuilt G1).
+
+| registration | test | verdict | numbers |
+|---|---|---|---|
+| skew | G3, token order | PASS | 36 cells, 6 pages, CI [-0.013, +0.015]%; margin +-0.36% |
+| | E1-SKEW, v3 from predicted bytes (pooled and each shape: rms <= 2%, worst <= 5%, \|mean\| <= 1%) | HOLDS; Mixtral and Phi CERTIFIED in CLEAN | 84 cells: rms 0.61%, worst -1.61%, mean -0.24%; Mixtral 42 rms 0.51%, Phi 42 rms 0.69% |
+| | E1-UNI, SKEW-RATIO v3 | HOLDS, HOLDS | balanced 36 cells rms 0.46%; 48 ratios rms 0.45%, worst -1.10% |
+| | E1 rivals | LT3 EXCLUDED; v2, H8, v3_all, v3_noca UNDECIDED (by construction) | LT3 1.83% against v3's 0.68% on 62 lever cells |
+| | SKEW-RATIO rivals | U EXCLUDED; LT3 UNDECIDED | U 12.85% against 0.50% on 32 lever ratios; LT3 4 lever ratios |
+| q1 | Q1-H (term b on control pairs, REPLICATE) | FAILS (level HOLDS, copies FAILS) | 24 pairs, 5 clusters: mean g +0.42 us (se 0.52); c15 - c9 +2.24 us |
+| | Q1-H rivals | v2, H8 EXCLUDED; v3_all NOT EXCLUDED | g_R +4.52, +7.44, 0.00 us |
+| | Q1-C (Qwen1.5 SHARED n 1) | SELECTED CALL | D +0.58 us; DEAD at -5.47 us, 2 se_D 1.27 us |
+| | Q1-P, Q1-SK | DESCRIPTIVE; OPEN | Q1-P Mixtral n 3 mean g -10.56 us (v3_all -10.61); Q1-SK Phi n 2 -0.95 us |
+| l2open | OPEN-L2SKEW on OLMoE w1 (v3, ROWKEY39.5, ROWKEY60) | NAMED ROWKEY60 (OPEN) | skewed w1 rms 1.99% (worst -3.21%) against 8.10% and 15.33% |
+
+**The drift rule, as registered.** R3 is rental 6's pin, so its stored histogram G1 still fails a
+page for one drift-flagged repeat. It failed the six Mixtral and Phi skew pages and Phi q9, as
+expected. The scorers never read it. They rebuild each page from cells.csv under r7-median-run3: a
+repeat is out only if its median clock slipped a 15 MHz step, if 3 or more consecutive per-burst
+reads dipped that far, or if it is not ok; a page fails G1 past 10% such rows. All twelve timed pages pass
+with 0 non-clean rows of 1,332, and every cell keeps 9 of 9 repeats at a median of 1710.0 MHz. The
+dips are present (668 repeats carry a read at 1694 MHz or lower, down to 1515) and isolated (no run
+longer than 2). The P20 view, printed beside every verdict, drops the 52 drift-flagged repeats,
+loses one cell and passes every page; it moves no verdict.
+
+**What each test separated, and what it did not.**
+
+- Model v3 now meets the time bar under skew in CLEAN on three models. Rental 7 certifies Mixtral
+  (42 cells, rms 0.51%, worst -1.22%) and Phi (42 cells, rms 0.69%, worst -1.61%) on fresh BLIND
+  draws, each with 3 of 3 pages in CLEAN. Rental 6 certified OLMoE (42 cells, rms 0.54%, board
+  ff9942). Pooled descriptively over the 126 CLEAN cells of the two boards: rms 0.59%, worst -1.61%.
+  Every cell is R3's tile 32 x 64 x 64 w8 s4 at G = 8, not vLLM's, and the tile stage on vLLM's
+  tiles is still to come.
+- The residual is a function of the tread, not of the skew. On both shapes v3 predicts about 1% too
+  little time at the first tread (Mixtral n 3 -0.88 / -0.51% NATIVE / SHARED; Phi n 2 -1.11 /
+  -1.00%), about 0.1 to 0.2% at the second and +0.3% at the third. Rental 6 showed the same order on
+  another board. The skew labels sit at 0.59 to 0.78% rms and uniform at 0.47%.
+- LT3 (no last-wave quantisation) is excluded on time (1.83% against 0.68% on 62 lever cells;
+  rental 6 left it INCONCLUSIVE). On these shapes the other E1 rivals cannot be separated on time.
+  v2, which drops term (b), reads 0.56% rms over all 84 cells against v3's 0.61% (DESCRIPTIVE).
+- Term (b) on control pairs: the level is right and the copies dependence is not. Across 24 pairs
+  in 5 clusters, v3's S - N gap is within 0.42 us of the measured one, and v2 (no term b, +4.52 us)
+  and H8 (+7.44 us) are excluded. Moving the same board from 9 to 15 declared copies shifts the
+  SHARED residual by +3.44 us at Phi n 2 and +3.05 us at Qwen1.5 n 2, while NATIVE, the same call on
+  both pages, moves -0.19 and -1.12 us. The copies clause (1.5 us) fails at +2.24 us, so Q1-H FAILS.
+  The c15 SHARED cells are the blind part of this replicate. At n 1 the picture differs: Qwen1.5
+  SHARED's -8 us residual does not move with the copies count (Q1-C reads CALL: a per-call cost,
+  not a dead-CTA one).
+- The block-scan path condition: Q1-P, registered descriptive, now reads against it. Mixtral n 3
+  control pairs read g -10.56 us; v3_all predicts -10.61 and v3 0. Rental 6 read -6.38 us on the same
+  population. The A page reads -3.9 / -7.0 us, B and C -12.4 to -14.0. Nothing is decided. A test
+  needs lever cells, and E1 has 3.
+- OLMoE w1 bytes under skew: the row-granular A key with one exact LRU at 60 MiB, the card's L2, is
+  NAMED over v3 and over the same key at 39.5 MiB. Every prediction was fixed before the page ran
+  on exactly the priced draws. It reads every skewed w1 row within 3.21% (all under-predicted, -1.2
+  to -3.2%). The 39.5 MiB key misses n 4 by +11.7 to +13.6%, and v3 misses by +7.7% (n 4) to +25.8%
+  (n 16). OPEN: no model change follows from it. The capacity was SEEN-chosen; its numbers are blind.
+  Bytes do not reach time on these floor-bound cells (rental 6), so this is a byte-model finding.
+- Token order: on Mixtral and Phi it moves no cell by more than a few hundredths of a percent (page
+  means -0.023 to +0.026%).
+
+**Instrument.** Every timed cell's median clock is 1710.0 MHz; no repeat slipped. The counter page
+passes lock_gate.check_page with 20 of 20 cells in [1640, 1710] MHz; its own analyse exits 3 on V1
+(no SHARED cell at n 16, three treads), as the registered design and rental 6's byte pages do. The
+driver's `fresh_tag` fix held: units 13 and 14 ran as `-p2-11` and `-p2-12`. The per-unit logs are
+named by model and label, and none overwrote another. One non-scorer fix with the publication:
+`register.py --check` read rental 7's own published pages into its leakage set and turned every
+rental-7 draw SEEN. It now reads the set as of the registration date, as the pricer already did, and
+all eight registered files reproduce. Every page carries its card's UUID, as every published session
+does; the histograms are the registered synthetic files (G5 PASS on every page).
+
+**What the paper can claim, after rental 7.** Model v3 prices skewed routing to the time bar on R3's
+tile in CLEAN on Mixtral 8x7B, Phi-3.5-MoE (rental 7) and OLMoE (rental 6). Its rivals LT3, U, v2 and
+H8 are excluded by registered tests (v2 and H8 on the S - N gap level). Not claimed: the copies
+dependence of the S - N gap (Q1-H FAILS at 15 copies), the block-scan path condition (Q1-P reads
+against it, descriptively), OLMoE's skewed w1 bytes under v3 (the 60 MiB row key is named; OPEN), or
+anything on vLLM's own tile, which is the next stage.
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are
