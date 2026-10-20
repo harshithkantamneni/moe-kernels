@@ -50,3 +50,7 @@
 2026-10-20T23:34:04Z gate START: gate f64w8: scripts/tileA2_gate.py f64w8 at the 1710 lock; FAIL ends the rental (tileA2-gates) [unit 12/32 - g64 gate=f64w8] (estimate 1 min, cap 5 min, 160 min left)
 2026-10-20T23:34:05Z gate END: exit 0 after 0 min [unit 12/32 - g64 gate=f64w8]
 2026-10-20T23:34:06Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+[push] pushed 661f605 to run-gh200-tile2-20261020t2242: gate (unit 12/32 - g64 gate=f64w8): exit 0 (0 min)
+2026-10-20T23:34:08Z timed START: 3c.3 timed R3 histogram page at 1710: G=1, docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json, arms native, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 13/32 mixtral-8x7b cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 15 min, 159 min left)
+2026-10-20T23:36:46Z timed END: exit 0 after 3 min [unit 13/32 mixtral-8x7b cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-20T23:36:46Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
