@@ -4,3 +4,4 @@
 2026-10-20T06:01:26Z calibrate (unit 2/21 mixtral-8x7b ta): exit 0 (0 min)
 2026-10-20T06:01:46Z tilecensus (unit 3/21 - ta tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite): exit 3 (0 min)
 2026-10-20T06:04:43Z bytes: G=64 page exit 3
+2026-10-20T06:04:52Z bytes (unit 4/21 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
