@@ -29,3 +29,4 @@
 2026-10-20T07:47:37Z bytes (unit 18/21 olmoe-1b-7b f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
 2026-10-20T07:50:03Z bytes: G=64 page exit 1
 2026-10-20T07:50:14Z bytes (unit 19/21 olmoe-1b-7b f32w4 block-m=32 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-20T07:52:56Z timed (unit 20/21 olmoe-1b-7b d9 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
