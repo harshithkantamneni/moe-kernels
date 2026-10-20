@@ -1372,6 +1372,32 @@ nodrop.
 
 147 min of units (117 nodrop), about $5.6; rental B about 117 min, $5.3: the stage about $11 (D10).
 
+**Scored 2026-10-20** on `results/published/2026-10-20-nvidia_gh200_480gb-tileA-session`
+(board 03e9ec, new; 21 units at c4914ba in 115 minutes, none dropped, driver exit 3 from the census
+unit's exit 3; the scorers' outputs and the tables in `scripts/scoring/tileA/` and `SCORES.md`; no
+post-page fix). **STOP: rental B does not run** (finalise.py refuses). **census**: VALID
+(INCOMPLETE): 0 MMA path mismatches over 72 configs; deepseek-v2-lite errors on all six tiles ("N
+rows per expert is not an integer token count for E=64 k=6", a census-tool defect); 32x128x64 w4
+reads occupancy 4 against the design's 5 (the rebuild at the census occupancy changes only floor's
+DESCRIPTIVE mma.sync block; tileA-bytes is the same). **floor**: CALIBRATION NOT SCORED (under 6
+floor-bound cells). The counter clock rule (cells in [1640, 1710] MHz) keeps 6 of 27 and 7 of 27
+cells on the OLMoE and Mixtral f128 pages, all PRIVATE: NATIVE and SHARED ran 1599 to 1640 MHz on
+the 128x128 wgmma tile. No c_128, so no v4. **bytes**: NOT NAMED (nearest CLAMP); v4 takes CLAMP
+(rms CLAMP 5.03%, v3 5.03%, ROWKEY60 12.31%, ROWKEY30 12.29%) on 19 of the 56 registered rows; the
+band drops OLMoE b128g1's 24 and 13 of Qwen2-57B's 16. **e1cal**: NOT SCORED; the stop rule prints
+the floor clause only. Rebuilt under r7-median-run3 (DESCRIPTIVE), Mixtral e128g16 (33.8% non-clean)
+and Qwen2-57B e128g1 (27.1%) also fail G1, which the stop rule's page clause reads as a STOP.
+**rep**: sigma_page 0.1275% (24 cells). **dead**: delta +20.01 us (se 0.61); D, D2, SLOT and d 1.06
+each EXCLUDED, so D against SLOT is NOT SEPARATED by this page; kappa NOT SCORED (no c_128). The
+decode stage cannot be scored as registered (`2026-10-14-decodeC-cal-gh200` requires the tile
+stage's finalised selections). Open defect, not fixed: `score_floor.py` and `score_bytes.py` import
+`r3_timing_model_v4` / `r3_timing_model` before `tcommon` sets `sys.path`, so they need
+`PYTHONPATH=.:scripts` from the command line. The registration files above are unchanged;
+`register.py --check` reads `same` on all eight. One non-scorer fix: rental 7's `register.py`
+now reads reg7._held_pages as of 2026-10-13 (the tile session's histogram pages had joined the
+g1rule file's 17 held pages, and `--check` read DIFFERS there); reg7.py (pinned) is unchanged and
+all eight rental-7 files read `same`.
+
 ## The decode stage (2026-10-14): `2026-10-14-decodeC-cal-gh200`, `2026-10-14-decodeB-blind-gh200`
 
 Registered before any decode page, from design-decode DESIGN.md and the owner's decisions DD1 to DD6

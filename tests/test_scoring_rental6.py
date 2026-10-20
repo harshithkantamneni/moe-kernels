@@ -81,9 +81,16 @@ def test_the_scorers_g1_takes_r3s_g1_and_at_most_ten_percent_slipped_rows():
     assert sl["slipped"][0]["mhz"] == 1680.0 and sl["slipped"][0]["cell"] == "PT/native/n3"
 
 
+TILE_A = "2026-10-20-nvidia_gh200_480gb-tileA-session"
+
+
 def test_the_counter_clock_rule_passes_held_pages_and_fails_the_8x22b_floor():
+    """The band on R3's tiles, where it was set (every 1710 lock page but tile rental A's), and the
+    tile pages apart: they pass check_page, but their wgmma NATIVE and SHARED cells run under the
+    band (docs/FINDINGS.md, tile rental A), 120 of 242 cells in it."""
     import lock_gate as LG
     tot = ok = 0
+    tile_tot = tile_ok = 0
     off = []
     for p in LG.published_lock_pages(LG.PUBLISHED):
         page = json.loads(p.read_text())
@@ -94,10 +101,17 @@ def test_the_counter_clock_rule_passes_held_pages_and_fails_the_8x22b_floor():
             continue
         if LG.page_kind(page) != "page":
             continue
-        cs = [c for c in C6.clock_rule(page, p)["cells"] if c["mhz"] is not None]
+        rule = C6.clock_rule(page, p)
+        cs = [c for c in rule["cells"] if c["mhz"] is not None]
+        if p.relative_to(LG.PUBLISHED).parts[0] == TILE_A:
+            assert rule["page_ok"], p
+            tile_tot += len(cs)
+            tile_ok += sum(c["ok"] for c in cs)
+            continue
         tot += len(cs)
         ok += sum(c["ok"] for c in cs)
-    assert tot > 3000 and 0.995 <= ok / tot <= 0.999, (ok, tot)        # 3025 of 3033, 99.74%
+    assert tot > 3000 and 0.995 <= ok / tot <= 0.999, (ok, tot)        # 3139 of 3147, 99.75%
+    assert (tile_ok, tile_tot) == (120, 242)
     assert len(off) == 1 and not off[0]["page_ok"] and off[0]["cells_ok"] == 0
 
 

@@ -1,0 +1,16 @@
+{
+ "registration": "2026-10-14-tileA-rep-gh200",
+ "part": "rep",
+ "pages": {
+  "e128g1": "counted",
+  "e128g1r": "counted"
+ },
+ "REP": {
+  "verdict": "MEASURED",
+  "sigma_page": 0.001275,
+  "cells": 24,
+  "mean_shift": -0.001537
+ },
+ "sigma_page_used": 0.001275,
+ "source": "tA-rep (the 128x128 replicate pair)"
+}

@@ -1,0 +1,290 @@
+{
+ "registration": "2026-10-14-tileA-census-gh200",
+ "part": "census",
+ "CENSUS": {
+  "verdict": "VALID (INCOMPLETE)",
+  "file": "results/published/2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta/tile-census.json",
+  "entries": 72,
+  "errors": [
+   "deepseek-v2-lite 128x128x64w8s3: ValueError: 128 rows per expert is not an integer token count for E=64 k=6",
+   "deepseek-v2-lite 64x128x64w8s3: ValueError: 64 rows per expert is not an integer token count for E=64 k=6",
+   "deepseek-v2-lite 64x128x64w4s3: ValueError: 64 rows per expert is not an integer token count for E=64 k=6",
+   "deepseek-v2-lite 32x128x64w4s3: ValueError: 32 rows per expert is not an integer token count for E=64 k=6",
+   "deepseek-v2-lite 16x64x128w4s4: ValueError: 16 rows per expert is not an integer token count for E=64 k=6",
+   "deepseek-v2-lite 32x64x128w4s3: ValueError: 32 rows per expert is not an integer token count for E=64 k=6"
+  ]
+ },
+ "occupancy": {
+  "64x128x64w8s3": {
+   "w1": 3,
+   "w2": 3
+  },
+  "16x64x128w4s4": {
+   "w1": 3,
+   "w2": 3
+  },
+  "32x64x128w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "32x128x64w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "128x128x64w8s3": {
+   "w1": 2,
+   "w2": 2
+  },
+  "64x128x64w4s3": {
+   "w1": 3,
+   "w2": 3
+  }
+ },
+ "occupancy_by_model": {
+  "olmoe-1b-7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "mixtral-8x7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "qwen2-57b-a14b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "phi-3.5-moe": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "qwen1.5-moe-a2.7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "jetmoe-8b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  }
+ },
+ "counts": {
+  "128x128x64w8s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n128k16",
+   "dtype": "bf16",
+   "cp_async_cg": 8,
+   "cp_async_bytes_per_thread": 128,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 256,
+   "per_warpgroup": 4,
+   "warpgroups": 2
+  },
+  "64x128x64w8s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n64k16",
+   "dtype": "bf16",
+   "cp_async_cg": 6,
+   "cp_async_bytes_per_thread": 96,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 256,
+   "per_warpgroup": 4,
+   "warpgroups": 2
+  },
+  "64x128x64w4s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n128k16",
+   "dtype": "bf16",
+   "cp_async_cg": 12,
+   "cp_async_bytes_per_thread": 192,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 128,
+   "per_warpgroup": 4,
+   "warpgroups": 1
+  },
+  "32x128x64w4s3": {
+   "path": "mma.sync",
+   "mma_sync": 32,
+   "ldmatrix": 16,
+   "cp_async_cg": 10,
+   "ldmatrix_bytes_per_thread": 256,
+   "cp_async_bytes_per_thread": 160,
+   "threads": 128,
+   "wavefronts": 296.0
+  },
+  "16x64x128w4s4": {
+   "path": "mma.sync",
+   "mma_sync": 16,
+   "ldmatrix": 16,
+   "cp_async_cg": 10,
+   "ldmatrix_bytes_per_thread": 256,
+   "cp_async_bytes_per_thread": 160,
+   "threads": 128,
+   "wavefronts": 296.0
+  },
+  "32x64x128w4s3": {
+   "path": "mma.sync",
+   "mma_sync": 32,
+   "ldmatrix": 24,
+   "cp_async_cg": 12,
+   "ldmatrix_bytes_per_thread": 384,
+   "cp_async_bytes_per_thread": 192,
+   "threads": 128,
+   "wavefronts": 432.0
+  }
+ },
+ "differs_from_design": {
+  "32x128x64w4s3": {
+   "design": 5,
+   "census": {
+    "w1": 4,
+    "w2": 4
+   }
+  }
+ },
+ "mechanical_steps": [
+  "re-price rowkeys_tile.py at the census occupancy and rebuild tileA-bytes (tileA-census)"
+ ]
+}

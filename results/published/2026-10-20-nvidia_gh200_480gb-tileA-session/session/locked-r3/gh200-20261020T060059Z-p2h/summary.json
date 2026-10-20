@@ -1,0 +1,243 @@
+{
+ "schema": 1,
+ "utc_start": "2026-10-20T07:52:59Z",
+ "utc_end": "2026-10-20T07:55:30Z",
+ "session_tag": "gh200-20261020T060059Z-p2h",
+ "locks_asked": [
+  1710
+ ],
+ "groups": [
+  1
+ ],
+ "r3_args": [
+  "--model",
+  "olmoe-1b-7b",
+  "--block-m",
+  "128",
+  "--repeats",
+  "9",
+  "--duty",
+  "0.25",
+  "--seed",
+  "0",
+  "--declared-copies",
+  "15",
+  "--histogram",
+  "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json",
+  "--arms",
+  "native,shared",
+  "--num-stages",
+  "3",
+  "--block-k",
+  "64",
+  "--block-n",
+  "128",
+  "--num-warps",
+  "8"
+ ],
+ "python": "/home/ubuntu/moe/venvs/vllm/bin/python",
+ "results_dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-d15",
+ "card": "NVIDIA GH200 480GB, GPU-82fa16c1-1eb0-efac-8c23-3ee0b3295771, Enabled, 700.00 W, 1980 MHz",
+ "attempts": [
+  {
+   "lock": 1710,
+   "G": 1,
+   "tag": "gh200-20261020T060059Z-p2h-lock1710",
+   "state": "held",
+   "rc": 0,
+   "cells": 36,
+   "worst_mhz": 1710.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-d15/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl15-dtypebf16-duty0.25-g1-hist12905532-563202f3",
+   "why": "",
+   "utc_start": "2026-10-20T07:52:59Z",
+   "seconds": 150.2,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20261020T060059Z-p2h/r3-g1-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "scripts/r3_tile.py",
+    "--model",
+    "olmoe-1b-7b",
+    "--block-m",
+    "128",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "15",
+    "--histogram",
+    "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json",
+    "--arms",
+    "native,shared",
+    "--num-stages",
+    "3",
+    "--block-k",
+    "64",
+    "--block-n",
+    "128",
+    "--num-warps",
+    "8",
+    "--slip-policy",
+    "cell",
+    "--lock-mhz",
+    "1710",
+    "--min-clean-repeats",
+    "0",
+    "--group-m",
+    "1",
+    "--session-tag",
+    "gh200-20261020T060059Z-p2h-lock1710"
+   ],
+   "slipped_cells": []
+  }
+ ],
+ "lock": 1710,
+ "pages": [
+  {
+   "lock": 1710,
+   "G": 1,
+   "tag": "gh200-20261020T060059Z-p2h-lock1710",
+   "state": "held",
+   "rc": 0,
+   "cells": 36,
+   "worst_mhz": 1710.0,
+   "slip_mhz": null,
+   "over_mhz": null,
+   "dir": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-d15/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl15-dtypebf16-duty0.25-g1-hist12905532-563202f3",
+   "why": "",
+   "utc_start": "2026-10-20T07:52:59Z",
+   "seconds": 150.2,
+   "log": "/home/ubuntu/moe/session/locked-r3/gh200-20261020T060059Z-p2h/r3-g1-lock1710.log",
+   "argv": [
+    "/home/ubuntu/moe/venvs/vllm/bin/python",
+    "scripts/r3_tile.py",
+    "--model",
+    "olmoe-1b-7b",
+    "--block-m",
+    "128",
+    "--repeats",
+    "9",
+    "--duty",
+    "0.25",
+    "--seed",
+    "0",
+    "--declared-copies",
+    "15",
+    "--histogram",
+    "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json",
+    "--arms",
+    "native,shared",
+    "--num-stages",
+    "3",
+    "--block-k",
+    "64",
+    "--block-n",
+    "128",
+    "--num-warps",
+    "8",
+    "--slip-policy",
+    "cell",
+    "--lock-mhz",
+    "1710",
+    "--min-clean-repeats",
+    "0",
+    "--group-m",
+    "1",
+    "--session-tag",
+    "gh200-20261020T060059Z-p2h-lock1710"
+   ],
+   "slipped_cells": []
+  }
+ ],
+ "outcome": {
+  "held": 1710,
+  "all_slipped": false,
+  "stopped": "",
+  "refused": ""
+ },
+ "stopped_by": "",
+ "gates": [
+  {
+   "kind": "VALIDITY",
+   "number": "1",
+   "claim": "every attempt read only the run directory its own R3 named",
+   "verdict": "PASS",
+   "measured": "1 of 1 attempts",
+   "threshold": "the plan's session line is the attempt's tag, the directory is new since the attempt started, and its report.json records the same tag",
+   "invalidates": "the lock search: an attempt scored another run's cells, or R3 would have resumed one"
+  },
+  {
+   "kind": "VALIDITY",
+   "number": "2",
+   "claim": "the lock search reached a verdict",
+   "verdict": "PASS",
+   "measured": "lock 1710 MHz held at every G",
+   "threshold": "a lock held at every G, or every lock on the ladder slipped",
+   "invalidates": "the verdict: the ladder stopped for a reason a lower lock would not fix"
+  },
+  {
+   "kind": "CLAIM",
+   "number": "1",
+   "claim": "a lock on the ladder held at every G",
+   "verdict": "PASS",
+   "measured": "1710 MHz held at G = 1",
+   "threshold": "no timed cell more than 15 MHz under the lock at any G (under --slip-policy cell a slipped repeat is R3's to exclude, not a stop)",
+   "invalidates": ""
+  }
+ ],
+ "exit": 0,
+ "reset": {
+  "command": "sudo -n nvidia-smi -rgc",
+  "rc": 0,
+  "output": "All done.",
+  "held": 1710
+ },
+ "smi_log": [
+  {
+   "utc": "2026-10-20T07:52:59Z",
+   "command": "nvidia-smi --query-gpu=name,uuid,persistence_mode,power.limit,clocks.max.sm --format=csv,noheader",
+   "rc": 0,
+   "output": "NVIDIA GH200 480GB, GPU-82fa16c1-1eb0-efac-8c23-3ee0b3295771, Enabled, 700.00 W, 1980 MHz"
+  },
+  {
+   "utc": "2026-10-20T07:52:59Z",
+   "command": "nvidia-smi -q -d SUPPORTED_CLOCKS",
+   "rc": 0,
+   "output": "phics                      : 450 MHz\n            Graphics                      : 435 MHz\n            Graphics                      : 420 MHz\n            Graphics                      : 405 MHz\n            Graphics                      : 390 MHz\n            Graphics                      : 375 MHz\n            Graphics                      : 360 MHz\n            Graphics                      : 345 MHz"
+  },
+  {
+   "utc": "2026-10-20T07:52:59Z",
+   "command": "nvidia-smi --query-compute-apps=pid --format=csv,noheader",
+   "rc": 0,
+   "output": ""
+  },
+  {
+   "utc": "2026-10-20T07:52:59Z",
+   "command": "sudo -n nvidia-smi -lgc 1710,1710",
+   "rc": 0,
+   "output": "GPU clocks set to \"(gpuClkMin 1710, gpuClkMax 1710)\" for GPU 00000000:DD:00.0\nAll done."
+  },
+  {
+   "utc": "2026-10-20T07:52:59Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "1980 MHz, 1980 MHz, 0x0000000000000000, 148.28 W, 700.00 W"
+  },
+  {
+   "utc": "2026-10-20T07:55:30Z",
+   "command": "sudo -n nvidia-smi -rgc",
+   "rc": 0,
+   "output": "All done."
+  },
+  {
+   "utc": "2026-10-20T07:55:30Z",
+   "command": "nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,clocks_event_reasons.active,power.draw,power.limit --format=csv,noheader",
+   "rc": 0,
+   "output": "345 MHz, 1980 MHz, 0x0000000000000001, 139.39 W, 700.00 W"
+  }
+ ]
+}

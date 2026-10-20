@@ -387,17 +387,27 @@ PINNED = """
 2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-olmoe-1b-7b-skbytes-r3-counters/lock1710/r3c-g8.json V10 None PASS
 2026-10-13-nvidia_gh200_480gb-rental6-session/results/2026-10-13-nvidia_gh200_480gb-phi-3.5-moe-skbytes-r3-counters/lock1710/r3c-g8.json V10 None PASS
 2026-10-14-nvidia_gh200_480gb-rental7-session/results/2026-10-14-nvidia_gh200_480gb-olmoe-1b-7b-l2open-r3-counters/lock1710/r3c-g8.json V10 None PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-mixtral-8x7b-b128g16-r3-counters/lock1710/r3c-g16.json V10 None PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-mixtral-8x7b-b64g1-r3-counters/lock1710/r3c-g1.json V10 None PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-mixtral-8x7b-f64w8-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-b128g1-r3-counters/lock1710/r3c-g1.json V10 None PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f32w4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f64w4-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f64w8-r3-counters/lock1710/r3c-g64.json V10 PASS PASS
+2026-10-20-nvidia_gh200_480gb-tileA-session/results/2026-10-20-nvidia_gh200_480gb-qwen2-57b-a14b-b128g1-r3-counters/lock1710/r3c-g1.json V10 None PASS
 """
 
 
 def test_the_regate_of_every_published_lock_page_is_pinned():
-    """152 lock pages (summary.json files repeat their pages' gates and are
+    """162 lock pages (summary.json files repeat their pages' gates and are
     not pages; 19 of them rental 3's, 2026-10-06, 7 rental 4's, 2026-10-07, 4 rental 5's,
-    2026-10-09, 4 rental 6's, 2026-10-13, and 1 rental 7's, 2026-10-14, all PASS). The 8x22B
-    floor, the lock not in force, fails; every other page passes, 78 stored FAILs among them;
-    rental 5's and rental 6's two histogram byte pages each and rental 7's one store no gate
-    (R3's histogram byte mode records none), so 83 verdicts change. The published JSONs are
-    read, never written."""
+    2026-10-09, 4 rental 6's, 2026-10-13, 1 rental 7's, 2026-10-14, and 10 tile rental A's,
+    2026-10-20, all PASS). The 8x22B floor, the lock not in force, fails; every other page
+    passes, 78 stored FAILs among them; rental 5's and rental 6's two histogram byte pages each,
+    rental 7's one and tile rental A's four store no gate (R3's histogram byte mode records
+    none), so 87 verdicts change. The published JSONs are read, never written."""
     want = [tuple(line.split()) for line in PINNED.strip().splitlines()]
     before = {p: p.stat().st_mtime_ns for p in LG.published_lock_pages()}
     got = [(str(Path(r["path"]).relative_to(LG.PUBLISHED)), r["gate"], str(r["stored"]),
@@ -408,7 +418,7 @@ def test_the_regate_of_every_published_lock_page_is_pinned():
     assert fails == [("2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-"
                       "nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json", "FL1", "FAIL",
                       "FAIL")]
-    assert sum(1 for g in got if g[2] != g[3]) == 83
+    assert sum(1 for g in got if g[2] != g[3]) == 87
 
 
 def test_the_8x22b_floor_fails_on_two_independent_readings():
@@ -422,7 +432,7 @@ def test_the_8x22b_floor_fails_on_two_independent_readings():
 def test_the_cli_prints_the_table(capsys):
     assert LG.main([]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[-1].startswith("152 lock pages; 83 verdicts change; new verdict "
+    assert out.splitlines()[-1].startswith("162 lock pages; 87 verdicts change; new verdict "
                                            "not PASS on 1: 2026-09-28-nvidia_gh200_480gb-8x22b")
 
 

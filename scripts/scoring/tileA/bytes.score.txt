@@ -1,0 +1,3 @@
+SCORED against 2026-10-14-tileA-bytes-gh200
+  pages: {'olmoe-1b-7b-b128g1': 'counted', 'mixtral-8x7b-b64g1': 'counted', 'mixtral-8x7b-b128g16': 'counted', 'qwen2-57b-a14b-b128g1': 'counted'}
+KEY: NOT NAMED (nearest CLAMP); v4 takes CLAMP rms % {'v3': 5.025447, 'CLAMP': 5.025332, 'ROWKEY60': 12.313564, 'ROWKEY30': 12.291728} worst nearest 7.469203%

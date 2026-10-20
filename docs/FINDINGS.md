@@ -2090,6 +2090,143 @@ moved files changed at rental 6, and every pin of rentals 6 and 7 matches today
 on the three published sessions, write their committed score files byte for byte (checked
 2026-10-14 for the tile stage's build).
 
+---
+
+## Tile rental A (2026-10-20): STOP, the wgmma floor is not calibrated because its NATIVE and SHARED cells ran under the counter clock band; v4's A key falls to CLAMP; sigma_page 0.13% at 128x128; every dead-CTA law excluded
+
+One Lambda GH200 480GB (2026-10-20; board `03e9ec`, new to the study) ran
+`scripts/plans/rentalA-tile-2026-10.plan` unattended through the tile driver at c4914ba. 21 units ran
+in 115 minutes (06:00:59Z to 07:55:35Z) against 147 estimated; none was dropped. 20 units exited 0;
+the census unit exited 3, so the driver ends with exit 3. Six registrations (`2026-10-14-tileA-*`),
+rental B's two frozen ones, their scorers, the SYNTHETIC histograms and the plan were committed
+before any page (eb84555; unchanged at c4914ba). Published at
+`results/published/2026-10-20-nvidia_gh200_480gb-tileA-session`. Every verdict is the committed
+scorers' output in `scripts/scoring/tileA/` (`SCORES.md` has the tables). No post-page fix. The
+instance id and the bill are not in the run files.
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers | file |
+|---|---|---|---|---|
+| tileA-census | MMA path, occupancy | VALID (INCOMPLETE) | 72 configs, 0 path mismatches; 6 errors (deepseek-v2-lite, every tile); occupancy 2 at 128x128 w8, 3 at 64x128 w8 and w4, 4 at 32x128x64 w4 (design 5) | `census.score.txt` |
+| tileA-floor | CAL-A (c_128, F_wg,w1, F_wg,w2) | NOT SCORED (under 6 floor-bound cells) | f128 cells in [1640, 1710] MHz: 6 of 27 (OLMoE), 7 of 27 (Mixtral), all PRIVATE | `floor.score.txt` |
+| | 64x128 test, selections, F form | not reached | | |
+| tileA-bytes | the A key | NOT NAMED (nearest CLAMP); v4 takes CLAMP | 19 of 56 rows: rms CLAMP 5.03%, v3 5.03%, ROWKEY30 12.29%, ROWKEY60 12.31%; worst CLAMP +7.47% | `bytes.score.txt` |
+| tileA-e1cal | E1-CAL, the stop rule | NOT SCORED; STOP: rental B does not run | the printed clause: tA-floor has no calibration | `e1cal.score.txt` |
+| tileA-rep | sigma_page at 128x128 | MEASURED | 0.1275% over 24 cells; mean shift -0.154% | `rep.score.txt` |
+| tileA-dead | D against SLOT at occupancy 2 | D, D2, SLOT, d 1.06 EXCLUDED; D against SLOT NOT SEPARATED by this page; kappa NOT SCORED | delta +20.01 us, se 0.61; D 10.02 (z 16.3), D2 10.10 (16.2), SLOT 24.69 (-7.7), d 1.06 11.41 (14.1) | `dead.score.txt` |
+
+`finalise.py` refuses (exit 2: "the stop rule reads STOP"), so rental B's predictions and plan do not
+exist. The decode stage cannot be scored as registered either: `2026-10-14-decodeC-cal-gh200`
+requires the tile stage's finalised selections (`score_cal.py` refuses without `--tile-scores`), and
+its stop rule STOPs when they are missing.
+
+**The clock.** The 1710 MHz lock held as a ceiling. None of the 16,200 per-burst NVML reads in the
+eight timed pages' `cells.csv` is above 1710 MHz, and 12,402 (76.6%) read exactly 1710; every counter
+page passes lock_gate.check_page (V10). The tile scorers also apply rental 6's counter clock rule:
+a counter cell counts only inside `BAND_MHZ` = [1640, 1710] MHz (`scripts/scoring/rental6/r6common.py`),
+a band set at rental 6 on R3's 32 x 64 mma.sync tiles, where every cell of rentals 6 and 7's five
+counter pages met it.
+On the wgmma tiles NATIVE and SHARED ran below it. Per-cell clocks from `r6common.clock_rule`
+(range and median, MHz):
+
+| page | tile | NATIVE | SHARED | PRIVATE | in band |
+|---|---|---|---|---|---:|
+| olmoe f128 (G 64) | 128x128x64 w8 s3, wgmma | 1602.6 to 1636.5 (1626.7) | 1601.1 to 1639.4 (1636.5) | 1617.9 to 1666.4 (1646.8) | 6 of 27 |
+| mixtral f128 (G 64) | 128x128x64 w8 s3, wgmma | 1599.3 to 1639.9 (1626.0) | 1606.5 to 1637.2 (1621.8) | 1627.5 to 1694.8 (1677.5) | 7 of 27 |
+| olmoe f64w8 (G 64) | 64x128x64 w8 s3, wgmma | 1616.0 to 1663.3 (1663.3) | 1610.1 to 1663.3 (1663.3) | 1663.3 to 1679.8 (1668.5) | 21 of 27 |
+| mixtral f64w8 (G 64) | 64x128x64 w8 s3, wgmma | 1618.3 to 1654.2 (1637.8) | 1614.3 to 1657.2 (1636.5) | 1654.5 to 1698.9 (1685.2) | 13 of 27 |
+| olmoe f64w4 (G 64) | 64x128x64 w4 s3, wgmma | 1607.9 to 1667.5 (1667.5) | 1608.6 to 1667.5 (1667.5) | 1660.6 to 1678.6 (1667.5) | 21 of 27 |
+| olmoe f32w4 (G 64) | 32x128x64 w4 s3, mma.sync | 1636.6 to 1682.6 (1682.6) | 1636.6 to 1682.6 (1682.6) | 1678.2 to 1689.8 (1682.6) | 25 of 27 |
+| olmoe b128g1 (G 1) | 128x128x64 w8 s3 | 1601.6 to 1620.5 (1614.0) | 1602.8 to 1620.7 (1614.0) | | 0 of 24 |
+| qwen2-57b b128g1 (G 1) | 128x128x64 w8 s3 | 1607.7 to 1643.6 (1633.3) | 1608.1 to 1643.6 (1629.5) | | 3 of 16 |
+| mixtral b128g16 (G 16) | 128x128x64 w8 s3 | 1605.9 to 1649.4 (1630.7) | 1605.2 to 1649.8 (1630.8) | | 8 of 24 |
+| mixtral b64g1 (G 1) | 64x128x64 w8 s3 | 1646.1 to 1673.7 (1664.8) | 1647.7 to 1673.4 (1664.4) | | 16 of 16 |
+
+The calibration's estimator (`tcommon.joint_cF`) reads NATIVE and SHARED cells only, so on the f128
+pages it has none: 0 of 18 per page are in the band. That, not a failed fit, is why tA-floor is NOT
+SCORED. NATIVE and SHARED clocks rise as the tile shrinks: 128x128 lowest, 64x128 between, the
+32x128 mma.sync tile nearest the lock (DESCRIPTIVE, one board). Only the timed
+pages have an NVML ledger (`session/locked-r3/*/smi.csv`, 8,578 samples): the throttle reasons set
+are 0x4 (SW power cap, 2,323 samples) and 0x1 (GPU idle, 47), and nothing else; peak temperature 60 C;
+peak draw 714.5 W against the 700 W limit. Of the 2,072 samples under 1710 MHz, 938 carry 0x4 and
+1,134 carry no reason flag. That the counter pages' sag is the power cap is INFERRED (no ledger on
+those pages, and half the timed pages' sub-lock samples name no reason); that it is not thermal is
+measured (60 C peak).
+
+**What each test separated, and what it did not.**
+
+- Model v4 does not exist after rental A. Its wgmma constants (c_128, F_wg) were to come from the
+  f128 pages and could not be fitted under the registered clock rule. No accounting (B, W, T), F form
+  or eta_mma reading was reached, so nothing about the wgmma floor is tested here. Rental B and the
+  decode stage stop with it.
+- The A key: v4 would take CLAMP, by the registered default (CLAMP and v3 are 1.00002x apart, far
+  from the 2x needed to name either). The reading rests on 19 of the 56 registered rows (Mixtral
+  b64g1 16, Qwen2-57B 3); OLMoE's 128x128 G-1 page lost every cell to the band. On these rows the
+  row keys at 60 and 30 MiB under-predict skewed w1 reads by up to 27.9% (Mixtral b64g1 n 2 PT), and
+  v3 / CLAMP over-predict them by 2.5 to 7.5%. That ROWKEY60 was NAMED on OLMoE w1 at R3's tile
+  (rental 7) and reads 12.3% here is a fact about different tiles, models and rows; no comparison is
+  registered.
+- sigma_page at 128x128 is 0.1275%, below rental 3's 0.18% at R3's tile, on 24 cells of OLMoE run twice.
+- The dead-CTA lever at occupancy 2 (OLMoE SHARED n 1, 15 against 9 copies): the measured increment
+  is +20.01 us (se 0.61). Every registered law is more than 3 se away: SLOT predicts 24.69 us, and D,
+  D2 and d 1.06 predict 10.0 to 11.4 us at the nominal c_128 900 (7.6 to 12.9 us over the registered
+  600, 900 and 1100, so none of the registered c_128 values rescues them). The measurement lies
+between the two families.
+  The kappa rows need c_128 and are NOT SCORED.
+- The census: every config compiled on its expected MMA path. 32x128x64 w4 s3 is register-bound at 4
+  CTAs per SM (99 to 102 registers; the shared-memory limit alone would allow 5). Rebuilt at the census
+  occupancy, the registrations change only in floor's DESCRIPTIVE mma.sync block (c_counter_w1 442.14
+  to 443.20); tileA-bytes is identical. deepseek-v2-lite (E 64, k 6) raised "N rows per expert is not
+  an integer token count" on all six tiles: N x 64 / 6 is not an integer for N 16 to 128. That is a
+  defect of the census tool, recorded and not fixed; rental B's deepseek-v2-lite cells have no census
+  occupancy.
+
+**Two facts beside the verdicts (DESCRIPTIVE).**
+
+- E1-CAL's pages under the drift rule. `score_e1cal.py` stops at the missing calibration and prints
+  that clause alone. Rebuilt under r7-median-run3 by `r7common.rebuild` (the function the tile
+  scorers' timed-page loader calls), two of the five E1-CAL pages fail G1: Mixtral e128g16 73 of 216
+  repeat rows non-clean (33.8%, 56 lock slips, 7 cells lost) and Qwen2-57B e128g1 39 of 144 (27.1%, 4
+  cells lost). `tcommon.stop_rule` STOPs on any E1-CAL page not "counted", so it would have stopped
+  rental B on these pages too had the floor calibrated (read off the code; not the registered
+  verdict's printed reason, and no verdict changes). The other three E1-CAL pages, the replicate and
+  the two dead-CTA pages pass (0 to 8.3% non-clean).
+- The counter pages' own harness gates. OLMoE f128 exits 3: V4 FAILS (q(1) 1.043 in every arm,
+  against [0.97, 1.03]), V5 FAILS (PRIVATE w1 q_P 0.969 at n 1), C1 FAILS and C6 FAILS: PRIVATE reads
+  w2 at +19.1% to +25.5% over one weight set per tile from n 1 to 9 and w1 at -3.1% to +0.6%. Mixtral
+  f128 exits 3 on V5 and V7 (PRIVATE up to +45.0% on w1 at n 9 and +73.7% on w2 at n 8; NATIVE and
+  SHARED w1 2.06% apart at n 2); Mixtral f64w8 on V7. The 64x128 OLMoE pages and the mma.sync page
+  fail claims only (C1 on all three, C6 on f64w4) and exit 1. These are the counter harness's readings, not scorer verdicts; no tile
+  registration reads them.
+
+**Instrument.** On every timed page G1's clock clause passes: each kept cell's rebuilt median clock
+is within one 15 MHz step of 1710 MHz; the slips are the G1 numbers above. Every histogram page reads its registered SYNTHETIC file (sha256
+and shuffle seed 20261410 on all eight timed and four byte pages). The run branch's 646 files match
+its SHA256SUMS; the 21 `cuda_utils*.so` are left out, as before. One non-scorer fix with the publication:
+rental 7's `register.py --check` read the tile session's histogram pages into the g1rule
+registration's held pages (reg7._held_pages leaves out only names carrying 'rental7') and differed;
+it now reads them as of the registration date, as it already read the leakage set, and all eight
+rental-7 files reproduce. reg7.py (pinned) is unchanged.
+
+**Open defects, recorded and not fixed (registered scorer files).** (1) `score_floor.py` imports
+`r3_timing_model_v4`, and `score_bytes.py` imports `r3_timing_model`, before `tcommon` puts
+`scripts/` on `sys.path`: from the command line both stop with ModuleNotFoundError unless
+`PYTHONPATH=.:scripts` is set. The tests import them after `tcommon` and do not catch it. (2)
+`score_census.py` iterates a set of tile names, so the key order of its `occupancy` block, and of
+floor's copy, follows the hash seed; the values do not change. Two scorings of this session (the
+fetched tree and the published one) agree byte for byte on every `.score.txt` and on the bytes,
+rep, dead and e1cal JSON, and as data on census and floor. (3) The census tool's deepseek-v2-lite
+token-count error, above.
+
+**What the paper can claim, after tile rental A.** Nothing new about the timing model: v4 has no
+wgmma constants, and no E1 cell on vLLM's tiles is scored. Measured: the census of six
+tiles (wgmma at 128x128 and 64x128, mma.sync at 32 and 16 rows), sigma_page 0.13% at 128x128, a
+dead-CTA increment at occupancy 2 that no registered law predicts, and the clock: under the 700 W
+cap, the 128x128 wgmma tile runs NATIVE and SHARED at about 1600 to 1640 MHz on this board, under a
+1710 MHz lock that is never exceeded. Any next tile rental needs a clock rule that wgmma pages can
+meet, registered before its pages; that is a design choice for the owner and is not made here.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

@@ -101,10 +101,27 @@ def _seed_leakage_as_of_registration() -> None:
         R7.PUB = pub
 
 
+def _held_pages_as_of_registration() -> None:
+    """reg7._held_pages (the g1rule builder's input) globs every published histogram page and leaves
+    out rental 7's by name, so a session published later (the tile stage's of 2026-10-20) would join
+    the 17 pages the rule was registered on. `--check` recomputes the registered files, so the pages
+    are read as of the registration: those of sessions dated on or before C7.DATE (each entry's name
+    starts with its session's date). reg7.py (pinned) is unchanged; the wrapper is installed once."""
+    if getattr(R7._held_pages, "_as_of", False):
+        return
+    held = R7._held_pages
+
+    def as_of():
+        return [x for x in held() if x[0][:10] <= C7.DATE]
+    as_of._as_of = True
+    R7._held_pages = as_of
+
+
 def build(only=None) -> dict:
     parts = [p for p in C7.PARTS if only is None or p in only]
     R7.seed_pricer()
     _seed_leakage_as_of_registration()
+    _held_pages_as_of_registration()
     docs = {p: R7.BUILDERS[p]() for p in parts}
     pins = {p: sha256(REPO / p) for p in PINNED}
     for d in docs.values():

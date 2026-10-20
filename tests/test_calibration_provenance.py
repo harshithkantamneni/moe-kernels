@@ -457,6 +457,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-10-13-nvidia_gh200_480gb-rental6-session": SESSION,
         # Rental 7 of 2026-10-14: one GH200, 15 units of four registrations (the rebuilt G1 rule, skew on Mixtral and Phi, Q1, the OLMoE w1 byte page).
         "2026-10-14-nvidia_gh200_480gb-rental7-session": SESSION,
+        # Tile rental A of 2026-10-20: one GH200, 21 units of six registrations (census, the wgmma floor, the A key, E1-CAL, the replicate, the dead-CTA pair).
+        "2026-10-20-nvidia_gh200_480gb-tileA-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

@@ -1,0 +1,56 @@
+== 2026-10-20T06:01:27Z step tilecensus: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 64x128x64w8s3 64x128x64w4s3 32x128x64w4s3 16x64x128w4s4 32x64x128w4s3 on olmoe-1b-7b mixtral-8x7b qwen2-57b-a14b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite; refused on an MMA path mismatch
+TILE CENSUS: compile only, no lock, nothing timed
+tiles   128x128x64w8s3 64x128x64w8s3 64x128x64w4s3 32x128x64w4s3 16x64x128w4s4 32x64x128w4s3
+models  olmoe-1b-7b mixtral-8x7b qwen2-57b-a14b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  32x128x64w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  32x64x128w4s3: path mma.sync, shared 49152 B, design occupancy 4
+  128x128x64w8s3 olmoe-1b-7b: 2 configs
+  128x128x64w8s3 mixtral-8x7b: 2 configs
+  128x128x64w8s3 qwen2-57b-a14b: 2 configs
+  128x128x64w8s3 phi-3.5-moe: 2 configs
+  128x128x64w8s3 qwen1.5-moe-a2.7b: 2 configs
+  128x128x64w8s3 jetmoe-8b: 2 configs
+  128x128x64w8s3 deepseek-v2-lite: 0 configs
+  64x128x64w8s3 olmoe-1b-7b: 2 configs
+  64x128x64w8s3 mixtral-8x7b: 2 configs
+  64x128x64w8s3 qwen2-57b-a14b: 2 configs
+  64x128x64w8s3 phi-3.5-moe: 2 configs
+  64x128x64w8s3 qwen1.5-moe-a2.7b: 2 configs
+  64x128x64w8s3 jetmoe-8b: 2 configs
+  64x128x64w8s3 deepseek-v2-lite: 0 configs
+  64x128x64w4s3 olmoe-1b-7b: 2 configs
+  64x128x64w4s3 mixtral-8x7b: 2 configs
+  64x128x64w4s3 qwen2-57b-a14b: 2 configs
+  64x128x64w4s3 phi-3.5-moe: 2 configs
+  64x128x64w4s3 qwen1.5-moe-a2.7b: 2 configs
+  64x128x64w4s3 jetmoe-8b: 2 configs
+  64x128x64w4s3 deepseek-v2-lite: 0 configs
+  32x128x64w4s3 olmoe-1b-7b: 2 configs
+  32x128x64w4s3 mixtral-8x7b: 2 configs
+  32x128x64w4s3 qwen2-57b-a14b: 2 configs
+  32x128x64w4s3 phi-3.5-moe: 2 configs
+  32x128x64w4s3 qwen1.5-moe-a2.7b: 2 configs
+  32x128x64w4s3 jetmoe-8b: 2 configs
+  32x128x64w4s3 deepseek-v2-lite: 0 configs
+  16x64x128w4s4 olmoe-1b-7b: 2 configs
+  16x64x128w4s4 mixtral-8x7b: 2 configs
+  16x64x128w4s4 qwen2-57b-a14b: 2 configs
+  16x64x128w4s4 phi-3.5-moe: 2 configs
+  16x64x128w4s4 qwen1.5-moe-a2.7b: 2 configs
+  16x64x128w4s4 jetmoe-8b: 2 configs
+  16x64x128w4s4 deepseek-v2-lite: 0 configs
+  32x64x128w4s3 olmoe-1b-7b: 2 configs
+  32x64x128w4s3 mixtral-8x7b: 2 configs
+  32x64x128w4s3 qwen2-57b-a14b: 2 configs
+  32x64x128w4s3 phi-3.5-moe: 2 configs
+  32x64x128w4s3 qwen1.5-moe-a2.7b: 2 configs
+  32x64x128w4s3 jetmoe-8b: 2 configs
+  32x64x128w4s3 deepseek-v2-lite: 0 configs
+RESULT: VALIDITY census_path PASS 72 configs, 0 path mismatches, 6 errors
+2026-10-20T06:01:45Z tilecensus: RESULT: VALIDITY census_path PASS 72 configs, 0 path mismatches, 6 errors
+2026-10-20T06:01:45Z tilecensus: exit 3 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta/tile-census.json)

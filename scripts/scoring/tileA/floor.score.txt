@@ -1,0 +1,5 @@
+SCORED against 2026-10-14-tileA-floor-gh200
+  pages: {'f128': {'olmoe-1b-7b': 'counted (6 of 27 cells in the clock band)', 'mixtral-8x7b': 'counted (7 of 27 cells in the clock band)'}, 'f64w8': {'olmoe-1b-7b': 'counted (21 of 27 cells in the clock band)', 'mixtral-8x7b': 'counted (13 of 27 cells in the clock band)'}, 'f64w4': {'olmoe-1b-7b': 'counted (21 of 27 cells in the clock band)'}, 'f32w4': {'olmoe-1b-7b': 'counted (25 of 27 cells in the clock band)'}}
+CALIBRATION: NOT SCORED: under 6 floor-bound cells or rank deficient (no v4: rental B does not run) c None F None
+Z_wg: None
+SELECTION: None; F form None

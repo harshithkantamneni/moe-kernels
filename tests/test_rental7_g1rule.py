@@ -41,12 +41,14 @@ LOCK = 1710
 
 def _pages():
     """Every histogram page with a report published before the registration (the 17 SEEN pages the
-    rule was chosen on; rental 7's own pages are left out, as reg7._held_pages leaves them):
+    rule was chosen on; rental 7's own pages are left out, as reg7._held_pages leaves them, and so
+    is every session dated after the registration, as rental 7's register.py reads them):
     (name, report, cells.csv rows, R3 samples by cell)."""
     out = []
     for rp in sorted(PUB.glob("**/private_weight_reference/*/report.json")):
         rep = json.loads(rp.read_text())
-        if not rep.get("histogram_gates") or "rental7" in str(rp):
+        session = rp.relative_to(PUB).parts[0]
+        if not rep.get("histogram_gates") or "rental7" in str(rp) or session[:10] > C7.DATE:
             continue
         _r, raw = C7.read_page(rp.parent)
         by: dict = {}

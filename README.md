@@ -238,9 +238,9 @@ Harness complete; 6619 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty-five further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty-six further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and eighteen Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and nineteen Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -262,9 +262,11 @@ synthetic skew on Mixtral 8x7B, OLMoE and Phi-3.5, its byte legs, the S - N gap 
 lost to a driver tag defect, since fixed) and second K on Mixtral TP=4, 21 units on one GH200,
 and rental 7 of 2026-10-14: model v3 under fresh synthetic skew draws on Mixtral 8x7B and
 Phi-3.5 scored under a rebuilt drift rule, all six S - N gap pages, and one OLMoE w1 byte page,
-15 units on one GH200), kept so every verdict they printed can be
+15 units on one GH200, and tile rental A of 2026-10-20: the tile census, the wgmma floor's counter
+pages at 128x128 and 64x128, the A-key byte pages, the E1-CAL timed pages, a replicate and the
+dead-CTA pair on vLLM-sized tiles, 21 units on one GH200), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 18 GH200 sessions ran on thirteen distinct boards (counted by
+sessions rather than arms. The 19 GH200 sessions ran on fourteen distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
@@ -275,7 +277,10 @@ Mixtral, OLMoE and Phi cells (ALL), 0.54% over OLMoE's 42 (CLEAN), on R3's tile,
 (docs/FINDINGS.md, Rental 6). Rental 7's repeats it on fresh Mixtral and Phi draws and HOLDS
 in both views with every page in CLEAN: 0.61% rms over 84 cells, each model certified (Mixtral
 0.51%, Phi 0.69%), again on R3's tile; its S - N gap test (Q1-H) FAILS on the 15-copy pages
-(docs/FINDINGS.md, Rental 7). Every
+(docs/FINDINGS.md, Rental 7). Tile rental A STOPPED the tile stage: the 128x128 wgmma counter
+pages ran NATIVE and SHARED at 1599 to 1640 MHz under the 1710 MHz lock, below the counter clock
+band, so the floor calibration is NOT SCORED, model v4 has no wgmma constants and rental B does not
+run (docs/FINDINGS.md, Tile rental A). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

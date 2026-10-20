@@ -1,0 +1,48 @@
+{
+ "registration": "2026-10-14-tileA-dead-gh200",
+ "part": "dead",
+ "pages": {
+  "d9": "counted",
+  "d15": "counted"
+ },
+ "DEAD": {
+  "delta_us": 20.006017,
+  "se_us": 0.611886,
+  "laws": {
+   "D": {
+    "pred_us": 10.019166,
+    "z": 16.321426,
+    "verdict": "EXCLUDED"
+   },
+   "D2": {
+    "pred_us": 10.104338,
+    "z": 16.18223,
+    "verdict": "EXCLUDED"
+   },
+   "SLOT": {
+    "pred_us": 24.6888,
+    "z": -7.653033,
+    "verdict": "EXCLUDED"
+   },
+   "kappa 0.15": {
+    "pred_us": 12.13104,
+    "verdict": "NOT SCORED (c_128 None under 900)"
+   },
+   "kappa 0": {
+    "pred_us": 12.13104,
+    "verdict": "NOT SCORED (c_128 None under 900)"
+   },
+   "d 1.06": {
+    "pred_us": 11.406526,
+    "z": 14.054075,
+    "verdict": "EXCLUDED"
+   }
+  },
+  "D_vs_SLOT": "NOT SEPARATED by this page",
+  "cells": 2,
+  "sigma_page": 0.001275,
+  "sigma_source": "tA-rep (the 128x128 replicate pair)",
+  "c128": null,
+  "laws_at": "the nominal 900 (no calibration)"
+ }
+}
