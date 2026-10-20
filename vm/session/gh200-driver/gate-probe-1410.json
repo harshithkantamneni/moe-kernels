@@ -1,0 +1,320 @@
+{
+ "gate": "probe",
+ "verdict": "PASS",
+ "rung": {
+  "lock_mhz": 1410.0,
+  "verdict": "HOLDS",
+  "pages": {
+   "mixtral-8x7b-lp1410m": {
+    "page": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1410m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-07cfc940",
+    "lock_mhz_page": 1410,
+    "why": [],
+    "locked_r3_held": 1410,
+    "non_clean": {
+     "rows": 0,
+     "of": 144,
+     "share": 0.0,
+     "cap": 0.1
+    },
+    "cells": [
+     {
+      "cell": "PT/native/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/shared/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/native/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/shared/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/native/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/shared/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/native/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/shared/n3",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/native/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/shared/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/native/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/shared/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/native/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/shared/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/native/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/shared/n8",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     }
+    ],
+    "min_cell_mhz": 1410.0,
+    "verdict": "PASS",
+    "nvml (DESCRIPTIVE)": {
+     "busy_samples": 969,
+     "min_clock_mhz": 1350.0,
+     "median_clock_mhz": 1410.0,
+     "max_power_w": 340.11,
+     "reasons_seen": [
+      "0x0000000000000000",
+      "0x0000000000000004"
+     ]
+    }
+   },
+   "qwen2-57b-a14b-lp1410q": {
+    "page": "/home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-lp1410q/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histb6a730e31-b728152f",
+    "lock_mhz_page": 1410,
+    "why": [],
+    "locked_r3_held": 1410,
+    "non_clean": {
+     "rows": 0,
+     "of": 72,
+     "share": 0.0,
+     "cap": 0.1
+    },
+    "cells": [
+     {
+      "cell": "PT/native/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PT/shared/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/native/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "PW/shared/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/native/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "uniform/shared/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/native/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     },
+     {
+      "cell": "balanced/shared/n2",
+      "mhz": 1410.0,
+      "clean": 9,
+      "of": 9,
+      "lost": false
+     }
+    ],
+    "min_cell_mhz": 1410.0,
+    "verdict": "PASS",
+    "nvml (DESCRIPTIVE)": {
+     "busy_samples": 485,
+     "min_clock_mhz": 1335.0,
+     "median_clock_mhz": 1410.0,
+     "max_power_w": 322.33,
+     "reasons_seen": [
+      "0x0000000000000000",
+      "0x0000000000000004"
+     ]
+    }
+   },
+   "olmoe-1b-7b-lp1410f (P5)": {
+    "page": "/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-lp1410f-r3-counters/lock1410/r3c-g64.json",
+    "why": [],
+    "primary": {
+     "band": [
+      1374.75,
+      1410.0
+     ],
+     "check_page": "PASS",
+     "cells_in_band": 2,
+     "of": 27,
+     "floor_bound_in_band": 4,
+     "cell_mhz": [
+      1363.218307,
+      1363.218307,
+      1363.218307,
+      1354.356817,
+      1358.922996,
+      1356.959503,
+      1365.527419,
+      1370.567518,
+      1376.377505,
+      1363.218307,
+      1363.218307,
+      1363.218307,
+      1347.343758,
+      1361.64755,
+      1360.285955,
+      1367.253303,
+      1368.777569,
+      1376.66744,
+      1363.218307,
+      1363.218307,
+      1335.80613,
+      1348.737628,
+      1354.775769,
+      1366.792451,
+      1368.601758,
+      1369.265633,
+      1368.377456
+     ]
+    },
+    "fallback": {
+     "band": [
+      1352.19,
+      1410.0
+     ],
+     "check_page": "PASS",
+     "cells_in_band": 24,
+     "of": 27,
+     "floor_bound_in_band": 22,
+     "cell_mhz": [
+      1363.218307,
+      1363.218307,
+      1363.218307,
+      1354.356817,
+      1358.922996,
+      1356.959503,
+      1365.527419,
+      1370.567518,
+      1376.377505,
+      1363.218307,
+      1363.218307,
+      1363.218307,
+      1347.343758,
+      1361.64755,
+      1360.285955,
+      1367.253303,
+      1368.777569,
+      1376.66744,
+      1363.218307,
+      1363.218307,
+      1335.80613,
+      1348.737628,
+      1354.775769,
+      1366.792451,
+      1368.601758,
+      1369.265633,
+      1368.377456
+     ]
+    },
+    "verdict": "PASS",
+    "band_used": "fallback"
+   }
+  },
+  "hw_rulers (DESCRIPTIVE)": {
+   "matmul sm_clock_load_mhz": 1365.0,
+   "file": "/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-rulers-lp1410/rulers.json"
+  },
+  "why": []
+ },
+ "why": ""
+}
