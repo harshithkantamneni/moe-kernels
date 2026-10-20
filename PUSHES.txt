@@ -28,3 +28,4 @@
 2026-10-20T07:47:27Z bytes: G=64 page exit 1
 2026-10-20T07:47:37Z bytes (unit 18/21 olmoe-1b-7b f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
 2026-10-20T07:50:03Z bytes: G=64 page exit 1
+2026-10-20T07:50:14Z bytes (unit 19/21 olmoe-1b-7b f32w4 block-m=32 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
