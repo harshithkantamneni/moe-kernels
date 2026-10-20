@@ -1,0 +1,80 @@
+{
+ "tool": "scripts/hw_rulers.py",
+ "lock_mhz": 1710.0,
+ "device": {
+  "name": "NVIDIA GH200 480GB",
+  "sms": 132,
+  "l2_cache_size": 62914560,
+  "total_memory": 101468602368,
+  "capability": "9.0"
+ },
+ "plan": {
+  "read2d": {
+   "bytes": 4294967296,
+   "what": "torch.sum(a, dim=1), a fp32 [4096, 262144]"
+  },
+  "copy": {
+   "bytes": 8589934592,
+   "what": "y.copy_(x), fp32, each the buffer"
+  },
+  "add": {
+   "bytes": 12884901888,
+   "what": "torch.add(a, b, out=c), fp32, each the buffer"
+  },
+  "matmul": {
+   "flop": 1099511627776,
+   "what": "torch.matmul bf16 8192^3"
+  },
+  "cols": 262144,
+  "buffer_bytes": 4294967296
+ },
+ "timings": {
+  "read2d": {
+   "ms_p50": 1.1257280111312866,
+   "ms_min": 1.1225279569625854,
+   "ms_std": 0.0012252504871235622,
+   "sm_clock_load_mhz": 1710.0,
+   "iters": 177
+  },
+  "copy": {
+   "ms_p50": 2.340575933456421,
+   "ms_min": 2.3379199504852295,
+   "ms_std": 0.0012746322740791768,
+   "sm_clock_load_mhz": 1710.0,
+   "iters": 85
+  },
+  "add": {
+   "ms_p50": 3.4562880992889404,
+   "ms_min": 3.4512319564819336,
+   "ms_std": 0.0016771199526877936,
+   "sm_clock_load_mhz": 1710.0,
+   "iters": 57
+  },
+  "matmul": {
+   "ms_p50": 1.6230080127716064,
+   "ms_min": 1.5869439840316772,
+   "ms_std": 0.01945373381882483,
+   "sm_clock_load_mhz": 1365.0,
+   "iters": 121
+  }
+ },
+ "rates": {
+  "read2d": {
+   "gbps": 3815.279759880741,
+   "ms": 1.1257280111312866
+  },
+  "copy": {
+   "gbps": 3670.0089363539278,
+   "ms": 2.340575933456421
+  },
+  "add": {
+   "gbps": 3727.9594518323865,
+   "ms": 3.4562880992889404
+  },
+  "matmul": {
+   "tflops": 677.4529879851714,
+   "ms": 1.6230080127716064
+  }
+ },
+ "ended": 1792536430.0052047
+}

@@ -22,3 +22,5 @@
 2026-10-20T22:46:56Z gate START: gate census: scripts/tileA2_gate.py census at the 1710 lock; FAIL ends the rental (tileA2-gates) [unit 5/32 - gcen gate=census] (estimate 1 min, cap 5 min, 207 min left)
 2026-10-20T22:46:58Z gate END: exit 0 after 0 min [unit 5/32 - gcen gate=census]
 2026-10-20T22:46:58Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+[push] pushed 89ef257 to run-gh200-tile2-20261020t2242: gate (unit 5/32 - gcen gate=census): exit 0 (0 min)
+2026-10-20T22:46:59Z lockprobe START: the lock-hold probe: per rung of 1710 1410 1305 MHz, hw_rulers then the probe pages at the rung, the gate; the first rung that holds is the lock, none: STOP [unit 6/32 - lp ladder=1710,1410,1305 probes=mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m,qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3] (estimate 20 min, cap 70 min, 207 min left)

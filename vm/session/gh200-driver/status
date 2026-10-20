@@ -40,3 +40,36 @@
 2026-10-20T22:46:58Z gate census at 1710 MHz: RESULT: GATE census PASS (exit 0)
 2026-10-20T22:46:58Z gate END: exit 0 after 0 min [unit 5/32 - gcen gate=census]
 2026-10-20T22:46:58Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-20T22:46:59Z lockprobe START: the lock-hold probe: per rung of 1710 1410 1305 MHz, hw_rulers then the probe pages at the rung, the gate; the first rung that holds is the lock, none: STOP [unit 6/32 - lp ladder=1710,1410,1305 probes=mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m,qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3] (estimate 20 min, cap 70 min, 207 min left)
+2026-10-20T22:47:00Z lockprobe: rung 1710 MHz: hw_rulers, then mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q, then the OLMoE f128 counter page (P5)
+2026-10-20T22:47:10Z rulers: exit 0 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-rulers-lp1710/rulers.json)
+2026-10-20T22:47:10Z timed: declared-copies 9 on every page of this unit
+2026-10-20T22:47:10Z timed: histogram page docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json, arms native,shared, deepest tread 8, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T22:47:11Z timed: G = 16 at treads 8, no G=3 page (timed-groups / timed-treads)
+2026-10-20T22:56:28Z timed: P2 locked_r3 exit 0
+2026-10-20T22:56:28Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T22:56:28Z timed: 2026-10-20T22:56:23Z G=16 held-with-slips at lock 1710: R3 exit 3 INVALID, cells=144 worst=1605.0 MHz, 551 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-86e4983d; 25 slipped rows; 25 slipped rows, lowest 1605 MHz, recorded and kept out of their cell medians by R3
+2026-10-20T22:56:28Z lockprobe: mixtral-8x7b lp1710m timed exit 0
+2026-10-20T22:56:29Z lockprobe: rung 1710 MHz: lp1710m fails the rule, the rung's remaining pages are not run (early stop)
+2026-10-20T22:56:31Z lockprobe: rung 1710 MHz: RESULT: GATE probe FAIL mixtral-8x7b-lp1710m: P3: uniform/shared/n3 LOST (5 clean of 9); mixtral-8x7b-lp1710m: P3: PT/native/n8 LOST (4 clean of 9); mixtral-8x7b-lp1710m: P3: uniform/shared/n8 LOST (5 clean of 9); mixtra (exit 3)
+2026-10-20T22:56:31Z lockprobe: rung 1410 MHz: hw_rulers, then mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q, then the OLMoE f128 counter page (P5)
+2026-10-20T22:56:41Z rulers: exit 0 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-rulers-lp1410/rulers.json)
+2026-10-20T22:56:41Z timed: declared-copies 9 on every page of this unit
+2026-10-20T22:56:41Z timed: histogram page docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json, arms native,shared, deepest tread 8, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T22:56:42Z timed: G = 16 at treads 8, no G=3 page (timed-groups / timed-treads)
+2026-10-20T23:06:10Z timed: P2 locked_r3 exit 0
+2026-10-20T23:06:10Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T23:06:10Z timed: 2026-10-20T23:06:04Z G=16 held at lock 1410: R3 exit 0 DONE, cells=144 worst=1410.0 MHz, 561 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-07cfc940
+2026-10-20T23:06:10Z lockprobe: mixtral-8x7b lp1410m timed exit 0
+2026-10-20T23:06:11Z timed: declared-copies 9 on every page of this unit
+2026-10-20T23:06:11Z timed: histogram page docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json, arms native,shared, deepest tread 2, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T23:06:12Z timed: G = 1 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-20T23:11:09Z timed: P2 locked_r3 exit 0
+2026-10-20T23:11:09Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T23:11:09Z timed: 2026-10-20T23:11:04Z G=1 held at lock 1410: R3 exit 0 DONE, cells=72 worst=1410.0 MHz, 290 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histb6a730e31-b728152f
+2026-10-20T23:11:09Z lockprobe: qwen2-57b-a14b lp1410q timed exit 0
+2026-10-20T23:11:26Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-20T23:11:26Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-20T23:11:26Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-20T23:11:26Z bytes: the registered list G = 64 (olmoe-1b-7b, lp1410f): no tail drop, no re-price, no base-clock control
+2026-10-20T23:14:14Z bytes: G=64 page exit 3 after 165 s
