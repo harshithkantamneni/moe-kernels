@@ -6,3 +6,7 @@
 2026-10-20T22:45:56Z prelude START: 3c.1 supported clocks, persistence, 900 W (power.max_limit read first), the session lock 1710 MHz [unit 1/32 - lock-mhz=1710 power-limit-w=900] (estimate 1 min, cap 15 min, 208 min left)
 2026-10-20T22:46:02Z prelude END: exit 0 after 0 min [unit 1/32 - lock-mhz=1710 power-limit-w=900]
 2026-10-20T22:46:03Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+[push] pushed a8e52df to run-gh200-tile2-20261020t2242: prelude (unit 1/32 - lock-mhz=1710 power-limit-w=900): exit 0 (0 min)
+2026-10-20T22:46:04Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/32 mixtral-8x7b ta2] (estimate 1 min, cap 30 min, 208 min left)
+2026-10-20T22:46:29Z calibrate END: exit 0 after 0 min [unit 2/32 mixtral-8x7b ta2]
+2026-10-20T22:46:30Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
