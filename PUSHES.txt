@@ -19,3 +19,4 @@
 2026-10-20T23:34:07Z gate (unit 12/32 - g64 gate=f64w8): exit 0 (0 min)
 2026-10-20T23:36:47Z timed (unit 13/32 mixtral-8x7b cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
 2026-10-20T23:38:59Z timed (unit 14/32 olmoe-1b-7b cvo1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
+2026-10-20T23:44:10Z timed (unit 15/32 mixtral-8x7b cvm8 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
