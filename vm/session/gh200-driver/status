@@ -141,3 +141,12 @@
 2026-10-20T23:36:46Z timed: 2026-10-20T23:36:40Z G=1 held at lock 1410: R3 exit 0 DONE, cells=36 worst=1410.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-18a78486
 2026-10-20T23:36:46Z timed END: exit 0 after 3 min [unit 13/32 mixtral-8x7b cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-20T23:36:46Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-20T23:36:49Z timed START: 3c.3 timed R3 histogram page at 1710: G=1, docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json, arms native, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 14/32 olmoe-1b-7b cvo1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 2 min, cap 15 min, 157 min left)
+2026-10-20T23:36:49Z timed: declared-copies 9 on every page of this unit
+2026-10-20T23:36:49Z timed: histogram page docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json, arms native, deepest tread 3, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T23:36:49Z timed: G = 1 at treads 3, no G=3 page (timed-groups / timed-treads)
+2026-10-20T23:38:57Z timed: P2 locked_r3 exit 0
+2026-10-20T23:38:57Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T23:38:57Z timed: 2026-10-20T23:38:51Z G=1 held at lock 1410: R3 exit 0 DONE, cells=27 worst=1410.0 MHz, 120 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist8a0c67e0a329b4af-bbb20bf6
+2026-10-20T23:38:57Z timed END: exit 0 after 2 min [unit 14/32 olmoe-1b-7b cvo1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-20T23:38:57Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
