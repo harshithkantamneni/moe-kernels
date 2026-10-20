@@ -1,0 +1,19 @@
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   128x128x64w8s3 64x128x64w8s3 64x128x64w4s3 32x128x64w4s3 16x64x128w4s4 32x64x128w4s3
+models  olmoe-1b-7b mixtral-8x7b qwen2-57b-a14b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  32x128x64w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  32x64x128w4s3: path mma.sync, shared 49152 B, design occupancy 4
+  olmoe-1b-7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  mixtral-8x7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  qwen2-57b-a14b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  phi-3.5-moe: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  qwen1.5-moe-a2.7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  jetmoe-8b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1, 64x128x64w4s3 n 1, 32x128x64w4s3 n 1, 16x64x128w4s4 n 1, 32x64x128w4s3 n 1
+  deepseek-v2-lite: tread 128x128x64w8s3 n 3, 64x128x64w8s3 n 3, 64x128x64w4s3 n 3, 32x128x64w4s3 n 3, 16x64x128w4s4 n 3, 32x64x128w4s3 n 3
+  and olmoe-1b-7b again at n 3 on every tile (the n 1 / n 3 rule for deepseek-v2-lite)
+DRY RUN: nothing compiled (exit 2)

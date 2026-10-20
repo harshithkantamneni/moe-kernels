@@ -3,3 +3,4 @@
 2026-10-20T22:46:03Z prelude (unit 1/32 - lock-mhz=1710 power-limit-w=900): exit 0 (0 min)
 2026-10-20T22:46:30Z calibrate (unit 2/32 mixtral-8x7b ta2): exit 0 (0 min)
 2026-10-20T22:46:33Z gate (unit 3/32 - gcal gate=calibrate): exit 0 (0 min)
+2026-10-20T22:46:55Z tilecensus (unit 4/32 - ta2 tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite): exit 0 (0 min)
