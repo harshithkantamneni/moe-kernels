@@ -36,3 +36,7 @@
 2026-10-20T22:46:55Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta2/tile-census.json)
 2026-10-20T22:46:55Z tilecensus END: exit 0 after 0 min [unit 4/32 - ta2 tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite]
 2026-10-20T22:46:55Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-20T22:46:56Z gate START: gate census: scripts/tileA2_gate.py census at the 1710 lock; FAIL ends the rental (tileA2-gates) [unit 5/32 - gcen gate=census] (estimate 1 min, cap 5 min, 207 min left)
+2026-10-20T22:46:58Z gate census at 1710 MHz: RESULT: GATE census PASS (exit 0)
+2026-10-20T22:46:58Z gate END: exit 0 after 0 min [unit 5/32 - gcen gate=census]
+2026-10-20T22:46:58Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
