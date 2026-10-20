@@ -4,3 +4,4 @@ tilecensus exit 3 after 0 min [unit 3/21 - ta tiles=128x128x64w8s3,64x128x64w8s3
 bytes      exit 0 after 3 min [unit 4/21 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 bytes      exit 0 after 7 min [unit 5/21 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 bytes      exit 0 after 3 min [unit 6/21 olmoe-1b-7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+bytes      exit 0 after 6 min [unit 7/21 mixtral-8x7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
