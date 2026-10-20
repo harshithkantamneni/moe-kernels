@@ -38,3 +38,5 @@
 2026-10-20T23:24:28Z gate START: gate band: scripts/tileA2_gate.py band at the 1710 lock; FAIL ends the rental (tileA2-gates) [unit 9/32 - gband gate=band] (estimate 1 min, cap 5 min, 169 min left)
 2026-10-20T23:24:29Z gate END: exit 0 after 0 min [unit 9/32 - gband gate=band]
 2026-10-20T23:24:30Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+[push] pushed a38eb92 to run-gh200-tile2-20261020t2242: gate (unit 9/32 - gband gate=band): exit 0 (0 min)
+2026-10-20T23:24:32Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 64x128x64 w8 s3 [unit 10/32 olmoe-1b-7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 4 min, cap 20 min, 169 min left)
