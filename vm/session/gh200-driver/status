@@ -110,3 +110,12 @@
 2026-10-20T06:37:13Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-20-nvidia_gh200_480gb-qwen2-57b-a14b-b128g1-r3-counters/lock1710/summary.json)
 2026-10-20T06:37:13Z bytes END: exit 0 after 5 min [unit 11/21 qwen2-57b-a14b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared byte-groups=1]
 2026-10-20T06:37:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-20T06:37:15Z timed START: 3c.3 timed R3 histogram page at 1710: G=1, docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 12/21 olmoe-1b-7b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 127 min left)
+2026-10-20T06:37:15Z timed: declared-copies 9 on every page of this unit
+2026-10-20T06:37:15Z timed: histogram page docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json, arms native,shared, deepest tread 4, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T06:37:16Z timed: G = 1 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-10-20T06:51:24Z timed: P2 locked_r3 exit 0
+2026-10-20T06:51:24Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T06:51:24Z timed: 2026-10-20T06:51:19Z G=1 held at lock 1710: R3 exit 3 INVALID, cells=216 worst=1695.0 MHz, 841 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histd3025569b-5e00530f
+2026-10-20T06:51:24Z timed END: exit 0 after 14 min [unit 12/21 olmoe-1b-7b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-20T06:51:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
