@@ -1,2 +1,8 @@
 2026-10-20T22:44:13Z setup_vm.sh start: commit 36291487e4efcb7e6887ac455a8ec99426c8488d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-21T02:22:04Z
 2026-10-20T22:45:55Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 8815d69 to run-gh200-tile2-20261020t2242: setup_vm.sh: READY
+2026-10-20T22:45:56Z driver start: commit 36291487e4efcb7e6887ac455a8ec99426c8488d, steps of the plan scripts/plans/rentalA2-tile-2026-10.plan, deadline 2026-10-21T02:22:04Z (208 min of work left)
+2026-10-20T22:45:56Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalA2-tile-2026-10.plan (sha256 0ab6c60cea9d4ed6930c9f0968e08286b21ef5276d675f28df031a762c1a751d), 32 units
+2026-10-20T22:45:56Z prelude START: 3c.1 supported clocks, persistence, 900 W (power.max_limit read first), the session lock 1710 MHz [unit 1/32 - lock-mhz=1710 power-limit-w=900] (estimate 1 min, cap 15 min, 208 min left)
+2026-10-20T22:46:02Z prelude END: exit 0 after 0 min [unit 1/32 - lock-mhz=1710 power-limit-w=900]
+2026-10-20T22:46:03Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
