@@ -159,3 +159,12 @@
 2026-10-20T23:44:08Z timed: 2026-10-20T23:44:03Z G=8 held at lock 1410: R3 exit 0 DONE, cells=72 worst=1410.0 MHz, 300 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g8-histd5f3a877d1a0a1f3-d9ff2758
 2026-10-20T23:44:08Z timed END: exit 0 after 5 min [unit 15/32 mixtral-8x7b cvm8 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-20T23:44:09Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-20T23:44:11Z timed START: 3c.3 timed R3 histogram page at 1710: G=1, docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json, arms native, 9 copies, slip-policy cell, g1-rule r7-median-run3 [unit 16/32 mixtral-8x7b cvm1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 3 min, cap 15 min, 149 min left)
+2026-10-20T23:44:11Z timed: declared-copies 9 on every page of this unit
+2026-10-20T23:44:11Z timed: histogram page docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json, arms native, deepest tread 3, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-20T23:44:12Z timed: G = 1 at treads 3, no G=3 page (timed-groups / timed-treads)
+2026-10-20T23:46:49Z timed: P2 locked_r3 exit 0
+2026-10-20T23:46:49Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-20T23:46:49Z timed: 2026-10-20T23:46:44Z G=1 held at lock 1710: R3 exit 3 INVALID, cells=36 worst=1710.0 MHz, 150 s, dir nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist0c725879cf03323a-49ac5848
+2026-10-20T23:46:49Z timed END: exit 0 after 3 min [unit 16/32 mixtral-8x7b cvm1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-20T23:46:50Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
