@@ -1,0 +1,95 @@
+REGISTERED 2026-10-20, before any tile rental A2 page: tile rental A2, 2026-10-20-tileA2-bytes-gh200
+status: REGISTERED BEFORE ANY A2 PAGE
+design: design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden
+tool: scorer scripts/scoring/tileA2/score_bytes_a2.py (scripts/scoring/tileA/score_bytes.py inside a2common.scoring, in the band floor.score.json records); tcommon.named_key; bytes scripts/wave_split_bytes_v4.py
+
+v3 vs CLAMP: {'rows': 56, 'rms_pct': 6.00813, 'max_abs_pct': 19.7195}
+CLAMP vs ROWKEY60: {'rows': 56, 'rms_pct': 16.502324, 'max_abs_pct': 48.510149}
+ROWKEY60 vs ROWKEY30: {'rows': 56, 'rms_pct': 9.793547, 'max_abs_pct': 28.753891}
+v3 vs ROWKEY60: {'rows': 56, 'rms_pct': 14.693979, 'max_abs_pct': 48.510149}
+
+what: the A key of v4 (D3): which w1 A accounting prices rental B's G-1 cells, where bytes reach time (design-tile 2.4)
+keys:
+  v3: M4's content key (rental 6), unchanged
+  CLAMP: v3 with each GEMM's q floored at the active weights once (q_ideal = experts with a row / E): a physical floor, not a fit (design-tile-review 5). M4 prices uniform cells below one weight set at BLOCK_M 128 (Qwen1.5 n 1 w1 q 0.967)
+  ROWKEY60: rental 6's row-granular LRU at 60 MiB (rental 7's NAMED key, SEEN-chosen, OPEN)
+  ROWKEY30: the same at 30 MiB: one of the GH200's two L2 partitions (its L2 read 60 MiB on rental 4's rulers, CONSISTENT with RRZE's GH200 run; Hopper's L2 is two partitions, NVIDIA H100 whitepaper). The design's 'Fan et al.' attribution is withdrawn (no source supports it; design-tile-review 9.13)
+rowkey_rows:
+  path: docs/registered/2026-10-14-tileA-hist/rowkey_tile.json
+  sha256: 6abb298bfe2bb8c0f2b6ac17567b2c85f848c326a080bace7f7911e4867699c6
+  device: cpu
+  dtype: int64 (exact)
+  cells: (in the JSON)
+  wall_s: 82.3
+  occupancy:
+    olmoe-1b-7b-128g1: {"w1": 2, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+    mixtral-8x7b-64g1: {"w1": 3, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+    qwen2-57b-a14b-128g1: {"w1": 2, "source": "DESIGN (shared-memory rule; the census replaces it)"}
+  method: streamed (rowkeys_tile.stream_misses): the pinned rival's access order and hit rule with bounded memory (peak 0.25 GB); the pinned rowkeys.simulate's own run on this page was stopped at 19 GB of unified memory on 2026-10-14
+  equality_check: the stream's read bytes EQUAL rowkeys.simulate's (CPU float64, and the MPS float32 run before it was stopped) on all 13 OLMoE 128 G 1 cells that run priced (n 1, 2, 4, 8; 4.2 to 33.8 million accesses each); tests/test_tile_plumbing.py re-runs n 1
+  arms: NATIVE priced, SHARED carried (the same walk at G 1)
+  recompute: re-priced at the census occupancy if it differs from the design occupancy (tileA-census)
+deviation: the design's OLMoE 128x128 G 1 n 8 tread is removed (build-tile-review 5): M4 rules w2 at G 1 and n >= 6 ILL-POSED on Hopper (wave_split_bytes.HOPPER_G1_N), applied per tread and literally at BLOCK_M 128 (n 4 is already 512 rows per expert, past BLOCK_M 32's n 6 at 192), so an n-8 cell would have no v4 prediction; OLMoE runs n 1, 2, 4, and the deepest A-heavy w1 row (n 8) is lost
+separations_on_scored_w1_rows:
+  v3 vs CLAMP:
+    rows: 56
+    rms_pct: 6.00813
+    max_abs_pct: 19.7195
+  CLAMP vs ROWKEY60:
+    rows: 56
+    rms_pct: 16.502324
+    max_abs_pct: 48.510149
+  ROWKEY60 vs ROWKEY30:
+    rows: 56
+    rms_pct: 9.793547
+    max_abs_pct: 28.753891
+  v3 vs ROWKEY60:
+    rows: 56
+    rms_pct: 14.693979
+    max_abs_pct: 48.510149
+statistic: per (cell, arm, GEMM): q_counted = (dram_bytes_read - n x operand_per_tile_g) / W_g at the tile's BYTE_MODEL; e_K = q_pred_K / q_counted - 1
+rule (D3; design-tile-review 5): over EVERY scored w1 row (the G-1 pages: OLMoE 128 G 1, Mixtral 64 G 1, Qwen2-57B 128 G 1; uniform, balanced and skewed, NATIVE and SHARED): the key nearest by rms is NAMED iff the next is at least 2x farther and every row of the nearest is within 5%; if none is NAMED v4 takes CLAMP (the physical floor), not v3. The NAMED key or CLAMP becomes rental B's w1 A key. Mixtral's G-16 rows and every w2 row are printed
+brackets_printed: q_group (every M-tile re-reads its expert's slabs, G 1) and q_ideal (active weights once)
+B_BYTES_bar_printed: rms <= 3% and every row <= 5% per key on the scored rows
+gates:
+  clock: rental 6's counter clock rule at A2's lock: lock_gate.check_page PASS at the page's lock, each cell in the counter band in force (tileA2-floor: [0.975 L, L], or the registered fallback [0.959 L, L])
+  G5: histogram sha256, shuffle seed, every cell's counts sha256
+  tile: the page's recorded block_m, block_n, block_k, num_warps, num_stages must be the unit's
+noise:
+  counter:
+    within_board_pct: 0.3
+    board_to_board_pct: [0.03, 0.66]
+labels:
+  rows: BLIND-CALMODEL (CAL models); uniform and balanced rows may be SEEN-WORKLOAD (per row)
+  ROWKEY60: SEEN-chosen capacity
+  ROWKEY30: derived from the measured L2
+seen_data:
+  - M4 (v3's bytes) SEEN-fitted on 8x7B CAL
+  - C 60 MiB SEEN-chosen
+  - the 60 MiB L2 (rental 4)
+re-run (OD3): the four byte pages re-run at L give the registered rule its 56 rows; bytes are clock-invariant (base and lock bytes agree to 0.03%), so every byte prediction below is tileA-bytes' own number; rental A's printed verdict (NOT NAMED, CLAMP on 19 rows) stands, and A2's key is rental B2's
+lock:
+  decision (owner, 2026-10-20): a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock
+  changes: the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W
+  why (DESIGN-A2 1, REVIEW-A2 1): rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites
+  ladder (owner, 2026-10-20): 1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion
+  conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20): the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)
+  rules at L:
+    at 1710: rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself
+    counter band: below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)
+    fallback band (REVIEW-A2 2c): [L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled
+    G4: cell clock >= L - 5 MHz (1705, 1405, 1300)
+    dips: r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)
+    lock_gate: lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)
+    v4 at L: r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L
+seen (REVIEW-A2 5):
+  label: SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it
+  (i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE): tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz
+  (ii) the 64x128 accounting outcome: predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it
+  (iii) SEEN-expected: with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)
+  (iv) tA-dead: rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test
+  (v) the A key: rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread
+  (vi) sigma_page: rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in
+  (vii) what chose the lock, the probe cells and the gates: rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log
+  (viii) rental A's times: rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated
+  (ix) the offline conversion check (OD12; REVIEW-A2 3b): see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity

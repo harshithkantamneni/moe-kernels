@@ -1441,3 +1441,39 @@ run; the trace-like cells are rental 5's fitted DW shapes EXTRAPOLATED to decode
 |---|---:|---:|---:|---:|
 | decode CAL (after tile rental B) | 13 | 106 | about 2 h 21 min | about $5.4 |
 | decode blind (generated at finalisation) | 9 | 101 | about 2 h 15 min | about $5.2 |
+
+## 2026-10-20, before any page: tile rental A2, eight registrations, rental B2's two (frozen), a decode addendum
+
+Rental A ran its wgmma pages under the 1710 lock at 1599 to 1640 MHz (reason 0x4 only, the SW power cap,
+inferred; GPU or module scope unresolved), so its calibration was NOT SCORED and its heavy timed pages
+failed G1 (one cause, two STOP clauses). A2 re-runs the tile stage's calibration at a lock the tiles can
+hold. Design: design-A2 DESIGN.md corrected by design-A2-review REVIEW.md and the build review, and the
+owner's decisions of 2026-10-20: **a 900 W GPU power limit and the lock ladder 1710, 1410, 1305** (the
+first rung whose probe passes is every later unit's lock; at 1710 no clock conversion is used). The 900 W
+limit changes the owner's 2026-09-26 700 W decision for A2, and for rental B2, which runs at the limit and
+the rung A2 held. Built by `scripts/scoring/tileA2/register_a2.py` (`--check` recomputes all eleven files)
+over the pinned `regtile.py`: every tileA / tileB builder runs unchanged inside `a2common.scoring` (v4 at
+L by P1's rule, c x 1710 / L at every tile, `scripts/r3_timing_model_v4L.py`; the identity at 1710), then a
+whitelist of fields is replaced; each tileB2 file equals its frozen tileB twin outside that whitelist
+(`tests/test_tileA2_registrations.py`). No pinned file and no rental-A registration or verdict changes.
+
+| file | what |
+|---|---|
+| `2026-10-20-tileA2-census-gh200` | addendum to tileA-census: `scripts/tile_census_a2.py` compiles each model at its smallest whole tread (deepseek-v2-lite at 3); OLMoE again at n 3, any difference leaves deepseek NOT SCORED; the equality gate against rental A's census (copied verbatim into `2026-10-20-tileA2-hist/`); the named merge step that writes A2's census input |
+| `2026-10-20-tileA2-floor-gh200` | the calibration and the 64x128 test at L; at 1710 rental A's band [1640, 1710]; below it [0.975 L, L] (a new rule, 2 x rental 3's 1.02% held shortfall at 1410), fallback [0.959 L, L] only when the primary leaves `joint_cF` None; the cross-clock c_128 readout |
+| `2026-10-20-tileA2-bytes-gh200`, `-e1cal-`, `-rep-`, `-dead-` | the byte pages (56 rows), the five E1-CAL pages and the replicate re-measured at L, G4 at L - 5; tA2-dead SEEN-REPLICATE (DESCRIPTIVE); e1cal states the conversion risk at 1410 and 1305 (R1 G 1 about 1.36% fast at 1410, about 1.4x at 1305, against the 0.75% class-mean clause) |
+| `2026-10-20-tileA2-convl-gh200` | CONV-L: three R3-tile pages at L and at 1710 on A2's board, a per-cell ratio per class (G 1, G 8), the E1 bar, worded "indicates"; skipped by rule and NOT SCORED when 1710 holds; the offline check on SEEN pages |
+| `2026-10-20-tileA2-gates-gh200` | power.max_limit read before -pl 900 (and in the pre-setup dry run; under it the session stops, no fallback to 700 W); G-CAL (against the lowest rung), G-CEN, the lock-hold probe (1710, 1410, 1305; strict; each rung also the OLMoE f128 counter page in the rung's band, the first failing page ends the rung), G-BAND, G-64, each ending the rental on a FAIL; the plan unit by unit; deadline launch + 220 min, hard cap launch + 235 min |
+| `2026-10-20-tileB2-{e1tile,stop}-gh200` | rental B at the power limit and lock rung A2 held, both read by `finalise_a2.py` from A2's score directory (`scripts/scoring/tileA2/`) |
+| `2026-10-20-decode-tilesource-gh200` | decode stays at 1710; it uses A2's constants only once A2's floor calibration is scored (`scripts/scoring/tileA2/decode_gate_a2.py`: GO, else WAIT), whatever else A2's stop rule reads; which census it reads |
+
+Every A2 registration carries a SEEN block (rental A's out-of-band fits, the predictable 64x128 outcome,
+tA-dead, the A key's near tie, sigma_page, the traces that chose the lock, and rental A's 1710 E1-CAL times
+and dropped byte rows, which stay unread against v4: a rule). Plan: `scripts/plans/rentalA2-tile-2026-10.plan`,
+32 units, 168 min of units estimated (142 nodrop; the estimates are rental A's actual minutes), about 173 min
+wall ($6.6) if 1710 holds, 207 ($7.9) at 1410 (dk dropped) and at 1305 (dk, ms, w4 and rep dropped); drop
+order dk, ms, w4, rep. Driver: `scripts/gh200_tileA2_session.sh`, the pinned
+tile driver plus lines marked A2 (`tests/test_tileA2_plan.py`). The scorers `scripts/scoring/tileA2/score_*_a2.py`
+run rental A's pinned scorers inside `a2common.scoring`; at rental A's own rules they reproduce its committed
+scores byte for byte (`PYTHONHASHSEED=0`, no `PYTHONPATH`; `score_floor.py` and `score_bytes.py` now import
+`tcommon` first, so they start from the command line, and no verdict moved).

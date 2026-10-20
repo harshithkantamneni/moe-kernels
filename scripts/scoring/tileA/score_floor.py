@@ -17,8 +17,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import r3_timing_model_v4 as V4  # noqa: E402
+# tcommon first: it puts the repo and scripts/ on sys.path, which r3_timing_model_v4 needs from the
+# command line (the tests import tcommon before this file, which hid the order)
 import tcommon as TC  # noqa: E402
+import r3_timing_model_v4 as V4  # noqa: E402
 
 PART = "floor"
 r6 = TC.r6

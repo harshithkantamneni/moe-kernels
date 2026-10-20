@@ -109,7 +109,10 @@ from the code; the scorer did not print it.
 - **Import order.** `score_floor.py` imports `r3_timing_model_v4`, and `score_bytes.py` imports
   `r3_timing_model`, before `tcommon` puts `scripts/` on `sys.path`, so from the command line both
   stop with `ModuleNotFoundError` unless `PYTHONPATH` holds the repo and `scripts/`. The tests import
-  them after `tcommon` and do not see it.
+  them after `tcommon` and do not see it. **Fixed 2026-10-20 (the tile rental A2 build):** both now
+  import `tcommon` first and start from the command line with no `PYTHONPATH`; re-run that way with
+  `PYTHONHASHSEED=0`, all twelve score files here are byte-identical (no verdict moved;
+  `tests/test_tileA2_scoring.py`).
 - **Key order.** `score_census.py` builds `occupancy` by iterating a set of tile names, so its key
   order (and floor's `census_occupancy`, copied from it) follows the hash seed. The data are the same
   on every run.

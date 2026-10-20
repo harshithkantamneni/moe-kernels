@@ -1,0 +1,3240 @@
+{
+ "registered": "2026-10-20, before any tile rental A2 page",
+ "name": "2026-10-20-tileA2-e1cal-gh200",
+ "status": "REGISTERED BEFORE ANY A2 PAGE",
+ "design": "design-A2 DESIGN.md (2026-10-20) corrected by design-A2-review REVIEW.md (the review wins: every MAJOR and MINOR fix), the build review (GO-WITH-FIXES) and the owner's decisions of 2026-10-20: A 900 W GPU POWER LIMIT AND THE LOCK LADDER 1710, 1410, 1305 (the first rung whose probe passes is the lock of every later unit; the 900 W limit changes the owner's 2026-09-26 700 W decision for tile rental A2, and rental B2 at the limit A2 held, only); rental B2 at A2's power limit and lock rung; decode uses A2's constants only once A2's floor calibration is scored; the probe strict (one LOST cell fails a rung); every other decision is the design's recommendation as amended by the review: OD3 the byte pages re-run, OD4 sigma_page re-measured, OD5 w4, ms and dk droppable, OD6 CONV-L a registered test, nodrop, not a stop clause (REVIEW 3a: timed at 1710 and at L, a per-cell ratio), OD7 decode stays at 1710 by addendum, OD8 the band [0.975 L, L] (REVIEW 2c: the scaled band a registered fallback), OD9 the calibrate gate under the lowest rung (build review fix 3), OD10 the scorer import order fixed in place, OD11 the probe thresholds of DESIGN 6, OD12 the offline conversion check done before registering, OD13 rental A's timed pages against v4 forbidden",
+ "tool": "scorer scripts/scoring/tileA2/score_e1cal_a2.py (scripts/scoring/tileA/score_e1cal.py inside a2common.scoring); tcommon.bar, class_means, stop_rule; v4 at A2's constants and lock (finalise.predict_pages under r3_timing_model_v4L.at_lock)",
+ "what": "BLIND-CALMODEL in time: v4 as fixed by tA-census, tA-floor and tA-bytes' registered rules, end to end, on the CAL models' timed pages; the calibration read counters, not time. Its class means are rental B's stop rule (tileB-stop)",
+ "pages": {
+  "units": [
+   "olmoe-1b-7b timed label=e128g1 (histogram olmoe-1b-7b-128g1.json)",
+   "mixtral-8x7b timed label=e128g16 (histogram mixtral-8x7b-128g16.json)",
+   "mixtral-8x7b timed label=e64g1 (histogram mixtral-8x7b-64g1.json)",
+   "qwen2-57b-a14b timed label=e128g1 (histogram qwen2-57b-a14b-128g1.json)",
+   "mixtral-8x7b timed label=e128g1 (histogram mixtral-8x7b-128g1.json)"
+  ],
+  "files": {
+   "mixtral-8x7b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json",
+    "sha256": "bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+      "seed": 20271430,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+      "seed": 20271431,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-128g16.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json",
+    "sha256": "cf3da1b8b0224289323b457c40989de3a65646a87c4c13f6e95dbceb1a537431",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 16,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+      "seed": 20271440,
+      "kind": "dirichlet",
+      "param": 21.7841,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+      "seed": 20271441,
+      "kind": "dirichlet",
+      "param": 5.59393,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8"
+     },
+     {
+      "label": "balanced",
+      "n": 3,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+      "seed": 20271450,
+      "kind": "dirichlet",
+      "param": 25.5453,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+      "seed": 20271451,
+      "kind": "dirichlet",
+      "param": 6.05764,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+      "seed": 20271490,
+      "kind": "dirichlet",
+      "param": 37.495,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+      "seed": 20271491,
+      "kind": "dirichlet",
+      "param": 7.339,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b"
+     },
+     {
+      "label": "balanced",
+      "n": 8,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-64g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json",
+    "sha256": "9785d07cbda01e3ed311a77cf664858bcc09b4d500fedf0af64f2e4445f3fa23",
+    "shuffle_seed": 20261410,
+    "tile": [
+     64,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+      "seed": 20261420,
+      "kind": "dirichlet",
+      "param": 13.051,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+      "seed": 20261421,
+      "kind": "dirichlet",
+      "param": 3.7495,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+      "seed": 20261430,
+      "kind": "dirichlet",
+      "param": 15.0712,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+      "seed": 20261431,
+      "kind": "dirichlet",
+      "param": 4.32984,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "olmoe-1b-7b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json",
+    "sha256": "d3025569ba7c0fdb363befa95e13b8828bc53228956de0ae5180ec6c5759923c",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+      "seed": 20272420,
+      "kind": "zipf",
+      "param": 0.575,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+      "seed": 20272421,
+      "kind": "dirichlet",
+      "param": 1.0772,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+      "seed": 20272430,
+      "kind": "zipf",
+      "param": 0.522614,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+      "seed": 20272431,
+      "kind": "dirichlet",
+      "param": 1.30505,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+      "seed": 20272450,
+      "kind": "zipf",
+      "param": 0.475,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+      "seed": 20272451,
+      "kind": "dirichlet",
+      "param": 1.5811,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b"
+     },
+     {
+      "label": "balanced",
+      "n": 4,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "qwen2-57b-a14b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json",
+    "sha256": "bfd3ac6bf0b7f0be16c14cdfe3cedce1a6aeaf45be62933484bc783bc3f28086",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "cells": [
+     {
+      "label": "PT",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+      "seed": 20273420,
+      "kind": "zipf",
+      "param": 0.575,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+      "seed": 20273421,
+      "kind": "dirichlet",
+      "param": 1.0772,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c"
+     },
+     {
+      "label": "balanced",
+      "n": 1,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     },
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+      "seed": 20273430,
+      "kind": "zipf",
+      "param": 0.522614,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+      "seed": 20273431,
+      "kind": "dirichlet",
+      "param": 1.30505,
+      "source_model": "olmoe-1b-7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "classes": {
+   "64g1": "Mixtral 64x128 G 1 (n 1, 2)",
+   "128g1": "OLMoE (n 1, 2, 4), Qwen2-57B (n 1, 2), Mixtral (n 2): three CAL models",
+   "128g16": "Mixtral 128x128 G 16 (n 3, 4, 8)"
+  },
+  "nodrop": "every E1-CAL page is nodrop (design-tile-review 4: the Qwen2-57B page and the Mixtral 128 G 1 n 2 tread added for the model-specific check); a SKIPPED, LOST or NOT SCORED page is a STOP"
+ },
+ "predictions": "COMPUTED AT A2'S CONSTANTS AND LOCK by finalise.predict_pages under at_lock(L) (mechanical: the merged census occupancy, c_128 and F_wg, the selected accounting or v4cal, the F form and the A key, all by the registered rules); the DESIGN-NOMINAL numbers below (at 1410) show the scale only",
+ "deviation": "the design's OLMoE 128x128 G 1 n 8 tread is removed (build-tile-review 5): M4 rules w2 at G 1 and n >= 6 ILL-POSED on Hopper (wave_split_bytes.HOPPER_G1_N), applied per tread and literally at BLOCK_M 128 (n 4 is already 512 rows per expert, past BLOCK_M 32's n 6 at 192), so an n-8 cell would have no v4 prediction; OLMoE runs n 1, 2, 4, and the deepest A-heavy w1 row (n 8) is lost",
+ "nominal_cells": [
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+   "ms_nominal": 0.443731,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 576,
+    "w2": 576
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.005289
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ec9a21a2b1b055c2a56d30f80763be1ac1f9fc3d104ca053e0bbba5be7656e58",
+   "ms_nominal": 0.448194,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.03,
+   "dead_ctas": {
+    "w1": 8704,
+    "w2": 8704
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+   "ms_nominal": 0.475542,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 384,
+    "w2": 384
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.002146
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "5d149b95932cf1047f7033bd6ca58f3f85420366cd74d3228ea34ad1de2316bf",
+   "ms_nominal": 0.479814,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.03,
+   "dead_ctas": {
+    "w1": 8512,
+    "w2": 8512
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "ms_nominal": 0.329533,
+   "host_ok_nominal": false,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.403324
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "ms_nominal": 0.334442,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.03,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.329533,
+   "host_ok_nominal": false,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.403324
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.334442,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.03,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+   "ms_nominal": 0.723313,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 464,
+    "w2": 464
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 2.5e-05
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "f7ca16d5a08af9c1511806a2c0ac0de9b0d360300e392eda1db044d39f8c39b2",
+   "ms_nominal": 0.728754,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.12,
+   "dead_ctas": {
+    "w1": 8592,
+    "w2": 8592
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+   "ms_nominal": 0.723313,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 560,
+    "w2": 560
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 2.3e-05
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "0c6921ca6c1cc4527204fc71f1e106fe225c872579374ce7aa60dfdda225b92e",
+   "ms_nominal": 0.72885,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.12,
+   "dead_ctas": {
+    "w1": 8688,
+    "w2": 8688
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "ms_nominal": 0.595688,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.000299
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "ms_nominal": 0.601687,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.12,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.595688,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.000299
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.601687,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.12,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+   "ms_nominal": 1.250914,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 528,
+    "w2": 528
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.0
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "bce484097a3815f199e7d6f6bd8f09e18a0b913f63bcd57286a3bbd77b52de59",
+   "ms_nominal": 1.259099,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 4.8,
+   "dead_ctas": {
+    "w1": 8656,
+    "w2": 8656
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+   "ms_nominal": 1.282823,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 480,
+    "w2": 480
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.0
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "955794a5711e424c163127981a1832467986ce10f32aa4e74927d5cad4bc3d58",
+   "ms_nominal": 1.290961,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 4.8,
+   "dead_ctas": {
+    "w1": 8608,
+    "w2": 8608
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "ms_nominal": 1.155186,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.0
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "71773f1ff26beaa415d0e6f5bbc008c895946c71c79985a94e5a3e9ef2610c7b",
+   "ms_nominal": 1.163865,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 4.8,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.155186,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1024,
+    "w2": 1024
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.0
+  },
+  {
+   "unit": "e128g1",
+   "model": "olmoe-1b-7b",
+   "page": "olmoe-1b-7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.163865,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 4.8,
+   "dead_ctas": {
+    "w1": 9152,
+    "w2": 9152
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+   "ms_nominal": 3.040999,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1120,
+    "w2": 160
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.000223
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "a06c1c1cb616cbea18ab3e6a604c58b3642491b256efa670641923793b2df24a",
+   "ms_nominal": 3.044951,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.0443,
+   "dead_ctas": {
+    "w1": 15456,
+    "w2": 2208
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+   "ms_nominal": 3.393036,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 448,
+    "w2": 64
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 7.3e-05
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "9db20ab747297095e551aa450411b5042229d7bf49ea096fcaea7ddba7c63fdd",
+   "ms_nominal": 3.396988,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.0443,
+   "dead_ctas": {
+    "w1": 14784,
+    "w2": 2112
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8",
+   "ms_nominal": 2.689003,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.000639
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "b7459925cd8eac243cecc4fb63fe345366040422b693cddaf9793690785f81b8",
+   "ms_nominal": 2.692956,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.0443,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 2.689003,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.000639
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 3,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 2.692956,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.0443,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+   "ms_nominal": 4.022027,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 8.2e-05
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "9c6c395d07e3b26faf9bd3234206c436270cd06bbfa3acaad8775bd2a6ae2fd0",
+   "ms_nominal": 4.026666,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.73,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+   "ms_nominal": 4.063518,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 672,
+    "w2": 96
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 8.5e-05
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "321f459c245e72412cafdcf5bea2cfd3f956dde2b302e77a8bb2a4d5b0770278",
+   "ms_nominal": 4.068157,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.73,
+   "dead_ctas": {
+    "w1": 15008,
+    "w2": 2144
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe",
+   "ms_nominal": 3.587065,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.00044
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "0f59bb201fff3f9f1eb0a9ba415ea413a6760d4edf1b314a94c0aa5ccfa528fe",
+   "ms_nominal": 3.591704,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.73,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 3.587065,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.00044
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 4,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 3.591704,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.73,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+   "ms_nominal": 7.614371,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 672,
+    "w2": 96
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.000153
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ab5a05c1a2bc58f14be6377754f42b390ba5dcd291d2beafe78d02d0f877e8ab",
+   "ms_nominal": 7.621752,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 5.4729,
+   "dead_ctas": {
+    "w1": 15008,
+    "w2": 2144
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+   "ms_nominal": 7.53144,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.000253
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "30c36c5623dbfa5f3c04c63f5cfa08024d1d6efcbebe84d22927d558bd04e861",
+   "ms_nominal": 7.538822,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 5.4729,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "ms_nominal": 7.096283,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 3.6e-05
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "ca1f45bac70540781975aed332ecc48e18ebb36e052c96d823821d2ccde7300b",
+   "ms_nominal": 7.103664,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 5.4729,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 7.096283,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 3.6e-05
+  },
+  {
+   "unit": "e128g16",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g16",
+   "tile": "128x128x64w8s3",
+   "G": 16,
+   "cls": "128g16",
+   "n": 8,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 7.103664,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 5.4729,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+   "ms_nominal": 1.057043,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1120,
+    "w2": 160
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.828184
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+   "ms_nominal": 1.044056,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": -3.09,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+   "ms_nominal": 1.124584,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.84413
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+   "ms_nominal": 1.111597,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": -3.09,
+   "dead_ctas": {
+    "w1": 15008,
+    "w2": 2144
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "ms_nominal": 0.928071,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.912315
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+   "ms_nominal": 0.915084,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": -3.09,
+   "dead_ctas": {
+    "w1": 15904,
+    "w2": 2272
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.928071,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.912315
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 0.915084,
+   "host_ok_nominal": true,
+   "native_path": "small-batch",
+   "A_proxy_us": -3.09,
+   "dead_ctas": {
+    "w1": 15904,
+    "w2": 2272
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+   "ms_nominal": 1.770588,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1120,
+    "w2": 160
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.796674
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+   "ms_nominal": 1.773216,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.72,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+   "ms_nominal": 1.818123,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.814384
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+   "ms_nominal": 1.820752,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.72,
+   "dead_ctas": {
+    "w1": 15008,
+    "w2": 2144
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+   "ms_nominal": 1.576839,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.816465
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+   "ms_nominal": 1.579468,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.72,
+   "dead_ctas": {
+    "w1": 15904,
+    "w2": 2272
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.576839,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.816465
+  },
+  {
+   "unit": "e64g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-64g1",
+   "tile": "64x128x64w8s3",
+   "G": 1,
+   "cls": "64g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.579468,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.72,
+   "dead_ctas": {
+    "w1": 15904,
+    "w2": 2272
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+   "ms_nominal": 1.636869,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1440,
+    "w2": 1008
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.013817
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "58e70008cdcb3a07380862b368176a6b3889ceeba9d23be13ccc676da195d029",
+   "ms_nominal": 1.639737,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.96,
+   "dead_ctas": {
+    "w1": 21760,
+    "w2": 15232
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+   "ms_nominal": 1.860298,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 960,
+    "w2": 672
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.003297
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "e8e86df31da93f3a3152fb0141cbe54953c2d48b000476dc62ade83a19aedfaa",
+   "ms_nominal": 1.863167,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.96,
+   "dead_ctas": {
+    "w1": 21280,
+    "w2": 14896
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "ms_nominal": 1.219715,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 2560,
+    "w2": 1792
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.321126
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "23b7c3e32dbde7b80549ed7ac6e825301615c743317a3635d7083c9ba36b5f5c",
+   "ms_nominal": 1.222584,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.96,
+   "dead_ctas": {
+    "w1": 22880,
+    "w2": 16016
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.219715,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 2560,
+    "w2": 1792
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.321126
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 1,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.222584,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.96,
+   "dead_ctas": {
+    "w1": 22880,
+    "w2": 16016
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+   "ms_nominal": 2.88429,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1120,
+    "w2": 784
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 2.7e-05
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+   "ms_nominal": 2.888249,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.05,
+   "dead_ctas": {
+    "w1": 21440,
+    "w2": 15008
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+   "ms_nominal": 2.847941,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1240,
+    "w2": 868
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 3.2e-05
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "3eb037a244c4070d310c64026734f7ab3dbe99d78b043013629c13e95534cfad",
+   "ms_nominal": 2.851899,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.05,
+   "dead_ctas": {
+    "w1": 21560,
+    "w2": 15092
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "ms_nominal": 2.299693,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 2560,
+    "w2": 1792
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.000301
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "da2d9654987934936e91ecfeb4d20f12b8bc8f1427e1cfda4183425b89eb0985",
+   "ms_nominal": 2.303652,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.05,
+   "dead_ctas": {
+    "w1": 22880,
+    "w2": 16016
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 2.299693,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 2560,
+    "w2": 1792
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.000301
+  },
+  {
+   "unit": "e128g1",
+   "model": "qwen2-57b-a14b",
+   "page": "qwen2-57b-a14b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 2.303652,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 2.05,
+   "dead_ctas": {
+    "w1": 22880,
+    "w2": 16016
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+   "ms_nominal": 2.265291,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.208444
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PT",
+   "arm": "shared",
+   "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+   "ms_nominal": 2.26858,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.38,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+   "ms_nominal": 2.265211,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 896,
+    "w2": 128
+   },
+   "workload": "BLIND counts (no published page carries them)",
+   "dlnT_dlnB_nominal": 0.207932
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "PW",
+   "arm": "shared",
+   "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+   "ms_nominal": 2.268499,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.38,
+   "dead_ctas": {
+    "w1": 15232,
+    "w2": 2176
+   },
+   "workload": "BLIND counts (no published page carries them)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "ms_nominal": 1.864446,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.156518
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "uniform",
+   "arm": "shared",
+   "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+   "ms_nominal": 1.867735,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.38,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.864446,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 0.0,
+   "dead_ctas": {
+    "w1": 1792,
+    "w2": 256
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)",
+   "dlnT_dlnB_nominal": 0.156518
+  },
+  {
+   "unit": "e128g1",
+   "model": "mixtral-8x7b",
+   "page": "mixtral-8x7b-128g1",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "cls": "128g1",
+   "n": 2,
+   "label": "balanced",
+   "arm": "shared",
+   "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "ms_nominal": 1.867735,
+   "host_ok_nominal": true,
+   "native_path": "block-scan",
+   "A_proxy_us": 1.38,
+   "dead_ctas": {
+    "w1": 16128,
+    "w2": 2304
+   },
+   "workload": "SEEN-WORKLOAD (a published R3-tile page timed these counts; only the tile is new)"
+  }
+ ],
+ "statistic": "e = T_v4 / T_meas - 1 per valid NATIVE cell (PT, PW, uniform and balanced); SHARED printed with the page's own A",
+ "rule": "the E1 time bar (rms <= 2%, worst <= 5%, |mean| <= 1%) on the pooled NATIVE cells: tA-e1cal HOLDS or FAILS. Per page and per class printed",
+ "gates": {
+  "G1": "rental7-g1rule (r7-median-run3 rebuilt from cells.csv at the page's own lock; 6 of 9 clean; 10% non-clean cap)",
+  "G2": "the host rule on the DESIGN-NOMINAL prediction (T + F240 < 0.40 ms is host-bound) AND the timer flag; every CAL cell here passes it",
+  "G4": "cell clock >= L - 5 MHz (1705 at 1710, 1405 at 1410, 1300 at 1305)",
+  "G5": "provenance (file, counts, shuffle seed, bincount)",
+  "tile": "the page's recorded tile (BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages) is the unit's",
+  "G3": "rental 7's TOST on uniform minus balanced, strict; a FAIL voids every histogram cell and E1 is printed DESCRIPTIVELY (design-tile 4); a voided tA-e1cal is a STOP (design-tile-review 9.9)",
+  "views": "ALL and CLEAN; the stop rule reads CLEAN"
+ },
+ "stop_rule": "tileB-stop",
+ "nominal": "DESIGN-NOMINAL: c_128 900 counter cycles (design-tile 2.2's mid value), F_wg the R3 tile's CAL 520 / 979, accounting W, F-step, A key CLAMP; for levers, sensitivities and power only, never a registered prediction",
+ "labels": {
+  "time": "BLIND-CALMODEL",
+  "workload": "per cell (SEEN-WORKLOAD on uniform and balanced cells whose counts a published page timed)"
+ },
+ "scorer_ambiguities": {
+  "1 which c is the denominator, and F's units": "c_time = c_card x c_counter(tile) / 344.1 (344.1 the CAL counters' c); F is held in counter cycles and PHI = F / c_counter(tile) in k-steps; at R3's tile v4 is v3 exactly (r3_timing_model_v4.py --check)",
+  "2 F-cyc against F-step": "F-step (v3's form) is registered; F-cyc replaces it only when, on the 64x128 w8 pages, it is nearer the measured F on both GEMMs and F-step misses by more than 3 se on one (tcommon.f_form_rule)",
+  "3 eta_mma": "per clock (Luo Table 11, 0.991), per instruction by Table 9's ratios: 0.983 (m64n128k16, 128x128 w8), 0.965 (m64n64k16, 64x128); H800 PCIe, FP16; BF16 on GH200 assumed equal; rival Table 9's chip-relative 0.872 / 0.857",
+  "4 tA-floor": "the test statistic is u = S c + F per (model, GEMM), within 3%; cells are the NATIVE and SHARED cells at n 4..9 whose own GEMM reads DRAM at no more than 0.5 x 4022 GB/s; a dropped w4 page changes nothing (printed only); at 128x128 v4cal and v4 are the same model",
+  "5 the NAMED rule's rows, and the default": "every scored w1 row of the G-1 byte pages (uniform, balanced and skewed, NATIVE and SHARED); nothing NAMED gives CLAMP, not v3",
+  "6 E1-TILE's 'each model'": "the three BLIND-TILE models; deepseek-v2-lite is in the pooled bar only (its own bar DESCRIPTIVE, never CERTIFIED); a model left with one page is scored and NOT CERTIFIED",
+  "7 the host cut": "0.40 ms (T + F240), rental 3's registered rule, on the FINALISED v4 prediction",
+  "8 tA-rep dropped": "rental 3's 0.18% feeds the rivals' se, tA-dead's z and the power at finalisation",
+  "9 tA-e1cal 'fails'": "on the CLEAN view: the pooled NATIVE bar, each class mean within 0.75%, the 128 G 1 CAL models within 1%; a SKIPPED, LOST or NOT SCORED E1-CAL page, or a G3 void, is a STOP (tileB-stop)",
+  "10 the OLS rival": "one ridge OLS over every valid NATIVE E1-CAL cell (features waves, bytes / bw, ln(1 + CTAs); lambda 1e-3 x trace(X'X) / 3 on standardised features); NOT SCORED under 12 cells or condition number over 1e6",
+  "11 census against counter occupancy": "integers, exact; a counter page at another occupancy is scored at its recorded one (rental 4's re-key, score_floor: Z_wg at the 128x128 pages' recorded occupancy, each 64x128 page's c at its own); on rental B a (model, tile) at another occupancy than rental A's census is NOT SCORED on every page of that (model, tile), and a missing or refused rental-B census leaves every page NOT SCORED (score_tileB.census_check); a refused rental-A census is a STOP",
+  "12 tA-dead": "tread n 1 (uniform and balanced); align growth = (A_S - A_N) at c15 minus at c9 off each page's align_probe; se = 2 sigma_page mean(T) / sqrt(cells), sigma_page tA-rep's or 0.18%",
+  "13 the 30 MiB row key": "one of the card's two L2 partitions of its measured 60 MiB (rental 4's rulers, CONSISTENT with RRZE's GH200; Hopper's partitioned L2, NVIDIA H100 whitepaper); the 'Fan et al.' attribution is withdrawn",
+  "14 byte pages and timed pages": "one histogram file per (model, tile, G): a byte page and a timed page of the same (model, tile, G) read the same file, so their counts are identical (the files' sha256 above)"
+ },
+ "seen_data": [
+  "the CAL models' R3-tile pages",
+  "v4's carried v3 constants"
+ ],
+ "re-measured (DESIGN-A2 3.1)": "all five E1-CAL pages re-run at L: the calibration is in cycles at L and v4 converts at L; two of rental A's five failed G1 at 1710 (one cause, the clock: two STOP clauses); mixing locks across the five would break A3",
+ "conversion (UNTESTED here)": "at rung 1710 none (v4 itself); at 1410 or 1305, T0, bw, s_small, s_block, h, CORES rho, d and MVA2's eta, z0, z1 carry unconverted from 1710; E1-CAL tests the conversion only jointly with c_128; tileA2-convl tests it on R3's tile",
+ "conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20)": "the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)",
+ "nominal_ms at the fallback rung 1305 (page, label, n, arm, ms)": [
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   1,
+   "native",
+   0.474429
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   1,
+   "shared",
+   0.478317
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   1,
+   "native",
+   0.508869
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   1,
+   "shared",
+   0.512567
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   1,
+   "native",
+   0.342614
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   1,
+   "shared",
+   0.346948
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   1,
+   "native",
+   0.342614
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   1,
+   "shared",
+   0.346948
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   2,
+   "native",
+   0.77466
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   2,
+   "shared",
+   0.779527
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   2,
+   "native",
+   0.77466
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   2,
+   "shared",
+   0.779623
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   2,
+   "native",
+   0.636758
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   2,
+   "shared",
+   0.642182
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   2,
+   "native",
+   0.636758
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   2,
+   "shared",
+   0.642182
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   4,
+   "native",
+   1.340774
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PT",
+   4,
+   "shared",
+   1.348385
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   4,
+   "native",
+   1.37525
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "PW",
+   4,
+   "shared",
+   1.382814
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   4,
+   "native",
+   1.237344
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "uniform",
+   4,
+   "shared",
+   1.245448
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   4,
+   "native",
+   1.237344
+  ],
+  [
+   "olmoe-1b-7b-128g1",
+   "balanced",
+   4,
+   "shared",
+   1.245448
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   3,
+   "native",
+   3.275981
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   3,
+   "shared",
+   3.279934
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   3,
+   "native",
+   3.656363
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   3,
+   "shared",
+   3.660316
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   3,
+   "native",
+   2.895613
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   3,
+   "shared",
+   2.899566
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   3,
+   "native",
+   2.895613
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   3,
+   "shared",
+   2.899566
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   4,
+   "native",
+   4.333708
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   4,
+   "shared",
+   4.338347
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   4,
+   "native",
+   4.378537
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   4,
+   "shared",
+   4.383176
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   4,
+   "native",
+   3.863689
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   4,
+   "shared",
+   3.868328
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   4,
+   "native",
+   3.863689
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   4,
+   "shared",
+   3.868328
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   8,
+   "native",
+   8.206046
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PT",
+   8,
+   "shared",
+   8.213427
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   8,
+   "native",
+   8.116407
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "PW",
+   8,
+   "shared",
+   8.123789
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   8,
+   "native",
+   7.646316
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "uniform",
+   8,
+   "shared",
+   7.653698
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   8,
+   "native",
+   7.646316
+  ],
+  [
+   "mixtral-8x7b-128g16",
+   "balanced",
+   8,
+   "shared",
+   7.653698
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PT",
+   1,
+   "native",
+   1.068506
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PT",
+   1,
+   "shared",
+   1.055519
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PW",
+   1,
+   "native",
+   1.135451
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PW",
+   1,
+   "shared",
+   1.122464
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "uniform",
+   1,
+   "native",
+   0.928364
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "uniform",
+   1,
+   "shared",
+   0.915378
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "balanced",
+   1,
+   "native",
+   0.928364
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "balanced",
+   1,
+   "shared",
+   0.915378
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PT",
+   2,
+   "native",
+   1.795769
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PT",
+   2,
+   "shared",
+   1.798398
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PW",
+   2,
+   "native",
+   1.845486
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "PW",
+   2,
+   "shared",
+   1.848115
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "uniform",
+   2,
+   "native",
+   1.59619
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "uniform",
+   2,
+   "shared",
+   1.598819
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "balanced",
+   2,
+   "native",
+   1.59619
+  ],
+  [
+   "mixtral-8x7b-64g1",
+   "balanced",
+   2,
+   "shared",
+   1.598819
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PT",
+   1,
+   "native",
+   1.76023
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PT",
+   1,
+   "shared",
+   1.763098
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PW",
+   1,
+   "native",
+   2.002467
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PW",
+   1,
+   "shared",
+   2.005336
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "uniform",
+   1,
+   "native",
+   1.288271
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "uniform",
+   1,
+   "shared",
+   1.29114
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "balanced",
+   1,
+   "native",
+   1.288271
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "balanced",
+   1,
+   "shared",
+   1.29114
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PT",
+   2,
+   "native",
+   3.104863
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PT",
+   2,
+   "shared",
+   3.108822
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PW",
+   2,
+   "native",
+   3.065588
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "PW",
+   2,
+   "shared",
+   3.069547
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "uniform",
+   2,
+   "native",
+   2.473198
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "uniform",
+   2,
+   "shared",
+   2.477157
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "balanced",
+   2,
+   "native",
+   2.473198
+  ],
+  [
+   "qwen2-57b-a14b-128g1",
+   "balanced",
+   2,
+   "shared",
+   2.477157
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "PT",
+   2,
+   "native",
+   2.413717
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "PT",
+   2,
+   "shared",
+   2.417005
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "PW",
+   2,
+   "native",
+   2.413687
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "PW",
+   2,
+   "shared",
+   2.416976
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "uniform",
+   2,
+   "native",
+   1.991262
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "uniform",
+   2,
+   "shared",
+   1.994551
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "balanced",
+   2,
+   "native",
+   1.991262
+  ],
+  [
+   "mixtral-8x7b-128g1",
+   "balanced",
+   2,
+   "shared",
+   1.994551
+  ]
+ ],
+ "a2_score_directory": {
+  "A2's score directory (REVIEW-A2 6a; build review fix 4)": "scripts/scoring/tileA2/ (the score files committed beside A2's scorers, as rental A's are in scripts/scoring/tileA/), every file written by A2's own wrappers (score_*_a2.py) from A2's pages at the lock the driver selected; no rental-A score file is copied in",
+  "session.score.json": "score_session_a2.py: the lock rung the probe selected (a2-lock.env) and the GPU power limit read back after -pl (two readings within 1 W): rental B2's lock and limit (finalise_a2.py)",
+  "census.score.json": "the NAMED MERGE STEP (score_census_a2.py, census_a2.merge): rental A's 72 entries (held to A2's by the equality gate) plus A2's deepseek-v2-lite entries at tread 3 when the OLMoE n 1 / n 3 rule reads SAME, scored by score_census.py; the merged file is kept beside it",
+  "floor.score.json": "score_floor_a2.py at L (the band in force recorded)",
+  "bytes.score.json": "score_bytes_a2.py at L, in the band in force; NOT SCORED or NOT NAMED gives CLAMP by tcommon's rule",
+  "rep.score.json": "score_rep_a2.py at L; dropped, lost or not scored: tcommon.sigma_page_of's fallback, rental 3's 0.18% (rental A's 0.1275% is never copied in)",
+  "e1cal.score.json": "score_e1cal_a2.py at L (v4 at_lock L from A2's selections)",
+  "dead.score.json, convl.score.json": "score_dead_a2.py (SEEN-REPLICATE) and score_convl_a2.py",
+  "order": "session, census, floor, bytes, rep, e1cal, dead, convl, probe (each reads the ones before it)"
+ },
+ "lock": {
+  "decision (owner, 2026-10-20)": "a 900 W GPU power limit (GPU scope, -sc 0) and the lock ladder 1710, 1410, 1305 MHz: the probe tries 1710 first; the first rung whose probe passes is the run's lock",
+  "changes": "the owner's 2026-09-26 decision (the GPU power limit 700 W at the start, -sc 0) FOR TILE RENTAL A2 AND RENTAL B2 ONLY (B2 runs at the limit and the lock rung A2 held, read from A2's score directory); every other rental's driver keeps 700 W",
+  "why (DESIGN-A2 1, REVIEW-A2 1)": "rental A's wgmma pages sagged under the 1710 lock: reason 0x4 (SW power cap) only, 60 C at most; the smi trace went to 1290 MHz on the three heavy 128x128 pages; the inferred cause is the software power cap (GPU or module scope unresolved), so the limit rises to the card's maximum and the lock steps down only when the probe says the cap still bites",
+  "ladder (owner, 2026-10-20)": "1710, then 1410, then 1305 MHz: the lock-hold probe's first rung that holds is A2's lock (tileA2-gates G-PROBE). At 1710 no clock conversion is used (v4L is v4 exactly) and CONV-L does not run; 1410 and 1305 carry the conversion",
+  "conversion risk at 1410 and 1305 (build review MAJOR 1; owner, 2026-10-20)": "the offline check (tileA2-convl) reads v3's c-only conversion about 1.36% fast on R1's G 1 cells at 1410 (clock-attributable, the level cancelled), and about 1.4x that at 1305 (ln(1710/1305) / ln(1710/1410)); against tileB2-stop's 0.75% class-mean clause, a 64 G 1 or 128 G 1 class at those rungs can STOP on the carried constants, not the wgmma calibration (SEEN-expected, stated before any page)",
+  "rules at L": {
+   "at 1710": "rental A's own rules: the band [1640, 1710] (derived at that lock; the fallback band at 1710 is the same), G4 1705, v4 itself",
+   "counter band": "below 1710 [L x 0.975, L] = [1374.75, 1410] at 1410, [1272.375, 1305] at 1305 (2 x the 1.02% largest held-lock shortfall at 1410 on rental 3's tp4 floor, rounded up to 0.5%: a NEW rule in lock_gate's convention; the 1710 band [1640, 1710] is 4.1% wide and does not follow it)",
+   "fallback band (REVIEW-A2 2c)": "[L x 0.959, L], applied only when the primary leaves tcommon.joint_cF None on the f128 pages; then every counter scorer's band, labelled",
+   "G4": "cell clock >= L - 5 MHz (1705, 1405, 1300)",
+   "dips": "r7-median-run3 at the page's own lock_mhz (a read under L - 15 is dipped: 1395 is not at 1410, 1380 is)",
+   "lock_gate": "lock_gate.RATIO_REF holds 1710 only (lock_gate.py:127), so at L check_page reads the nvidia-smi bracket and the null / spread readings, no base-twin level (REVIEW-A2 2d)",
+   "v4 at L": "r3_timing_model_v4L.at_lock(L): c x 1710 / L at every tile, R3's included (P1's rule, eta 1); the roofline at L"
+  }
+ },
+ "seen (REVIEW-A2 5)": {
+  "label": "SEEN before this registration (REVIEW-A2 5): none of it is a lever, the selection rules are tcommon's pinned functions unchanged (variant_rule, f_form_rule, joint_cF, floor_test); stated so a reader can weigh it",
+  "(i) rental A's out-of-band fits (DESIGN-A2 7d, work/fit.py, DESCRIPTIVE)": "tcommon.joint_cF on rental A's f128 pages with the band removed: c_128 698.67 +- 10.63 cycles, F_w1 2740 +- 615, F_w2 3113 +- 341, 36 cells, rel rms 0.53%, recorded occupancy 2; on the f64w8 pages c_64 459.1 +- 19.4; the cells' clocks 1601 to 1663 MHz",
+  "(ii) the 64x128 accounting outcome": "predictable by interpolation from (i) and tileA-floor's registered table (W and T c_64 at c_128 600 and 750); nobody computed it",
+  "(iii) SEEN-expected": "with c_128 near 700, accounting B is FALSIFIED by construction (its pipe alone, 769 cycles, exceeds c_128) and the kappa comparison is NOT SCORED (it needs c_128 >= 900)",
+  "(iv) tA-dead": "rental A measured the lever: delta 20.006 us, se 0.612; D 10.02, D2 10.10, SLOT 24.69, d 1.06 11.41 us, each EXCLUDED: A2's dk pages are SEEN-REPLICATE (DESCRIPTIVE), not a test",
+  "(v) the A key": "rental A's key test on 19 of 56 rows: v3 5.0254% against CLAMP 5.0253% rms, NOT NAMED (CLAMP): the near tie is known; the 53 rows its band dropped stay unread",
+  "(vi) sigma_page": "rental A's 0.1275% (24 cells, at a sagging 1710 clock); A2 re-measures it, and never copies rental A's in",
+  "(vii) what chose the lock, the probe cells and the gates": "rental A's per-repeat clocks (cells.csv), the in-flight NVML reads, the smi traces (locked-r3/*/smi.csv: clock, power, temperature, reasons) and the calibrate log",
+  "(viii) rental A's times": "rental A's 1710 times of every E1-CAL cell and its counted bytes of every byte row exist (results/published/2026-10-20-nvidia_gh200_480gb-tileA-session) UNREAD against v4: no v4 time is computed against the E1-CAL times, and the 53 band-dropped byte rows are not re-scored, before or after A2 (OD13, a rule of this registration); its rep and dead pages are scored and published ((iv), (vi)); A2's E1-CAL, byte, rep and dead pages read the same histogram files, so their workloads are SEEN while their times on A2's board are not; the per-row workload labels below are tileA's (as of 2026-10-14) and are not updated",
+  "(ix) the offline conversion check (OD12; REVIEW-A2 3b)": "see tileA2-convl 'offline_check (SEEN)': on the 2026-09-27 and R1 pages v3's c-only rule holds on the c-heavy G 4 / G 2 ladders and on the G 1 per-M-tile elasticity, and underpredicts the G 1 per-call clock elasticity"
+ },
+ "code_pins": {
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/gh200_model_session.sh": "901c18a290990ea86d7fc604d97ae2210a17a980bfedb32de845d2e9b47e5787",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/skew_synth7.py": "e241296eb4d341ba05c7c55e1ba9e97898cf8339fbe074968c367de35ead6a0a",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+  "scripts/scoring/rental7/rowkeys7.py": "cfca6adee49009f4d6941d73f0dda5f058fe94c101d7c332439e35b799fa639b",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/gh200_tile_session.sh": "0f7308e97b7755ea5187940b5f6a13cee39b4740040443879f08fb2aba1507e9",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/scoring/tileA/score_floor.py": "4dd8c3cb80c66521cd67eb678e3023965a2529432a75c03c17d87a6c01f82a02",
+  "scripts/scoring/tileA/score_bytes.py": "877b2b284fe4ed85e8d871a36abdcfc95ae934f220e70b756c3172a23f5bd8b2",
+  "scripts/scoring/tileA/score_census.py": "2f2cacefb299f92ace9f17e02809fe7d97e511fb6b018728819a6d2305e445e0",
+  "scripts/scoring/tileA/score_e1cal.py": "7971efc9017ae6e79d68ac42e50b0599bd96ff7feb73ce3f144025d7f21f0864",
+  "scripts/scoring/tileA/score_rep.py": "7e240d1de17e14a731728c890eb5b56c0cefb37d3ac05cbe58452bbc1e2bcb11",
+  "scripts/scoring/tileA/score_dead.py": "d96368ad89b1b81da6876da0ddc565fd3bfbf8bce3569190e4d63b69c7841321",
+  "scripts/scoring/tileA/score_tileB.py": "d7e4409283176e9709475eeb00eaf2399c83153d0896c64e4ad4b09215dd1259",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/scoring/tileA2/census_a2.py": "063806f831cbb359ea7b6acbb02ffd64042e11178707062df0f7290856132cb6",
+  "scripts/scoring/tileA2/probe_a2.py": "e3c736c54a06a90f84192366aa1c0dcad6965228971fc1a02a680188ff6cdf51",
+  "scripts/scoring/tileA2/hist_a2.py": "18fc7eaa73e84076a3ee277cfe509876f9dbf80995a13190e1915ece9502b57d",
+  "scripts/scoring/tileA2/conv_offline.py": "413013699bc6fe1e87e99f3bd8fe4912c19c133332db3ea1ced511643453f058",
+  "scripts/scoring/tileA2/regtile_a2.py": "5a3e9cf68e10736dccad188c349b3494b60528f0c1fca70ad1242eda0a33b3f5",
+  "scripts/scoring/tileA2/register_a2.py": "87b2068279a982b080987d328b2da4f7b63ffd88256e39bab0d90a1d16ed176b",
+  "scripts/scoring/tileA2/finalise_a2.py": "c6b18a874bb133212ad7024bb47db02011f016a35f74340446558719bea0d2b2",
+  "scripts/scoring/tileA2/score_census_a2.py": "3218b2a04fb89c6b322afb142d1a90676435a758336a5256e998cfcbcd1c5c1c",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "scripts/scoring/tileA2/score_bytes_a2.py": "c9d8c0a6940b8963e72b3d52329e2e08416a4225ffa9c0656a75bd6910ff2dd9",
+  "scripts/scoring/tileA2/score_rep_a2.py": "65b09c83493a28b584df95cf883f786090682e3a099be0b7fa554795221150d5",
+  "scripts/scoring/tileA2/score_e1cal_a2.py": "ffcaa7734bfdeb85c00de1a58cbd05e5fdad5621d5eb61208569447f1846c852",
+  "scripts/scoring/tileA2/score_dead_a2.py": "c480ff65f13b87a2783c76bcd5f8624453b361cc8403bde4f807a5e3dee64736",
+  "scripts/scoring/tileA2/score_convl_a2.py": "72818c239d776680eb9ad80fa4c8fb123d2ff934a170cb5abe4f40fa4ab72fb8",
+  "scripts/scoring/tileA2/score_probe_a2.py": "682965ecf7d0ccc9d40a4d272b55e404264ce338ed1f13b99b3c9893ed5e78f1",
+  "scripts/scoring/tileA2/score_tileB2_a2.py": "8935239e0c16305a23690466370ed75a2e816b33bab4f4ea47f2522b4c37b7e8",
+  "scripts/scoring/tileA2/score_session_a2.py": "6de1caa7b178045d640ee4cdff17238518303878e518d18d693d84542698d129",
+  "scripts/scoring/tileA2/decode_gate_a2.py": "b38d7ce95fede441885cf3c30cd03c4bbc6c7d77dfc5e2f8ab22f055f1402a36"
+ }
+}
