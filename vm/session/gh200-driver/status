@@ -97,3 +97,9 @@
 2026-10-21T07:21:20Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
 2026-10-21T07:21:20Z bytes: the registered list G = 64 (olmoe-1b-7b, f1410): no tail drop, no re-price, no base-clock control
 2026-10-21T07:24:07Z bytes: G=64 page exit 3 after 165 s
+2026-10-21T07:24:10Z bytes: lock block exit 0 (G=64 exit 3 07:24:07 165 s;)
+2026-10-21T07:24:15Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-21T07:24:15Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-21T07:24:16Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f1410-r3-counters/lock1410/summary.json)
+2026-10-21T07:24:16Z bytes END: exit 0 after 3 min [unit 9/14 olmoe-1b-7b f1410 lock-mhz=1410 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-21T07:24:17Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
