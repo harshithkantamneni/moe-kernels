@@ -84,3 +84,8 @@
 2026-10-21T19:16:28Z timed: 2026-10-21T19:16:22Z G=1 held at lock 1410: R3 exit 0 DONE, cells=72 worst=1410.0 MHz, 290 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbebb06d6d-7a75a552
 2026-10-21T19:16:28Z timed END: exit 0 after 5 min [unit 9/10 mixtral-8x7b t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-21T19:16:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-21T19:16:30Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 10/10 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1] (estimate 6 min, cap 20 min, 48 min left)
+2026-10-21T19:16:30Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-21T19:16:30Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json --arms native,shared on every page of this unit
+2026-10-21T19:16:30Z bytes: the registered list G = 1 (mixtral-8x7b, b128g1): no tail drop, no re-price, no base-clock control
+2026-10-21T19:18:34Z bytes: G=1 page exit 0 after 121 s
