@@ -1,0 +1,4 @@
+binary  /usr/local/bin/nsys
+note    nsys installed: /usr/local/bin/nsys
+--- nsys --version
+NVIDIA Nsight Systems version 2025.3.2.474-253236389321v0
