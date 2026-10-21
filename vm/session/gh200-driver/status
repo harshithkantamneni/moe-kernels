@@ -204,3 +204,12 @@
 2026-10-21T00:22:16Z timed: 2026-10-21T00:22:11Z G=16 held at lock 1410: R3 exit 0 DONE, cells=216 worst=1410.0 MHz, 831 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histcf3da1b8-f1717948
 2026-10-21T00:22:16Z timed END: exit 0 after 14 min [unit 20/32 mixtral-8x7b e128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-21T00:22:17Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-21T00:22:20Z timed START: 3c.3 timed R3 histogram page at 1710: G=1, docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 64x128x64 w8 s3 [unit 21/32 mixtral-8x7b e64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 111 min left)
+2026-10-21T00:22:20Z timed: declared-copies 9 on every page of this unit
+2026-10-21T00:22:20Z timed: histogram page docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json, arms native,shared, deepest tread 2, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-21T00:22:21Z timed: G = 1 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-21T00:31:48Z timed: P2 locked_r3 exit 0
+2026-10-21T00:31:48Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-21T00:31:48Z timed: 2026-10-21T00:31:43Z G=1 held at lock 1410: R3 exit 0 DONE, cells=144 worst=1410.0 MHz, 561 s, dir nvidia_gh200_480gb-armsnative_shared-bm64-budget200.0-decl9-dtypebf16-duty0.25-g1-hist9785d07cbd-23146301
+2026-10-21T00:31:48Z timed END: exit 0 after 9 min [unit 21/32 mixtral-8x7b e64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-21T00:31:49Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
