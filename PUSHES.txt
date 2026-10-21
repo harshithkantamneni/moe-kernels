@@ -30,3 +30,4 @@
 2026-10-21T00:46:35Z timed (unit 23/32 mixtral-8x7b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
 2026-10-21T00:48:50Z bytes: G=1 page exit 0
 2026-10-21T00:49:02Z bytes (unit 24/32 olmoe-1b-7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared byte-groups=1): exit 0 (2 min)
+2026-10-21T00:52:51Z bytes: G=1 page exit 0
