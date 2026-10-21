@@ -235,9 +235,10 @@ def test_the_registrations_pins_hold_and_its_text_is_its_json():
 # the frozen chain on real pages (stand-ins), each in its own interpreter
 # --------------------------------------------------------------------------
 
-def job(*args) -> dict:
+def job(*args, cwd=None) -> dict:
     got = subprocess.run([sys.executable, "-B", str(REPO / "tests" / "cal2_chain_job.py"), *map(str, args)],
-                         capture_output=True, text=True, timeout=900, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+                         capture_output=True, text=True, timeout=900, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                         cwd=cwd)
     line = next((ln for ln in got.stdout.splitlines() if ln.startswith("JSON ")), None)
     assert got.returncode == 0 and line, got.stdout[-3000:] + got.stderr[-3000:]
     return json.loads(line[5:])
@@ -396,3 +397,47 @@ def test_the_bands_wording_is_the_reviews():
     assert "stays at or under 0.09 at every X" in m["CLEAN"] and "not A" in m["CLEAN"]
     assert "regime or E 8 family property" in m["REGIME"]
     assert "X4" in REG["readings"]["C2-R1"]["beside X (DESCRIPTIVE)"] and "lock_mhz 1410" in REG["readings"]["C2-R1"]["refusals"]
+
+
+def test_repo_modules_in_the_canonical_layout(tmp_path, monkeypatch):
+    """The canonical checkout: .venv is inside the repo, the working directory is the repo root, torch.ops and
+    torch.classes carry the relative __file__ '_ops.py' and '_classes.py', and the test harness that drives the reader
+    lives in the repo's tests/. Only the tracked, non-environment, non-test modules count (the 2366efcf suite failure:
+    '_classes.py', '_ops.py' and 'tests/cal2_chain_job.py' were read as unpinned chain modules)."""
+    import types
+    root = tmp_path / "repo"
+    files = {"scripts/x.py": "x", "tests/cal2_chain_job.py": "h", "_ops.py": "trap", "_classes.py": "trap",
+             ".venv/lib/python3.12/site-packages/torch/_ops.py": "t", "venv/site-packages/y.py": "t",
+             "lib/dist-packages/z.py": "t"}
+    for f, body in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(body)
+    (root / ".venv" / ".gitignore").write_text("*\n")
+    _git(root, "init", "-q")
+    _git(root, "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A", "-f")
+    _git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c")
+    (root / "scripts" / "untracked.py").write_text("u")
+    monkeypatch.chdir(root)
+
+    def mod(f):
+        m = types.ModuleType("m")
+        m.__file__ = f
+        return m
+    mods = [mod("_ops.py"), mod("_classes.py"), mod(str(root / "scripts" / "x.py")), mod(str(root / "tests" / "cal2_chain_job.py")),
+            mod(str(root / ".venv/lib/python3.12/site-packages/torch/_ops.py")), mod(str(root / "venv/site-packages/y.py")),
+            mod(str(root / "lib/dist-packages/z.py")), mod(str(root / "scripts" / "untracked.py")), mod(None), mod("/elsewhere/w.py")]
+    tracked = R.tracked_files(root)
+    assert "tests/cal2_chain_job.py" in tracked and "_ops.py" in tracked
+    assert R.repo_modules(mods, root, tracked) == ["scripts/x.py"]
+
+
+@pytest.mark.slow
+@chain_only
+def test_the_chain_repo_check_holds_from_the_chain_repos_own_working_directory():
+    """The canonical layout for real, read-only: the job run with its working directory at the repo the chain
+    imports (~/code/moe-kernels), where torch's relative '_ops.py' and '_classes.py' would resolve."""
+    root = Path.home() / "code" / "moe-kernels"
+    if not (root / ".git").exists():
+        pytest.skip("no canonical checkout")
+    d = job("a2", cwd=root)
+    assert d["chain_repo_bad"] == [] and d["mixtral_fold"] == 3.13

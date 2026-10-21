@@ -615,7 +615,7 @@
   "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
   "scripts/calibrate_hardware.py": "c7d9246a8e5f676527c5d2997354c34f383e5c26305df9c90e4298d3af3a44aa",
   "scripts/scoring/cal2/hist_c2.py": "cba8b7ce7cdceb416b9dd65524a543a4bd123e1e7e4a76d69c8dcfad18f47d6d",
-  "scripts/scoring/cal2/read_c2.py": "cfa6fdbd2457928546831c3e81bbeca56a7551d25a6206fa024099c059b1a703",
+  "scripts/scoring/cal2/read_c2.py": "b57982f7ba784da7c519f76de6018c64503242f78a27d84f630ce6f500b77fde",
   "scripts/scoring/cal2/register_c2.py": "40e0f35f3dc3b4b413dfdf1251cf0869bec666fa1d4637bf3a597198838d3fae",
   "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
   "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",

@@ -587,22 +587,47 @@ def chain_repo() -> Path:
     return Path(k5.d5.V.REPO)
 
 
-def check_chain_repo(R: dict) -> list:
-    """[(path, why)]: every module the chain has loaded from its repo is a registered pin with its registered bytes,
-    and every CHAIN_REPO_MODULES path there has its registered sha256."""
-    root = chain_repo().resolve()
-    bad = []
-    for m in list(sys.modules.values()):
+#: path parts that mark an installed package, never a repo module, wherever the environment lives
+ENV_PARTS = (".venv", "venv", "site-packages", "dist-packages")
+
+
+def tracked_files(root: Path) -> set:
+    """The files git tracks in `root` (its HEAD's index)."""
+    got = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True)
+    return set(got.stdout.decode().split("\0")) - {""} if got.returncode == 0 else set()
+
+
+def repo_modules(modules, root: Path, tracked: set) -> list:
+    """The repo modules among `modules` (module objects): an ABSOLUTE __file__ (torch.ops and torch.classes carry
+    the relative '_ops.py' and '_classes.py', which a resolve() would place under the working directory), under
+    `root`, in no environment directory (.venv, venv, site-packages, dist-packages: the canonical checkout's .venv is
+    inside it), not under tests/ (the test harness that drives the reader is not the chain's), and tracked by git."""
+    root = Path(root).resolve()
+    out = set()
+    for m in modules:
         f = getattr(m, "__file__", None)
-        if not f or "/.venv/" in f:
+        if not isinstance(f, str) or not Path(f).is_absolute():
             continue
-        f = Path(f).resolve()
         try:
-            rel = str(f.relative_to(root))
+            rel = Path(f).relative_to(root)
         except ValueError:
+            try:
+                rel = Path(f).resolve().relative_to(root)
+            except ValueError:
+                continue
+        if any(part in ENV_PARTS for part in rel.parts) or rel.parts[:1] == ("tests",):
             continue
-        if rel not in R["code_pins"]:
-            bad.append((rel, "loaded by the chain from its repo but not pinned"))
+        if str(rel) in tracked:
+            out.add(str(rel))
+    return sorted(out)
+
+
+def check_chain_repo(R: dict) -> list:
+    """[(path, why)]: every repo module the chain has loaded from its repo (repo_modules) is a registered pin with its
+    registered bytes, and every CHAIN_REPO_MODULES path there has its registered sha256."""
+    root = chain_repo().resolve()
+    loaded = repo_modules(list(sys.modules.values()), root, tracked_files(root))
+    bad = [(rel, "loaded by the chain from its repo but not pinned") for rel in loaded if rel not in R["code_pins"]]
     bad += [(p, f"under the chain's repo {root}: not the registered sha256") for p in CHAIN_REPO_MODULES
             if p not in R["code_pins"] or not (root / p).is_file() or sha256(root / p) != R["code_pins"][p]]
     return sorted(set(bad))
