@@ -54,3 +54,12 @@
 2026-10-21T18:59:00Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
 2026-10-21T18:59:00Z gate END: exit 0 after 0 min [unit 6/10 - gband gate=band]
 2026-10-21T18:59:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-21T18:59:02Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 35 min, 65 min left)
+2026-10-21T18:59:02Z timed: declared-copies 9 on every page of this unit
+2026-10-21T18:59:02Z timed: histogram page docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json, arms native,shared, deepest tread 2, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-10-21T18:59:03Z timed: G = 1 at treads 2, no G=3 page (timed-groups / timed-treads)
+2026-10-21T19:06:20Z timed: P2 locked_r3 exit 0
+2026-10-21T19:06:20Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-10-21T19:06:20Z timed: 2026-10-21T19:06:15Z G=1 held at lock 1410: R3 exit 3 INVALID, cells=108 worst=1410.0 MHz, 430 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histb5d6e34a5-7798c9e7
+2026-10-21T19:06:20Z timed END: exit 0 after 7 min [unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-21T19:06:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
