@@ -1,0 +1,112 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "qwen2-57b-a14b",
+  "dtype": "bf16",
+  "block_m": 128,
+  "block_n": 128,
+  "num_stages": 3,
+  "group_m": 1,
+  "treads": [
+    2
+  ],
+  "arms": [
+    "native"
+  ],
+  "cells": [
+    [
+      "native",
+      2,
+      "PT"
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count 8192..73728 does not cross 1024: one kernel throughout",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-kr-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-kr-r3-counters/lock1410/r3c-g1.profiles/g1.triton-cache",
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "105245eef5fa547db504f68d88358e03646d46f21bcab70ad98a3956407f59c2",
+    "page": "qwen2-57b-a14b-128g1-rp",
+    "shuffle_seed": 20261410,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 2,
+        "counts": [
+          332,
+          240,
+          152,
+          220,
+          144,
+          478,
+          181,
+          354,
+          140,
+          207,
+          384,
+          154,
+          234,
+          164,
+          315,
+          181,
+          177,
+          544,
+          174,
+          146,
+          336,
+          266,
+          164,
+          159,
+          215,
+          277,
+          272,
+          207,
+          370,
+          165,
+          255,
+          413,
+          210,
+          204,
+          721,
+          173,
+          164,
+          955,
+          180,
+          240,
+          187,
+          170,
+          282,
+          144,
+          385,
+          143,
+          254,
+          178,
+          229,
+          188,
+          149,
+          231,
+          147,
+          147,
+          201,
+          169,
+          166,
+          166,
+          448,
+          191,
+          203,
+          654,
+          183,
+          302
+        ],
+        "arms": [
+          "native"
+        ]
+      }
+    ]
+  }
+}
