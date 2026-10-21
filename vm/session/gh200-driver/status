@@ -283,3 +283,8 @@
 2026-10-21T01:18:27Z timed: 2026-10-21T01:18:21Z G=1 held at lock 1410: R3 exit 0 DONE, cells=216 worst=1410.0 MHz, 851 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histd3025569b-c4cb7fee
 2026-10-21T01:18:27Z timed END: exit 0 after 14 min [unit 28/32 olmoe-1b-7b e128g1r block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-21T01:18:28Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+2026-10-21T01:18:32Z bytes START: 3c.2 byte pages at the 1710 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 64x128x64 w4 s3 [unit 29/32 olmoe-1b-7b f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 55 min left)
+2026-10-21T01:18:32Z bytes: tile --num-warps 4 --block-m 64 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-21T01:18:32Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-21T01:18:32Z bytes: the registered list G = 64 (olmoe-1b-7b, f64w4): no tail drop, no re-price, no base-clock control
+2026-10-21T01:21:08Z bytes: G=64 page exit 1 after 154 s
