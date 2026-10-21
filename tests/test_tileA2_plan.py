@@ -163,7 +163,8 @@ def test_the_lambda_stop_instruction_and_vm_run_name_the_a2_driver():
     assert re.search(pat, "bash gh200_tileA2_session.sh --plan x") and not re.search(pat, "gh200_tile_session.sh")
     assert not re.search(r"[g]h200_(model|tile)_session.sh", "gh200_tileA2_session.sh")
     vm = (REPO / "scripts" / "vm_run.sh").read_text()
-    assert "SESSION_DRIVERS=(gh200_model_session.sh gh200_tile_session.sh gh200_decode_session.sh gh200_tileA2_session.sh)" in vm
+    drivers = re.search(r"^SESSION_DRIVERS=\(([^)]*)\)$", vm, re.M).group(1).split()
+    assert drivers[:4] == ["gh200_model_session.sh", "gh200_tile_session.sh", "gh200_decode_session.sh", "gh200_tileA2_session.sh"]
 
 
 # --------------------------------------------------------------------------

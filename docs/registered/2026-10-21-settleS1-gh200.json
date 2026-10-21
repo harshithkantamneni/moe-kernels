@@ -1,0 +1,591 @@
+{
+ "registered": "2026-10-21, before any S1 page",
+ "name": "2026-10-21-settleS1-gh200",
+ "status": "DESCRIPTIVE: S1 measures; it certifies nothing and no model verdict is scored on its pages. The reading bands below choose the FORM v5 registers for F1, F2 and F3; they are not verdicts",
+ "design": "DIAGNOSIS-A2 (moe-kernels-work 2026-10-21 diag-A2/DIAGNOSIS.md, offline, read-only over A2's tree at 36291487), section Q7's five measurements; the owner's decision of 2026-10-21: run S1 first so the sag (F1) and the re-reads (F3) are measured, not fitted, then design v5",
+ "tool": "scripts/gh200_settleS1_session.sh (A2's pinned driver plus lines marked S1), scripts/dram_counter_route_s1.py (instrumentation only: ncu replay mode, cache control, metric list), scripts/power_proof_s1.py (S1-M0's load: torch.matmul, no kernel of ours), scripts/scoring/settleS1/read_s1.py (the reader)",
+ "seen": "Every S1 page is SEEN for v5: any constant v5 takes from an S1 reading (A and tau per lock, the knee's form, a re-read refit) is SEEN-MEASURED or SEEN-FITTED, and no S1 page or E1-CAL page can test it. v5's blind test must use NEW shapes: rental B2's frozen pages (docs/registered/2026-10-20-tileB2-e1tile-gh200: JetMoE-8B, Phi-3.5-MoE and Qwen1.5-MoE-A2.7B, the shapes DIAGNOSIS-A2 Q6 names for each fix), never OLMoE-1B-7B, Mixtral 8x7B or Qwen2-57B-A14B, whose cells S1 and A2 measured",
+ "power_and_lock": {
+  "power_limit_w": 900,
+  "rule": "A2's (tileA2-gates P-W): the pre-setup dry run and the prelude refuse a card whose power.max_limit is under 900 W, no fallback to 700 W; the limit is set as A2 set it, nvidia-smi -pl 900 -sc 0 (scope 0 is the GPU's, 1 the module's, per nvidia-smi's documentation). S1 adds the read-back: the prelude polls (every 2 s, up to 30 s) until --query-gpu=enforced.power.limit (the power management algorithm's ceiling, the minimum of every limiter) and nvidia-smi -q -d POWER's GPU-scope Current Power Limit both read 900 W within 1 W, then writes power-set.txt; otherwise it REFUSES. A2 read 700 W from -q (Current and Requested) and 900 W from power.limit on every read of its session and never read enforced.power.limit, so the limit A2 ran under is not known (A2 publication)",
+  "fallback": "the owner's decision of 2026-10-21, pre-authorised: a read-back refusal at 900 W is recorded (s1-power.env S1_POWER_900=refused, power-set-unsettled-900.txt) and the SAME session sets nvidia-smi -pl 700 -sc 0 and repeats the read-back, requiring enforced.power.limit and the -q GPU-scope Current Power Limit both at 700 W; every unit then runs at 700 W (S1_POWER_W=700). A refusal at 700 W too stops the session. No other scope is tried (-sc 2 is not used)",
+  "outcomes": {
+   "900 W read back": "the owner's 900 W limit is in force as both readings say; M0 confirms it (ABOVE-700 possible) or shows a lower limiter (AT-700, CAP-BELOW-680)",
+   "900 W refused, 700 W read back": "the board behaves as A2's most likely did; S1's pages are at 700 W, comparable to A2's; the 900 W decision is recorded as not attainable on this board; M0 states whether 700 W held (AT-700) or another limiter is lower (CAP-BELOW-680); ABOVE-700 would mean the readings do not name the enforced limit",
+   "both refused": "the session stops before any page (about $1 of setup); no S1 reading exists"
+  },
+  "session_lock_mhz": 1410,
+  "lock_rule": "every unit but M0 runs under nvidia-smi -lgc at the session lock 1410 MHz (the rung A2 held) with ncu --clock-control none, except S1-M2's pages at their own locks 1305 and 1005 MHz (and its same-board 1410 reference), and M0 (the power proof), which runs with no lock; the prelude locks, reads back and resets each unit lock once",
+  "probe": "no lock-hold probe: S1 certifies nothing and chooses no lock, and every page carries its own clock reading (sm__cycles_elapsed.avg over gpu__time_duration.sum per GEMM), so a lock that sags is the measurement itself, not a reason to move the session"
+ },
+ "measurements": {
+  "M0": {
+   "question": "which GPU power limit holds: A2's -q readings (700 W) or its power.limit (900 W)? The limit every later S1 page runs under, and the likeliest source of the sag (DIAGNOSIS-A2 Q5: the SW power cap, 0x4, fired on A2's heavy pages at 1410)",
+   "units": [
+    "- pp"
+   ],
+   "cells": "no cells: torch.matmul 8192^3 bf16, back to back, 90 s, no clock lock (scripts/power_proof_s1.py)",
+   "instrument": "nvidia-smi --query-gpu=timestamp,power.draw,enforced.power.limit,power.limit,clocks.sm,clocks.max.sm,clocks_event_reasons.active,temperature.gpu -lms 100 for the GEMM's length; -q -d POWER before and after",
+   "unit": "watts (GPU scope power.draw); seconds; share of samples",
+   "quantity": "busy samples (power.draw > 200 W); 1 s means (10 consecutive busy samples); the seconds of 1 s means over 720 W; the largest 1 s mean; the share of busy samples with the SW power cap bit 0x4; the busy clock's median against clocks.max.sm; enforced.power.limit as read",
+   "read_by": "scripts/scoring/settleS1/read_s1.py power_proof",
+   "reading": {
+    "ABOVE-700": "1 s means over 720 W cover >= 10 s",
+    "AT-700": "largest 1 s mean in [680, 720] W, SW power cap on >= half the busy samples, busy clock under max",
+    "CAP-BELOW-680": "SW power cap on >= half the busy samples and the largest 1 s mean under 680 W",
+    "UNDECIDED": "otherwise (the GEMM reached no limit)"
+   },
+   "constrains": {
+    "session": "ABOVE-700: a ceiling above 700 W held under S1's 900 W readings; S1's pages ran above A2's -q value. AT-700: a 700 W ceiling held although both read-backs said 900 W: the read-backs do not name the enforced limit on this platform, S1's pages ran at 700 W (as A2's most likely did) and the owner's 900 W decision was not in force. CAP-BELOW-680: another limiter (module or platform) holds below both; S1-M2's sag is read against it. UNDECIDED: no reading",
+    "F1": "AT-700 or CAP-BELOW-680 with S1-M2 PRESENT: the sag is a power-cap transient at the enforced limit, so F1's A and tau are per limit as well as per lock and tile; ABOVE-700 with S1-M2 PRESENT: the sag persists with headroom, a kernel-start clock effect at the lock, not the cap"
+   }
+  },
+  "M1": {
+   "question": "DIAGNOSIS-A2 Q7 row 1: is the sag in the timed burst the one ncu's kernel replay shows (each kernel replayed in isolation after a cache flush and a save/restore)?",
+   "units": [
+    "olmoe-1b-7b kr",
+    "olmoe-1b-7b ar",
+    "qwen2-57b-a14b kr",
+    "qwen2-57b-a14b ar"
+   ],
+   "cells": "E1-CAL cells OLMoE 128x128 G 1 n 1 PT and n 4 PT, Qwen2-57B n 2 PT, NATIVE (copied cells, same shuffle seed: docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json, qwen2-57b-a14b-128g1-rp.json)",
+   "instrument": {
+    "kr": "A2's byte-page instrument: ncu --replay-mode kernel --cache-control all --clock-control none under nvidia-smi -lgc 1410 (scripts/dram_counter_route_tile.py)",
+    "ar": "ncu --replay-mode application --cache-control none, everything else the same (scripts/dram_counter_route_s1.py --s1-replay application)"
+   },
+   "unit": "microseconds per GEMM kernel launch (mean of the page's 3 measured calls); per cell, the call's w1 + w2",
+   "quantity": "off = gpu__time_duration.sum - sm__cycles_elapsed.avg / 1410 MHz per GEMM; d = off_app - off_kernel per GEMM and per cell",
+   "read_by": "scripts/scoring/settleS1/read_s1.py replay_contrast (rows: gemm_rows)",
+   "reading": {
+    "INSTRUMENT-INDEPENDENT": "|median d_cell| <= 10 us and every |d_cell| <= 0.25 x off_kernel_cell + 5 us",
+    "INSTRUMENT-INFLATED": "median d_cell < -10 us",
+    "INSTRUMENT-DEFLATED": "median d_cell > +10 us",
+    "MIXED": "otherwise"
+   },
+   "constrains": {
+    "F1": "INSTRUMENT-INDEPENDENT: the sag is not made by kernel replay's flush or save/restore; v5's F1 takes A and tau from counter pages (A2's, S1-M2's) as measured. INSTRUMENT-INFLATED: the kernel-replay A overstates the sag; v5's F1 takes its size from the application-replay offsets (per cell) and DIAGNOSIS-A2 Q1's clock/call split is re-read with them. INSTRUMENT-DEFLATED: the sag is larger in stream order; F1's A is taken from the application-replay pages, and the per-call timed residual (-32.3 us at 128) is compared with their per-cell sum. MIXED: no counter-page A enters v5 without a per-cell check against these three cells"
+   },
+   "follow_up": "in-burst per-GEMM CUDA events (a wrapper around pinned R3's timed path) are built only if M1 reads MIXED or INSTRUMENT-DEFLATED (owner, 2026-10-21)",
+   "not_reproduced": "application replay still serialises the profiled launches (ncu stops between them to read its counters), so the GEMMs are not as back to back as in R3's timed burst; the contrast isolates the flush and the save/restore, not the gaps"
+  },
+  "M2": {
+   "question": "DIAGNOSIS-A2 Q7 row 2: does the sag vanish at a lower lock (an apparatus fix), and where?",
+   "units": [
+    "olmoe-1b-7b f1305",
+    "olmoe-1b-7b f1005",
+    "olmoe-1b-7b f1410 (the same-board reference, nodrop)"
+   ],
+   "cells": "the OLMoE f128 counter page: 128x128x64 w8 s3, G 64, treads 1 to 9, NATIVE, SHARED and PRIVATE (54 GEMM cells)",
+   "instrument": "A2's byte-page instrument at the unit's own lock (1305, 1005, 1410 MHz)",
+   "unit": "microseconds per GEMM kernel; A in microseconds, tau in microseconds; f in MHz",
+   "quantity": "per lock L: off = t_ncu - cycles / L per GEMM cell; A(L), tau(L) of off = A (1 - exp(-t / tau)) (tau on a grid 50 to 4975 us, step 25; A least squares; DIAGNOSIS-A2 work/transient.py), the linear t = a + cycles / f, the median off by duration bin",
+   "read_by": "scripts/scoring/settleS1/read_s1.py lock_ladder (sag_fit over gemm_rows)",
+   "reading": {
+    "GONE": "A(L) <= 8 us (R3's own 1410 sag is 6.1 us and sits in T0)",
+    "REDUCED": "A(L) <= 0.5 x A(1410) on this board's f1410 page (nodrop); if f1410 is still missing, A2's fit of the same page, 29.652628 us (tau 300 us; results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json, another board)",
+    "PRESENT": "otherwise"
+   },
+   "constrains": {
+    "F1": "GONE at 1305: an apparatus fix exists at the ladder's own rung (time the wgmma tiles at 1305, F1 keeps only R3's baseline in T0); GONE at 1005 only: the fix needs 1005 (an owner decision on the timing lock); PRESENT at both: no apparatus escape, F1 is priced, and A(L), tau(L) are its per-lock constants (SEEN-MEASURED); REDUCED: F1 is priced with A(L) at the lock v5 times at"
+   },
+   "decided_after": "whether v5 and B2 time at 1005 MHz (should M2 read GONE only there) is decided by the owner after S1, with M2's numbers (owner, 2026-10-21); nothing here pre-commits it"
+  },
+  "M3": {
+   "question": "DIAGNOSIS-A2 Q7 row 3: does v4 over-predict Mixtral 128 G 1's w1 bytes (Q2's inference, about 7%)?",
+   "units": [
+    "mixtral-8x7b b128g1"
+   ],
+   "cells": "Mixtral 8x7B 128x128 G 1, n 2 PT, PW, uniform, balanced, NATIVE (docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json)",
+   "instrument": "A2's byte-page instrument at 1410",
+   "unit": "weight sets per GEMM (q); e as a fraction",
+   "quantity": "q_counted = (dram__bytes_read.sum - n x the GEMM's A operand per tread) / the GEMM's weight set; e = q_pred / q_counted - 1 per key (v3, CLAMP) with q_pred registered below (byte_predictions_m3)",
+   "read_by": "scripts/scoring/settleS1/read_s1.py m3_bytes",
+   "reading": {
+    "W1-OVER": "mean e(CLAMP, w1) over the 4 cells >= +4%",
+    "W1-EXACT": "|mean e(CLAMP, w1)| < 2%",
+    "W1-PARTIAL": "otherwise"
+   },
+   "constrains": {
+    "F3": "W1-OVER: Q2's inference holds; F3's w1 re-read refit takes these rows (SEEN-FITTED) and is what moves Mixtral 128 G 1. W1-EXACT: bytes do not carry Mixtral 128 G 1's residual under F1 + F2 + F4 (+2.8 to +3.5%); F3 is not needed there and v5's knee and sag forms are re-examined on Mixtral. W1-PARTIAL: both"
+   }
+  },
+  "M4": {
+   "question": "DIAGNOSIS-A2 Q7 row 4: in the w2 (and w1) re-read excess at G 16 and 64 G 1, activation against weight re-reads",
+   "units": [
+    "mixtral-8x7b p128g16",
+    "mixtral-8x7b p64g1"
+   ],
+   "cells": "ladder (balanced) cells, arms NATIVE, SHARED and PRIVATE: Mixtral 128x128 G 16 treads 3, 4, 8; Mixtral 64x128 w8 G 1 tread 2 (the balanced cells of A2's b128g16 and b64g1 pages; R3 runs PRIVATE on its balanced ladder only, PRIVATE_SKEW_REFUSAL)",
+   "instrument": "A2's byte-page instrument at 1410, the ladder's treads by the S1 key byte-treads",
+   "unit": "weight sets per GEMM",
+   "quantity": "e_P = max(q_P - n, 0), PRIVATE's excess over its n weight sets (each M-tile its own copy: no weight slab is read twice, so the excess is re-read activations), at the K-call means and at PRIVATE's highest call (dram_counter_route.r3_weight_bracket, pinned); SHARED's re-read q_S - 1; a = min(e_P / (q_S - 1), 1), the largest share of SHARED's excess that can be activations",
+   "read_by": "scripts/scoring/settleS1/read_s1.py private_split",
+   "reading": {
+    "B-DOMINATED": "at every tread e_P <= 0.2 x (q_S - 1) or e_P <= 0.02 weight sets",
+    "A-DOMINATED": "e_P >= 0.5 x (q_S - 1) at most treads",
+    "MIXED": "otherwise"
+   },
+   "constrains": {
+    "F3": "B-DOMINATED (w2): the w2 excess is weight re-reads; F3 refits M4's slab constants (C_B, beta_B, theta1, eps1_w2) per tile family and nothing else. A-DOMINATED: M4's charge-once A assumption fails at the wgmma tiles; F3 needs an activation re-read term, and the weight part of w2's over-prediction is larger than the byte pages show. MIXED: both terms; the reduced form (eps1, theta1 only) is not enough"
+   }
+  },
+  "M5": {
+   "question": "DIAGNOSIS-A2 Q7 row 5: the knee's mechanism (latency exposure at 2 CTAs per SM?)",
+   "units": [
+    "qwen2-57b-a14b st",
+    "olmoe-1b-7b st"
+   ],
+   "cells": "128x128 G 1 byte cells, NATIVE: Qwen2-57B n 1, 2 and OLMoE n 1, 2, 4, four labels each (docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json, olmoe-1b-7b-128g1-n.json); x from about 0.3 to 1.15",
+   "instrument": "A2's byte-page instrument at 1410 plus three recorded metrics (scripts/dram_counter_route_s1.py --s1-stall-metrics): smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct, smsp__warp_issue_stalled_barrier_per_warp_active.pct, sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active",
+   "unit": "percent (per active warp for the stalls, of peak sustained active for the tensor pipe); x and y ratios",
+   "quantity": "per GEMM: the three metrics; floor_cyc = q (S c + F_g), q = ceil(live CTAs / 132), S = K / 64 (the tcommon.joint_cF form at the CAL-A constants below); bytes_cyc = counted reads / bw x lock; x_s1 = bytes_cyc / floor_cyc; y_s1 = cycles / max(floor_cyc, bytes_cyc); Spearman rho of x_s1 with each metric over the page's GEMM cells",
+   "read_by": "scripts/scoring/settleS1/read_s1.py stall_table",
+   "reading": {
+    "LATENCY": "rho(x, long scoreboard) >= 0.6 and rho(x, tensor active) <= -0.6",
+    "BARRIER": "rho(x, barrier) >= 0.6 and rho(x, long scoreboard) < 0.6",
+    "NONE-SEEN": "otherwise"
+   },
+   "constrains": {
+    "F2": "LATENCY: the soft knee is DRAM latency exposed at 2 CTAs per SM and 3 stages (Q5.2's INFERENCE supported); v5's knee exponent is a per-tile property tied to occupancy and stages, and 64x128 w8 (3 CTAs per SM) is expected between 128x128's 5.25 and R3's 14. BARRIER: the knee is pipeline synchronisation; its exponent is tied to num_stages. NONE-SEEN: F2 stays a SEEN-FITTED shape with no mechanism claimed"
+   }
+  }
+ },
+ "constants": {
+  "M1": {
+   "abs_us": 10.0,
+   "rel": 0.25,
+   "slack_us": 5.0
+  },
+  "M2": {
+   "gone_us": 8.0,
+   "reduced_frac": 0.5,
+   "ref_lock_mhz": 1410.0,
+   "a2_ref_A_us": 29.652628,
+   "a2_ref_tau_us": 300.0,
+   "a2_ref_page": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-20-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json",
+   "tau_grid_us": [
+    50,
+    4975,
+    25
+   ]
+  },
+  "M3": {
+   "over": 0.04,
+   "exact": 0.02
+  },
+  "M4": {
+   "a_dom": 0.5,
+   "b_dom": 0.2,
+   "tiny": 0.02
+  },
+  "M5": {
+   "rho": 0.6,
+   "c_cycles": 691.6475590359868,
+   "F_cycles": {
+    "w1": 2898.052707811491,
+    "w2": 3346.3006086105324
+   },
+   "bw_gbps": 3597.800853,
+   "sms": 132,
+   "source": "c and F: A2's CAL-A floor calibration (A2's floor score, 'calibration'; SEEN); bw: v4's bandwidth, the CAL engine's v2 timing fit x[2] (rental 6's Pricer, regtile.pricer), as DIAGNOSIS-A2 knee.py's bytes_only term"
+  }
+ },
+ "byte_predictions_m3": [
+  {
+   "page": "mixtral-8x7b-128g1-n",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PT",
+   "arm": "native",
+   "q_pred": {
+    "v3": {
+     "w1": 2.471698,
+     "w2": 1.736052
+    },
+    "CLAMP": {
+     "w1": 2.471698,
+     "w2": 1.736052
+    }
+   },
+   "q_ideal": 1.0,
+   "occupancy": {
+    "w1": 2,
+    "w2": 2
+   },
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  },
+  {
+   "page": "mixtral-8x7b-128g1-n",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "PW",
+   "arm": "native",
+   "q_pred": {
+    "v3": {
+     "w1": 2.471688,
+     "w2": 1.639321
+    },
+    "CLAMP": {
+     "w1": 2.471688,
+     "w2": 1.639321
+    }
+   },
+   "q_ideal": 1.0,
+   "occupancy": {
+    "w1": 2,
+    "w2": 2
+   },
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  },
+  {
+   "page": "mixtral-8x7b-128g1-n",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "uniform",
+   "arm": "native",
+   "q_pred": {
+    "v3": {
+     "w1": 1.977194,
+     "w2": 1.423605
+    },
+    "CLAMP": {
+     "w1": 1.977194,
+     "w2": 1.423605
+    }
+   },
+   "q_ideal": 1.0,
+   "occupancy": {
+    "w1": 2,
+    "w2": 2
+   },
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  },
+  {
+   "page": "mixtral-8x7b-128g1-n",
+   "model": "mixtral-8x7b",
+   "tile": "128x128x64w8s3",
+   "G": 1,
+   "n": 2,
+   "label": "balanced",
+   "arm": "native",
+   "q_pred": {
+    "v3": {
+     "w1": 1.977194,
+     "w2": 1.423605
+    },
+    "CLAMP": {
+     "w1": 1.977194,
+     "w2": 1.423605
+    }
+   },
+   "q_ideal": 1.0,
+   "occupancy": {
+    "w1": 2,
+    "w2": 2
+   },
+   "occupancy_source": "DESIGN (shared-memory rule; the census replaces it)"
+  }
+ ],
+ "plan": {
+  "file": "scripts/plans/rentalS1-settle-2026-10.plan",
+  "sha256": "79891a29e424a6df2b7a4ee18025da1c881e44b9b5af03005d2f73fbf7b02f76",
+  "units_count": 14,
+  "units": [
+   {
+    "model": "-",
+    "step": "prelude",
+    "label": "",
+    "est": 2,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1410",
+     "power-limit-w": "900"
+    }
+   },
+   {
+    "model": "-",
+    "step": "powerproof",
+    "label": "pp",
+    "est": 3,
+    "cap": 10,
+    "drop": "nodrop",
+    "keys": {}
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "kr",
+    "est": 3,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json",
+     "arms": "native",
+     "byte-groups": "1"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "ar",
+    "est": 5,
+    "cap": 10,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json",
+     "arms": "native",
+     "byte-groups": "1",
+     "replay": "application"
+    }
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "step": "bytes",
+    "label": "kr",
+    "est": 3,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json",
+     "arms": "native",
+     "byte-groups": "1"
+    }
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "step": "bytes",
+    "label": "ar",
+    "est": 5,
+    "cap": 10,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json",
+     "arms": "native",
+     "byte-groups": "1",
+     "replay": "application"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "f1305",
+    "est": 3,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1305",
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "f1005",
+    "est": 4,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1005",
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "f1410",
+    "est": 3,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1410",
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "b128g1",
+    "est": 3,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json",
+     "arms": "native",
+     "byte-groups": "1"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "p128g16",
+    "est": 4,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "16",
+     "byte-treads": "3,4,8"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "p64g1",
+    "est": 2,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "64",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "1",
+     "byte-treads": "2"
+    }
+   },
+   {
+    "model": "qwen2-57b-a14b",
+    "step": "bytes",
+    "label": "st",
+    "est": 4,
+    "cap": 20,
+    "drop": "st",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json",
+     "arms": "native",
+     "byte-groups": "1",
+     "stall-metrics": "1"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "st",
+    "est": 3,
+    "cap": 20,
+    "drop": "st",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-n.json",
+     "arms": "native",
+     "byte-groups": "1",
+     "stall-metrics": "1"
+    }
+   }
+  ],
+  "est_total_min": 47,
+  "est_nodrop_min": 40,
+  "drop_order_last_first": [
+   "st"
+  ],
+  "boot_setup_min": 25,
+  "wall_min": 72,
+  "rate_usd_per_h": 2.29,
+  "cost_usd": 2.75,
+  "deadline_after_launch_min": 85,
+  "hard_cap_after_launch_min": 100,
+  "cost_at_hard_cap_usd": 3.82
+ },
+ "pages": {
+  "files": {
+   "olmoe-1b-7b-128g1-rp.json": {
+    "path": "docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json",
+    "sha256": "5263c9c0b091942a6d74bd99d4eca42d7b567346b0be3a6c9addf9be8c7b5100"
+   },
+   "qwen2-57b-a14b-128g1-rp.json": {
+    "path": "docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json",
+    "sha256": "105245eef5fa547db504f68d88358e03646d46f21bcab70ad98a3956407f59c2"
+   },
+   "mixtral-8x7b-128g1-n.json": {
+    "path": "docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json",
+    "sha256": "d3ab2b2f359eee6e065749d63d9698ae614222ab2313a599de5fecea89d084e1"
+   },
+   "qwen2-57b-a14b-128g1-n.json": {
+    "path": "docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json",
+    "sha256": "12ccbb624a9fdbd2822ce8e6ca9c1c912a4ec7cfca591e1c77be9891068b1dcd"
+   },
+   "olmoe-1b-7b-128g1-n.json": {
+    "path": "docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-n.json",
+    "sha256": "8239cf35f2be93f72d6c5ebf5263a1f67032dfb3575028865cb3578b909fc694"
+   }
+  }
+ },
+ "code_pins": {
+  "scripts/gh200_settleS1_session.sh": "341e1aa6aec2d6dccdbda389eda4219fc5846aaa721eee406f3471ff6e8f2f5e",
+  "scripts/dram_counter_route_s1.py": "53a040518a440b4310ddb227bc4adb4530335571a3ba0796be3d5cc9acb58e72",
+  "scripts/power_proof_s1.py": "8180d6bd4d6a448dfc5a5ed5092564ef2104ebad3c871f589cc30bf58ed35d14",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/settleS1/hist_s1.py": "4ddc33d4bb12245e73bfa51302cc5007bdb28656f99b7c8e2c07a6e87d1e8107",
+  "scripts/scoring/settleS1/read_s1.py": "6869544a9e6f624867d808604ae3e7d4eb4bad6b5563f1abf5cfc2f922763df8",
+  "scripts/scoring/settleS1/register_s1.py": "f72b5072e8cf2a32888c1da3909f1310a5dc5d87e11293540e01ab951cc62ed3"
+ }
+}

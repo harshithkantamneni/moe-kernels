@@ -1502,3 +1502,18 @@ A's and rental 7's `register.py --check` on theirs. No scorer or as-of fix was n
 moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Open defects, not fixed: the
 session record's two power readings; the driver's ledger text "at the 1710 lock" on units that ran at
 1410; G3's stratum-1 FAIL, which `score_e1cal.py` does not void (it voids only when every stratum fails).
+
+### The settle rental S1 (2026-10-21, DESCRIPTIVE)
+
+| file | registers |
+|---|---|
+| `2026-10-21-settleS1-gh200` | the five measurements DIAGNOSIS-A2's section Q7 could not settle, plus a power proof: M0 a sustained bf16 GEMM logging power.draw, enforced.power.limit and the SW power cap (which GPU limit holds); M1 kernel against application replay (no cache flush) on E1-CAL cells OLMoE n 1 PT, n 4 PT and Qwen2-57B n 2 PT; M2 the OLMoE f128 page at 1305 and 1005 MHz (and 1410 on the same board); M3 Mixtral 128 G 1 counted bytes against v4's frozen predictions; M4 PRIVATE-arm ladder pages (Mixtral 128 G 16 treads 3, 4, 8; 64x128 G 1 tread 2); M5 long-scoreboard and barrier stalls and tensor-pipe activity along x on the 128 G 1 byte cells. Per measurement the unit, quantity, reader function (`scripts/scoring/settleS1/read_s1.py`), reading bands and the candidate fix (F1 to F3) each reading constrains; histogram pages copied into `2026-10-21-settleS1-hist` |
+
+S1 certifies nothing and no model verdict is scored on its pages; every S1 page is SEEN for v5, whose blind test
+uses rental B2's new shapes (JetMoE, Phi-3.5, Qwen1.5). A2's 900 W limit and 1410 MHz session lock; the prelude now
+refuses unless `enforced.power.limit` and `nvidia-smi -q`'s GPU-scope Current Power Limit both read 900 W (A2's
+session-record defect); a refusal at 900 W reruns the same session at 700 W (owner, pre-authorised), and a
+refusal at 700 W stops it. Plan: `scripts/plans/rentalS1-settle-2026-10.plan`, 14 units, 47 min estimated (40
+nodrop), about 72 min wall ($2.75); drop order st only; deadline launch + 85 min, hard cap launch + 100 min. Driver:
+`scripts/gh200_settleS1_session.sh`, A2's pinned driver plus lines marked S1 (`tests/test_settleS1_plan.py`), which
+also names each unit's real lock in the ledger.
