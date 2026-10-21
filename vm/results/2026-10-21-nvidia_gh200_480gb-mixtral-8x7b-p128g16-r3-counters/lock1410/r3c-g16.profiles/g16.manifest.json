@@ -1,0 +1,197 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      8
+    ],
+    [
+      "shared",
+      3
+    ],
+    [
+      "shared",
+      4
+    ],
+    [
+      "shared",
+      8
+    ],
+    [
+      "private",
+      3
+    ],
+    [
+      "private",
+      4
+    ],
+    [
+      "private",
+      8
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 36,
+  "launch_count": 54,
+  "tokens": {
+    "3": 1536,
+    "4": 2048,
+    "8": 4096
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/3": "6dc4ba7ddc96fd34ecfdcaff475d52ee8e3bf4c62f8d4ffb7f72794ccff9f1d6",
+    "native/4": "3ee41ab32b8d84ea76e59388f45e21cd0aa6bbeaca900c8b1eeb9a8b8632ba84",
+    "native/8": "46ddb6da35444b6dbf820d526c3f09741277a0e6180a47ac23c686808d0a0978",
+    "shared/3": "d6510d4e3393d8fdd5553f6e5d28624dff58bad8ef5bf0b7fd9e39b75c107ee4",
+    "shared/4": "7bae1882a43836833683fc72c08fd9f34203a96296d8fb0706caa6401def1877",
+    "shared/8": "9ce8014ce655eb218b3337a039abe1a38ec76c137dd2398c0efec88ee2dbe564",
+    "private/3": "cfdda345d2354db060697c2648bca41c5e942d1c928cd11bfcb102f20c1d4614",
+    "private/4": "95ed9594c7870c6115a31e5e3a4b07c065dce580f1945b6911746d7331704f6c",
+    "private/8": "6db5c87b2640b295a056b851ccddc7eeae947184459eea701964619f12a0b01a"
+  },
+  "sorted_ids_len": {
+    "native/3": 4088,
+    "native/4": 5112,
+    "native/8": 9208,
+    "shared/3": 12216,
+    "shared/4": 13240,
+    "shared/8": 17336,
+    "private/3": 12216,
+    "private/4": 13240,
+    "private/8": 17336
+  },
+  "grids": {
+    "native/3": {
+      "w1": 7168,
+      "w2": 1024
+    },
+    "native/4": {
+      "w1": 8960,
+      "w2": 1280
+    },
+    "native/8": {
+      "w1": 16128,
+      "w2": 2304
+    },
+    "shared/3": {
+      "w1": 21504,
+      "w2": 3072
+    },
+    "shared/4": {
+      "w1": 23296,
+      "w2": 3328
+    },
+    "shared/8": {
+      "w1": 30464,
+      "w2": 4352
+    },
+    "private/3": {
+      "w1": 21504,
+      "w2": 3072
+    },
+    "private/4": {
+      "w1": 23296,
+      "w2": 3328
+    },
+    "private/8": {
+      "w1": 30464,
+      "w2": 4352
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g16/n3",
+    "r3/native/g16/n3",
+    "r3/native/g16/n3",
+    "r3/native/g16/n4",
+    "r3/native/g16/n4",
+    "r3/native/g16/n4",
+    "r3/native/g16/n8",
+    "r3/native/g16/n8",
+    "r3/native/g16/n8",
+    "r3/shared/g16/n3",
+    "r3/shared/g16/n3",
+    "r3/shared/g16/n3",
+    "r3/shared/g16/n4",
+    "r3/shared/g16/n4",
+    "r3/shared/g16/n4",
+    "r3/shared/g16/n8",
+    "r3/shared/g16/n8",
+    "r3/shared/g16/n8",
+    "r3/private/g16/n3",
+    "r3/private/g16/n3",
+    "r3/private/g16/n3",
+    "r3/private/g16/n4",
+    "r3/private/g16/n4",
+    "r3/private/g16/n4",
+    "r3/private/g16/n8",
+    "r3/private/g16/n8",
+    "r3/private/g16/n8"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 128
+  },
+  "proof": {
+    "parts": {
+      "addresses": true,
+      "sentinels": true,
+      "same_layer": true,
+      "kernel_read": true,
+      "shared_blind": true
+    },
+    "detail": {
+      "addresses": "9 copies x 8 experts span 25367150592 bytes against 25367150592 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+      "sentinels": "wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+      "same_layer": "private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)",
+      "kernel_read": "every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=8 (never read): zeroing it left both outputs unchanged=True; c=1: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=2: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=3: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=4: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=5: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=6: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=7: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True",
+      "shared_blind": "the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output"
+    },
+    "verdict": "PASS",
+    "tread": 8
+  },
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 838860800,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 27883732992,
+    "device_free_bytes": 100721164288,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 8
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "869d8ecd-f2b6-aec6-2943-9e6f1320e0ce"
+  }
+}
