@@ -1,6 +1,8 @@
 """scripts/scoring/rescore.py: the census scorers re-score the published tileA and tileA2 trees to the committed
 files under PYTHONHASHSEED=0 (score_census.py's occupancy key order follows the hash seed; the file is pinned), and
-the settle rental S1's registered reader re-reads its published session to the committed settleS1.read files."""
+the settle rental S1's registered reader re-reads its published session to the committed settleS1.read files, and the
+calibration rental C2's registered reader its own to the committed cal2.read files (where the knee round's frozen chain is
+on this machine: the reader refuses without it)."""
 from __future__ import annotations
 
 import importlib.util
@@ -34,6 +36,22 @@ def test_the_published_settleS1_session_rereads_to_the_committed_files(tmp_path)
     assert ran == [("scripts/scoring/settleS1/read_s1.py", 0)], ran
     rows = dict(RS.compare("settleS1", tmp_path))
     assert rows == {"settleS1.read.json": "EQUAL", "settleS1.read.txt": "EQUAL"}, rows
+
+
+_c2spec = importlib.util.spec_from_file_location("read_c2_for_rescore", REPO / "scripts" / "scoring" / "cal2" / "read_c2.py")
+_C2 = importlib.util.module_from_spec(_c2spec)
+_c2spec.loader.exec_module(_C2)
+HAVE_C2_CHAIN = all((_C2.WORK / f).is_file() for f in _C2.FROZEN_FILES) and \
+    (Path.home() / "moe-kernels-exfil/runs/gh200-tile2-20261020T2242Z/tree/vm/results").is_dir()
+
+
+@pytest.mark.skipif(not HAVE_C2_CHAIN, reason="the knee round's work folder or A2's exfil tree is not here")
+def test_the_published_cal2_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("cal2") == "results/published/2026-10-21-nvidia_gh200_480gb-cal2-session"
+    ran = RS.rescore("cal2", tmp_path)
+    assert ran == [("scripts/scoring/cal2/read_c2.py", 0)], ran
+    rows = dict(RS.compare("cal2", tmp_path))
+    assert rows == {"cal2.read.json": "EQUAL", "cal2.read.txt": "EQUAL"}, rows
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

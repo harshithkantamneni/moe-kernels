@@ -1554,3 +1554,26 @@ cap launch + 105 min ($4.01 at most). Driver:
 `scripts/gh200_cal2_session.sh`, S1's pinned driver plus lines marked C2 (`tests/test_cal2_plan.py`), which also
 fixes S1's open ledger defect: the unsettled power reading is written to `power-set-unsettled-<W>.txt` and the
 ledger names that file.
+
+**Read 2026-10-22** on `results/published/2026-10-21-nvidia_gh200_480gb-cal2-session` (board c3f52a, new; 10
+units at 09b340ce in about 31 minutes on 2026-10-21, none dropped, every unit and the driver exit 0; the reader's
+output in `scripts/scoring/cal2/cal2.read.{json,txt}`; no post-page fix). CALIBRATION: no verdict; every C2 page is
+now SEEN for v5'' and B3. **Board** valid: 700 W read back on both readings at the first poll (`C2_POWER_W=700`),
+`LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the primary left joint_cF None, as on A2); the
+commit check passed on 73 files and the fingerprint reproduces. **F1** on C2's board: par 41.59 us, tau 412.5 us
+(OLMoE 30.60 / 325, Mixtral-8x7B 52.58 / 500; A2's 42.02 / 425). **C2-R1**: X = +4.57% over all six NATIVE n 2
+cells (+4.08 to +5.26, none dropped; X over A2's four labels +4.37, X at A2's par +4.57); the four-model table
+OLMoE +0.13, Qwen2-57B -0.82, Mixtral-8x7B +3.13, Mixtral-8x22B +4.57 (spread 5.39); pass estimates A 0.0045, B
+0.0112, D 0.0049. **OUTCOME: REGIME** (X >= 2): the large-K, x near 1, G 1 miss is a regime or E 8 family property;
+B3 is not registered with v5''; the registered next step is a four-model refit with 8x22B SEEN, then a new
+held-out check. DESCRIPTIVE: **C2-S1** x w1 median 1.188, w2 1.071; **C2-S2** M4 over counted reads on 8x22B
+b128g1 w1 +0.05%, w2 +32.53% (worst +41.27%), the knee's cycles error on counted bytes w1 +1.99%, w2 +1.00%;
+**C2-S3** 8x22B's own sag 51.06 us (tau 475 us), C2's par 8.01 us under it on the mean; **C2-S4** SAME-AS-S1
+(Mixtral-8x7B w1 cycles +4.20% against S1's +5.42%; M4 w2 reads +22.28%, w1 -0.21%); **C2-S5** census COMPLETE (2
+CTAs per SM compiled and priced), triad 3725.87 GB/s inside the 15-rental range; **C2-S6** REPRODUCES (Mixtral-8x7B
++3.37% on C2's board against A2's +3.13; GEMMs +3.20% of time, per-call +0.17%). The 8x22B timed page stores G1 FAIL
+(clock drift on the uniform cell, 0 slipped repeats) and its R3 run exits 3 INVALID; the registered admission
+rebuilds G1 under r7-median-run3 from `cells.csv` and passes (0 of 108 repeat rows non-clean). The registration
+files are unchanged (`register_c2.py --check`); the reader re-reads the published copy to the same `.txt` and to
+JSON that differs only in the page path, and `scripts/scoring/rescore.py cal2` re-reads it to the committed files.
+Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).

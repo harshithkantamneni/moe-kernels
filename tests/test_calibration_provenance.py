@@ -463,6 +463,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-10-21-nvidia_gh200_480gb-tileA2-session": SESSION,
         # Settle rental S1 of 2026-10-21: one GH200, 14 units of one descriptive registration (the power proof, kernel against application replay, the sag at 1410, 1305 and 1005 MHz, byte, PRIVATE and stall pages).
         "2026-10-21-nvidia_gh200_480gb-settleS1-session": SESSION,
+        # Calibration rental C2 of 2026-10-21: one GH200, 10 units of one calibration registration (Mixtral-8x22B's 128x128 G 1 timed and byte pages, the sag estimator's two f128 pages, Mixtral-8x7B's 128 G 1 timed and byte pages).
+        "2026-10-21-nvidia_gh200_480gb-cal2-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

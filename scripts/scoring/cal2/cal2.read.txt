@@ -1,0 +1,35 @@
+C2 READING (2026-10-22-cal2-gh200): CALIBRATION: certifies nothing; every C2 page is SEEN once read
+  pages: results/published/2026-10-21-nvidia_gh200_480gb-cal2-session
+  commit: {"checked": true, "files": 73, "sha": "09b340ce60920d5d66c7a07019427cff3ba1b0f3"}
+  board: {"c2_power_env": "C2_POWER_W=700", "g_band": "PASS", "g_band_which": "fallback (registered: the primary band left joint_cF None)", "lock_probe": "LOCK_PROBE_1410=held", "valid": true, "why": ""}
+  fingerprint (v5'' at A2's par equals the registration): True
+  F1 (C2 board): {"A2 par": [42.02, 425.0], "A2 per_page": {"mixtral-8x7b": [54.39, 550.0], "olmoe-1b-7b": [29.65, 300.0]}, "par": [41.59, 412.5], "per_page": {"mixtral-8x7b": [52.58, 500.0], "olmoe-1b-7b": [30.6, 325.0]}}
+
+FOUR-MODEL HELD-OUT TABLE (128 G 1 means, %)
+  olmoe-1b-7b: {"held_out_128g1_mean_pct": 0.13, "source": "registered (knee-v5 sagtau.json, LOMO, v5'' + F1 par)"}
+  qwen2-57b-a14b: {"held_out_128g1_mean_pct": -0.82, "source": "registered (knee-v5 sagtau.json, LOMO, v5'' + F1 par)"}
+  mixtral-8x7b: {"held_out_128g1_mean_pct": 3.13, "source": "registered (knee-v5 sagtau.json, LOMO, v5'' + F1 par)"}
+  mixtral-8x22b: {"held_out_128g1_mean_pct": 4.57, "source": "C2-R1 (this reader)"}
+  max |mean|: 4.57
+  spread: 5.39
+
+C2-R1: X = 4.57 over 6 cells; dropped []; 
+  X4_pct (A2's labels PT, PW, uniform, balanced) (DESCRIPTIVE): 4.37
+  X_at_A2_par_pct (DESCRIPTIVE): 4.57
+  n 2 PT: meas 3.209984 ms, e +4.378%
+  n 2 PW: meas 3.719024 ms, e +4.082%
+  n 2 PT2: meas 3.832384 ms, e +4.680%
+  n 2 PW2: meas 3.344 ms, e +5.257%
+  n 2 uniform: meas 2.862048 ms, e +4.487%
+  n 2 balanced: meas 2.860928 ms, e +4.528%
+OUTCOME: REGIME: the large-K, x near 1, G 1 miss is a regime or E 8 family property (8x22B shares Mixtral-8x7B's E 8, top_k 2; Phi-3.5, E 16, only partly inherits it): B3 is not registered with v5''; the next step is a four-model refit (8x22B SEEN), then a new held-out check
+PASS ESTIMATES: {'A (4 models)': 0.0045, 'B (4 models)': 0.0112, 'D (O, Q, X; 8x7B G1 aside)': 0.0049}
+
+C2-S1 x: {"w1": {"max": 1.194, "median": 1.188, "min": 1.162}, "w2": {"max": 1.124, "median": 1.071, "min": 1.04}}
+C2-S2 8x22B b128g1: {"bytes_m4_over_counted": {"w1": {"mean_pct": 0.05, "n": 6, "rms_pct": 0.05, "worst_pct": 0.08}, "w2": {"mean_pct": 32.53, "n": 6, "rms_pct": 33.27, "worst_pct": 41.27}}, "rows": 12, "w1": {"K": 6144, "mean_pct": 1.99, "n": 6, "rms_pct": 2.01, "worst_pct": 2.4, "x_median": 1.187}, "w2": {"K": 16384, "mean_pct": 1.0, "n": 6, "rms_pct": 2.01, "worst_pct": 3.22, "x_median": 0.819}}
+C2-S3 8x22B sag: {"mean_err_us": -8.01, "n": 24, "own_fit_A_us": 51.06, "own_fit_tau_us": 475.0, "rms_us": 9.14}
+C2-S4 Mixtral-8x7B b128g1: {"A2 timed, same cells, held out (time domain)": 3.13, "C2 board": {"bytes_m4_over_counted": {"w1": {"mean_pct": -0.21, "n": 4, "rms_pct": 0.4, "worst_pct": -0.51}, "w2": {"mean_pct": 22.28, "n": 4, "rms_pct": 22.43, "worst_pct": 26.45}}, "rows": 8, "w1": {"K": 4096, "mean_pct": 4.2, "n": 4, "rms_pct": 4.2, "worst_pct": 4.32, "x_median": 1.151}, "w2": {"K": 14336, "mean_pct": -1.26, "n": 4, "rms_pct": 1.97, "worst_pct": -2.98, "x_median": 0.736}}, "S1 board (9da3c0)": {"bytes_m4_over_counted": {"w1": {"mean_pct": 0.1, "n": 4, "rms_pct": 0.27, "worst_pct": 0.52}, "w2": {"mean_pct": 20.32, "n": 4, "rms_pct": 20.34, "worst_pct": 21.75}}, "rows": 8, "w1": {"K": 4096, "mean_pct": 5.42, "n": 4, "rms_pct": 5.45, "worst_pct": 6.12, "x_median": 1.148}, "w2": {"K": 14336, "mean_pct": -0.94, "n": 4, "rms_pct": 1.45, "worst_pct": -2.06, "x_median": 0.75}}, "reading": "SAME-AS-S1"}
+C2-S6 Mixtral-8x7B t128g1: {"A2 held out": 3.13, "F1 (C2 OLMoE f128 alone)": [30.6, 325.0], "M_pct": 3.37, "held_out": {"X_pct": 3.37, "cells": [{"e_pct": 3.544, "label": "PT", "meas_ms": 2.078544, "n": 2}, {"e_pct": 3.389, "label": "PW", "meas_ms": 2.074256, "n": 2}, {"e_pct": 3.269, "label": "uniform", "meas_ms": 1.703664, "n": 2}, {"e_pct": 3.278, "label": "balanced", "meas_ms": 1.703504, "n": 2}], "dropped": [], "summ": {"mean_pct": 3.37, "n": 4, "rms_pct": 3.37, "worst_pct": 3.54}}, "p_128": 5.25, "reading": "REPRODUCES", "split (one board: C2's timed and byte pages)": {"cells": [{"gemm_err_ms": 0.058613, "gemm_pct_of_time": 2.82, "label": "PT", "meas_ms": 2.078544, "n": 2, "per_call_err_ms": 0.015049, "per_call_pct_of_time": 0.724, "time_err_ms": 0.073662, "time_pct": 3.544}, {"gemm_err_ms": 0.056783, "gemm_pct_of_time": 2.737, "label": "PW", "meas_ms": 2.074256, "n": 2, "per_call_err_ms": 0.013512, "per_call_pct_of_time": 0.651, "time_err_ms": 0.070295, "time_pct": 3.389}, {"gemm_err_ms": 0.062901, "gemm_pct_of_time": 3.692, "label": "balanced", "meas_ms": 1.703504, "n": 2, "per_call_err_ms": -0.007054, "per_call_pct_of_time": -0.414, "time_err_ms": 0.055848, "time_pct": 3.278}, {"gemm_err_ms": 0.0606, "gemm_pct_of_time": 3.557, "label": "uniform", "meas_ms": 1.703664, "n": 2, "per_call_err_ms": -0.004913, "per_call_pct_of_time": -0.288, "time_err_ms": 0.055688, "time_pct": 3.269}], "mean_gemm_pct_of_time": 3.2, "mean_per_call_pct_of_time": 0.17, "mean_time_pct": 3.37}}
+C2-S5 census: {"compiled": {"w1": 2, "w2": 2}, "priced": {"w1": 2, "w2": 2}, "same": true, "verdict": "COMPLETE"}
+C2-S5 triad: {"A2_gbps": 3726.2, "C2_gbps": 3725.8724915840835, "inside_range": true, "range_15_rentals_gbps": [3725.6, 3727.6]}
+chain_repo: {"modules_checked": 54, "path": "/Users/harshithkantamneni/code/moe-kernels"}

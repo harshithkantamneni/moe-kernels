@@ -2460,6 +2460,109 @@ w2 bytes 21% high; PRIVATE's excess at 128x128 G 16 is mostly activation re-read
 900 W limit was most likely not in force. Not established: what holds the GPU at 700 W, whether 900 W would hold
 1710 MHz, and whether the knee is latency or synchronisation.
 
+## Calibration rental C2 (2026-10-21): CALIBRATION, no verdict; REGIME: Mixtral-8x22B's held-out 128 G 1 mean is +4.57% under the frozen v5'', so the large-K G 1 miss is not Mixtral-8x7B's alone and B3 is not registered with v5''
+
+One Lambda GH200 480GB (instance 70d96347, us-east-3, 18:42:47Z to 19:19:24Z on 2026-10-21; board `c3f52a`,
+new to the study) ran `scripts/plans/rentalC2-cal-2026-10.plan` unattended through
+`scripts/gh200_cal2_session.sh` at 09b340ce. 10 units ran in about 31 minutes (18:48:03Z to 19:18:43Z) against
+48 estimated; none was dropped and every unit and the driver exit 0. The registration
+(`docs/registered/2026-10-22-cal2-gh200`), its reader `scripts/scoring/cal2/read_c2.py`, the 8x22B histogram page
+and the plan were committed before any page (2366efcf); one reader fix followed before the rental (09b340ce, the
+run commit). Published at `results/published/2026-10-21-nvidia_gh200_480gb-cal2-session`. Every reading is the
+pinned reader's output, `scripts/scoring/cal2/cal2.read.{json,txt}`. No post-page fix.
+
+**What C2 registered.** C2 is a CALIBRATION rental: it certifies nothing, scores no verdict, and every C2 page
+is SEEN for model v5'' and for B3 (the blind test of v5'' on rental B2's frozen pages of Phi-3.5-MoE,
+Qwen1.5-MoE-A2.7B and JetMoE-8B) once read. v5'' and its averaged-fit sag estimator ("par") were developed
+offline after settle rental S1 (moe-kernels-work 2026-10-21 design-v5, 2026-10-22 diag-v5 and knee-v5; none of
+it is in this repository) and FROZEN at the registration: every work file by sha256, the constants by value (the
+null knee form at the carried bw 3597.8 GB/s, p_128 5.75 fitted on the three CAL models' 118 NATIVE 128x128
+counter rows, M4 bytes with the v3 key, F4 rho x 2, R3's 1410 sag share 6.11 us, 50 us in T0), and a six-cell
+fingerprint the reader must reproduce at A2's board sag. The reader also refuses unless the rental's own commit
+holds the registration, the reader, the driver and every repo module the chain loads, each at its registered
+sha256. The question (knee-v5 section 8, the owner's option (b)): the three CAL models' held-out 128 G 1 means
+under v5'' are OLMoE +0.13%, Qwen2-57B -0.82% and Mixtral-8x7B +3.13%; is Mixtral-8x7B's +3.13 isolated, or does
+a fourth model in the same large-K, x near 1, G 1 regime miss too? Mixtral-8x22B (E 8, top-k 2, like 8x7B) had
+no page at 128x128 before C2, so its fold is held out. The bands, registered before any page, on X (8x22B's
+held-out 128 G 1 mean): CLEAN |X| <= 1 (8x7B's miss reads isolated; B3 may be registered with v5'' as frozen),
+PARTIAL 1 < X < 2 (the owner decides), REGIME X >= 2 (a regime or E 8 family property; B3 is not registered with
+v5''; the next step is a four-model refit with 8x22B SEEN, then a new held-out check), OPPOSITE X < -1, NOT READ if
+the board or the page fails its validity clause. The secondary readings C2-S1 to C2-S6 are DESCRIPTIVE and
+change no band.
+
+**What ran.** C2-P: the prelude (700 W, read back on both readings, else stop; the 1410 MHz lock probe, else
+stop), calibrate's ruler, and the tile census of 8x22B at 128x128x64 w8 s3. C2-F: the OLMoE and Mixtral-8x7B
+f128 counter pages (G 64, treads 1 to 9) that the sag estimator is fitted on, on this board, then A2's G-BAND.
+C2-T: 8x22B's timed page at 128x128 w8 s3 G 1 (n 2, the only tread whose vLLM default config is that tile for
+E 8, top-k 2; six labels PT, PW, PT2, PW2, uniform, balanced; NATIVE and SHARED; E1-CAL's instrument, 9
+declared copies, slip-policy cell, r7-median-run3). C2-B: 8x22B's byte page on the same cells. C2-MT and C2-M
+(owner, 2026-10-22): Mixtral-8x7B's timed and byte pages on A2's four E1-CAL 128 G 1 cells, the A2-type byte
+page A2 never ran.
+
+**What C2 read.**
+
+| reading | outcome | numbers | file |
+|---|---|---|---|
+| board | valid | 700 W on enforced.power.limit and the `-q` GPU scope at the first poll; lock 1410 held; G-BAND PASS on the fallback band [1352.19, 1410] MHz (primary [1374.75, 1410] left joint_cF None: 1 and 7 of 27 cells in band); triad 3725.87 GB/s, inside the 15-rental range 3725.6 to 3727.6; commit check 73 files at 09b340ce; fingerprint reproduces | `session/power-set.txt`, `session/gh200-driver/{c2-power,locks}.env`, `session/gh200-driver/gate-band-1410.json` |
+| F1 on C2's board (C2-S5) | par 41.59 us, tau 412.5 us | OLMoE f128 30.60 us (325 us), Mixtral-8x7B f128 52.58 us (500 us); A2's board 29.65 / 300 and 54.39 / 550, par 42.02 / 425 | the two `f128` pages |
+| **C2-R1** | **X = +4.57%, REGIME** | six NATIVE n 2 cells, none dropped: PT +4.38, PW +4.08, PT2 +4.68, PW2 +5.26, uniform +4.49, balanced +4.53 | `results/gaps-nvidia_gh200_480gb-mixtral-8x22b-t128g1/` |
+| beside X | X4 +4.37%; X at A2's par +4.57% | X over A2's four labels (PT, PW, uniform, balanced); X priced with A2's board sag | the same page |
+| the four-model table | spread 5.39 points | OLMoE +0.13, Qwen2-57B -0.82, Mixtral-8x7B +3.13 (registered, unchanged), Mixtral-8x22B +4.57 | `cal2.read.json` "table" |
+| pass estimates, P(E1-TILE holds) on B2's 84 cells | | A (four models, common bias) 0.0045; B (no common bias, RMS) 0.0112; D (OLMoE, Qwen2-57B and X) 0.0049 | `cal2.read.json` "pass_estimates" |
+| C2-S1: 8x22B's x per GEMM on its timed cells (M4 bytes) | | w1 median 1.188 (1.162 to 1.194), w2 median 1.071 (1.040 to 1.124); registered expectation w1 1.16 to 1.19, w2 0.97 to 1.07 | the timed page |
+| C2-S2: 8x22B b128g1 | w1 bytes exact, w2 bytes high | M4 over counted reads: w1 +0.05% (worst +0.08%), w2 +32.53% (worst +41.27%), 6 cells; the knee's cycles error on counted bytes: w1 +1.99%, w2 +1.00% | `results/2026-10-21-nvidia_gh200_480gb-mixtral-8x22b-b128g1-r3-counters/` |
+| C2-S3: 8x22B's own sag | | own fit A 51.06 us, tau 475 us; C2's par minus the measured off: mean -8.01 us, rms 9.14 us over 24 GEMMs | the same page |
+| C2-S4: Mixtral-8x7B b128g1 on C2's board | SAME-AS-S1 | knee cycles error w1 +4.20% (S1's board 9da3c0: +5.42%), w2 -1.26% (-0.94%); M4 over counted reads w1 -0.21%, w2 +22.28% (worst +26.45%), 4 cells | `results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-b128g1-r3-counters/` |
+| C2-S5: census | COMPLETE | 8x22B at 128x128 compiles 2 CTAs per SM on w1 and w2, the occupancy v5'' prices | `results/2026-10-21-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tc2/` |
+| C2-S6: Mixtral-8x7B timed on C2's board | REPRODUCES | held-out 128 G 1 mean +3.37% (A2's board +3.13%; cells PT +3.54, PW +3.39, uniform +3.27, balanced +3.28); split on one board: GEMMs +3.20% of time, per-call +0.17% | `results/gaps-nvidia_gh200_480gb-mixtral-8x7b-t128g1m/` |
+
+**What it shows.** Measured: under v5'' frozen before the page, Mixtral-8x22B's held-out 128x128 G 1 time is
+over-predicted by 4.57% on the mean, and every one of its six cells is over by 4.08 to 5.26%. That is past the
+registered REGIME bar (2.0) and larger than Mixtral-8x7B's +3.13. By the registration, the large-K, x near 1,
+G 1 miss is a regime or E 8 family property and not an isolated Mixtral-8x7B outlier; B3 is not registered with
+v5'', and the registered next step is a four-model refit with 8x22B SEEN, then a new held-out check. Under each of
+the three registered estimates (A, B and D), v5'' as frozen holds E1-TILE on B2's cells with probability under
+0.012. C2's board sag does not move X: priced with A2's board sag instead of C2's, X is the same +4.57 (C2's par,
+41.59 us, is within 0.5 us of A2's 42.02). Mixtral-8x7B's miss reproduces on a second board: +3.37% on C2's
+board against +3.13% on A2's, and its w1 cycles error is +4.20% here against +5.42% on S1's board.
+
+**What it does not show.**
+
+- **Regime or E 8 family is not separated.** 8x22B shares 8x7B's E 8 and top-k 2 as well as its regime, so C2
+  cannot say whether the miss follows the shape (large K, x near 1, G 1) or the E 8 family. No registered
+  reading separates them; the registration places Phi-3.5 (E 16) in the regime, only partly inheriting the
+  family.
+- **The w2 byte over-prediction is a LEAD, not a demonstrated cause.** On the same six cells M4 predicts 32.5%
+  more w2 bytes than were counted (8x22B), as it does 22.3% more on 8x7B (+20.32% on S1's board page), while w1 is right
+  to 0.05% and 0.21%. On counted bytes the knee's cycles error on 8x22B is w1 +1.99% and w2 +1.00%, smaller than
+  X; the timed pricing uses M4's bytes, and w2's x on those bytes (median 1.071, C2-S1) against 0.819 on counted
+  bytes (C2-S2) is the byte ratio. Whether the w2 byte excess carries the time miss is not read by any registered
+  reading: the GEMM against per-call split was registered for Mixtral-8x7B only, and there (C2-S6) the GEMMs on
+  counted bytes carry +3.20 of the +3.37 points, which on 8x7B points at the knee on correct bytes rather than at
+  the bytes (INFERENCE from two readings on one board; not tested).
+- **The sag reading is not a correction.** C2's averaged estimator runs 8.01 us under 8x22B's own measured sag
+  on the mean (own fit 51.06 us, tau 475 us). An under-predicted sag makes the model faster, not slower, so it
+  does not explain a positive X; no reading prices 8x22B with its own sag.
+- **No fix is tested.** C2 fits nothing and changes no constant. The four-model refit is the next step by the
+  registration, not something C2 ran.
+
+**Instrument.** Both timed pages read their registered histogram files (sha256 on the page) and run at the 1410
+lock with 0 slipped repeats. The 8x22B page stores G1 lock-thermal FAIL (clock drift listed on the uniform
+cell, NATIVE and SHARED), so its R3 run exits 3 INVALID; the registered admission (`tcommon.timed_page`) does not
+read the stored G1 and rebuilds it under r7-median-run3 from `cells.csv`: PASS, 0 of 108 repeat rows non-clean
+(Mixtral-8x7B's: PASS, 0 of 72). The run branch's 297 files match its SHA256SUMS; the 9 `cuda_utils*.so` are left
+out, as before. Read twice, on the fetched tree and on the published copy, the reader's `.txt` and JSON differ
+only in the page path. `register_c2.py --check` reads `same` on both registration files.
+`scripts/scoring/rescore.py cal2` re-reads the published session to the committed files. The 4 counter pages
+re-gate PASS under `lock_gate` at 1410; the two f128 pages store V10 PASS and the two G 1 histogram byte pages
+none, so `tests/test_lock_gate.py` moves to 189 pages and 102 changed verdicts.
+
+**What the paper can claim, after calibration rental C2.** Measured, on board c3f52a at a 700 W enforced limit
+and a 1410 MHz lock: v5'', frozen before the page, over-predicts Mixtral-8x22B's 128x128 G 1 time by 4.57%
+(six cells, +4.08 to +5.26%) and Mixtral-8x7B's by 3.37% (A2's board: 3.13%); M4 over-predicts the w2 bytes of
+both at 128 G 1 (+32.5% and +22.3%) and gets w1 right. Not established: whether the miss is the regime's or the
+E 8 family's, and whether the w2 byte excess causes any of it.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

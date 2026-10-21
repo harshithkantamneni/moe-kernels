@@ -1,0 +1,46 @@
+2026-10-21T18:44:56Z setup_vm.sh start: commit 09b340ce60920d5d66c7a07019427cff3ba1b0f3 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-21T20:12:47Z
+2026-10-21T18:48:01Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 15da706 to run-gh200-tile2-20261021t1842: setup_vm.sh: READY
+2026-10-21T18:48:02Z driver start: commit 09b340ce60920d5d66c7a07019427cff3ba1b0f3, steps of the plan scripts/plans/rentalC2-cal-2026-10.plan, deadline 2026-10-21T20:12:47Z (76 min of work left)
+2026-10-21T18:48:03Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalC2-cal-2026-10.plan (sha256 3ebcff1cd3214acf2bda2ef6e93f434e572ebb8e4f3ea69f3dee0f741a013699), 10 units
+2026-10-21T18:48:03Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/10 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 76 min left)
+2026-10-21T18:48:05Z prelude END: exit 0 after 0 min [unit 1/10 - lock-mhz=1410 power-limit-w=700]
+2026-10-21T18:48:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 469f193 to run-gh200-tile2-20261021t1842: prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-10-21T18:48:07Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/10 mixtral-8x7b tc2] (estimate 1 min, cap 30 min, 76 min left)
+2026-10-21T18:48:32Z calibrate END: exit 0 after 0 min [unit 2/10 mixtral-8x7b tc2]
+2026-10-21T18:48:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ea2fca4 to run-gh200-tile2-20261021t1842: calibrate (unit 2/10 mixtral-8x7b tc2): exit 0 (0 min)
+2026-10-21T18:48:34Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on mixtral-8x22b; refused on an MMA path mismatch [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b] (estimate 1 min, cap 15 min, 76 min left)
+2026-10-21T18:48:43Z tilecensus END: exit 0 after 0 min [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b]
+2026-10-21T18:48:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4aa272a to run-gh200-tile2-20261021t1842: tilecensus (unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b): exit 0 (0 min)
+2026-10-21T18:48:45Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 4/10 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 76 min left)
+2026-10-21T18:51:57Z bytes END: exit 0 after 3 min [unit 4/10 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-21T18:51:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 766e5e4 to run-gh200-tile2-20261021t1842: bytes (unit 4/10 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T18:51:59Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 5/10 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 72 min left)
+2026-10-21T18:58:57Z bytes END: exit 0 after 7 min [unit 5/10 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-10-21T18:58:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed cd6fa0d to run-gh200-tile2-20261021t1842: bytes (unit 5/10 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-10-21T18:58:59Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL ends the rental (tileA2-gates) [unit 6/10 - gband gate=band] (estimate 1 min, cap 5 min, 65 min left)
+2026-10-21T18:59:00Z gate END: exit 0 after 0 min [unit 6/10 - gband gate=band]
+2026-10-21T18:59:01Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 8f296e8 to run-gh200-tile2-20261021t1842: gate (unit 6/10 - gband gate=band): exit 0 (0 min)
+2026-10-21T18:59:02Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 35 min, 65 min left)
+2026-10-21T19:06:20Z timed END: exit 0 after 7 min [unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-21T19:06:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6decc65 to run-gh200-tile2-20261021t1842: timed (unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
+2026-10-21T19:06:23Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 8/10 mixtral-8x22b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1] (estimate 6 min, cap 25 min, 58 min left)
+2026-10-21T19:11:27Z bytes END: exit 0 after 5 min [unit 8/10 mixtral-8x22b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1]
+2026-10-21T19:11:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 14ad27b to run-gh200-tile2-20261021t1842: bytes (unit 8/10 mixtral-8x22b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1): exit 0 (5 min)
+2026-10-21T19:11:29Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 9/10 mixtral-8x7b t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 20 min, 53 min left)
+2026-10-21T19:16:28Z timed END: exit 0 after 5 min [unit 9/10 mixtral-8x7b t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-21T19:16:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f344013 to run-gh200-tile2-20261021t1842: timed (unit 9/10 mixtral-8x7b t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
+2026-10-21T19:16:30Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 10/10 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1] (estimate 6 min, cap 20 min, 48 min left)
+2026-10-21T19:18:43Z bytes END: exit 0 after 2 min [unit 10/10 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1]
+2026-10-21T19:18:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c59853f to run-gh200-tile2-20261021t1842: bytes (unit 10/10 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1): exit 0 (2 min)
+2026-10-21T19:18:45Z driver end: exit 0

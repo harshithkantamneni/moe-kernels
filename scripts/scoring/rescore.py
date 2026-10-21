@@ -3,8 +3,8 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2 or settleS1. Each registered scorer runs in a subprocess, in the stage's registered
-order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
+<stage> is tileA, tileA2, settleS1 or cal2. Each registered scorer runs in a subprocess, in the stage's
+registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
 instead of in the file; the committed tileA and tileA2 score files were written with PYTHONHASHSEED=0.
@@ -12,6 +12,11 @@ instead of in the file; the committed tileA and tileA2 score files were written 
 settleS1 is descriptive: its one registered reader (scripts/scoring/settleS1/read_s1.py, pinned by the
 2026-10-21-settleS1-gh200 registration) reads the whole published session (results/ and session/, for the
 power read-backs), and its files are settleS1.read.json and settleS1.read.txt.
+
+cal2 is the calibration rental C2: its one registered reader (scripts/scoring/cal2/read_c2.py, pinned by the
+2026-10-22-cal2-gh200 registration) reads the whole published session too, takes it as --c2 and its output
+directory as --out-dir, and writes cal2.read.json and cal2.read.txt. It imports the knee round's frozen chain
+from ~/code/moe-kernels-work and refuses unless every frozen file and the run's commit check (its docstring).
 
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
@@ -40,11 +45,15 @@ STAGES = {
                 for s in ("session", "probe", "census", "floor", "bytes", "rep", "dead", "e1cal", "convl")]),
     "settleS1": ("2026-10-21-nvidia_gh200_480gb-settleS1-session", "scripts/scoring/settleS1",
                  ["scripts/scoring/settleS1/read_s1.py"]),
+    "cal2": ("2026-10-21-nvidia_gh200_480gb-cal2-session", "scripts/scoring/cal2",
+             ["scripts/scoring/cal2/read_c2.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
-TREE = {"settleS1": ""}
+TREE = {"settleS1": "", "cal2": ""}
 #: the files each stage's scorers write (default: *.score.*)
-OUTPUTS = {"settleS1": "settleS1.read.*"}
+OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*"}
+#: the command-line each stage's scorers take after the script (default: the repo, the tree, the output directory)
+ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out]}
 
 
 def tree_of(stage: str) -> str:
@@ -66,7 +75,8 @@ def rescore(stage: str, out: Path, only: list[str] | None = None) -> list[tuple[
     for s in scorers:
         if only and not any(o in Path(s).name for o in only):
             continue
-        rc = subprocess.run([sys.executable, s, ".", tree, str(out)], cwd=REPO, env=scorer_env(),
+        args = ARGV[stage](tree, str(out)) if stage in ARGV else [".", tree, str(out)]
+        rc = subprocess.run([sys.executable, s, *args], cwd=REPO, env=scorer_env(),
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True).returncode
         ran.append((s, rc))
     return ran
