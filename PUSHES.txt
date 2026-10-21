@@ -10,3 +10,4 @@
 2026-10-21T18:59:01Z gate (unit 6/10 - gband gate=band): exit 0 (0 min)
 2026-10-21T19:06:21Z timed (unit 7/10 mixtral-8x22b t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
 2026-10-21T19:11:19Z bytes: G=1 page exit 0
+2026-10-21T19:11:28Z bytes (unit 8/10 mixtral-8x22b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1): exit 0 (5 min)
