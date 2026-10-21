@@ -1538,3 +1538,19 @@ and to JSON that differs only in page paths, and `scripts/scoring/rescore.py set
 committed files. Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).
 Open defect, not fixed: the prelude's log names `power-set-unsettled.txt` for the file
 `power-set-unsettled-900.txt`.
+
+### The calibration rental C2 (2026-10-22, CALIBRATION)
+
+| file | registers |
+|---|---|
+| `2026-10-22-cal2-gh200` | Mixtral-8x22B as a fourth held-out CAL model in the large-K, x near 1, G 1 regime (knee-v5 section 8, the owner's option (b) of 2026-10-22): C2-T its 128x128 w8 s3 G 1 timed page (n 2, six cells, NATIVE and SHARED) and C2-B its byte page; C2-F the averaged-fit sag estimator's two pages on C2's board (OLMoE and Mixtral-8x7B f128) and G-BAND; C2-M the A2-type Mixtral-8x7B b128g1 byte page on A2's E1-CAL cells and C2-MT its timed page (owner, 2026-10-22; DESCRIPTIVE C2-S6: Mixtral's held-out mean on C2's board beside +3.13 and the GEMM against per-call split on one board). The primary reading C2-R1 (8x22B's held-out 128 G 1 mean X under v5'' and F1 par, `scripts/scoring/cal2/read_c2.py`), the four-model table beside the three registered CAL means (+0.13, -0.82, +3.13), the pass estimates A, B and D (power5's method, ported), the bands CLEAN (abs X <= 1), PARTIAL, REGIME (X >= 2, a regime or E 8 family property), OPPOSITE (X < -1) and what each means for B3 (CLEAN changes which estimate is credible, D over A; A stays under 0.09 at every X); v5'' and the sag estimator FROZEN (every work file by sha256, constants by value, a six-cell fingerprint the reader must reproduce) and tied to the rental's commit (the reader refuses unless that commit holds the registration, the reader, the driver and every repo module the chain imports, each at its registered sha256); histogram page drawn into `2026-10-22-cal2-hist` by `scripts/scoring/cal2/hist_c2.py` |
+
+C2 certifies nothing; every C2 page becomes SEEN for v5'' and B3 once read, and no cell of B3's blind models runs.
+700 W set and read back as S1 does (no fallback: S1's publication showed `-pl 900 -sc 0` leaves the enforced limit at
+700 W), the session lock 1410 MHz probed in the prelude (a lock that does not read back stops the session) and
+G-BAND after the f128 pages. Plan: `scripts/plans/rentalC2-cal-2026-10.plan`, 10 units, 48 min estimated (37
+nodrop), about 73 min wall ($2.79); drop order m7 only (the two Mixtral-8x7B pages); deadline launch + 90 min, hard
+cap launch + 105 min ($4.01 at most). Driver:
+`scripts/gh200_cal2_session.sh`, S1's pinned driver plus lines marked C2 (`tests/test_cal2_plan.py`), which also
+fixes S1's open ledger defect: the unsettled power reading is written to `power-set-unsettled-<W>.txt` and the
+ledger names that file.

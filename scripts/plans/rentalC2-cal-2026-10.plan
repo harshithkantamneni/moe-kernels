@@ -1,0 +1,44 @@
+# THE CALIBRATION RENTAL C2 (2026-10-22): Mixtral-8x22B as a fourth held-out CAL model in the large-K, x near 1,
+# G 1 regime where blind Phi-3.5 sits, before rental B3 is registered (the owner's option (b) of 2026-10-22, after
+# the knee round knee-v5 failed its gate: Mixtral-8x7B's 128x128 G 1 held-out mean +3.13% under v5''). One
+# gpu_1x_gh200 at $2.29/h, run by C2's driver (S1's pinned driver plus lines marked C2):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 90 min, epoch s> \
+#     --plan scripts/plans/rentalC2-cal-2026-10.plan --driver gh200_cal2_session.sh
+# Registration (before any page): docs/registered/2026-10-22-cal2-gh200.{txt,json}. C2 certifies nothing; every C2
+# page is SEEN for v5'' and B3 once read; v5'' and the averaged-fit sag estimator are frozen by the registration.
+# Power and lock: 700 W, set and read back as S1 does (enforced.power.limit and the -q GPU-scope limit both at 700 W
+# within 1 W, else the session stops; S1's publication: -pl 900 -sc 0 leaves the enforced limit at 700 W). The session
+# lock 1410 MHz (A2's and S1's rung): the prelude locks it, reads it back and stops when it does not hold; A2's G-BAND
+# gate after the two f128 pages stops the session when their counter clocks under load leave the registered band.
+# Units (registration 'units'):
+#   C2-P   the prelude: power read-back, the 1410 lock probe; calibrate (the ruler the timed unit needs, A2's);
+#          the tile census of 8x22B at 128x128 (compile only: its occupancy, DESCRIPTIVE)
+#   C2-F   the sag estimator's pages on this board: OLMoE f128 and Mixtral-8x7B f128 (128x128 G 64, treads 1-9, three
+#          arms), then G-BAND
+#   C2-T   Mixtral-8x22B 128x128 w8 s3 G 1 timed, NATIVE and SHARED, n 2, six cells (the fourth held-out model)
+#   C2-B   its byte page, the same file
+#   C2-MT  Mixtral-8x7B 128x128 G 1 timed on A2's E1-CAL cell set, NATIVE and SHARED (owner, 2026-10-22; DESCRIPTIVE,
+#          C2-S6: its held-out mean on this board beside A2's +3.13, and with C2-M the GEMM against per-call split)
+#   C2-M   Mixtral-8x7B 128x128 G 1 byte page on the same cells (the file A2's timed page ran), NATIVE and SHARED
+# Line order is the priority. The driver drops the LAST unit first; a drop-group goes together. Drop order: m7 only
+# (C2-MT and C2-M together).
+# nodrop: every unit but C2-MT and C2-M.
+# MINUTES: 48 of units estimated (37 nodrop): A2's actual minutes for the f128 pages (3 and 7), the census and
+# calibrate (0 each, 1 here) and the Mixtral timed page (5), knee-v5 section 5's for the 8x22B pages (16 and 6, an
+# INFERENCE: 8x22B has no 128x128 page anywhere) and the Mixtral byte page (6; A2's 8-row byte pages ran 2 to 5).
+# Wall with about 25 min of boot, driver upgrade and setup: about 73 min ($2.79 at $2.29/h). Deadline launch + 90 min
+# (57 min of units after 25 of boot and the driver's 8 min reserve: m7 is not dropped at the start); guardian hard
+# cap launch + 105 min ($4.01 at most).
+- prelude lock-mhz=1410 power-limit-w=700 est=2 cap=15
+mixtral-8x7b calibrate label=tc2 nodrop=1 est=1 cap=30
+- tilecensus label=tc2 tiles=128x128x64w8s3 models=mixtral-8x22b nodrop=1 est=1 cap=15
+# C2-F: the sag estimator's pages on this board, then the lock band under load
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=gband gate=band nodrop=1 est=1 cap=5
+# C2-T and C2-B: Mixtral-8x22B 128x128 G 1, timed then counted
+mixtral-8x22b timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=16 cap=35
+mixtral-8x22b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=6 cap=25
+# C2-MT and C2-M: Mixtral-8x7B 128x128 G 1 on A2's E1-CAL cells, timed then counted (drop-group m7)
+mixtral-8x7b timed label=t128g1m block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 drop-group=m7 est=5 cap=20
+mixtral-8x7b bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared byte-groups=1 drop-group=m7 est=6 cap=20

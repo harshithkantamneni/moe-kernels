@@ -194,8 +194,10 @@ def test_the_lambda_stop_instruction_and_vm_run_name_the_s1_driver():
     for other in (r"[g]h200_(model|tile)_session.sh", r"[g]h200_tileA2_session.sh", r"[g]h200_decode_session.sh"):
         assert not re.search(other, "gh200_settleS1_session.sh")
     vm = (REPO / "scripts" / "vm_run.sh").read_text()
-    assert "SESSION_DRIVERS=(gh200_model_session.sh gh200_tile_session.sh gh200_decode_session.sh gh200_tileA2_session.sh gh200_settleS1_session.sh)" in vm
-    assert "|gh200_settleS1_session.sh]" in vm.splitlines()[5]
+    drivers = re.search(r"^SESSION_DRIVERS=\(([^)]*)\)$", vm, re.M).group(1).split()
+    assert drivers[:5] == ["gh200_model_session.sh", "gh200_tile_session.sh", "gh200_decode_session.sh", "gh200_tileA2_session.sh",
+                           "gh200_settleS1_session.sh"]
+    assert "|gh200_settleS1_session.sh" in vm.splitlines()[5]
 
 
 # --------------------------------------------------------------------------

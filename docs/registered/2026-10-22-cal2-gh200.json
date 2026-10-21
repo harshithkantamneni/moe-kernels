@@ -1,0 +1,674 @@
+{
+ "registered": "2026-10-22, before any C2 page",
+ "name": "2026-10-22-cal2-gh200",
+ "status": "CALIBRATION: C2 certifies nothing and scores no verdict; every C2 page becomes SEEN for v5'' and B3 once read. The bands below say what the fourth held-out model means for the B3 decision; the decision is the owner's",
+ "design": "moe-kernels-work 2026-10-22 knee-v5/KNEE.md (offline, read-only over the repo at 6dfa9e35), section 8 and section 5's units; the owner's option (b) of 2026-10-22: one short calibration rental adding Mixtral-8x22B as a fourth held-out CAL model in the large-K, x near 1, G 1 regime (where blind Phi-3.5 sits) plus the missing A2-type Mixtral-8x7B b128g1 byte page, before B3 is registered. v5'' is design-v5's v5 (moe-kernels-work 2026-10-21 design-v5/DESIGN.md) as revised by diag-v5 (2026-10-22 diag-v5/DIAGNOSIS.md), with knee-v5's recommended F1 estimator 'par'",
+ "tool": "scripts/gh200_cal2_session.sh (S1's pinned driver plus lines marked C2), scripts/tileA2_gate.py band (A2's G-BAND), scripts/tile_census_a2.py (the census), scripts/scoring/cal2/hist_c2.py (the 8x22B page), scripts/scoring/cal2/read_c2.py (the reader)",
+ "seen": "Every C2 page is SEEN for v5'' and B3 once read: Mixtral-8x22B joins OLMoE-1B-7B, Mixtral-8x7B and Qwen2-57B-A14B as a CAL model, and any later fit that uses it (a four-model refit) is SEEN-FITTED on it. C2 runs no cell of B3's blind models (Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B; rental B2's frozen pages, docs/registered/2026-10-20-tileB2-e1tile-gh200) and no 8x22B cell exists at 128x128 or 64x128 before C2 (knee-v5 section 8: every 8x22B page is at R3's tile, BLOCK_M 32, 1710 MHz). OD13 kept: no time is priced against rental A's 1710 E1-CAL pages",
+ "frozen": {
+  "statement": "v5'' and the averaged-fit sag estimator are FROZEN as of this registration. The reader refuses unless every file below has its sha256 and v5'' at A2's board sag reproduces the fingerprint to 6 decimals; no constant below is refitted, re-chosen or re-read from a C2 page before C2-R1 is read. A change made after C2's pages are seen is SEEN-FITTED on 8x22B and is disclosed as such. THE FREEZE IS TIED TO THE RENTAL'S COMMIT: read_c2.read takes the commit from the ledger's 'driver start: commit <sha>' line (gh200-driver/status, checked against session/commit.txt) and refuses unless git show <sha>:<path> equals the working copy for the registration JSON and text, the 8x22B page, the Mixtral page, the plan and every code_pins path (read_c2.py, the driver and the repo modules the chain imports among them), every code_pins path has its registered sha256, and every repo module the chain loads from the repo it runs (diag-A2 common.REPO) is a code_pins path with its registered bytes there",
+  "chain_repo_modules": [
+   "moe/__init__.py",
+   "moe/baselines/__init__.py",
+   "moe/baselines/_framework_config.py",
+   "moe/bench/__init__.py",
+   "moe/bench/ai_model.py",
+   "moe/bench/calibrate.py",
+   "moe/bench/counter_probe_kernel.py",
+   "moe/bench/exit_codes.py",
+   "moe/bench/provenance.py",
+   "moe/bench/published.py",
+   "moe/bench/roofline.py",
+   "moe/bench/schema.py",
+   "moe/bench/timing.py",
+   "moe/bench/weights.py",
+   "moe/pipeline.py",
+   "moe/quant.py",
+   "moe/routing/__init__.py",
+   "moe/routing/distributions.py",
+   "moe/spec.py",
+   "moe/stages.py",
+   "moe/state.py",
+   "scripts/atile_pooled_fit.py",
+   "scripts/block_m_crossing_sweep.py",
+   "scripts/clock_elasticity.py",
+   "scripts/cores_heldout_predict.py",
+   "scripts/cross_model_predict.py",
+   "scripts/dram_counter_route.py",
+   "scripts/lock_gate.py",
+   "scripts/per_tile_model_fit.py",
+   "scripts/private_weight_reference.py",
+   "scripts/r3_timing_model.py",
+   "scripts/r3_timing_model_v3.py",
+   "scripts/r3_timing_model_v4.py",
+   "scripts/r3_timing_model_v4L.py",
+   "scripts/ruler_rebaseline.py",
+   "scripts/scoring/rental2/common.py",
+   "scripts/scoring/rental3/r3common.py",
+   "scripts/scoring/rental4/r4common.py",
+   "scripts/scoring/rental5/r5common.py",
+   "scripts/scoring/rental5/skewmodel.py",
+   "scripts/scoring/rental6/r6common.py",
+   "scripts/scoring/rental6/r6model.py",
+   "scripts/scoring/rental6/reg6.py",
+   "scripts/scoring/rental7/r7common.py",
+   "scripts/scoring/tileA/finalise.py",
+   "scripts/scoring/tileA/power_tile.py",
+   "scripts/scoring/tileA/regtile.py",
+   "scripts/scoring/tileA/tcommon.py",
+   "scripts/scoring/tileA2/a2common.py",
+   "scripts/skew_synth.py",
+   "scripts/skew_synth_tile.py",
+   "scripts/wave_split_bytes.py",
+   "scripts/wave_split_bytes_v3.py",
+   "scripts/wave_split_bytes_v4.py"
+  ],
+  "root": "~/code/moe-kernels-work (paths below relative to it); the chain imports the repo at ~/code/moe-kernels",
+  "files": {
+   "2026-10-20/scoreA2/bytes.score.json": "f90eeebb98c0445e01c08277a1137ead3c67601e71aa5859ed886b2d9c6e2c13",
+   "2026-10-20/scoreA2/census.score.json": "736ebb7ff3005323801513c4aecadb0b3173f5c5d6379f1c9e09189524ff0436",
+   "2026-10-20/scoreA2/floor.score.json": "f313f46c6c34cab5d618545fb96034ee0383b8a71c91ca193620f5dd631e8689",
+   "2026-10-20/scoreA2/rep.score.json": "9c09c8b48640684f40ecd2bc6d87d72597c3789c022848694539e863d2db9733",
+   "2026-10-21/diag-A2/work/common.py": "f4ac72d293fb2fbd71704397ae7a8b4b7de8bf339d0c1cc82a7d2333d4cb0921",
+   "2026-10-21/design-v5/work/v5price.py": "ff2565f18fbd81a5a8dbc650bdfbb1fffffde60a421fc2f755b60dfe89d3191a",
+   "2026-10-21/design-v5/work/kneefit.py": "df0b63145411ce5fddb0b4044c7ba1661949bb73f71062e0f88b453d448c9a35",
+   "2026-10-21/design-v5/work/sag.py": "a7261341ff39885384821632a1930279c10b3aed33605043a94a0fb7083f10e0",
+   "2026-10-21/design-v5/work/b2risk.py": "dad0d98c787736823d23336b0124b4dda6e0f0da70d7812fdef0d99171e97435",
+   "2026-10-21/design-v5/work/f3fit.json": "1a1fad978a7d9473f4851cb71aa26e0cdfc2004445280fdd8e4f198f64e44552",
+   "2026-10-21/design-v5/work/kneefit.json": "43ac3b0cba2db4a00d66a60da8669cbd33266d9fb93fb846e15f981fcecb8e53",
+   "2026-10-21/design-v5/work/kneefit64.json": "51b38850fa075e23e8711572ab90340e35c73b73f5fa32bfd77633e475d614bf",
+   "2026-10-22/diag-v5/work/d5.py": "09e86b88d56834f8055e3e0639697563d6fe571b2fe2c542bae398d33f27e12a",
+   "2026-10-22/diag-v5/work/bw.py": "d112e8a15d83f6e893177e595dd368a7a263e7f17e2d2eb64184f951a4bf91dd",
+   "2026-10-22/diag-v5/work/knee2.py": "86e21ee57e57c2a3cb92adc6f728f40a74a2ec9a254f6bd8f31c44afa7a952f8",
+   "2026-10-22/diag-v5/work/v5prime.py": "95aa801c8257b36bd4c255aa34f58ae4406ea3af3e4e1c066f2eb6403d71d8e4",
+   "2026-10-22/diag-v5/work/bytes_lomo.json": "cc51368d9a14a68100b22a3ccd9f0f3dbc2f9257060c4b7a684b6729edddc1aa",
+   "2026-10-22/diag-v5/work/power5.py": "682bce8597c1fa03c011d85188d7d32d49ee98908fdc26d0c080bf0ab1e5bb45",
+   "2026-10-22/knee-v5/work/k5.py": "02e06a689ecec4e492deac6c911f6a8fe107c152144850c517a6a8c894b80435",
+   "2026-10-22/knee-v5/work/sagtau.py": "e37711298b69ec72f8e9b49d0420c8ce814a3fb807b3435c0163186f0e7626b7",
+   "2026-10-22/knee-v5/work/sagtau.json": "df54ed4007964643152150e785f50d9e261fe94d40910dfed9511e39168f23e8",
+   "2026-10-22/knee-v5/work/x22.json": "3f1fb64928215458dd25795173926f07071a238631174c13b91095b99eb2a32f"
+  },
+  "constants": {
+   "knee form": "null (v5''), the carried bw 3597.8 GB/s (the CAL engine's v2 fit x[2], SEEN-FITTED, CARRIED)",
+   "p_128": 5.75,
+   "p_64": 3.75,
+   "p_128 source": "knee-v5 forms.json \"v5'' (null, carried bw)\" SEEN constants: the fit on all three CAL models' 118 NATIVE 128x128 counter rows (A2 and S1); 8x22B is in none, so p_128 5.75 IS its held-out fold",
+   "bytes": "M4 registered at 128x128, v3 key (k5.F3_M4: diag-v5 bytes_lomo.json 'none (SEEN)' 'M4')",
+   "F4": "rho x 2 at both tiles",
+   "T0, c, bw": "43.23 us, 202.548 ns, 3597.8 GB/s, as v4 (asserted at import by d5.py and k5.py)",
+   "R3's 1410 sag share in T0": [
+    6.11,
+    50.0
+   ],
+   "F1 estimator": "'par' (knee-v5 sagtau.py estimators): per estimator page one (A, tau) by sagtau.fit (design-v5/work/sag.py fit: tau on 50 to 4975 us step 25, A least squares, A rounded to 0.01 us) over sag.pts_of(page, 1410) (off = t_ncu - cycles / 1410 per GEMM), then A and tau averaged; the Sc form A (1 - exp(-t / tau)) on each GEMM's floor-only time",
+   "F1 pages": "C2's OLMoE f128 and Mixtral-8x7B f128 (C2-F), both: 8x22B has no estimator page to drop",
+   "A2 board F1 (the fingerprint's)": {
+    "per_page": {
+     "olmoe-1b-7b": [
+      29.65,
+      300.0
+     ],
+     "mixtral-8x7b": [
+      54.39,
+      550.0
+     ]
+    },
+    "par": [
+     42.02,
+     425.0
+    ]
+   },
+   "selections": "A2's (moe-kernels-work 2026-10-20 scoreA2 via finalise.selections; occupancy every model's)",
+   "scoring rules": "a2common.Rules.tileA2(1410)"
+  },
+  "fingerprint_cells": [
+   "n2/PT",
+   "n2/PW",
+   "n2/PT2",
+   "n2/PW2",
+   "n2/uniform",
+   "n2/balanced"
+  ],
+  "fingerprint_ms_at_A2_par": [
+   3.350691,
+   3.87106,
+   4.011952,
+   3.519966,
+   2.990583,
+   2.990583
+  ],
+  "v4_ms (the drop rule's prediction)": [
+   3.150474,
+   3.641673,
+   3.779816,
+   3.323797,
+   2.80369,
+   2.80369
+  ]
+ },
+ "power_and_lock": {
+  "power_limit_w": 700,
+  "rule": "the plan prelude's power-limit-w 700: the pre-setup dry run and the prelude refuse a card whose power.max_limit is under it (A2's P-W); nvidia-smi -pl 700 -sc 0, then S1's read-back: poll every 2 s, up to 30 s, until --query-gpu=enforced.power.limit and nvidia-smi -q -d POWER's GPU-scope Current Power Limit both read 700 W within 1 W (power-set.txt), else the session STOPS (c2-power.env C2_POWER_700=refused, the last reading in power-set-unsettled-700.txt, which the ledger names). No fallback limit. 900 W is not attempted: in S1's publication -pl 900 -sc 0 left the enforced GPU limit at 700 W, and S1 and (most likely) A2 ran at 700 W, so 700 W keeps C2 comparable with both",
+  "session_lock_mhz": 1410,
+  "lock_rule": "every unit but calibrate and the census runs under nvidia-smi -lgc 1410 with ncu --clock-control none (A2's and S1's rung; v5'' is fitted there)",
+  "probe": "A2's lock-hold probe in its cheapest form: (1) the prelude locks 1410, reads clocks.sm back (lock_and_check, two tries), resets, records LOCK_PROBE_1410=held, and STOPS the session when it does not read back (S1's prelude probe, made a stop); (2) A2's G-BAND (tileA2_gate.py band, score_floor_a2.choose_band) after the two f128 pages: joint_cF over them in the counter band at 1410 (primary [0.975 L, L], else the registered fallback [0.959 L, L]) is not None, else the session ends there. A2's timed probe pages (27 min on A2) are not run"
+ },
+ "units": {
+  "C2-P": {
+   "units": [
+    "- prelude",
+    "mixtral-8x7b calibrate tc2",
+    "- tilecensus tc2"
+   ],
+   "for": "the power read-back and the lock probe (the reading's validity); calibrate's ruler, which the timed unit hands R3 (A2's); 8x22B's compiled occupancy at 128x128 (C2-S5, DESCRIPTIVE)"
+  },
+  "C2-F": {
+   "units": [
+    "olmoe-1b-7b bytes f128",
+    "mixtral-8x7b bytes f128",
+    "- gate gband"
+   ],
+   "for": "the averaged-fit sag estimator's two pages ON C2'S BOARD, so 8x22B's cells are priced as B3 will price blind cells (per-page fits averaged, MEASURED-ON-BOARD); then G-BAND",
+   "cells": "128x128x64 w8 s3, G 64, treads 1 to 9, NATIVE, SHARED and PRIVATE (A2's f128 pages)"
+  },
+  "C2-T": {
+   "units": [
+    "mixtral-8x22b timed t128g1"
+   ],
+   "for": "C2-R1: Mixtral-8x22B's held-out 128 G 1 time, the fourth held-out model",
+   "cells": "docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json: n 2 (the only tread whose vLLM default config is 128x128x64 w8 s3 G 1 for E 8, top_k 2), PT, PW, PT2, PW2, uniform, balanced, NATIVE and SHARED; E1-CAL's instrument (R3 through r3_tile.py, 9 declared copies, slip-policy cell, r7-median-run3)"
+  },
+  "C2-B": {
+   "units": [
+    "mixtral-8x22b bytes b128g1"
+   ],
+   "for": "C2-S2 and C2-S3: 8x22B's counted bytes, cycles and sag on the same cells",
+   "cells": "the same file, A2's byte-page instrument at 1410"
+  },
+  "C2-MT": {
+   "units": [
+    "mixtral-8x7b timed t128g1m"
+   ],
+   "for": "C2-S6 (owner, 2026-10-22; DESCRIPTIVE, changes no band): Mixtral-8x7B's held-out 128 G 1 mean on C2's board beside A2's +3.13, and with C2-M the GEMM against per-call split on one board; drop-group m7 with C2-M",
+   "cells": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json (A2's E1-CAL Mixtral 128 G 1 cells), NATIVE and SHARED, NATIVE scored; E1-CAL's instrument"
+  },
+  "C2-M": {
+   "units": [
+    "mixtral-8x7b bytes b128g1"
+   ],
+   "for": "C2-S4 and C2-S6's split: the A2-type Mixtral-8x7B 128 G 1 byte page (A2 ran none): is S1's b128g1 page (board 9da3c0, the only one, +5.42% w1 cycles under v5'') the outlier, or the model?",
+   "cells": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json (the file A2's E1-CAL Mixtral 128 G 1 timed page ran), NATIVE and SHARED"
+  }
+ },
+ "readings": {
+  "C2-R1": {
+   "what": "X, Mixtral-8x22B's held-out 128 G 1 mean, percent; e = T_model / T_meas - 1 per cell",
+   "read_by": "scripts/scoring/cal2/read_c2.py read (timed_rows, sag_fits, held_out)",
+   "method": "the knee round's held-out method (knee-v5/work/forms.py main, LOMO block, and sagtau.py main, 'par'): cells by v5price.e1cal_rows' loop (tcommon.timed_page at G 1 with the registered file entry below: G5 provenance, the r7-median-run3 rebuild, the ALL view; tcommon.row_drop against v4's ms); each kept NATIVE cell priced by knee-v5/work/k5.py cell_ms(r, None, 5.75, (A, tau) par of C2-F, None); X = v5prime.summ(...)['model_class_means']['mixtral-8x22b 128g1'] (k5.summ)",
+   "table": "read_c2.heldout_table: the three CAL models' registered LOMO held-out 128 G 1 means under v5'' + F1 par (knee-v5/work/sagtau.json e1[\"v5'' (null, carried)\"][\"par\"][\"LOMO 128g1\"]: {\"olmoe-1b-7b\": 0.13, \"qwen2-57b-a14b\": -0.82, \"mixtral-8x7b\": 3.13}), unchanged by C2 (no C2 page enters their folds), and X",
+   "pass_estimate": "read_c2.pass_estimates(X): diag-v5/work/power5.py power (ported verbatim as read_c2.power; it reproduces x22.json's twelve bounds bit for bit, asserted here) on B2's 84 registered NATIVE cells, R 200,000, seed 20261022, as knee-v5/work/x22.py: A = power(b_class the mean of the four b = -ln(1 + e), sd their SD), B = power(0, their RMS), D = power(the mean of OLMoE, Qwen2-57B and X, their SD)",
+   "beside X (DESCRIPTIVE)": "X4: X over A2's four labels (PT, PW, uniform, balanced; uniform and balanced have the same counts, so the six-cell X weights the balanced routing twice); X at A2's par (42.02 us, 425 us): X less this separates C2's board sag from the model's error",
+   "refusals": "read_c2.read refuses (no reading at all) on a frozen work file, the rental's commit, a code_pins sha256, a chain repo module, or the fingerprint (FROZEN above); the timed page is NOT SCORED unless tcommon.timed_page admits it and its report records lock_mhz 1410",
+   "validity": "the reading is NOT READ unless the board reads valid (c2-power.env C2_POWER_W=700, LOCK_PROBE_1410=held, G-BAND PASS), both C2-F pages give a fit, the C2-T page is admitted, and at least 4 of its 6 NATIVE cells are kept",
+   "bands": {
+    "CLEAN": "|X| <= 1",
+    "PARTIAL": "1 < X < 2",
+    "REGIME": "X >= 2",
+    "OPPOSITE": "X < -1",
+    "NOT READ": "the validity clause fails"
+   },
+   "means_for_B3": {
+    "CLEAN": "Mixtral-8x7B's G 1 miss reads as isolated: B3 may be registered with v5'' and the averaged-fit sag estimator as frozen here, the estimate D disclosed beside A. The four-model A stays at or under 0.09 at every X (0.086 at X 0): CLEAN changes which estimate is credible (D over A), not A",
+    "PARTIAL": "between the bounds: neither going blind nor a refit is indicated by this reading; the owner decides with A, B and D at X",
+    "REGIME": "the large-K, x near 1, G 1 miss is a regime or E 8 family property (8x22B shares Mixtral-8x7B's E 8, top_k 2; Phi-3.5, E 16, only partly inherits it): B3 is not registered with v5''; the next step is a four-model refit (8x22B SEEN), then a new held-out check",
+    "OPPOSITE": "8x22B misses the other way: the 128 G 1 error is model-specific in both directions; A and B apply, not D; the owner decides (go blind, refit, or neither)",
+    "NOT READ": "no fourth held-out model: the B3 decision stands where knee-v5 left it (option (a) or (b) again)"
+   },
+   "bounds (knee-v5 section 8; the estimates at X, v5'' + F1 par held fixed)": {
+    "X +0.00": {
+     "A (4 models)": 0.0857,
+     "B (4 models)": 0.1494,
+     "D (O, Q, X; 8x7B G1 aside)": 0.8307
+    },
+    "X +1.00": {
+     "A (4 models)": 0.0701,
+     "B (4 models)": 0.1262,
+     "D (O, Q, X; 8x7B G1 aside)": 0.565
+    },
+    "X +1.60": {
+     "A (4 models)": 0.0517,
+     "B (4 models)": 0.0978,
+     "D (O, Q, X; 8x7B G1 aside)": 0.3026
+    },
+    "X +3.13": {
+     "A (4 models)": 0.0162,
+     "B (4 models)": 0.0356,
+     "D (O, Q, X; 8x7B G1 aside)": 0.0361
+    }
+   },
+   "why these cuts": "CLEAN changes which estimate is credible (D over A), not A: the four-model A stays at or under 0.09 at every X. 1.0 is the gate's own bar on a held-out mean (knee-v5 section 5) and the X at which D is 0.565; 2.0 is two thirds of Mixtral-8x7B's +3.13, past which D falls under 0.3 (0.303 at +1.60): the miss is mostly reproduced. Below -1.0 the miss changes sign"
+  },
+  "C2-S1": {
+   "what": "8x22B's x (bytes-only / floor-only) per GEMM on its kept cells (knee-v5 x22.py's xs)",
+   "read_by": "scripts/scoring/cal2/read_c2.py x_of_rows",
+   "expected (x22, INFERENCE)": "w1 1.16 to 1.19, w2 0.97 to 1.07 on Mixtral-8x7B's cells with the model swapped"
+  },
+  "C2-S2": {
+   "what": "8x22B b128g1: M4 (v3 key) reads over counted dram_bytes_read - 1, and the cycles-domain error of the v5'' knee (null, carried bw, p 5.75) per GEMM, NATIVE cells",
+   "read_by": "scripts/scoring/cal2/read_c2.py counter_reading (k5.capture_rows, k5.eval_rows, v5price.f3_reads)"
+  },
+  "C2-S3": {
+   "what": "8x22B's own sag on its b128g1 page: C2's par estimator minus the measured off, us; its own fit",
+   "read_by": "scripts/scoring/cal2/read_c2.py sag_domain"
+  },
+  "C2-S4": {
+   "what": "Mixtral-8x7B b128g1 (A2 cells): the cycles-domain error at p 5.75 per GEMM on C2's board beside S1's b128g1 page (+5.42% w1, -0.94% w2 in knee-v5 forms.json) and A2's held-out time +3.13% on the same cells",
+   "read_by": "scripts/scoring/cal2/read_c2.py counter_reading",
+   "reading": "DESCRIPTIVE (read_c2.s4_reading on the w1 means, points, S1's w1 +5.42): SAME-AS-S1 when |C2 - S1| <= 2 (the G 1 counter behaviour is Mixtral-8x7B's on two boards, not a board outlier); BOARD-SPECIFIC when |C2| <= 2 (S1's page was its board's); BETWEEN only strictly between those two (0 and S1's, each widened by 2); BEYOND-S1 past S1's; OPPOSITE past 0 on the far side. None changes C2-R1"
+  },
+  "C2-S6": {
+   "what": "Mixtral-8x7B t128g1m on C2's board (A2's E1-CAL cells, NATIVE): its held-out 128 G 1 mean M in the fold A2's +3.13 was read in (p_128 5.25, forms.json's Mixtral LOMO fold; F1 from C2's OLMoE f128 page alone, sagtau's Mixtral fold), beside +3.13; and the split on one board, cell by cell with C2-M: the time error (ms) of that pricing, the GEMMs' error (ms) on C2-M's cycles at the same p (k5.capture_rows, the null form, counted bytes, no sag on either side), and their difference, the per-call part (T0, other, the sag); M4's bytes against the counted reads beside it",
+   "read_by": "scripts/scoring/cal2/read_c2.py timed_rows, held_out, split",
+   "reading": "DESCRIPTIVE (read_c2.s6_reading on M, percent): REPRODUCES when |M - 3.13| <= 1 (X and the three CAL means compare across boards for this class); BOARD when |M| <= 1 (boards move this class by about 3 points, far past B2's 0.26% board term: B3's estimate falls in every reading, and X minus M is the within-board contrast to read); BETWEEN strictly between the two; ABOVE past +3.13; OPPOSITE past 0 on the far side. It changes no band"
+  },
+  "C2-S5": {
+   "what": "the board: C2's per-page (A, tau) beside A2's, the power read-back, the lock probe, G-BAND; 8x22B's compiled CTAs per SM at 128x128 beside the 2 per SM v5'' prices (a difference is reported, the frozen pricing is not changed)",
+   "read_by": "scripts/scoring/cal2/read_c2.py board, census, triad",
+   "also": "which G-BAND band passed (primary or fallback; A2 passed on the fallback); calibrate's triad ruler beside A2's 3726.2 GB/s (15 rentals 3725.6 to 3727.6)"
+  }
+ },
+ "plan": {
+  "file": "scripts/plans/rentalC2-cal-2026-10.plan",
+  "sha256": "3ebcff1cd3214acf2bda2ef6e93f434e572ebb8e4f3ea69f3dee0f741a013699",
+  "units_count": 10,
+  "units": [
+   {
+    "model": "-",
+    "step": "prelude",
+    "label": "",
+    "est": 2,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1410",
+     "power-limit-w": "700"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "calibrate",
+    "label": "tc2",
+    "est": 1,
+    "cap": 30,
+    "drop": "nodrop",
+    "keys": {}
+   },
+   {
+    "model": "-",
+    "step": "tilecensus",
+    "label": "tc2",
+    "est": 1,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "tiles": "128x128x64w8s3",
+     "models": "mixtral-8x22b"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "f128",
+    "est": 3,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "f128",
+    "est": 7,
+    "cap": 25,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "-",
+    "step": "gate",
+    "label": "gband",
+    "est": 1,
+    "cap": 5,
+    "drop": "nodrop",
+    "keys": {
+     "gate": "band"
+    }
+   },
+   {
+    "model": "mixtral-8x22b",
+    "step": "timed",
+    "label": "t128g1",
+    "est": 16,
+    "cap": 35,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json",
+     "arms": "native,shared",
+     "declared-copies": "9",
+     "timed-groups": "1",
+     "slip-policy": "cell",
+     "g1-rule": "r7-median-run3"
+    }
+   },
+   {
+    "model": "mixtral-8x22b",
+    "step": "bytes",
+    "label": "b128g1",
+    "est": 6,
+    "cap": 25,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json",
+     "arms": "native,shared",
+     "byte-groups": "1"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "timed",
+    "label": "t128g1m",
+    "est": 5,
+    "cap": 20,
+    "drop": "m7",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json",
+     "arms": "native,shared",
+     "declared-copies": "9",
+     "timed-groups": "1",
+     "slip-policy": "cell",
+     "g1-rule": "r7-median-run3"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "b128g1",
+    "est": 6,
+    "cap": 20,
+    "drop": "m7",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json",
+     "arms": "native,shared",
+     "byte-groups": "1"
+    }
+   }
+  ],
+  "est_total_min": 48,
+  "est_nodrop_min": 37,
+  "drop_order_last_first": [
+   "m7"
+  ],
+  "boot_setup_min": 25,
+  "wall_min": 73,
+  "rate_usd_per_h": 2.29,
+  "cost_usd": 2.79,
+  "deadline_after_launch_min": 90,
+  "hard_cap_after_launch_min": 105,
+  "cost_at_hard_cap_usd": 4.01
+ },
+ "pages": {
+  "files": {
+   "mixtral-8x22b-128g1.json": {
+    "path": "docs/registered/2026-10-22-cal2-hist/mixtral-8x22b-128g1.json",
+    "sha256": "b5d6e34a5afd4fc6ba906707758b199a2c5555a49290bf7512fd5a1749c924ad",
+    "shuffle_seed": 20261440,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "model": "mixtral-8x22b",
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "0a59797323261f5d92e153ad1c8032e1a83b4a0034820d321abcdc2d3a3981ea",
+      "seed": 20278460,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "224b94ae664a7d1064a922b0f88b6a8dd6dd2d278b15f5dc97dd43bdf91ca143",
+      "seed": 20278461,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PT2",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "a7b998b345ef3c2c4f4c0673c96be77ece5bc430cac328cf5c40531f97f28b5b",
+      "seed": 20278462,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW2",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "8abfb2c4450fb2bf1876f2582ff8e4cfdb5968c76dca82e44a3b4b8c5a9cc763",
+      "seed": 20278463,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   },
+   "mixtral-8x7b-128g1.json": {
+    "path": "docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json",
+    "sha256": "bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3",
+    "shuffle_seed": 20261410,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "model": "mixtral-8x7b",
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "e36cf7f919bfa97a600ff25997583883927983146371e1e805eb19d0973d4f3d",
+      "seed": 20271430,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "41924e3fa6e3db0fa9ee8ec2a5426de85da46b4bc989b7958e44bb16254d718f",
+      "seed": 20271431,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "generator": "scripts/scoring/cal2/hist_c2.py (mixtral-8x22b-128g1)"
+ },
+ "code_pins": {
+  "scripts/gh200_cal2_session.sh": "18f5bf2759c572b5f154525cad31d52771df415e98eb978a5a50609269eb8c46",
+  "scripts/gh200_settleS1_session.sh": "341e1aa6aec2d6dccdbda389eda4219fc5846aaa721eee406f3471ff6e8f2f5e",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/calibrate_hardware.py": "c7d9246a8e5f676527c5d2997354c34f383e5c26305df9c90e4298d3af3a44aa",
+  "scripts/scoring/cal2/hist_c2.py": "cba8b7ce7cdceb416b9dd65524a543a4bd123e1e7e4a76d69c8dcfad18f47d6d",
+  "scripts/scoring/cal2/read_c2.py": "cfa6fdbd2457928546831c3e81bbeca56a7551d25a6206fa024099c059b1a703",
+  "scripts/scoring/cal2/register_c2.py": "40e0f35f3dc3b4b413dfdf1251cf0869bec666fa1d4637bf3a597198838d3fae",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305",
+  "moe/__init__.py": "a7cb786129ce60d6981c407d974be1dda25c663af886a0a8892e7cf15a925042",
+  "moe/baselines/__init__.py": "85e49644e5a0c59f6f9efe8684ff84326db902d0ba22957eb9cf48503e1b756e",
+  "moe/baselines/_framework_config.py": "1ddb47f222fa58fe90f1ad97ec95d6debcb43c192e398b036aad54a6b4ddfe5a",
+  "moe/bench/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/bench/ai_model.py": "f915d94133c669249fba3628893effa9f2079cf2e297572240ca152e458eb027",
+  "moe/bench/calibrate.py": "b2bb7193b20bd9ab458f3c8055f0902ee27c19b913bfbbd64f2037d5f9172007",
+  "moe/bench/counter_probe_kernel.py": "da59ca206e4cfc9c8bd5f1ab704961167ba858ac0edc2fe673a8fd6adaf2036d",
+  "moe/bench/exit_codes.py": "89c2a3dab3bef3e418e696b263a53b3362e1c2bc416d9809a1f4858e0bdcdd55",
+  "moe/bench/provenance.py": "777a450890ccbca0e16d2d0418940d6f90908c4f878c26479caecca51bae4285",
+  "moe/bench/published.py": "5e08a6ac0b9b45f63c90200045e88c6a380a0c36b0a58974ede1de481764472c",
+  "moe/bench/roofline.py": "301ae87c8a11e34f100f0b258e458d762a0af22cd9a675925be617448731910a",
+  "moe/bench/schema.py": "7fb29c5467f1a897bc2d5bfedf67f3454b6ae954b8d71bb1e465f440214c8cac",
+  "moe/bench/timing.py": "264b580cb0f38b7b5c09aabee9ced0f41f1787edd3e81c22d55dac1044a0c155",
+  "moe/bench/weights.py": "c54b2e714d39eb530e47dd34a184c304b8dcc3f3ca15d3e53de7c52a38d1e58e",
+  "moe/pipeline.py": "c54b6c27b74486fa103bc46cb9302ce1b00f335bffd2f61fde29c3b4ad432b93",
+  "moe/quant.py": "e4f31b990fdc548ca89688e455ea9e2e7919ebfcaac6e0ca699846b4750354c5",
+  "moe/routing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/routing/distributions.py": "253476cf178f90cbf2042ee0bbed66d16ed030b3319e478948b996419d631cbf",
+  "moe/spec.py": "58fb9b7fe2fdbd82867e0ab789cfc02bc03705c01722f9cfa0769c40bf6f87de",
+  "moe/stages.py": "38d254d30ded31f50ee682b85d6d68ce81c2b6985c6a7f4189735637a9d86f05",
+  "moe/state.py": "aad96b311d39ae7687870762a85ca4f5cbe7052d09e7abe7fef8fc514d71f8d4",
+  "scripts/atile_pooled_fit.py": "943b2e55a4e78b015e26617b10e5623e2e07209c000b1d6b013166f2ef183588",
+  "scripts/block_m_crossing_sweep.py": "54eaffb89a342723b8c214f188273710c1f53891639fd4b3496bccd317f4aaef",
+  "scripts/clock_elasticity.py": "193ae94b9207e6c84a05eda43b484790f902e9db546901e211b2fe85146c0b69",
+  "scripts/cores_heldout_predict.py": "e37c003c372363c1e20610c2df67ec7b675a768a426e1016baab71209198b46e",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/per_tile_model_fit.py": "1b25fed30ab783e02e9dae3d54ef2d26e248ecd519003bc739c55beaaa5e0230",
+  "scripts/ruler_rebaseline.py": "1b500afa4cec57fb31d8ef1d40bcdcb554369c9093939cf5bd5e3133adc75d55",
+  "scripts/scoring/rental2/common.py": "dd8a1b890f342168f76dd01ec1c31a583f09fcfd1dc764265a634d72d475b453",
+  "scripts/scoring/rental4/r4common.py": "f2cb03333cce44470855b0633292af135084b755352e10e0334d09a94ff37665",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11"
+ }
+}

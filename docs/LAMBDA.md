@@ -650,8 +650,9 @@ the VM: `pkill -TERM -f '[g]h200_(model|tile)_session.sh'` (an extended regex th
 stops the pinned driver and the tile stage's copy; each layer resets the clock,
 then the driver pushes and exits 143); the decode stage's copy (2026-10-14) stops with
 `pkill -TERM -f '[g]h200_decode_session.sh'`, tile rental A2's copy (2026-10-20) with
-`pkill -TERM -f '[g]h200_tileA2_session.sh'`, and the settle rental S1's copy (2026-10-21) with
-`pkill -TERM -f '[g]h200_settleS1_session.sh'`. To resume at a step:
+`pkill -TERM -f '[g]h200_tileA2_session.sh'`, the settle rental S1's copy (2026-10-21) with
+`pkill -TERM -f '[g]h200_settleS1_session.sh'`, and the calibration rental C2's copy (2026-10-22) with
+`pkill -TERM -f '[g]h200_cal2_session.sh'`. To resume at a step:
 `bash ~/moe/repo/scripts/gh200_model_session.sh --from <step> --deadline <epoch s>`;
 a rerun takes a fresh session tag (`...b`), since locked_r3.py refuses one
 already used.
