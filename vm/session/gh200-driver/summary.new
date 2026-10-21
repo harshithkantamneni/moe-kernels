@@ -1,1 +1,2 @@
 prelude    exit 0 after 1 min [unit 1/14 - lock-mhz=1410 power-limit-w=900]
+powerproof exit 0 after 2 min [unit 2/14 - pp]

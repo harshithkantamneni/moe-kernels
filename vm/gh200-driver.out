@@ -6,3 +6,7 @@
 2026-10-21T07:08:08Z prelude START: 3c.1 supported clocks, persistence, 900 W (power.max_limit read first), the session lock 1410 MHz [unit 1/14 - lock-mhz=1410 power-limit-w=900] (estimate 2 min, cap 15 min, 73 min left)
 2026-10-21T07:08:46Z prelude END: exit 0 after 1 min [unit 1/14 - lock-mhz=1410 power-limit-w=900]
 2026-10-21T07:08:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed fe792e6 to run-gh200-tile1-20261021t0704: prelude (unit 1/14 - lock-mhz=1410 power-limit-w=900): exit 0 (1 min)
+2026-10-21T07:08:47Z powerproof START: the power proof: a sustained bf16 GEMM for 90 s with no clock lock, nvidia-smi logging power.draw, enforced.power.limit and clocks_event_reasons every 100 ms (S1-M0) [unit 2/14 - pp] (estimate 3 min, cap 10 min, 73 min left)
+2026-10-21T07:10:20Z powerproof END: exit 0 after 2 min [unit 2/14 - pp]
+2026-10-21T07:10:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

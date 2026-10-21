@@ -20,3 +20,7 @@
 2026-10-21T07:08:46Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261021T070808Z, session lock 1410 MHz
 2026-10-21T07:08:46Z prelude END: exit 0 after 1 min [unit 1/14 - lock-mhz=1410 power-limit-w=900]
 2026-10-21T07:08:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-21T07:08:47Z powerproof START: the power proof: a sustained bf16 GEMM for 90 s with no clock lock, nvidia-smi logging power.draw, enforced.power.limit and clocks_event_reasons every 100 ms (S1-M0) [unit 2/14 - pp] (estimate 3 min, cap 10 min, 73 min left)
+2026-10-21T07:10:20Z powerproof: GEMM exit 0, 896 nvidia-smi samples (/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-powerproof-pp)
+2026-10-21T07:10:20Z powerproof END: exit 0 after 2 min [unit 2/14 - pp]
+2026-10-21T07:10:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
