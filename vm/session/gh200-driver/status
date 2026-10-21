@@ -22,3 +22,9 @@
 2026-10-21T18:48:32Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-10-21T18:48:32Z calibrate END: exit 0 after 0 min [unit 2/10 mixtral-8x7b tc2]
 2026-10-21T18:48:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-21T18:48:34Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on mixtral-8x22b; refused on an MMA path mismatch [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b] (estimate 1 min, cap 15 min, 76 min left)
+2026-10-21T18:48:43Z tilecensus: RESULT: VALIDITY census_path PASS 2 configs, 0 path mismatches, 0 errors
+2026-10-21T18:48:43Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-10-21T18:48:43Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tc2/tile-census.json)
+2026-10-21T18:48:43Z tilecensus END: exit 0 after 0 min [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b]
+2026-10-21T18:48:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
