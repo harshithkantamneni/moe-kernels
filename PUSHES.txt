@@ -21,3 +21,4 @@
 2026-10-21T07:28:05Z bytes: G=16 page exit 3
 2026-10-21T07:28:15Z bytes (unit 11/14 mixtral-8x7b p128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=16 byte-treads=3,4,8): exit 0 (3 min)
 2026-10-21T07:29:16Z bytes: G=1 page exit 3
+2026-10-21T07:29:26Z bytes (unit 12/14 mixtral-8x7b p64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=1 byte-treads=2): exit 0 (1 min)
