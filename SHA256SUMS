@@ -1,5 +1,5 @@
 9aeb55f1fc5b0a4393bbd49b025895b668e95534ab58c8e8ca8edec053e19054  vm/driver580.log
-87f14419280f1b50eb03ef9b9f55428fe35d6b9f66be13dbf822eaad50053d8e  vm/gh200-driver.out
+f9d224bccbd7fafc22e3fbacedd04e36d5041d86bea20e4aa23b04f27dcae370  vm/gh200-driver.out
 a6c8641cc93a2d2e3653d94d77730dbbdff6ebcdafd9582fa1fe86584f1571d9  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.json
 eb615938258d1bca36a5c03e67e951b7805741e11c7ab039e1f7cac1857ad58e  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.capture.json
 8aa82dbc4e6c0e01cbd0c2e111079a8a15266488dd31612e9ecfe537fc8697ee  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.csv
@@ -24,6 +24,7 @@ ce5d2be273f195b6060bca1e618aa0e8635554fb200639cf9f47991c7e09553a  vm/results/202
 85a95cb366d05e78481e4b5737da9a622c013a4d2eddda8e001a360612e7a856  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.triton-cache/OBZE5BCSXJMY5UMK765J5IZTRWVW4UYZYGLEUIFKYUVJ4776HN4Q/fused_moe_kernel.source
 7e939c576d3e314f8d0866447fe9709bdf0a99729b7f16fe123eba443537dbe4  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.triton-cache/OBZE5BCSXJMY5UMK765J5IZTRWVW4UYZYGLEUIFKYUVJ4776HN4Q/fused_moe_kernel.ttgir
 a46f3cfc0dbc759caf928b6cfe990fde43dfb4fc7c0f5a4c82871e9b488cd5c4  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.triton-cache/OBZE5BCSXJMY5UMK765J5IZTRWVW4UYZYGLEUIFKYUVJ4776HN4Q/fused_moe_kernel.ttir
+36f99741672436c552d0edd8256bce2fdd50d615d0cd446f4fdf0a74e3030c1a  vm/results/2026-10-21-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json
 3e2cab4762cdca95f7bd9f27a34762bd7cfdc074427c85cbbf61530b7c7791ec  vm/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json
 c02b99af85350b18b4ae4fb8cfc85f5d44a7bdfa8e9dda78b9d7f80df813c727  vm/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.capture.json
 d99ac278a87ca3b30073b6ee6fcfad27cc1257b56f1afc2f9e281fb158594f06  vm/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.profiles/g64.csv
@@ -111,16 +112,17 @@ b27c1d0bcbc0bfa7fe1b96a11e1c91dc0bb33ca29dbc224234e91ef66a7d775f  vm/session/cou
 3fbbd4c6d76130399b0c79cdf41758669224a91e05b7b216953f0c9728750865  vm/session/gh200-driver/instr-variants.json
 10379a744d5bf4144a081772334da76ea620c077f420a0b86c679d85da8e9d03  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-e7a4c0c9c148622ecbd4a60ba73ef9a202e1336457786625df0aabbd43c7922b  vm/session/gh200-driver/status
-e700d13ad1c89d282837140f44f1021c72bdf19b6925b1e76a4cea311270421d  vm/session/gh200-driver/summary.new
-e700d13ad1c89d282837140f44f1021c72bdf19b6925b1e76a4cea311270421d  vm/session/gh200-driver/summary.txt
+5f0d3670e073c7f5009c078d56524fba4737c64e6c3ddbdaa8f4f0b0105ce8c6  vm/session/gh200-driver/status
+dd32ab8b7d50e05d1ba6b0d0240e74d25741cc51ebe0bc734addc8f2688b56a3  vm/session/gh200-driver/summary.new
+dd32ab8b7d50e05d1ba6b0d0240e74d25741cc51ebe0bc734addc8f2688b56a3  vm/session/gh200-driver/summary.txt
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/git-at-start.txt
 08bf23085240344bc02cd6818a6a6705145afbec4968499906d909cb03bcf624  vm/session/lock-plan.txt
+1df92e903681be16120a8fda7bd6ee1823fb18ff03a28f170a82145fbceefb6b  vm/session/logs/analyse-mixtral-8x7b-f128-lock1410.log
 6e44ce4299e1cd079245eac354c644c04a7a77fc80d7aa2d941aae988a2538e0  vm/session/logs/analyse-olmoe-1b-7b-f128-lock1410.log
 b857ad3c7a0c91c24d16152392d31d15c85c2a218fe37c955151096200851479  vm/session/logs/calibrate-mixtral-8x7b-tc2.log
 92e91a478a87605122135fea79f478a21a1218661f8ef595987488c3fe3f5001  vm/session/logs/census-olmoe-1b-7b-f128.log
-f9ddf0711cb951dc434ba507cd6a6619818b058a5c89ffbcae6fe60f7832447e  vm/session/logs/driver-bytes-mixtral-8x7b-f128.log
+7f72f837f2a030c37e5dcf397f241fbbddd7d98b8ce0bb612b2e979efb808970  vm/session/logs/driver-bytes-mixtral-8x7b-f128.log
 cf267fda9760a21389bb3e5b592b695cef92420f38ff08612a3528c173214953  vm/session/logs/driver-bytes-olmoe-1b-7b-f128.log
 a228f5c2ed2e32887c94fc7382bcbe25138bfe1b664b06a152f7b1e7ad3af695  vm/session/logs/driver-calibrate-mixtral-8x7b-tc2.log
 1362f8de829df92d3bd6d136abaa670f0b904f27dee669510affad387aa4073a  vm/session/logs/driver-prelude-mixtral-8x7b.log
