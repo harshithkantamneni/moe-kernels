@@ -12,3 +12,5 @@
 2026-10-21T07:10:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
 [push] pushed f555135 to run-gh200-tile1-20261021t0704: powerproof (unit 2/14 - pp): exit 0 (2 min)
 2026-10-21T07:10:21Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json --arms native; tile 128x128x64 w8 s3 [unit 3/14 olmoe-1b-7b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1] (estimate 3 min, cap 20 min, 71 min left)
+2026-10-21T07:11:13Z bytes END: exit 0 after 1 min [unit 3/14 olmoe-1b-7b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1]
+2026-10-21T07:11:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

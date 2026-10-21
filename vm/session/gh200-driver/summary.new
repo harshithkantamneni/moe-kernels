@@ -1,2 +1,3 @@
 prelude    exit 0 after 1 min [unit 1/14 - lock-mhz=1410 power-limit-w=900]
 powerproof exit 0 after 2 min [unit 2/14 - pp]
+bytes      exit 0 after 1 min [unit 3/14 olmoe-1b-7b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/olmoe-1b-7b-128g1-rp.json arms=native byte-groups=1]
