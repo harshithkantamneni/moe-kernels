@@ -1,3 +1,4 @@
 2026-10-21T18:44:46Z the branch's first commit: the VM can push
 2026-10-21T18:48:01Z setup_vm.sh: READY
 2026-10-21T18:48:06Z prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-10-21T18:48:33Z calibrate (unit 2/10 mixtral-8x7b tc2): exit 0 (0 min)
