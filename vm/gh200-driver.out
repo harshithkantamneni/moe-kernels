@@ -14,3 +14,5 @@
 2026-10-21T18:48:34Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on mixtral-8x22b; refused on an MMA path mismatch [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b] (estimate 1 min, cap 15 min, 76 min left)
 2026-10-21T18:48:43Z tilecensus END: exit 0 after 0 min [unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b]
 2026-10-21T18:48:44Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4aa272a to run-gh200-tile2-20261021t1842: tilecensus (unit 3/10 - tc2 tiles=128x128x64w8s3 models=mixtral-8x22b): exit 0 (0 min)
+2026-10-21T18:48:45Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 4/10 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 76 min left)
