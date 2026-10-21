@@ -34,3 +34,4 @@
 2026-10-21T00:53:02Z bytes (unit 25/32 mixtral-8x7b b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared byte-groups=1): exit 0 (4 min)
 2026-10-21T00:58:48Z bytes: G=16 page exit 0
 2026-10-21T00:58:59Z bytes (unit 26/32 mixtral-8x7b b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared byte-groups=16): exit 0 (6 min)
+2026-10-21T01:03:56Z bytes: G=1 page exit 0
