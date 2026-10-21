@@ -1,0 +1,387 @@
+{
+  "family": "r3-arms",
+  "schema": 1,
+  "card": {
+    "name": "NVIDIA GH200 480GB",
+    "slug": "nvidia_gh200_480gb",
+    "uuid": "869d8ecd-f2b6-aec6-2943-9e6f1320e0ce",
+    "sm_count": 132,
+    "l2_bytes": 62914560,
+    "capability": "9.0",
+    "memory_bytes": 101468602368,
+    "driver": "580.105.08",
+    "study_role": "the primary card"
+  },
+  "stack": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "ncu": {
+    "binary": "/usr/local/cuda-13.0/bin/ncu",
+    "version": "Version 2025.3.1.0 (build 36398880) (public-release)",
+    "argv": [
+      "/usr/local/cuda-13.0/bin/ncu",
+      "--target-processes",
+      "all",
+      "--replay-mode",
+      "application",
+      "--cache-control",
+      "none",
+      "--clock-control",
+      "none",
+      "--nvtx",
+      "-k",
+      "regex:^fused_moe_kernel$",
+      "--kernel-name-base",
+      "function",
+      "--launch-skip",
+      "4",
+      "--launch-count",
+      "6",
+      "--metrics",
+      "dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_srcunit_tex_op_read.sum,launch__grid_size,gpu__time_duration.sum,lts__d_sectors_fill_device.sum,lts__t_sectors_op_read_lookup_miss.sum,lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum,lts__t_sector_op_read_hit_rate.pct,launch__occupancy_limit_blocks,launch__occupancy_limit_registers,launch__occupancy_limit_shared_mem,launch__occupancy_limit_warps,launch__registers_per_thread,launch__waves_per_multiprocessor,lts__t_sectors_srcunit_ltcfabric.sum,sm__cycles_elapsed.avg",
+      "--export",
+      "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.ncu-rep",
+      "--force-overwrite",
+      "--",
+      "/home/ubuntu/moe/venvs/vllm/bin/python",
+      "/home/ubuntu/moe/repo/scripts/r3_tile.py",
+      "--counter-child",
+      "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.plan.json"
+    ],
+    "replay_mode": "application",
+    "cache_control": "none",
+    "clock_control": "none",
+    "lock_mhz": 1410.0,
+    "probe_clock_control": "none",
+    "smi_before": {
+      "utc": "2026-10-21T07:13:34Z",
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+        "--format=csv,noheader,nounits"
+      ],
+      "returncode": 0,
+      "rows": [
+        {
+          "uuid": "GPU-869d8ecd-f2b6-aec6-2943-9e6f1320e0ce",
+          "clocks.sm": "1410",
+          "power.draw": "118.90",
+          "power.limit": "700.00",
+          "clocks_event_reasons.active": "0x0000000000000000",
+          "persistence_mode": "Enabled"
+        }
+      ],
+      "error": ""
+    },
+    "smi_after": {
+      "utc": "2026-10-21T07:14:29Z",
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=uuid,clocks.sm,power.draw,power.limit,clocks_event_reasons.active,persistence_mode",
+        "--format=csv,noheader,nounits"
+      ],
+      "returncode": 0,
+      "rows": [
+        {
+          "uuid": "GPU-869d8ecd-f2b6-aec6-2943-9e6f1320e0ce",
+          "clocks.sm": "1410",
+          "power.draw": "127.70",
+          "power.limit": "700.00",
+          "clocks_event_reasons.active": "0x0000000000000000",
+          "persistence_mode": "Enabled"
+        }
+      ],
+      "error": ""
+    },
+    "report": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.ncu-rep",
+    "report_sha256": "a32327e9efd9aea25dfcd24e5c22e848bdf129b6a2a4d48e2d02fef9e884d45c",
+    "csv": "/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.csv",
+    "csv_layout": "wide",
+    "metrics_asked": [
+      "dram__bytes_read.sum",
+      "dram__bytes_write.sum",
+      "lts__t_sectors_srcunit_tex_op_read.sum",
+      "launch__grid_size",
+      "gpu__time_duration.sum",
+      "lts__d_sectors_fill_device.sum",
+      "lts__t_sectors_op_read_lookup_miss.sum",
+      "lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum",
+      "lts__t_sector_op_read_hit_rate.pct",
+      "launch__occupancy_limit_blocks",
+      "launch__occupancy_limit_registers",
+      "launch__occupancy_limit_shared_mem",
+      "launch__occupancy_limit_warps",
+      "launch__registers_per_thread",
+      "launch__waves_per_multiprocessor",
+      "lts__t_sectors_srcunit_ltcfabric.sum",
+      "sm__cycles_elapsed.avg"
+    ],
+    "metrics_dropped": [],
+    "capture_commit": "52ed2cac18810753ff33286b864f00c128c9e80e"
+  },
+  "design": {
+    "histogram": {
+      "file_sha256": "105245eef5fa547db504f68d88358e03646d46f21bcab70ad98a3956407f59c2",
+      "page": "qwen2-57b-a14b-128g1-rp",
+      "shuffle_seed": 20261410
+    },
+    "histogram_page": true,
+    "model": "qwen2-57b-a14b",
+    "dtype": "bf16",
+    "block_m": 128,
+    "block_n": 128,
+    "block_k": 64,
+    "num_warps": 8,
+    "num_stages": 3,
+    "group_m": 1,
+    "treads": [
+      2
+    ],
+    "arms": [
+      "native"
+    ],
+    "copies_declared": 9,
+    "declared_reason": "the ladder's id count 8192..73728 does not cross 1024: one kernel throughout",
+    "declared_by_arm": {
+      "native": 64,
+      "shared": 576,
+      "private": 576
+    },
+    "calls_per_cell": 3,
+    "warmup_calls": 2,
+    "gemms_per_call": 2,
+    "launch_skip": 4,
+    "launch_count": 6,
+    "seed": 0
+  },
+  "byte_model": {
+    "W": 3523215360,
+    "W_w1": 2348810240,
+    "W_w2": 1174405120,
+    "operand_per_tile_w1": 58720256,
+    "operand_per_tile_w2": 41943040,
+    "source": "moe.bench.weights.routed_expert_weight_bytes_by_gemm; block_m_crossing_sweep.gemm_operand_read_bytes_per_row x E x BLOCK_M"
+  },
+  "census": {
+    "path": "/home/ubuntu/moe/session/census-qwen2-57b-a14b.json",
+    "sha256": "26108a9e30010f60026c82f47ebce5d2923433e8eab0ae9381d1958f70475765",
+    "gemms_per_call": 2
+  },
+  "proof": null,
+  "cells": [
+    {
+      "arm": "native",
+      "n": 2,
+      "tokens": 2048,
+      "declared": 64,
+      "calls": 3,
+      "launches": 6,
+      "grid": {
+        "w1": 7680,
+        "w2": 5376
+      },
+      "per_call": {
+        "dram_bytes_read": 4857566976.0,
+        "dram_bytes_write": 299177898.6666666,
+        "l2_tex_read_sectors": 476744348.6666666,
+        "gpu_time_ns": 2407530.6666666665,
+        "l2_fill_device_sectors": 151798981.0,
+        "l2_read_miss_sectors": 260430679.6666667,
+        "l2_tex_read_hit_sectors": 290926864.3333333,
+        "l2_read_hit_pct": 55.580312733136694
+      },
+      "per_gemm": {
+        "w1": {
+          "dram_bytes_read": 3490123434.6666665,
+          "dram_bytes_write": 170989738.66666666,
+          "l2_tex_read_sectors": 319282983.0,
+          "gpu_time_ns": 1582677.3333333333,
+          "l2_fill_device_sectors": 109066361.66666667,
+          "l2_read_miss_sectors": 184918811.33333334,
+          "l2_tex_read_hit_sectors": 187778009.0,
+          "l2_read_hit_pct": 53.20666666666667,
+          "grid_size": 7680
+        },
+        "w2": {
+          "dram_bytes_read": 1367443541.3333333,
+          "dram_bytes_write": 128188160.0,
+          "l2_tex_read_sectors": 157461365.66666666,
+          "gpu_time_ns": 824853.3333333334,
+          "l2_fill_device_sectors": 42732619.333333336,
+          "l2_read_miss_sectors": 75511868.33333333,
+          "l2_tex_read_hit_sectors": 103148855.33333333,
+          "l2_read_hit_pct": 60.39333333333334,
+          "grid_size": 5376
+        }
+      },
+      "per_call_values": [
+        4848309760.0,
+        4843507712.0,
+        4880883456.0
+      ],
+      "per_gemm_values": {
+        "w1": [
+          3484185344.0,
+          3476278528.0,
+          3509906432.0
+        ],
+        "w2": [
+          1364124416.0,
+          1367229184.0,
+          1370977024.0
+        ]
+      },
+      "spread_rel": 0.007709025588332046,
+      "recorded": {
+        "w1": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 29.09,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 78549799.66666667,
+          "sm__cycles_elapsed.avg": 2136509.2933333335
+        },
+        "w2": {
+          "launch__occupancy_limit_blocks": 32.0,
+          "launch__occupancy_limit_registers": 2.0,
+          "launch__occupancy_limit_shared_mem": 2.0,
+          "launch__occupancy_limit_warps": 8.0,
+          "launch__registers_per_thread": 116.0,
+          "launch__waves_per_multiprocessor": 20.36,
+          "lts__t_sectors_srcunit_ltcfabric.sum": 34516179.666666664,
+          "sm__cycles_elapsed.avg": 1102417.29
+        }
+      },
+      "histogram": "PT",
+      "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+      "bincount": [
+        332,
+        240,
+        152,
+        220,
+        144,
+        478,
+        181,
+        354,
+        140,
+        207,
+        384,
+        154,
+        234,
+        164,
+        315,
+        181,
+        177,
+        544,
+        174,
+        146,
+        336,
+        266,
+        164,
+        159,
+        215,
+        277,
+        272,
+        207,
+        370,
+        165,
+        255,
+        413,
+        210,
+        204,
+        721,
+        173,
+        164,
+        955,
+        180,
+        240,
+        187,
+        170,
+        282,
+        144,
+        385,
+        143,
+        254,
+        178,
+        229,
+        188,
+        149,
+        231,
+        147,
+        147,
+        201,
+        169,
+        166,
+        166,
+        448,
+        191,
+        203,
+        654,
+        183,
+        302
+      ]
+    }
+  ],
+  "group_model": {
+    "model": "group_reads: vLLM v0.27.1's pid mapping, a pure L2 inside a GROUP_SIZE_M group and none across",
+    "q": {
+      "2": 2.0
+    }
+  },
+  "estimates": {
+    "not_applicable": "histogram page: cells are (arm, n, label), not a balanced ladder; the rental-5 scorer reads them"
+  },
+  "gates": [],
+  "s1": {
+    "registration": "docs/registered/2026-10-21-settleS1-gh200",
+    "replay_mode": "application",
+    "cache_control": "none",
+    "stall_metrics": [],
+    "wrapper": "scripts/dram_counter_route_s1.py"
+  },
+  "run_id": "nvidia_gh200_480gb-armsnative-block_m128-block_n128-calls3-clock_controlnone-dtypebf16-familyr3-3ec12de8",
+  "git_sha": "52ed2cac18810753ff33286b864f00c128c9e80e",
+  "gpu_name": "NVIDIA GH200 480GB",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "nsight-compute/dram-counters/replay-mode-application/cache-control-none/clock-control-none/r3-arms-fused_moe_kernel-launches-attributed-by-order-and-grid; NOT timing.TIMING_BASIS",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "52ed2cac18810753ff33286b864f00c128c9e80e",
+    "git_dirty": false,
+    "git_dirty_files": 0,
+    "utc": "2026-10-21T07:14:29+00:00",
+    "hostname": "192-222-57-239",
+    "gpu_name": "NVIDIA GH200 480GB",
+    "driver_version": "580.105.08",
+    "cuda_version": "13.0",
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "nsight-compute/dram-counters/replay-mode-application/cache-control-none/clock-control-none/r3-arms-fused_moe_kernel-launches-attributed-by-order-and-grid; NOT timing.TIMING_BASIS",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

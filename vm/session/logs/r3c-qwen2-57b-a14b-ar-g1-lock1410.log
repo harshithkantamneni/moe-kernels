@@ -1,0 +1,8 @@
+CARD NVIDIA GH200 480GB (nvidia_gh200_480gb, board 9da3c0, sm_90, 132 SMs, 60 MiB L2): every number here is THIS card's; one of the study's four cards: the primary card.
+R3 COUNTER RUN  G=1  1 cells, 6 profiled launches after 4 skipped, at an nvidia-smi lock of 1410 MHz (ncu --clock-control none)
+  ncu        /usr/local/cuda-13.0/bin/ncu  [Version 2025.3.1.0 (build 36398880) (public-release)]
+  metrics    17 asked: dram__bytes_read.sum, dram__bytes_write.sum, lts__t_sectors_srcunit_tex_op_read.sum, launch__grid_size, gpu__time_duration.sum, lts__d_sectors_fill_device.sum, lts__t_sectors_op_read_lookup_miss.sum, lts__t_sectors_srcunit_tex_op_read_lookup_hit.sum, lts__t_sector_op_read_hit_rate.pct, launch__occupancy_limit_blocks, launch__occupancy_limit_registers, launch__occupancy_limit_shared_mem, launch__occupancy_limit_warps, launch__registers_per_thread, launch__waves_per_multiprocessor, lts__t_sectors_srcunit_ltcfabric.sum, sm__cycles_elapsed.avg
+  profiles   /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles
+  PT               native  n=2   DRAM read w1 3490123434.6666665 w2 1367443541.3333333
+wrote /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.json (histogram page: no gate scored here)
+git   git check-ignore exited 128; path UNVERIFIED (fatal: /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.json: '/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.json' is outside repository at '/home/ubuntu/moe/repo')
