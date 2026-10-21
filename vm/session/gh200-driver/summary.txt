@@ -10,3 +10,4 @@ bytes      exit 0 after 3 min [unit 9/14 olmoe-1b-7b f1410 lock-mhz=1410 block-m
 bytes      exit 0 after 1 min [unit 10/14 mixtral-8x7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/mixtral-8x7b-128g1-n.json arms=native byte-groups=1]
 bytes      exit 0 after 3 min [unit 11/14 mixtral-8x7b p128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=16 byte-treads=3,4,8]
 bytes      exit 0 after 1 min [unit 12/14 mixtral-8x7b p64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=1 byte-treads=2]
+bytes      exit 0 after 3 min [unit 13/14 qwen2-57b-a14b st block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-n.json arms=native byte-groups=1 stall-metrics=1]
