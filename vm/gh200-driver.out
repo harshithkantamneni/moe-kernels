@@ -30,3 +30,5 @@
 2026-10-21T07:14:40Z bytes START: 3c.2 byte pages at the 1305 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 7/14 olmoe-1b-7b f1305 lock-mhz=1305 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 15 min, 67 min left)
 2026-10-21T07:17:44Z bytes END: exit 0 after 3 min [unit 7/14 olmoe-1b-7b f1305 lock-mhz=1305 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 2026-10-21T07:17:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed adf2081 to run-gh200-tile1-20261021t0704: bytes (unit 7/14 olmoe-1b-7b f1305 lock-mhz=1305 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T07:17:47Z bytes START: 3c.2 byte pages at the 1005 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 8/14 olmoe-1b-7b f1005 lock-mhz=1005 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 4 min, cap 15 min, 64 min left)
