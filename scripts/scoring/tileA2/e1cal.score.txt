@@ -1,0 +1,11 @@
+SCORED against 2026-10-20-tileA2-e1cal-gh200
+E1-CAL: FAILS
+  ALL: FAILS {'cells': 42, 'rms': 0.042346, 'worst': -0.085171, 'mean': -0.023079}
+  CLEAN: FAILS {'cells': 42, 'rms': 0.042346, 'worst': -0.085171, 'mean': -0.023079}
+STOP RULE: STOP: rental B does not run
+  class 64g1: mean residual +3.574% beyond 0.75%
+  class 128g1: mean residual -4.955% beyond 0.75%
+  class 128g16: mean residual -1.376% beyond 0.75%
+  128 G 1: the CAL models' means differ by 2.581% (over 1%)
+  tA-e1cal's pooled bar reads FAILS
+LOCK 1410 MHz (v4 at_lock 1410)

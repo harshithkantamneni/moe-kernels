@@ -1,0 +1,396 @@
+{
+ "registration": "2026-10-20-tileA2-gates-gh200",
+ "part": "probe",
+ "label": "DESCRIPTIVE (the probe's times are never read)",
+ "rungs": {
+  "1710": {
+   "pages": {
+    "mixtral-8x7b-lp1710m": {
+     "page": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1710m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-86e4983d",
+     "lock_mhz_page": 1710,
+     "why": [
+      "P3: uniform/shared/n3 LOST (5 clean of 9)",
+      "P3: PT/native/n8 LOST (4 clean of 9)",
+      "P3: uniform/shared/n8 LOST (5 clean of 9)",
+      "P3: balanced/native/n8 LOST (4 clean of 9)",
+      "P4: 33 of 144 repeat rows non-clean (22.92%, over 10%)"
+     ],
+     "locked_r3_held": 1710,
+     "non_clean": {
+      "rows": 33,
+      "of": 144,
+      "share": 0.229167,
+      "cap": 0.1
+     },
+     "cells": [
+      {
+       "cell": "PT/native/n3",
+       "mhz": 1710.0,
+       "clean": 7,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/shared/n3",
+       "mhz": 1710.0,
+       "clean": 8,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/native/n3",
+       "mhz": 1710.0,
+       "clean": 8,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/shared/n3",
+       "mhz": 1710.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/native/n3",
+       "mhz": 1710.0,
+       "clean": 8,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/shared/n3",
+       "mhz": 1710.0,
+       "clean": 5,
+       "of": 9,
+       "lost": true
+      },
+      {
+       "cell": "balanced/native/n3",
+       "mhz": 1710.0,
+       "clean": 8,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/shared/n3",
+       "mhz": 1710.0,
+       "clean": 7,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/native/n8",
+       "mhz": 1710.0,
+       "clean": 4,
+       "of": 9,
+       "lost": true
+      },
+      {
+       "cell": "PT/shared/n8",
+       "mhz": 1710.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/native/n8",
+       "mhz": 1710.0,
+       "clean": 7,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/shared/n8",
+       "mhz": 1710.0,
+       "clean": 8,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/native/n8",
+       "mhz": 1710.0,
+       "clean": 7,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/shared/n8",
+       "mhz": 1710.0,
+       "clean": 5,
+       "of": 9,
+       "lost": true
+      },
+      {
+       "cell": "balanced/native/n8",
+       "mhz": 1710.0,
+       "clean": 4,
+       "of": 9,
+       "lost": true
+      },
+      {
+       "cell": "balanced/shared/n8",
+       "mhz": 1710.0,
+       "clean": 7,
+       "of": 9,
+       "lost": false
+      }
+     ],
+     "min_cell_mhz": 1710.0,
+     "verdict": "FAIL"
+    }
+   },
+   "every page PASSES": false
+  },
+  "1410": {
+   "pages": {
+    "mixtral-8x7b-lp1410m": {
+     "page": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-lp1410m/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-histbccfb3e2-07cfc940",
+     "lock_mhz_page": 1410,
+     "why": [],
+     "locked_r3_held": 1410,
+     "non_clean": {
+      "rows": 0,
+      "of": 144,
+      "share": 0.0,
+      "cap": 0.1
+     },
+     "cells": [
+      {
+       "cell": "PT/native/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/shared/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/native/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/shared/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/native/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/shared/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/native/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/shared/n3",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/native/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/shared/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/native/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/shared/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/native/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/shared/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/native/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/shared/n8",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      }
+     ],
+     "min_cell_mhz": 1410.0,
+     "verdict": "PASS"
+    },
+    "qwen2-57b-a14b-lp1410q": {
+     "page": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-lp1410q/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histb6a730e31-b728152f",
+     "lock_mhz_page": 1410,
+     "why": [],
+     "locked_r3_held": 1410,
+     "non_clean": {
+      "rows": 0,
+      "of": 72,
+      "share": 0.0,
+      "cap": 0.1
+     },
+     "cells": [
+      {
+       "cell": "PT/native/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PT/shared/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/native/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "PW/shared/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/native/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "uniform/shared/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/native/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      },
+      {
+       "cell": "balanced/shared/n2",
+       "mhz": 1410.0,
+       "clean": 9,
+       "of": 9,
+       "lost": false
+      }
+     ],
+     "min_cell_mhz": 1410.0,
+     "verdict": "PASS"
+    }
+   },
+   "every page PASSES": true
+  }
+ },
+ "a2_lock_selected": 1410.0,
+ "rulers (DESIGN-A2 6 risk 7)": {
+  "at L": {
+   "read2d": {
+    "ms_p50": 1.130336046218872,
+    "sm_clock_load_mhz": 1410.0
+   },
+   "copy": {
+    "ms_p50": 2.34768009185791,
+    "sm_clock_load_mhz": 1410.0
+   },
+   "add": {
+    "ms_p50": 3.458303928375244,
+    "sm_clock_load_mhz": 1410.0
+   },
+   "matmul": {
+    "ms_p50": 1.628175973892212,
+    "sm_clock_load_mhz": 1365.0
+   }
+  },
+  "at 1710": {
+   "read2d": {
+    "ms_p50": 1.1257280111312866,
+    "sm_clock_load_mhz": 1710.0
+   },
+   "copy": {
+    "ms_p50": 2.340575933456421,
+    "sm_clock_load_mhz": 1710.0
+   },
+   "add": {
+    "ms_p50": 3.4562880992889404,
+    "sm_clock_load_mhz": 1710.0
+   },
+   "matmul": {
+    "ms_p50": 1.6230080127716064,
+    "sm_clock_load_mhz": 1365.0
+   }
+  },
+  "ms(L) / ms(1710)": {
+   "read2d": 1.004093,
+   "copy": 1.003035,
+   "add": 1.000583,
+   "matmul": 1.003184
+  }
+ }
+}

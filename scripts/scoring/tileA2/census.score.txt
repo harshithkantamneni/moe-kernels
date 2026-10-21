@@ -1,0 +1,12 @@
+SCORED against 2026-10-20-tileA2-census-gh200
+CENSUS: VALID (COMPLETE)
+  128x128x64w8s3: {'w1': 2, 'w2': 2}
+  16x64x128w4s4: {'w1': 3, 'w2': 3}
+  32x128x64w4s3: {'w1': 4, 'w2': 4}
+  32x64x128w4s3: {'w1': 4, 'w2': 4}
+  64x128x64w4s3: {'w1': 3, 'w2': 3}
+  64x128x64w8s3: {'w1': 3, 'w2': 3}
+  differs from the design occupancy: {'32x128x64w4s3': {'design': 5, 'census': {'w1': 4, 'w2': 4}}}
+MERGE: MERGED
+  equality gate EQUAL over 72 rental-A entries
+  OLMoE n 1 / n 3: SAME on every (tile, GEMM): deepseek-v2-lite's tread-3 entries are admitted

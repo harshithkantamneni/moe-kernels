@@ -1,0 +1,342 @@
+{
+ "registration": "2026-10-20-tileA2-census-gh200",
+ "part": "census",
+ "CENSUS": {
+  "verdict": "VALID (COMPLETE)",
+  "file": "scripts/scoring/tileA2/census-merged/2026-10-20-nvidia_gh200_480gb-tile-census-merged-ta2m/tile-census.json",
+  "entries": 84,
+  "errors": []
+ },
+ "occupancy": {
+  "64x128x64w8s3": {
+   "w1": 3,
+   "w2": 3
+  },
+  "16x64x128w4s4": {
+   "w1": 3,
+   "w2": 3
+  },
+  "32x64x128w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "32x128x64w4s3": {
+   "w1": 4,
+   "w2": 4
+  },
+  "128x128x64w8s3": {
+   "w1": 2,
+   "w2": 2
+  },
+  "64x128x64w4s3": {
+   "w1": 3,
+   "w2": 3
+  }
+ },
+ "occupancy_by_model": {
+  "olmoe-1b-7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "mixtral-8x7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "qwen2-57b-a14b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "phi-3.5-moe": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "qwen1.5-moe-a2.7b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "jetmoe-8b": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  },
+  "deepseek-v2-lite": {
+   "128x128x64w8s3": {
+    "w1": 2,
+    "w2": 2
+   },
+   "64x128x64w8s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "64x128x64w4s3": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x128x64w4s3": {
+    "w1": 4,
+    "w2": 4
+   },
+   "16x64x128w4s4": {
+    "w1": 3,
+    "w2": 3
+   },
+   "32x64x128w4s3": {
+    "w1": 4,
+    "w2": 4
+   }
+  }
+ },
+ "counts": {
+  "128x128x64w8s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n128k16",
+   "dtype": "bf16",
+   "cp_async_cg": 8,
+   "cp_async_bytes_per_thread": 128,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 256,
+   "per_warpgroup": 4,
+   "warpgroups": 2
+  },
+  "64x128x64w8s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n64k16",
+   "dtype": "bf16",
+   "cp_async_cg": 6,
+   "cp_async_bytes_per_thread": 96,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 256,
+   "per_warpgroup": 4,
+   "warpgroups": 2
+  },
+  "64x128x64w4s3": {
+   "path": "wgmma",
+   "wgmma": 4,
+   "instruction": "m64n128k16",
+   "dtype": "bf16",
+   "cp_async_cg": 12,
+   "cp_async_bytes_per_thread": 192,
+   "bar_sync": 2,
+   "fence_proxy_async": 1,
+   "wgmma_wait_group": 1,
+   "cp_async_wait_group": 1,
+   "threads": 128,
+   "per_warpgroup": 4,
+   "warpgroups": 1
+  },
+  "32x128x64w4s3": {
+   "path": "mma.sync",
+   "mma_sync": 32,
+   "ldmatrix": 16,
+   "cp_async_cg": 10,
+   "ldmatrix_bytes_per_thread": 256,
+   "cp_async_bytes_per_thread": 160,
+   "threads": 128,
+   "wavefronts": 296.0
+  },
+  "16x64x128w4s4": {
+   "path": "mma.sync",
+   "mma_sync": 16,
+   "ldmatrix": 16,
+   "cp_async_cg": 10,
+   "ldmatrix_bytes_per_thread": 256,
+   "cp_async_bytes_per_thread": 160,
+   "threads": 128,
+   "wavefronts": 296.0
+  },
+  "32x64x128w4s3": {
+   "path": "mma.sync",
+   "mma_sync": 32,
+   "ldmatrix": 24,
+   "cp_async_cg": 12,
+   "ldmatrix_bytes_per_thread": 384,
+   "cp_async_bytes_per_thread": 192,
+   "threads": 128,
+   "wavefronts": 432.0
+  }
+ },
+ "differs_from_design": {
+  "32x128x64w4s3": {
+   "design": 5,
+   "census": {
+    "w1": 4,
+    "w2": 4
+   }
+  }
+ },
+ "mechanical_steps": [
+  "re-price rowkeys_tile.py at the census occupancy and rebuild tileA-bytes (tileA-census)"
+ ],
+ "merge": {
+  "equality_gate": {
+   "verdict": "EQUAL",
+   "compared": 72,
+   "drift": []
+  },
+  "olmoe_n1_n3_rule": {
+   "verdict": "SAME on every (tile, GEMM): deepseek-v2-lite's tread-3 entries are admitted",
+   "admit": true
+  },
+  "olmoe_n1_n3_rows": {
+   "128x128x64w8s3|w1": "SAME",
+   "128x128x64w8s3|w2": "SAME",
+   "16x64x128w4s4|w1": "SAME",
+   "16x64x128w4s4|w2": "SAME",
+   "32x128x64w4s3|w1": "SAME",
+   "32x128x64w4s3|w2": "SAME",
+   "32x64x128w4s3|w1": "SAME",
+   "32x64x128w4s3|w2": "SAME",
+   "64x128x64w4s3|w1": "SAME",
+   "64x128x64w4s3|w2": "SAME",
+   "64x128x64w8s3|w1": "SAME",
+   "64x128x64w8s3|w2": "SAME"
+  },
+  "deepseek_admitted": true,
+  "deepseek_entries": 12,
+  "rental_A_entries": 72,
+  "merged_entries": 84,
+  "verdict": "MERGED",
+  "a2_census": "results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-20-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ta2/tile-census.json",
+  "merged": "scripts/scoring/tileA2/census-merged/2026-10-20-nvidia_gh200_480gb-tile-census-merged-ta2m/tile-census.json"
+ },
+ "lock_mhz": 1410.0
+}

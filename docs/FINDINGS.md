@@ -2227,6 +2227,138 @@ cap, the 128x128 wgmma tile runs NATIVE and SHARED at about 1600 to 1640 MHz on 
 1710 MHz lock that is never exceeded. Any next tile rental needs a clock rule that wgmma pages can
 meet, registered before its pages; that is a design choice for the owner and is not made here.
 
+---
+
+## Tile rental A2 (2026-10-20/21): STOP, the wgmma floor calibrates at 1410 MHz but v4 fails E1-CAL (4.23% rms); CONV-L holds; the A key falls to CLAMP again; the session record is NOT READ (two power-limit readings disagree)
+
+One Lambda GH200 480GB (2026-10-20 to 2026-10-21; board `fb8566`, new to the study) ran
+`scripts/plans/rentalA2-tile-2026-10.plan` unattended through `scripts/gh200_tileA2_session.sh` at
+36291487. 32 units ran in 164 minutes (22:45:56Z to 01:29:28Z) against 168 estimated; none was dropped
+and every unit exited 0, so the driver ends with exit 0. Eight registrations (`2026-10-20-tileA2-*`),
+rental B2's two (`2026-10-20-tileB2-*`), the decode addendum (`2026-10-20-decode-tilesource-gh200`),
+their scorers, the SYNTHETIC histograms and the plan were committed before any page (36291487, the run
+commit). Published at `results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session`. Every verdict
+is the committed scorers' output in `scripts/scoring/tileA2/` (`SCORES.md` has the tables). No
+post-page fix. The instance id and the bill are not in the run files.
+
+What A2 changed from rental A, by the owner's decisions of 2026-10-20 (docs/registered/README.md): a
+900 W GPU power limit instead of 700 W, and a lock ladder 1710, 1410, 1305 MHz whose first rung that
+passes the lock-hold probe is every later unit's lock; below 1710, the counter band [0.975 L, L], with
+the fallback [0.959 L, L] when the primary leaves the joint fit empty, and v4 converted to L by P1's rule
+(c x 1710 / L, every other constant carried), the conversion tested on its own by CONV-L.
+
+**Registered outcomes.**
+
+| registration | test | verdict | numbers | file |
+|---|---|---|---|---|
+| tileA2-gates | the session record (B2's lock and limit) | NOT READ: the two power readings disagree (900.0 and 700.0 W) | lock 1410; power.limit 900 W (`clocks-at-start.txt`), GPU Current Power Limit 700 W (`power-set.txt`) | `session.score.txt` |
+| tileA2-gates | the lock-hold probe (DESCRIPTIVE reading) | 1710 FAILS, 1410 PASSES: A2's lock 1410 | 1710: Mixtral 4 LOST cells, 33 of 144 rows non-clean (22.9%); 1410: Mixtral 0 of 144, Qwen2-57B 0 of 72, OLMoE counter clause PASS (fallback band) | `probe.score.txt` |
+| tileA2-census | MMA path, occupancy, the merge | VALID (COMPLETE); MERGED | 84 entries, 0 errors; EQUAL over rental A's 72; deepseek-v2-lite admitted at tread 3; occupancy as rental A | `census.score.txt` |
+| tileA2-floor | CAL-A at 1410 | CAL-A in the fallback band [1352.19, 1410] | c_128 691.6 +- 9.9 cycles, F_wg,w1 2898 +- 582, F_wg,w2 3346 +- 323; 34 cells, rel rms 0.55% | `floor.score.txt` |
+| | accounting, selection, F form | B unreachable, W HOLDS, T FAILS; SELECTED W; F-step | W within 2.4% on four 64x128 rows, T -14.5% to -18.4% | |
+| tileA2-bytes | the A key | NOT NAMED (nearest v3); v4 takes CLAMP | 45 rows: v3 8.70%, ROWKEY60 9.78%, CLAMP 10.20%, ROWKEY30 14.38%; worst v3 row 20.4% | `bytes.score.txt` |
+| tileA2-rep | sigma_page at 128x128 | MEASURED | 0.1199% over 24 cells | `rep.score.txt` |
+| tileA2-e1cal | E1-CAL; tileB2-stop | E1-CAL FAILS; STOP: rental B does not run | 42 NATIVE cells: rms 4.23%, worst -8.52%, mean -2.31%; class means 64g1 +3.574%, 128g1 -4.955%, 128g16 -1.376% (bar 0.75%); 128 G 1 models 2.581% apart (bar 1%) | `e1cal.score.txt` |
+| tileA2-dead | SEEN-REPLICATE (DESCRIPTIVE) | SLOT NOT EXCLUDED; D, D2, d 1.06 EXCLUDED; kappa NOT SCORED | delta 25.35 us, se 0.62; SLOT 24.69 (z 1.08), D 10.73 (23.7), D2 10.76 (23.7), d 1.06 12.11 (21.5) | `dead.score.txt` |
+| tileA2-convl | CONV-L (1410 against 1710, R3's tile) | HOLDS | G1 rms 0.61% (7 cells), G8 rms 0.16% (8 cells) | `convl.score.txt` |
+| decode-tilesource | the decode gate | GO | the floor calibration is scored; A2's STOP printed beside | `decode_gate_a2.py` |
+
+`finalise_a2.py` refuses (exit 2: no READ `session.score.json`), and it would refuse on the STOP as
+well, so rental B2's predictions and plan do not exist. The decode gate reads GO: by
+`2026-10-20-decode-tilesource-gh200`, the decode stage may read A2's score directory as the tile
+stage's selections (decode stays at 1710; a STOP of A2's stop rule alone does not stop decode).
+
+**The probe.** Per rung, in the registered order and with the registered early stop (the first page
+that fails ends the rung):
+
+| rung | page | cells | lost | non-clean rows | min cell MHz | verdict |
+|---|---|---:|---:|---|---:|---|
+| 1710 | Mixtral 8x7B lp1710m (128x128, G 16) | 16 | 4 | 33 of 144 (22.9%; 25 lock slips, 15 run-guarded) | 1710 | FAIL |
+| 1710 | Qwen2-57B lp1710q, OLMoE lp1710f | | | | | not run (early stop) |
+| 1410 | Mixtral 8x7B lp1410m | 16 | 0 | 0 of 144 | 1410 | PASS |
+| 1410 | Qwen2-57B lp1410q (128x128, G 1) | 8 | 0 | 0 of 72 | 1410 | PASS |
+| 1410 | OLMoE lp1410f (f128 counter page, P5) | 27 | | | | PASS: primary band 2 cells (4 floor-bound, under 6); fallback 24 cells (22 floor-bound) |
+
+Gate records: `session/gh200-driver/gate-probe-{1710,1410}.json`; reading: `probe.score.txt`.
+
+**The clock.** At 1410 the lock held as a ceiling: none of the 21,465 per-burst NVML reads in the 13
+timed pages at 1410 is above 1410 MHz, 21,258 (99.0%) read exactly 1410, the lowest 1335; every timed
+page at 1410 passes G1 under r7-median-run3 with no non-clean row. The counter pages still ran under
+the lock: NATIVE and SHARED on the 128x128 wgmma pages at 1326 to 1376 MHz (medians 1366 to 1369), the
+64x128 pages at 1331 to 1375, the 32x128 mma.sync page at 1362 to 1384 (per-cell clocks from
+`r6common.clock_rule`; the session README has the table). The primary band [1374.75, 1410] kept 2
+(OLMoE) and 9 (Mixtral) of 27 f128 cells, too few for the fit, so the registered fallback
+[1352.19, 1410] is the band of every counter scorer (24 and 19 of 27). The timed pages' NVML ledgers
+(13,527 samples on 17 pages) set reason 0x4 (SW power cap) on 861 samples and 0x1 on 88; peak 57 C.
+
+**The power limit.** The two ways the run read it disagree for the whole session. Every
+`nvidia-smi --query-gpu=power.limit` read gives 900 W: the prelude's own check after `-pl 900 -sc 0`,
+`clocks-at-start.txt`, `clocks-after-timed.txt`, the 44 records in the 11 counter pages and every row
+of the 17 smi ledgers. Every `nvidia-smi -q -d POWER` read gives the GPU scope's Current and Requested
+Power Limit 700 W: `power-at-start.txt` (before `-pl`), `power-set.txt` (just after it), the later
+`power-before-calibrate.txt`, the four probe snapshots and all 1,612 per-second samples of the probe
+(22:47Z to 23:14Z). Rental A, which ran at 700 W, reads 700 W in both. The GPU's 1 s average draw in
+those samples peaks at 633.4 W (1710 rung) and 680.0 W (1410 rung). These files do not establish which
+limit the board enforced, and so do not show whether the 900 W decision took effect. The session
+scorer reads the first read-back of each kind and refuses, as registered.
+
+**What each test separated, and what it did not.**
+
+- The wgmma floor now has constants: c_128 691.6 +- 9.9 cycles at 1410 MHz on this board, accounting W,
+  F-step. The cross-clock readout against rental A's out-of-band fit (698.67 +- 10.63 at 1601 to 1640
+  MHz, another board) differs by -1.01% (z -0.48, DESCRIPTIVE); the two fits are consistent with a c_128
+  that does not move between those clocks, but the comparison crosses boards as well as clocks and no
+  test of cycle invariance is registered on it.
+- E1-CAL FAILS with v4 at those constants. The misses are not one sign: the 64x128 G 1 class
+  (Mixtral e64g1) reads +3.57% and the 128x128 G 1 class -4.96% (OLMoE -4.66%, Mixtral -3.48%,
+  Qwen2-57B -6.06%), 128x128 G 16 -1.38%. The test does not say which term of v4 is wrong.
+- CONV-L HOLDS on R3's tile (G1 rms 0.61%, G8 0.16%), so the conversion of v4's carried constants from
+  1710 to 1410, as measured on R3's tile, does not account for E1-CAL's misses. The registered reading
+  (DESCRIPTIVE) is that this indicates the wgmma calibration or v4's wgmma terms, not the conversion, and
+  that the conversion is not ruled out on the 128x128 G 1 cells, where a carried constant can weigh more
+  than on R3's tile. CONV-L's G1 class reads mean +0.38% (rms 0.61%), against the registration's
+  SEEN-expected risk of about 1.36% (v3's c-only rule fast on R1's G 1 cells at 1410).
+- The A key: v4 takes CLAMP by the registered default (no key is 2x nearer than the next), and on these
+  45 rows CLAMP is third (10.20% rms) behind v3 (8.70%) and ROWKEY60 (9.78%); the worst v3 row is 20.4%
+  off. The w1 byte predictions on these tiles miss by 8.7 to 14.4% rms, more than E1-CAL's 4.23% in
+  time, which makes them a lead for the E1-CAL failure. It is not a demonstrated cause: the bytes are
+  counted on separate counter pages, and no registered test connects a cell's byte residual to its time
+  residual.
+- sigma_page at 128x128 and 1410 is 0.1199% (24 cells), against rental A's 0.1275% at a sagging 1710.
+- The dead-CTA pair (SEEN-REPLICATE, not a test): delta 25.35 us at 1410 against rental A's 20.01 us at
+  1710; at the measured c_128 SLOT (24.69 us) is within 1.1 se and the D family is 21 to 24 se away.
+  Rental A had every law EXCLUDED. A replicate on another board at another clock, with laws priced at a
+  different c_128, does not separate D from SLOT; it is recorded as the registration labels it.
+- The census is COMPLETE: the tread-3 tool gives deepseek-v2-lite 12 entries, and the merge's two gates
+  (EQUAL over 72, OLMoE n 1 / n 3 SAME) pass.
+
+**Instrument.** Every histogram page reads its registered SYNTHETIC file (sha256 and shuffle seed
+20261410). The run branch's 967 files match its SHA256SUMS; the 31 `cuda_utils*.so` are left out, as
+before. Scored twice, on the fetched tree and on the published copy, the nine scorers agree byte for
+byte on every `.score.txt`, the merged census and six JSON files; census, probe and session JSON differ
+only in path strings. `register_a2.py --check` reads `same` on all 22 registration files, rental A's
+`register.py --check` and rental 7's on theirs, with no as-of change: rental 7's held pages and the
+counter clock rule's test already read sessions by date or by the 1710 lock, and A2's counter pages are
+at 1410. Only two pins moved: `tests/test_lock_gate.py` (11 more lock pages, 173; 91 verdicts change)
+and `tests/test_calibration_provenance.py` (the session's declared verdict).
+
+**Open defects, recorded and not fixed.** (1) The session record: `score_session_a2.py` needs the two
+read-backs to agree within 1 W, and on this board `nvidia-smi -q -d POWER` and
+`--query-gpu=power.limit` disagree on every read of the session, so the defect is not the timing of the
+read just after `-pl` (`scripts/gh200_tileA2_session.sh:750-754`); which reading reflects the enforced
+limit is open. (2) The driver's `step_what` prints `LOCK_TIMED` (1710) in the bytes and timed units'
+START lines before the unit reads `a2-lock.env`; the pages record 1410. (3) G3 on E1-CAL reads FAIL in
+stratum 1 only; `score_e1cal.py` voids cells only when every stratum fails, so the 42 cells include
+stratum 1's (the registered scorer's behaviour; its effect on the bar is not computed). (4) Rental A's
+census key-order defect carries over (`PYTHONHASHSEED=0` fixes it for the committed files).
+
+**What the paper can claim, after tile rental A2.** Measured: on board fb8566 at a 1410 MHz lock, the
+128x128 wgmma floor's c_128 is 691.6 +- 9.9 cycles under accounting W, and the conversion of v4's
+carried constants from 1710 to 1410 holds on R3's tile. Tested and failed: model v4 at those constants
+predicts the five E1-CAL pages at 4.23% rms (class means +3.6% to -5.0%), so v4 on vLLM's tiles is not
+certified and rental B2 does not run. Not established: the cause of the E1-CAL misses (the byte key's
+error is a lead), and which power limit the board enforced.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

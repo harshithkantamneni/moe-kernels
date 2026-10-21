@@ -1,0 +1,2 @@
+READ against 2026-10-20-tileA2-gates-gh200: NOT READ: the two power readings disagree (900.0 and 700.0 W)
+  lock 1410.0 MHz; power limit None W; probe rungs {'1710': 'FAIL', '1410': 'PASS'}

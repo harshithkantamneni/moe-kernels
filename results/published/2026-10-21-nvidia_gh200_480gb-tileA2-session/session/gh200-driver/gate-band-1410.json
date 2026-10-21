@@ -1,0 +1,26 @@
+{
+ "gate": "band",
+ "verdict": "PASS",
+ "band_in_force": {
+  "primary": [
+   1374.75,
+   1410.0
+  ],
+  "primary_fit": "None",
+  "primary_pages": {
+   "olmoe-1b-7b": "counted (2 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (9 of 27 cells in the clock band)"
+  },
+  "fallback": [
+   1352.19,
+   1410.0
+  ],
+  "fallback_fit": "fit",
+  "fallback_pages": {
+   "olmoe-1b-7b": "counted (24 of 27 cells in the clock band)",
+   "mixtral-8x7b": "counted (19 of 27 cells in the clock band)"
+  },
+  "which": "fallback (registered: the primary band left joint_cF None)"
+ },
+ "why": ""
+}

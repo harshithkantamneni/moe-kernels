@@ -1,0 +1,56 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist8a0c67e0a329b4af-bbb20bf6
+model       olmoe-1b-7b E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=32, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+histogram   docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json (sha256 8a0c67e0a329b4af...), page convl-olmoe-1b-7b-g1, 3 cells x arms = 3 timed cells, token-row shuffle seed 20261010; R3's balanced ladder is NOT run (--treads ignored)
+arms        native; PRIVATE cannot run skewed
+  ridge       177.27 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 660.5 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-10-20 at 36291487
+experts     native declares E=64; shared declares E x n_decl = 576 at every cell
+            n_decl = 9 against n_max = 3 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 3 against the 3 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T224556Z-p2e-lock1410
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-cvo1/private_weight_reference/nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist8a0c67e0a329b4af-bbb20bf6
+slips       --slip-policy cell at the 1410 MHz lock: a repeat under 1395 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native, 3 repeats, about 0 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=3   PT               native         block-scan   cce03ebcff9adff8
+  n=3   PW               native         block-scan   9febe2368262bf92
+  n=3   uniform          native         block-scan   7514e3b4602f2e79
+  rep 0 PT             native   n=  3 T=    768    0.7602 ms
+  rep 0 PW             native   n=  3 T=    768    0.7666 ms
+  rep 0 uniform        native   n=  3 T=    768    0.6552 ms
+  rep 1 uniform        native   n=  3 T=    768    0.6551 ms
+  rep 1 PW             native   n=  3 T=    768    0.7667 ms
+  rep 1 PT             native   n=  3 T=    768    0.7599 ms
+  rep 2 PT             native   n=  3 T=    768    0.7605 ms
+  rep 2 PW             native   n=  3 T=    768    0.7668 ms
+  rep 2 uniform        native   n=  3 T=    768    0.6556 ms
+  rep 3 uniform        native   n=  3 T=    768    0.6553 ms
+  rep 3 PW             native   n=  3 T=    768    0.7669 ms
+  rep 3 PT             native   n=  3 T=    768    0.7596 ms
+  rep 4 PT             native   n=  3 T=    768    0.7599 ms
+  rep 4 PW             native   n=  3 T=    768    0.7664 ms
+  rep 4 uniform        native   n=  3 T=    768    0.6550 ms
+  rep 5 uniform        native   n=  3 T=    768    0.6561 ms
+  rep 5 PW             native   n=  3 T=    768    0.7663 ms
+  rep 5 PT             native   n=  3 T=    768    0.7605 ms
+  rep 6 PT             native   n=  3 T=    768    0.7602 ms
+  rep 6 PW             native   n=  3 T=    768    0.7656 ms
+  rep 6 uniform        native   n=  3 T=    768    0.6562 ms
+  rep 7 uniform        native   n=  3 T=    768    0.6553 ms
+  rep 7 PW             native   n=  3 T=    768    0.7664 ms
+  rep 7 PT             native   n=  3 T=    768    0.7603 ms
+  rep 8 PT             native   n=  3 T=    768    0.7600 ms
+  rep 8 PW             native   n=  3 T=    768    0.7664 ms
+  rep 8 uniform        native   n=  3 T=    768    0.6553 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-cvo1/private_weight_reference/nvidia_gh200_480gb-armsnative-bm32-budget200.0-decl9-dtypebf16-duty0.25-g1-hist8a0c67e0a329b4af-bbb20bf6/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

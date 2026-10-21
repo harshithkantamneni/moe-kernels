@@ -1,0 +1,4 @@
+SCORED against 2026-10-20-tileA2-rep-gh200
+  pages: {'e128g1': 'counted', 'e128g1r': 'counted'}
+REP: MEASURED sigma_page 0.001199; used 0.001199 (tA-rep (the 128x128 replicate pair))
+LOCK 1410 MHz

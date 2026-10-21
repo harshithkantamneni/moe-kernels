@@ -1,0 +1,50 @@
+{
+ "registration": "2026-10-20-tileA2-dead-gh200",
+ "part": "dead",
+ "pages": {
+  "d9": "counted",
+  "d15": "counted"
+ },
+ "DEAD": {
+  "delta_us": 25.352003,
+  "se_us": 0.615837,
+  "laws": {
+   "D": {
+    "pred_us": 10.726056,
+    "z": 23.749711,
+    "verdict": "EXCLUDED"
+   },
+   "D2": {
+    "pred_us": 10.756852,
+    "z": 23.699704,
+    "verdict": "EXCLUDED"
+   },
+   "SLOT": {
+    "pred_us": 24.6888,
+    "z": 1.076914,
+    "verdict": "NOT EXCLUDED"
+   },
+   "kappa 0.15": {
+    "pred_us": 12.13104,
+    "verdict": "NOT SCORED (c_128 691.6475590359868 under 900)"
+   },
+   "kappa 0": {
+    "pred_us": 12.13104,
+    "verdict": "NOT SCORED (c_128 691.6475590359868 under 900)"
+   },
+   "d 1.06": {
+    "pred_us": 12.113416,
+    "z": 21.496906,
+    "verdict": "EXCLUDED"
+   }
+  },
+  "D_vs_SLOT": "SLOT HOLDS, D EXCLUDED",
+  "cells": 2,
+  "sigma_page": 0.001199,
+  "sigma_source": "tA-rep (the 128x128 replicate pair)",
+  "c128": 691.6475590359868,
+  "laws_at": "the measured c_128"
+ },
+ "lock_mhz": 1410.0,
+ "label": "SEEN-REPLICATE (DESCRIPTIVE): rental A measured this lever; A2 replicates it, no test"
+}

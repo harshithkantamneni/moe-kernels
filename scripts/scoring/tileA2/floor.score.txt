@@ -1,0 +1,10 @@
+SCORED against 2026-10-20-tileA2-floor-gh200
+  pages: {'f128': {'olmoe-1b-7b': 'counted (24 of 27 cells in the clock band)', 'mixtral-8x7b': 'counted (19 of 27 cells in the clock band)'}, 'f64w8': {'olmoe-1b-7b': 'counted (26 of 27 cells in the clock band)', 'mixtral-8x7b': 'counted (22 of 27 cells in the clock band)'}, 'f64w4': {'olmoe-1b-7b': 'counted (23 of 27 cells in the clock band)'}, 'f32w4': {'olmoe-1b-7b': 'counted'}}
+CALIBRATION: CAL-A c 691.6475590359868 F {'w1': 2898.052707811491, 'w2': 3346.3006086105324}
+Z_wg: {'B': None, 'W': 587.277621, 'T': 625.370097}
+  B: unreachable or no 64x128 fit
+  W: HOLDS
+  T: FAILS
+SELECTION: SELECTED W; F form F-step
+LOCK 1410 MHz; BAND IN FORCE fallback (registered: the primary band left joint_cF None) [1352.19, 1410.0]
+CROSS-CLOCK c_128 (DESCRIPTIVE): A2 691.647559 +- 9.874408 at 1410 MHz against rental A's 698.67 +- 10.63 at 1601 to 1640 MHz (rental A, out of band, under the 1710 lock): difference -7.022441 (-1.01%), z -0.484018

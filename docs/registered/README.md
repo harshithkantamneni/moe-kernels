@@ -1477,3 +1477,28 @@ tile driver plus lines marked A2 (`tests/test_tileA2_plan.py`). The scorers `scr
 run rental A's pinned scorers inside `a2common.scoring`; at rental A's own rules they reproduce its committed
 scores byte for byte (`PYTHONHASHSEED=0`, no `PYTHONPATH`; `score_floor.py` and `score_bytes.py` now import
 `tcommon` first, so they start from the command line, and no verdict moved).
+
+**Scored 2026-10-21** on `results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session` (board
+fb8566, new; 32 units at 36291487 in 164 minutes, none dropped, every unit and the driver exit 0; the
+scorers' outputs and the tables in `scripts/scoring/tileA2/` and `SCORES.md`; no post-page fix). The
+session is named by the date it ended (22:45Z on 2026-10-20 to 01:29Z on 2026-10-21), as rentals 4 and 5
+were. **STOP: rental B2 does not run** (`finalise_a2.py` refuses on the session record, and the stop rule
+reads STOP). **session**: NOT READ: the two power readings disagree (900.0 and 700.0 W):
+`--query-gpu=power.limit` reads 900 W on every read of the session and `nvidia-smi -q -d POWER`'s GPU
+Current Power Limit 700 W on every read, before and long after `-pl 900`, so which limit was enforced is
+not established; the refusal stands. **probe**: 1710 FAILS (Mixtral lp1710m: 4 LOST cells, 22.9% of rows
+non-clean; the rung's other pages not run, by the early stop); 1410 PASSES (Mixtral 0 of 144, Qwen2-57B
+0 of 72; the OLMoE counter clause in the fallback band): A2's lock is 1410. **census**: VALID (COMPLETE);
+MERGED (EQUAL over 72, deepseek-v2-lite admitted at tread 3, 84 entries). **floor**: CAL-A in the
+fallback band [1352.19, 1410] (the primary kept 2 and 9 of 27 f128 cells): c_128 691.6 +- 9.9, F_wg
+2898 / 3346; W HOLDS, T FAILS, B unreachable: SELECTED W, F-step; cross-clock -1.01% (z -0.48) against
+rental A's out-of-band 698.67. **bytes**: NOT NAMED (nearest v3); v4 takes CLAMP (45 rows: v3 8.70%,
+ROWKEY60 9.78%, CLAMP 10.20%, ROWKEY30 14.38%). **rep**: sigma_page 0.1199%. **e1cal**: FAILS (42 cells,
+rms 4.23%, worst -8.52%, mean -2.31%; class means +3.574%, -4.955%, -1.376%; the 128 G 1 models 2.581%
+apart). **dead** (SEEN-REPLICATE): delta 25.35 us; SLOT NOT EXCLUDED, D, D2 and d 1.06 EXCLUDED, kappa
+NOT SCORED. **convl**: HOLDS (G1 0.61%, G8 0.16% rms). **decode gate**: GO (`decode_gate_a2.py`). The
+registration files above are unchanged; `register_a2.py --check` reads `same` on all 22, and rental
+A's and rental 7's `register.py --check` on theirs. No scorer or as-of fix was needed; two test pins
+moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Open defects, not fixed: the
+session record's two power readings; the driver's ledger text "at the 1710 lock" on units that ran at
+1410; G3's stratum-1 FAIL, which `score_e1cal.py` does not void (it voids only when every stratum fails).

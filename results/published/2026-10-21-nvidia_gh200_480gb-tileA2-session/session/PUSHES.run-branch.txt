@@ -1,0 +1,46 @@
+2026-10-20T22:43:52Z the branch's first commit: the VM can push
+2026-10-20T22:45:55Z setup_vm.sh: READY
+2026-10-20T22:46:03Z prelude (unit 1/32 - lock-mhz=1710 power-limit-w=900): exit 0 (0 min)
+2026-10-20T22:46:30Z calibrate (unit 2/32 mixtral-8x7b ta2): exit 0 (0 min)
+2026-10-20T22:46:33Z gate (unit 3/32 - gcal gate=calibrate): exit 0 (0 min)
+2026-10-20T22:46:55Z tilecensus (unit 4/32 - ta2 tiles=128x128x64w8s3,64x128x64w8s3,64x128x64w4s3,32x128x64w4s3,16x64x128w4s4,32x64x128w4s3 models=olmoe-1b-7b,mixtral-8x7b,qwen2-57b-a14b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite): exit 0 (0 min)
+2026-10-20T22:46:59Z gate (unit 5/32 - gcen gate=census): exit 0 (0 min)
+2026-10-20T23:14:14Z bytes: G=64 page exit 3
+2026-10-20T23:14:27Z lockprobe (unit 6/32 - lp ladder=1710,1410,1305 probes=mixtral-8x7b:docs/registered/2026-10-20-tileA2-hist/mixtral-8x7b-128g16-probe.json:16:m,qwen2-57b-a14b:docs/registered/2026-10-20-tileA2-hist/qwen2-57b-a14b-128g1-probe.json:1:q block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3): exit 0 (27 min)
+2026-10-20T23:17:16Z bytes: G=64 page exit 3
+2026-10-20T23:17:26Z bytes (unit 7/32 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-20T23:24:17Z bytes: G=64 page exit 3
+2026-10-20T23:24:27Z bytes (unit 8/32 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-10-20T23:24:31Z gate (unit 9/32 - gband gate=band): exit 0 (0 min)
+2026-10-20T23:27:09Z bytes: G=64 page exit 1
+2026-10-20T23:27:19Z bytes (unit 10/32 olmoe-1b-7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-20T23:33:53Z bytes: G=64 page exit 3
+2026-10-20T23:34:03Z bytes (unit 11/32 mixtral-8x7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-10-20T23:34:07Z gate (unit 12/32 - g64 gate=f64w8): exit 0 (0 min)
+2026-10-20T23:36:47Z timed (unit 13/32 mixtral-8x7b cvm1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-20T23:38:59Z timed (unit 14/32 olmoe-1b-7b cvo1 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
+2026-10-20T23:44:10Z timed (unit 15/32 mixtral-8x7b cvm8 unless-lock=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
+2026-10-20T23:46:51Z timed (unit 16/32 mixtral-8x7b cvm1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-20T23:49:03Z timed (unit 17/32 olmoe-1b-7b cvo1t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-olmoe-1b-7b-g1.json arms=native declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
+2026-10-20T23:53:54Z timed (unit 18/32 mixtral-8x7b cvm8t unless-lock=1710 lock-mhz=1710 histogram=docs/registered/2026-10-20-tileA2-hist/convl-mixtral-8x7b-g8.json arms=native declared-copies=9 timed-groups=8 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
+2026-10-21T00:08:17Z timed (unit 19/32 olmoe-1b-7b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-21T00:22:19Z timed (unit 20/32 mixtral-8x7b e128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-21T00:31:51Z timed (unit 21/32 mixtral-8x7b e64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (9 min)
+2026-10-21T00:41:33Z timed (unit 22/32 qwen2-57b-a14b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (10 min)
+2026-10-21T00:46:35Z timed (unit 23/32 mixtral-8x7b e128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
+2026-10-21T00:48:50Z bytes: G=1 page exit 0
+2026-10-21T00:49:02Z bytes (unit 24/32 olmoe-1b-7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared byte-groups=1): exit 0 (2 min)
+2026-10-21T00:52:51Z bytes: G=1 page exit 0
+2026-10-21T00:53:02Z bytes (unit 25/32 mixtral-8x7b b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-64g1.json arms=native,shared byte-groups=1): exit 0 (4 min)
+2026-10-21T00:58:48Z bytes: G=16 page exit 0
+2026-10-21T00:58:59Z bytes (unit 26/32 mixtral-8x7b b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g16.json arms=native,shared byte-groups=16): exit 0 (6 min)
+2026-10-21T01:03:56Z bytes: G=1 page exit 0
+2026-10-21T01:04:07Z bytes (unit 27/32 qwen2-57b-a14b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json arms=native,shared byte-groups=1): exit 0 (5 min)
+2026-10-21T01:18:30Z timed (unit 28/32 olmoe-1b-7b e128g1r block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-21T01:21:10Z bytes: G=64 page exit 1
+2026-10-21T01:21:22Z bytes (unit 29/32 olmoe-1b-7b f64w4 block-m=64 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T01:23:55Z bytes: G=64 page exit 1
+2026-10-21T01:24:07Z bytes (unit 30/32 olmoe-1b-7b f32w4 block-m=32 block-n=128 block-k=64 num-warps=4 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-10-21T01:26:49Z timed (unit 31/32 olmoe-1b-7b d9 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-21T01:29:32Z timed (unit 32/32 olmoe-1b-7b d15 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/olmoe-1b-7b-dead.json arms=native,shared declared-copies=15 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
+2026-10-21T01:29:36Z the session ended: driver exit 0

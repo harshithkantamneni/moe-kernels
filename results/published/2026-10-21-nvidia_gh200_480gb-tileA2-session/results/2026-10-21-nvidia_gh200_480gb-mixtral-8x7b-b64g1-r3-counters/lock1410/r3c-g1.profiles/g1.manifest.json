@@ -1,0 +1,533 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      1,
+      "PT"
+    ],
+    [
+      "shared",
+      1,
+      "PT"
+    ],
+    [
+      "native",
+      1,
+      "PW"
+    ],
+    [
+      "shared",
+      1,
+      "PW"
+    ],
+    [
+      "native",
+      1,
+      "uniform"
+    ],
+    [
+      "shared",
+      1,
+      "uniform"
+    ],
+    [
+      "native",
+      1,
+      "balanced"
+    ],
+    [
+      "shared",
+      1,
+      "balanced"
+    ],
+    [
+      "native",
+      2,
+      "PT"
+    ],
+    [
+      "shared",
+      2,
+      "PT"
+    ],
+    [
+      "native",
+      2,
+      "PW"
+    ],
+    [
+      "shared",
+      2,
+      "PW"
+    ],
+    [
+      "native",
+      2,
+      "uniform"
+    ],
+    [
+      "shared",
+      2,
+      "uniform"
+    ],
+    [
+      "native",
+      2,
+      "balanced"
+    ],
+    [
+      "shared",
+      2,
+      "balanced"
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 64,
+  "launch_count": 96,
+  "tokens": {
+    "1": 256,
+    "2": 512
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/1/PT": "2994828a7d2cd6c1c87b4ea0de6a96de60d5a29f9fd9e5966bfca84397180a2c",
+    "shared/1/PT": "acf8d858cec8ad3e66fa031df98904d94e421b817c5020263a7050226f1a5721",
+    "native/1/PW": "d42864acc40f0d7c57d1144b6f20734d63c6c1ad061d0efa6186befdbfef8f1b",
+    "shared/1/PW": "2f0d1b59c1b68811aabc8f75065076b2b5a132a779872aa2279d053297633a07",
+    "native/1/uniform": "69159305d293b5b3fb50e1b9a6989f6be61c3181889ac902c590dcdd47a09071",
+    "shared/1/uniform": "873bd2959aab2b3b2807a9e822aaeb70398734beae7787d9f94374aed2a06383",
+    "native/1/balanced": "f568310ce909c90b38da372699a031abb49db16fdd3a038a374b6b163d328195",
+    "shared/1/balanced": "1151114e040fdf2a186ceed7c48dcf75442d8b6e3026ec7a078b48ad202803ee",
+    "native/2/PT": "4b2004dfa0df812ba41351e35cb2292818db08376503f6eae484dadb6abfccac",
+    "shared/2/PT": "e7f8253d05092f469eff15215cbe0c080efea0a2e36195dd0dfd274e1ce91859",
+    "native/2/PW": "534d02662c30f72da13eae19f710abb6e7a9a1b40f62497a48db5bc61668e2d5",
+    "shared/2/PW": "ab75e71c8a9187cf0345d6d05b2d3c7d77ec8440b6ae367b57db374d9ae5f995",
+    "native/2/uniform": "e18c9a9aca325bc0ce94fe9d9c9f118089cdcf2ba16bd1dca52ac36618260062",
+    "shared/2/uniform": "55924eb98e06e4245c0cc3419be3d965f71b40b4e74a69da221860452d8b0211",
+    "native/2/balanced": "72eac24e8b77a04abfba12045b4d0a95d68426c2737e86af731e16011802854f",
+    "shared/2/balanced": "29c55ff845fa072ed511f8e2d075a1d72502fde6b9e813e8ad7a80ccd7a5b731"
+  },
+  "sorted_ids_len": {
+    "native/1/PT": 1016,
+    "shared/1/PT": 5048,
+    "native/1/PW": 1016,
+    "shared/1/PW": 5048,
+    "native/1/uniform": 1016,
+    "shared/1/uniform": 5048,
+    "native/1/balanced": 1016,
+    "shared/1/balanced": 5048,
+    "native/2/PT": 1528,
+    "shared/2/PT": 5560,
+    "native/2/PW": 1528,
+    "shared/2/PW": 5560,
+    "native/2/uniform": 1528,
+    "shared/2/uniform": 5560,
+    "native/2/balanced": 1528,
+    "shared/2/balanced": 5560
+  },
+  "grids": {
+    "native/1/PT": {
+      "w1": 3584,
+      "w2": 512
+    },
+    "shared/1/PT": {
+      "w1": 17696,
+      "w2": 2528
+    },
+    "native/1/PW": {
+      "w1": 3584,
+      "w2": 512
+    },
+    "shared/1/PW": {
+      "w1": 17696,
+      "w2": 2528
+    },
+    "native/1/uniform": {
+      "w1": 3584,
+      "w2": 512
+    },
+    "shared/1/uniform": {
+      "w1": 17696,
+      "w2": 2528
+    },
+    "native/1/balanced": {
+      "w1": 3584,
+      "w2": 512
+    },
+    "shared/1/balanced": {
+      "w1": 17696,
+      "w2": 2528
+    },
+    "native/2/PT": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/PT": {
+      "w1": 19488,
+      "w2": 2784
+    },
+    "native/2/PW": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/PW": {
+      "w1": 19488,
+      "w2": 2784
+    },
+    "native/2/uniform": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/uniform": {
+      "w1": 19488,
+      "w2": 2784
+    },
+    "native/2/balanced": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "shared/2/balanced": {
+      "w1": 19488,
+      "w2": 2784
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g1/n1/PT",
+    "r3/native/g1/n1/PT",
+    "r3/native/g1/n1/PT",
+    "r3/shared/g1/n1/PT",
+    "r3/shared/g1/n1/PT",
+    "r3/shared/g1/n1/PT",
+    "r3/native/g1/n1/PW",
+    "r3/native/g1/n1/PW",
+    "r3/native/g1/n1/PW",
+    "r3/shared/g1/n1/PW",
+    "r3/shared/g1/n1/PW",
+    "r3/shared/g1/n1/PW",
+    "r3/native/g1/n1/uniform",
+    "r3/native/g1/n1/uniform",
+    "r3/native/g1/n1/uniform",
+    "r3/shared/g1/n1/uniform",
+    "r3/shared/g1/n1/uniform",
+    "r3/shared/g1/n1/uniform",
+    "r3/native/g1/n1/balanced",
+    "r3/native/g1/n1/balanced",
+    "r3/native/g1/n1/balanced",
+    "r3/shared/g1/n1/balanced",
+    "r3/shared/g1/n1/balanced",
+    "r3/shared/g1/n1/balanced",
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/shared/g1/n2/PT",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/native/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/shared/g1/n2/PW",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/native/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/shared/g1/n2/uniform",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/native/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced",
+    "r3/shared/g1/n2/balanced"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 64
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 104857600,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 25681723392,
+    "device_free_bytes": 100728635392,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 2
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "1a7710b2-11b6-5750-db3b-1265475ab3e3"
+  },
+  "histogram": {
+    "file_sha256": "9785d07cbda01e3ed311a77cf664858bcc09b4d500fedf0af64f2e4445f3fa23",
+    "page": "mixtral-8x7b-64g1",
+    "shuffle_seed": 20261410,
+    "cells": {
+      "native/1/PT": {
+        "label": "PT",
+        "n": 1,
+        "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+        "bincount": [
+          65,
+          41,
+          62,
+          66,
+          63,
+          46,
+          105,
+          64
+        ]
+      },
+      "shared/1/PT": {
+        "label": "PT",
+        "n": 1,
+        "counts_sha256": "fac4bb1c1b5161697c6b6c7b9791a38d037c4822a9e62297bdd560896838fd16",
+        "bincount": [
+          65,
+          41,
+          62,
+          66,
+          63,
+          46,
+          105,
+          64
+        ]
+      },
+      "native/1/PW": {
+        "label": "PW",
+        "n": 1,
+        "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+        "bincount": [
+          77,
+          47,
+          51,
+          73,
+          48,
+          31,
+          95,
+          90
+        ]
+      },
+      "shared/1/PW": {
+        "label": "PW",
+        "n": 1,
+        "counts_sha256": "2a5a181d537b4c4296177498053fcfde172939d03ce870b7bcd17ab97177cff6",
+        "bincount": [
+          77,
+          47,
+          51,
+          73,
+          48,
+          31,
+          95,
+          90
+        ]
+      },
+      "native/1/uniform": {
+        "label": "uniform",
+        "n": 1,
+        "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "shared/1/uniform": {
+        "label": "uniform",
+        "n": 1,
+        "counts_sha256": "6e917c769e5c26176912aca5bc53f20edbbfc854f889eb630fe2835942a968d1",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "native/1/balanced": {
+        "label": "balanced",
+        "n": 1,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "shared/1/balanced": {
+        "label": "balanced",
+        "n": 1,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      "native/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+        "bincount": [
+          123,
+          144,
+          111,
+          123,
+          173,
+          128,
+          92,
+          130
+        ]
+      },
+      "shared/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "e8384d2e7e07e03e40a0454b78b00ccab20650461229c6b657fc6bde41ceb84d",
+        "bincount": [
+          123,
+          144,
+          111,
+          123,
+          173,
+          128,
+          92,
+          130
+        ]
+      },
+      "native/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+        "bincount": [
+          86,
+          109,
+          98,
+          225,
+          131,
+          110,
+          114,
+          151
+        ]
+      },
+      "shared/2/PW": {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "960e1a298a72530e65d8957289a7aa176366954c67117b187d9944786bf2b76b",
+        "bincount": [
+          86,
+          109,
+          98,
+          225,
+          131,
+          110,
+          114,
+          151
+        ]
+      },
+      "native/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+        "bincount": [
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128
+        ]
+      },
+      "shared/2/uniform": {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "82d122c0e91bef915e97c5a9eb7cefe06e2b5ab43701e7c11a1aec8d12651313",
+        "bincount": [
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128
+        ]
+      },
+      "native/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128
+        ]
+      },
+      "shared/2/balanced": {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "bincount": [
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128,
+          128
+        ]
+      }
+    }
+  }
+}
