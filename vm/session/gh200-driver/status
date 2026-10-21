@@ -53,3 +53,9 @@
 2026-10-21T07:12:38Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json --arms native on every page of this unit
 2026-10-21T07:12:38Z bytes: the registered list G = 1 (qwen2-57b-a14b, kr): no tail drop, no re-price, no base-clock control
 2026-10-21T07:13:15Z bytes: G=1 page exit 0 after 34 s
+2026-10-21T07:13:17Z bytes: lock block exit 0 (G=1 exit 0 07:13:15 34 s;)
+2026-10-21T07:13:22Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-10-21T07:13:22Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-10-21T07:13:24Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-kr-r3-counters/lock1410/summary.json)
+2026-10-21T07:13:24Z bytes END: exit 0 after 1 min [unit 5/14 qwen2-57b-a14b kr block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-21-settleS1-hist/qwen2-57b-a14b-128g1-rp.json arms=native byte-groups=1]
+2026-10-21T07:13:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
