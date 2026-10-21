@@ -1517,3 +1517,24 @@ refusal at 700 W stops it. Plan: `scripts/plans/rentalS1-settle-2026-10.plan`, 1
 nodrop), about 72 min wall ($2.75); drop order st only; deadline launch + 85 min, hard cap launch + 100 min. Driver:
 `scripts/gh200_settleS1_session.sh`, A2's pinned driver plus lines marked S1 (`tests/test_settleS1_plan.py`), which
 also names each unit's real lock in the ledger.
+
+**Read 2026-10-21** on `results/published/2026-10-21-nvidia_gh200_480gb-settleS1-session` (board 9da3c0,
+new; 14 units at 52ed2cac in about 25 minutes, none dropped, every unit and the driver exit 0; the reader's
+output in `scripts/scoring/settleS1/settleS1.read.{json,txt}`; no post-page fix). DESCRIPTIVE: no verdict.
+**power**: 900 W refused, 700 W read back: after `-pl 900 -sc 0` and the 30 s poll, `enforced.power.limit`
+and the `-q` GPU scope's Current Power Limit read 700 W (power.limit 900 W); the owner's fallback set 700 W,
+all three readings agreed, and every unit ran at 700 W. **M0**: CAP-BELOW-680 (largest 1 s mean 662.96 W, SW
+power cap on every busy sample, enforced 700 W). **M1**: INSTRUMENT-INDEPENDENT on OLMoE (median d 1.52 us)
+and Qwen2-57B (9.65 us); the in-burst CUDA-event follow-up is not built. **M2**: A by lock 1410 47.32 us,
+1305 37.74 us (PRESENT), 1005 0.70 us (GONE), against this board's 1410 page; whether v5 and B2 time at 1005
+MHz is the owner's decision. **M3**: W1-EXACT (mean e w1 +0.10%, w2 +21.3%, v3 and CLAMP alike). **M4**:
+128x128 G 16 w1 and w2 A-DOMINATED; 64x128 G 1 w1 B-DOMINATED, w2 MIXED. **M5**: Qwen2-57B LATENCY (rho long
+scoreboard 0.83, barrier 0.98, tensor active -0.73); OLMoE NONE-SEEN. The power reading corrects tile rental
+A2's open question: `-pl 900 -sc 0` does not move the enforced GPU limit on this board, and A2's `-q` reads
+were the same 700 W, so A2 most likely ran at 700 W (an inference across boards); A2's verdicts stand as
+scored, its session record stays NOT READ, and 900 W at 1710 MHz is untested. The registration files are
+unchanged (`register_s1.py --check` reads `same`); the reader re-reads the published copy to the same `.txt`
+and to JSON that differs only in page paths, and `scripts/scoring/rescore.py settleS1` re-reads it to the
+committed files. Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).
+Open defect, not fixed: the prelude's log names `power-set-unsettled.txt` for the file
+`power-set-unsettled-900.txt`.

@@ -1,0 +1,11 @@
+READ against 2026-10-21-settleS1-gh200 (DESCRIPTIVE (SEEN for v5; no verdict))
+power: 900 W refused, 700 W read back (limit 700.0 W; ['S1_POWER_900=refused', 'S1_POWER_W=700'])
+M0: CAP-BELOW-680 peak 1 s mean 662.961 W, cap share 1.0, enforced [700.0] W
+M1 olmoe-1b-7b: INSTRUMENT-INDEPENDENT median d 1.51559 us
+M1 qwen2-57b-a14b: INSTRUMENT-INDEPENDENT median d 9.654556 us
+M2: A by lock {'1005': 0.703859, '1305': 37.735576, '1410': 47.317824} us; {'1005': 'GONE', '1305': 'PRESENT'} (ref this board's 1410 MHz page)
+M3: W1-EXACT mean e {'CLAMP': {'w1': 0.000977, 'w2': 0.213122}, 'v3': {'w1': 0.000977, 'w2': 0.213122}}
+M4 p128g16: {'w1': 'A-DOMINATED', 'w2': 'A-DOMINATED'}
+M4 p64g1: {'w1': 'B-DOMINATED', 'w2': 'MIXED'}
+M5 qwen2-57b-a14b: LATENCY rho {'long_scoreboard': 0.832353, 'barrier': 0.982353, 'tensor_active': -0.726471, 'y_s1': 0.920588}
+M5 olmoe-1b-7b: NONE-SEEN rho {'long_scoreboard': 0.637391, 'barrier': 0.82, 'tensor_active': -0.473913, 'y_s1': 0.853043}

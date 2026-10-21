@@ -1,0 +1,153 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      2,
+      "PT"
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 4,
+  "launch_count": 6,
+  "tokens": {
+    "2": 2048
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 64,
+    "shared": 576,
+    "private": 576
+  },
+  "ids_sha256": {
+    "native/2/PT": "0b18bb122018d8fb2200ae9d77f8ac864b044127b11ba925b84c07834b8097a0"
+  },
+  "sorted_ids_len": {
+    "native/2/PT": 24512
+  },
+  "grids": {
+    "native/2/PT": {
+      "w1": 7680,
+      "w2": 5376
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT",
+    "r3/native/g1/n2/PT"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 128
+  },
+  "proof": null,
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 3523215360,
+    "weight_bytes": 31708938240,
+    "activation_bytes": 398458880,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 32904314880,
+    "device_free_bytes": 100721623040,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 1
+  },
+  "versions": {
+    "python": "3.12.15",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "869d8ecd-f2b6-aec6-2943-9e6f1320e0ce"
+  },
+  "histogram": {
+    "file_sha256": "105245eef5fa547db504f68d88358e03646d46f21bcab70ad98a3956407f59c2",
+    "page": "qwen2-57b-a14b-128g1-rp",
+    "shuffle_seed": 20261410,
+    "cells": {
+      "native/2/PT": {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "ded07a8646aa4b68ff139e332ce10c50e8fa872f353cd983113acd614541cb7b",
+        "bincount": [
+          332,
+          240,
+          152,
+          220,
+          144,
+          478,
+          181,
+          354,
+          140,
+          207,
+          384,
+          154,
+          234,
+          164,
+          315,
+          181,
+          177,
+          544,
+          174,
+          146,
+          336,
+          266,
+          164,
+          159,
+          215,
+          277,
+          272,
+          207,
+          370,
+          165,
+          255,
+          413,
+          210,
+          204,
+          721,
+          173,
+          164,
+          955,
+          180,
+          240,
+          187,
+          170,
+          282,
+          144,
+          385,
+          143,
+          254,
+          178,
+          229,
+          188,
+          149,
+          231,
+          147,
+          147,
+          201,
+          169,
+          166,
+          166,
+          448,
+          191,
+          203,
+          654,
+          183,
+          302
+        ]
+      }
+    }
+  }
+}

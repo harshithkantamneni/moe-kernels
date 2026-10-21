@@ -1,0 +1,4 @@
+== 2026-10-21T07:08:47Z step powerproof: the power proof: a sustained bf16 GEMM for 90 s with no clock lock, nvidia-smi logging power.draw, enforced.power.limit and clocks_event_reasons every 100 ms (S1-M0)
+POWER PROOF: bf16 matmul 8192^3, batches of 20, for 90 s; out /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-powerproof-pp/gemm.json
+RESULT: 2631 batches, median 642.45 TFLOP/s
+2026-10-21T07:10:20Z powerproof: GEMM exit 0, 896 nvidia-smi samples (/home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-powerproof-pp)

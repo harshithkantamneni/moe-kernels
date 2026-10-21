@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 6818 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 6819 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty-seven further directories
+arms carrying 26 `*.report.json` files and no CSV. Twenty-eight further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-one Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -266,9 +266,11 @@ Phi-3.5 scored under a rebuilt drift rule, all six S - N gap pages, and one OLMo
 pages at 128x128 and 64x128, the A-key byte pages, the E1-CAL timed pages, a replicate and the
 dead-CTA pair on vLLM-sized tiles, 21 units on one GH200, and tile rental A2 of 2026-10-20/21: the
 lock-hold probe at 1710 and 1410 MHz under a 900 W limit, then rental A's pages again at the 1410
-lock it selected, with the CONV-L anchor pages at 1410 and 1710, 32 units on one GH200), kept so every verdict they printed can be
+lock it selected, with the CONV-L anchor pages at 1410 and 1710, 32 units on one GH200, and settle rental S1
+of 2026-10-21: a power proof, kernel against application replay, the OLMoE wgmma counter page at 1410, 1305
+and 1005 MHz, Mixtral byte and PRIVATE-arm pages and stall-metric pages, 14 units on one GH200 at 700 W), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 20 GH200 sessions ran on fifteen distinct boards (counted by
+sessions rather than arms. The 21 GH200 sessions ran on sixteen distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
@@ -285,7 +287,11 @@ band, so the floor calibration is NOT SCORED, model v4 has no wgmma constants an
 run (docs/FINDINGS.md, Tile rental A). Tile rental A2 STOPPED it again, at the 1410 MHz lock its
 probe selected: the floor calibrated (c_128 691.6 +- 9.9 cycles) and CONV-L HOLDS, but E1-CAL FAILS
 (4.23% rms over 42 cells, class means +3.57%, -4.96% and -1.38% against 0.75%), so rental B2 does
-not run (docs/FINDINGS.md, Tile rental A2). Every
+not run (docs/FINDINGS.md, Tile rental A2). Settle rental S1 (descriptive, no verdict) found that
+`nvidia-smi -pl 900 -sc 0` leaves the enforced GPU limit at 700 W on its board, so A2 most likely ran at
+700 W, not 900; it read the per-kernel clock sag on the 128x128 wgmma page gone at 1005 MHz (0.7 us) and
+present at 1305 (37.7 us against 47.3 at 1410), and v4's w1 bytes on Mixtral 128 G 1 exact (+0.10%)
+(docs/FINDINGS.md, Settle rental S1). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

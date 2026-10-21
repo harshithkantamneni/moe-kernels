@@ -1,0 +1,49 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 19981 (/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+==PROF== Profiling "fused_moe_kernel": Application replay pass 1
+COUNTER CHILD: 1 cells, 3 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json
+==PROF== Disconnected from process 19981
+==PROF== Connected to process 20139 (/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+==PROF== Profiling "fused_moe_kernel": Application replay pass 2
+COUNTER CHILD: 1 cells, 3 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json
+==PROF== Disconnected from process 20139
+==PROF== Connected to process 20288 (/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+==PROF== Profiling "fused_moe_kernel": Application replay pass 3
+COUNTER CHILD: 1 cells, 3 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json
+==PROF== Disconnected from process 20288
+==PROF== Connected to process 20456 (/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+==PROF== Profiling "fused_moe_kernel": Application replay pass 4
+COUNTER CHILD: 1 cells, 3 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json
+==PROF== Disconnected from process 20456
+==PROF== Connected to process 20606 (/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12)
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+==PROF== Profiling "fused_moe_kernel": Application replay pass 5
+COUNTER CHILD: 1 cells, 3 calls each after 2 warmups; manifest /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.manifest.json
+==PROF== Disconnected from process 20606
+==PROF== Creating report from application replay data: 0%.................100%
+==PROF== Report: /home/ubuntu/moe/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-ar-r3-counters/lock1410/r3c-g1.profiles/g1.ncu-rep

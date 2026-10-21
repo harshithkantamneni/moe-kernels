@@ -3,16 +3,20 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA or tileA2. Each registered scorer runs in a subprocess, in the stage's registered order,
-from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
+<stage> is tileA, tileA2 or settleS1. Each registered scorer runs in a subprocess, in the stage's registered
+order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
 instead of in the file; the committed tileA and tileA2 score files were written with PYTHONHASHSEED=0.
 
-The scorers write into a scratch directory; every *.score.json and *.score.txt there is compared with the
-committed file of the same name after the scratch directory's path is replaced by the committed one (the
-tileA2 census score records the merged census under its output directory). Exits 0 when every file is
-equal, 1 otherwise, printing each file's reading.
+settleS1 is descriptive: its one registered reader (scripts/scoring/settleS1/read_s1.py, pinned by the
+2026-10-21-settleS1-gh200 registration) reads the whole published session (results/ and session/, for the
+power read-backs), and its files are settleS1.read.json and settleS1.read.txt.
+
+The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
+stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
+is replaced by the committed one (the tileA2 census score records the merged census under its output
+directory). Exits 0 when every file is equal, 1 otherwise, printing each file's reading.
 """
 from __future__ import annotations
 
@@ -34,7 +38,18 @@ STAGES = {
     "tileA2": ("2026-10-21-nvidia_gh200_480gb-tileA2-session", "scripts/scoring/tileA2",
                [f"scripts/scoring/tileA2/score_{s}_a2.py"
                 for s in ("session", "probe", "census", "floor", "bytes", "rep", "dead", "e1cal", "convl")]),
+    "settleS1": ("2026-10-21-nvidia_gh200_480gb-settleS1-session", "scripts/scoring/settleS1",
+                 ["scripts/scoring/settleS1/read_s1.py"]),
 }
+#: the tree each stage's scorers read, under the published session (default: results)
+TREE = {"settleS1": ""}
+#: the files each stage's scorers write (default: *.score.*)
+OUTPUTS = {"settleS1": "settleS1.read.*"}
+
+
+def tree_of(stage: str) -> str:
+    sub = TREE.get(stage, "results")
+    return f"{PUB}/{STAGES[stage][0]}" + (f"/{sub}" if sub else "")
 
 
 def scorer_env() -> dict:
@@ -45,8 +60,8 @@ def scorer_env() -> dict:
 
 def rescore(stage: str, out: Path, only: list[str] | None = None) -> list[tuple[str, int]]:
     """Run the stage's scorers into `out`; [(scorer, exit code)]."""
-    session, _committed, scorers = STAGES[stage]
-    tree = f"{PUB}/{session}/results"
+    _session, _committed, scorers = STAGES[stage]
+    tree = tree_of(stage)
     ran = []
     for s in scorers:
         if only and not any(o in Path(s).name for o in only):
@@ -61,7 +76,7 @@ def compare(stage: str, out: Path) -> list[tuple[str, str]]:
     """[(file name, EQUAL | DIFFERS | MISSING)] over every score file the scratch run wrote."""
     committed = REPO / STAGES[stage][1]
     rows = []
-    for p in sorted(out.glob("*.score.*")):
+    for p in sorted(out.glob(OUTPUTS.get(stage, "*.score.*"))):
         if p.suffix not in (".json", ".txt"):
             continue
         c = committed / p.name

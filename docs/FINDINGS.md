@@ -2301,6 +2301,7 @@ Power Limit 700 W: `power-at-start.txt` (before `-pl`), `power-set.txt` (just af
 those samples peaks at 633.4 W (1710 rung) and 680.0 W (1410 rung). These files do not establish which
 limit the board enforced, and so do not show whether the 900 W decision took effect. The session
 scorer reads the first read-back of each kind and refuses, as registered.
+*(Added 2026-10-21.)* Settle rental S1 read `enforced.power.limit` on another board: 700 W after `-pl 900`, so A2 most likely ran at 700 W (Settle rental S1, below).
 
 **What each test separated, and what it did not.**
 
@@ -2358,6 +2359,106 @@ carried constants from 1710 to 1410 holds on R3's tile. Tested and failed: model
 predicts the five E1-CAL pages at 4.23% rms (class means +3.6% to -5.0%), so v4 on vLLM's tiles is not
 certified and rental B2 does not run. Not established: the cause of the E1-CAL misses (the byte key's
 error is a lead), and which power limit the board enforced.
+
+## Settle rental S1 (2026-10-21): DESCRIPTIVE, no verdict; `-pl 900` does not move the enforced GPU limit (700 W); the sag is gone at 1005 MHz and present at 1305; Mixtral 128 G 1 w1 bytes exact; PRIVATE's excess is activations at 128x128 G 16
+
+One Lambda GH200 480GB (instance 702c75b6, us-east-3, 07:04:51Z to 07:35:00Z on 2026-10-21; board `9da3c0`,
+new to the study) ran `scripts/plans/rentalS1-settle-2026-10.plan` unattended through
+`scripts/gh200_settleS1_session.sh` at 52ed2cac. 14 units ran in about 25 minutes (07:08:08Z to 07:33:33Z)
+against 47 estimated; none was dropped and every unit and the driver exit 0. The registration
+(`docs/registered/2026-10-21-settleS1-gh200`), its reader `scripts/scoring/settleS1/read_s1.py`, the SYNTHETIC
+histograms and the plan were committed before any page (52ed2cac, the run commit). Published at
+`results/published/2026-10-21-nvidia_gh200_480gb-settleS1-session`. Every reading is the pinned reader's
+output, `scripts/scoring/settleS1/settleS1.read.{json,txt}`. No post-page fix.
+
+S1 is DESCRIPTIVE. It certifies nothing, no model verdict is scored on its pages, and every S1 page is SEEN for
+model v5: a constant v5 takes from an S1 reading is SEEN-MEASURED or SEEN-FITTED, and v5's blind test must use
+rental B2's new shapes (JetMoE-8B, Phi-3.5-MoE, Qwen1.5-MoE-A2.7B), never OLMoE, Mixtral 8x7B or Qwen2-57B. Each
+reading band below was registered to choose the form v5 gives one of DIAGNOSIS-A2's candidate fixes (F1 the
+per-kernel clock sag, F2 the knee at the wgmma tiles, F3 weight re-reads at the tile, F4 tail rho per tile);
+none is a test of a model.
+
+**What S1 read.**
+
+| measurement | reading | numbers | file |
+|---|---|---|---|
+| power: the 900 W read-back | 900 W refused, 700 W read back | after `-pl 900 -sc 0` and a 30 s poll: enforced.power.limit 700 W, `-q` GPU Current and Requested 700 W, power.limit 900 W; after `-pl 700 -sc 0`: 700 W on all three | `session/power-set-unsettled-900.txt`, `session/power-set.txt`, `session/gh200-driver/s1-power.env` |
+| M0: which limit holds (sustained bf16 GEMM, no lock, 90 s) | CAP-BELOW-680 | largest 1 s mean 662.96 W; 0 s over 720 W; SW power cap (0x4) on 884 of 884 busy samples; busy clock median 1410 MHz (max 1980); enforced.power.limit 700 W | `results/2026-10-21-nvidia_gh200_480gb-powerproof-pp/smi.csv` |
+| M1: kernel against application replay at 1410 | INSTRUMENT-INDEPENDENT (both models) | median d_cell OLMoE 1.52 us (n 1 PT -0.44, n 4 PT +3.47), Qwen2-57B 9.65 us (n 2 PT; bound 30.19 us) | the `kr` and `ar` pages |
+| M2: the sag by lock, OLMoE f128 G 64 (54 cells per lock) | 1305 PRESENT, 1005 GONE | A (tau): 1410 47.32 us (450 us), 1305 37.74 us (575 us), 1005 0.70 us (75 us); median effective clock 1333.1, 1255.7, 1004.1 MHz | the `f1410`, `f1305`, `f1005` pages |
+| M3: Mixtral 128 G 1 bytes against v4's frozen predictions | W1-EXACT | mean e over 4 cells, v3 and CLAMP alike: w1 +0.10% (cells -0.15 to +0.52%), w2 +21.3% | the `b128g1` page |
+| M4: PRIVATE's excess against SHARED's re-read | 128x128 G 16: w1 and w2 A-DOMINATED; 64x128 G 1: w1 B-DOMINATED, w2 MIXED | share a at treads 3, 4, 8: w1 0.56, 1.0, 1.0, w2 0.29, 0.71, 1.0; 64x128 tread 2: w1 e_P 0.0027 weight sets, w2 e_P 0.0211 and a 0.207 | the `p128g16` and `p64g1` pages |
+| M5: stalls and tensor pipe along x | Qwen2-57B LATENCY; OLMoE NONE-SEEN | Spearman rho with x_s1: Qwen2-57B (16 GEMMs) long scoreboard 0.83, barrier 0.98, tensor active -0.73; OLMoE (24) 0.64, 0.82, -0.47 | the `st` pages |
+
+Files are under the session directory; the reader's file is `scripts/scoring/settleS1/settleS1.read.json`.
+
+**The power limit, corrected.** On this Lambda GH200, `nvidia-smi -pl 900 -sc 0` does not change the
+enforced GPU limit. The command reported success ("set to 900.00 W from 700.00 W") and
+`--query-gpu=power.limit` then read 900 W, but `enforced.power.limit` and the `-q -d POWER` GPU scope's
+Current and Requested Power Limit stayed at 700 W through the 30 s poll; the Default and Max Power Limit read
+900 W and the module scope 1000 W throughout. The registered fallback then set 700 W, all three readings
+agreed, and every S1 unit ran at 700 W. M0 says the sustained draw held below even that: the SW power cap
+was on in every busy sample while the largest 1 s mean was 662.96 W. Tile rental A2 read the same pattern on
+every read of its session (power.limit 900 W, `-q` GPU Current and Requested 700 W) and never read
+`enforced.power.limit`; on this board the `-q` value is the one that agrees with `enforced.power.limit`. So
+tile rental A2 most likely ran at 700 W, not 900 W (INFERENCE: S1 ran on board 9da3c0, A2 on fb8566, and
+nothing on A2's board read the enforced limit). A2's registered verdicts stand as scored: none of its
+scorers reads the power limit except the session record, which refused (NOT READ) and still does. Whether
+900 W holds the 1710 MHz lock remains untested, because the limit could not be set this way; what sets the
+700 W ceiling (a platform or host limit outside `nvidia-smi -pl`) is not in these files.
+
+**What each reading constrains** (the registration's `constrains` entries, applied to the readings).
+
+- **F1, the sag.** M1 reads INSTRUMENT-INDEPENDENT on both models, so the sag is not made by kernel replay's
+  cache flush or save/restore, and v5's F1 takes A and tau from counter pages as measured; the in-burst CUDA
+  event wrapper (built only on MIXED or INSTRUMENT-DEFLATED) is not needed. M2 reads GONE at 1005 MHz only:
+  A falls from 47.32 us at 1410 to 37.74 us at 1305 (0.80 of 1410's, over the 0.5 REDUCED bar) and to 0.70 us
+  at 1005, where the page's median clock is the lock's. By the registration, an apparatus fix exists only at
+  1005, and whether v5 and rental B2 time at 1005 MHz is the owner's decision, taken with these numbers;
+  otherwise F1 is priced with A(L) and tau(L) as SEEN-MEASURED per-lock constants. With M0's CAP-BELOW-680 and
+  M2 PRESENT, the registered reading is that the sag is a power-cap transient at the enforced limit, so F1's A
+  and tau are per limit as well as per lock and tile. On this board the 1410 page's A, 47.32 us (tau 450 us),
+  is larger than A2's fit of the same page on board fb8566, 29.65 us (tau 300 us).
+- **F2, the knee.** M5 reads LATENCY on Qwen2-57B: the soft knee is DRAM latency exposed at 2 CTAs per SM and
+  3 stages, and v5's knee exponent is a per-tile property tied to occupancy and stages (64x128 w8, 3 CTAs per
+  SM, expected between 128x128's 5.25 and R3's 14). On OLMoE it reads NONE-SEEN (long scoreboard 0.64 meets
+  its 0.6 bar, tensor active -0.47 misses -0.6), so there F2 stays a SEEN-FITTED shape with no mechanism
+  claimed. On both models the barrier stall correlates with x more strongly than the long scoreboard (0.98
+  against 0.83, 0.82 against 0.64); the registered BARRIER reading needs the long scoreboard under 0.6, so it
+  cannot fire here, and these pages do not separate latency exposure from pipeline synchronisation
+  (INFERENCE from the rank correlations; no registered test separates them).
+- **F3, the re-reads.** M3 reads W1-EXACT: v4's w1 bytes on Mixtral 128 G 1 are right to 0.10% (v3 and CLAMP
+  agree on these cells), so DIAGNOSIS-A2 Q2's inference of a w1 over-prediction of about 7% does not hold on
+  this board, bytes do not carry Mixtral 128 G 1's residual under F1 + F2 + F4 (+2.8 to +3.5%), F3 is not needed
+  there, and v5's knee and sag forms are re-examined on Mixtral. v4 over-predicts the same cells' w2 bytes by
+  21.3% (descriptive; no band is registered on w2 here). M4 reads A-DOMINATED on both GEMMs at 128x128 G 16:
+  M4's charge-once activation assumption fails at the wgmma tiles, F3 needs an activation re-read term, and
+  the weight part of w2's over-prediction is larger than the byte pages show. At treads 4 and 8 SHARED's w1
+  re-read is small (0.066 and 0.003 weight sets), so the w1 reading there rests on a small excess. At 64x128
+  G 1, w1 reads B-DOMINATED (its excess is weight re-reads, so the slab constants refit per tile family) and
+  w2 MIXED (both terms; the reduced eps1, theta1 form is not enough); w2's reading sits just past both
+  B-DOMINATED bars (e_P 0.0211 against 0.02, share 0.207 against 0.2).
+- **F4, tail rho.** No S1 measurement was registered against F4; S1 does not constrain it.
+
+**Instrument.** Every histogram page reads its registered SYNTHETIC file (sha256 on the page). The run
+branch's 470 files match its SHA256SUMS; the 15 `cuda_utils*.so` are left out, as before. Read twice, on the
+fetched tree and on the published copy, the reader's `.txt` is byte for byte the same and its JSON differs
+only in the page paths. `register_s1.py --check` reads `same` on both registration files, and A2's
+`register_a2.py --check` on all of its own. `scripts/scoring/rescore.py settleS1` re-reads the published session to the
+committed files. The 12 counter pages re-gate PASS under `lock_gate` at their own locks; three store V10
+PASS, the nine G 1 and G 16 pages store none, so `tests/test_lock_gate.py` moves to 185 pages and 100 changed
+verdicts.
+
+**Open defects, recorded and not fixed.** (1) The prelude's log line names `power-set-unsettled.txt`; the file
+it wrote is `power-set-unsettled-900.txt`. (2) What enforces the 700 W GPU ceiling, and whether any supported
+interface raises it on this platform, is not established.
+
+**What the paper can claim, after settle rental S1.** Measured, on board 9da3c0 at a 700 W enforced limit: the
+per-kernel clock sag on the 128x128 wgmma page is 47.3 us at a 1410 MHz lock, 37.7 us at 1305 and 0.7 us at
+1005; it is the same under kernel and application replay; v4's w1 bytes on Mixtral 128 G 1 are exact and its
+w2 bytes 21% high; PRIVATE's excess at 128x128 G 16 is mostly activation re-reads. Corrected: tile rental A2's
+900 W limit was most likely not in force. Not established: what holds the GPU at 700 W, whether 900 W would hold
+1710 MHz, and whether the knee is latency or synchronisation.
 
 ## The evidence base
 
