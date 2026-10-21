@@ -1,0 +1,38 @@
+== 2026-10-21T07:08:08Z step prelude: 3c.1 supported clocks, persistence, 900 W (power.max_limit read first), the session lock 1410 MHz
+base tag gh200-20261021T070808Z (every locked run adds its own suffix)
+52ed2cac18810753ff33286b864f00c128c9e80e
+110 graphics clocks, 345 to 1980 MHz
+1410 supported
+1605 supported
+1590 supported
+1500 supported
+1410 supported
+LOCK_ETA_A 1410 (registered)
+LOCK_ETA_B 1500 (registered)
+LOCK_ETA_C 1605 (registered)
+LOCK_PROBE_1305 supported (a plan's floor lock; probed below)
+LOCK_PROBE_1005 supported (a plan's floor lock; probed below)
+LOCK_PROBE_1410 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1305 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1005 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1410 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z prelude: power.max_limit 900.00 W, at or over the registered 900 W
+Persistence mode is already Enabled for GPU 00000000:DD:00.0.
+All done.
+Power limit for GPU 00000000:DD:00.0 was set to 900.00 W from 700.00 W.
+All done.
+2026-10-21T07:08:39Z prelude: after 30 s enforced.power.limit reads '700.00' W and -q -d POWER GPU scope Current '700.00' W (Requested '700.00' W; power.limit '900.00' W), not both 900 W (power-set-unsettled.txt)
+2026-10-21T07:08:39Z prelude: the power limit never read back as 900 W on both readings within 30 s (S1); recorded
+2026-10-21T07:08:39Z prelude: the owner's fallback (2026-10-21): every unit runs at 700 W; -pl 700 -sc 0, then the same read-back
+Power limit for GPU 00000000:DD:00.0 was set to 700.00 W from 700.00 W.
+All done.
+2026-10-21T07:08:39Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+persistence_mode, clocks.current.sm [MHz], clocks.max.sm [MHz], power.limit [W], power.default_limit [W], clocks_event_reasons.active
+Enabled, 345 MHz, 1980 MHz, 700.00 W, 900.00 W, 0x0000000000000001
+2026-10-21T07:08:41Z lock probe: 1305 MHz held
+2026-10-21T07:08:43Z lock probe: 1005 MHz held
+2026-10-21T07:08:46Z lock probe: 1410 MHz held
+2026-10-21T07:08:46Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261021T070808Z, session lock 1410 MHz

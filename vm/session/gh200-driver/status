@@ -1,2 +1,22 @@
 2026-10-21T07:06:36Z setup_vm.sh start: commit 52ed2cac18810753ff33286b864f00c128c9e80e from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-21T08:29:51Z
 2026-10-21T07:08:07Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-21T07:08:08Z driver start: commit 52ed2cac18810753ff33286b864f00c128c9e80e, steps of the plan scripts/plans/rentalS1-settle-2026-10.plan, deadline 2026-10-21T08:29:51Z (73 min of work left)
+2026-10-21T07:08:08Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalS1-settle-2026-10.plan (sha256 79891a29e424a6df2b7a4ee18025da1c881e44b9b5af03005d2f73fbf7b02f76), 14 units
+2026-10-21T07:08:08Z prelude START: 3c.1 supported clocks, persistence, 900 W (power.max_limit read first), the session lock 1410 MHz [unit 1/14 - lock-mhz=1410 power-limit-w=900] (estimate 2 min, cap 15 min, 73 min left)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1305 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1005 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z lock plan: LOCK_PROBE_1410 supported (a plan's floor lock; probed below)
+2026-10-21T07:08:08Z prelude: power.max_limit 900.00 W, at or over the registered 900 W
+2026-10-21T07:08:39Z prelude: after 30 s enforced.power.limit reads '700.00' W and -q -d POWER GPU scope Current '700.00' W (Requested '700.00' W; power.limit '900.00' W), not both 900 W (power-set-unsettled.txt)
+2026-10-21T07:08:39Z prelude: the power limit never read back as 900 W on both readings within 30 s (S1); recorded
+2026-10-21T07:08:39Z prelude: the owner's fallback (2026-10-21): every unit runs at 700 W; -pl 700 -sc 0, then the same read-back
+2026-10-21T07:08:39Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-10-21T07:08:41Z lock probe: 1305 MHz held
+2026-10-21T07:08:43Z lock probe: 1005 MHz held
+2026-10-21T07:08:46Z lock probe: 1410 MHz held
+2026-10-21T07:08:46Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261021T070808Z, session lock 1410 MHz
+2026-10-21T07:08:46Z prelude END: exit 0 after 1 min [unit 1/14 - lock-mhz=1410 power-limit-w=900]
+2026-10-21T07:08:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
