@@ -1,0 +1,178 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbfd3ac6bf-8e9e7263
+model       qwen2-57b-a14b E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=128, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 128, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 3}
+histogram   docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json (sha256 bfd3ac6bf0b7f0be...), page qwen2-57b-a14b-128g1, 8 cells x arms = 16 timed cells, token-row shuffle seed 20261410; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       177.27 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 660.5 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-10-20 at 36291487
+experts     native declares E=64; shared declares E x n_decl = 576 at every cell
+            n_decl = 9 against n_max = 2 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 2 against the 2 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261020T224556Z-p2-13-lock1410
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-e128g1/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbfd3ac6bf-8e9e7263
+slips       --slip-policy cell at the 1410 MHz lock: a repeat under 1395 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 2 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=1   PT               native,shared  block-scan   58e70008cdcb3a07
+  n=1   PW               native,shared  block-scan   e8e86df31da93f3a
+  n=1   uniform          native,shared  block-scan   23b7c3e32dbde7b8
+  n=1   balanced         native,shared  block-scan   74234e98afe7498f
+  n=2   PT               native,shared  block-scan   ded07a8646aa4b68
+  n=2   PW               native,shared  block-scan   3eb037a244c4070d
+  n=2   uniform          native,shared  block-scan   da2d965498793493
+  n=2   balanced         native,shared  block-scan   74234e98afe7498f
+  rep 0 PT             native   n=  1 T=   1024    1.4959 ms
+  rep 0 PT             shared   n=  1 T=   1024    1.5436 ms
+  rep 0 PW             native   n=  1 T=   1024    1.6623 ms
+  rep 0 PW             shared   n=  1 T=   1024    1.6963 ms
+  rep 0 uniform        native   n=  1 T=   1024    1.2229 ms
+  rep 0 uniform        shared   n=  1 T=   1024    1.2717 ms
+  rep 0 balanced       native   n=  1 T=   1024    1.2227 ms
+  rep 0 balanced       shared   n=  1 T=   1024    1.2710 ms
+  rep 0 PT             native   n=  2 T=   2048    2.4905 ms
+  rep 0 PT             shared   n=  2 T=   2048    2.5620 ms
+  rep 0 PW             native   n=  2 T=   2048    2.4686 ms
+  rep 0 PW             shared   n=  2 T=   2048    2.5276 ms
+  rep 0 uniform        native   n=  2 T=   2048    2.0446 ms
+  rep 0 uniform        shared   n=  2 T=   2048    2.0874 ms
+  rep 0 balanced       native   n=  2 T=   2048    2.0437 ms
+  rep 0 balanced       shared   n=  2 T=   2048    2.0944 ms
+  rep 1 balanced       shared   n=  2 T=   2048    2.0922 ms
+  rep 1 balanced       native   n=  2 T=   2048    2.0465 ms
+  rep 1 uniform        shared   n=  2 T=   2048    2.0893 ms
+  rep 1 uniform        native   n=  2 T=   2048    2.0424 ms
+  rep 1 PW             shared   n=  2 T=   2048    2.5318 ms
+  rep 1 PW             native   n=  2 T=   2048    2.4699 ms
+  rep 1 PT             shared   n=  2 T=   2048    2.5634 ms
+  rep 1 PT             native   n=  2 T=   2048    2.5080 ms
+  rep 1 balanced       shared   n=  1 T=   1024    1.2743 ms
+  rep 1 balanced       native   n=  1 T=   1024    1.2268 ms
+  rep 1 uniform        shared   n=  1 T=   1024    1.2745 ms
+  rep 1 uniform        native   n=  1 T=   1024    1.2275 ms
+  rep 1 PW             shared   n=  1 T=   1024    1.7067 ms
+  rep 1 PW             native   n=  1 T=   1024    1.6714 ms
+  rep 1 PT             shared   n=  1 T=   1024    1.5550 ms
+  rep 1 PT             native   n=  1 T=   1024    1.5138 ms
+  rep 2 PT             native   n=  1 T=   1024    1.5118 ms
+  rep 2 PT             shared   n=  1 T=   1024    1.5573 ms
+  rep 2 PW             native   n=  1 T=   1024    1.6704 ms
+  rep 2 PW             shared   n=  1 T=   1024    1.7097 ms
+  rep 2 uniform        native   n=  1 T=   1024    1.2273 ms
+  rep 2 uniform        shared   n=  1 T=   1024    1.2750 ms
+  rep 2 balanced       native   n=  1 T=   1024    1.2260 ms
+  rep 2 balanced       shared   n=  1 T=   1024    1.2744 ms
+  rep 2 PT             native   n=  2 T=   2048    2.5132 ms
+  rep 2 PT             shared   n=  2 T=   2048    2.5668 ms
+  rep 2 PW             native   n=  2 T=   2048    2.4666 ms
+  rep 2 PW             shared   n=  2 T=   2048    2.5340 ms
+  rep 2 uniform        native   n=  2 T=   2048    2.0316 ms
+  rep 2 uniform        shared   n=  2 T=   2048    2.0811 ms
+  rep 2 balanced       native   n=  2 T=   2048    2.0347 ms
+  rep 2 balanced       shared   n=  2 T=   2048    2.0926 ms
+  rep 3 balanced       shared   n=  2 T=   2048    2.0795 ms
+  rep 3 balanced       native   n=  2 T=   2048    2.0335 ms
+  rep 3 uniform        shared   n=  2 T=   2048    2.0774 ms
+  rep 3 uniform        native   n=  2 T=   2048    2.0325 ms
+  rep 3 PW             shared   n=  2 T=   2048    2.5322 ms
+  rep 3 PW             native   n=  2 T=   2048    2.4758 ms
+  rep 3 PT             shared   n=  2 T=   2048    2.5698 ms
+  rep 3 PT             native   n=  2 T=   2048    2.5040 ms
+  rep 3 balanced       shared   n=  1 T=   1024    1.2742 ms
+  rep 3 balanced       native   n=  1 T=   1024    1.2272 ms
+  rep 3 uniform        shared   n=  1 T=   1024    1.2757 ms
+  rep 3 uniform        native   n=  1 T=   1024    1.2272 ms
+  rep 3 PW             shared   n=  1 T=   1024    1.7111 ms
+  rep 3 PW             native   n=  1 T=   1024    1.6746 ms
+  rep 3 PT             shared   n=  1 T=   1024    1.5525 ms
+  rep 3 PT             native   n=  1 T=   1024    1.5113 ms
+  rep 4 PT             native   n=  1 T=   1024    1.5124 ms
+  rep 4 PT             shared   n=  1 T=   1024    1.5562 ms
+  rep 4 PW             native   n=  1 T=   1024    1.6706 ms
+  rep 4 PW             shared   n=  1 T=   1024    1.7100 ms
+  rep 4 uniform        native   n=  1 T=   1024    1.2273 ms
+  rep 4 uniform        shared   n=  1 T=   1024    1.2743 ms
+  rep 4 balanced       native   n=  1 T=   1024    1.2262 ms
+  rep 4 balanced       shared   n=  1 T=   1024    1.2748 ms
+  rep 4 PT             native   n=  2 T=   2048    2.5126 ms
+  rep 4 PT             shared   n=  2 T=   2048    2.5650 ms
+  rep 4 PW             native   n=  2 T=   2048    2.4647 ms
+  rep 4 PW             shared   n=  2 T=   2048    2.5244 ms
+  rep 4 uniform        native   n=  2 T=   2048    2.0473 ms
+  rep 4 uniform        shared   n=  2 T=   2048    2.0980 ms
+  rep 4 balanced       native   n=  2 T=   2048    2.0485 ms
+  rep 4 balanced       shared   n=  2 T=   2048    2.0806 ms
+  rep 5 balanced       shared   n=  2 T=   2048    2.0900 ms
+  rep 5 balanced       native   n=  2 T=   2048    2.0451 ms
+  rep 5 uniform        shared   n=  2 T=   2048    2.0887 ms
+  rep 5 uniform        native   n=  2 T=   2048    2.0436 ms
+  rep 5 PW             shared   n=  2 T=   2048    2.5323 ms
+  rep 5 PW             native   n=  2 T=   2048    2.4697 ms
+  rep 5 PT             shared   n=  2 T=   2048    2.5688 ms
+  rep 5 PT             native   n=  2 T=   2048    2.5055 ms
+  rep 5 balanced       shared   n=  1 T=   1024    1.2742 ms
+  rep 5 balanced       native   n=  1 T=   1024    1.2271 ms
+  rep 5 uniform        shared   n=  1 T=   1024    1.2743 ms
+  rep 5 uniform        native   n=  1 T=   1024    1.2258 ms
+  rep 5 PW             shared   n=  1 T=   1024    1.7099 ms
+  rep 5 PW             native   n=  1 T=   1024    1.6717 ms
+  rep 5 PT             shared   n=  1 T=   1024    1.5581 ms
+  rep 5 PT             native   n=  1 T=   1024    1.5086 ms
+  rep 6 PT             native   n=  1 T=   1024    1.5129 ms
+  rep 6 PT             shared   n=  1 T=   1024    1.5561 ms
+  rep 6 PW             native   n=  1 T=   1024    1.6712 ms
+  rep 6 PW             shared   n=  1 T=   1024    1.7035 ms
+  rep 6 uniform        native   n=  1 T=   1024    1.2274 ms
+  rep 6 uniform        shared   n=  1 T=   1024    1.2744 ms
+  rep 6 balanced       native   n=  1 T=   1024    1.2257 ms
+  rep 6 balanced       shared   n=  1 T=   1024    1.2750 ms
+  rep 6 PT             native   n=  2 T=   2048    2.5087 ms
+  rep 6 PT             shared   n=  2 T=   2048    2.5632 ms
+  rep 6 PW             native   n=  2 T=   2048    2.4695 ms
+  rep 6 PW             shared   n=  2 T=   2048    2.5359 ms
+  rep 6 uniform        native   n=  2 T=   2048    2.0443 ms
+  rep 6 uniform        shared   n=  2 T=   2048    2.0945 ms
+  rep 6 balanced       native   n=  2 T=   2048    2.0482 ms
+  rep 6 balanced       shared   n=  2 T=   2048    2.0951 ms
+  rep 7 balanced       shared   n=  2 T=   2048    2.0928 ms
+  rep 7 balanced       native   n=  2 T=   2048    2.0430 ms
+  rep 7 uniform        shared   n=  2 T=   2048    2.0961 ms
+  rep 7 uniform        native   n=  2 T=   2048    2.0451 ms
+  rep 7 PW             shared   n=  2 T=   2048    2.5337 ms
+  rep 7 PW             native   n=  2 T=   2048    2.4694 ms
+  rep 7 PT             shared   n=  2 T=   2048    2.5633 ms
+  rep 7 PT             native   n=  2 T=   2048    2.4998 ms
+  rep 7 balanced       shared   n=  1 T=   1024    1.2750 ms
+  rep 7 balanced       native   n=  1 T=   1024    1.2269 ms
+  rep 7 uniform        shared   n=  1 T=   1024    1.2755 ms
+  rep 7 uniform        native   n=  1 T=   1024    1.2264 ms
+  rep 7 PW             shared   n=  1 T=   1024    1.7099 ms
+  rep 7 PW             native   n=  1 T=   1024    1.6731 ms
+  rep 7 PT             shared   n=  1 T=   1024    1.5581 ms
+  rep 7 PT             native   n=  1 T=   1024    1.5131 ms
+  rep 8 PT             native   n=  1 T=   1024    1.5113 ms
+  rep 8 PT             shared   n=  1 T=   1024    1.5557 ms
+  rep 8 PW             native   n=  1 T=   1024    1.6698 ms
+  rep 8 PW             shared   n=  1 T=   1024    1.7109 ms
+  rep 8 uniform        native   n=  1 T=   1024    1.2266 ms
+  rep 8 uniform        shared   n=  1 T=   1024    1.2746 ms
+  rep 8 balanced       native   n=  1 T=   1024    1.2262 ms
+  rep 8 balanced       shared   n=  1 T=   1024    1.2745 ms
+  rep 8 PT             native   n=  2 T=   2048    2.4918 ms
+  rep 8 PT             shared   n=  2 T=   2048    2.5419 ms
+  rep 8 PW             native   n=  2 T=   2048    2.4580 ms
+  rep 8 PW             shared   n=  2 T=   2048    2.5277 ms
+  rep 8 uniform        native   n=  2 T=   2048    2.0428 ms
+  rep 8 uniform        shared   n=  2 T=   2048    2.0921 ms
+  rep 8 balanced       native   n=  2 T=   2048    2.0461 ms
+  rep 8 balanced       shared   n=  2 T=   2048    2.0945 ms
+
+HISTOGRAM GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-e128g1/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histbfd3ac6bf-8e9e7263/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED
