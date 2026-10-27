@@ -38,3 +38,8 @@
 2026-10-27T04:24:20Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
 2026-10-27T04:24:20Z gate END: exit 0 after 0 min [unit 4/8 - gband gate=band]
 2026-10-27T04:24:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:24:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 5/8 - rc3] (estimate 3 min, cap 10 min, 48 min left)
+2026-10-27T04:24:38Z regcheck: REGCHECK_u7_st7=PASS
+2026-10-27T04:24:38Z regcheck: REGCHECK_u8_stq=PASS
+2026-10-27T04:24:38Z regcheck END: exit 0 after 0 min [unit 5/8 - rc3]
+2026-10-27T04:24:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

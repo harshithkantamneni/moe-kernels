@@ -1,0 +1,293 @@
+{
+ "tool": "scripts/instr_probe_c3.py --mode regcheck",
+ "variants": {
+  "u7-st7": {
+   "cell": [
+    "PT",
+    2,
+    "native"
+   ],
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "128-128-64-1-3-8-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "128-128-64-1-3-8-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    },
+    "plain": {
+     "128-128-64-1-3-8-False-2": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "128-128-64-1-3-8-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    }
+   },
+   "rows": [
+    {
+     "config": [
+      128,
+      128,
+      64,
+      1,
+      3,
+      8,
+      false,
+      2
+     ],
+     "off": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 2,
+        "regs": 113,
+        "shared": 98304
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      128,
+      128,
+      64,
+      1,
+      3,
+      8,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 2,
+        "regs": 114,
+        "shared": 98304
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's; plain and copy on wgmma",
+   "sass_checks_c3_printed": {
+    "128-128-64-1-3-8-False-2": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 976,
+     "loop": [
+      9888,
+      11712
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "128-128-64-1-3-8-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 1064,
+     "loop": [
+      9952,
+      11712
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "why": ""
+  },
+  "u8-stq": {
+   "cell": [
+    "PT",
+    1,
+    "native"
+   ],
+   "own_spec": "stamps=ends,evict_a=none,evict_b=none",
+   "own_spec_ok": true,
+   "paths": {
+    "copy": {
+     "128-128-64-1-3-8-False-8": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "128-128-64-1-3-8-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    },
+    "plain": {
+     "128-128-64-1-3-8-False-8": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     },
+     "128-128-64-1-3-8-True-1": {
+      "mma": "wgmma",
+      "mma_sync": 0,
+      "wgmma": 4,
+      "wgmma_wait_group": 2
+     }
+    }
+   },
+   "rows": [
+    {
+     "config": [
+      128,
+      128,
+      64,
+      1,
+      3,
+      8,
+      false,
+      8
+     ],
+     "off": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 2,
+        "regs": 114,
+        "shared": 98304
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    },
+    {
+     "config": [
+      128,
+      128,
+      64,
+      1,
+      3,
+      8,
+      true,
+      1
+     ],
+     "off": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "off_same": true,
+     "plain": {
+      "ctas_per_sm": 2,
+      "regs": 116,
+      "shared": 98304
+     },
+     "specs": {
+      "stamps=ends,evict_a=none,evict_b=none": {
+       "copy": {
+        "ctas_per_sm": 2,
+        "regs": 114,
+        "shared": 98304
+       },
+       "same_ctas_per_sm": true,
+       "same_regs": false
+      }
+     }
+    }
+   ],
+   "rule": "CTAs per SM identical to the plain kernel's; plain and copy on wgmma",
+   "sass_checks_c3_printed": {
+    "128-128-64-1-3-8-False-8": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 976,
+     "loop": [
+      9952,
+      11760
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    },
+    "128-128-64-1-3-8-True-1": {
+     "bars_after_loop": 2,
+     "clock_reads": 6,
+     "instructions": 1064,
+     "loop": [
+      9952,
+      11712
+     ],
+     "loop_clock_reads": 0,
+     "loop_mma": 4,
+     "mma": "HGMMA",
+     "ok": true,
+     "start_before_first_ldg": true
+    }
+   },
+   "why": ""
+  }
+ },
+ "versions": {
+  "python": "3.12.16",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ }
+}
