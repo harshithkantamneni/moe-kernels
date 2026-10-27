@@ -1,1 +1,2 @@
 prelude    exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
+calibrate  exit 0 after 0 min [unit 2/8 mixtral-8x7b tc4]

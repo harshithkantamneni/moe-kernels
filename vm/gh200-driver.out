@@ -6,3 +6,7 @@
 2026-10-27T22:42:07Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/8 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 53 min left)
 2026-10-27T22:42:09Z prelude END: exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
 2026-10-27T22:42:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 65cf16d to run-gh200-tile4-20261027t2238: prelude (unit 1/8 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-10-27T22:42:11Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/8 mixtral-8x7b tc4] (estimate 1 min, cap 30 min, 52 min left)
+2026-10-27T22:42:36Z calibrate END: exit 0 after 0 min [unit 2/8 mixtral-8x7b tc4]
+2026-10-27T22:42:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
