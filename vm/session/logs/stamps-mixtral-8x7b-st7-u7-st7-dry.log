@@ -1,0 +1,5 @@
+INSTRUMENTED KERNEL C3 (stamps): 1 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u7-st7           mixtral-8x7b           128x128x64 w8 s3 G1 mixtral-8x7b-128g1 cells 4 (PT-n2-native, PW-n2-native, uniform-n2-native, balanced-n2-native) spec stamps=ends,evict_a=none,evict_b=none
+  3 warm-up and 3 stamped calls per cell, each held ahead; on a PASS regcheck and gate hard legs (PERTURBED on a timing FAIL alone)
+PERTURBED: the overhead gate for u7-st7 reads FAIL; the stamps run and the pages are labelled PERTURBED, the measured overhead beside every reading (owner OD-1, 2026-10-26)
+DRY RUN: nothing launched (exit 2)
