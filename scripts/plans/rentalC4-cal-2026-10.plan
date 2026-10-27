@@ -1,0 +1,38 @@
+# THE CALIBRATION RENTAL C4 (2026-10-27): a fifth non-blind CAL model in blind Phi-3.5's w1 regime (large K, x near 1,
+# P near 100), Mixtral-8x7B's tensor-parallel-2 shard (mixtral-8x7b-tp2: w1 K 4096, P 112, x 0.92 to 0.98 at n 2), read
+# under the FROZEN round-4 model (W2 byte law, K1 wall knee, clock form, F1 par; the owner's choice of 2026-10-27, after
+# four offline rounds left the B3 gate failing: round 4 max |held-out mean| 1.49, P(A) 0.380). One gpu_1x_gh200 at
+# $2.29/h, run by C4's driver (C2's pinned driver plus lines marked C4):
+#   bash scripts/vm_run.sh start --ip <ip> --run-id <id> --deadline <launch + 65 min, epoch s> \
+#     --plan scripts/plans/rentalC4-cal-2026-10.plan --driver gh200_cal4_session.sh
+# Registration (before any page): docs/registered/2026-10-27-cal4-gh200.{txt,json}. C4 is CALIBRATION: it certifies
+# nothing; every C4 page is SEEN once read; the round-4 model is frozen by the registration.
+# Power and lock: C2's. 700 W set and read back (enforced.power.limit and the -q GPU-scope limit both at 700 W within
+# 1 W, else the session stops; no fallback); the session lock 1410 MHz locked and read back by the prelude, else stop;
+# A2's G-BAND gate after the two f128 pages ends the session when their counter clocks under load leave the band.
+# Units (registration 'units'):
+#   C4-P   the prelude: power read-back, the 1410 lock probe; calibrate (the ruler the timed unit hands R3, and the
+#          triad K1's rate is read beside); the tile census of tp2 at 128x128 (compile only: 2 CTAs per SM, the W_c 264
+#          the frozen W2 law prices with)
+#   C4-F   the sag estimator's pages on this board: OLMoE f128 and Mixtral-8x7B f128 (128x128 G 64, treads 1-9, three
+#          arms), then G-BAND
+#   C4-T   Mixtral-8x7B-tp2 128x128 w8 s3 G 1 timed, NATIVE and SHARED (NATIVE scored), n 2, six cells
+#   C4-B   its byte page, the same file (the w1 bytes reading: W2 at P 112 against counted bytes)
+# Line order is the priority. The driver drops the LAST unit first. Every unit is nodrop: the readings need all of them.
+# MINUTES: 25 of units estimated (25 nodrop): C2's actual minutes for the prelude, calibrate, the census and the gate
+# (0 each, 2, 1, 1 and 1 here) and the f128 pages (3 and 7); tp2's pages scaled from C2's (8x22B timed 7 min and bytes
+# 5 min on six cells at 4.83 GB a layer, Mixtral-8x7B timed 5 and bytes 2 on four cells at 2.82 GB; tp2 is six cells at
+# 1.41 GB: 6 and 4, an INFERENCE).
+# Wall with about 25 min of boot, driver upgrade and setup: about 50 min ($1.91 at $2.29/h). Deadline launch + 65 min
+# (32 min of units after 25 of boot and the driver's 8 min reserve, 7 min over the estimate); guardian hard cap launch
+# + 80 min ($3.05 at most).
+- prelude lock-mhz=1410 power-limit-w=700 est=2 cap=15
+mixtral-8x7b calibrate label=tc4 nodrop=1 est=1 cap=30
+- tilecensus label=tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2 nodrop=1 est=1 cap=15
+# C4-F: the sag estimator's pages on this board, then the lock band under load
+olmoe-1b-7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=3 cap=20
+mixtral-8x7b bytes label=f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64 nodrop=1 est=7 cap=25
+- gate label=gband gate=band nodrop=1 est=1 cap=5
+# C4-T and C4-B: Mixtral-8x7B-tp2 128x128 G 1, timed then counted
+mixtral-8x7b-tp2 timed label=t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3 nodrop=1 est=6 cap=25
+mixtral-8x7b-tp2 bytes label=b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared byte-groups=1 nodrop=1 est=4 cap=20

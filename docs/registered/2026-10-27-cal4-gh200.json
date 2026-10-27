@@ -1,0 +1,767 @@
+{
+ "registered": "2026-10-27, before any C4 page",
+ "name": "2026-10-27-cal4-gh200",
+ "status": "CALIBRATION: C4 certifies nothing and scores no verdict; every C4 page becomes SEEN once read. The bands below say what the fifth held-out model means for the B3 decision and for the one declared model round that follows (owner, 2026-10-27); both decisions are the owner's",
+ "design": "moe-kernels-work 2026-10-27 build-C4 (CANDIDATE.md, DESIGN.md; offline, read-only over the repo at 3f0566a9), after refit4 REFIT.md, ROUND2.md and round3 ROUND3.md, ROUND4.md; the owner's choice of 2026-10-27: one calibration rental with a fifth non-blind CAL model in Phi-3.5's w1 regime (large K, x near 1, P near 100, ROUND4.md's definitions), then ONE declared model round. The fifth model is Mixtral-8x7B's tensor-parallel-2 shard, moe/spec.py 'mixtral-8x7b-tp2' (H 4096, I 7168, E 8, top_k 2: w1 K 4096, N 14336, P 112, x 0.92 to 0.98 at n 2 with M4's bytes; w2 K 7168, P 32, expert w2 0.93 L2), the only repo model in that regime that fits (CANDIDATE.md)",
+ "tool": "scripts/gh200_cal4_session.sh (C2's pinned driver; no line past its header changed), scripts/tileA2_gate.py band (A2's G-BAND), scripts/tile_census_a2.py (the census), scripts/scoring/cal4/hist_c4.py (the tp2 page), scripts/scoring/cal4/read_c4.py (the reader)",
+ "seen": "Every C4 page is SEEN once read: mixtral-8x7b-tp2 joins OLMoE-1B-7B, Qwen2-57B-A14B, Mixtral-8x7B and Mixtral-8x22B as a CAL model, and any later fit that uses it (the declared five-model round) is SEEN-FITTED on it. tp2 is a TP shard of the CAL model Mixtral-8x7B: its router, E 8, top_k 2 and H 4096 are Mixtral-8x7B's (so are its page's routing shapes, and Phi-3.5's, rental 6 owner decision 4); its w1 N (14336) and w2 K (7168) are new. No tp2 cell exists at 128x128 or 64x128 before C4 (its uniform and balanced cells have the counts of tp2's R3-tile tread-8 cells, 256 rows per expert, from rentals 1 to 3: SEEN by counts at another tile, never timed and in no round-4 fit); its R3-tile pages (rentals 1, 2 and 3, BLOCK_M 32, at 1710 and 1005 MHz) are SEEN, and M4's carried constants were fitted at R3's tile on rentals that ran them (SEEN-INFORMED). C4 runs no cell of B3's blind models (Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite; docs/registered/2026-10-20-tileB2-*). OD13 kept: no time is priced against rental A's 1710 E1-CAL pages",
+ "frozen": {
+  "statement": "The round-4 model (round3 ROUND4.md's selected variant: the W2 byte law on both GEMMs, the K1 knee fitted in the wall domain at its SEEN constants, the clock form of F1, F1 'par') is FROZEN as of this registration. The reader refuses unless every file below has its sha256, the frozen model reproduces the fingerprint on tp2's six cells, and B2's cell at the registered UNPRICED index is round 4's UNPRICED cell; no constant below is refitted, re-chosen or re-read from a C4 page before C4-R1 and C4-R2 are read. A change made after C4's pages are seen is SEEN-FITTED on tp2 and is disclosed as such. THE FREEZE IS TIED TO THE RENTAL'S COMMIT, as C2's: read_c4.read takes the commit from the ledger's 'driver start: commit <sha>' line (gh200-driver/status, checked against session/commit.txt) and refuses unless git show <sha>:<path> equals the working copy for the registration JSON and text, the tp2 page, the plan and every code_pins path, every code_pins path has its registered sha256, and every repo module loaded from the chain's repo (diag-A2 common.REPO) and from the reader's repo is a code_pins path with its registered bytes: a repo module is a git-tracked file under that repo, outside tests/ and any .venv, venv, site-packages or dist-packages directory, with an absolute __file__ (read_c2.repo_modules, C2's rule)",
+  "chain_repo_modules": [
+   "moe/__init__.py",
+   "moe/baselines/__init__.py",
+   "moe/baselines/_framework_config.py",
+   "moe/bench/__init__.py",
+   "moe/bench/ai_model.py",
+   "moe/bench/calibrate.py",
+   "moe/bench/counter_probe_kernel.py",
+   "moe/bench/exit_codes.py",
+   "moe/bench/provenance.py",
+   "moe/bench/published.py",
+   "moe/bench/roofline.py",
+   "moe/bench/schema.py",
+   "moe/bench/timing.py",
+   "moe/bench/weights.py",
+   "moe/pipeline.py",
+   "moe/quant.py",
+   "moe/routing/__init__.py",
+   "moe/routing/distributions.py",
+   "moe/spec.py",
+   "moe/stages.py",
+   "moe/state.py",
+   "scripts/atile_pooled_fit.py",
+   "scripts/block_m_crossing_sweep.py",
+   "scripts/clock_elasticity.py",
+   "scripts/cores_heldout_predict.py",
+   "scripts/cross_model_predict.py",
+   "scripts/dram_counter_route.py",
+   "scripts/lock_gate.py",
+   "scripts/per_tile_model_fit.py",
+   "scripts/private_weight_reference.py",
+   "scripts/r3_timing_model.py",
+   "scripts/r3_timing_model_v3.py",
+   "scripts/r3_timing_model_v4.py",
+   "scripts/r3_timing_model_v4L.py",
+   "scripts/ruler_rebaseline.py",
+   "scripts/scoring/rental2/common.py",
+   "scripts/scoring/rental3/r3common.py",
+   "scripts/scoring/rental4/r4common.py",
+   "scripts/scoring/rental5/r5common.py",
+   "scripts/scoring/rental5/skewmodel.py",
+   "scripts/scoring/rental6/r6common.py",
+   "scripts/scoring/rental6/r6model.py",
+   "scripts/scoring/rental6/reg6.py",
+   "scripts/scoring/rental7/r7common.py",
+   "scripts/scoring/tileA/finalise.py",
+   "scripts/scoring/tileA/power_tile.py",
+   "scripts/scoring/tileA/regtile.py",
+   "scripts/scoring/tileA/tcommon.py",
+   "scripts/scoring/tileA2/a2common.py",
+   "scripts/skew_synth.py",
+   "scripts/skew_synth_tile.py",
+   "scripts/wave_split_bytes.py",
+   "scripts/wave_split_bytes_v3.py",
+   "scripts/wave_split_bytes_v4.py",
+   "scripts/scoring/cal2/read_c2.py",
+   "scripts/scoring/cal4/read_c4.py"
+  ],
+  "root": "~/code/moe-kernels-work (paths below relative to it); the chain imports the repo at ~/code/moe-kernels",
+  "files": {
+   "2026-10-20/scoreA2/bytes.score.json": "f90eeebb98c0445e01c08277a1137ead3c67601e71aa5859ed886b2d9c6e2c13",
+   "2026-10-20/scoreA2/census.score.json": "736ebb7ff3005323801513c4aecadb0b3173f5c5d6379f1c9e09189524ff0436",
+   "2026-10-20/scoreA2/floor.score.json": "f313f46c6c34cab5d618545fb96034ee0383b8a71c91ca193620f5dd631e8689",
+   "2026-10-20/scoreA2/rep.score.json": "9c09c8b48640684f40ecd2bc6d87d72597c3789c022848694539e863d2db9733",
+   "2026-10-21/diag-A2/work/common.py": "f4ac72d293fb2fbd71704397ae7a8b4b7de8bf339d0c1cc82a7d2333d4cb0921",
+   "2026-10-21/design-v5/work/v5price.py": "ff2565f18fbd81a5a8dbc650bdfbb1fffffde60a421fc2f755b60dfe89d3191a",
+   "2026-10-21/design-v5/work/kneefit.py": "df0b63145411ce5fddb0b4044c7ba1661949bb73f71062e0f88b453d448c9a35",
+   "2026-10-21/design-v5/work/sag.py": "a7261341ff39885384821632a1930279c10b3aed33605043a94a0fb7083f10e0",
+   "2026-10-21/design-v5/work/b2risk.py": "dad0d98c787736823d23336b0124b4dda6e0f0da70d7812fdef0d99171e97435",
+   "2026-10-21/design-v5/work/f3fit.json": "1a1fad978a7d9473f4851cb71aa26e0cdfc2004445280fdd8e4f198f64e44552",
+   "2026-10-21/design-v5/work/kneefit.json": "43ac3b0cba2db4a00d66a60da8669cbd33266d9fb93fb846e15f981fcecb8e53",
+   "2026-10-21/design-v5/work/kneefit64.json": "51b38850fa075e23e8711572ab90340e35c73b73f5fa32bfd77633e475d614bf",
+   "2026-10-22/diag-v5/work/d5.py": "09e86b88d56834f8055e3e0639697563d6fe571b2fe2c542bae398d33f27e12a",
+   "2026-10-22/diag-v5/work/bw.py": "d112e8a15d83f6e893177e595dd368a7a263e7f17e2d2eb64184f951a4bf91dd",
+   "2026-10-22/diag-v5/work/knee2.py": "86e21ee57e57c2a3cb92adc6f728f40a74a2ec9a254f6bd8f31c44afa7a952f8",
+   "2026-10-22/diag-v5/work/v5prime.py": "95aa801c8257b36bd4c255aa34f58ae4406ea3af3e4e1c066f2eb6403d71d8e4",
+   "2026-10-22/diag-v5/work/bytes_lomo.json": "cc51368d9a14a68100b22a3ccd9f0f3dbc2f9257060c4b7a684b6729edddc1aa",
+   "2026-10-22/knee-v5/work/k5.py": "02e06a689ecec4e492deac6c911f6a8fe107c152144850c517a6a8c894b80435",
+   "2026-10-22/refit4/work/r4.py": "cbc0587e57e645ac3a6476577dfeb230bfbb38783282ae766da19a2b82b5c3d6",
+   "2026-10-27/round3/work/r5.py": "d418b2d3713a5633320beb94e777392a1157ba744d89cb2e9862555eed60e323",
+   "2026-10-27/round3/work/r6.py": "57865d964ff13c8c8f02c9d76eb626ebc79f5357f9bb6b2504f0584e3ef78179",
+   "2026-10-27/round3/work/tailmap.json": "b0bbbc6e41fa0dae495c161ebb676a85191ed8a2f89332abc9d82914e316db7b",
+   "2026-10-27/round3/work/knee4.json": "bbd13b49cba45d0983e7aa3915209ed13457724bc9e5da29de8ad7ba1d7a9122",
+   "2026-10-27/round3/work/bytes7.json": "8ed65b98081ab7e83debb69ad43ebcd4c3715888a2db5f5beab402dc78297b4c",
+   "2026-10-27/round3/work/combo4.json": "7e9303f9b257676524402183da6126bae9ae86c1309d05b5a0543e3e5ea4e17a",
+   "2026-10-27/round3/work/DECLARED4.txt": "54c8e9a20726f335e6f1378cd4404d1d6f4b083f4623aa59be192ab6cab89a65"
+  },
+  "constants": {
+   "byte law": "W2 at 128x128 on both GEMMs (round3 r5 LS law, r6 law4('W2')): later-wave cross-group slab re-reads at D_eff = W_c dt / L from list scheduling (R 16 replicas, seed 20261027 x 1000 + i), sigma_gap 0.0375 (MEASURED-PERTURBED, in-sample for Mixtral-8x7B), the carried soft survival, the capacity cut at the 60 MiB L2 (MEASURED); the first window, in-group and A events M4's (v3 key, CARRIED); W_c 264 = 132 SMs x 2 CTAs per SM (the C2 and A2 censuses)",
+   "knee": "K1 at the A2 triad (3726.2 GB/s), p_128 6.0, S0 2.75 k-steps: knee4.json candidates K1 SEEN, the wall-domain fit on all four CAL models' 138 NATIVE 128x128 counter rows; tp2 is in none, so the SEEN constants ARE its held-out fold",
+   "clock form": "fac_g = 1 + D_net(t0) / t0 on the floor side, D_net(t) = A (1 - exp(-t / tau)) - 6.11 (1 - exp(-t / 50 us)) us, t0 the GEMM's sag-free time (r6.v5_parts_clock)",
+   "F1 estimator": "'par': per estimator page one (A, tau) by refit4 r4.sag_page_fit (design-v5 sag.fit over sag.pts_of(page, 1410)), A and tau averaged; pages: C4's OLMoE f128 and Mixtral-8x7B f128 (C4-F), both (tp2 has no estimator page to drop)",
+   "A2 board F1 (the fingerprint's)": {
+    "per_page": {
+     "olmoe-1b-7b": [
+      29.65,
+      300.0
+     ],
+     "mixtral-8x7b": [
+      54.39,
+      550.0
+     ]
+    },
+    "par": [
+     42.02,
+     425.0
+    ]
+   },
+   "T0, c, bw, p_64, F4, R3's 1410 share": "43.23 us, 202.548 ns, 3597.8 GB/s (asserted at import), 3.75, rho x 2, (6.11 us, 50 us): CARRIED as round 4",
+   "selections": "A2's (moe-kernels-work 2026-10-20 scoreA2 via finalise.selections)",
+   "scoring rules": "a2common.Rules.tileA2(1410)",
+   "registered UNPRICED blind cell": {
+    "index": 72,
+    "model": "jetmoe-8b",
+    "cls": "128g1",
+    "n": 2,
+    "label": "PT",
+    "rule": "round 4's: excluded from E1-TILE's statistics, so every pass estimate here is on 83 cells"
+   }
+  },
+  "round 4 selected table, re-priced by the frozen code at registration": {
+   "olmoe-1b-7b": 0.48,
+   "qwen2-57b-a14b": -1.44,
+   "mixtral-8x7b": 1.25,
+   "mixtral-8x22b": 0.24,
+   "mixtral-8x7b C2": 1.49
+  },
+  "round 4 pass estimate on 83 cells, reproduced": {
+   "A (4 models)": 0.3798,
+   "B (4 models)": 0.4998,
+   "D (O, Q, X; 8x7B G1 aside)": 0.4233
+  },
+  "fingerprint": {
+   "cells": [
+    "n2/PT",
+    "n2/PW",
+    "n2/PT2",
+    "n2/PW2",
+    "n2/uniform",
+    "n2/balanced"
+   ],
+   "ms": [
+    0.99127,
+    0.99693,
+    0.98471,
+    0.988935,
+    0.830071,
+    0.830071
+   ],
+   "w2_reads": [
+    [
+     1606530318,
+     623890119
+    ],
+    [
+     1694921575,
+     564521398
+    ],
+    [
+     1508088429,
+     608573540
+    ],
+    [
+     1579217374,
+     593624068
+    ],
+    [
+     1383276167,
+     531494557
+    ],
+    [
+     1383276167,
+     531494557
+    ]
+   ],
+   "m4_reads": [
+    [
+     1936628161,
+     626609652
+    ],
+    [
+     1816956866,
+     603553133
+    ],
+    [
+     1853236869,
+     615671633
+    ],
+    [
+     1936601917,
+     626799048
+    ],
+    [
+     1592515440,
+     582079351
+    ],
+    [
+     1592515440,
+     582079351
+    ]
+   ]
+  }
+ },
+ "power_and_lock": {
+  "power_limit_w": 700,
+  "rule": "C2's prelude, unchanged: nvidia-smi -pl 700 -sc 0, then the read-back (enforced.power.limit and -q -d POWER's GPU-scope Current Power Limit both at 700 W within 1 W, polled every 2 s up to 30 s), else the session STOPS (c2-power.env C2_POWER_700=refused, the last reading in power-set-unsettled-700.txt). No fallback limit",
+  "session_lock_mhz": 1410,
+  "lock_rule": "every unit but calibrate and the census runs under nvidia-smi -lgc 1410 with ncu --clock-control none; the prelude locks 1410, reads clocks.sm back (two tries) and STOPS when it does not hold (LOCK_PROBE_1410=held in locks.env)",
+  "g_band": "A2's G-BAND (tileA2_gate.py band) after C4's two f128 pages: joint_cF over them in the counter band at 1410 (primary [0.975 L, L], else the fallback [0.959 L, L]) is not None, else the session ends there"
+ },
+ "units": {
+  "C4-P": {
+   "units": [
+    "- prelude",
+    "mixtral-8x7b calibrate tc4",
+    "- tilecensus tc4"
+   ],
+   "for": "the power read-back and the lock probe (validity); calibrate's ruler, which the timed unit hands R3, and the triad K1's rate is read beside (C4-S5); tp2's compiled occupancy at 128x128: 2 CTAs per SM on both GEMMs is a validity clause of C4-R1 and C4-R2 (W2 prices with W_c 264)"
+  },
+  "C4-F": {
+   "units": [
+    "olmoe-1b-7b bytes f128",
+    "mixtral-8x7b bytes f128",
+    "- gate gband"
+   ],
+   "for": "the sag estimator's two pages ON C4'S BOARD, so tp2's cells are priced as B3 will price blind cells; then G-BAND",
+   "cells": "128x128x64 w8 s3, G 64, treads 1 to 9, NATIVE, SHARED and PRIVATE (A2's f128 pages)"
+  },
+  "C4-T": {
+   "units": [
+    "mixtral-8x7b-tp2 timed t128g1"
+   ],
+   "for": "C4-R1: tp2's held-out 128 G 1 time, the fifth held-out model",
+   "cells": "docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json: n 2 (the only tread whose vLLM default config is 128x128x64 w8 s3 G 1 for E 8, top_k 2), PT, PW, PT2, PW2, uniform, balanced, NATIVE and SHARED (NATIVE scored); E1-CAL's instrument (R3 through r3_tile.py, 9 declared copies, slip-policy cell, r7-median-run3)"
+  },
+  "C4-B": {
+   "units": [
+    "mixtral-8x7b-tp2 bytes b128g1"
+   ],
+   "for": "C4-R2 (the w1 bytes reading), C4-S2 and C4-S3: tp2's counted bytes, cycles, ncu time and sag on the same cells",
+   "cells": "the same file, A2's byte-page instrument at 1410, NATIVE and SHARED"
+  }
+ },
+ "readings": {
+  "C4-R1": {
+   "what": "X, tp2's held-out 128 G 1 mean, percent; e = T_model / T_meas - 1 per cell",
+   "read_by": "scripts/scoring/cal4/read_c4.py read (timed_rows, sag_fits, held_out)",
+   "method": "cells by read_c2.timed_rows' loop (tcommon.timed_page at G 1 with the registered file entry: G5 provenance, the r7-median-run3 rebuild, the ALL view; tcommon.row_drop against v4's ms); each kept NATIVE cell priced by r6.cell_ms4(r, K1 at the A2 triad with S0 2.75, p 6.0, F1 par of C4-F, r6.reads_of(r, 6.0, 'W2'), clock=True); a cell whose W2 fixed point the guard refuses is UNPRICED, listed and left out of X; X = refit4 r4.summ's mean over the priced cells",
+   "table": "read_c4.table: round 4's selected LOMO held-out 128 G 1 means (combo4.json: {\"olmoe-1b-7b\": 0.48, \"qwen2-57b-a14b\": -1.44, \"mixtral-8x7b\": 1.25, \"mixtral-8x22b\": 0.24}; Mixtral-8x7B on C2's board 1.49 beside), unchanged by C4 (no C4 page enters their folds), and X; max |mean|, spread, rms of means; the round-4 gate's G1 on the five (DESCRIPTIVE: it already fails on the four, so C4 cannot pass it)",
+   "pass_estimate": "read_c4.pass_estimates(X): read_c2.power (diag-v5 power5's, verbatim) on B2's registered NATIVE cells less the registered UNPRICED cell (83), R 200,000, seed 20261022, the knee round's method on five means: A = power(b_class the mean of the five b = -ln(1 + e), sd their SD), B = power(0, their RMS), D = power(the mean of OLMoE, Qwen2-57B, Mixtral-8x22B and X, their SD: Mixtral-8x7B's G 1 set aside). An ESTIMATE",
+   "beside X (DESCRIPTIVE)": "X at A2's par (C4's board sag against the model's error); X with M4's bytes (the W2 lever's share in time); X with C4-B's counted bytes (oracle); X with K1 at C4's own triad; v5'''s held-out mean on the same cells",
+   "refusals": "read_c4.read refuses (no reading at all) on a frozen work file, the rental's commit, a code_pins sha256, a repo module (checked right after the fingerprint, before any page, and again at the end), the fingerprint, the UNPRICED identity, or the PREFLIGHT: right after the fingerprint and before any page, the frozen code re-prices round 4's selected table (r4.sag_page_fit on A2's and C2's f128 pages, the path C4's F1 takes) and its four-model estimate, and refuses on any difference from the registered values; the timed page is NOT SCORED unless tcommon.timed_page admits it and its report records lock_mhz 1410",
+   "validity": "NOT READ unless the board reads valid (c2-power.env C2_POWER_W=700, LOCK_PROBE_1410=held, G-BAND PASS), both C4-F pages give a fit, the C4-T page is admitted, the tc4 census compiles tp2 at 2 CTAs per SM on both GEMMs with verdict COMPLETE, and at least 4 of its 6 NATIVE cells are kept and priced",
+   "bands": {
+    "CLEAN": "|X| <= 1",
+    "HIGH": "1 < X < 2",
+    "HIGH-FAR": "X >= 2",
+    "LOW": "-2 < X < -1",
+    "LOW-FAR": "X <= -2",
+    "NOT READ": "the validity clause fails"
+   },
+   "means_for_B3": {
+    "CLEAN": "the frozen round-4 model prices tp2 (Phi-3.5's w1 geometry: K 4096, x near 1, P 112) within the gate's 1% bar. What that supports depends on C4-R2 (the joint table): with W2-SIDE both Phi levers pass their first held-out test; with BETWEEN or M4-SIDE the 1% agreement is a cancellation of a bytes error against a knee error and Phi's stake is not supported; with NOT READ only the time is tested. The final declared round refits on five models with tp2 SEEN and keeps the round-4 forms that the joint cell supports; G1 covers the five",
+    "HIGH": "tp2 runs faster than the frozen model prices it, as Mixtral-8x7B's 128 G 1 does (+1.25 on A2, +1.49 on C2's board): the Mixtral-type miss partly reproduces at P 112. The final declared round must carry a knee variable that separates K 4096, x near 1 (Mixtral-8x7B and tp2) from Qwen2-57B at K 3584, with C4-S2's wall-domain w1 error as its evidence, and the bytes term the joint cell names",
+    "HIGH-FAR": "as HIGH, past Mixtral-8x7B's own residual: the miss is a regime of K 4096, x near 1, G 1 (or of Mixtral-8x7B's E 8 routing, which tp2 shares; disclosed), and Phi-3.5 (K 4096, x 0.94 to 1.07) most likely sits in it. The final declared round must model that regime on five models; Phi-3.5's stake is reported as at risk until it does",
+    "LOW": "the frozen model prices tp2 too fast, the direction of Phi-3.5's stake (-2.3% against v5''). The final declared round must remove the term the joint cell names: W2's w1 service at P near 100 (M4-SIDE, BETWEEN) or the knee's sharpness at P 112 (W2-SIDE, BEYOND-W2)",
+    "LOW-FAR": "as LOW, past Qwen2-57B's -1.44: the round-4 model's Phi-3.5 stake is most likely an error large enough to fail E1-TILE's 1% bar on Phi alone. The final declared round must remove the term the joint cell names, and Phi-3.5's stake is reported as at risk in that round's registration",
+    "NOT READ": "no fifth held-out model: the final declared round runs on the four existing CAL models without tp2 (G1 on the four, Mixtral-8x7B on C2's board as well), and C4 is not rented again (owner, 2026-10-27)"
+   },
+   "joint (C4-R1 band x C4-R2 band: the registered reading of the two together, for the final declared round)": {
+    "CLEAN": {
+     "W2-SIDE": "both Phi levers pass their first held-out test: the round keeps W2 on both GEMMs and the wall knee",
+     "BETWEEN": "the 1% agreement is partly a cancellation: W2 over-serves w1 at P 112 and the knee offsets it; the round must reduce W2's w1 service and re-check the knee on five models; Phi's stake is not supported",
+     "M4-SIDE": "the 1% agreement is a cancellation: W2's w1 service at P near 100 is wrong and the knee error offsets it; the round keeps M4 on w1 at this distance and refits the knee; Phi's stake is not supported",
+     "BEYOND-W2": "time agrees but the counters show more service than W2: the round keeps W2's direction and discloses its size; Phi's bytes lever is supported in sign only",
+     "BEYOND-M4": "time agrees but neither byte law describes w1 at P 112: the round has no measured w1 law at Phi's distance and Phi's stake is not supported",
+     "NOT READ": "only the time is tested: the round keeps the round-4 forms; Phi's bytes lever stays untested"
+    },
+    "HIGH": {
+     "W2-SIDE": "the bytes are right, so the excess is the knee: the round must sharpen the knee at K 4096, x near 1",
+     "BETWEEN": "the knee is sharper than K1's and W2 partly over-serves w1: the round changes both terms",
+     "M4-SIDE": "the knee is sharper still, partly hidden by W2's over-service: the round keeps M4 on w1 at P near 100 and sharpens the knee",
+     "BEYOND-W2": "the knee carries the excess and W2 under-serves: the round sharpens the knee and discloses the bytes",
+     "BEYOND-M4": "neither byte law fits and tp2 still runs fast: the round has no measured w1 law at Phi's distance",
+     "NOT READ": "the knee is the only tested term: the round sharpens the knee at K 4096, x near 1"
+    },
+    "HIGH-FAR": {
+     "W2-SIDE": "a knee regime at K 4096, x near 1 with the bytes right: the round must model it; Phi's stake at risk",
+     "BETWEEN": "a knee regime plus W2 over-service: the round changes both; Phi's stake at risk",
+     "M4-SIDE": "a knee regime hidden in part by W2's error: the round keeps M4 on w1 at P near 100 and models the regime; Phi's stake at risk",
+     "BEYOND-W2": "a knee regime with W2 under-serving: the round models the regime; Phi's stake at risk",
+     "BEYOND-M4": "a knee regime and no byte law at P 112: the round models the regime; Phi's stake at risk",
+     "NOT READ": "a knee regime, bytes untested: the round models the regime; Phi's stake at risk"
+    },
+    "LOW": {
+     "W2-SIDE": "the bytes are right, so the knee is too sharp at P 112 (Qwen2-like): the round softens the knee there",
+     "BETWEEN": "W2 over-serves w1 at P 112: the round reduces W2's w1 service at P near 100",
+     "M4-SIDE": "W2's w1 service at P near 100 is the error (Phi's bytes lever is the law's error): the round keeps M4 on w1 at this distance",
+     "BEYOND-W2": "the knee is too sharp and W2 under-serves: the round softens the knee",
+     "BEYOND-M4": "neither byte law fits: the round has no measured w1 law at Phi's distance",
+     "NOT READ": "the term is not identified: the round treats the knee and W2's w1 service as suspect"
+    },
+    "LOW-FAR": {
+     "W2-SIDE": "the knee is too sharp at P 112: the round softens it; Phi's stake at risk",
+     "BETWEEN": "W2 over-serves w1: the round reduces W2's w1 service; Phi's stake at risk",
+     "M4-SIDE": "Phi's bytes lever is the law's error: the round keeps M4 on w1 at P near 100; Phi's stake at risk",
+     "BEYOND-W2": "the knee is too sharp: the round softens it; Phi's stake at risk",
+     "BEYOND-M4": "neither byte law fits at P 112: Phi's stake at risk",
+     "NOT READ": "the term is not identified: the round treats the knee and W2's w1 service as suspect; Phi's stake at risk"
+    },
+    "NOT READ": {
+     "W2-SIDE": "the time is not read: the final round runs on the four CAL models without tp2; the bytes reading (W2-SIDE) is DESCRIPTIVE beside it",
+     "BETWEEN": "the time is not read: the final round runs on the four CAL models without tp2; the bytes reading (BETWEEN) is DESCRIPTIVE beside it",
+     "M4-SIDE": "the time is not read: the final round runs on the four CAL models without tp2; the bytes reading (M4-SIDE) is DESCRIPTIVE beside it",
+     "BEYOND-W2": "the time is not read: the final round runs on the four CAL models without tp2; the bytes reading (BEYOND-W2) is DESCRIPTIVE beside it",
+     "BEYOND-M4": "the time is not read: the final round runs on the four CAL models without tp2; the bytes reading (BEYOND-M4) is DESCRIPTIVE beside it",
+     "NOT READ": "the time is not read: the final round runs on the four CAL models without tp2"
+    }
+   },
+   "bounds (the five-model estimates at X, round 4's four means held fixed; 83 cells)": {
+    "X -3.00": {
+     "A (5 models)": 0.0923,
+     "B (5 models)": 0.1398,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.0657
+    },
+    "X -2.00": {
+     "A (5 models)": 0.2228,
+     "B (5 models)": 0.3025,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.1942
+    },
+    "X -1.00": {
+     "A (5 models)": 0.4071,
+     "B (5 models)": 0.4976,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.4302
+    },
+    "X +0.00": {
+     "A (5 models)": 0.4974,
+     "B (5 models)": 0.5875,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.5819
+    },
+    "X +1.00": {
+     "A (5 models)": 0.3959,
+     "B (5 models)": 0.4992,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.4424
+    },
+    "X +2.00": {
+     "A (5 models)": 0.2189,
+     "B (5 models)": 0.3105,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.2034
+    },
+    "X +3.00": {
+     "A (5 models)": 0.0952,
+     "B (5 models)": 0.1507,
+     "D (O, Q, 8x22B, X; 8x7B G1 aside)": 0.0709
+    }
+   },
+   "why these cuts": "1.0 is the gate's own bar on a held-out mean. 2.0 is past both CAL residuals the knee trades (Mixtral-8x7B +1.25 on A2, +1.49 on C2's board; Qwen2-57B -1.44) and near Phi-3.5's 128g1 stake (-2.32 against v5''): a reading past it is larger than any residual the four models leave",
+   "stakes (frozen model against v5'' on tp2's cells at A2's par; NOT a prediction of record)": {
+    "frozen model / v5'' - 1, % (n2/PT, PW, PT2, PW2, uniform, balanced)": [
+     -3.49,
+     -1.46,
+     -3.08,
+     -3.71,
+     -2.92,
+     -2.92
+    ],
+    "mean %": -2.93,
+    "W2 / M4 w1 bytes - 1, %": [
+     -17.04,
+     -6.72,
+     -18.62,
+     -18.45,
+     -13.14,
+     -13.14
+    ],
+    "x": {
+     "w1 M4": {
+      "min": 0.916,
+      "median": 0.974,
+      "max": 0.976
+     },
+     "w1 W2": {
+      "min": 0.766,
+      "median": 0.833,
+      "max": 0.857
+     },
+     "w2 M4": {
+      "min": 0.601,
+      "median": 0.624,
+      "max": 0.71
+     },
+     "w2 W2": {
+      "min": 0.563,
+      "median": 0.613,
+      "max": 0.65
+     }
+    }
+   }
+  },
+  "C4-R2": {
+   "what": "Lambda = sum(counted - W2) / sum(M4 - W2) over C4-B's NATIVE cells' w1 dram_bytes_read: 0 when the counters are W2's, 1 when they are M4's. The W2 lever (sum(M4 - W2) / sum(M4)) is beside. Phi-3.5's bytes lever, held out for the first time",
+   "read_by": "scripts/scoring/cal4/read_c4.py bytes_reading (counter_cells, lambda_of)",
+   "method": "counted reads by kneefit.cells_of (refit4 r4.counter_cells: NATIVE, BLOCK_M 128); W2's and M4's reads by r6.reads_of(cell, 6.0, 'W2') and r6.reads_of(cell, 6.0, None) on the same counts and shuffle seed; the same quantities on w2 beside (DESCRIPTIVE)",
+   "validity": "NOT READ unless the board reads valid, the page is the registered tile and file (read_c2.check_counter_page), the census reads 2 CTAs per SM with verdict COMPLETE, at least 4 NATIVE cells are priced under both laws, and the W2 lever is at least 0.03 (at registration, on the page's six cells: 14.66% on the sum-based measure the cut tests, 15.09% per-cell median)",
+   "bands": {
+    "W2-SIDE": "-1/3 <= Lambda <= 1/3",
+    "BETWEEN": "1/3 < Lambda < 2/3",
+    "M4-SIDE": "2/3 <= Lambda <= 4/3",
+    "BEYOND-W2": "Lambda < -1/3",
+    "BEYOND-M4": "Lambda > 4/3",
+    "NOT READ": "the validity clause fails"
+   },
+   "means": {
+    "W2-SIDE": "W2 prices tp2's w1 bytes at P 112: same-wave w1 re-reads about 0.4 of a wave apart are served, as the law says. Phi-3.5's bytes lever (W2's w1 bytes 9% under M4's, ROUND3.md section 4) passes its first held-out test",
+    "BETWEEN": "the counted w1 bytes sit between W2's and M4's: the law serves too many of the re-reads it moves. Phi-3.5's bytes lever is partly the law's error; the declared round may not keep W2's w1 service as it is",
+    "M4-SIDE": "the re-reads W2 serves at P 112 miss, as M4 prices them: W2's w1 service at P near 100 is the law's error, and Phi-3.5's w1 bytes under W2 are suspect. The declared round keeps M4's w1 at this distance (ROUND3.md section 3's 'W2 on w2 only' row moves the four-model table by 0.2 points or less)",
+    "BEYOND-W2": "fewer w1 bytes than even W2 prices: more re-reads are served than the launch law places under the cut. W2's direction holds at P 112; its size does not",
+    "BEYOND-M4": "more w1 bytes than M4 prices: neither law describes w1 at P 112; the declared round has no measured w1 law at Phi-3.5's distance",
+    "NOT READ": "no held-out test of the w1 bytes lever: Phi-3.5's lever stays untested"
+   },
+   "why these cuts": "thirds of the distance between the two laws: a reading is W2's or M4's when the counters sit within a third of it from that law, so the lever (14.66% at registration, against the byte-page noise B2 assumes, 1.75% x s) is resolved three ways"
+  },
+  "C4-S1": {
+   "what": "tp2's x (bytes-only / floor-only) per GEMM on its kept cells, with M4's bytes and with W2's",
+   "read_by": "scripts/scoring/cal4/read_c4.py x_of_rows",
+   "expected (registration, INFERENCE)": {
+    "w1 M4": {
+     "min": 0.916,
+     "median": 0.974,
+     "max": 0.976
+    },
+    "w1 W2": {
+     "min": 0.766,
+     "median": 0.833,
+     "max": 0.857
+    },
+    "w2 M4": {
+     "min": 0.601,
+     "median": 0.624,
+     "max": 0.71
+    },
+    "w2 W2": {
+     "min": 0.563,
+     "median": 0.613,
+     "max": 0.65
+    }
+   }
+  },
+  "C4-S2": {
+   "what": "tp2 b128g1: K1 at its SEEN constants on counted bytes per GEMM in the wall domain (knee4.py's target and kappa_row) and in the cycles domain beside, and the per-cell w1 + w2 sum: does the knee carry X?",
+   "read_by": "scripts/scoring/cal4/read_c4.py knee_reading (k5.capture_rows, k5.gemm_form)"
+  },
+  "C4-S3": {
+   "what": "tp2's own sag on its b128g1 page: C4's par estimator minus the measured off, us; its own fit",
+   "read_by": "scripts/scoring/cal4/read_c4.py sag_domain"
+  },
+  "C4-S5": {
+   "what": "the board: C4's per-page (A, tau) beside A2's and C2's, the power read-back, the lock probe, G-BAND; tp2's compiled CTAs per SM at 128x128 beside the 2 per SM the frozen pricing uses; calibrate's triad beside A2's 3726.2 GB/s (15 rentals 3725.6 to 3727.6)",
+   "read_by": "scripts/scoring/cal4/read_c4.py census, triad (read_c2.board)"
+  }
+ },
+ "after": "OWNER DECISIONS 2026-10-27 (registered): C4, then ONE final declared model round (gate: G1 every held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board as well; G2 estimated P(A) >= 0.5 on the registered cells). If that round fails the B3 gate, iteration stops and the owner chooses between narrowing scope and going blind. B3 is registered only after a declared round passes. If C4 reads NOT READ, the final round runs on the four existing CAL models without tp2, and C4 is not rented again (owner, 2026-10-27). The round-4 gate is unchanged for that final round; G1 covers the five CAL models when C4 is read, the four otherwise",
+ "plan": {
+  "file": "scripts/plans/rentalC4-cal-2026-10.plan",
+  "sha256": "ab5a7aedd674ce24c0bc55f6e222af813744b1ab491f86ac982c77b33f15a935",
+  "units_count": 8,
+  "units": [
+   {
+    "model": "-",
+    "step": "prelude",
+    "label": "",
+    "est": 2,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "lock-mhz": "1410",
+     "power-limit-w": "700"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "calibrate",
+    "label": "tc4",
+    "est": 1,
+    "cap": 30,
+    "drop": "nodrop",
+    "keys": {}
+   },
+   {
+    "model": "-",
+    "step": "tilecensus",
+    "label": "tc4",
+    "est": 1,
+    "cap": 15,
+    "drop": "nodrop",
+    "keys": {
+     "tiles": "128x128x64w8s3",
+     "models": "mixtral-8x7b-tp2"
+    }
+   },
+   {
+    "model": "olmoe-1b-7b",
+    "step": "bytes",
+    "label": "f128",
+    "est": 3,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "mixtral-8x7b",
+    "step": "bytes",
+    "label": "f128",
+    "est": 7,
+    "cap": 25,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "byte-groups": "64"
+    }
+   },
+   {
+    "model": "-",
+    "step": "gate",
+    "label": "gband",
+    "est": 1,
+    "cap": 5,
+    "drop": "nodrop",
+    "keys": {
+     "gate": "band"
+    }
+   },
+   {
+    "model": "mixtral-8x7b-tp2",
+    "step": "timed",
+    "label": "t128g1",
+    "est": 6,
+    "cap": 25,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json",
+     "arms": "native,shared",
+     "declared-copies": "9",
+     "timed-groups": "1",
+     "slip-policy": "cell",
+     "g1-rule": "r7-median-run3"
+    }
+   },
+   {
+    "model": "mixtral-8x7b-tp2",
+    "step": "bytes",
+    "label": "b128g1",
+    "est": 4,
+    "cap": 20,
+    "drop": "nodrop",
+    "keys": {
+     "block-m": "128",
+     "block-n": "128",
+     "block-k": "64",
+     "num-warps": "8",
+     "num-stages": "3",
+     "histogram": "docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json",
+     "arms": "native,shared",
+     "byte-groups": "1"
+    }
+   }
+  ],
+  "est_total_min": 25,
+  "est_nodrop_min": 25,
+  "drop_order_last_first": [],
+  "boot_setup_min": 25,
+  "wall_min": 50,
+  "rate_usd_per_h": 2.29,
+  "cost_usd": 1.91,
+  "deadline_after_launch_min": 65,
+  "hard_cap_after_launch_min": 80,
+  "cost_at_hard_cap_usd": 3.05
+ },
+ "pages": {
+  "files": {
+   "mixtral-8x7b-tp2-128g1.json": {
+    "path": "docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json",
+    "sha256": "7a20bf5f3b2295d3991d723e58ae65267666e848f641be0771e1b3eb26e15b1e",
+    "shuffle_seed": 20261450,
+    "tile": [
+     128,
+     128,
+     64,
+     8,
+     3
+    ],
+    "group_m": 1,
+    "model": "mixtral-8x7b-tp2",
+    "cells": [
+     {
+      "label": "PT",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "571f567a21759f0e8e41de3b15a332eb4db24ecc38a0037daf24cb679e545f5b",
+      "seed": 20279470,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "860b4706a62a7581b73fdff269b761f4497feb70e8426e0603dfdb6d5cf90ee5",
+      "seed": 20279471,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PT2",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "800fad78fb2af2573abd669399880881aec4c564d58aca42e37bfab34cd3cb59",
+      "seed": 20279472,
+      "kind": "dirichlet",
+      "param": 17.404,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "PW2",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "18be6e8532f58a2acaaec0cf09344eea6f96fed0da4ab207930dd2a6f7f366ac",
+      "seed": 20279473,
+      "kind": "dirichlet",
+      "param": 5.0,
+      "source_model": "mixtral-8x7b"
+     },
+     {
+      "label": "uniform",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90"
+     },
+     {
+      "label": "balanced",
+      "n": 2,
+      "arms": [
+       "native",
+       "shared"
+      ],
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+     }
+    ]
+   }
+  },
+  "generator": "scripts/scoring/cal4/hist_c4.py (mixtral-8x7b-tp2-128g1)"
+ },
+ "code_pins": {
+  "scripts/gh200_cal4_session.sh": "7ab1dab9c0d86cc5a64a488af4ed3e47b4ced7fc8092a4ec8d89c37f442f5b6a",
+  "scripts/gh200_cal2_session.sh": "18f5bf2759c572b5f154525cad31d52771df415e98eb978a5a50609269eb8c46",
+  "scripts/gh200_settleS1_session.sh": "341e1aa6aec2d6dccdbda389eda4219fc5846aaa721eee406f3471ff6e8f2f5e",
+  "scripts/gh200_tileA2_session.sh": "77adb07f8ae7d190c3da7c3dcb031e020c1eb4c2040fcfbcaf88ac40a0deed53",
+  "scripts/tileA2_gate.py": "566703b38372677019faf8cbbe62e50f7d5b4e8a857b10e236197289ddc3dbce",
+  "scripts/tile_census_a2.py": "1021a1ba5e8820172b62829537703718d8fc7d4488b143364eba51ac13a4cdad",
+  "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+  "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+  "scripts/dram_counter_route_tile.py": "e180be82a3330e8c10aa0da4d41eb2759fee2a21e5346222fb8f824b94345ecc",
+  "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+  "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+  "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
+  "scripts/calibrate_hardware.py": "c7d9246a8e5f676527c5d2997354c34f383e5c26305df9c90e4298d3af3a44aa",
+  "scripts/scoring/cal4/hist_c4.py": "0132843a8b504937193dcf427e92f9f094fd57e5dca09966d0e5ef5c2d242609",
+  "scripts/scoring/cal4/read_c4.py": "93c1a55f2cf504a4e3d21f1ec9498c5855e7745471e7af53207f360fbd3f79ba",
+  "scripts/scoring/cal4/register_c4.py": "825c4af4bbbf15ae04d6957ae479341378807a017a5c5ac4eb73dcf69a0c26aa",
+  "scripts/scoring/cal2/read_c2.py": "b57982f7ba784da7c519f76de6018c64503242f78a27d84f630ce6f500b77fde",
+  "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+  "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+  "scripts/scoring/tileA2/score_floor_a2.py": "c075802d9067177a73c506a475d772a67cdd03c5dec404854b27daf34e1c7347",
+  "moe/__init__.py": "a7cb786129ce60d6981c407d974be1dda25c663af886a0a8892e7cf15a925042",
+  "moe/baselines/__init__.py": "85e49644e5a0c59f6f9efe8684ff84326db902d0ba22957eb9cf48503e1b756e",
+  "moe/baselines/_framework_config.py": "1ddb47f222fa58fe90f1ad97ec95d6debcb43c192e398b036aad54a6b4ddfe5a",
+  "moe/bench/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/bench/ai_model.py": "f915d94133c669249fba3628893effa9f2079cf2e297572240ca152e458eb027",
+  "moe/bench/calibrate.py": "b2bb7193b20bd9ab458f3c8055f0902ee27c19b913bfbbd64f2037d5f9172007",
+  "moe/bench/counter_probe_kernel.py": "da59ca206e4cfc9c8bd5f1ab704961167ba858ac0edc2fe673a8fd6adaf2036d",
+  "moe/bench/exit_codes.py": "89c2a3dab3bef3e418e696b263a53b3362e1c2bc416d9809a1f4858e0bdcdd55",
+  "moe/bench/provenance.py": "777a450890ccbca0e16d2d0418940d6f90908c4f878c26479caecca51bae4285",
+  "moe/bench/published.py": "5e08a6ac0b9b45f63c90200045e88c6a380a0c36b0a58974ede1de481764472c",
+  "moe/bench/roofline.py": "301ae87c8a11e34f100f0b258e458d762a0af22cd9a675925be617448731910a",
+  "moe/bench/schema.py": "7fb29c5467f1a897bc2d5bfedf67f3454b6ae954b8d71bb1e465f440214c8cac",
+  "moe/bench/timing.py": "264b580cb0f38b7b5c09aabee9ced0f41f1787edd3e81c22d55dac1044a0c155",
+  "moe/bench/weights.py": "c54b2e714d39eb530e47dd34a184c304b8dcc3f3ca15d3e53de7c52a38d1e58e",
+  "moe/pipeline.py": "c54b6c27b74486fa103bc46cb9302ce1b00f335bffd2f61fde29c3b4ad432b93",
+  "moe/quant.py": "e4f31b990fdc548ca89688e455ea9e2e7919ebfcaac6e0ca699846b4750354c5",
+  "moe/routing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "moe/routing/distributions.py": "253476cf178f90cbf2042ee0bbed66d16ed030b3319e478948b996419d631cbf",
+  "moe/spec.py": "58fb9b7fe2fdbd82867e0ab789cfc02bc03705c01722f9cfa0769c40bf6f87de",
+  "moe/stages.py": "38d254d30ded31f50ee682b85d6d68ce81c2b6985c6a7f4189735637a9d86f05",
+  "moe/state.py": "aad96b311d39ae7687870762a85ca4f5cbe7052d09e7abe7fef8fc514d71f8d4",
+  "scripts/atile_pooled_fit.py": "943b2e55a4e78b015e26617b10e5623e2e07209c000b1d6b013166f2ef183588",
+  "scripts/block_m_crossing_sweep.py": "54eaffb89a342723b8c214f188273710c1f53891639fd4b3496bccd317f4aaef",
+  "scripts/clock_elasticity.py": "193ae94b9207e6c84a05eda43b484790f902e9db546901e211b2fe85146c0b69",
+  "scripts/cores_heldout_predict.py": "e37c003c372363c1e20610c2df67ec7b675a768a426e1016baab71209198b46e",
+  "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+  "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+  "scripts/per_tile_model_fit.py": "1b25fed30ab783e02e9dae3d54ef2d26e248ecd519003bc739c55beaaa5e0230",
+  "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+  "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+  "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+  "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+  "scripts/ruler_rebaseline.py": "1b500afa4cec57fb31d8ef1d40bcdcb554369c9093939cf5bd5e3133adc75d55",
+  "scripts/scoring/rental2/common.py": "dd8a1b890f342168f76dd01ec1c31a583f09fcfd1dc764265a634d72d475b453",
+  "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305",
+  "scripts/scoring/rental4/r4common.py": "f2cb03333cce44470855b0633292af135084b755352e10e0334d09a94ff37665",
+  "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+  "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+  "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+  "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+  "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+  "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+  "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+  "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+  "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+  "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+  "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+  "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+  "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+  "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265"
+ }
+}
