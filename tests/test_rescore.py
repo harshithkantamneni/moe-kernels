@@ -2,10 +2,12 @@
 files under PYTHONHASHSEED=0 (score_census.py's occupancy key order follows the hash seed; the file is pinned), and
 the settle rental S1's registered reader re-reads its published session to the committed settleS1.read files, and the
 calibration rental C2's registered reader its own to the committed cal2.read files (where the knee round's frozen chain is
-on this machine: the reader refuses without it)."""
+on this machine: the reader refuses without it), and the calibration rental C3's registered reader its own to the committed
+cal3.read files (where the run's commit is in this clone's history: the reader checks the freeze against it)."""
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +54,20 @@ def test_the_published_cal2_session_rereads_to_the_committed_files(tmp_path):
     assert ran == [("scripts/scoring/cal2/read_c2.py", 0)], ran
     rows = dict(RS.compare("cal2", tmp_path))
     assert rows == {"cal2.read.json": "EQUAL", "cal2.read.txt": "EQUAL"}, rows
+
+
+C3_RUN_COMMIT = "e10fda1b9e8cad4f815d549184f76cddaab781e1"
+HAVE_C3_COMMIT = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{C3_RUN_COMMIT}^{{commit}}"],
+                                capture_output=True).returncode == 0
+
+
+@pytest.mark.skipif(not HAVE_C3_COMMIT, reason="C3's run commit is not in this clone's history")
+def test_the_published_cal3_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("cal3") == "results/published/2026-10-27-nvidia_gh200_480gb-cal3-session"
+    ran = RS.rescore("cal3", tmp_path)
+    assert ran == [("scripts/scoring/cal3/read_c3.py", 0)], ran
+    rows = dict(RS.compare("cal3", tmp_path))
+    assert rows == {"cal3.read.json": "EQUAL", "cal3.read.txt": "EQUAL"}, rows
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

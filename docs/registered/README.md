@@ -1604,3 +1604,29 @@ launch + 70 min, hard cap launch + 85 min ($3.24 at most). Driver: `scripts/gh20
 plus lines marked C3 (`tests/test_cal3_plan.py`); probe `scripts/instr_probe_c3.py` (rental 4/5's probe at vLLM's
 tile and A2's histogram cells; `scripts/instr_probe.py` stays byte-identical). The gate a later model round must pass
 before B3 is unchanged: every held-out 128 G 1 mean within 1% and an estimated P(A) of at least 0.5.
+
+**Read 2026-10-27** on `results/published/2026-10-27-nvidia_gh200_480gb-cal3-session` (board 02e86e, rental 7's;
+8 units at e10fda1b in about 12 minutes on 2026-10-27, none dropped, the driver exit 0, every unit exit 0 but the
+perturbation gate's exit 1; the reader's output in `scripts/scoring/cal3/cal3.read.{json,txt}`; no post-page fix).
+CALIBRATION, DESCRIPTIVE: no verdict; every C3 page is now SEEN. **Board** valid: 700 W read back on both readings
+at the first poll (`C2_POWER_W=700`), `LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the
+primary left joint_cF None, as on A2 and C2); the commit check passed on 33 files. **Gate**: regcheck PASS on both
+variants (2 CTAs per SM, the copy at 113 and 114 registers against 116, wgmma); the perturbation gate FAILS on its
+timing legs (Mixtral-8x7B median 2.03%, worst 2.42%; Qwen2-57B 1.46%, 3.01%; bars 1% and 2%) and PASSES its hard
+legs, so by OD-1 every stamp page is **PERTURBED**; the read GEMM's overhead, Mixtral-8x7B w2, is 1.38% median and
+2.97% worst burst pair, inside the NOT-READ bound (10%, 20%). **C3-R1: OUT**: theta_L 0.3513 over 12 launches
+(theta (1 + o) 0.3562; cells 0.262 to 0.353), MEASURED-PERTURBED and in-sample for Mixtral-8x7B: C5's 0.25 to 0.30
+is not the launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times.
+**C3-R2: LAUNCH-TOGETHER**: 0.901 of 1872 later-wave, schedule-same-wave re-read pairs launch within 0.5 of M4's
+staggered gap (all pairs 0.877; schedule share 0.925): M4's staggered distance is the wrong picture for Mixtral w2
+at 128x128 G 1. **C3-R3: NOT REPRODUCED** (DESCRIPTIVE ONLY): K1 over-predicts this board's plain Mixtral-8x7B w1
+by 0.94% (N0 1.70%), under the registered +2%, so the split (LIFE +0.034, PACKING -0.030, overhead-corrected) is
+printed and nothing is attributed; whether the board, the timing basis (event time here, counted cycles in refit4)
+or the earlier readings account for it is not read. DESCRIPTIVE: theta Mixtral-8x7B w1 0.494, Qwen2-57B w1 0.742,
+w2 0.477; the pair-gap theta on Mixtral-8x7B w2 0.071 to 0.175 per cell; e_plain under K1 Mixtral-8x7B w2 -5.27%,
+Qwen2-57B w1 -4.59%, w2 -4.29%; the stamped call over plain +1.44 to +3.05% (per-GEMM means). The two f128 counter
+pages exit 3 on the route's own gates, as C2's did; no C3 reading uses a page verdict. The registration files are
+unchanged (`register_c3.py --check`); the reader re-reads the published copy to the same `.txt` and JSON except the
+page path, and `scripts/scoring/rescore.py cal3` re-reads it to the committed files. Two test pins moved
+(`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). The gate a later model round must pass before
+B3 is unchanged.

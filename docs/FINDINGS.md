@@ -2563,6 +2563,134 @@ and a 1410 MHz lock: v5'', frozen before the page, over-predicts Mixtral-8x22B's
 both at 128 G 1 (+32.5% and +22.3%) and gets w1 right. Not established: whether the miss is the regime's or the
 E 8 family's, and whether the w2 byte excess causes any of it.
 
+## Calibration rental C3 (2026-10-27): CALIBRATION, DESCRIPTIVE, PERTURBED pages; C3-R1 OUT (theta_L 0.351, C5's constant stays SEEN-FITTED), C3-R2 LAUNCH-TOGETHER (0.901), C3-R3 NOT REPRODUCED (Mixtral-8x7B w1 +0.94% on this board)
+
+One Lambda GH200 480GB (instance f3128422, us-east-3, 04:10:28Z to 04:26:34Z on 2026-10-27; board `02e86e`, the
+board of rental 7) ran `scripts/plans/rentalC3-cal-2026-10.plan` unattended through `scripts/gh200_cal3_session.sh`
+at e10fda1b. 8 units ran in about 12 minutes (04:14:03Z to 04:25:47Z) against 30 estimated; none was dropped and
+the driver exit 0. Every unit exit 0 except the perturbation gate (exit 1, its timing legs). The registration
+(`docs/registered/2026-10-26-cal3-gh200`), its priced table, the reader `scripts/scoring/cal3/read_c3.py`, the probe
+`scripts/instr_probe_c3.py`, the driver and the plan were committed before any page (e10fda1b, the run commit).
+Published at `results/published/2026-10-27-nvidia_gh200_480gb-cal3-session`. Every reading is the pinned reader's
+output, `scripts/scoring/cal3/cal3.read.{json,txt}`. No post-page fix.
+
+**What C3 registered.** C3 is a CALIBRATION rental and DESCRIPTIVE: it certifies nothing, scores no verdict and
+moves no registered verdict, and every C3 page is SEEN once read. It is the owner's option (b) of 2026-10-22, after
+refit4's two offline rounds (moe-kernels-work 2026-10-22 refit4, REFIT.md and ROUND2.md; not in this repository)
+failed their gate: Mixtral-8x7B's 128 G 1 w1 runs about 4% faster than priced under every knee form (held out, in
+cycles, on the S1 and C2 boards' counter pages, C2-S4 SAME-AS-S1), and C5's launch-spread constant theta_L is
+SEEN-FITTED at 0.25 to 0.30. C3 takes per-CTA start and end stamps (the instrumented copy of vLLM's kernel at its
+"ends" level: CTA start before the dead check, a dead CTA's exit, the end after the final store; nothing near the
+wgmma k-loop) on Mixtral-8x7B and Qwen2-57B, w1 and w2, at vLLM's 128x128x64 w8 s3 G 1 tile on A2's E1-CAL cells
+(NATIVE), and reads three quantities against registered bands: C3-R1 theta_L on Mixtral-8x7B w2 (IN [0.25, 0.30]:
+C5 MEASURED; NEAR [0.20, 0.35]: C5's mechanism holds and its constant moves; OUT: C5's 0.25 to 0.30 absorbs
+something else), C3-R2 the share of Mixtral-8x7B w2 slab re-reads launched within half of M4's staggered gap of
+their partner (LAUNCH-TOGETHER >= 0.75, STAGGERED <= 0.25, MIXED), and C3-R3 the exact split of K1's w1 error into
+a per-CTA LIFE term and a PACKING term, banded only when this board's plain kernel reproduces the w1 miss (at
+least +2%) and the w1 overhead is at most a quarter of that miss. C3-R4 is validity. The owner's OD-1 (2026-10-26,
+C3 only): a perturbation gate that fails on its timing legs alone keeps the stamps units and labels their pages
+PERTURBED, with the measured overhead beside every reading; C3-R1 and C3-R2 are read on them unless the read
+GEMM's median overhead exceeds 10% or a worst burst pair 20% (NOT READ); C3-R3 is DESCRIPTIVE ONLY there; a
+PERTURBED theta_L is at most MEASURED-PERTURBED, and in-sample for Mixtral-8x7B in any later held-out round.
+
+**What ran.** C3-P: the prelude (700 W, read back on both readings, else stop; the 1410 MHz lock probe, else
+stop). C3-F: the OLMoE and Mixtral-8x7B f128 counter pages (G 64, treads 1 to 9), then A2's G-BAND. C3-G:
+regcheck (compile only: CTAs per SM equal to the plain kernel's, the wgmma path) and the perturbation gate (8
+alternating bursts of 10 calls each way, plain against the copy, on every stamped cell; its plain medians are
+C3's uninstrumented reference). C3-S7: Mixtral-8x7B's stamp page (PT, PW, uniform, balanced at n 2; 3 stamped
+calls each after 3 warmups, 24 launches). C3-SQ: Qwen2-57B's (the same four labels at n 1 and 2, 48 launches).
+
+**The overhead gate.** It FAILED on its timing legs and PASSED its hard legs, on both variants
+(`results/2026-10-27-nvidia_gh200_480gb-perturb-pt3/gate.env`):
+
+| variant | median \|plain / copy - 1\| | worst | registered bar | hard legs | regcheck |
+|---|---|---|---|---|---|
+| u7-st7, Mixtral-8x7B | 2.03% | 2.42% | 1% / 2% | PASS | PASS |
+| u8-stq, Qwen2-57B | 1.46% | 3.01% | 1% / 2% | PASS | PASS |
+
+The hard legs: 2 CTAs per SM on plain and copy on every config (the copy compiles at 113 and 114 registers against
+the plain kernel's 116, 98,304 B shared on both, so shared memory holds both at 2), the all-off copy's SASS equal to
+the plain kernel's, the installed `fused_moe.py` the upstream file, and C3's SASS legs on every stamped config (a
+clock read before the first global load, none inside the HGMMA loop, wgmma in the PTX). By OD-1 the pages are
+PERTURBED. The overhead the readings carry is per (cell, GEMM), median copy / median plain - 1 and its worst
+burst pair: Mixtral-8x7B w2 median over cells 1.38%, worst burst pair 2.97%; w1 2.30% and 2.83%; Qwen2-57B w1
+2.13% and 3.62%, w2 0.82% and 1.76%. All are far inside the NOT-READ bound (10% median, 20% worst). These are the
+first stamp pages the project has: rentals 4 and 5 failed their gates and ran none (rental 4 median 1.45 to 9.51%,
+worst 2.22 to 16.68%; rental 5 2.2 to 6.6% and 2.7 to 14.7%, both on R3's tiles and other stamp levels, so not
+like for like). C3's two variants sit at the low end of that range; they are not below all of it (rental 4's
+lowest variant median, 1.45%, is at Qwen2-57B's 1.46%, and its lowest worst, 2.22%, is under both of C3's).
+
+**What C3 read.** Every reading is on PERTURBED pages.
+
+| reading | outcome | numbers | file |
+|---|---|---|---|
+| board | valid | 700 W on enforced.power.limit and the `-q` GPU scope at the first poll; lock 1410 held; G-BAND PASS on the fallback band [1352.19, 1410] MHz (primary [1374.75, 1410] left joint_cF None: 0 OLMoE and 4 of 27 Mixtral-8x7B cells in band; fallback 18 and 16 of 27); commit check 33 files at e10fda1b | `session/power-set.txt`, `session/gh200-driver/{c2-power,locks}.env`, `session/gh200-driver/gate-band-1410.json` |
+| C3-R4 validity | valid on both models | every launch stamped live or dead, live CTAs the expected pids, USE_TD False, 132 SMs, timer resolution under L / 10; the histogram the registered file | the two `instr-*` pages |
+| **C3-R1** | **OUT, MEASURED-PERTURBED** | Mixtral-8x7B w2 theta_L 0.3513, the median over 12 launches; theta (1 + o) 0.3562 at o 1.38%; per cell PT 0.262, PW 0.350, balanced 0.353, uniform 0.353 | `results/2026-10-27-nvidia_gh200_480gb-instr-mixtral-8x7b-st7/` |
+| **C3-R2** | **LAUNCH-TOGETHER** | 0.901 of 1872 Mixtral-8x7B w2 re-read pairs in waves 1 and later that the schedule puts in their partner's wave launch within 0.5 of M4's staggered gap; all pairs 0.877 of 3840; schedule same-wave share 0.925 (OD-4's 0.925) | the same page |
+| **C3-R3** | **NOT REPRODUCED, DESCRIPTIVE ONLY** | Mixtral-8x7B w1 e_plain +0.94% under K1 (N0 +1.70%), under the registered +2%; overhead-corrected LIFE +0.034, PACKING -0.030, total +0.003, so the life share is not read (total under 0.005) | the same page and `results/2026-10-27-nvidia_gh200_480gb-perturb-pt3/perturb.json` |
+| descriptive: theta_L | | Mixtral-8x7B w1 0.494; Qwen2-57B w1 0.742, w2 0.477 | the two stamp pages |
+| descriptive: the pair-gap theta (median g over schedule-same-wave pairs in waves >= 1) | | Mixtral-8x7B w2 per cell 0.071 to 0.175 | the Mixtral-8x7B page |
+| descriptive: e_plain under K1 | | Mixtral-8x7B w2 -5.27%; Qwen2-57B w1 -4.59%, w2 -4.29% | the perturb unit against the priced table |
+| descriptive: the instrument's cost on the stamped call | | stamped over plain time, mean over cells: Mixtral-8x7B w1 +2.88%, w2 +2.49%; Qwen2-57B w1 +3.05%, w2 +1.44% | the stamp pages and the perturb unit |
+| descriptive: per-CTA SM clock | | Mixtral-8x7B w1 1358 to 1375 MHz, w2 1324 to 1356 MHz; Qwen2-57B 1354 to 1388 MHz | the stamp pages |
+
+**What it shows.** Measured, on PERTURBED pages at 1.4% w2 overhead: on Mixtral-8x7B w2 at 128x128 G 1, a later
+wave's CTAs launch over 0.35 of a median lifetime across the wave (theta_L 0.351), just outside NEAR's upper edge
+(0.35) and outside C5's fitted 0.25 to 0.30, so by the registration C3-R1 reads OUT: C5's constant is not this
+launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times. The registration's
+bias analysis puts a PERTURBED theta between the true value over 1 + o and the true value, unless the cost is not
+uniform across CTAs (which C3 does not test), so under it the true theta is at or above the 0.351 read, not inside
+NEAR; theta (1 + o) is 0.356. One of the four cells (PT, 0.262) is inside IN; the other three read 0.350 to
+0.353. On the same GEMM, 0.901 of the later-wave re-reads that the schedule puts in their
+partner's wave launch within half of M4's staggered gap of the partner (0.877 over all pairs), so C3-R2 reads
+LAUNCH-TOGETHER: M4's staggered-stream picture is wrong for Mixtral-8x7B w2 at 128x128 G 1, and by the
+registration a next byte law prices the measured launch gap, not the rank distance. That supports building the
+w2 byte law from measured launch times; it is not itself a byte law, and no byte law was fitted or tested here.
+On C3's board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94% (e_plain), below the
+registered +2%, so C3-R3 reads NOT REPRODUCED: the LIFE / PACKING split is printed and nothing is attributed.
+
+**What it does not show.**
+
+- **Every number is PERTURBED.** The copy's per-cell median overhead runs 0.47 to 3.11% (the perturb unit) and the
+  stamped call over the plain kernel 1.44 to 3.05% on the per-GEMM means; C3-R1 and C3-R2 are read under the
+  registered bound and C3-R3 is descriptive only. No C3 constant is MEASURED; theta_L is
+  MEASURED-PERTURBED and in-sample for Mixtral-8x7B.
+- **What C5's 0.25 to 0.30 absorbs is not read.** OUT says the fitted constant is not the launch spread; no C3
+  reading says what it is instead.
+- **The pair theta and theta_L disagree, and neither is banded against the other.** C5 puts a same-wave re-read
+  g = theta_L behind its partner (g in units of M4's gap P L / W_c); the median g over Mixtral-8x7B w2's
+  schedule-same-wave pairs in waves 1 and later (the descriptive pair-gap theta) reads 0.071 to 0.175 per cell,
+  well under the wave fit's 0.35. The registered C3-R1 is the wave fit. Why the two differ is not read.
+- **The w1 miss did not reproduce, and the cause is undetermined.** refit4's +4% Mixtral-8x7B w1 miss is held out
+  in cycles on counter pages (ROUND2: the same page on the S1 and C2 boards, C2-S4); C3-R3 compares K1 with this
+  board's plain-kernel event time. A
+  board effect, the timing basis, or an artefact of the earlier readings would each give this outcome, and C3
+  separates none of them. DESCRIPTIVE, from committed files and not a registered reading: K1's price against C2's
+  counted w1 time (cycles at 1400.8 MHz, the priced table's meas_ms) is +3.43% over the same four cells, C3's
+  plain w1 event times are 1.97 to 2.83% longer than those counted times, and the stamps' per-CTA SM clock on
+  Mixtral-8x7B w1 reads 1358 to 1375 MHz, 1.9 to 3.1% under the 1400.8 MHz conversion. INFERENCE, not tested:
+  that clock ratio is about the size of the 2.5-point gap between the two bases, so the timing basis may carry
+  most of it; a board effect is not excluded.
+- **Qwen2-57B is a contrast, not a test.** Its theta_L and e_plain are DESCRIPTIVE (no band).
+
+**Instrument.** Both stamp pages read their registered histogram files (sha256 on the page) at the 1410 lock
+(`nvidia-smi` 1410 MHz before and after each stamp and perturb unit). The two f128 counter pages exit 3 on the
+route's own page gates (OLMoE V4, V5, C1, C6 FAIL and C2 REFUSE; Mixtral-8x7B V5, V7, C2, C6 FAIL and C1 REFUSE),
+the same gates C2's f128 pages failed; no C3 reading uses a page verdict, and G-BAND reads them under the clock
+band. The run branch's 556 files match its SHA256SUMS; the 8 `cuda_utils*.so` are left out, as before. Read
+twice, on the fetched tree and on the published copy, the reader's `.txt` and JSON differ only in the page path.
+`register_c3.py --check` reads `same` on both registration files. `scripts/scoring/rescore.py cal3` re-reads the
+published session to the committed files. The 2 counter pages re-gate PASS under `lock_gate` at 1410 and store V10
+PASS, so `tests/test_lock_gate.py` moves to 191 pages with 102 changed verdicts.
+
+**What the paper can claim, after calibration rental C3.** Measured, on board 02e86e at a 700 W enforced limit and
+a 1410 MHz lock, with an instrumented copy that costs 0.5 to 3.1% per cell (PERTURBED): Mixtral-8x7B's 128x128 G 1 w2
+launches a later wave's CTAs over 0.35 of a lifetime (outside C5's fitted 0.25 to 0.30), and 0.90 of its
+later-wave, schedule-same-wave slab re-reads launch within half of M4's staggered gap of their partner. On this
+board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94%. Not established: what C5's fitted constant
+absorbs, and why the w1 miss read on the S1 and C2 counter pages did not reproduce here.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

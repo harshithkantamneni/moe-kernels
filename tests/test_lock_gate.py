@@ -424,15 +424,19 @@ PINNED = """
 2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f32w4-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
 2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-21-nvidia_gh200_480gb-olmoe-1b-7b-f64w4-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
 2026-10-21-nvidia_gh200_480gb-tileA2-session/results/2026-10-21-nvidia_gh200_480gb-qwen2-57b-a14b-b128g1-r3-counters/lock1410/r3c-g1.json V10 None PASS
+2026-10-27-nvidia_gh200_480gb-cal3-session/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-10-27-nvidia_gh200_480gb-cal3-session/results/2026-10-27-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
 """
 
 
 def test_the_regate_of_every_published_lock_page_is_pinned():
-    """189 lock pages (summary.json files repeat their pages' gates and are
+    """191 lock pages (summary.json files repeat their pages' gates and are
     not pages; 19 of them rental 3's, 2026-10-06, 7 rental 4's, 2026-10-07, 4 rental 5's,
     2026-10-09, 4 rental 6's, 2026-10-13, 1 rental 7's, 2026-10-14, 10 tile rental A's,
     2026-10-20, 11 tile rental A2's at 1410, 2026-10-21, 12 settle rental S1's at 1410, 1305
-    and 1005, 2026-10-21, and 4 calibration rental C2's at 1410, 2026-10-21, all PASS). The
+    and 1005, 2026-10-21, 4 calibration rental C2's at 1410, 2026-10-21, and 2 calibration
+    rental C3's at 1410, 2026-10-27 (its two f128 pages, both storing V10 PASS; its stamp
+    pages are not lock pages), all PASS). The
     8x22B floor, the lock not in force, fails; every other page passes, 78 stored FAILs among
     them; rental 5's and rental 6's two histogram byte pages each, rental 7's one, tile rental
     A's and A2's four each and C2's two store no gate (R3's histogram byte mode records none),
@@ -463,7 +467,7 @@ def test_the_8x22b_floor_fails_on_two_independent_readings():
 def test_the_cli_prints_the_table(capsys):
     assert LG.main([]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[-1].startswith("189 lock pages; 102 verdicts change; new verdict "
+    assert out.splitlines()[-1].startswith("191 lock pages; 102 verdicts change; new verdict "
                                            "not PASS on 1: 2026-09-28-nvidia_gh200_480gb-8x22b")
 
 

@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1 or cal2. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2 or cal3. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -17,6 +17,12 @@ cal2 is the calibration rental C2: its one registered reader (scripts/scoring/ca
 2026-10-22-cal2-gh200 registration) reads the whole published session too, takes it as --c2 and its output
 directory as --out-dir, and writes cal2.read.json and cal2.read.txt. It imports the knee round's frozen chain
 from ~/code/moe-kernels-work and refuses unless every frozen file and the run's commit check (its docstring).
+
+cal3 is the calibration rental C3: its one registered reader (scripts/scoring/cal3/read_c3.py, pinned by the
+2026-10-26-cal3-gh200 registration) reads the whole published session, takes it as --c3 and its output directory
+as --out-dir, and writes cal3.read.json and cal3.read.txt. It needs no work folder: it refuses unless the run's
+commit (e10fda1b, on the ledger's driver start line) holds the registration, the priced table, the plan, the
+histograms and every pinned file byte for byte, and every repo module it loads is pinned (its docstring).
 
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
@@ -47,13 +53,16 @@ STAGES = {
                  ["scripts/scoring/settleS1/read_s1.py"]),
     "cal2": ("2026-10-21-nvidia_gh200_480gb-cal2-session", "scripts/scoring/cal2",
              ["scripts/scoring/cal2/read_c2.py"]),
+    "cal3": ("2026-10-27-nvidia_gh200_480gb-cal3-session", "scripts/scoring/cal3",
+             ["scripts/scoring/cal3/read_c3.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
-TREE = {"settleS1": "", "cal2": ""}
+TREE = {"settleS1": "", "cal2": "", "cal3": ""}
 #: the files each stage's scorers write (default: *.score.*)
-OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*"}
+OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.read.*"}
 #: the command-line each stage's scorers take after the script (default: the repo, the tree, the output directory)
-ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out]}
+ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
+        "cal3": lambda tree, out: ["--c3", tree, "--out-dir", out]}
 
 
 def tree_of(stage: str) -> str:

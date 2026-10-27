@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 6993 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 6994 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Twenty-nine further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-two Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-three Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -271,10 +271,12 @@ of 2026-10-21: a power proof, kernel against application replay, the OLMoE wgmma
 and 1005 MHz, Mixtral byte and PRIVATE-arm pages and stall-metric pages, 14 units on one GH200 at 700 W, and
 calibration rental C2 of 2026-10-21: Mixtral-8x22B's 128x128 G 1 timed and byte pages as a fourth held-out CAL
 model, the sag estimator's two f128 pages and Mixtral-8x7B's 128 G 1 timed and byte pages, 10 units on one GH200
-at 700 W), kept so every verdict they printed can be
+at 700 W, and calibration rental C3 of 2026-10-27: the sag estimator's two f128 pages, the instrumented copy's
+regcheck and perturbation gate, and per-CTA start and end stamps on Mixtral-8x7B and Qwen2-57B at 128x128 G 1,
+8 units on one GH200 at 700 W), kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 22 GH200 sessions ran on seventeen distinct boards (counted by
-board hash; Granite's board is the 2026-09-25 card). Of the GH200 call-time results, three
+sessions rather than arms. The 23 GH200 sessions ran on seventeen distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -297,7 +299,12 @@ present at 1305 (37.7 us against 47.3 at 1410), and v4's w1 bytes on Mixtral 128
 (docs/FINDINGS.md, Settle rental S1). Calibration rental C2 (no verdict) read REGIME: under model v5'', frozen
 before the page, Mixtral-8x22B's held-out 128 G 1 time is over-predicted by 4.57% (six cells, +4.08 to +5.26%),
 beside Mixtral-8x7B's +3.13% (+3.37% on C2's board), so the blind test B3 is not registered with v5'' and the
-registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental C2). Every
+registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental C2). Calibration rental C3
+(descriptive, no verdict; its stamp pages PERTURBED, the instrumented copy failing its 1%/2% timing gate at 2.03%
+and 1.46% median while its hard legs passed) read C5's launch-spread constant OUT (Mixtral-8x7B w2 theta_L 0.351
+against the fitted 0.25 to 0.30, so it stays SEEN-FITTED), 0.901 of Mixtral w2's same-wave slab re-reads launching
+with their partner (LAUNCH-TOGETHER, against M4's staggered picture), and the Mixtral-8x7B w1 miss NOT REPRODUCED on
+its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

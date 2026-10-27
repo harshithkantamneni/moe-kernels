@@ -1,0 +1,5 @@
+INSTRUMENTED KERNEL C3 (perturb): 2 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u7-st7           mixtral-8x7b           128x128x64 w8 s3 G1 mixtral-8x7b-128g1 cells 4 (PT-n2-native, PW-n2-native, uniform-n2-native, balanced-n2-native) spec stamps=ends,evict_a=none,evict_b=none
+  u8-stq           qwen2-57b-a14b         128x128x64 w8 s3 G1 qwen2-57b-a14b-128g1 cells 8 (PT-n1-native, PW-n1-native, uniform-n1-native, balanced-n1-native, PT-n2-native, PW-n2-native, uniform-n2-native, balanced-n2-native) spec stamps=ends,evict_a=none,evict_b=none
+  gate (decision 2, rental 5's legs): median |plain/copy - 1| <= 1%, worst <= 2%, CTAs per SM identical, all-off SASS equal, the upstream file; C3: a clock read before the first LDG and none inside the HGMMA loop; 8 bursts of 10 calls each way on every cell
+DRY RUN: nothing launched (exit 2)
