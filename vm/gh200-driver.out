@@ -10,3 +10,7 @@
 2026-10-27T22:42:11Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/8 mixtral-8x7b tc4] (estimate 1 min, cap 30 min, 52 min left)
 2026-10-27T22:42:36Z calibrate END: exit 0 after 0 min [unit 2/8 mixtral-8x7b tc4]
 2026-10-27T22:42:36Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 38f73e4 to run-gh200-tile4-20261027t2238: calibrate (unit 2/8 mixtral-8x7b tc4): exit 0 (0 min)
+2026-10-27T22:42:38Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on mixtral-8x7b-tp2; refused on an MMA path mismatch [unit 3/8 - tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2] (estimate 1 min, cap 15 min, 52 min left)
+2026-10-27T22:42:47Z tilecensus END: exit 0 after 0 min [unit 3/8 - tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2]
+2026-10-27T22:42:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
