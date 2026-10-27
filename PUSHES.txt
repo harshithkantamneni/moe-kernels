@@ -2,3 +2,4 @@
 2026-10-27T04:14:02Z setup_vm.sh: READY
 2026-10-27T04:14:06Z prelude (unit 1/8 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
 2026-10-27T04:17:10Z bytes: G=64 page exit 3
+2026-10-27T04:17:19Z bytes (unit 2/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)

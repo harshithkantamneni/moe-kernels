@@ -1,1 +1,2 @@
 prelude    exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
+bytes      exit 0 after 3 min [unit 2/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
