@@ -3,3 +3,4 @@
 2026-10-27T22:42:10Z prelude (unit 1/8 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
 2026-10-27T22:42:37Z calibrate (unit 2/8 mixtral-8x7b tc4): exit 0 (0 min)
 2026-10-27T22:42:47Z tilecensus (unit 3/8 - tc4 tiles=128x128x64w8s3 models=mixtral-8x7b-tp2): exit 0 (0 min)
+2026-10-27T22:45:51Z bytes: G=64 page exit 3
