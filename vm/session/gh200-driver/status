@@ -1,2 +1,14 @@
 2026-10-27T22:39:55Z setup_vm.sh start: commit aa5e1b7cc561635dd939fcc1972efa142b3739ca from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-27T23:43:07Z
 2026-10-27T22:42:05Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-27T22:42:07Z driver start: commit aa5e1b7cc561635dd939fcc1972efa142b3739ca, steps of the plan scripts/plans/rentalC4-cal-2026-10.plan, deadline 2026-10-27T23:43:07Z (53 min of work left)
+2026-10-27T22:42:07Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalC4-cal-2026-10.plan (sha256 ab5a7aedd674ce24c0bc55f6e222af813744b1ab491f86ac982c77b33f15a935), 8 units
+2026-10-27T22:42:07Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/8 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 53 min left)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-27T22:42:07Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-27T22:42:07Z prelude: power.max_limit 900.00 W, at or over the registered 700 W
+2026-10-27T22:42:07Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-10-27T22:42:09Z lock probe: the session lock 1410 MHz held (C2)
+2026-10-27T22:42:09Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261027T224207Z, session lock 1410 MHz
+2026-10-27T22:42:09Z prelude END: exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
+2026-10-27T22:42:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
