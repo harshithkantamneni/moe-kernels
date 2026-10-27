@@ -1,0 +1,437 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "order": [
+    [
+      "native",
+      1
+    ],
+    [
+      "native",
+      2
+    ],
+    [
+      "native",
+      3
+    ],
+    [
+      "native",
+      4
+    ],
+    [
+      "native",
+      5
+    ],
+    [
+      "native",
+      6
+    ],
+    [
+      "native",
+      7
+    ],
+    [
+      "native",
+      8
+    ],
+    [
+      "native",
+      9
+    ],
+    [
+      "shared",
+      1
+    ],
+    [
+      "shared",
+      2
+    ],
+    [
+      "shared",
+      3
+    ],
+    [
+      "shared",
+      4
+    ],
+    [
+      "shared",
+      5
+    ],
+    [
+      "shared",
+      6
+    ],
+    [
+      "shared",
+      7
+    ],
+    [
+      "shared",
+      8
+    ],
+    [
+      "shared",
+      9
+    ],
+    [
+      "private",
+      1
+    ],
+    [
+      "private",
+      2
+    ],
+    [
+      "private",
+      3
+    ],
+    [
+      "private",
+      4
+    ],
+    [
+      "private",
+      5
+    ],
+    [
+      "private",
+      6
+    ],
+    [
+      "private",
+      7
+    ],
+    [
+      "private",
+      8
+    ],
+    [
+      "private",
+      9
+    ]
+  ],
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "launch_skip": 108,
+  "launch_count": 162,
+  "tokens": {
+    "1": 512,
+    "2": 1024,
+    "3": 1536,
+    "4": 2048,
+    "5": 2560,
+    "6": 3072,
+    "7": 3584,
+    "8": 4096,
+    "9": 4608
+  },
+  "copies_declared": 9,
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "ids_sha256": {
+    "native/1": "72eac24e8b77a04abfba12045b4d0a95d68426c2737e86af731e16011802854f",
+    "native/2": "c2519307679a38f7118681c76aabb5d2ece77767ebf9badc654bf792cded5e24",
+    "native/3": "6dc4ba7ddc96fd34ecfdcaff475d52ee8e3bf4c62f8d4ffb7f72794ccff9f1d6",
+    "native/4": "3ee41ab32b8d84ea76e59388f45e21cd0aa6bbeaca900c8b1eeb9a8b8632ba84",
+    "native/5": "65c29a2953415f1d94d9b69288f840fa7546b17220934c42887902aec412adf5",
+    "native/6": "0617b07637a0ca8f5dbb8c98653a53088f874caac2dafa18cc30cbebf115af5a",
+    "native/7": "fe288433545524e30660d9010f850bf454139b362125b8bb3986e579592ba835",
+    "native/8": "46ddb6da35444b6dbf820d526c3f09741277a0e6180a47ac23c686808d0a0978",
+    "native/9": "046bc037a145989464f75949fc330b390b36f75ea5c513eca13eb8926a3e5d6b",
+    "shared/1": "29c55ff845fa072ed511f8e2d075a1d72502fde6b9e813e8ad7a80ccd7a5b731",
+    "shared/2": "84894f8b4575e731dfe12f26b41592c189da2d22c484e460bc39588ed1c33a50",
+    "shared/3": "d6510d4e3393d8fdd5553f6e5d28624dff58bad8ef5bf0b7fd9e39b75c107ee4",
+    "shared/4": "7bae1882a43836833683fc72c08fd9f34203a96296d8fb0706caa6401def1877",
+    "shared/5": "d71c06e92779fd41b6dde753736ba979cca2137d13a7baea8f65a661d3fff3a9",
+    "shared/6": "02ef88d8b3df639b39f00817a55a92174ba574e85b1848c529b061f972a7cb8e",
+    "shared/7": "d063d607a6677ed2320e6b805c07b6c22c3e6f85a15d8ff319a9f9c1a34cd414",
+    "shared/8": "9ce8014ce655eb218b3337a039abe1a38ec76c137dd2398c0efec88ee2dbe564",
+    "shared/9": "94895c920e2c1ecd37195e452871d7f517053ca7d604863a86a5c4d530529ae2",
+    "private/1": "29c55ff845fa072ed511f8e2d075a1d72502fde6b9e813e8ad7a80ccd7a5b731",
+    "private/2": "761322a4f0916ece4f7a5b264983b74e76c24dd64d8ba324034e1b7f14988675",
+    "private/3": "cfdda345d2354db060697c2648bca41c5e942d1c928cd11bfcb102f20c1d4614",
+    "private/4": "95ed9594c7870c6115a31e5e3a4b07c065dce580f1945b6911746d7331704f6c",
+    "private/5": "510f2ee4fbc228b7f990dc282af7779024fd0c939b98ecb23d3955ac44fc9b13",
+    "private/6": "ba085ea10ab2d6495876c3948d6044d540a68b5dca3776dc8396029b2367e8af",
+    "private/7": "9ff7ca85f3086a0142b04807f5e8ad74ddc440d1fc638326a14a02babe97f22b",
+    "private/8": "6db5c87b2640b295a056b851ccddc7eeae947184459eea701964619f12a0b01a",
+    "private/9": "73cc1cf44668da2deb072b57104e95928768824676a3286addcd9eace6cc9cbe"
+  },
+  "sorted_ids_len": {
+    "native/1": 2040,
+    "native/2": 3064,
+    "native/3": 4088,
+    "native/4": 5112,
+    "native/5": 6136,
+    "native/6": 7160,
+    "native/7": 8184,
+    "native/8": 9208,
+    "native/9": 10232,
+    "shared/1": 10168,
+    "shared/2": 11192,
+    "shared/3": 12216,
+    "shared/4": 13240,
+    "shared/5": 14264,
+    "shared/6": 15288,
+    "shared/7": 16312,
+    "shared/8": 17336,
+    "shared/9": 18360,
+    "private/1": 10168,
+    "private/2": 11192,
+    "private/3": 12216,
+    "private/4": 13240,
+    "private/5": 14264,
+    "private/6": 15288,
+    "private/7": 16312,
+    "private/8": 17336,
+    "private/9": 18360
+  },
+  "grids": {
+    "native/1": {
+      "w1": 3584,
+      "w2": 512
+    },
+    "native/2": {
+      "w1": 5376,
+      "w2": 768
+    },
+    "native/3": {
+      "w1": 7168,
+      "w2": 1024
+    },
+    "native/4": {
+      "w1": 8960,
+      "w2": 1280
+    },
+    "native/5": {
+      "w1": 10752,
+      "w2": 1536
+    },
+    "native/6": {
+      "w1": 12544,
+      "w2": 1792
+    },
+    "native/7": {
+      "w1": 14336,
+      "w2": 2048
+    },
+    "native/8": {
+      "w1": 16128,
+      "w2": 2304
+    },
+    "native/9": {
+      "w1": 17920,
+      "w2": 2560
+    },
+    "shared/1": {
+      "w1": 17920,
+      "w2": 2560
+    },
+    "shared/2": {
+      "w1": 19712,
+      "w2": 2816
+    },
+    "shared/3": {
+      "w1": 21504,
+      "w2": 3072
+    },
+    "shared/4": {
+      "w1": 23296,
+      "w2": 3328
+    },
+    "shared/5": {
+      "w1": 25088,
+      "w2": 3584
+    },
+    "shared/6": {
+      "w1": 26880,
+      "w2": 3840
+    },
+    "shared/7": {
+      "w1": 28672,
+      "w2": 4096
+    },
+    "shared/8": {
+      "w1": 30464,
+      "w2": 4352
+    },
+    "shared/9": {
+      "w1": 32256,
+      "w2": 4608
+    },
+    "private/1": {
+      "w1": 17920,
+      "w2": 2560
+    },
+    "private/2": {
+      "w1": 19712,
+      "w2": 2816
+    },
+    "private/3": {
+      "w1": 21504,
+      "w2": 3072
+    },
+    "private/4": {
+      "w1": 23296,
+      "w2": 3328
+    },
+    "private/5": {
+      "w1": 25088,
+      "w2": 3584
+    },
+    "private/6": {
+      "w1": 26880,
+      "w2": 3840
+    },
+    "private/7": {
+      "w1": 28672,
+      "w2": 4096
+    },
+    "private/8": {
+      "w1": 30464,
+      "w2": 4352
+    },
+    "private/9": {
+      "w1": 32256,
+      "w2": 4608
+    }
+  },
+  "nvtx_ranges": [
+    "r3/native/g64/n1",
+    "r3/native/g64/n1",
+    "r3/native/g64/n1",
+    "r3/native/g64/n2",
+    "r3/native/g64/n2",
+    "r3/native/g64/n2",
+    "r3/native/g64/n3",
+    "r3/native/g64/n3",
+    "r3/native/g64/n3",
+    "r3/native/g64/n4",
+    "r3/native/g64/n4",
+    "r3/native/g64/n4",
+    "r3/native/g64/n5",
+    "r3/native/g64/n5",
+    "r3/native/g64/n5",
+    "r3/native/g64/n6",
+    "r3/native/g64/n6",
+    "r3/native/g64/n6",
+    "r3/native/g64/n7",
+    "r3/native/g64/n7",
+    "r3/native/g64/n7",
+    "r3/native/g64/n8",
+    "r3/native/g64/n8",
+    "r3/native/g64/n8",
+    "r3/native/g64/n9",
+    "r3/native/g64/n9",
+    "r3/native/g64/n9",
+    "r3/shared/g64/n1",
+    "r3/shared/g64/n1",
+    "r3/shared/g64/n1",
+    "r3/shared/g64/n2",
+    "r3/shared/g64/n2",
+    "r3/shared/g64/n2",
+    "r3/shared/g64/n3",
+    "r3/shared/g64/n3",
+    "r3/shared/g64/n3",
+    "r3/shared/g64/n4",
+    "r3/shared/g64/n4",
+    "r3/shared/g64/n4",
+    "r3/shared/g64/n5",
+    "r3/shared/g64/n5",
+    "r3/shared/g64/n5",
+    "r3/shared/g64/n6",
+    "r3/shared/g64/n6",
+    "r3/shared/g64/n6",
+    "r3/shared/g64/n7",
+    "r3/shared/g64/n7",
+    "r3/shared/g64/n7",
+    "r3/shared/g64/n8",
+    "r3/shared/g64/n8",
+    "r3/shared/g64/n8",
+    "r3/shared/g64/n9",
+    "r3/shared/g64/n9",
+    "r3/shared/g64/n9",
+    "r3/private/g64/n1",
+    "r3/private/g64/n1",
+    "r3/private/g64/n1",
+    "r3/private/g64/n2",
+    "r3/private/g64/n2",
+    "r3/private/g64/n2",
+    "r3/private/g64/n3",
+    "r3/private/g64/n3",
+    "r3/private/g64/n3",
+    "r3/private/g64/n4",
+    "r3/private/g64/n4",
+    "r3/private/g64/n4",
+    "r3/private/g64/n5",
+    "r3/private/g64/n5",
+    "r3/private/g64/n5",
+    "r3/private/g64/n6",
+    "r3/private/g64/n6",
+    "r3/private/g64/n6",
+    "r3/private/g64/n7",
+    "r3/private/g64/n7",
+    "r3/private/g64/n7",
+    "r3/private/g64/n8",
+    "r3/private/g64/n8",
+    "r3/private/g64/n8",
+    "r3/private/g64/n9",
+    "r3/private/g64/n9",
+    "r3/private/g64/n9"
+  ],
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 64,
+    "num_warps": 8,
+    "num_stages": 3,
+    "BLOCK_SIZE_M": 128
+  },
+  "proof": {
+    "parts": {
+      "addresses": true,
+      "sentinels": true,
+      "same_layer": true,
+      "kernel_read": true,
+      "shared_blind": true
+    },
+    "detail": {
+      "addresses": "9 copies x 8 experts span 25367150592 bytes against 25367150592 predicted; slot = expert x 9 + copy at every slot: True; native view is every 9th slot of the same storage: True",
+      "sentinels": "wrote 9 distinct values, read back 9 distinct, and restored the original bytes: True",
+      "same_layer": "private output is bitwise equal to shared; native output is bitwise equal to shared (recorded, not scored: native runs a different launch grid)",
+      "kernel_read": "every copy c >= 1, zeroed alone, changed exactly the tokens routed to it | c=1: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=2: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=3: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=4: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=5: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=6: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=7: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True; c=8: 512 rows changed, 512 routed, exact=True, shared unchanged=True, restored=True",
+      "shared_blind": "the shared output was bitwise unchanged by every zeroing, every restore put the private output back bitwise, and zeroing a never-read copy moved neither output"
+    },
+    "verdict": "PASS",
+    "tread": 9
+  },
+  "memory_plan": {
+    "copies": 9,
+    "per_copy_bytes": 2818572288,
+    "weight_bytes": 25367150592,
+    "activation_bytes": 943718400,
+    "allowance": 3.0,
+    "flush_bytes": 0,
+    "flush_source": "the counter child times nothing, so no flush buffer",
+    "predicted_peak_bytes": 28198305792,
+    "device_free_bytes": 100723392512,
+    "device_source": "free on the attached device, asked of the driver",
+    "headroom": 0.66,
+    "copies_read": 9
+  },
+  "versions": {
+    "python": "3.12.16",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "device": {
+    "name": "NVIDIA GH200 480GB",
+    "uuid": "e0172ca4-b9ed-dad8-68e7-2def2dac8abc"
+  }
+}
