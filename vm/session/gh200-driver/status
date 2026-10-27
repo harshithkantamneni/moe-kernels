@@ -12,3 +12,9 @@
 2026-10-27T04:14:06Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261027T041403Z, session lock 1410 MHz
 2026-10-27T04:14:06Z prelude END: exit 0 after 0 min [unit 1/8 - lock-mhz=1410 power-limit-w=700]
 2026-10-27T04:14:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T04:14:07Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 2/8 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 58 min left)
+2026-10-27T04:14:23Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-10-27T04:14:23Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T04:14:23Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-10-27T04:14:23Z bytes: the registered list G = 64 (olmoe-1b-7b, f128): no tail drop, no re-price, no base-clock control
+2026-10-27T04:17:10Z bytes: G=64 page exit 3 after 165 s
