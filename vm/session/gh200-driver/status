@@ -63,3 +63,9 @@
 2026-10-27T23:00:12Z timed: 2026-10-27T23:00:07Z G=1 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 420 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-hist7a20bf5f3-c7ada9ae
 2026-10-27T23:00:12Z timed END: exit 0 after 7 min [unit 7/8 mixtral-8x7b-tp2 t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-27T23:00:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-27T23:00:14Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 8/8 mixtral-8x7b-tp2 b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared byte-groups=1] (estimate 4 min, cap 20 min, 34 min left)
+2026-10-27T23:00:30Z census for mixtral-8x7b-tp2 written (/home/ubuntu/moe/session/census-mixtral-8x7b-tp2.json)
+2026-10-27T23:00:30Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-10-27T23:00:30Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json --arms native,shared on every page of this unit
+2026-10-27T23:00:30Z bytes: the registered list G = 1 (mixtral-8x7b-tp2, b128g1): no tail drop, no re-price, no base-clock control
+2026-10-27T23:02:14Z bytes: G=1 page exit 0 after 101 s
