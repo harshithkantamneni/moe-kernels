@@ -22,3 +22,7 @@
 2026-10-27T04:24:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 5/8 - rc3] (estimate 3 min, cap 10 min, 48 min left)
 2026-10-27T04:24:38Z regcheck END: exit 0 after 0 min [unit 5/8 - rc3]
 2026-10-27T04:24:38Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c0aabb1 to run-gh200-tile3-20261027t0410: regcheck (unit 5/8 - rc3): exit 0 (0 min)
+2026-10-27T04:24:40Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 6/8 - pt3] (estimate 6 min, cap 20 min, 47 min left)
+2026-10-27T04:25:11Z perturb END: exit 1 after 1 min [unit 6/8 - pt3]
+2026-10-27T04:25:12Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
