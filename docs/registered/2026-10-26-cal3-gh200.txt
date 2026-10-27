@@ -1,0 +1,131 @@
+REGISTERED 2026-10-26, before any C3 page: the calibration rental C3, 2026-10-26-cal3-gh200
+status: CALIBRATION, DESCRIPTIVE: C3 certifies nothing, scores no verdict and moves no registered verdict; every C3 page becomes SEEN once read. The bands say what each reading means for the next model round; the round is the owner's
+design: moe-kernels-work 2026-10-26 build-C3 (CHECK.md, DESIGN.md; offline, read-only over the repo at e324867c); the owner's option (b) of 2026-10-22 (moe-kernels-work 2026-10-22 refit4/ROUND2.md section 5): one short instrumented rental measuring per-CTA launch and finish times for Mixtral-8x7B and Qwen2-57B, w1 and w2, at vLLM's 128x128x64 w8 s3 G 1 tile, after refit4's two offline rounds failed their gate (REFIT.md, ROUND2.md: Mixtral-8x7B's 128 G 1 w1 runs about 4% faster than priced under every knee form, and C5's theta_L is SEEN-FITTED at 0.25 to 0.30)
+tool: scripts/gh200_cal3_session.sh (C2's pinned driver plus lines marked C3), scripts/instr_probe_c3.py (the probe), moe/instrumented/fused_moe_instr.py (the copy, unchanged, STAMPS 3), scripts/tileA2_gate.py band (G-BAND), scripts/scoring/cal3/read_c3.py (the reader)
+
+SEEN: Every C3 page is SEEN once read: Mixtral-8x7B and Qwen2-57B are CAL models already; no blind model of B3 (Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B) and no new model is run. A constant read off a C3 page and carried into a model is MEASURED (theta_L) or SEEN-FITTED (anything fitted to these pages). OD13 kept: nothing is priced against rental A's 1710 E1-CAL pages
+
+STEP 1 CHECK
+  verdict: WORKS AS IS (the copy at the ends level; no instrumentation change)
+  file: moe-kernels-work 2026-10-26 build-C3/CHECK.md
+  facts: A2's tile census compiles 128x128x64 w8 s3 at 116 registers, 98,304 B shared, 2 CTAs per SM (shared binds at 2; the copy can only lose occupancy above 128 registers), mma wgmma; no stamp line reads a tile parameter; rentals 4 and 5 never produced a stamp page (20 gate FAILs, median 1.45 to 9.51%, the cost a compile effect: 1-in-17 sampling cost as much as every CTA); the ends level was compiled, never timed
+  harness: instr_probe.py pins R3's tile and ladder cells and cubin.sass_checks finds the loop by HMMA: C3's probe and SASS check are new host-side files; both pinned files unchanged
+
+POWER AND LOCK
+  power_limit_w: 700
+  rule: C2's prelude, unchanged: nvidia-smi -pl 700 -sc 0, then the read-back (enforced.power.limit and -q -d POWER's GPU-scope Current Power Limit both at 700 W within 1 W, polled every 2 s up to 30 s), else the session STOPS (c2-power.env C2_POWER_700=refused, power-set-unsettled-700.txt); no fallback
+  session_lock_mhz: 1410
+  lock_rule: the prelude locks 1410, reads clocks.sm back (two tries) and STOPS when it does not hold (LOCK_PROBE_1410=held in locks.env); every timed instrumented unit runs under -lgc 1410 (locked_run); regcheck is compile only
+  g_band: A2's G-BAND (tileA2_gate.py band) after C3's two f128 pages: joint_cF over them in the counter band at 1410 (primary [0.975 L, L], else the fallback [0.959 L, L]) is not None, else the session ends there
+
+INSTRUMENT
+  copy: moe/instrumented/fused_moe_instr.py (vLLM v0.27.1 fused_moe_kernel plus rental 4's approved stamps)
+  copy_sha256: 16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250
+  spec: stamps=ends,evict_a=none,evict_b=none (STAMPS 3: CTA start before the dead check, a dead CTA's exit, the end after the final store; nothing near the wgmma k-loop)
+  row: ["smid", "start_ns", "start_clk", "prologue_ns", "prologue_clk", "epi_ns", "epi_clk", "end_ns", "end_clk", "kind"]
+  tile: {"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 64, "num_warps": 8, "num_stages": 3, "GROUP_SIZE_M": 1}
+  declared_copies: 9
+  arms: ["native"]
+  warmup_calls: 3
+  stamped_calls: 3
+  flush: before every stamped call: the stamp buffers allocated, the GPU held ahead by instr_probe's 25 ms sleep (review MAJOR-2, as the burst timer does, so no launch waits on the host), then an L2 flush outside the launch event pair
+  span: each launch's stamp_span_ns (first live start to last live end, globaltimer) is recorded beside its event-pair ms; the reader prints event / span per cell
+  kept_per_launch: the int64 rows, expert_ids and num_tokens_post_padded vLLM handed the launch (references held, copied to the host after the call's synchronize), USE_TD (must be False), the launch's event-pair ms
+
+GATE
+  rule: owner decision 2 (2026-10-06) with rental 5's occupancy leg, on EVERY C3 cell: per (cell, GEMM) r = median plain ms / median copy ms over 8 alternating bursts of 10 calls each way; PASS iff median |r - 1| <= 1% and worst <= 2%, CTAs per SM identical per config, the all-off copy's SASS equal to the plain kernel's (line info stripped), the installed fused_moe.py the upstream file, and C3's SASS legs on every stamped config: a clock read before the first LDG and none inside the k-loop (the back-branch spanning the most HGMMA; instr_probe_c3.sass_checks_c3)
+  regcheck: compile only, before any timed unit: the all-off copy and the stamped copy at the plain kernel's CTAs per SM, and the plain kernel and the copy on the wgmma path (instr_probe_c3.regcheck_c3)
+  on_fail: owner OD-1 (2026-10-26; changes decision 2's refuse-on-fail for C3 only): a gate that fails on its TIMING legs alone (median |r - 1| over 1% or worst over 2%) keeps the stamps units; their pages are labelled PERTURBED (stamps.json page_label) and every reading carries the measured overhead (perturb.json per (cell, GEMM): overhead_median = median copy / median plain - 1 and overhead_worst = the worst burst pair). The HARD legs still refuse the unit (gate.env HARD_<id>): CTAs per SM identical, the all-off copy's SASS equal to the plain kernel's, the upstream file, C3's SASS legs (a clock read before the first LDG, none inside the HGMMA loop); and regcheck (CTAs per SM, the wgmma path) must PASS
+  perturbed_readings: C3-R1 (theta_L) and C3-R2 (the re-read launch gap) are ORDERING quantities: read on PERTURBED pages with the overhead disclosed, unless the read GEMM's overhead passes the NOT-READ bound. C3-R3 (the w1 LIFE / PACKING split) is DESCRIPTIVE ONLY on PERTURBED pages: printed, never used to price or select a model form
+  not_read_bound: C3-R1 and C3-R2 are NOT READ when, over the read GEMM's cells (Mixtral-8x7B w2), the median of the cells' |median overhead| exceeds 10% or any cell's |worst burst pair| exceeds 20% (read_c3.overhead_ok; two-sided, review MINOR-1: a copy faster than the plain kernel is a compile effect too)
+  perturbed_theta: review MINOR-2 and MINOR-3: on PERTURBED pages theta and theta (1 + o) are both printed (o the w2 median |overhead|) and the band is reported only when both fall in one band, else '<band> or <band> (PERTURBED)'; a PERTURBED theta_L is never registered as MEASURED: at most MEASURED-PERTURBED, and a later round may use it only as such. Any theta_L C3 reads on Mixtral-8x7B is IN-SAMPLE for Mixtral-8x7B in any later held-out round
+  not_read_bound_why: theta_L and g are ratios of a launch spread to a lifetime. A slowdown that scales the whole CTA (a slower main loop, the compile effect rentals 4 and 5 saw) scales the spread and the lifetime alike and leaves them unchanged; a fixed per-CTA cost c lengthens the lifetime only, so at overhead o they read low by at most 1 / (1 + o); a whole-CTA slowdown leaves theta unbiased only when the finish spread scales with L, and reads it low by the same 1 / (1 + o) when the spread is fixed in ns, so the bias lies in [1 / (1 + o), 1] either way (it reads high only under a cost that is not uniform across CTAs). C3-R1's IN band is 0.275 +- 9%: at o = 10% a true 0.275 reads 0.250, IN's edge, and no worse than NEAR up to o = 37%; C3-R2's cut at g 0.5 separates C5's same-wave 0.25 to 0.30 from M4's 1 at any o up to 80% (1 / 1.8 > 0.5). The theta band binds, so the median cap is 10%. The worst-pair cap, 20%, allows burst noise around a median under 10% but voids a page whose cost is far from uniform across bursts, where order could move. A stamped-against-plain launch-order test is not possible: the plain kernel carries no stamps
+  reference: the perturb unit's plain-kernel medians are C3's uninstrumented reference: C3-R3's e_plain and the stamped-over-plain cost are read against them
+
+UNITS
+  C3-P: ["- prelude"]: the power read-back and the 1410 lock probe (validity)
+  C3-F: ["olmoe-1b-7b bytes f128", "mixtral-8x7b bytes f128", "- gate gband"]: C2's sag estimator pages on this board (128x128 G 64, treads 1 to 9), so the board is comparable with A2's and C2's, then G-BAND (validity)
+  C3-G: ["- regcheck rc3", "- perturb pt3"]: the copy's two checks before any stamp, and the uninstrumented reference (the gate)
+  C3-S7: ["mixtral-8x7b stamps st7"]: C3-R1, C3-R2, C3-R3 (Mixtral-8x7B, w1 and w2) [A2's E1-CAL Mixtral 128 G 1 cells: n 2, PT, PW, uniform, balanced; NATIVE]
+  C3-SQ: ["qwen2-57b-a14b stamps stq"]: the Qwen2-57B contrast (C3-R3's Qwen2 w1, theta and same-wave on Qwen2 w2, DESCRIPTIVE) [A2's E1-CAL Qwen2 128 G 1 cells: n 1 and 2, PT, PW, uniform, balanced; NATIVE]
+
+READINGS
+  C3-R1:
+    what: theta_L, C5's launch spread of a later wave (refit4 DECLARED.txt AM2), on Mixtral-8x7B w2
+    read_by: read_c3.launch_reading via wave_theta; model_reading (median over launches)
+    rule: per w2 launch, each wave k >= 1 of W_c = 264 live ranks with at least 132 CTAs: least squares start_ns = a + s u / W_c (u = r - k W_c), theta_k = s / L, L the launch's median live lifetime; the launch's theta the CTA-weighted mean; theta_L the median over the model's valid w2 launches
+    band: IN [0.25, 0.30]; NEAR [0.20, 0.35] outside IN; OUT otherwise
+    meaning:
+      IN: C5 MEASURED: the launch spread C5 fitted (0.25 to 0.30) is the measured one. A next byte-law round may carry C5's distance with theta_L at the measured value as a MEASURED constant (MEASURED-PERTURBED, and usable only as such, when read on PERTURBED pages); it is IN-SAMPLE for Mixtral-8x7B in any later held-out round (read off that model's own w2); its w1 guard still applies (C5 failed it through M4's soft slab survival, which this does not touch)
+      NEAR: C5's mechanism holds and its constant moves: the measured value replaces the SEEN fit in any next round (MEASURED; MEASURED-PERTURBED on PERTURBED pages, usable only as such; in-sample for Mixtral-8x7B), and C5's held-out w2 means are re-priced at it before anything is selected
+      OUT: the jitter picture is not the launch: C5's 0.25 to 0.30 absorbs something else. C5 stays SEEN-FITTED and cannot be argued from launch physics; a next byte law starts from the measured launch times
+      NOT READ: no valid Mixtral-8x7B w2 launch: C5 stays SEEN-FITTED
+  C3-R2:
+    what: the share of w2 slab re-reads launched with their partner, Mixtral-8x7B
+    read_by: read_c3.pairs, same_wave, gap_ratio (launch_reading); pooled in model_reading
+    rule: a re-read is live rank r whose M-tile pid_m - 1 holds the same expert (expert_ids as vLLM passed the launch); g = (start(r) - start(r - P)) / (P L / W_c), P = N / 128 (M4's staggered gap is 1, C5's same-wave pair theta_L, C3's synchronized wave 0); the banded share (review MAJOR-1): g < 0.5 over the re-reads in waves k >= 1 that the schedule puts in their partner's wave, floor(r / W_c) = floor((r - P) / W_c) (wave 0 launches together under every picture; C5 and C3 read 1.000, M4 0.000), pooled over the model's valid w2 launches whose globaltimer resolution is at most a quarter of P L / W_c (review MINOR-4); the all-pairs share and the schedule share printed beside (DESCRIPTIVE; REFIT.md's 82 to 88% is the schedule_note's)
+    band: LAUNCH-TOGETHER >= 0.75; STAGGERED <= 0.25; MIXED between
+    meaning:
+      LAUNCH-TOGETHER: most re-reads launch within half of M4's staggered gap of their partner, as C3 and C5 assume and the schedule's 82 to 88% says: M4's staggered distance is the wrong picture for Mixtral w2 at 128x128, and a next byte law prices the launch gap, not the rank distance
+      STAGGERED: most re-reads launch about one staggered gap behind their partner, M4's picture: M4's w2 over-prediction is then its survival law's, not its distance's
+      MIXED: neither picture: a next byte law prices the measured share directly
+      NOT READ: no valid Mixtral-8x7B w2 launch
+  C3-R3:
+    what: why Mixtral-8x7B's 128 G 1 w1 runs faster than priced: per-CTA life against packing
+    read_by: read_c3.r3_cell, r3_model
+    rule: per cell T_pred = K1 at its LOMO constants (refit4 ROUND2's selected knee; N0 printed beside), registered by value; L_pred = T_pred W_c / live; T_stamp the stamped launch's event-pair time (median over calls; each call held ahead), L_med its median live lifetime (globaltimer); ln(T_pred / T_stamp) = ln(L_pred / L_med) [LIFE] + ln(live L_med / (W_c T_stamp)) [PACKING], exactly; owner 2026-10-26 (review MAJOR-3): LIFE and the total are corrected for the cell's measured w1 overhead o (L and T_stamp over 1 + o; PACKING unchanged; the raw terms printed beside); per model the means over cells; life share = mean LIFE / mean total (read when |mean total| >= 0.005); e_plain = mean T_pred / T_plain - 1 over the cells, T_plain the perturb unit's plain median on the same cell
+    band: on Mixtral-8x7B w1 under K1: NOT REPRODUCED when e_plain < +2%; DESCRIPTIVE ONLY when the w1 overhead (the median over cells of |o|) exceeds a quarter of e_plain; else LIFE when the life share >= 2/3, PACKING <= 1/3, BOTH between; on PERTURBED pages DESCRIPTIVE ONLY whatever the band (owner OD-1)
+    meaning:
+      LIFE: Mixtral-8x7B's w1 CTAs themselves run faster than priced: the next knee form needs a per-CTA rate term that Mixtral w1 carries and Qwen2 w1 does not (cycles domain), not a wave or launch term
+      PACKING: the CTAs live as priced and the GEMM is shorter than its waves of median lives: the next round declares a time-domain launch-overlap or tail-packing term (C5's jitter physics applied to time)
+      BOTH: both terms carry the miss: a next form needs a rate term and a packing term, declared separately
+      NOT REPRODUCED: this board's plain kernel does not reproduce the w1 miss (under +2%): the decomposition is printed, nothing is attributed
+      DESCRIPTIVE ONLY: the w1 overhead (absolute) is over a quarter of this board's plain-kernel miss: the overhead-corrected split is printed and attributes nothing (owner, 2026-10-26)
+      NOT READ: no valid Mixtral-8x7B w1 launch
+  C3-R4:
+    what: validity of every reading
+    read_by: read_c3.read, launch_reading
+    rule: NOT READ unless: the board valid (read_c2.board: C2_POWER_W=700, LOCK_PROBE_1410=held, G-BAND PASS); the variant's regcheck line and the gate's HARD line PASS (a timing FAIL alone reads PERTURBED, owner OD-1), the page's label the gate's; every stamped config passes C3's SASS legs; the page's histogram is the registered file; and per launch every row stamped live or dead, the live CTAs exactly the pids under (num_tokens_post_padded / 128) x P, USE_TD False, late_buffers 0 (review MINOR-7), 132 distinct SMs, the globaltimer resolution (the least positive difference of distinct start stamps) at most L / 10: a 1.024 us timer still admits every C3 GEMM, whose CTAs live about 20 us and longer at 1410 MHz
+
+DESCRIPTIVE (no band): theta on w1 and on Qwen2-57B w2; the pair-gap theta: median g over schedule-same-wave pairs in waves >= 1; the median g over all pairs; the per-CTA SM clock (life cycles / life ns); first-wave over later-wave median lifetime; life IQR / median; the stamped over the plain time per cell (the instrument's cost on the stamped call); Qwen2-57B's C3-R3 under K1 and N0
+
+CONSTANTS: {"CTAs_per_SM": 2, "SMs": 132, "W_c": 264, "form": "K1", "form_beside": "N0", "life_share_hi": 0.6666666666666666, "life_share_lo": 0.3333333333333333, "min_wave_ctas": 132, "overhead_median_max": 0.1, "overhead_worst_max": 0.2, "r2_timer_fraction_of_gap": 0.25, "r3_overhead_fraction_of_miss": 0.25, "reproduce_min_pct": 2.0, "share_min_total": 0.005, "staggered_band": 0.25, "theta_in": [0.25, 0.3], "theta_near": [0.2, 0.35], "timer_max_fraction_of_L": 0.1, "together_band": 0.75, "together_gap_below": 0.5}
+
+PRICED: docs/registered/2026-10-26-cal3-priced.json sha256 8d2b04578efca8cea9be44d9b8732fc38956da19921fac897edd378ca54c6cb5 (24 rows): the priced 128 G 1 GEMM times of C3's cells (A2's E1-CAL cells, NATIVE): refit4 ROUND2's selected knee K1 (triad rate 3726.2 GB/s, p and S0) and the null knee N0 (carried bw 3597.8 GB/s, p), each at its LOMO constants with the priced model held out (knee2r.json), on counted bytes of the board's own b128g1 counter page (Mixtral-8x7B: C2's; Qwen2-57B: A2's), dead CTAs included; meas_ms is that page's counted GEMM time (cycles / 1400.8 MHz, the rows' own conversion)
+  generator: moe-kernels-work 2026-10-26 build-C3/work/priced_c3.py (offline, read-only; run from refit4/work)
+  2026-10-22/diag-v5/work/d5.py 09e86b88d56834f8055e3e0639697563d6fe571b2fe2c542bae398d33f27e12a
+  2026-10-22/knee-v5/work/k5.py 02e06a689ecec4e492deac6c911f6a8fe107c152144850c517a6a8c894b80435
+  2026-10-22/refit4/work/bytes4.json 86a6a2edd6e0096af8f226140904fa4e40b7bd0862d00656c53012a478f968bb
+  2026-10-22/refit4/work/knee2r.json 6dc6d257bea33ac2831f290440fac00b3839b2634a5fd3e039bffc56a68a4c97
+  2026-10-22/refit4/work/r4.py cbc0587e57e645ac3a6476577dfeb230bfbb38783282ae766da19a2b82b5c3d6
+  2026-10-22/refit4/work/refit4.py 4ab08ff866efd5062077f1e9e86993cbe8ac735ec58b34643b43949cd3f238df
+  2026-10-26/build-C3/work/priced_c3.py cf97d06306e70b769a4eae58ebe6ca514b70a84fa161c348304aa23a132c511e
+
+SCHEDULE NOTE (OD-4)
+  OD-4 (owner, 2026-10-26): refit4 REFIT.md section 2a's 'a re-read P = 32 or 48 ranks behind its partner falls in the same wave for 82 to 88% of pairs' does NOT reproduce for Mixtral-8x7B on C3's cells: the schedule share is 0.896 (PT, PW) and 0.969 (uniform, balanced), pooled 0.925. Mixtral-8x22B's C2 cells give 0.812 to 0.900 (pooled 0.844), so the quoted range matches 8x22B's cells, not 8x7B's. It enters no band
+  derivation: 128 G 1 w2, GROUP_SIZE_M 1: pid = pid_m P + pid_n with P = N / 128 (8x7B 4096 / 128 = 32; 8x22B 6144 / 128 = 48); expert e owns ceil(c_e / 128) consecutive M-tiles (moe_align_block_size, experts ascending), c_e the cell's NATIVE rows per expert (the histogram's counts; balanced: T top_k / E). A re-read is live rank r whose M-tile pid_m - 1 holds the same expert (its partner r - P read the same B slab); it is same-wave when floor(r / 264) = floor((r - P) / 264), W_c = 132 SMs x 2 CTAs. 8x7B uniform and balanced n 2: 2 tiles per expert, 16 tiles, 512 live, 256 re-reads (the second tile of each expert); only r in [264, 295] crosses, pid_m 9, pid_n 0 to 7: 8 pairs, 248 / 256 = 0.969. 8x7B PT (tiles 2,2,3,2,3,3,2,3) and PW (4,3,2,1,3,2,2,3): 20 tiles, 640 live, 384 re-reads, 40 cross: 0.896. Restricted to waves k >= 1 the shares are 0.815 to 0.938. read_c3.pairs and same_wave compute these on every page from the expert_ids vLLM handed the launch
+
+NEXT ROUND GATE: unchanged from refit4 (DECLARED.txt C, DECLARED2.txt R2-D): before B3 is registered, a model round must put every held-out 128 G 1 model mean within 1.0% (OLMoE, Qwen2-57B, Mixtral-8x7B on A2's cells, Mixtral-8x22B, and Mixtral-8x7B on C2's board as well) AND have an estimated P(B3 E1-TILE holds) under A of at least 0.5 (read_c2.pass_estimates' method). C3 changes neither clause; a constant C3 measures enters that round as MEASURED
+
+OWNER DECISIONS
+  OD-1 (decided 2026-10-26): a gate failing on its timing legs alone keeps the stamps units, pages labelled PERTURBED with the overhead beside each reading; C3-R1 and C3-R2 read under the NOT-READ bound, C3-R3 descriptive only; the hard legs and regcheck still refuse
+  OD-4 (decided 2026-10-26): REFIT.md's 82 to 88% does not reproduce for Mixtral-8x7B (schedule_note)
+  MAJOR-3 (decided 2026-10-26): C3-R3's split corrected for the measured overhead, its band read only when the w1 |overhead| is at most a quarter of the plain-kernel miss, else DESCRIPTIVE ONLY
+  OD-2: no published rental 4/5 stamp page exists, so the reader is tested on synthetic pages in the probe's on-disk layout and on rental 5's real gate.env and regcheck.env
+
+PLAN scripts/plans/rentalC3-cal-2026-10.plan sha256 51faa798bb9b4c2f59e767a1ccc4b9f51ce02a1a48ae28365007ef7a7007b2ae: 8 units, 30 min estimated (26 nodrop), drop order last first ['q']
+  - prelude  est 2 cap 15 nodrop
+  olmoe-1b-7b bytes f128 est 3 cap 20 nodrop
+  mixtral-8x7b bytes f128 est 7 cap 25 nodrop
+  - gate gband est 1 cap 5 nodrop
+  - regcheck rc3 est 3 cap 10 nodrop
+  - perturb pt3 est 6 cap 20 nodrop
+  mixtral-8x7b stamps st7 est 4 cap 15 nodrop
+  qwen2-57b-a14b stamps stq est 4 cap 15 q
+  wall about 55 min with 25 min of boot and setup: $2.10 at $2.29/h; deadline launch + 70 min; guardian hard cap launch + 85 min ($3.24 at most)
+
+PAGES
+  mixtral-8x7b: docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json bebb06d6df189f193ec1a72fbdc98cd52549ead35d24742d21429bbed7d08fe3 cells [['PT', 2], ['PW', 2], ['uniform', 2], ['balanced', 2]] (mixtral-8x7b stamps st7, variant u7-st7)
+  qwen2-57b-a14b: docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json bfd3ac6bf0b7f0be16c14cdfe3cedce1a6aeaf45be62933484bc783bc3f28086 cells [['PT', 1], ['PW', 1], ['uniform', 1], ['balanced', 1], ['PT', 2], ['PW', 2], ['uniform', 2], ['balanced', 2]] (qwen2-57b-a14b stamps stq, variant u8-stq)
+
+code_pins: (in the JSON)

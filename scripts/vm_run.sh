@@ -3,7 +3,7 @@
 #
 #   bash scripts/vm_run.sh prepare --ip <ip> --run-id <id> --branch run-gh200-<date>
 #   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> [--model M] [--steps a,b] [--floor-groups G,G --floor-treads n,n]
-#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> --plan scripts/plans/<file>.plan [--driver gh200_tile_session.sh|gh200_decode_session.sh|gh200_tileA2_session.sh|gh200_settleS1_session.sh|gh200_cal2_session.sh]
+#   bash scripts/vm_run.sh start   --ip <ip> --run-id <id> --deadline <epoch s> --plan scripts/plans/<file>.plan [--driver gh200_tile_session.sh|gh200_decode_session.sh|gh200_tileA2_session.sh|gh200_settleS1_session.sh|gh200_cal2_session.sh|gh200_cal3_session.sh]
 #   bash scripts/vm_run.sh watch   --run-id <id>     # exit 0 when DRIVER-DONE is on the branch, 3 before
 #   bash scripts/vm_run.sh verify  --run-id <id>     # every pushed file against SHA256SUMS
 #   bash scripts/vm_run.sh forget  --run-id <id>     # delete the run's deploy key
@@ -72,7 +72,7 @@ POLL_S="${MOE_VM_POLL_S:-10}"
 DRIVER_PKG="nvidia-driver-580-server-open"
 #: The session drivers start may run (2026-10-14): the pinned one, the tile stage's copy of it, and the
 #: decode stage's copy of the tile stage's; tile rental A2's copy of the tile stage's (2026-10-20).
-SESSION_DRIVERS=(gh200_model_session.sh gh200_tile_session.sh gh200_decode_session.sh gh200_tileA2_session.sh gh200_settleS1_session.sh gh200_cal2_session.sh)
+SESSION_DRIVERS=(gh200_model_session.sh gh200_tile_session.sh gh200_decode_session.sh gh200_tileA2_session.sh gh200_settleS1_session.sh gh200_cal2_session.sh gh200_cal3_session.sh)
 DRIVER_BUILD="580.105.08-0lambda0.22.04.1"
 MIN_DRIVER=580
 

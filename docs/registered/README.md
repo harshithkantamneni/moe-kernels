@@ -1577,3 +1577,30 @@ rebuilds G1 under r7-median-run3 from `cells.csv` and passes (0 of 108 repeat ro
 files are unchanged (`register_c2.py --check`); the reader re-reads the published copy to the same `.txt` and to
 JSON that differs only in the page path, and `scripts/scoring/rescore.py cal2` re-reads it to the committed files.
 Two test pins moved (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`).
+
+### The calibration rental C3 (2026-10-26, CALIBRATION, DESCRIPTIVE)
+
+| file | registers |
+|---|---|
+| `2026-10-26-cal3-gh200` | per-CTA launch and finish stamps for Mixtral-8x7B and Qwen2-57B, w1 and w2, at vLLM's 128x128x64 w8 s3 G 1 tile on A2's E1-CAL cells (NATIVE), from the instrumented copy of vLLM's kernel at its "ends" level (`moe/instrumented`, unchanged; the owner's option (b) of 2026-10-22, after refit4's two offline rounds failed their gate). C3-R1 theta_L, C5's launch spread of a later wave, measured on Mixtral-8x7B w2 (bands IN [0.25, 0.30]: C5 MEASURED; NEAR [0.20, 0.35]; OUT); C3-R2 the share of w2 slab re-reads launched within half of M4's staggered gap of their partner (LAUNCH-TOGETHER, MIXED, STAGGERED); C3-R3 why Mixtral-8x7B's w1 runs faster than priced, the exact split of ln(T_pred / T_stamp) into a per-CTA LIFE term and a PACKING term against K1's held-out price (LIFE, BOTH, PACKING, or NOT REPRODUCED when this board's plain kernel misses by under +2%); C3-R4 validity. The priced times by value in `2026-10-26-cal3-priced.json` (refit4 ROUND2's K1 and N0 at their LOMO constants on the C2 and A2 counter pages). Read by `scripts/scoring/cal3/read_c3.py` |
+
+C3 certifies nothing and moves no verdict; every C3 page is SEEN once read, and no blind model runs. The copy is gated
+on every C3 cell (owner decision 2 with rental 5's CTAs-per-SM leg, plus C3's SASS legs: a clock read before the first
+LDG and none inside the HGMMA loop) and by regcheck (CTAs per SM equal, the wgmma path kept); the perturb unit's plain
+medians are the uninstrumented reference. Owner OD-1 (2026-10-26, C3 only): a gate failing on its timing legs alone
+(median over 1%, worst over 2%) keeps the stamps units, pages labelled PERTURBED with each cell's measured overhead
+beside every reading; C3-R1 and C3-R2 (ordering quantities) are read on them unless the read GEMM's median overhead
+exceeds 10% or a worst burst pair 20% (NOT READ); C3-R3 is descriptive only there; the hard legs and regcheck still
+refuse. OD-4: REFIT.md's 82 to 88% same-wave share does not reproduce for Mixtral-8x7B (0.896 PT/PW, 0.969
+uniform/balanced; it matches 8x22B's 0.812 to 0.900), registered with its derivation. Build review (GO-WITH-FIXES), applied before any page: C3-R2 is
+banded on the re-reads in waves 1 and later that the schedule puts in their partner's wave (C5 1.000, M4 0.000); each
+stamped call is held ahead and records its stamps' own span; C3-R3's split is corrected for the measured overhead and
+its band read only when the w1 |overhead| is at most a quarter of the plain-kernel miss (owner, 2026-10-26), else
+DESCRIPTIVE ONLY; the overhead bounds are two-sided; a PERTURBED theta_L is at most MEASURED-PERTURBED, and a theta_L
+read on Mixtral-8x7B is in-sample for that model in any later held-out round. C2's prelude (700 W read back or stop,
+the 1410 lock read back or stop) and G-BAND after C2's two f128 pages. Plan: `scripts/plans/rentalC3-cal-2026-10.plan`,
+8 units, 30 min estimated (26 nodrop), about 55 min wall ($2.10); drop order q only (the Qwen2-57B stamps); deadline
+launch + 70 min, hard cap launch + 85 min ($3.24 at most). Driver: `scripts/gh200_cal3_session.sh`, C2's pinned driver
+plus lines marked C3 (`tests/test_cal3_plan.py`); probe `scripts/instr_probe_c3.py` (rental 4/5's probe at vLLM's
+tile and A2's histogram cells; `scripts/instr_probe.py` stays byte-identical). The gate a later model round must pass
+before B3 is unchanged: every held-out 128 G 1 mean within 1% and an estimated P(A) of at least 0.5.
