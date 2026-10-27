@@ -9,3 +9,4 @@
 2026-10-27T04:24:39Z regcheck (unit 5/8 - rc3): exit 0 (0 min)
 2026-10-27T04:25:13Z perturb (unit 6/8 - pt3): exit 1 (1 min)
 2026-10-27T04:25:30Z stamps (unit 7/8 mixtral-8x7b st7 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/mixtral-8x7b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
+2026-10-27T04:25:49Z stamps (unit 8/8 qwen2-57b-a14b stq block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileA-hist/qwen2-57b-a14b-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
