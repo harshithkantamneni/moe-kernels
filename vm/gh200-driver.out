@@ -26,3 +26,7 @@
 2026-10-27T22:53:00Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL ends the rental (tileA2-gates) [unit 6/8 - gband gate=band] (estimate 1 min, cap 5 min, 42 min left)
 2026-10-27T22:53:02Z gate END: exit 0 after 0 min [unit 6/8 - gband gate=band]
 2026-10-27T22:53:02Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed e797b0b to run-gh200-tile4-20261027t2238: gate (unit 6/8 - gband gate=band): exit 0 (0 min)
+2026-10-27T22:53:04Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 7/8 mixtral-8x7b-tp2 t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 6 min, cap 25 min, 42 min left)
+2026-10-27T23:00:12Z timed END: exit 0 after 7 min [unit 7/8 mixtral-8x7b-tp2 t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-27T23:00:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
