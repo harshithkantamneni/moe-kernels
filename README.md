@@ -312,7 +312,13 @@ time by 4.44% (six cells, -2.56 to -5.70%; w1 at P 112, Phi-3.5's regime). Its b
 21.0% under the counters and M4 7.5% under (BEYOND-M4: neither law fits w1 there), and its w2 reads 5.2% under;
 with the counted bytes on both GEMMs in place of W2's, the rest of the frozen model reads +0.12% (descriptive). The
 five-model pass estimate A is 0.021; the owner's next step is one final declared model round, and iteration stops
-if it fails the gate (docs/FINDINGS.md, Calibration rental C4). Every
+if it fails the gate (docs/FINDINGS.md, Calibration rental C4). That final round (round 5, offline) failed
+the gate. Its held-out 128 G 1 means were OLMoE +0.45%, Qwen2-57B -1.46%, Mixtral-8x7B +1.77% (+2.01% on C2's board),
+Mixtral-8x22B +0.24% and tp2 +2.39%, with P(A) 0.124. On 2026-10-28 the owner narrowed scope, so B3 is not
+registered and its blind models stay unspent. The only certified timing model is still v3 on R3's tile. On vLLM's
+tiles the work stands as MEASURED or HELD-OUT, not blind. A 1% held-out claim holds only for OLMoE-like and
+Mixtral-8x22B-like 128 G 1 shapes. The knee conflict and the large-P w1 byte law are open (docs/FINDINGS.md, Tile
+stage: scope decision). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

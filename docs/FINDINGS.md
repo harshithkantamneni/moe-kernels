@@ -2798,6 +2798,148 @@ a 1410 MHz lock: the round-4 model, frozen before the page, under-predicts Mixtr
 under, W2 21.0% under) at P 112. Not established: why w1 reads more than M4 prices there, how X splits between the
 two GEMMs, and whether any of it carries to Phi-3.5's routing.
 
+## Tile stage: scope decision (2026-10-28)
+
+**The decision (owner, 2026-10-28).** The scope is narrowed. The tile stage's model iteration on vLLM's tiles
+stopped after the final declared round failed the B3 gate. That round was round 5, the one round the owner allowed
+after calibration rental C4 (registered in C4's registration, `docs/registered/2026-10-27-cal4-gh200`). Its
+declaration is `work/DECLARED5.txt` (written 2026-10-27T23:19:46Z, sha256 `e2dd41fe...df18d6`, read-only, not
+amended). The gate is round 4's, on five models:
+- G1: every held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board as well;
+- G2: an estimated P(A) of at least 0.5.
+
+B3, the blind test of a tile model on rental B2's 84 frozen NATIVE cells
+(`docs/registered/2026-10-20-tileB2-e1tile-gh200`), is **not registered**. Its blind models, Phi-3.5-MoE,
+Qwen1.5-MoE-A2.7B and JetMoE-8B, stay unspent. No registered verdict changes, and no page, constant or pinned file
+changes with this section.
+
+Rounds 2 to 5 are offline work in moe-kernels-work and are not in this repository: refit4 (REFIT.md, ROUND2.md;
+2026-10-22), round 3 and round 4 (ROUND3.md, ROUND4.md; 2026-10-27), and round 5 (ROUND5.md; 2026-10-28). The
+diagnosis and knee rounds before them are 2026-10-22 diag-v5 (DIAGNOSIS.md) and knee-v5 (KNEE.md). Numbers from
+them are cited by file and section. Sign throughout: e = model / measured - 1.
+
+**What is CERTIFIED (unchanged).** Model v3 on R3's tile, 32 x 64 x 64 w8 s4 at G 8, blind under synthetic skewed
+routing, on three models in CLEAN:
+- OLMoE, rental 6: 42 cells, rms 0.54%, worst -1.47% (`scripts/scoring/rental6/skew.score.json`; Rental 6 above);
+- Mixtral-8x7B, rental 7: 42 cells, rms 0.51%, worst -1.22% (`scripts/scoring/rental7/skew.score.txt`);
+- Phi-3.5-MoE, rental 7: 42 cells, rms 0.69%, worst -1.61% (the same file; Rental 7 above).
+
+That is the study's only certified timing model. It is not vLLM's tile.
+
+**What the large-tile work established (vLLM's 128x128 and 64x128 wgmma tiles).** Every item here is MEASURED, or
+HELD-OUT inside an offline round. None is blind-certified.
+- **The per-kernel clock sag under the 700 W cap** (MEASURED, Settle rental S1, `scripts/scoring/settleS1/settleS1.read.json` M2).
+  - On the OLMoE 128x128 page: A 47.32 us (tau 450 us) at 1410 MHz, 37.74 us at 1305, 0.70 us at 1005. It is gone
+    at 1005 MHz only.
+  - It depends on the board. The same 1410 page fits 29.65 us (tau 300 us) on A2's board fb8566. The sag
+    estimator's "par" is 42.02 / 425 us on A2, 41.59 / 412.5 on C2 and 54.25 / 587.5 on C4
+    (`scripts/scoring/cal2/cal2.read.json`, `scripts/scoring/cal4/cal4.read.json`).
+- **The power limit** (MEASURED, S1). On Lambda GH200, `nvidia-smi -pl 900 -sc 0` reports success but leaves
+  `enforced.power.limit` at 700 W (`session/power-set-unsettled-900.txt` in the S1 session). So A2 most likely ran at
+  700 W (INFERENCE, as S1 states).
+- **The clock conversion holds on R3's tile** (CONV-L HOLDS, Tile rental A2, `scripts/scoring/tileA2/convl.score.txt`):
+  1410 against 1710 MHz, G1 rms 0.61% over 7 cells, G8 0.16% over 8.
+- **w2 re-reads launch together** (MEASURED-PERTURBED, C3-R2, `scripts/scoring/cal3/cal3.read.json`). 0.901 of
+  Mixtral-8x7B w2's later-wave, schedule-same-wave slab re-reads launch within half of M4's staggered gap. So M4's
+  staggered-stream picture of w2 at 128x128 G 1 is wrong. M4 over-prices those w2 bytes by +21.3% (S1 M3) to
+  +22.3% (C2-S4) on Mixtral-8x7B and +32.5% on Mixtral-8x22B (C2-S2).
+- **The round-5 model's held-out 128 G 1 means on five CAL models** (HELD-OUT, ROUND5.md section 3,
+  `work/combo5.out`). The model is STAG-CUT w1 bytes, W2 w2 bytes, the K1 wall knee, the clock form of F1 and F1 par.
+  - OLMoE +0.45%;
+  - Qwen2-57B -1.46%;
+  - Mixtral-8x7B +1.77% (+2.01% on C2's board);
+  - Mixtral-8x22B +0.24%;
+  - Mixtral-8x7B-tp2 +2.39%.
+
+  The pooled cell rms is 1.64% and the worst cell +3.67%. The pass estimate is A 0.124 on 84 cells (ROUND5.md
+  section 4; an ESTIMATE under B2's noise model).
+- **Board-to-board transfer** (HELD-OUT, ROUND3.md section 2, ROUND5.md section 7). The same four Mixtral-8x7B cells
+  priced on A2's and C2's boards differ by 0.23 to 0.24 points in every variant. That matches the 0.26% board noise
+  B2's noise model assumes.
+- **The "w1 +4%" was a cycles-domain artefact** (ROUND3.md section 2; MEASURED clocks, INFERENCE for the
+  attribution).
+  - In cycles at 1400.8 MHz, K1 over-prices Mixtral-8x7B w1 by +4.63% (S1) and +3.43% (C2).
+  - The ncu SM clock during that GEMM is 1339 and 1359 MHz. Against wall time the same predictions read +0.03%
+    (S1), +0.36% (C2) and +0.94% (C3's plain kernel).
+  - C3-R3's NOT REPRODUCED compared a cycles-domain price with a wall-time kernel.
+
+**What it does NOT establish.**
+- **No blind test on vLLM's tiles.** E1-TILE has never been scored. The only scored E1 on these tiles is A2's
+  E1-CAL, and it FAILS under v4: 4.23% rms over 42 cells (`scripts/scoring/tileA2/e1cal.score.txt`).
+- **The knee conflict is unresolved** (ROUND4.md section 6, ROUND5.md sections 3 and 7). Even with counted bytes on
+  both GEMMs (the oracle row), the model prices Mixtral-8x7B 128 G 1 slow and Qwen2-57B fast:
+  - Mixtral-8x7B +1.62% (+1.86% on C2's board);
+  - Qwen2-57B -1.21%;
+  - oracle P(A) 0.439.
+
+  The two models sit at nearly the same K and x but want different knees. knee-v5 found it first (KNEE.md summary
+  item 2: their w1 K1 rates differ by 0.4%, their page-optimal p by 12 against 6). No byte law reaches this residual.
+- **No w1 byte law is identified at large P** (ROUND5.md section 2, `work/bytes8.out`). This is Phi-3.5's regime
+  (w1 P 100, K 4096).
+  - On tp2 (P 112) the declared laws read w1 bytes +7.12% (STAG-CUT), -7.25% (M4w1) and -20.71% (W2), against
+    C4-B's counters.
+  - Random replacement at the L2 reads -3.60% but breaks OLMoE's w1 guard.
+  - So Phi-3.5's 128g1 stake against v5'' flips sign between declared models: -2.32% under round 4's model, +3.64%
+    under round 5's (ROUND5.md section 5).
+- **C5's jitter constant is not the launch spread** (C3-R1 OUT). Mixtral-8x7B w2 theta_L reads 0.351
+  (MEASURED-PERTURBED), outside C5's fitted 0.25 to 0.30. What C5's constant absorbs is not read.
+
+**Where a 1% claim is supported (held out, not blind).** Only two kinds of shape:
+- OLMoE-like shapes: small P, floor-side. OLMoE reads +0.40 to +0.53% in every round-5 variant.
+- Mixtral-8x22B-like shapes: very large P, where every w1 re-read misses. Mixtral-8x22B reads +0.16 to +0.24% with
+  W2 on w2. With M4 on both GEMMs it reads +3.24%, so this claim rests on the w2 law.
+
+A 1% claim is not supported on three kinds of shape: Mixtral-8x7B-like 128 G 1, Qwen2-57B-like, and large-P w1
+between about P 88 and 112 (JetMoE-8B, Phi-3.5-MoE). This is ROUND5.md section 7's reading (INFERENCE).
+
+Two qualifications apply to every held-out number in this section:
+- **Each round built on the one before.** Rounds 2 to 5 were each declared with the earlier rounds' held-out numbers
+  in view, and round 5 also after a diagnosis of C4's counted w1 bytes. The held-out means therefore carry a
+  forking-paths risk. ROUND5.md's selected law won its last tie-break by 0.03 points of pooled rms.
+- **Every page is SEEN.** That covers every page from tile rental A2, S1, C2, C3 and C4. tp2 is a TP shard of
+  Mixtral-8x7B and shares its router (C4).
+
+**What would reopen B3.** A declared model must pass the registered gate on held-out CAL models, with B3's blind
+models still unspent. The gate is G1 (every held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board too) and
+G2 (an estimated P(A) of at least 0.5). INFERENCE: every existing CAL page is SEEN, so a pass on the five current CAL
+models would carry the forking-paths risk above. A new CAL page read under a model frozen before it would not.
+
+**Open defects carried** (recorded, not fixed; one line each).
+1. `score_floor.py` and `score_bytes.py` import before `tcommon` sets `sys.path`, so from the command line they need
+   `PYTHONPATH=.:scripts` (Tile rental A).
+2. `score_census.py` orders its `occupancy` keys by hash seed; `PYTHONHASHSEED=0` fixes the committed files (Tile
+   rentals A and A2).
+3. Rental A's census tool raises on deepseek-v2-lite's token count; A2's tread-3 tool admits it, and the original
+   tool is unchanged (Tile rentals A and A2).
+4. `score_session_a2.py` refuses when the two power read-backs differ, so A2's session record stays NOT READ (Tile
+   rental A2).
+5. The A2 driver's `step_what` prints `LOCK_TIMED` (1710) in START lines that run at 1410 (Tile rental A2).
+6. `score_e1cal.py` voids a cell only when every G3 stratum fails, so A2's 42 cells include stratum 1's (Tile rental
+   A2).
+7. S1's prelude log names `power-set-unsettled.txt`; the file written is `power-set-unsettled-900.txt` (Settle
+   rental S1).
+8. What enforces the 700 W GPU ceiling, and whether 900 W would hold the 1710 MHz lock, are not established (Settle
+   rental S1).
+9. JetMoE-8B 128g1 n2 PT has two fixed-point roots under W2 (1.273, 1.519; UNPRICED in round 4). It is priced under
+   STAG-CUT, and why the second root goes away is not checked (ROUND4.md, ROUND5.md section 4).
+10. W2's launch-gap tail is too thin: p90 0.029 L against 0.060 measured. The law also leaves out a dispatch drift of
+    about 0.008 L per wave (ROUND3.md section 1a).
+11. At 128x128 G 16, M4's charge-once activation assumption fails (S1 M4 A-DOMINATED), and Mixtral b128g16 w2 stays
+    +62% under M4 (ROUND3.md section 1c).
+12. C3's pair-gap theta (0.071 to 0.175 per cell) and its wave-fit theta_L (0.351) disagree, and why is not read
+    (Calibration rental C3).
+13. Why tp2's counted w1 reads exceed M4's at P 112 (BEYOND-M4) is not read (Calibration rental C4).
+
+**What the paper can claim, after the scope decision.** Certified: model v3 on R3's tile under skew, on Mixtral-8x7B,
+Phi-3.5-MoE and OLMoE. MEASURED or HELD-OUT on vLLM's 128x128 tile, not blind:
+- the clock sag and the 700 W ceiling;
+- the clock conversion on R3's tile;
+- the w2 launch-together reading;
+- 128 G 1 time to within 1% held out on OLMoE and Mixtral-8x22B only;
+- a 0.24-point board transfer.
+
+Not claimed: any timing model on vLLM's tiles, a w1 byte law at large P, or a resolution of the knee conflict.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

@@ -1669,3 +1669,17 @@ and `scripts/scoring/rescore.py cal4` re-reads it to the committed files. Two te
 (`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Next, by the owner's registered sequence: one
 final declared model round under round 4's gate on five models; if it fails, iteration stops and the owner chooses
 between narrowing scope and going blind.
+
+**Scope decision 2026-10-28 (owner).** The final declared model round failed the B3 gate on five models. That was
+round 5, offline (moe-kernels-work 2026-10-28 round5, ROUND5.md; `work/DECLARED5.txt` written
+2026-10-27T23:19:46Z, sha256 `e2dd41fe...df18d6`, not amended).
+- G1 fails on four of six means: tp2 +2.39%, Mixtral-8x7B +1.77% (+2.01% on C2's board) and Qwen2-57B -1.46%.
+  OLMoE reads +0.45% and Mixtral-8x22B +0.24%.
+- G2 fails: P(A) is 0.124 on 84 cells, against 0.5.
+
+By the owner's registered sequence, iteration stops, and the owner chose to narrow scope. **B3 is not registered**,
+and its blind models (Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B on B2's 84 frozen cells) stay unspent. No
+registration file, scorer or verdict changes. `2026-10-20-tileB2-e1tile-gh200` stays as committed and
+unscored. B3 reopens only if a declared model passes the same gate on held-out CAL models
+with the blind models still unspent. docs/FINDINGS.md, "Tile stage: scope decision (2026-10-28)", records what is
+certified, what is MEASURED or HELD-OUT on vLLM's tiles, what is not established, and the open defects carried.
