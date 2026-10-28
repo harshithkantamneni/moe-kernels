@@ -3,7 +3,9 @@ files under PYTHONHASHSEED=0 (score_census.py's occupancy key order follows the 
 the settle rental S1's registered reader re-reads its published session to the committed settleS1.read files, and the
 calibration rental C2's registered reader its own to the committed cal2.read files (where the knee round's frozen chain is
 on this machine: the reader refuses without it), and the calibration rental C3's registered reader its own to the committed
-cal3.read files (where the run's commit is in this clone's history: the reader checks the freeze against it)."""
+cal3.read files (where the run's commit is in this clone's history: the reader checks the freeze against it), and the
+calibration rental C4's registered reader its own to the committed cal4.read files (where round 4's frozen chain is on
+this machine: the reader refuses without it)."""
 from __future__ import annotations
 
 import importlib.util
@@ -68,6 +70,22 @@ def test_the_published_cal3_session_rereads_to_the_committed_files(tmp_path):
     assert ran == [("scripts/scoring/cal3/read_c3.py", 0)], ran
     rows = dict(RS.compare("cal3", tmp_path))
     assert rows == {"cal3.read.json": "EQUAL", "cal3.read.txt": "EQUAL"}, rows
+
+
+_c4spec = importlib.util.spec_from_file_location("read_c4_for_rescore", REPO / "scripts" / "scoring" / "cal4" / "read_c4.py")
+_C4 = importlib.util.module_from_spec(_c4spec)
+_c4spec.loader.exec_module(_C4)
+HAVE_C4_CHAIN = all((_C4.WORK / f).is_file() for f in _C4.FROZEN_FILES) and \
+    (Path.home() / "moe-kernels-exfil/runs/gh200-tile2-20261020T2242Z/tree/vm/results").is_dir()
+
+
+@pytest.mark.skipif(not HAVE_C4_CHAIN, reason="round 4's work folder or A2's exfil tree is not here")
+def test_the_published_cal4_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("cal4") == "results/published/2026-10-27-nvidia_gh200_480gb-cal4-session"
+    ran = RS.rescore("cal4", tmp_path)
+    assert ran == [("scripts/scoring/cal4/read_c4.py", 0)], ran
+    rows = dict(RS.compare("cal4", tmp_path))
+    assert rows == {"cal4.read.json": "EQUAL", "cal4.read.txt": "EQUAL"}, rows
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

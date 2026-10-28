@@ -1,0 +1,129 @@
+{
+ "tool": "scripts/tile_census_a2.py (tile_census.compile_tile at each model's smallest whole tread)",
+ "tiles": [
+  "128x128x64w8s3"
+ ],
+ "models": [
+  "mixtral-8x7b-tp2"
+ ],
+ "triton_cache": "/tmp/tile-census-a2-triton-5gyn0qpl",
+ "entries": [
+  {
+   "model": "mixtral-8x7b-tp2",
+   "tile": "128x128x64w8s3",
+   "gemm": "w1",
+   "config": [
+    128,
+    128,
+    64,
+    1,
+    3,
+    8,
+    false,
+    2
+   ],
+   "regs": 116,
+   "shared": 98304,
+   "num_warps": 8,
+   "mma": "wgmma",
+   "occupancy": {
+    "ctas_per_sm": 2,
+    "limits": {
+     "registers": 2,
+     "shared": 2,
+     "warps": 8,
+     "ctas": 32
+    },
+    "binding": [
+     "registers",
+     "shared"
+    ]
+   },
+   "ptx_counts": {
+    "path": "wgmma",
+    "wgmma": 4,
+    "instruction": "m64n128k16",
+    "dtype": "bf16",
+    "cp_async_cg": 8,
+    "cp_async_bytes_per_thread": 128,
+    "bar_sync": 2,
+    "fence_proxy_async": 1,
+    "wgmma_wait_group": 1,
+    "cp_async_wait_group": 1,
+    "threads": 256,
+    "per_warpgroup": 4,
+    "warpgroups": 2
+   },
+   "tread": 1
+  },
+  {
+   "model": "mixtral-8x7b-tp2",
+   "tile": "128x128x64w8s3",
+   "gemm": "w2",
+   "config": [
+    128,
+    128,
+    64,
+    1,
+    3,
+    8,
+    true,
+    1
+   ],
+   "regs": 116,
+   "shared": 98304,
+   "num_warps": 8,
+   "mma": "wgmma",
+   "occupancy": {
+    "ctas_per_sm": 2,
+    "limits": {
+     "registers": 2,
+     "shared": 2,
+     "warps": 8,
+     "ctas": 32
+    },
+    "binding": [
+     "registers",
+     "shared"
+    ]
+   },
+   "ptx_counts": {
+    "path": "wgmma",
+    "wgmma": 4,
+    "instruction": "m64n128k16",
+    "dtype": "bf16",
+    "cp_async_cg": 8,
+    "cp_async_bytes_per_thread": 128,
+    "bar_sync": 2,
+    "fence_proxy_async": 1,
+    "wgmma_wait_group": 1,
+    "cp_async_wait_group": 1,
+    "threads": 256,
+    "per_warpgroup": 4,
+    "warpgroups": 2
+   },
+   "tread": 1
+  }
+ ],
+ "olmoe_n3_entries": [],
+ "olmoe_n1_n3_rule": {
+  "verdict": "NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED",
+  "admit": false,
+  "rows": {}
+ },
+ "summary": {
+  "128x128x64w8s3": {
+   "by": {
+    "mixtral-8x7b-tp2|w1": 2,
+    "mixtral-8x7b-tp2|w2": 2
+   },
+   "values": [
+    2
+   ],
+   "one_value": true
+  }
+ },
+ "errors": [],
+ "path_mismatch": [],
+ "verdict": "COMPLETE"
+}

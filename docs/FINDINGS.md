@@ -2691,6 +2691,113 @@ later-wave, schedule-same-wave slab re-reads launch within half of M4's staggere
 board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94%. Not established: what C5's fitted constant
 absorbs, and why the w1 miss read on the S1 and C2 counter pages did not reproduce here.
 
+## Calibration rental C4 (2026-10-27): CALIBRATION, no verdict; LOW-FAR x BEYOND-M4: Mixtral-8x7B-tp2's held-out 128 G 1 mean is -4.44% under the frozen round-4 model, and its counted w1 bytes exceed both byte laws at P 112
+
+One Lambda GH200 480GB (instance e86d88b5, us-east-3, 22:38:07Z to 23:04:21Z on 2026-10-27; board `183300`, new
+to the study) ran `scripts/plans/rentalC4-cal-2026-10.plan` unattended through `scripts/gh200_cal4_session.sh`
+at aa5e1b7c. 8 units ran in about 20 minutes (22:42:07Z to 23:02:25Z) against 25 estimated; none was dropped and
+every unit and the driver exit 0. The registration (`docs/registered/2026-10-27-cal4-gh200`), its reader
+`scripts/scoring/cal4/read_c4.py`, the tp2 histogram page, the driver and the plan were committed before any page
+(aa5e1b7c, the run commit). Published at `results/published/2026-10-27-nvidia_gh200_480gb-cal4-session`. Every
+reading is the pinned reader's output, `scripts/scoring/cal4/cal4.read.{json,txt}`. No post-page fix.
+
+**What C4 registered.** C4 is a CALIBRATION rental: it certifies nothing, scores no verdict, and every C4 page is
+SEEN once read. It follows round 4 (moe-kernels-work 2026-10-27 round3, ROUND4.md; not in this repository), whose
+selected model (the W2 byte law on both GEMMs, the K1 knee fitted in the wall domain at its SEEN p 6.0 and S0 2.75,
+the clock form of F1, F1 'par') failed its own offline gate at a largest held-out 128 G 1 mean of 1.49 and an
+estimated P(A) of 0.380. The owner's choice of 2026-10-27: one calibration rental with a fifth non-blind CAL model
+in blind Phi-3.5's w1 regime (large K, x near 1, P near 100), then ONE final declared model round. The fifth model
+is Mixtral-8x7B's tensor-parallel-2 shard `mixtral-8x7b-tp2` (`moe/spec.py`: H 4096, I 7168, E 8, top-k 2; w1 K
+4096, N 14336, P 112, x 0.92 to 0.98 at n 2 with M4's bytes; w2 K 7168, P 32), which had no 128x128 cell before C4.
+The round-4 model was FROZEN at the registration: 26 work files by sha256, round 4's selected table re-priced by the
+frozen code, a six-cell fingerprint, and the reader's PREFLIGHT, which re-prices round 4's four-model table and its
+P(A) 0.3798 before it opens any page and refuses on any difference. C4-R1 reads X, tp2's held-out 128 G 1 mean,
+against CLEAN (|X| <= 1), HIGH (1 < X < 2), HIGH-FAR (X >= 2), LOW (-2 < X < -1) and LOW-FAR (X <= -2). C4-R2 reads
+the w1 bytes, Lambda = sum(counted - W2) / sum(M4 - W2) over the byte page's NATIVE cells (0 at W2, 1 at M4), against
+W2-SIDE (|Lambda| <= 1/3), BETWEEN, M4-SIDE (2/3 to 4/3), BEYOND-W2 (under -1/3) and BEYOND-M4 (over 4/3), read only on
+a W2 lever of at least 3% (14.66% at registration). A registered joint table gives one sentence per C4-R1 x C4-R2
+cell for the final round. C4-S1 to C4-S5 are DESCRIPTIVE and change no band.
+
+**What ran.** C4-P: the prelude (700 W, read back on both readings, else stop; the 1410 MHz lock probe, else
+stop), calibrate's ruler, and the compile-only tile census of tp2 at 128x128x64 w8 s3. C4-F: the OLMoE and
+Mixtral-8x7B f128 counter pages (G 64, treads 1 to 9) that F1 is fitted on, on this board, then A2's G-BAND. C4-T:
+tp2's timed page at 128x128 w8 s3 G 1 (n 2, six labels PT, PW, PT2, PW2, uniform, balanced; NATIVE and SHARED,
+NATIVE scored; E1-CAL's instrument, 9 declared copies, slip-policy cell, r7-median-run3), on
+`docs/registered/2026-10-27-cal4-hist/mixtral-8x7b-tp2-128g1.json`. C4-B: tp2's byte page on the same cells.
+
+**What C4 read.**
+
+| reading | outcome | numbers | file |
+|---|---|---|---|
+| board | valid | 700 W on enforced.power.limit and the `-q` GPU scope at the first poll; lock 1410 held; G-BAND PASS on the fallback band [1352.19, 1410] MHz (primary [1374.75, 1410] left joint_cF None: 0 OLMoE and 5 of 27 Mixtral-8x7B cells in band; fallback 22 and 17 of 27); commit check 74 files at aa5e1b7c; fingerprint reproduces; PREFLIGHT reproduces round 4's table and P(A) 0.3798 | `session/power-set.txt`, `session/gh200-driver/{c2-power,locks}.env`, `session/gh200-driver/gate-band-1410.json` |
+| C4-S5: census and triad | COMPLETE; triad just below the range | tp2 at 128x128 compiles 2 CTAs per SM on w1 and w2 (W2's W_c 264 holds); triad 3725.4 GB/s against A2's 3726.2 and the 15-rental range 3725.6 to 3727.6 (descriptive: K1 at C4's triad reads X -4.44, unchanged) | `results/2026-10-27-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tc4/`, `session/logs/calibrate-mixtral-8x7b-tc4.log` |
+| F1 on C4's board | par 54.25 us, tau 587.5 us | OLMoE f128 40.95 us (525 us), Mixtral-8x7B f128 67.55 us (650 us); A2's par 42.02 / 425, C2's 41.59 / 412.5 | the two `f128` pages |
+| **C4-R1** | **X = -4.44%, LOW-FAR** | six NATIVE n 2 cells, none dropped or unpriced: PT -5.69, PW -4.89, PT2 -5.70, PW2 -5.24, uniform -2.59, balanced -2.56; rms 4.65 | `results/gaps-nvidia_gh200_480gb-mixtral-8x7b-tp2-t128g1/` |
+| beside X (descriptive) | | X at A2's par -4.68; with M4's bytes -1.84; with C4-B's counted bytes (oracle, both GEMMs) +0.12; v5'''s held-out mean on the same cells -1.61 | `cal4.read.json` "C4-R1" |
+| the five-model table | max \|mean\| 4.44, spread 5.69, rms of means 2.17 | OLMoE +0.48, Qwen2-57B -1.44, Mixtral-8x7B +1.25 (+1.49 on C2's board, beside), Mixtral-8x22B +0.24 (round 4's, unchanged), tp2 -4.44; the round-4 gate's G1 on the five: false | `cal4.read.json` "table" |
+| pass estimates, P(E1-TILE holds) on B2's 83 cells | | A (five models, common bias) 0.0206; B (no common bias, RMS) 0.0359; D (OLMoE, Qwen2-57B, Mixtral-8x22B and X) 0.0118 | `cal4.read.json` "pass_estimates" |
+| **C4-R2** | **Lambda 1.5505, BEYOND-M4** | W2 lever 0.1466; w1 reads against the counters: M4 -7.47% (per cell -3.68 to -10.09), W2 -21.04% (-16.13 to -26.03), 6 cells | `results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-tp2-b128g1-r3-counters/` |
+| joint | LOW-FAR x BEYOND-M4 | the registered sentence: "neither byte law fits at P 112: Phi's stake at risk" | `cal4.read.json` "joint" |
+| C4-R2 beside: w2 reads | | M4 -0.21% (Lambda 1.04), W2 -5.23% against the counters (lever 0.050) | the same page |
+| C4-S1: x per GEMM on the timed cells | as registered | w1 median 0.974 with M4's bytes, 0.833 with W2's; w2 0.624 and 0.613 | the timed page |
+| C4-S2: K1 on counted bytes | | wall domain: w1 -0.25% (rms 0.46), w2 -2.53% (rms 2.95), the cell sum w1 + w2 -0.98% (rms 1.21); cycles domain: w1 +1.99%, w2 -2.88%; w1 x on counted bytes 1.02, w2 0.648 | the byte page |
+| C4-S3: tp2's own sag | | own fit A 53.82 us, tau 450 us; C4's par minus the measured off: mean -4.69 us, rms 5.19 us over 24 GEMMs | the byte page |
+
+**What it shows.** Measured: under the round-4 model, frozen before the page, Mixtral-8x7B-tp2's held-out 128x128
+G 1 time is under-predicted by 4.44% on the mean, every one of its six cells under by 2.56 to 5.70%. That is past
+the registered LOW-FAR bar (-2.0) and past Qwen2-57B's -1.44; by the registration, the round-4 model's Phi-3.5
+stake is most likely an error large enough to fail E1-TILE's 1% bar on Phi alone, and the final declared round
+must report Phi-3.5's stake as at risk. Under each of the three registered estimates, the round-4 model as frozen
+holds E1-TILE on B2's cells with probability under 0.04. On the same cells' byte page the counted w1 reads exceed
+M4's by 7.47% on the sum and W2's by 21.04% (Lambda 1.55, BEYOND-M4): neither byte law describes tp2's w1 at P 112,
+and the final declared round has no measured w1 law at Phi-3.5's distance. The frozen model's W2 law under-prices
+tp2's bytes on both GEMMs (w1 21.0%, w2 5.2% under the counters). Priced with the counted bytes on both GEMMs in
+place of W2's, the rest of the frozen model (K1, the clock form, F1 par) reads +0.12% on the timed cells
+(descriptive, an oracle: it uses C4-B's counters), and on the byte page K1 on counted bytes prices w1 within 0.25%
+in the wall domain it was fitted in. The board's sag does not carry X: C4's par (54.25 us) is 12 us above A2's,
+and priced at A2's par X moves to -4.68.
+
+**What it does not show.**
+
+- **Routing is not tested.** tp2 is a TP shard of the CAL model Mixtral-8x7B: its router, E 8, top-k 2 and H
+  4096 are Mixtral-8x7B's, and its page draws Mixtral-8x7B's fitted routing shapes (as Phi-3.5's pages do, rental 6
+  owner decision 4). Only the w1 N (14336) and w2 K (7168) are new. C4 tests the GEMM geometry at P 112, not a
+  router, and says nothing about Phi-3.5's E 16 expert counts.
+- **The +0.12% is not the w1 law's share alone.** The oracle swaps both GEMMs' bytes, and W2 is 5.2% under the
+  counters on w2 as well as 21.0% on w1; M4's bytes (w1 7.5% under, w2 0.2% under) read -1.84. No reading splits X
+  by GEMM. INFERENCE, not tested: w1 carries most of it, since its byte gap is four times w2's and w1 is the
+  larger GEMM on every cell.
+- **The cause of the extra w1 bytes is not read.** BEYOND-M4 says the counters exceed even M4's price at P 112;
+  why (re-reads M4 does not place, other traffic, or a counter basis difference at this geometry) is not read by
+  any C4 reading. It is a lead for the final round's w1 law, not a mechanism.
+- **Phi-3.5 itself is not run.** "Phi's stake at risk" is the registration's inference from a same-regime CAL
+  model, not a measurement of a blind model; C4 runs no cell of B3's blind models.
+- **No fix is tested.** C4 fits nothing and changes no constant; every C4 page is SEEN, and the final declared round
+  that uses tp2 is SEEN-FITTED on it.
+
+**Instrument.** The timed page reads its registered histogram file (sha256 on the page) at the 1410 lock, stores
+G1 lock-thermal PASS with 0 slipped repeats in 108 repeat rows (worst cell 1410.0 MHz), and is admitted by
+`tcommon.timed_page`. The two f128 counter pages exit 3 on the route's own page gates (OLMoE V4, V5, C1, C6 FAIL and
+C2 REFUSE; Mixtral-8x7B V5, V7, C2, C6 FAIL and C1 REFUSE), as C2's and C3's did; tp2's b128g1 page exits 0 and its
+`analyse` step exits 3 (one tread, two arms); no C4 reading uses a page verdict. The 6 power.limit records on the 3
+counter pages read 700.00 W. The run branch's 238 files match its SHA256SUMS; the 7 `cuda_utils*.so` are left out,
+as before. Read twice, on the fetched tree and on the published copy, the reader's `.txt` and JSON differ only in
+the page path. `register_c4.py --check` reads `same` on both registration files. `scripts/scoring/rescore.py cal4`
+re-reads the published session to the committed files. The 3 counter pages re-gate PASS under `lock_gate` at 1410;
+the two f128 pages store V10 PASS and tp2's G 1 histogram byte page none, so `tests/test_lock_gate.py` moves to 194
+pages and 103 changed verdicts.
+
+**What comes next (owner, 2026-10-27, registered).** One final declared model round, gated as round 4 was (G1 every
+held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board as well, now on five models; G2 an estimated P(A) of
+at least 0.5). If it fails the gate, iteration stops and the owner chooses between narrowing scope and going blind.
+B3 is registered only after a declared round passes.
+
+**What the paper can claim, after calibration rental C4.** Measured, on board 183300 at a 700 W enforced limit and
+a 1410 MHz lock: the round-4 model, frozen before the page, under-predicts Mixtral-8x7B-tp2's 128x128 G 1 time by
+4.44% (six cells, -2.56 to -5.70%), and on the same cells the counted w1 DRAM reads exceed both byte laws (M4 7.5%
+under, W2 21.0% under) at P 112. Not established: why w1 reads more than M4 prices there, how X splits between the
+two GEMMs, and whether any of it carries to Phi-3.5's routing.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

@@ -22,3 +22,4 @@ date,session,board,commit,models,counter pages
 2026-10-21,2026-10-21-nvidia_gh200_480gb-settleS1-session,board 9da3c0,52ed2ca,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b",12
 2026-10-21,2026-10-21-nvidia_gh200_480gb-tileA2-session,board fb8566,3629148,"mixtral-8x7b, olmoe-1b-7b, qwen2-57b-a14b",11
 2026-10-27,2026-10-27-nvidia_gh200_480gb-cal3-session,board 02e86e,e10fda1,"mixtral-8x7b, olmoe-1b-7b",2
+2026-10-27,2026-10-27-nvidia_gh200_480gb-cal4-session,board 183300,aa5e1b7,"mixtral-8x7b, mixtral-8x7b-tp2, olmoe-1b-7b",3

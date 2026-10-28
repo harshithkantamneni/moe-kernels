@@ -1645,3 +1645,27 @@ whose gate is round 4's. C2's prelude (700 W read back or stop, the 1410 lock re
 two f128 pages. Plan: `scripts/plans/rentalC4-cal-2026-10.plan`, 8 units, 25 min estimated (all nodrop), about 50 min
 wall ($1.91); deadline launch + 65 min, hard cap launch + 80 min ($3.05 at most). Driver: `scripts/gh200_cal4_session.sh`,
 C2's pinned driver with its own header and no other line changed (`tests/test_cal4_plan.py`).
+
+**Read 2026-10-27** on `results/published/2026-10-27-nvidia_gh200_480gb-cal4-session` (board 183300, new; 8 units
+at aa5e1b7c in about 20 minutes on 2026-10-27, none dropped, every unit and the driver exit 0; the reader's output in
+`scripts/scoring/cal4/cal4.read.{json,txt}`; no post-page fix). CALIBRATION: no verdict; every C4 page is now SEEN,
+and tp2 is a CAL model. **Board** valid: 700 W read back on both readings at the first poll (`C2_POWER_W=700`),
+`LOCK_PROBE_1410=held`, G-BAND PASS on the registered fallback band (the primary left joint_cF None); the commit check
+passed on 74 files; the fingerprint reproduces, and the PREFLIGHT re-priced round 4's table (+0.48, -1.44, +1.25,
++0.24; +1.49 on C2's board) and its P(A) 0.3798 before any page. The tc4 census compiles tp2 at 2 CTAs per SM on both
+GEMMs (COMPLETE). Calibrate's triad 3725.4 GB/s is just below the 15-rental range 3725.6 to 3727.6 (DESCRIPTIVE; K1 at
+it reads X unchanged). **C4-R1: LOW-FAR**: X = -4.44% over six NATIVE n 2 cells, none dropped or unpriced (PT -5.69,
+PW -4.89, PT2 -5.70, PW2 -5.24, uniform -2.59, balanced -2.56); the five-model table's largest |mean| is 4.44 and the
+round-4 gate's G1 fails on the five; pass estimates on 83 cells A 0.0206, B 0.0359, D 0.0118. **C4-R2: BEYOND-M4**:
+Lambda 1.5505 on a W2 lever of 0.1466; tp2's counted w1 reads exceed M4's by 7.47% and W2's by 21.04% on the sum.
+**Joint LOW-FAR x BEYOND-M4**: "neither byte law fits at P 112: Phi's stake at risk"; by the registration the final
+declared round has no measured w1 law at Phi-3.5's distance and reports Phi-3.5's stake as at risk. DESCRIPTIVE: X at
+A2's par -4.68; with M4's bytes -1.84; with C4-B's counted bytes on both GEMMs (oracle) +0.12; v5'' on the same cells
+-1.61; w2 reads M4 -0.21%, W2 -5.23% against the counters; K1 on counted bytes in the wall domain w1 -0.25%, w2
+-2.53%; F1 on C4's board par 54.25 us (587.5 us); tp2's own sag 53.82 us (450 us), par minus measured off -4.69 us.
+tp2 shares Mixtral-8x7B's router, so no routing property is tested. The registration files are unchanged
+(`register_c4.py --check`); the reader re-reads the published copy to the same `.txt` and JSON except the page path,
+and `scripts/scoring/rescore.py cal4` re-reads it to the committed files. Two test pins moved
+(`tests/test_lock_gate.py`, `tests/test_calibration_provenance.py`). Next, by the owner's registered sequence: one
+final declared model round under round 4's gate on five models; if it fails, iteration stops and the owner chooses
+between narrowing scope and going blind.

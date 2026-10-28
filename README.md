@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7052 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7053 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-one further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-three Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-four Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -273,10 +273,12 @@ calibration rental C2 of 2026-10-21: Mixtral-8x22B's 128x128 G 1 timed and byte 
 model, the sag estimator's two f128 pages and Mixtral-8x7B's 128 G 1 timed and byte pages, 10 units on one GH200
 at 700 W, and calibration rental C3 of 2026-10-27: the sag estimator's two f128 pages, the instrumented copy's
 regcheck and perturbation gate, and per-CTA start and end stamps on Mixtral-8x7B and Qwen2-57B at 128x128 G 1,
-8 units on one GH200 at 700 W), kept so every verdict they printed can be
+8 units on one GH200 at 700 W, and calibration rental C4 of 2026-10-27: the sag estimator's two f128 pages and
+Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model, 8 units on one GH200 at 700 W),
+kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 23 GH200 sessions ran on seventeen distinct boards (counted by
-board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board). Of the GH200 call-time results, three
+sessions rather than arms. The 24 GH200 sessions ran on eighteen distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -304,7 +306,13 @@ registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental
 and 1.46% median while its hard legs passed) read C5's launch-spread constant OUT (Mixtral-8x7B w2 theta_L 0.351
 against the fitted 0.25 to 0.30, so it stays SEEN-FITTED), 0.901 of Mixtral w2's same-wave slab re-reads launching
 with their partner (LAUNCH-TOGETHER, against M4's staggered picture), and the Mixtral-8x7B w1 miss NOT REPRODUCED on
-its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Every
+its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Calibration rental C4 (no verdict) read
+LOW-FAR and BEYOND-M4: the round-4 model, frozen before the page, under-predicts Mixtral-8x7B-tp2's held-out 128 G 1
+time by 4.44% (six cells, -2.56 to -5.70%; w1 at P 112, Phi-3.5's regime). Its byte law W2 prices tp2's w1 reads
+21.0% under the counters and M4 7.5% under (BEYOND-M4: neither law fits w1 there), and its w2 reads 5.2% under;
+with the counted bytes on both GEMMs in place of W2's, the rest of the frozen model reads +0.12% (descriptive). The
+five-model pass estimate A is 0.021; the owner's next step is one final declared model round, and iteration stops
+if it fails the gate (docs/FINDINGS.md, Calibration rental C4). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 
