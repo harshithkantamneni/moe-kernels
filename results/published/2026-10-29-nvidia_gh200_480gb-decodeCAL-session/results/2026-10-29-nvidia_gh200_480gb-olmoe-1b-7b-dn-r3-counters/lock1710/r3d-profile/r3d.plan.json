@@ -1,0 +1,119 @@
+{
+ "family": "r3-decode",
+ "model": "olmoe-1b-7b",
+ "dtype": "bf16",
+ "page": "docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json",
+ "page_sha256": "04cef1e719baa42d256476a3440bd4a2892980f7be6ea6d9067633f61593d32b",
+ "cells": [
+  [
+   "L-T1-A8",
+   "native"
+  ],
+  [
+   "U-T1",
+   "native"
+  ],
+  [
+   "L-T2-A16",
+   "native"
+  ],
+  [
+   "L-T2-A8",
+   "native"
+  ],
+  [
+   "U-T2",
+   "native"
+  ],
+  [
+   "L-T4-A32",
+   "native"
+  ],
+  [
+   "L-T4-A8",
+   "native"
+  ],
+  [
+   "U-T4",
+   "native"
+  ],
+  [
+   "L-T8-A64",
+   "native"
+  ],
+  [
+   "L-T8-A8",
+   "native"
+  ],
+  [
+   "U-T8",
+   "native"
+  ],
+  [
+   "L-T16-A64",
+   "native"
+  ],
+  [
+   "L-T16-A8",
+   "native"
+  ],
+  [
+   "U-T16",
+   "native"
+  ],
+  [
+   "L-T32-A64",
+   "native"
+  ],
+  [
+   "L-T32-A8",
+   "native"
+  ],
+  [
+   "U-T32",
+   "native"
+  ],
+  [
+   "L-T64-A64",
+   "native"
+  ],
+  [
+   "L-T64-A8",
+   "native"
+  ],
+  [
+   "U-T64",
+   "native"
+  ],
+  [
+   "L-T96-A64",
+   "native"
+  ],
+  [
+   "L-T96-A8",
+   "native"
+  ],
+  [
+   "U-T96",
+   "native"
+  ],
+  [
+   "L-T128-A64",
+   "native"
+  ],
+  [
+   "L-T128-A8",
+   "native"
+  ],
+  [
+   "U-T128",
+   "native"
+  ]
+ ],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "seed": 0,
+ "decl_copies": null,
+ "manifest": "/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-olmoe-1b-7b-dn-r3-counters/lock1710/r3d-profile/r3d.manifest.json"
+}

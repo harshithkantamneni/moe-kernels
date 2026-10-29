@@ -1,0 +1,85 @@
+2026-10-29T03:25:11Z setup_vm.sh start: commit a398c6a0b6d4a158f854b689b32ba4320aa9a98d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-10-29T06:08:12Z
+2026-10-29T03:27:06Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-10-29T03:27:07Z driver start: commit a398c6a0b6d4a158f854b689b32ba4320aa9a98d, steps of the plan scripts/plans/rentalD-cal-d2-2026-10.plan, deadline 2026-10-29T06:08:12Z (153 min of work left)
+2026-10-29T03:27:07Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalD-cal-d2-2026-10.plan (sha256 6bf17829408b4900d713bfbab048debc8f1b67beaa5ce6e7e04af75fe5154b7a), 13 units
+2026-10-29T03:27:07Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/13 -] (estimate 3 min, cap 15 min, 153 min left)
+2026-10-29T03:27:07Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-10-29T03:27:07Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-10-29T03:27:07Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-10-29T03:27:07Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261029T032707Z
+2026-10-29T03:27:07Z prelude END: exit 0 after 0 min [unit 1/13 -]
+2026-10-29T03:27:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T03:27:26Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/13 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 152 min left)
+2026-10-29T03:27:51Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-10-29T03:27:51Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3724.9 GB/s
+2026-10-29T03:27:51Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.8 GB/s against a derived pin rate of 4022.8 GB/s
+2026-10-29T03:27:51Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.8 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-10-29T03:27:51Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-10-29T03:27:51Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1455 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-10-29T03:27:51Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-10-29T03:27:51Z calibrate END: exit 0 after 0 min [unit 2/13 mixtral-8x7b dcal]
+2026-10-29T03:27:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T03:27:53Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3 on olmoe-1b-7b mixtral-8x7b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite granite-3.0-3b-a800m; refused on an MMA path mismatch [unit 3/13 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m] (estimate 6 min, cap 25 min, 152 min left)
+2026-10-29T03:28:09Z tilecensus: RESULT: VALIDITY census_path PASS 48 configs, 0 path mismatches, 4 errors
+2026-10-29T03:28:09Z tilecensus: exit 3 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-tile-census-mixtral-8x7b-dec/tile-census.json)
+2026-10-29T03:28:09Z tilecensus END: exit 3 after 0 min [unit 3/13 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m]
+2026-10-29T03:28:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T03:28:10Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 4/13 olmoe-1b-7b dm histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 17 min, cap 51 min, 152 min left)
+2026-10-29T03:28:12Z r3decode: docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst GRR rot auto, session tag gh200-20261029T032707Z-dec
+2026-10-29T03:42:04Z r3decode: 2026-10-29T03:42:03Z G=1 held at lock 1710: R3 exit 0 DONE, cells=468 worst=1710.0 MHz, 831 s, dir nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-main-d374fde5
+2026-10-29T03:42:04Z r3decode: locked_r3 exit 0
+2026-10-29T03:42:04Z r3decode END: exit 0 after 14 min [unit 4/13 olmoe-1b-7b dm histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T03:42:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T03:42:06Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 5/13 mixtral-8x7b dm histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 138 min left)
+2026-10-29T03:42:08Z r3decode: docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json inst GRR rot auto, session tag gh200-20261029T032707Z-decb
+2026-10-29T03:58:40Z r3decode: 2026-10-29T03:58:40Z G=1 held at lock 1710: R3 exit 0 DONE, cells=459 worst=1695.0 MHz, 991 s, dir nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-main-105be225
+2026-10-29T03:58:40Z r3decode: locked_r3 exit 0
+2026-10-29T03:58:40Z r3decode END: exit 0 after 17 min [unit 5/13 mixtral-8x7b dm histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T03:58:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T03:58:43Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 6/13 olmoe-1b-7b dc histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 9 min, cap 27 min, 121 min left)
+2026-10-29T03:58:44Z r3decode: docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json inst GR1 rot auto, session tag gh200-20261029T032707Z-decc
+2026-10-29T04:05:26Z r3decode: 2026-10-29T04:05:26Z G=1 held at lock 1710: R3 exit 0 DONE, cells=234 worst=1710.0 MHz, 400 s, dir nvidia_gh200_480gb-decode-olmoe-1b-7b-GR1-olmoe-1b-7b-ctl-2103a6f7
+2026-10-29T04:05:26Z r3decode: locked_r3 exit 0
+2026-10-29T04:05:26Z r3decode END: exit 0 after 7 min [unit 6/13 olmoe-1b-7b dc histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:05:27Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:05:29Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 7/13 mixtral-8x7b dc histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 9 min, cap 27 min, 114 min left)
+2026-10-29T04:05:31Z r3decode: docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json inst GR1 rot auto, session tag gh200-20261029T032707Z-decd
+2026-10-29T04:12:12Z r3decode: 2026-10-29T04:12:12Z G=1 held at lock 1710: R3 exit 0 DONE, cells=234 worst=1710.0 MHz, 400 s, dir nvidia_gh200_480gb-decode-mixtral-8x7b-GR1-mixtral-8x7b-ctl-f3a6ff4d
+2026-10-29T04:12:12Z r3decode: locked_r3 exit 0
+2026-10-29T04:12:12Z r3decode END: exit 0 after 7 min [unit 7/13 mixtral-8x7b dc histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:12:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:12:16Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json, inst E240, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 8/13 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3] (estimate 6 min, cap 18 min, 107 min left)
+2026-10-29T04:12:17Z r3decode: docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst E240 rot auto, session tag gh200-20261029T032707Z-dece
+2026-10-29T04:16:09Z r3decode: 2026-10-29T04:16:08Z G=1 held at lock 1710: R3 exit 0 DONE, cells=126 worst=1710.0 MHz, 230 s, dir nvidia_gh200_480gb-decode-mixtral-8x7b-E240-mixtral-8x7b-e240-269581aa
+2026-10-29T04:16:09Z r3decode: locked_r3 exit 0
+2026-10-29T04:16:09Z r3decode END: exit 0 after 4 min [unit 8/13 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:16:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:16:13Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json; every launch grid held to vLLM's own [unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json] (estimate 5 min, cap 15 min, 103 min left)
+2026-10-29T04:17:28Z decodebytes: RESULT: VALIDITY grid PASS 26 cells, 260 launches attributed; /home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-olmoe-1b-7b-dn-r3-counters/lock1710/r3d.jso
+2026-10-29T04:17:28Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-olmoe-1b-7b-dn-r3-counters/lock1710/r3d.json)
+2026-10-29T04:17:28Z decodebytes END: exit 0 after 1 min [unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json]
+2026-10-29T04:17:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:17:32Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json; every launch grid held to vLLM's own [unit 10/13 mixtral-8x7b dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json] (estimate 6 min, cap 18 min, 102 min left)
+2026-10-29T04:19:26Z decodebytes: RESULT: VALIDITY grid PASS 26 cells, 260 launches attributed; /home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.js
+2026-10-29T04:19:27Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.json)
+2026-10-29T04:19:27Z decodebytes END: exit 0 after 2 min [unit 10/13 mixtral-8x7b dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json]
+2026-10-29T04:19:27Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:19:30Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 100 min left)
+2026-10-29T04:19:32Z r3decode: docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst GRR rot auto, session tag gh200-20261029T032707Z-decf
+2026-10-29T04:22:33Z r3decode: 2026-10-29T04:22:33Z G=1 held at lock 1710: R3 exit 0 DONE, cells=90 worst=1710.0 MHz, 180 s, dir nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-decl-838db471
+2026-10-29T04:22:33Z r3decode: locked_r3 exit 0
+2026-10-29T04:22:33Z r3decode END: exit 0 after 3 min [unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:22:34Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:22:37Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 12/13 mixtral-8x7b dd histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 97 min left)
+2026-10-29T04:22:39Z r3decode: docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json inst GRR rot auto, session tag gh200-20261029T032707Z-decg
+2026-10-29T04:26:30Z r3decode: 2026-10-29T04:26:30Z G=1 held at lock 1710: R3 exit 0 DONE, cells=90 worst=1710.0 MHz, 230 s, dir nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-decl-25b4060d
+2026-10-29T04:26:30Z r3decode: locked_r3 exit 0
+2026-10-29T04:26:30Z r3decode END: exit 0 after 4 min [unit 12/13 mixtral-8x7b dd histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:26:31Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:26:34Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 13/13 olmoe-1b-7b dr histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 17 min, cap 51 min, 93 min left)
+2026-10-29T04:26:36Z r3decode: docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst GRR rot auto, session tag gh200-20261029T032707Z-dech
+2026-10-29T04:40:28Z r3decode: 2026-10-29T04:40:27Z G=1 held at lock 1710: R3 exit 0 DONE, cells=468 worst=1710.0 MHz, 831 s, dir nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-main-c8d79e94
+2026-10-29T04:40:28Z r3decode: locked_r3 exit 0
+2026-10-29T04:40:28Z r3decode END: exit 0 after 14 min [unit 13/13 olmoe-1b-7b dr histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:40:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:40:33Z driver end: exit 3

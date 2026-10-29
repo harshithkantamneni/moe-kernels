@@ -2940,6 +2940,134 @@ Phi-3.5-MoE and OLMoE. MEASURED or HELD-OUT on vLLM's 128x128 tile, not blind:
 
 Not claimed: any timing model on vLLM's tiles, a w1 byte law at large P, or a resolution of the knee conflict.
 
+## Decode CAL rental (2026-10-29): STOP; v4d fails its in-sample bar on the 92 kept cells (4.75% rms), G3-D label NOT EQUIVALENT on Mixtral, so the blind decode rental does not run
+
+One Lambda GH200 480GB (instance 0e2c1113, us-east-3, launched 03:23:12Z and terminated 04:42:14Z on 2026-10-29;
+board `183300`, C4's board) ran `scripts/plans/rentalD-cal-d2-2026-10.plan` (sha256 6bf17829...) unattended
+through the pinned decode driver at a398c6a0. 13 units ran in about 73 minutes (03:27:07Z to 04:40:33Z) against 106
+estimated; none was dropped. 12 units exit 0; the tilecensus unit exits 3 on deepseek-v2-lite's known census error,
+as the addendum expected (readiness I7), so the driver ends with exit 3. The three decode registrations
+(`docs/registered/2026-10-14-decodeC-cal-gh200`, addendum 1 `2026-10-20-decode-tilesource-gh200`, addendum 2
+`2026-10-28-decode-addendum2-gh200`), the scorer `scripts/scoring/decode/score_cal_d2.py` and the plan were
+committed before any decode page (a398c6a0, the run commit). Published at
+`results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session`. Every reading is the registered scorer's
+output, run as registered from the repository root (`PYTHONHASHSEED=0 .venv/bin/python
+scripts/scoring/decode/score_cal_d2.py <tree>/results <out> --tile-scores scripts/scoring/tileA2`), committed as
+`scripts/scoring/decode/cal.score.{json,txt}`. No post-page fix.
+
+**What was registered.** decodeC-cal (2026-10-14): vLLM's own decode call at T 1 to 128 on OLMoE-1B-7B and
+Mixtral-8x7B, timed on GRR main pages (one CUDA graph of back-to-back calls on rotating weight copies), fits model
+v4d's three CAL constants (T0_GR, s_naive_GR, s_block_GR) and selects rho (fixed against scaled) on the sub-wave
+cells; the in-sample E1-DEC must hold the provisional bars (rms <= 3%, worst <= 8%, |mean| <= 1.5%); G3-D's shuffle
+and label TOSTs must read EQUIVALENT (time a function of counts alone); GD2 (GR1 against GRR) must keep its median in
+[-1, 10] us; the replicate sets sigma_page and tightens the blind bars. Any failure is a STOP and the blind rental
+(decodeB-blind, five models) does not run. Addendum 1 (2026-10-20) takes the tile constants from A2's score
+directory, its gate reading GO. Addendum 2 (2026-10-28): decode runs without tile rental B (D2-1); cells where an
+active expert holds a second M-tile (11 of the 103 CAL main cells, listed by identity) are DESCRIPTIVE, out of the
+fit, the rho selection and every E1 bar, read as SIGMA-D (D2-2); 700 W is read back from `power-set.txt` or nothing
+is scored (D2-3); knee rows at p 5.75 and 3.75 are DESCRIPTIVE and the two byte units nodrop (D2-4); CAL first, the
+blind rental only on GO (D2-5). The certified domain stays as registered: "decode calls in which every active expert
+fits in one M-tile (at most BLOCK_M rows)".
+
+**What ran.** The prelude (persistence on, power.limit 700.00 W, base tag gh200-20261029T032707Z), calibrate's
+ruler (triad 3724.9 GB/s), the compile-only decode tile census on seven models (48 configs, 0 path mismatches, 4
+errors, all deepseek-v2-lite: "N rows per expert is not an integer token count for E=64 k=6"); then at the 1710 MHz
+lock (G 1, slip-policy cell, r7-median-run3): the GRR main pages on OLMoE (468 cells, worst 1710.0 MHz) and Mixtral
+(459, worst 1695.0 MHz), the GR1 control pages on both (234 each), Mixtral's E240 eager page (126), the two decode
+counter pages (`dram_counter_route_decode.py`, 26 cells and 260 launches attributed each, grid PASS), the DECL pages
+on both (90 each) and OLMoE's main page again as the replicate (468). Every unit's `clocks:` line reads 700.00 W.
+
+**What the score reads.**
+
+| reading | outcome | numbers | file |
+|---|---|---|---|
+| power (D2-3) | READ | GPU Power Readings, Current Power Limit 700.00 W (Requested 700 W; module scope 1000 W); `power-at-start.txt` already read 700 W | `session/power-set.txt` |
+| units | all counted | 10 scored units counted, none dropped; V-ALIGN, GD5 and COPIES refused no cell; no cell NOT PRICED | `cal.score.json` "units" |
+| descriptive cells (D2-2) | 11 | OLMoE L-T32-A8, L-T64-A8, MIN-T64, L-T96-A8, L-T128-A8; Mixtral L-T32-A2, L-T64-A2, MIN-T64, L-T96-A2, L-T96-A4, L-T128-A2 | "excluded_cells" |
+| fit and rho | scaled selected | sub-wave rms 4.87% (41 cells) against fixed 19.56%; scaled T0_GR 24.83 us, s_naive -8.37 us, s_block -10.41 us | "FIT" |
+| **E1-CAL-IN-SAMPLE** | **FAILS**, every bar | 92 cells: rms 4.75% (bar 3), worst -22.7% (bar 8: OLMoE L-T2-A8, naive path, 61.2 us measured against 47.3 us priced), mean +1.67% (bar 1.5) | "E1_CAL_IN_SAMPLE", "rows" |
+| G3-D shuffle | EQUIVALENT | margin 1.87 us; mean d +0.06 us, 90% CI [-0.16, +0.29] us over 6 clusters | "G3D" |
+| **G3-D label** | **NOT EQUIVALENT** | margin 0.52 us; mean d -0.91 us, CI [-1.69, -0.14]; OLMoE -0.06, -0.12, -0.01 us at T 4, 16, 64; Mixtral -1.66, -2.02, -1.60 us | "G3D" |
+| G3-D fill | NOT EQUIVALENT (not a stop clause) | margin 2.83 us; mean d +3.29 us, CI [+1.28, +5.29] us; 9 pairs, +1.31 to +6.66 us | "G3D" |
+| REP | sigma_page 0.19% over 47 kept pairs | blind bars tightened to rms 1.5%, worst 4%, \|mean\| 0.75% (unused: no blind rental); every cell beside: 0.19% over 52 | "REP", "REP_ALL_CELLS" |
+| GD2 | PASS | median GR1 - GRR +3.66 us, band [-0.46, 5.91] us, 40 matched cells, 36 in the expected [0, 5] us | "GD2" |
+| GD3 | NOT SCORED (DESCRIPTIVE) | all 14 E240 cells fail GD1 (host-bound by the probe), so no matched cell | "GD3" |
+| **STOP rule** | **STOP** | "in-sample E1-DEC on the CAL main pages FAILS at the provisional bars"; "G3-D label NOT EQUIVALENT: time is not shown to be a function of counts alone" | "STOP" |
+| SIGMA-D Mixtral (DESCRIPTIVE) | MIXED, median position 0.41 | 6 of 6 cells read: 2 FULL-REREAD (L-T64-A2 0.24, MIN-T64 0.26), 4 MIXED (0.37 to 0.60); e at sigma 1 +21.0% mean, at the served estimate -26.2% | "SIGMA_D" |
+| SIGMA-D OLMoE (DESCRIPTIVE) | MIXED, median position 0.62 | 5 of 5 read: 2 L2-SERVED (L-T64-A8, MIN-T64, 0.76), 3 MIXED (0.48 to 0.62); e at sigma 1 +26.5% mean, served -16.6% | "SIGMA_D" |
+| BYTES-D2 (DESCRIPTIVE) | | share of the second-tile re-reads not seen at DRAM: OLMoE 1.00 to 1.05 on all 8 GEMMs; Mixtral w2 0.83 to 1.00; Mixtral w1 -0.00 (T 32), 0.08 (T 64), 0.50 (T 96), 0.63 (T 128) | "BYTES_D2" |
+| BYTES-D (DESCRIPTIVE) | median counted / v4d 1.0001 | on the 80 kept GEMM rows of the two counter pages, -0.64% to +0.25% except OLMoE's T 2 naive cells: L-T2-A8 w1 +27.9%, w2 +2.3%; U-T2 w1 +5.9%, w2 +3.2% | "BYTES_D" |
+| knee rows (DESCRIPTIVE) | both fail the provisional bars | p 5.75: rms 4.69%, worst -21.0%, mean +1.84%; p 3.75: rms 4.96%, worst -18.8%, mean +2.72% | "KNEE_D" |
+| the replicate's E1 (DESCRIPTIVE) | FAILS | 47 cells at the main page's constants: rms 4.57%, worst -23.0%, mean -0.60% | "E1_CAL_REP" |
+| as registered, every cell (DESCRIPTIVE) | E1 FAILS, STOP | 103 cells, sigma 1 on the second-tile cells: rms 8.92%, worst +41.9%, mean +1.72%; the same two STOP clauses | "REGISTERED_READING" |
+
+**What it shows.** Measured, on board 183300 at a 700 W enforced limit and the 1710 MHz lock: model v4d, with its
+three CAL constants fitted on these same 92 cells, does not price vLLM's decode call to the registered in-sample
+bars, and the miss is structured, not noise. The page's own noise is 0.19% (sigma_page), and the replicate page
+reproduces the miss at 4.57% rms. By path (the `path` field of the score's 92 rows; descriptive, not a registered
+split): the 5 block-scan cells (OLMoE at T 128) read 1.02% rms, mean -0.02%: that path is priced to about 1%. The
+78 small-batch cells, the bulk of decode, read 4.11% rms with v4d about 2% slow on average (mean +1.95%, pricing
+above the measured time), and the mean hides a model split: Mixtral's 43 cells +4.11% (rms 4.93%; +5.3 to +5.8% at T
+2 to 16, falling to -0.1% at T 128) against OLMoE's 35 at -0.69% (rms 2.80%; near 0 at T 4 to 32, -2.0 to -3.0% at T
+64 to 96). The 9 naive cells (T 1 and 2) read 9.14% rms, mean +0.18%, and carry the worst cell; without that one
+cell E1 still fails all three bars (91 cells: rms 4.14%, worst +8.55% on Mixtral DW-T8, mean +1.94%). On the
+counter pages v4d's DRAM read bytes are within 0.7% of the counters on every kept GEMM row except OLMoE's T 2 naive
+cells, so the small-batch miss is not a byte miss. G3-D label: on Mixtral, the same counts run 1.60 to 2.02 us
+faster on experts 0 and 1 (MIN-T4, T16, T64) than on experts 2 and 5 (L-T-A2), about 0.75% of a 220 us call, against
+a 0.52 us margin; on OLMoE the same test differs by at most 0.12 us. G3-D fill: padded rows are not free on the
+16x64x128 tile, +1.3 to +6.7 us beyond v4d's FILL0 price. Of the second-tile cells, OLMoE's counters show the re-read
+slabs served from L2 on both GEMMs, while Mixtral's w1 re-reads reach DRAM at T 32 and mostly at T 64; SIGMA-D's
+timing positions sit between the two prices on both models (MIXED).
+
+**Inferences, not tested.**
+
+- **The label miss is about where the experts sit, not how many rows they hold.** The label pairs hold the same
+  multiset of counts, so v4d prices both sides the same and d is the measured difference alone. Experts 0 and 1 are
+  adjacent in Mixtral's stacked weight tensor and 2 and 5 are not; whether adjacency, DRAM page or channel placement,
+  or the launch order of the two experts' CTAs carries the 1.6 to 2.0 us is not read by any reading here. OLMoE's
+  expert slabs are 28x smaller (12 MiB against 336 MiB), which may be why its label pairs do not separate.
+- **The worst cell is a byte miss on the naive path.** OLMoE L-T2-A8 (two tokens on the same eight experts) is priced
+  22.7% under its time (the time is 1.29x the price), and on the control counter page the same cell's w1 reads are 27.9% over v4d's. INFERENCE: on the
+  naive path each token-expert pair reads its expert's slab on its own, so two tokens on one expert read it twice,
+  partly from L2; v4d prices one read per active expert. The counter page is GR1's, not the timed GRR page's.
+- **Mixtral's small-batch miss is in the time terms, not the bytes.** With v4d's bytes within 0.1% of the counters on
+  Mixtral's control cells at T 2 to 16 (0.25% on every kept Mixtral row), the +5% at T 2 to 16 sits in the fitted fixed cost, rho or the stream rate at Mixtral's slab size; one T0_GR
+  shared by both models cannot fit Mixtral's +5% and OLMoE's -0.7% at once. Which term is not separated.
+- **The second-tile cells cost more than their DRAM bytes say.** On OLMoE the counters see none of the re-reads, yet
+  the measured time sits 0.48 to 0.76 of the way from the sigma-1 price to the served price, not at 1: something
+  other than DRAM bytes (L2 bandwidth, the extra CTAs' own cost) is priced at zero by the served estimate.
+
+**What it does not show.**
+
+- **No blind result.** The STOP ends the decode stage as registered: the blind rental (decodeB-blind on Phi-3.5-MoE,
+  Qwen1.5-MoE, JetMoE-8B, deepseek-v2-lite and Granite-3B) does not run, `finalise_decode_d2.py` refuses on the STOP,
+  and no decode model is certified. The blind models stay unspent.
+- **No mechanism.** None of the inferences above is measured. No reading splits the small-batch miss between T0_GR,
+  rho and the stream rate, and no page varies expert placement at fixed counts beyond the three label pairs.
+- **No fix is tested.** Nothing is refitted after the page; the knee rows change only the knee and fail the bars at
+  both registered values.
+- **GD3 is not read.** Every E240 cell is host-bound under GD1, so the eager instrument's agreement with GR1 is
+  unknown; GD3 was DESCRIPTIVE and is not a stop clause. 12 of OLMoE's 26 GR1 cells also fail GD1, so GD2 reads 40
+  matched cells, not 52.
+
+**Instrument.** Every timed page held the 1710 lock at G 1 (worst cell 1710.0 MHz on every page except Mixtral's main
+page, 1695.0 MHz, inside the 15 MHz slip rule; R3 exit 0 on all eight). The run branch's 899 files match its
+SHA256SUMS; the 9 `cuda_utils*.so` are left out, as before, so 890 are published. Scored twice, on the fetched tree
+and on the published copy, `cal.score.txt` is byte-identical and `cal.score.json` differs only in the power file's
+path. `register_decode.py --check` and `register_decode_d2.py --check` read `same` on all four registration files.
+`scripts/scoring/rescore.py decodeCAL` re-scores the published session to the committed files. The two decode
+counter pages are `r3d.json` and are not lock pages for `lock_gate`, so `tests/test_lock_gate.py` is unchanged.
+
+**What comes next (owner, 2026-10-29).** Offline diagnosis of the STOP from the published pages, with no rental: the
+small-batch split by model, the naive-path byte miss, and the label pairs. Any change to v4d is a new registration,
+and the CAL pages are SEEN for it.
+
+**What the paper can claim, after the decode CAL rental.** Measured, on one GH200 at 700 W and 1710 MHz: vLLM's
+decode MoE call on OLMoE-1B-7B and Mixtral-8x7B at T 1 to 128 is priced by v4d to 1.02% rms on the block-scan path
+(5 cells) and not to 3% elsewhere (small-batch 4.11%, naive 9.14%), in sample; the replicate noise is 0.19%; and on
+Mixtral the call's time depends on which experts are active at fixed counts by 1.6 to 2.0 us. Not established: a
+decode timing model, blind or in sample, on any model.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

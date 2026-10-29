@@ -1,0 +1,35 @@
+DECODE STAGE, CAL RENTAL (addendum 2): score
+tile params: the tile stage's selections from A2's score directory (scripts/scoring/tileA2)
+power: READ (700.0 W)
+descriptive cells (out of the fit, the rho selection and every E1 bar): 11
+Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row.
+units:
+  olmoe-1b-7b-dm-r3decode: counted
+  mixtral-8x7b-dm-r3decode: counted
+  olmoe-1b-7b-dc-r3decode: counted
+  mixtral-8x7b-dc-r3decode: counted
+  mixtral-8x7b-de-r3decode: counted
+  olmoe-1b-7b-dn-decodebytes: counted
+  mixtral-8x7b-dn-decodebytes: counted
+  olmoe-1b-7b-dd-r3decode: counted
+  mixtral-8x7b-dd-r3decode: counted
+  olmoe-1b-7b-dr-r3decode: counted
+fit: selected rho scaled (the lower CAL rms on sub-wave cells (sub-wave: some GEMM under one wave at the census occupancy); fixed unless scaled's rms is lower by 0.1 percentage points (absolute))
+  fixed: FITTED T0_GR 0.015459498712066392 s_naive -0.00991958665465546 s_block -0.015243536696384967 in-sample {'cells': 92, 'rms': 0.150707, 'worst': 0.403809, 'mean': 0.052382} sub-wave {'cells': 41, 'rms': 0.195624, 'worst': 0.403809, 'mean': 0.110444}
+  scaled: FITTED T0_GR 0.02483091764232842 s_naive -0.008373783200701885 s_block -0.010406917373846703 in-sample {'cells': 92, 'rms': 0.047524, 'worst': -0.227202, 'mean': 0.016739} sub-wave {'cells': 41, 'rms': 0.048658, 'worst': 0.080363, 'mean': 0.026958}
+E1-CAL-IN-SAMPLE: FAILS {'cells': 92, 'rms': 0.047524, 'worst': -0.227202, 'mean': 0.016739}
+G3-D shuffle: EQUIVALENT (margin 1.870729 us)
+G3-D label: NOT EQUIVALENT (margin 0.519914 us)
+G3-D fill: NOT EQUIVALENT (margin 2.829679 us)
+REP: sigma_page 0.001884 over 47 pairs; blind bars {'rms_max': 0.015, 'max_abs': 0.04, 'mean_max': 0.0075, 'source': "tightened from the CAL replicate's sigma_page 0.00188"}
+GD2: PASS median 3.661007 us band [-0.459551, 5.91]
+GD3: NOT SCORED: no E240 page or no matched cell None/None in band
+STOP: STOP
+  in-sample E1-DEC on the CAL main pages FAILS at the provisional bars
+  G3-D label NOT EQUIVALENT: time is not shown to be a function of counts alone
+REP over every cell (DESCRIPTIVE): sigma_page 0.001851 over 52 pairs; bars {'rms_max': 0.015, 'max_abs': 0.04, 'mean_max': 0.0075, 'source': "tightened from the CAL replicate's sigma_page 0.00185"}
+SIGMA-D mixtral-8x7b: MIXED (median position 0.410878, 6 of 6 cells read); v4d sigma 1 {'cells': 6, 'rms': 0.242636, 'worst': 0.429255, 'mean': 0.21049}; L2-served {'cells': 6, 'rms': 0.263169, 'worst': -0.298522, 'mean': -0.262154}
+SIGMA-D olmoe-1b-7b: MIXED (median position 0.623223, 5 of 5 cells read); v4d sigma 1 {'cells': 5, 'rms': 0.274164, 'worst': 0.400283, 'mean': 0.26509}; L2-served {'cells': 5, 'rms': 0.18124, 'worst': -0.241996, 'mean': -0.166384}
+knee p 5.75 (DESCRIPTIVE): {'cells': 92, 'rms': 0.046884, 'worst': -0.210208, 'mean': 0.018443}
+knee p 3.75 (DESCRIPTIVE): {'cells': 92, 'rms': 0.049617, 'worst': -0.188398, 'mean': 0.027226}
+as registered (DESCRIPTIVE): E1 FAILS {'cells': 103, 'rms': 0.089199, 'worst': 0.419331, 'mean': 0.017185}; STOP STOP

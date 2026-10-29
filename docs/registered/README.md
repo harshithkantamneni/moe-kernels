@@ -1717,3 +1717,27 @@ committed score files.
 |---|---:|---:|---:|---:|---:|
 | decode CAL (addendum 2 plan) | 106 | about 151 min | about $5.76 | launch + 165 min | launch + 180 min ($6.87) |
 | decode blind (on a CAL GO) | 101 | about 145 min | about $5.53 | launch + 160 min | launch + 175 min ($6.68) |
+
+**Scored 2026-10-29** on `results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session` (board 183300, C4's;
+13 units at a398c6a0 in about 73 minutes on 2026-10-29, none dropped; 12 exit 0 and the tilecensus unit exit 3 on
+deepseek-v2-lite's known census error, readiness I7; the score in `scripts/scoring/decode/cal.score.{json,txt}`,
+written by `score_cal_d2.py <tree>/results <out> --tile-scores scripts/scoring/tileA2` from the repository root with
+PYTHONHASHSEED=0; no post-page fix). **Power** READ: the GPU scope's Current Power Limit 700.00 W in `power-set.txt`.
+**Descriptive cells**: the 11 registered second-tile cells, left out of the fit, the rho selection and every E1 bar.
+**Fit**: rho scaled selected (sub-wave rms 4.87% against fixed 19.56%; T0_GR 24.83 us, s_naive -8.37 us, s_block
+-10.41 us). **E1-CAL-IN-SAMPLE: FAILS** on 92 cells: rms 4.75%, worst -22.7% (OLMoE L-T2-A8, naive path, 61.2 us
+measured against 47.3 us), mean +1.67%. **G3-D**: shuffle EQUIVALENT (margin 1.87 us); label NOT EQUIVALENT (margin
+0.52 us; mean -0.91 us, CI [-1.69, -0.14]; Mixtral -1.60 to -2.02 us, OLMoE within 0.12 us); fill NOT EQUIVALENT
+(margin 2.83 us, mean +3.29 us). **REP**: sigma_page 0.19% over 47 kept pairs (0.19% over all 52, DESCRIPTIVE).
+**GD2** PASS (median +3.66 us, band [-0.46, 5.91] us, 40 matched cells). **GD3** NOT SCORED: every E240 cell fails
+GD1 (host-bound), so no matched cell. **STOP rule: STOP** (E1-CAL-IN-SAMPLE FAILS; G3-D label NOT EQUIVALENT); the
+blind decode rental does not run and `finalise_decode_d2.py` refuses. DESCRIPTIVE: SIGMA-D Mixtral MIXED (median
+position 0.41, 6 of 6 read), OLMoE MIXED (0.62, 5 of 5); BYTES-D2 OLMoE's second-tile re-reads unseen at DRAM on
+all 8 GEMMs, Mixtral w1's seen at T 32 and 64; knee rows p 5.75 rms 4.69%, p 3.75 rms 4.96%; as registered on all 103
+cells E1 FAILS at rms 8.92% with the same STOP. By path (descriptive, from the score's rows): block-scan 5 cells rms
+1.02%, small-batch 78 cells rms 4.11% mean +1.95% (Mixtral +4.11%, OLMoE -0.69%), naive 9 cells rms 9.14%. The four
+registration files are unchanged (`register_decode.py --check`, `register_decode_d2.py --check`: `same`); scored on
+the fetched tree and on the published copy, the `.txt` is byte-identical and the JSON differs only in the power
+file's path; `scripts/scoring/rescore.py decodeCAL` re-scores the published session to the committed files. One test
+pin moved (`tests/test_calibration_provenance.py`). Next (owner): offline diagnosis, no rental (docs/FINDINGS.md,
+Decode CAL rental).

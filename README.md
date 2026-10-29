@@ -234,13 +234,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7082 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7083 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-one further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-two further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-four Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-five Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -274,11 +274,15 @@ model, the sag estimator's two f128 pages and Mixtral-8x7B's 128 G 1 timed and b
 at 700 W, and calibration rental C3 of 2026-10-27: the sag estimator's two f128 pages, the instrumented copy's
 regcheck and perturbation gate, and per-CTA start and end stamps on Mixtral-8x7B and Qwen2-57B at 128x128 G 1,
 8 units on one GH200 at 700 W, and calibration rental C4 of 2026-10-27: the sag estimator's two f128 pages and
-Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model, 8 units on one GH200 at 700 W),
+Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model, 8 units on one GH200 at 700 W,
+and the decode stage's CAL rental of 2026-10-29: vLLM's own decode call at T 1 to 128 on OLMoE-1B-7B and Mixtral-8x7B,
+its graph-replayed main pages, control, E240, DECL and replicate pages and two decode counter pages, 13 units on one
+GH200 at 700 W and the 1710 MHz lock),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 24 GH200 sessions ran on eighteen distinct boards (counted by
-board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new). Of the GH200 call-time results, three
+sessions rather than arms. The 25 GH200 sessions ran on eighteen distinct boards (counted by
+board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
+decode CAL rental ran on it again). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -318,7 +322,14 @@ Mixtral-8x22B +0.24% and tp2 +2.39%, with P(A) 0.124. On 2026-10-28 the owner na
 registered and its blind models stay unspent. The only certified timing model is still v3 on R3's tile. On vLLM's
 tiles the work stands as MEASURED or HELD-OUT, not blind. A 1% held-out claim holds only for OLMoE-like and
 Mixtral-8x22B-like 128 G 1 shapes. The knee conflict and the large-P w1 byte law are open (docs/FINDINGS.md, Tile
-stage: scope decision). Every
+stage: scope decision). The decode stage's CAL rental (2026-10-29) STOPPED the decode stage, so its blind rental
+does not run. Board valid at 700 W; 11 second-tile cells were left out as registered. Model v4d, fitted on the 92
+remaining CAL cells, misses its own in-sample bar: 4.75% rms against 3%, worst -22.7% (one OLMoE naive-path cell),
+mean +1.67%. By path, the block-scan cells read 1.02% rms, the small-batch cells (78 of 92) 4.11% with v4d pricing
+them 1.95% slow on average (Mixtral +4.11%, OLMoE -0.69%), and the naive cells 9.14%. The label test is NOT
+EQUIVALENT: on Mixtral the same expert counts run 1.6 to 2.0 us faster on experts 0 and 1 than on experts 2 and 5, so
+time is not shown to be a function of counts alone. The replicate's page noise is 0.19%. The owner's next step is an
+offline diagnosis (docs/FINDINGS.md, Decode CAL rental). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

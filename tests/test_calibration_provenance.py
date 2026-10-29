@@ -469,6 +469,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-10-27-nvidia_gh200_480gb-cal3-session": SESSION,
         # Calibration rental C4 of 2026-10-27: one GH200, 8 units of one calibration registration (the sag estimator's two f128 pages, Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model).
         "2026-10-27-nvidia_gh200_480gb-cal4-session": SESSION,
+        # The decode stage's CAL rental of 2026-10-29: one GH200, 13 units of the decode CAL plan under the second addendum (calibrate, the decode tile census, GRR main, GR1 control, E240, DECL and replicate pages on OLMoE-1B-7B and Mixtral-8x7B, two decode counter pages).
+        "2026-10-29-nvidia_gh200_480gb-decodeCAL-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

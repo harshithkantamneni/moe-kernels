@@ -635,13 +635,15 @@ def T3(out: Path, repo: Path | None = None) -> None:
 @item
 def T4(out: Path) -> None:
     """GH200 sessions: date, board hash (`dram_counter_route.board` of the card UUID
-    on the session's pages), run commit (session/commit.txt or the pages' git_sha),
-    models (the pages' `design.model` / `plan.model`), page count."""
+    on the session's pages; a session whose pages carry no card, the decode counter
+    pages `r3d.json`, takes it from session/PREFLIGHT.json), run commit
+    (session/commit.txt or the pages' git_sha), models (the pages' `design.model` /
+    `plan.model`), page count."""
     import dram_counter_route as DCR
     rows = []
     for s in sorted(PUB.glob("*-nvidia_gh200_480gb*-session")):
         boards, models, shas = set(), set(), set()
-        pages = list(s.rglob("r3c-g*.json")) + list(s.rglob("r3f-*.json"))
+        pages = list(s.rglob("r3c-g*.json")) + list(s.rglob("r3f-*.json")) + list(s.rglob("r3d.json"))
         for p in pages:
             if p.suffix != ".json":
                 continue
@@ -654,6 +656,11 @@ def T4(out: Path) -> None:
                 models.add(m)
             if d.get("git_sha"):
                 shas.add(str(d["git_sha"])[:7])
+        pf = s / "session/PREFLIGHT.json"
+        if not boards and pages and pf.exists():
+            uuid = (json.loads(pf.read_text()).get("card") or {}).get("uuid")
+            if uuid:
+                boards.add(DCR.board(uuid))
         ct = s / "session/commit.txt"
         commit = ct.read_text().split()[0][:7] if ct.exists() and ct.read_text().strip() \
             else ", ".join(sorted(shas))

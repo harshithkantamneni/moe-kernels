@@ -5,7 +5,9 @@ calibration rental C2's registered reader its own to the committed cal2.read fil
 on this machine: the reader refuses without it), and the calibration rental C3's registered reader its own to the committed
 cal3.read files (where the run's commit is in this clone's history: the reader checks the freeze against it), and the
 calibration rental C4's registered reader its own to the committed cal4.read files (where round 4's frozen chain is on
-this machine: the reader refuses without it)."""
+this machine: the reader refuses without it), and the decode stage's CAL scorer under the second addendum its published
+session to the committed scripts/scoring/decode/cal.score files (it reads only the published tree and A2's committed
+score directory, so it needs nothing off the repo)."""
 from __future__ import annotations
 
 import importlib.util
@@ -86,6 +88,16 @@ def test_the_published_cal4_session_rereads_to_the_committed_files(tmp_path):
     assert ran == [("scripts/scoring/cal4/read_c4.py", 0)], ran
     rows = dict(RS.compare("cal4", tmp_path))
     assert rows == {"cal4.read.json": "EQUAL", "cal4.read.txt": "EQUAL"}, rows
+
+
+def test_the_published_decode_cal_session_rescores_to_the_committed_files(tmp_path):
+    assert RS.tree_of("decodeCAL") == "results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session/results"
+    ran = RS.rescore("decodeCAL", tmp_path)
+    assert ran == [("scripts/scoring/decode/score_cal_d2.py", 0)], ran
+    rows = dict(RS.compare("decodeCAL", tmp_path))
+    assert rows == {"cal.score.json": "EQUAL", "cal.score.txt": "EQUAL"}, rows
+    txt = (REPO / "scripts/scoring/decode/cal.score.txt").read_text().splitlines()
+    assert "power: READ (700.0 W)" in txt and "STOP: STOP" in txt
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):
