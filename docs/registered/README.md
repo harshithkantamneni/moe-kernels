@@ -1683,3 +1683,37 @@ registration file, scorer or verdict changes. `2026-10-20-tileB2-e1tile-gh200` s
 unscored. B3 reopens only if a declared model passes the same gate on held-out CAL models
 with the blind models still unspent. docs/FINDINGS.md, "Tile stage: scope decision (2026-10-28)", records what is
 certified, what is MEASURED or HELD-OUT on vLLM's tiles, what is not established, and the open defects carried.
+
+## 2026-10-28, before any decode page: the decode stage's second addendum
+
+`2026-10-28-decode-addendum2-gh200` (`scripts/scoring/decode/register_decode_d2.py --write` / `--check`) follows the
+decode readiness review's recommendation (b) (moe-kernels-work 2026-10-28 decode-ready, READINESS.md) and registers the
+owner's decisions of 2026-10-28. `2026-10-14-decodeC-cal-gh200`, `2026-10-14-decodeB-blind-gh200` and
+`2026-10-20-decode-tilesource-gh200` stay byte-identical; the addendum pins them, every frozen decode file and A2's
+committed score files.
+- **D2-1: DD6 superseded.** Decode CAL runs now; tile rental B is not run. The tile source stays A2's score directory
+  through the first addendum (`decode_gate_a2.py`: GO).
+- **D2-2: the second-tile cells are DESCRIPTIVE.** A cell off the naive path where an active expert holds more than
+  BLOCK_M rows (11 of 103 CAL main cells, 27 blind main cells, listed by identity) leaves the fit, the rho selection and
+  every E1 bar, and is read as SIGMA-D: the measured time against v4d's sigma-1 price and against an L2-served
+  estimate (v4d with the later M-tiles' slab reads removed, nothing else changed). G3-D, GD2, GD3 and the replicate's
+  sigma_page keep every cell. New wrappers run the frozen scorers unchanged: `score_cal_d2.py`, `score_blind_d2.py`,
+  `finalise_decode_d2.py` (shared rules in `d2common.py`).
+- **D2-3: 700 W.** The wrappers read the session's `power-set.txt` GPU Current Power Limit; off 700 W (1 W), the decode
+  readings are NOT SCORED. No driver change.
+- **D2-4: extras.** Knee rows at p 5.75 and 3.75 beside the registered prediction (DESCRIPTIVE); the two `dn` byte
+  units nodrop in `scripts/plans/rentalD-cal-d2-2026-10.plan` (the frozen plan otherwise line for line).
+- **D2-5: the sequence.** CAL; on GO, the mechanical finalisation and the blind rental.
+- **After the build review (GO-WITH-FIXES; owner, 2026-10-28).** The scope, verbatim in the registration and in both
+  score files, printed beside every certification line: "Certified domain: decode calls in which every active expert
+  fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing
+  at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row." SIGMA-D's reading is registered:
+  position under 1/3 FULL-REREAD, over 2/3 L2-SERVED, between MIXED; NOT READ when the sigma-1 and served prices are
+  under 3 us or 10% apart. The blind bars come from the kept cells' replicate noise (the every-cell figure printed
+  beside). Operator step: after the prelude's push, `d2common.py --power` on the run branch's `vm/session/power-set.txt`;
+  terminate unless it reads READ.
+
+| rental | est. min of units | wall (25 min boot) | cost | deadline | guardian hard cap |
+|---|---:|---:|---:|---:|---:|
+| decode CAL (addendum 2 plan) | 106 | about 151 min | about $5.76 | launch + 165 min | launch + 180 min ($6.87) |
+| decode blind (on a CAL GO) | 101 | about 145 min | about $5.53 | launch + 160 min | launch + 175 min ($6.68) |
