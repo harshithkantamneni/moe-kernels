@@ -10,3 +10,4 @@
 2026-10-29T04:16:11Z r3decode (unit 8/13 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
 2026-10-29T04:17:30Z decodebytes (unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json): exit 0 (1 min)
 2026-10-29T04:19:29Z decodebytes (unit 10/13 mixtral-8x7b dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json): exit 0 (2 min)
+2026-10-29T04:22:36Z r3decode (unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)

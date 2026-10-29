@@ -1,0 +1,123 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-decl-838db471
+model       olmoe-1b-7b E=64 k=8 bf16; W_e 12.0 MiB
+page        docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json (sha256 eed346a79afcf885...), olmoe-1b-7b-decl, 5 cells, 10 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 64 x W_e 12.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      9 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::9]; DECL declares E x 9 = 576
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.7 min
+session     gh200-20261029T032707Z-decf-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-dd/private_weight_reference/nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-decl-838db471
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=16  L-T16-A64             native,decl small-batch 16x64x128w4s4  A=64  L=64  P=896  dead=128/128   e87f401f581f
+  T=32  L-T32-A64             native,decl small-batch 16x64x128w4s4  A=64  L=64  P=768  dead=384/384   6380508c1144
+  T=64  L-T64-A64             native,decl small-batch 32x64x128w4s3  A=64  L=64  P=1536 dead=448/448   ae1eeef26c1a
+  T=96  L-T96-A64             native,decl small-batch 32x128x64w4s3  A=64  L=64  P=1280 dead=352/352   68f5d9290a06
+  T=128 L-T128-A64            native,decl block-scan  64x128x64w4s3  A=64  L=64  P=3072 dead=240/240   eb520d9e4e04
+WARNING 10-29 04:19:43 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1024,device_name=NVIDIA_GH200_480GB.json
+WARNING 10-29 04:19:45 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=576,N=1024,device_name=NVIDIA_GH200_480GB.json
+  rep 0 L-T16-A64        native T= 16    244.19 us ok
+  rep 0 L-T16-A64        decl   T= 16    427.98 us ok
+  rep 0 L-T32-A64        native T= 32    247.41 us ok
+  rep 0 L-T32-A64        decl   T= 32    241.66 us ok
+  rep 0 L-T64-A64        native T= 64    253.60 us ok
+  rep 0 L-T64-A64        decl   T= 64    251.56 us ok
+  rep 0 L-T96-A64        native T= 96    259.17 us ok
+  rep 0 L-T96-A64        decl   T= 96    247.90 us ok
+  rep 0 L-T128-A64       native T=128    251.41 us ok
+  rep 0 L-T128-A64       decl   T=128    252.30 us ok
+  rep 1 L-T128-A64       decl   T=128    251.98 us ok
+  rep 1 L-T128-A64       native T=128    251.26 us ok
+  rep 1 L-T96-A64        decl   T= 96    247.86 us ok
+  rep 1 L-T96-A64        native T= 96    258.94 us ok
+  rep 1 L-T64-A64        decl   T= 64    251.73 us ok
+  rep 1 L-T64-A64        native T= 64    254.00 us ok
+  rep 1 L-T32-A64        decl   T= 32    242.07 us ok
+  rep 1 L-T32-A64        native T= 32    247.59 us ok
+  rep 1 L-T16-A64        decl   T= 16    427.91 us ok
+  rep 1 L-T16-A64        native T= 16    244.26 us ok
+  rep 2 L-T16-A64        native T= 16    243.97 us ok
+  rep 2 L-T16-A64        decl   T= 16    427.97 us ok
+  rep 2 L-T32-A64        native T= 32    247.39 us ok
+  rep 2 L-T32-A64        decl   T= 32    241.75 us ok
+  rep 2 L-T64-A64        native T= 64    253.67 us ok
+  rep 2 L-T64-A64        decl   T= 64    251.73 us ok
+  rep 2 L-T96-A64        native T= 96    259.32 us ok
+  rep 2 L-T96-A64        decl   T= 96    247.95 us ok
+  rep 2 L-T128-A64       native T=128    251.46 us ok
+  rep 2 L-T128-A64       decl   T=128    251.86 us ok
+  rep 3 L-T128-A64       decl   T=128    252.04 us ok
+  rep 3 L-T128-A64       native T=128    251.64 us ok
+  rep 3 L-T96-A64        decl   T= 96    247.58 us ok
+  rep 3 L-T96-A64        native T= 96    259.05 us ok
+  rep 3 L-T64-A64        decl   T= 64    251.77 us ok
+  rep 3 L-T64-A64        native T= 64    254.41 us ok
+  rep 3 L-T32-A64        decl   T= 32    242.01 us ok
+  rep 3 L-T32-A64        native T= 32    247.51 us ok
+  rep 3 L-T16-A64        decl   T= 16    427.98 us ok
+  rep 3 L-T16-A64        native T= 16    244.28 us ok
+  rep 4 L-T16-A64        native T= 16    244.26 us ok
+  rep 4 L-T16-A64        decl   T= 16    427.67 us ok
+  rep 4 L-T32-A64        native T= 32    247.47 us ok
+  rep 4 L-T32-A64        decl   T= 32    241.98 us ok
+  rep 4 L-T64-A64        native T= 64    253.60 us ok
+  rep 4 L-T64-A64        decl   T= 64    251.68 us ok
+  rep 4 L-T96-A64        native T= 96    259.32 us ok
+  rep 4 L-T96-A64        decl   T= 96    248.00 us ok
+  rep 4 L-T128-A64       native T=128    251.76 us ok
+  rep 4 L-T128-A64       decl   T=128    252.00 us ok
+  rep 5 L-T128-A64       decl   T=128    252.09 us ok
+  rep 5 L-T128-A64       native T=128    251.76 us ok
+  rep 5 L-T96-A64        decl   T= 96    247.89 us ok
+  rep 5 L-T96-A64        native T= 96    259.05 us ok
+  rep 5 L-T64-A64        decl   T= 64    251.78 us ok
+  rep 5 L-T64-A64        native T= 64    254.42 us ok
+  rep 5 L-T32-A64        decl   T= 32    242.05 us ok
+  rep 5 L-T32-A64        native T= 32    247.47 us ok
+  rep 5 L-T16-A64        decl   T= 16    428.20 us ok
+  rep 5 L-T16-A64        native T= 16    244.30 us ok
+  rep 6 L-T16-A64        native T= 16    244.38 us ok
+  rep 6 L-T16-A64        decl   T= 16    428.01 us ok
+  rep 6 L-T32-A64        native T= 32    247.49 us ok
+  rep 6 L-T32-A64        decl   T= 32    241.76 us ok
+  rep 6 L-T64-A64        native T= 64    254.08 us ok
+  rep 6 L-T64-A64        decl   T= 64    251.67 us ok
+  rep 6 L-T96-A64        native T= 96    259.28 us ok
+  rep 6 L-T96-A64        decl   T= 96    247.96 us ok
+  rep 6 L-T128-A64       native T=128    251.79 us ok
+  rep 6 L-T128-A64       decl   T=128    252.13 us ok
+  rep 7 L-T128-A64       decl   T=128    251.64 us ok
+  rep 7 L-T128-A64       native T=128    251.51 us ok
+  rep 7 L-T96-A64        decl   T= 96    248.12 us ok
+  rep 7 L-T96-A64        native T= 96    258.94 us ok
+  rep 7 L-T64-A64        decl   T= 64    251.60 us ok
+  rep 7 L-T64-A64        native T= 64    254.30 us ok
+  rep 7 L-T32-A64        decl   T= 32    241.94 us ok
+  rep 7 L-T32-A64        native T= 32    247.59 us ok
+  rep 7 L-T16-A64        decl   T= 16    428.18 us ok
+  rep 7 L-T16-A64        native T= 16    243.95 us ok
+  rep 8 L-T16-A64        native T= 16    243.99 us ok
+  rep 8 L-T16-A64        decl   T= 16    427.94 us ok
+  rep 8 L-T32-A64        native T= 32    247.51 us ok
+  rep 8 L-T32-A64        decl   T= 32    241.89 us ok
+  rep 8 L-T64-A64        native T= 64    253.86 us ok
+  rep 8 L-T64-A64        decl   T= 64    251.64 us ok
+  rep 8 L-T96-A64        native T= 96    259.31 us ok
+  rep 8 L-T96-A64        decl   T= 96    247.92 us ok
+  rep 8 L-T128-A64       native T=128    251.40 us ok
+  rep 8 L-T128-A64       decl   T=128    251.90 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-dd/private_weight_reference/nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-decl-838db471/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

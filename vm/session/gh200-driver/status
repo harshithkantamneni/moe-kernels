@@ -64,3 +64,9 @@
 2026-10-29T04:19:27Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-mixtral-8x7b-dn-r3-counters/lock1710/r3d.json)
 2026-10-29T04:19:27Z decodebytes END: exit 0 after 2 min [unit 10/13 mixtral-8x7b dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json]
 2026-10-29T04:19:27Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:19:30Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 100 min left)
+2026-10-29T04:19:32Z r3decode: docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst GRR rot auto, session tag gh200-20261029T032707Z-decf
+2026-10-29T04:22:33Z r3decode: 2026-10-29T04:22:33Z G=1 held at lock 1710: R3 exit 0 DONE, cells=90 worst=1710.0 MHz, 180 s, dir nvidia_gh200_480gb-decode-olmoe-1b-7b-GRR-olmoe-1b-7b-decl-838db471
+2026-10-29T04:22:33Z r3decode: locked_r3 exit 0
+2026-10-29T04:22:33Z r3decode END: exit 0 after 3 min [unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-10-29T04:22:34Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
