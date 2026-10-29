@@ -13,3 +13,4 @@
 2026-10-29T04:22:36Z r3decode (unit 11/13 olmoe-1b-7b dd histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
 2026-10-29T04:26:33Z r3decode (unit 12/13 mixtral-8x7b dd histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-decl.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
 2026-10-29T04:40:31Z r3decode (unit 13/13 olmoe-1b-7b dr histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-29T04:40:35Z the session ended: driver exit 3

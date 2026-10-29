@@ -82,3 +82,4 @@
 2026-10-29T04:40:28Z r3decode: locked_r3 exit 0
 2026-10-29T04:40:28Z r3decode END: exit 0 after 14 min [unit 13/13 olmoe-1b-7b dr histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 2026-10-29T04:40:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:40:33Z driver end: exit 3
