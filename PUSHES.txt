@@ -4,3 +4,4 @@
 2026-10-29T03:27:52Z calibrate (unit 2/13 mixtral-8x7b dcal): exit 0 (0 min)
 2026-10-29T03:28:09Z tilecensus (unit 3/13 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m): exit 3 (0 min)
 2026-10-29T03:42:05Z r3decode (unit 4/13 olmoe-1b-7b dm histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)
+2026-10-29T03:58:41Z r3decode (unit 5/13 mixtral-8x7b dm histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (17 min)
