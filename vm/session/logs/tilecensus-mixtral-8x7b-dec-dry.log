@@ -1,0 +1,9 @@
+TILE CENSUS: compile only, no lock, nothing timed
+tiles   16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3
+models  olmoe-1b-7b mixtral-8x7b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite granite-3.0-3b-a800m
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  32x64x128w4s3: path mma.sync, shared 49152 B, design occupancy 4
+  32x128x64w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+DRY RUN: nothing compiled (exit 2)

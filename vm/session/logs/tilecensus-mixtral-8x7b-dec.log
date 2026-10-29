@@ -1,0 +1,37 @@
+TILE CENSUS: compile only, no lock, nothing timed
+tiles   16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3
+models  olmoe-1b-7b mixtral-8x7b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite granite-3.0-3b-a800m
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  32x64x128w4s3: path mma.sync, shared 49152 B, design occupancy 4
+  32x128x64w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  16x64x128w4s4 olmoe-1b-7b: 2 configs
+  16x64x128w4s4 mixtral-8x7b: 2 configs
+  16x64x128w4s4 phi-3.5-moe: 2 configs
+  16x64x128w4s4 qwen1.5-moe-a2.7b: 2 configs
+  16x64x128w4s4 jetmoe-8b: 2 configs
+  16x64x128w4s4 deepseek-v2-lite: 0 configs
+  16x64x128w4s4 granite-3.0-3b-a800m: 2 configs
+  32x64x128w4s3 olmoe-1b-7b: 2 configs
+  32x64x128w4s3 mixtral-8x7b: 2 configs
+  32x64x128w4s3 phi-3.5-moe: 2 configs
+  32x64x128w4s3 qwen1.5-moe-a2.7b: 2 configs
+  32x64x128w4s3 jetmoe-8b: 2 configs
+  32x64x128w4s3 deepseek-v2-lite: 0 configs
+  32x64x128w4s3 granite-3.0-3b-a800m: 2 configs
+  32x128x64w4s3 olmoe-1b-7b: 2 configs
+  32x128x64w4s3 mixtral-8x7b: 2 configs
+  32x128x64w4s3 phi-3.5-moe: 2 configs
+  32x128x64w4s3 qwen1.5-moe-a2.7b: 2 configs
+  32x128x64w4s3 jetmoe-8b: 2 configs
+  32x128x64w4s3 deepseek-v2-lite: 0 configs
+  32x128x64w4s3 granite-3.0-3b-a800m: 2 configs
+  64x128x64w4s3 olmoe-1b-7b: 2 configs
+  64x128x64w4s3 mixtral-8x7b: 2 configs
+  64x128x64w4s3 phi-3.5-moe: 2 configs
+  64x128x64w4s3 qwen1.5-moe-a2.7b: 2 configs
+  64x128x64w4s3 jetmoe-8b: 2 configs
+  64x128x64w4s3 deepseek-v2-lite: 0 configs
+  64x128x64w4s3 granite-3.0-3b-a800m: 2 configs
+RESULT: VALIDITY census_path PASS 48 configs, 0 path mismatches, 4 errors
