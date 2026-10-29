@@ -54,3 +54,8 @@
 2026-10-29T04:16:09Z r3decode: locked_r3 exit 0
 2026-10-29T04:16:09Z r3decode END: exit 0 after 4 min [unit 8/13 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3]
 2026-10-29T04:16:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-10-29T04:16:13Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json; every launch grid held to vLLM's own [unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json] (estimate 5 min, cap 15 min, 103 min left)
+2026-10-29T04:17:28Z decodebytes: RESULT: VALIDITY grid PASS 26 cells, 260 launches attributed; /home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-olmoe-1b-7b-dn-r3-counters/lock1710/r3d.jso
+2026-10-29T04:17:28Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-10-29-nvidia_gh200_480gb-olmoe-1b-7b-dn-r3-counters/lock1710/r3d.json)
+2026-10-29T04:17:28Z decodebytes END: exit 0 after 1 min [unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json]
+2026-10-29T04:17:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
