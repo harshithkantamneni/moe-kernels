@@ -7,3 +7,4 @@ r3decode   exit 0 after 7 min [unit 6/13 olmoe-1b-7b dc histogram=docs/registere
 r3decode   exit 0 after 7 min [unit 7/13 mixtral-8x7b dc histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
 r3decode   exit 0 after 4 min [unit 8/13 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3]
 decodebytes exit 0 after 1 min [unit 9/13 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json]
+decodebytes exit 0 after 2 min [unit 10/13 mixtral-8x7b dn histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-ctl.json]
