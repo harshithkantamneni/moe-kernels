@@ -1,0 +1,45 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-olmoe-1b-7b-GR1-olmoe-1b-7b-ctl-2103a6f7
+model       olmoe-1b-7b E=64 k=8 bf16; W_e 12.0 MiB
+page        docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json (sha256 04cef1e719baa42d...), olmoe-1b-7b-ctl, 26 cells, 26 (cell, arm), token-row shuffle seed 20261014
+instrument  GR1: a one-call graph, the 240 MiB flush outside it
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    9.1 min
+session     gh200-20261029T032707Z-decc-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-olmoe-1b-7b-dc/private_weight_reference/nvidia_gh200_480gb-decode-olmoe-1b-7b-GR1-olmoe-1b-7b-ctl-2103a6f7
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A8               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     381ab77977b0
+  T=1   U-T1                  native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     fd0951b11581
+  T=2   L-T2-A16              native      naive       16x64x128w4s4  A=16  L=16  P=240  dead=0/0     725a18b75fb1
+  T=2   L-T2-A8               native      naive       16x64x128w4s4  A=8   L=16  P=240  dead=0/0     3f8cc4a873f0
+  T=2   U-T2                  native      naive       16x64x128w4s4  A=15  L=16  P=240  dead=0/0     9b2997d4cf63
+  T=4   L-T4-A32              native      small-batch 16x64x128w4s4  A=32  L=32  P=480  dead=0/0     7b49c8d97e09
+  T=4   L-T4-A8               native      small-batch 16x64x128w4s4  A=8   L=8   P=96   dead=768/768   5bc048af8560
+  T=4   U-T4                  native      small-batch 16x64x128w4s4  A=27  L=27  P=400  dead=160/160   8e83af620a43
+  T=8   L-T8-A64              native      small-batch 16x64x128w4s4  A=64  L=64  P=960  dead=0/0     ba1e52e365a6
+  T=8   L-T8-A8               native      small-batch 16x64x128w4s4  A=8   L=8   P=64   dead=1792/1792  4c3609a59121
+  T=8   U-T8                  native      small-batch 16x64x128w4s4  A=41  L=41  P=592  dead=736/736   e5c9db5cbfac
+  T=16  L-T16-A64             native      small-batch 16x64x128w4s4  A=64  L=64  P=896  dead=128/128   e87f401f581f
+  T=16  L-T16-A8              native      small-batch 16x64x128w4s4  A=8   L=8   P=0    dead=1920/1920  7eb087db778e
+  T=16  U-T16                 native      small-batch 16x64x128w4s4  A=57  L=57  P=784  dead=352/352   ac1de53d3a55
+  T=32  L-T32-A64             native      small-batch 16x64x128w4s4  A=64  L=64  P=768  dead=384/384   6380508c1144
+  T=32  L-T32-A8              native      small-batch 16x64x128w4s4  A=8   L=16  P=0    dead=1920/1920  90b8267d482f
+  T=32  U-T32                 native      small-batch 16x64x128w4s4  A=63  L=63  P=752  dead=416/416   f0e30e4d545e
+  T=64  L-T64-A64             native      small-batch 32x64x128w4s3  A=64  L=64  P=1536 dead=448/448   ae1eeef26c1a
+  T=64  L-T64-A8              native      small-batch 32x64x128w4s3  A=8   L=16  P=0    dead=1984/1984  936fa3103ea9
+  T=64  U-T64                 native      small-batch 32x64x128w4s3  A=64  L=64  P=1536 dead=448/448   dab014c3ffe6
+  T=96  L-T96-A64             native      small-batch 32x128x64w4s3  A=64  L=64  P=1280 dead=352/352   68f5d9290a06
+  T=96  L-T96-A8              native      small-batch 32x128x64w4s3  A=8   L=24  P=0    dead=992/992   2a98dde3abd1
+  T=96  U-T96                 native      small-batch 32x128x64w4s3  A=64  L=64  P=1280 dead=352/352   529f72191d1e
+  T=128 L-T128-A64            native      block-scan  64x128x64w4s3  A=64  L=64  P=3072 dead=240/240   eb520d9e4e04
+  T=128 L-T128-A8             native      block-scan  64x128x64w4s3  A=8   L=16  P=0    dead=1008/1008  51c9c42ab12c
+  T=128 U-T128                native      block-scan  64x128x64w4s3  A=64  L=64  P=3072 dead=240/240   20e3473c19f4
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================
