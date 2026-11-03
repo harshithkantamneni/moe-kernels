@@ -1,7 +1,8 @@
 # moe-kernels
 
-MoE grouped-GEMM kernel work on an NVIDIA H200 NVL: a stage-span benchmark
-harness, real captured routing traces, roofline analysis, and kernels.
+MoE grouped-GEMM measurement work on NVIDIA H200 NVL and GH200: a stage-span
+benchmark harness, parametric routing distributions, roofline analysis and timing
+models. No kernels were written.
 
 ## What this is for
 
@@ -55,7 +56,7 @@ band was withdrawn rather than widened. The number to quote is the ridge of the
 calibration a row was measured against, and
 `results/published/CALIBRATION_PROVENANCE.md` says which that is for every arm.
 
-So: measure on real routing, on the hardware, and see where it actually breaks.
+So: measure under skewed routing, on the hardware, and see where it actually breaks.
 
 ## Architecture
 
