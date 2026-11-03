@@ -34,3 +34,7 @@
 2026-11-03T22:52:15Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json, inst E240, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 8/21 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3] (estimate 6 min, cap 18 min, 143 min left)
 2026-11-03T22:56:08Z r3decode END: exit 0 after 4 min [unit 8/21 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3]
 2026-11-03T22:56:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f2286c8 to run-gh200-tile2-20261103t2203: r3decode (unit 8/21 mixtral-8x7b de histogram=docs/registered/2026-10-14-decode-pages/mixtral-8x7b-e240.json inst=E240 slip-policy=cell g1-rule=r7-median-run3): exit 0 (4 min)
+2026-11-03T22:56:12Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json; every GEMM launch grid held to vLLM's own [unit 9/21 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json] (estimate 5 min, cap 15 min, 139 min left)
+2026-11-03T22:57:27Z decodebytes END: exit 0 after 1 min [unit 9/21 olmoe-1b-7b dn histogram=docs/registered/2026-10-14-decode-pages/olmoe-1b-7b-ctl.json]
+2026-11-03T22:57:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
