@@ -21,3 +21,4 @@
 2026-11-03T23:26:54Z decodebytes (unit 19/21 mixtral-8x7b dw histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-wide.json kernels=wide): exit 0 (1 min)
 2026-11-03T23:28:52Z r3decode (unit 20/21 mixtral-8x7b dp0 histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json inst=GRR pad-rows=0 slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
 2026-11-03T23:30:50Z r3decode (unit 21/21 mixtral-8x7b dp52 histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json inst=GRR pad-rows=52 slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
+2026-11-03T23:30:54Z the session ended: driver exit 3
