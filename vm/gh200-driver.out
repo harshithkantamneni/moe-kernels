@@ -10,3 +10,7 @@
 2026-11-03T22:07:23Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/21 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 187 min left)
 2026-11-03T22:07:48Z calibrate END: exit 0 after 0 min [unit 2/21 mixtral-8x7b dcal]
 2026-11-03T22:07:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4911d87 to run-gh200-tile2-20261103t2203: calibrate (unit 2/21 mixtral-8x7b dcal): exit 0 (0 min)
+2026-11-03T22:07:49Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3 on olmoe-1b-7b mixtral-8x7b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite granite-3.0-3b-a800m; refused on an MMA path mismatch [unit 3/21 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m] (estimate 6 min, cap 25 min, 187 min left)
+2026-11-03T22:08:05Z tilecensus END: exit 3 after 0 min [unit 3/21 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m]
+2026-11-03T22:08:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

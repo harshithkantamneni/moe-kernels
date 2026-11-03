@@ -19,3 +19,8 @@
 2026-11-03T22:07:48Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-11-03T22:07:48Z calibrate END: exit 0 after 0 min [unit 2/21 mixtral-8x7b dcal]
 2026-11-03T22:07:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-03T22:07:49Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3 on olmoe-1b-7b mixtral-8x7b phi-3.5-moe qwen1.5-moe-a2.7b jetmoe-8b deepseek-v2-lite granite-3.0-3b-a800m; refused on an MMA path mismatch [unit 3/21 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m] (estimate 6 min, cap 25 min, 187 min left)
+2026-11-03T22:08:05Z tilecensus: RESULT: VALIDITY census_path PASS 48 configs, 0 path mismatches, 4 errors
+2026-11-03T22:08:05Z tilecensus: exit 3 (/home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-tile-census-mixtral-8x7b-dec/tile-census.json)
+2026-11-03T22:08:05Z tilecensus END: exit 3 after 0 min [unit 3/21 - dec tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=olmoe-1b-7b,mixtral-8x7b,phi-3.5-moe,qwen1.5-moe-a2.7b,jetmoe-8b,deepseek-v2-lite,granite-3.0-3b-a800m]
+2026-11-03T22:08:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
