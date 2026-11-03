@@ -1,0 +1,30 @@
+experiment  r3_decode / nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-label-620a8643
+model       mixtral-8x7b E=8 k=2 bf16; W_e 336.0 MiB
+page        docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json (sha256 647dd3866983917e...), mixtral-8x7b-label, 6 cells, 6 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 2 x W_e 336.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    3.6 min
+session     gh200-20261103T220721Z-decj-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-mixtral-8x7b-dp0/private_weight_reference/nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-label-620a8643
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=4   S01-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   40a4c6be6a75
+  T=4   S25-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   482f365f32e1
+  T=4   S46-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   1346a7501825
+  T=4   S15-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   15092e377b2a
+  T=4   S37-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   a2c94f6d2847
+  T=4   S26-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=2688/384   2c467b541233
+pad rows    0 per expert slot (r3_decode3.py, rental 2's address control: stride(0) moves, the bytes read do not)
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS

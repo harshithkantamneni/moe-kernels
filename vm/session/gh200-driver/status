@@ -113,3 +113,9 @@
 2026-11-03T23:26:51Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-mixtral-8x7b-dw-r3-counters/lock1710/r3d.json)
 2026-11-03T23:26:51Z decodebytes END: exit 0 after 1 min [unit 19/21 mixtral-8x7b dw histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-wide.json kernels=wide]
 2026-11-03T23:26:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-03T23:26:56Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode3.py, G=1): docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3, pad rows 0 [unit 20/21 mixtral-8x7b dp0 histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json inst=GRR pad-rows=0 slip-policy=cell g1-rule=r7-median-run3] (estimate 4 min, cap 15 min, 108 min left)
+2026-11-03T23:26:58Z r3decode: docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json inst GRR rot auto pad rows 0 (scripts/r3_decode3.py), session tag gh200-20261103T220721Z-decj
+2026-11-03T23:28:49Z r3decode: 2026-11-03T23:28:48Z G=1 held at lock 1710: R3 exit 0 DONE, cells=54 worst=1710.0 MHz, 110 s, dir nvidia_gh200_480gb-decode-mixtral-8x7b-GRR-mixtral-8x7b-label-620a8643
+2026-11-03T23:28:49Z r3decode: locked_r3 exit 0
+2026-11-03T23:28:49Z r3decode END: exit 0 after 2 min [unit 20/21 mixtral-8x7b dp0 histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-label.json inst=GRR pad-rows=0 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-03T23:28:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
