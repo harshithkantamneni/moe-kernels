@@ -1,0 +1,124 @@
+{
+ "schema": "moe-kernels/decode-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-tiles",
+ "shuffle_seed": 20261014,
+ "decl_copies": null,
+ "label": "SYNTHETIC (scripts/scoring/decode/d3common.py, 2026-10-29-decode-addendum3-gh200); M1: counter pages at two A on each of the T 64, T 96 and T 128 tiles (main-page kept cells)",
+ "cells": [
+  {
+   "label": "L-T64-A4",
+   "T": 64,
+   "counts": [
+    0,
+    32,
+    32,
+    32,
+    0,
+    32,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER",
+   "source": "mixtral-8x7b-main"
+  },
+  {
+   "label": "L-T64-A8",
+   "T": 64,
+   "counts": [
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-main"
+  },
+  {
+   "label": "L-T96-A6",
+   "T": 96,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    0,
+    32,
+    0,
+    32
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER",
+   "source": "mixtral-8x7b-main"
+  },
+  {
+   "label": "L-T96-A8",
+   "T": 96,
+   "counts": [
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-main"
+  },
+  {
+   "label": "L-T128-A4",
+   "T": 128,
+   "counts": [
+    0,
+    64,
+    64,
+    64,
+    0,
+    64,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LADDER",
+   "source": "mixtral-8x7b-main"
+  },
+  {
+   "label": "L-T128-A8",
+   "T": 128,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-main"
+  }
+ ]
+}

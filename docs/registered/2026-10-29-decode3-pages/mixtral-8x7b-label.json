@@ -1,0 +1,142 @@
+{
+ "schema": "moe-kernels/decode-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-label",
+ "shuffle_seed": 20261014,
+ "decl_copies": null,
+ "label": "SYNTHETIC (scripts/scoring/decode/d3common.py, 2026-10-29-decode-addendum3-gh200); M3: Mixtral label sets at T 4, run at pad rows 0 and 52 (rental 2's address control; 52 moves expert 5's w1 slab past a 2 MiB page)",
+ "cells": [
+  {
+   "label": "S01-T4",
+   "T": 4,
+   "counts": [
+    4,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    0,
+    1
+   ]
+  },
+  {
+   "label": "S25-T4",
+   "T": 4,
+   "counts": [
+    0,
+    0,
+    4,
+    0,
+    0,
+    4,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    2,
+    5
+   ]
+  },
+  {
+   "label": "S46-T4",
+   "T": 4,
+   "counts": [
+    0,
+    0,
+    0,
+    0,
+    4,
+    0,
+    4,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    4,
+    6
+   ]
+  },
+  {
+   "label": "S15-T4",
+   "T": 4,
+   "counts": [
+    0,
+    4,
+    0,
+    0,
+    0,
+    4,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    1,
+    5
+   ]
+  },
+  {
+   "label": "S37-T4",
+   "T": 4,
+   "counts": [
+    0,
+    0,
+    0,
+    4,
+    0,
+    0,
+    0,
+    4
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    3,
+    7
+   ]
+  },
+  {
+   "label": "S26-T4",
+   "T": 4,
+   "counts": [
+    0,
+    0,
+    4,
+    0,
+    0,
+    0,
+    4,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "LABEL-SET",
+   "experts": [
+    2,
+    6
+   ]
+  }
+ ]
+}

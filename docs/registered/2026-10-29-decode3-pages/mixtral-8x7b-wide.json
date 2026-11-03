@@ -1,0 +1,124 @@
+{
+ "schema": "moe-kernels/decode-page/1",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-wide",
+ "shuffle_seed": 20261014,
+ "decl_copies": null,
+ "label": "SYNTHETIC (scripts/scoring/decode/d3common.py, 2026-10-29-decode-addendum3-gh200); M2: the wider ncu run (align, silu_and_mul, moe_sum and the GEMMs) on ctl-page cells",
+ "cells": [
+  {
+   "label": "L-T4-A8",
+   "T": 4,
+   "counts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  },
+  {
+   "label": "L-T16-A8",
+   "T": 16,
+   "counts": [
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  },
+  {
+   "label": "L-T32-A8",
+   "T": 32,
+   "counts": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  },
+  {
+   "label": "L-T64-A8",
+   "T": 64,
+   "counts": [
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  },
+  {
+   "label": "L-T96-A8",
+   "T": 96,
+   "counts": [
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  },
+  {
+   "label": "L-T128-A8",
+   "T": 128,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "BALANCED",
+   "source": "mixtral-8x7b-ctl"
+  }
+ ]
+}
