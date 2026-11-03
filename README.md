@@ -1,7 +1,12 @@
 # moe-kernels
 
-MoE grouped-GEMM kernel work on an NVIDIA H200 NVL: a stage-span benchmark
-harness, real captured routing traces, roofline analysis, and kernels.
+> **Current work is on branch [`latest-gh200`](https://github.com/harshithkantamneni/moe-kernels/tree/latest-gh200).**
+> This `main` branch stops at Aug 28, 2026. The project became a measurement study on H200 and
+> GH200, and no kernels were written. Results are in
+> [`docs/FINDINGS.md`](https://github.com/harshithkantamneni/moe-kernels/blob/latest-gh200/docs/FINDINGS.md).
+
+MoE grouped-GEMM measurement work on an NVIDIA H200 NVL: a stage-span benchmark
+harness and roofline analysis.
 
 ## What this is for
 
@@ -11,7 +16,7 @@ implementations handle the ragged shape by padding each expert's group up to a
 whole tile of a single global `BLOCK_M`. That is where the open problems are.
 
 This repository exists to find a specific weakness by measurement, then attack
-it. The measurement half is built. The kernels are being written.
+it. The measurements later ended the premise, so no kernels were written.
 
 **What this is aimed at.** Every MoE grouped-GEMM implementation I looked at
 selects its tile height from the *mean* tokens per expert: Inductor gates on
@@ -159,5 +164,6 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete and tested on CPU. Traces not yet captured. Kernels not yet
-written. No performance numbers have been produced, and none are claimed.
+This describes `main` as of Aug 28, 2026: harness complete and tested on CPU, no
+performance numbers here. For results, see the
+[`latest-gh200`](https://github.com/harshithkantamneni/moe-kernels/tree/latest-gh200) branch.
