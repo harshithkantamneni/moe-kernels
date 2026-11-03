@@ -58,3 +58,7 @@
 2026-11-03T23:20:31Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-tiles.json; every GEMM launch grid held to vLLM's own [unit 14/21 olmoe-1b-7b dt histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-tiles.json] (estimate 3 min, cap 15 min, 114 min left)
 2026-11-03T23:21:01Z decodebytes END: exit 0 after 1 min [unit 14/21 olmoe-1b-7b dt histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-tiles.json]
 2026-11-03T23:21:02Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed aaa77b3 to run-gh200-tile2-20261103t2203: decodebytes (unit 14/21 olmoe-1b-7b dt histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-tiles.json): exit 0 (1 min)
+2026-11-03T23:21:05Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json; every GEMM launch grid held to vLLM's own [unit 15/21 mixtral-8x7b dt histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json] (estimate 3 min, cap 15 min, 114 min left)
+2026-11-03T23:21:45Z decodebytes END: exit 0 after 1 min [unit 15/21 mixtral-8x7b dt histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json]
+2026-11-03T23:21:45Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
