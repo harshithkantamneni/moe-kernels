@@ -15,3 +15,4 @@ decodebytes exit 0 after 1 min [unit 14/21 olmoe-1b-7b dt histogram=docs/registe
 decodebytes exit 0 after 1 min [unit 15/21 mixtral-8x7b dt histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json]
 r3decode   exit 0 after 2 min [unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 decodebytes exit 0 after 1 min [unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json]
+decodebytes exit 0 after 1 min [unit 18/21 olmoe-1b-7b dw histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-wide.json kernels=wide]

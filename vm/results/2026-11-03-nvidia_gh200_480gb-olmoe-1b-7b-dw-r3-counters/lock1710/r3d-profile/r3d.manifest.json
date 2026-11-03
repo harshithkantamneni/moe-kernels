@@ -1,0 +1,73 @@
+{
+ "family": "r3-decode",
+ "order": [
+  [
+   "native",
+   4,
+   "L-T4-A8"
+  ],
+  [
+   "native",
+   16,
+   "L-T16-A64"
+  ],
+  [
+   "native",
+   32,
+   "L-T32-A64"
+  ],
+  [
+   "native",
+   64,
+   "L-T64-A64"
+  ],
+  [
+   "native",
+   96,
+   "L-T96-A64"
+  ],
+  [
+   "native",
+   128,
+   "L-T128-A64"
+  ]
+ ],
+ "grids": {
+  "native/4/L-T4-A8": {
+   "w1": 1024,
+   "w2": 1024
+  },
+  "native/16/L-T16-A64": {
+   "w1": 2176,
+   "w2": 2176
+  },
+  "native/32/L-T32-A64": {
+   "w1": 2432,
+   "w2": 2432
+  },
+  "native/64/L-T64-A64": {
+   "w1": 2496,
+   "w2": 2496
+  },
+  "native/96/L-T96-A64": {
+   "w1": 1376,
+   "w2": 1376
+  },
+  "native/128/L-T128-A64": {
+   "w1": 1264,
+   "w2": 1264
+  }
+ },
+ "refused": [],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "launch_count": null,
+ "versions": {
+  "python": "3.12.16",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ },
+ "page_sha256": "97f8ef9ef92061591ebdc0401ed774db93e475b87d2965de747e940407d22b9a"
+}

@@ -1,0 +1,39 @@
+{
+ "family": "r3-decode",
+ "model": "olmoe-1b-7b",
+ "dtype": "bf16",
+ "page": "docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-wide.json",
+ "page_sha256": "97f8ef9ef92061591ebdc0401ed774db93e475b87d2965de747e940407d22b9a",
+ "cells": [
+  [
+   "L-T4-A8",
+   "native"
+  ],
+  [
+   "L-T16-A64",
+   "native"
+  ],
+  [
+   "L-T32-A64",
+   "native"
+  ],
+  [
+   "L-T64-A64",
+   "native"
+  ],
+  [
+   "L-T96-A64",
+   "native"
+  ],
+  [
+   "L-T128-A64",
+   "native"
+  ]
+ ],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "seed": 0,
+ "decl_copies": null,
+ "manifest": "/home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dw-r3-counters/lock1710/r3d-profile/r3d.manifest.json"
+}

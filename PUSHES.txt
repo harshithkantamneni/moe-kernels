@@ -17,3 +17,4 @@
 2026-11-03T23:21:48Z decodebytes (unit 15/21 mixtral-8x7b dt histogram=docs/registered/2026-10-29-decode3-pages/mixtral-8x7b-tiles.json): exit 0 (1 min)
 2026-11-03T23:24:05Z r3decode (unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
 2026-11-03T23:24:44Z decodebytes (unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json): exit 0 (1 min)
+2026-11-03T23:25:38Z decodebytes (unit 18/21 olmoe-1b-7b dw histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-wide.json kernels=wide): exit 0 (1 min)
