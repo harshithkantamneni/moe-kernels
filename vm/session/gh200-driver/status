@@ -98,3 +98,8 @@
 2026-11-03T23:24:02Z r3decode: locked_r3 exit 0
 2026-11-03T23:24:02Z r3decode END: exit 0 after 2 min [unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 2026-11-03T23:24:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-03T23:24:07Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json; every GEMM launch grid held to vLLM's own [unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json] (estimate 3 min, cap 15 min, 111 min left)
+2026-11-03T23:24:40Z decodebytes: RESULT: VALIDITY grid PASS 8 cells, 80 launches attributed; /home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dgn-r3-counters/lock1710/r3d.json
+2026-11-03T23:24:41Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-03-nvidia_gh200_480gb-olmoe-1b-7b-dgn-r3-counters/lock1710/r3d.json)
+2026-11-03T23:24:41Z decodebytes END: exit 0 after 1 min [unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json]
+2026-11-03T23:24:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

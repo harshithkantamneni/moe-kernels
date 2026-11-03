@@ -66,3 +66,7 @@
 2026-11-03T23:21:49Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 5 min, cap 15 min, 113 min left)
 2026-11-03T23:24:02Z r3decode END: exit 0 after 2 min [unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 2026-11-03T23:24:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1c4884f to run-gh200-tile2-20261103t2203: r3decode (unit 16/21 olmoe-1b-7b dg histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (2 min)
+2026-11-03T23:24:07Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode.py, family r3-decode): docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json; every GEMM launch grid held to vLLM's own [unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json] (estimate 3 min, cap 15 min, 111 min left)
+2026-11-03T23:24:41Z decodebytes END: exit 0 after 1 min [unit 17/21 olmoe-1b-7b dgn histogram=docs/registered/2026-10-29-decode3-pages/olmoe-1b-7b-gaps.json]
+2026-11-03T23:24:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
