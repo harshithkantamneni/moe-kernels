@@ -1,9 +1,9 @@
 # moe-kernels
 
-> **Current work is on branch [`latest-gh200`](https://github.com/harshithkantamneni/moe-kernels/tree/latest-gh200).**
+> **Current work is on branch [`gh200-analysis-2026-09-27`](https://github.com/harshithkantamneni/moe-kernels/tree/gh200-analysis-2026-09-27).**
 > This `main` branch stops at Aug 28, 2026. The project became a measurement study on H200 and
 > GH200, and no kernels were written. Results are in
-> [`docs/FINDINGS.md`](https://github.com/harshithkantamneni/moe-kernels/blob/latest-gh200/docs/FINDINGS.md).
+> [`docs/FINDINGS.md`](https://github.com/harshithkantamneni/moe-kernels/blob/gh200-analysis-2026-09-27/docs/FINDINGS.md).
 
 MoE grouped-GEMM measurement work on an NVIDIA H200 NVL: a stage-span benchmark
 harness and roofline analysis.
@@ -166,4 +166,4 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 This describes `main` as of Aug 28, 2026: harness complete and tested on CPU, no
 performance numbers here. For results, see the
-[`latest-gh200`](https://github.com/harshithkantamneni/moe-kernels/tree/latest-gh200) branch.
+[`gh200-analysis-2026-09-27`](https://github.com/harshithkantamneni/moe-kernels/tree/gh200-analysis-2026-09-27) branch.
