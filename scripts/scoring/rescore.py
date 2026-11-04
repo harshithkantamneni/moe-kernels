@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -101,9 +102,10 @@ ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "decodeBlind": lambda tree, out: [tree, "scripts/scoring/decode/decodeB.finalised.json", out]}
 #: the committed name of a scratch score file, where the stage committed it under another name
 COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"}}
-#: the run-tree root a committed score file records, scored on the fetched tree before publication; it reads as
-#: the published session (the fetched tree's vm/ is the session's top level)
-FETCHED = {"decodeCAL2": "/Users/harshithkantamneni/moe-kernels-exfil/runs/gh200-tile2-20261103T2203Z/tree/vm"}
+#: the run-tree root a committed score file records, scored on the fetched tree before publication, matched on its
+#: run-relative tail (the part before it is whichever machine fetched it); it reads as the published session (the
+#: fetched tree's vm/ is the session's top level)
+FETCHED = {"decodeCAL2": "/runs/gh200-tile2-20261103T2203Z/tree/vm"}
 
 
 def tree_of(stage: str) -> str:
@@ -146,7 +148,7 @@ def compare(stage: str, out: Path) -> list[tuple[str, str]]:
         got = p.read_text().replace(str(out), STAGES[stage][1])
         want = c.read_text()
         if stage in FETCHED:
-            want = want.replace(FETCHED[stage], f"{PUB}/{STAGES[stage][0]}")
+            want = re.sub(r'(?<=")[^"]*' + re.escape(FETCHED[stage]), f"{PUB}/{STAGES[stage][0]}", want)
         rows.append((p.name, "EQUAL" if got == want else "DIFFERS"))
     return rows
 
