@@ -1,5 +1,5 @@
 761fffef37913d630cca278760ecc393e816f239e7cb90376269c29ab9d2cc0c  vm/driver580.log
-f349959736868d11448ccc45e0a3856dfe872ea6ca62696900dd76bc1bdd847d  vm/gh200-driver.out
+eae1e2c152c80f7895f573fb3e3ff4217fe5d46d4ace0ac26881dd283daa0fcd  vm/gh200-driver.out
 c03eca8c01aa2ef26b70b7f2f9aac727d6bcfc48cfe6c91ba81a373ae1d10887  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.csv
 0fc8124eb31901dc6425d5e37a38fa4b77b6286eb5f9b3ebf2d10d8c6a82ea76  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json
 c1a9850bf820fabd80ed7a1dd214dd9ed825e51914cda468847024176a5e9241  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.ncu-rep
@@ -76,7 +76,7 @@ e7de079db86f87ca2c404ba3628c62a536927f3397b8fcf7e62ee89972189049  vm/session/cou
 3fbbd4c6d76130399b0c79cdf41758669224a91e05b7b216953f0c9728750865  vm/session/gh200-driver/instr-variants.json
 d8f0a3d833621a416064a1c276e64f237dc2ccc220dff8afc706da93bc0b516b  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-0a795f6e0061db8356de2203c2427f055ab33941725ab930dab5c9681d35530c  vm/session/gh200-driver/status
+83ecf00b0495022bec79fcb8688c3b608d82dc978847c80552c27fe532be10fc  vm/session/gh200-driver/status
 cbfc3c9a14ef58ed068ebbc33164695df2f229a5cec07b9fbdf17f7c34704395  vm/session/gh200-driver/summary.new
 cbfc3c9a14ef58ed068ebbc33164695df2f229a5cec07b9fbdf17f7c34704395  vm/session/gh200-driver/summary.txt
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt

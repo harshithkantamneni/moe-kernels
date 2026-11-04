@@ -38,3 +38,5 @@
 2026-11-04T21:41:20Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json; every GEMM launch grid held to vLLM's own [unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide] (estimate 5 min, cap 15 min, 74 min left)
 2026-11-04T21:42:23Z decodebytes END: exit 0 after 1 min [unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide]
 2026-11-04T21:42:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3214935 to run-gh200-decodeds-20261104t2124: decodebytes (unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide): exit 0 (1 min)
+2026-11-04T21:42:25Z driver end: exit 0

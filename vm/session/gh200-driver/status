@@ -54,3 +54,4 @@
 2026-11-04T21:42:23Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-olmoe-1b-7b-ds-r3-counters/lock1710/r3d.json)
 2026-11-04T21:42:23Z decodebytes END: exit 0 after 1 min [unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide]
 2026-11-04T21:42:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-04T21:42:25Z driver end: exit 0

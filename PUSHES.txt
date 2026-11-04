@@ -9,3 +9,4 @@
 2026-11-04T21:39:44Z decodebytes (unit 7/9 granite-3.0-3b-a800m ds histogram=docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json kernels=wide): exit 0 (1 min)
 2026-11-04T21:41:18Z decodebytes (unit 8/9 qwen1.5-moe-a2.7b ds histogram=docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json kernels=wide): exit 0 (2 min)
 2026-11-04T21:42:24Z decodebytes (unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide): exit 0 (1 min)
+2026-11-04T21:42:26Z the session ended: driver exit 0
