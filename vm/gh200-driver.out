@@ -1,2 +1,8 @@
 2026-11-04T21:25:57Z setup_vm.sh start: commit 5410ad00016f4c7343a9b9107d63b231811769f8 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-04T23:04:15Z
 2026-11-04T21:27:55Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 8f339f7 to run-gh200-decodeds-20261104t2124: setup_vm.sh: READY
+2026-11-04T21:27:56Z driver start: commit 5410ad00016f4c7343a9b9107d63b231811769f8, steps of the plan scripts/plans/rentalDS-settle-d4-2026-11.plan, deadline 2026-11-04T23:04:15Z (88 min of work left)
+2026-11-04T21:27:56Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalDS-settle-d4-2026-11.plan (sha256 fec3c67f4910ddb4219ea3d60ef9b3c0073938a160872cd0125f5202c0a1aee2), 9 units
+2026-11-04T21:27:56Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/9 -] (estimate 3 min, cap 15 min, 88 min left)
+2026-11-04T21:27:56Z prelude END: exit 0 after 0 min [unit 1/9 -]
+2026-11-04T21:27:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
