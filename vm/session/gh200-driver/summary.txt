@@ -4,3 +4,4 @@ r3decode   exit 0 after 14 min [unit 3/9 phi-3.5-moe dm histogram=docs/registere
 r3decode   exit 0 after 15 min [unit 4/9 qwen1.5-moe-a2.7b dm histogram=docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 r3decode   exit 0 after 12 min [unit 5/9 jetmoe-8b dm histogram=docs/registered/2026-10-14-decode-pages/jetmoe-8b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 r3decode   exit 0 after 13 min [unit 6/9 deepseek-v2-lite dm histogram=docs/registered/2026-10-14-decode-pages/deepseek-v2-lite-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+r3decode   exit 0 after 12 min [unit 7/9 granite-3.0-3b-a800m dm histogram=docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
