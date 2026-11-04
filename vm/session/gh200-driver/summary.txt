@@ -4,3 +4,4 @@ tilecensus exit 0 after 0 min [unit 3/9 - ds tiles=16x64x128w4s4,32x64x128w4s3,3
 decodebytes exit 0 after 2 min [unit 4/9 jetmoe-8b ds histogram=docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json kernels=wide]
 decodebytes exit 0 after 4 min [unit 5/9 phi-3.5-moe ds histogram=docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json kernels=wide]
 decodebytes exit 0 after 4 min [unit 6/9 mixtral-8x7b ds histogram=docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json kernels=wide]
+decodebytes exit 0 after 1 min [unit 7/9 granite-3.0-3b-a800m ds histogram=docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json kernels=wide]
