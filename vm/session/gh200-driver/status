@@ -61,3 +61,4 @@
 2026-11-04T02:24:27Z r3decode: locked_r3 exit 0
 2026-11-04T02:24:27Z r3decode END: exit 0 after 7 min [unit 9/9 granite-3.0-3b-a800m dc histogram=docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
 2026-11-04T02:24:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-04T02:24:31Z driver end: exit 0
