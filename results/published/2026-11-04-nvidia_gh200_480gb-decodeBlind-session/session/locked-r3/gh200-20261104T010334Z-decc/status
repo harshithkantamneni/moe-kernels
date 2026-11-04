@@ -1,0 +1,12 @@
+2026-11-04T01:33:07Z locked_r3 start: tag gh200-20261104T010334Z-decc, locks [1710], G [1], R3 args --model jetmoe-8b --histogram docs/registered/2026-10-14-decode-pages/jetmoe-8b-main.json --inst GRR --rot auto --repeats 9 --duty 0.25 --seed 0, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-jetmoe-8b-dm/private_weight_reference
+2026-11-04T01:33:07Z card: NVIDIA GH200 480GB, GPU-f906335e-195e-fdef-9c45-799849d01f23, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-11-04T01:33:07Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-11-04T01:33:07Z locked at 1710 MHz: GPU clocks set to "(gpuClkMin 1710, gpuClkMax 1710)" for GPU 00000000:DD:00.0 All done.
+2026-11-04T01:33:07Z read back after the lock (an idle reading, not the lock's evidence): 1980 MHz, 1980 MHz, 0x0000000000000000, 131.81 W, 700.00 W
+2026-11-04T01:33:07Z G=1 start at lock 1710: pid 14790, tag gh200-20261104T010334Z-decc-lock1710, log r3-g1-lock1710.log
+2026-11-04T01:33:17Z G=1 at lock 1710: R3 named its run directory nvidia_gh200_480gb-decode-jetmoe-8b-GRR-jetmoe-8b-main-4b32d324
+2026-11-04T01:45:18Z G=1 held at lock 1710: R3 exit 0 DONE, cells=423 worst=1710.0 MHz, 731 s, dir nvidia_gh200_480gb-decode-jetmoe-8b-GRR-jetmoe-8b-main-4b32d324
+2026-11-04T01:45:18Z all G held at lock 1710 MHz
+2026-11-04T01:45:19Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1710 MHz lock is released
+2026-11-04T01:45:19Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 120.60 W, 700.00 W
+2026-11-04T01:45:19Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

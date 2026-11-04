@@ -235,13 +235,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7118 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7120 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-two further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-four further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-five Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-seven Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -278,12 +278,17 @@ regcheck and perturbation gate, and per-CTA start and end stamps on Mixtral-8x7B
 Mixtral-8x7B-tp2's 128x128 G 1 timed and byte pages as a fifth held-out CAL model, 8 units on one GH200 at 700 W,
 and the decode stage's CAL rental of 2026-10-29: vLLM's own decode call at T 1 to 128 on OLMoE-1B-7B and Mixtral-8x7B,
 its graph-replayed main pages, control, E240, DECL and replicate pages and two decode counter pages, 13 units on one
-GH200 at 700 W and the 1710 MHz lock),
+GH200 at 700 W and the 1710 MHz lock, and the decode CAL2 rental of 2026-11-03: the same 13 units under the third
+addendum, then the settling units M1 to M4 (tile and wide counter pages, OLMoE's gap pages, Mixtral's label page at pad
+0 and 52), 21 units on one GH200 at 700 W, and the decode blind rental of 2026-11-04: GRR main pages on Phi-3.5-MoE,
+Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite and Granite-3.0-3B-A800M and GR1 control pages on Qwen1.5 and Granite,
+9 units on one GH200 at 700 W),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 25 GH200 sessions ran on eighteen distinct boards (counted by
+sessions rather than arms. The 27 GH200 sessions ran on nineteen distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
-decode CAL rental ran on it again). Of the GH200 call-time results, three
+decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
+it again). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -330,7 +335,17 @@ mean +1.67%. By path, the block-scan cells read 1.02% rms, the small-batch cells
 them 1.95% slow on average (Mixtral +4.11%, OLMoE -0.69%), and the naive cells 9.14%. The label test is NOT
 EQUIVALENT: on Mixtral the same expert counts run 1.6 to 2.0 us faster on experts 0 and 1 than on experts 2 and 5, so
 time is not shown to be a function of counts alone. The replicate's page noise is 0.19%. The owner's next step is an
-offline diagnosis (docs/FINDINGS.md, Decode CAL rental). Every
+offline diagnosis (docs/FINDINGS.md, Decode CAL rental). From that diagnosis the third decode addendum registered
+model v4d' (v4d plus a follower rule for the naive path and the counter-measured w1 rate, no constant added) and made
+the label test descriptive, before any CAL2 page. Decode is now calibrated, not blind-certified. The CAL2 rental
+(2026-11-03) reads GO: on the 91 kept cells v4d' reads 2.29% rms in sample, worst -6.35%, mean +0.17% (v4d on the same
+pages 4.87%), with 0.16% page noise; the label test is again NOT EQUIVALENT on Mixtral (about -2.3 us), now
+descriptive. The blind predictions were finalised mechanically before any blind page. The blind rental (2026-11-04)
+FAILS: over five models no decode page had timed, v4d' reads 11.4% rms on 220 cells, worst +39.2%, mean +6.0% (it
+prices the calls slow), and no model is certified: deepseek-v2-lite 2.35% rms (0.91% at T <= 16, descriptive),
+Qwen1.5 5.3%, Phi-3.5 9.5%, Granite 13.4%, JetMoE 19.5%. The miss concentrates at T <= 16 on Qwen1.5, Phi-3.5 and
+Granite; deepseek-v2-lite misses at T >= 32 and JetMoE at every T. Every rival is excluded. Why the miss grows on these calls is under diagnosis (docs/FINDINGS.md, Decode
+CAL2 and blind rentals). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

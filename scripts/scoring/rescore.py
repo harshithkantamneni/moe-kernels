@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4 or decodeCAL. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2 or decodeBlind. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -35,6 +35,18 @@ decodeCAL is the decode stage's CAL rental: its registered scorer under the seco
 inside) reads the published session's results/ (and its session/power-set.txt, for the 700 W check), takes
 --tile-scores scripts/scoring/tileA2 after the tree and the output directory, and writes cal.score.json and
 cal.score.txt, committed in scripts/scoring/decode/ (the directory finalise_decode_d2.py reads).
+
+decodeCAL2 is the decode stage's CAL2 rental: its registered scorer under the third addendum
+(scripts/scoring/decode/score_cal_d3.py, 2026-10-29-decode-addendum3-gh200, which runs the frozen d2 wrapper and
+score_cal.py inside) takes the same arguments as decodeCAL's and writes cal.score.json and cal.score.txt. Those were
+scored on the fetched run tree before the blind finalisation and committed as scripts/scoring/decode/cal2.score.json
+and cal2.score.txt (the finalisation's input, kept byte for byte), so the scratch files are compared under those names,
+and the one path the committed JSON records from the fetched tree (the power file's) is read as the published copy's.
+
+decodeBlind is the decode stage's blind rental: its registered scorer under the third addendum
+(scripts/scoring/decode/score_blind_d3.py, which runs the frozen d2 wrapper and score_blind.py inside) reads the
+published session's results/ (and session/power-set.txt) against scripts/scoring/decode/decodeB.finalised.json and
+writes blind.score.json and blind.score.txt, committed in scripts/scoring/decode/.
 
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
@@ -71,6 +83,10 @@ STAGES = {
              ["scripts/scoring/cal4/read_c4.py"]),
     "decodeCAL": ("2026-10-29-nvidia_gh200_480gb-decodeCAL-session", "scripts/scoring/decode",
                   ["scripts/scoring/decode/score_cal_d2.py"]),
+    "decodeCAL2": ("2026-11-03-nvidia_gh200_480gb-decodeCAL2-session", "scripts/scoring/decode",
+                   ["scripts/scoring/decode/score_cal_d3.py"]),
+    "decodeBlind": ("2026-11-04-nvidia_gh200_480gb-decodeBlind-session", "scripts/scoring/decode",
+                    ["scripts/scoring/decode/score_blind_d3.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
 TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": ""}
@@ -80,7 +96,14 @@ OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.r
 ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "cal3": lambda tree, out: ["--c3", tree, "--out-dir", out],
         "cal4": lambda tree, out: ["--c4", tree, "--out-dir", out],
-        "decodeCAL": lambda tree, out: [tree, out, "--tile-scores", "scripts/scoring/tileA2"]}
+        "decodeCAL": lambda tree, out: [tree, out, "--tile-scores", "scripts/scoring/tileA2"],
+        "decodeCAL2": lambda tree, out: [tree, out, "--tile-scores", "scripts/scoring/tileA2"],
+        "decodeBlind": lambda tree, out: [tree, "scripts/scoring/decode/decodeB.finalised.json", out]}
+#: the committed name of a scratch score file, where the stage committed it under another name
+COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"}}
+#: the run-tree root a committed score file records, scored on the fetched tree before publication; it reads as
+#: the published session (the fetched tree's vm/ is the session's top level)
+FETCHED = {"decodeCAL2": "/Users/harshithkantamneni/moe-kernels-exfil/runs/gh200-tile2-20261103T2203Z/tree/vm"}
 
 
 def tree_of(stage: str) -> str:
@@ -116,12 +139,15 @@ def compare(stage: str, out: Path) -> list[tuple[str, str]]:
     for p in sorted(out.glob(OUTPUTS.get(stage, "*.score.*"))):
         if p.suffix not in (".json", ".txt"):
             continue
-        c = committed / p.name
+        c = committed / COMMITTED_AS.get(stage, {}).get(p.name, p.name)
         if not c.exists():
             rows.append((p.name, "MISSING"))
             continue
         got = p.read_text().replace(str(out), STAGES[stage][1])
-        rows.append((p.name, "EQUAL" if got == c.read_text() else "DIFFERS"))
+        want = c.read_text()
+        if stage in FETCHED:
+            want = want.replace(FETCHED[stage], f"{PUB}/{STAGES[stage][0]}")
+        rows.append((p.name, "EQUAL" if got == want else "DIFFERS"))
     return rows
 
 

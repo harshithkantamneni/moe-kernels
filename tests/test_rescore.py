@@ -7,7 +7,10 @@ cal3.read files (where the run's commit is in this clone's history: the reader c
 calibration rental C4's registered reader its own to the committed cal4.read files (where round 4's frozen chain is on
 this machine: the reader refuses without it), and the decode stage's CAL scorer under the second addendum its published
 session to the committed scripts/scoring/decode/cal.score files (it reads only the published tree and A2's committed
-score directory, so it needs nothing off the repo)."""
+score directory, so it needs nothing off the repo), and the decode CAL2 scorer under the third addendum its published
+session to the committed cal2.score files (scored on the fetched tree before the blind finalisation: equal but for the
+power file's path), and the decode blind scorer under the third addendum its published session, against the committed
+decodeB.finalised.json, to the committed blind.score files."""
 from __future__ import annotations
 
 import importlib.util
@@ -98,6 +101,35 @@ def test_the_published_decode_cal_session_rescores_to_the_committed_files(tmp_pa
     assert rows == {"cal.score.json": "EQUAL", "cal.score.txt": "EQUAL"}, rows
     txt = (REPO / "scripts/scoring/decode/cal.score.txt").read_text().splitlines()
     assert "power: READ (700.0 W)" in txt and "STOP: STOP" in txt
+
+
+def test_the_published_decode_cal2_session_rescores_to_the_committed_files(tmp_path):
+    session = "results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session"
+    assert RS.tree_of("decodeCAL2") == f"{session}/results"
+    ran = RS.rescore("decodeCAL2", tmp_path)
+    assert ran == [("scripts/scoring/decode/score_cal_d3.py", 0)], ran
+    rows = dict(RS.compare("decodeCAL2", tmp_path))
+    assert rows == {"cal.score.json": "EQUAL", "cal.score.txt": "EQUAL"}, rows
+    # the .txt is byte-identical; the JSON differs from the committed file only in the power file's path
+    assert (tmp_path / "cal.score.txt").read_bytes() == (REPO / "scripts/scoring/decode/cal2.score.txt").read_bytes()
+    got = (tmp_path / "cal.score.json").read_text().splitlines()
+    want = (REPO / "scripts/scoring/decode/cal2.score.json").read_text().splitlines()
+    diff = [(g, w) for g, w in zip(got, want) if g != w]
+    assert len(got) == len(want) and len(diff) == 1, diff
+    assert diff[0][0].strip() == f'"file": "{session}/session/power-set.txt",', diff
+    txt = (REPO / "scripts/scoring/decode/cal2.score.txt").read_text().splitlines()
+    assert "power: READ (700.0 W)" in txt and "STOP (addendum 3, G3-D label DESCRIPTIVE): GO" in txt
+
+
+def test_the_published_decode_blind_session_rescores_to_the_committed_files(tmp_path):
+    assert RS.tree_of("decodeBlind") == "results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session/results"
+    ran = RS.rescore("decodeBlind", tmp_path)
+    assert ran == [("scripts/scoring/decode/score_blind_d3.py", 0)], ran
+    rows = dict(RS.compare("decodeBlind", tmp_path))
+    assert rows == {"blind.score.json": "EQUAL", "blind.score.txt": "EQUAL"}, rows
+    txt = (REPO / "scripts/scoring/decode/blind.score.txt").read_text().splitlines()
+    assert "power: READ (700.0 W); 27 descriptive cells out of E1-DEC" in txt
+    assert sum(" -> NOT CERTIFIED" in t for t in txt) == 5 and not any(" -> CERTIFIED" in t for t in txt)
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

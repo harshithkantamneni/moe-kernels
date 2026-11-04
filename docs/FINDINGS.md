@@ -3068,6 +3068,153 @@ decode MoE call on OLMoE-1B-7B and Mixtral-8x7B at T 1 to 128 is priced by v4d t
 Mixtral the call's time depends on which experts are active at fixed counts by 1.6 to 2.0 us. Not established: a
 decode timing model, blind or in sample, on any model.
 
+## Decode CAL2 and blind rentals (2026-11-03/04): CAL2 GO under addendum 3 (v4d' 2.29% rms in sample on 91 kept cells); the blind rental FAILS (11.4% rms pooled over five unseen models), no model certified
+
+**Plainly: decode is calibrated but not blind-certified.** Model v4d' prices vLLM's decode MoE call on OLMoE-1B-7B and
+Mixtral-8x7B to the registered in-sample bars (CAL2 GO), and fails the registered blind test on all five unseen
+models: no decode model is certified on any model. Every number below is a registered scorer's output on the
+published sessions, with no post-page fix.
+
+Two Lambda GH200 480GB rentals in us-east-3, both on board `ae5fc5` (new to the study; two different instances).
+**CAL2**: instance 4be9ec70, launched 22:03:20Z and terminated 23:32:34Z on 2026-11-03, ran
+`scripts/plans/rentalD-cal2-d3-2026-10.plan` (sha256 3d0f688a..., as registered) at 88768aea through the D3 driver:
+21 units in about 84 minutes against 136 estimated, none dropped; 20 exit 0 and the tilecensus unit exits 3 on
+deepseek-v2-lite's known census error (readiness I7), so the driver ends with exit 3. Published at
+`results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session`; scored by `score_cal_d3.py <tree>/results <out>
+--tile-scores scripts/scoring/tileA2`, committed as `scripts/scoring/decode/cal2.score.{json,txt}`. **Blind**: instance
+984549e6, launched 00:59:36Z and terminated 02:26:22Z on 2026-11-04, ran the plan finalised from the CAL2 score
+(`scripts/plans/rentalD-blind-2026-10.plan`, sha256 989811c2...) at 82364213: 9 units in about 81 minutes against 101
+estimated, all exit 0. Published at `results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session`; scored by
+`score_blind_d3.py <tree>/results scripts/scoring/decode/decodeB.finalised.json <out>`, committed as
+`scripts/scoring/decode/blind.score.{json,txt}`.
+
+**What was registered.** Addendum 3 (`docs/registered/2026-10-29-decode-addendum3-gh200`, committed at 88768aea
+before any CAL2 page) after the offline diagnosis of the first CAL rental's STOP: model v4d' = v4d plus fix W (naive
+rows in vLLM's token-major launch order; a follower CTA is served from L2 in its leader's wave, or later while under 60
+MiB of slabs have streamed, else it re-fetches) and fix R (the w1 GEMM on 16x64x128 w4 s4 priced at the
+counter-measured rate, x 0.91849, measured on the first CAL's SEEN pages), 0 fitted constants added, no align term.
+The G3-D label test (does time depend on which experts are active at fixed counts?) is DESCRIPTIVE: it no longer stops
+CAL2 and never voids a blind model. Everything else stands as registered: the provisional CAL bars (rms 3%, worst 8%,
+|mean| 1.5%), the blind bars tightened from the CAL2 replicate (floors rms 1.5%, worst 4%, |mean| 0.75%), a blind
+model CERTIFIED only when its own bar and the pooled bar hold, addendum 2's 700 W check and second-tile exclusions,
+and the scope line, printed beside every verdict: "Certified domain: decode calls in which every active expert fits
+in one M-tile (at most BLOCK_M rows). [...] Certification covers time as a function of the expert counts only: it does
+not cover a dependence on which experts are active". The blind predictions (`decodeB.finalised.json`: 247 cells, 0
+not priced, 27 DESCRIPTIVE; T0_GR 28.02 us, s_naive -12.71 us, s_block -14.43 us, rho scaled) were finalised
+mechanically from the CAL2 score and committed with the blind plan at 82364213, before any blind page. The addendum's
+own estimates (registered, not measured) were: CAL2 GO about 0.7, the pooled blind bar holding about 0.05, at least
+one model certified about 0.15.
+
+**What CAL2 reads** (`cal2.score.txt`).
+
+| reading | outcome | numbers |
+|---|---|---|
+| power | READ | GPU Current Power Limit 700.00 W in `session/power-set.txt` |
+| units | all counted | 10 scored units; one Mixtral main cell (L-T64-A4) dropped host-bound under GD1, so 91 kept cells |
+| fit and rho | scaled selected | sub-wave rms 2.64% (40 cells) against fixed 18.29%; T0_GR 28.02 us, s_naive -12.71 us, s_block -14.43 us |
+| **E1-CAL-IN-SAMPLE (v4d')** | **HOLDS**, every bar | 91 cells: rms 2.29%, worst -6.35% (OLMoE L-T32-A27), mean +0.17% |
+| v4d as registered, same pages (DESCRIPTIVE) | FAILS | 91 cells: rms 4.87%, worst -23.2%, mean +1.73% |
+| G3-D shuffle | EQUIVALENT | margin 1.87 us |
+| G3-D label (DESCRIPTIVE) | NOT EQUIVALENT | margin 0.51 us; Mixtral -2.04, -1.73, -3.09 us at T 4, 16, 64 (mean -2.29 us); OLMoE within 0.09 us |
+| G3-D fill (not a stop clause) | NOT EQUIVALENT | margin 2.83 us, mean +3.13 us |
+| REP | sigma_page 0.159% | 47 kept pairs; the blind bars sit at their floors |
+| GD2 | PASS | median +3.94 us, band [-0.14, 7.09] us, 40 matched cells |
+| GD3 (DESCRIPTIVE) | NOT SCORED | no matched E240 cell |
+| **STOP (addendum 3)** | **GO** | the frozen rule, with the label as a stop clause, reads STOP (DESCRIPTIVE) |
+| SIGMA-D (DESCRIPTIVE) | Mixtral MIXED, OLMoE L2-SERVED | median positions 0.35 (6 of 6) and 0.70 (5 of 5) |
+| as registered, every cell (DESCRIPTIVE) | E1 FAILS, STOP | 102 cells, rms 8.65% |
+| M1 tiles (DESCRIPTIVE) | READ | fix R's ratio re-read on CAL2's own dn pages 0.920 (registered 0.9185); w1 v4d'/counter rates 0.90 to 1.01 on the T 64 to 128 tiles |
+| M2 wide (DESCRIPTIVE) | READ | align kernel slope 0.61 us (OLMoE) and 0.59 us (Mixtral) per iteration, against the diagnosis's 0.96 (not in v4d') |
+| M3 label (DESCRIPTIVE) | FOLLOWS-ADDRESS | expert-5 sets +0.58 us at pad 0, -0.40 us at pad 52: q -0.69 |
+| M4 gaps (DESCRIPTIVE) | 12 of 14 GEMM rows agree with fix W | the two that do not, G13-R3 and G15-R1 w2, read MIXED where W says SERVED and RE-FETCHED |
+
+By path (descriptive, the `path` field of the 91 rows): block-scan 5 cells rms 1.09%, small-batch 77 cells 2.42% (mean
++0.26%), naive 9 cells 1.92%; by model OLMoE 2.16% (mean -0.72%), Mixtral 2.47% (mean +1.20%). Beside the first CAL's
+reading (v4d on its own pages and board, 4.75% rms), the small-batch rms is 2.42% against 4.11% and the naive 1.92%
+against 9.14%; on CAL2's own pages v4d as registered reads 4.87%.
+
+**What the blind rental reads** (`blind.score.txt`; a positive error means v4d' prices the call slower than it ran).
+
+| reading | outcome | numbers |
+|---|---|---|
+| power | READ | 700.00 W |
+| descriptive cells | 27 | the registered second-tile cells, out of E1-DEC |
+| **E1-DEC pooled** | **FAILS** | 220 cells: rms 11.40%, worst +39.24% (JetMoE-8B L-T2-A2, 59.8 us measured, 83.3 us priced), mean +5.99% |
+| deepseek-v2-lite | FAILS, NOT CERTIFIED | 43 cells: rms 2.35%, worst +12.2% (L-T96-A25), mean +0.45% |
+| Qwen1.5-MoE-A2.7B | FAILS, NOT CERTIFIED | 52 cells: rms 5.31%, worst +15.6%, mean +3.15% |
+| Phi-3.5-MoE | FAILS, NOT CERTIFIED | 42 cells: rms 9.52%, worst +24.4%, mean +5.22% |
+| Granite-3.0-3B-A800M | FAILS, NOT CERTIFIED | 42 cells: rms 13.41%, worst +33.8%, mean +7.05% |
+| JetMoE-8B | FAILS, NOT CERTIFIED | 41 cells: rms 19.46%, worst +39.2%, mean +15.11% |
+| rivals | every one EXCLUDED | rho other, NAIVE-NODEDUP, eager, roofline, line, OLS (roofline closest: 12.35% against v4d''s 11.41% on its 189 lever cells) |
+| GD2 | PASS on both control pages | Qwen1.5 13 matched cells, none outside the band; Granite 0 matched cells |
+| G3-D shuffle | EQUIVALENT on all five | |
+| G3-D label (DESCRIPTIVE, never a void) | EQUIVALENT on four, NOT EQUIVALENT on Phi-3.5 | Phi mean +0.44 us against margin 0.40 us; the others within 0.11 us |
+| SIGMA-D (DESCRIPTIVE) | L2-SERVED on all five | median positions 0.76 to 0.94 |
+| rivals on every cell (DESCRIPTIVE) | roofline, OLS NOT EXCLUDED | the other four EXCLUDED |
+| as registered, every cell (DESCRIPTIVE) | E1 FAILS, none certified | 247 cells, rms 16.70% |
+
+**What the blind result shows, per model** (MEASURED, from the score's 220 rows; split by T descriptively, not a
+registered split).
+
+- **deepseek-v2-lite** comes closest and still fails: 2.35% rms against 1.5%, worst +12.2% against 4%, mean +0.45%
+  inside 0.75%. At T <= 16 it reads 0.91% rms (25 cells, mean -0.1%), inside every bar; the miss is at T >= 32 (3.47%
+  rms, 18 cells), largest at T 96 (mean +4.2%).
+- **Qwen1.5-MoE-A2.7B**: 5.31% rms; 6.48% at T <= 16 (mean +4.0%) against 2.10% at T >= 32.
+- **Phi-3.5-MoE**: 9.52% rms; 12.37% at T <= 16 (mean +7.5%) against 2.78% at T >= 32. Its label test is NOT
+  EQUIVALENT (+0.44 us), descriptive under addendum 3; the expert-set effect is a fraction of a percent of its calls
+  (median 230 us at T <= 16), so it does not account for the miss.
+- **Granite-3.0-3B-A800M**: 13.41% rms; 16.81% at T <= 16 (mean +13.9%, +24.1% at T 2) against 5.36% at T >= 32,
+  where the sign turns (mean -3.1%, -8.9% at T 128).
+- **JetMoE-8B**: 19.46% rms, the worst model; 22.55% at T <= 16 and still 13.99% at T >= 32 (mean +11.1%), so its
+  miss is not confined to small T.
+- In microseconds the over-pricing is a few to tens of us per call: median excess at T <= 16 of 0.3 us (deepseek),
+  2.3 (Qwen1.5), 5.2 (Granite), 8.8 (Phi) and 12.0 (JetMoE), and at T >= 32 of 4.1, 3.7, -1.6, 12.2 and 10.5 us. On
+  Phi and JetMoE the absolute excess is about the same at both ends, so the relative miss is largest where the calls
+  are shortest.
+
+**Inferences, not tested.**
+
+- **HYPOTHESIS (under diagnosis): the per-call constant does not transfer to the smaller calls.** T0_GR (28.02 us) and
+  the path offsets were fitted on OLMoE and Mixtral only. An additive over-price of a few us to about 12 us, roughly
+  constant in T on Phi and JetMoE, is the signature a call-level constant too large for these models would leave, and
+  it would weigh most on Granite's and JetMoE's short calls (median 41 and 95 us at T <= 16). Not separated from rho,
+  the stream rate at these slab sizes or the per-model kernel set; no blind page varies one of them alone, and the
+  blind pages are now SEEN for any later model.
+- **Granite's sign change** (slow at T <= 16, fast at T 128) is not one constant; a second term, not identified here,
+  is needed on that model.
+- **The second-tile cells look L2-served on every blind model** (SIGMA-D 0.76 to 0.94), closer to the served price
+  than on CAL's Mixtral (0.35). INFERENCE: the re-read slabs of these smaller experts stay in the 60 MiB L2; no counter
+  page ran in the blind session, so no byte reading confirms it.
+- **M3 reads FOLLOWS-ADDRESS**: moving expert 5's slab by 52 pad rows (2.03 MiB) reversed the expert-5 sets' sign
+  (+0.58 to -0.40 us). INFERENCE: Mixtral's expert-set effect is tied to where the slab sits, not which expert it is;
+  one board, one pad, 6 sets.
+
+**What it does not show.**
+
+- **No certified decode model.** Under the registered rule no blind model is certified, deepseek-v2-lite included
+  (its worst cell and rms miss the bars). Its 0.91% at T <= 16 is a descriptive split, not a certification.
+- **No mechanism.** Neither the per-call hypothesis nor the Granite sign change is measured; no fix is tested, and
+  nothing was refitted after either rental's pages.
+- **No byte reading on the blind models.** The blind plan carries no counter page.
+- **GD3 is not read** in CAL2, and GD2 on Granite has no matched cell (all 26 of its GR1 cells fail GD1,
+  host-bound by the probe), so the control instrument's agreement is read on Qwen1.5 alone in the blind session.
+
+**Instrument.** Both sessions held the 1710 MHz lock at G 1 on every timed page (worst cell 1710.0 MHz, R3 exit 0)
+and read 700.00 W on the GPU scope. The run branches' 1033 and 815 files match their SHA256SUMS; the 12 and 8
+`cuda_utils*.so` are left out as before, so 1021 and 807 are published. CAL2 was scored on the fetched tree before
+the finalisation; re-scored on the published copy, `cal2.score.txt` is byte-identical, the JSON differs only in the
+power file's path, and `finalise_decode_d3.py` on that score rewrites `decodeB.finalised.json` and the blind plan byte
+for byte. The blind score on the fetched tree and on the published copy agrees the same way. `register_decode.py`,
+`register_decode_d2.py` and `register_decode_d3.py --check` read `same`. `scripts/scoring/rescore.py decodeCAL2` and
+`decodeBlind` re-score the published sessions to the committed files.
+
+**What the paper can claim, after the decode CAL2 and blind rentals.** Measured, on one GH200 board at 700 W and
+1710 MHz: vLLM's decode MoE call on OLMoE-1B-7B and Mixtral-8x7B at T 1 to 128 is priced by v4d' to 2.29% rms in
+sample (91 cells, every path under 2.5%), with 0.16% page noise; on five models v4d' never saw it misses the
+registered blind bars (11.4% rms pooled, 2.35% to 19.5% per model, always pricing slow on average), and every rival
+is excluded. Not established: a blind-certified decode timing model on any model, or the reason the miss grows on the
+smaller and shorter calls.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

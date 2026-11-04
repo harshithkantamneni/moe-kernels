@@ -638,7 +638,9 @@ def T4(out: Path) -> None:
     on the session's pages; a session whose pages carry no card, the decode counter
     pages `r3d.json`, takes it from session/PREFLIGHT.json), run commit
     (session/commit.txt or the pages' git_sha), models (the pages' `design.model` /
-    `plan.model`), page count."""
+    `plan.model`), page count. A session with no counter page (the decode blind
+    rental's) takes its board from session/PREFLIGHT.json and its models from its timed
+    decode pages' `report.json` `model`; its page count stays 0."""
     import dram_counter_route as DCR
     rows = []
     for s in sorted(PUB.glob("*-nvidia_gh200_480gb*-session")):
@@ -657,10 +659,15 @@ def T4(out: Path) -> None:
             if d.get("git_sha"):
                 shas.add(str(d["git_sha"])[:7])
         pf = s / "session/PREFLIGHT.json"
-        if not boards and pages and pf.exists():
+        if not boards and pf.exists() and (pages or list(s.glob("results/*/private_weight_reference/*-decode-*/report.json"))):
             uuid = (json.loads(pf.read_text()).get("card") or {}).get("uuid")
             if uuid:
                 boards.add(DCR.board(uuid))
+        if not pages:
+            for p in s.glob("results/*/private_weight_reference/*-decode-*/report.json"):
+                m = json.loads(p.read_text()).get("model")
+                if m:
+                    models.add(m)
         ct = s / "session/commit.txt"
         commit = ct.read_text().split()[0][:7] if ct.exists() and ct.read_text().strip() \
             else ", ".join(sorted(shas))

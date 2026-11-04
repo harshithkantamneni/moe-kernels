@@ -1741,3 +1741,64 @@ the fetched tree and on the published copy, the `.txt` is byte-identical and the
 file's path; `scripts/scoring/rescore.py decodeCAL` re-scores the published session to the committed files. One test
 pin moved (`tests/test_calibration_provenance.py`). Next (owner): offline diagnosis, no rental (docs/FINDINGS.md,
 Decode CAL rental).
+
+## 2026-10-29 (amended 2026-11-03), before any CAL2 page: the decode stage's third addendum
+
+`2026-10-29-decode-addendum3-gh200` (`scripts/scoring/decode/register_decode_d3.py --write` / `--check`, committed at
+88768aea) follows the offline diagnosis of the decode CAL STOP and the owner's decisions D3-1 to D3-11; its `.txt` is
+the full record. In brief: model v4d' is v4d plus fix W (naive rows in vLLM's launch order, a wave and 60 MiB L2
+follower rule) and fix R (w1 on 16x64x128 w4 s4 at the counter-measured rate, x 0.91849, measured on SEEN pages), with
+0 fitted constants added and the align term dropped (D3-10); the G3-D label clause is DESCRIPTIVE, in the CAL2 stop
+rule and in the blind certification (D3-2, D3-6), and the scope line says so beside every verdict; the blind bars and
+the per-model certification stay as registered (D3-3); CAL2 is addendum 2's CAL plan plus the DESCRIPTIVE settling
+units M1 to M4 on the D3 driver (D3-4); new wrappers `score_cal_d3.py`, `finalise_decode_d3.py` and
+`score_blind_d3.py` run the frozen scorers unchanged (D3-5). The four earlier decode registrations stay
+byte-identical.
+
+**Scored 2026-11-03** on `results/published/2026-11-03-nvidia_gh200_480gb-decodeCAL2-session` (board ae5fc5, new; 21
+units at 88768aea in about 84 minutes on 2026-11-03, none dropped; 20 exit 0 and the tilecensus unit exit 3 on
+deepseek-v2-lite's known census error, readiness I7; written by `score_cal_d3.py <tree>/results <out> --tile-scores
+scripts/scoring/tileA2` from the repository root with PYTHONHASHSEED=0, first on the fetched tree; no post-page fix).
+The scorer writes `cal.score.{json,txt}` and the registration names no location for them; they are committed as
+`scripts/scoring/decode/cal2.score.{json,txt}` (82364213), beside the first CAL's `cal.score.*`. **Power** READ: the
+GPU scope's Current Power Limit 700.00 W in `power-set.txt`. **Descriptive cells**: the 11 registered second-tile
+cells. **Fit**: rho scaled selected (sub-wave rms 2.64% on 40 cells against fixed 18.29%; T0_GR 28.02 us, s_naive
+-12.71 us, s_block -14.43 us). **E1-CAL-IN-SAMPLE (v4d'): HOLDS** on 91 cells (one Mixtral main cell, L-T64-A4,
+dropped host-bound under GD1): rms 2.29%, worst -6.35% (OLMoE L-T32-A27, 127.5 us measured against 119.4 us), mean
++0.17%. **G3-D**: shuffle EQUIVALENT (margin 1.87 us); label NOT EQUIVALENT, DESCRIPTIVE under addendum 3 (margin
+0.51 us; mean -1.16 us, CI [-2.24, -0.08]; Mixtral -2.04, -1.73, -3.09 us at T 4, 16, 64, mean -2.29 us; OLMoE within
+0.09 us); fill NOT EQUIVALENT (margin 2.83 us, mean +3.13 us). **REP**: sigma_page 0.159% over 47 kept pairs (0.162%
+over all 52, DESCRIPTIVE); the tightened blind bars sit at their floors (rms 1.5%, worst 4%, |mean| 0.75%). **GD2** PASS
+(median +3.94 us, band [-0.14, 7.09] us, 40 matched cells). **GD3** NOT SCORED (no matched E240 cell). **STOP rule
+(addendum 3): GO**; the frozen rule with the label as a stop clause reads STOP (DESCRIPTIVE). DESCRIPTIVE: SIGMA-D
+Mixtral MIXED (median position 0.35, 6 of 6 read), OLMoE L2-SERVED (0.70, 5 of 5); knee rows p 5.75 rms 2.32%, p 3.75
+rms 2.67%; as registered on all 102 cells E1 FAILS at rms 8.65%; v4d as registered on the same 91 cells 4.87% rms,
+worst -23.2%; settling units: M1 fix R's ratio re-read 0.920 (registered 0.9185), M2 align slopes 0.61 us (OLMoE) and
+0.59 us (Mixtral) per iteration against the diagnosis's 0.96, M3 FOLLOWS-ADDRESS (q -0.69), M4 12 of 14 GEMM rows
+agree with fix W. On the GO, `finalise_decode_d3.py` wrote `scripts/scoring/decode/decodeB.finalised.json` (247 cells,
+0 not priced, 27 DESCRIPTIVE) and `scripts/plans/rentalD-blind-2026-10.plan`, committed at 82364213 before any blind
+page. Re-scored on the published copy, `cal2.score.txt` is byte-identical and the JSON differs only in the power
+file's path; the finalisation re-run on that score writes both files byte for byte. `register_decode.py`,
+`register_decode_d2.py` and `register_decode_d3.py --check` read `same` on all six registration files, the settling
+pages and the CAL2 plan. `scripts/scoring/rescore.py decodeCAL2` re-scores the published session to the committed
+files (docs/FINDINGS.md, Decode CAL2 and blind rentals).
+
+**Scored 2026-11-04** on `results/published/2026-11-04-nvidia_gh200_480gb-decodeBlind-session` (board ae5fc5, CAL2's,
+on a different instance; 9 units at 82364213 in about 81 minutes on 2026-11-04, none dropped, all exit 0; the score
+in `scripts/scoring/decode/blind.score.{json,txt}`, written by `score_blind_d3.py <tree>/results
+scripts/scoring/decode/decodeB.finalised.json <out>` from the repository root with PYTHONHASHSEED=0; no post-page
+fix). **Power** READ: 700.00 W. **Descriptive cells**: the 27 registered second-tile cells, out of E1-DEC. **Bars**:
+rms 1.5%, worst 4%, |mean| 0.75%. **E1-DEC pooled: FAILS** on 220 cells: rms 11.40%, worst +39.24% (JetMoE-8B
+L-T2-A2, 59.8 us measured against 83.3 us priced), mean +5.99%. **Per model, every one FAILS and none is CERTIFIED**:
+deepseek-v2-lite 43 cells rms 2.35%, worst +12.2%, mean +0.45%; Qwen1.5-MoE-A2.7B 52 cells 5.31%, +15.6%, +3.15%;
+Phi-3.5-MoE 42 cells 9.52%, +24.4%, +5.22%; Granite-3.0-3B-A800M 42 cells 13.41%, +33.8%, +7.05%; JetMoE-8B 41 cells
+19.46%, +39.2%, +15.11%. The scope line is printed beside every model's verdict. **Rivals**: rho other,
+NAIVE-NODEDUP, eager, roofline, line and OLS all EXCLUDED (roofline the closest: 12.35% rms against v4d''s 11.41% on
+its 189 lever cells). **GD2** PASS on Qwen1.5 (13 matched cells, none outside the band) and on Granite (0 matched
+cells: all 26 of its GR1 cells host-bound under GD1). **G3-D**: shuffle EQUIVALENT on all five; label (DESCRIPTIVE, never a void) EQUIVALENT on four, NOT EQUIVALENT
+on Phi-3.5-MoE (mean +0.44 us against a 0.40 us margin). DESCRIPTIVE: SIGMA-D L2-SERVED on all five (median positions
+0.76 to 0.94); on every cell roofline and OLS are NOT EXCLUDED; knee rows p 5.75 rms 11.51%, p 3.75 rms 11.94%; as
+registered on all 247 cells E1 FAILS at 16.70%, none certified. Scored on the fetched tree and on the published
+copy, the `.txt` is byte-identical and the JSON differs only in the power file's path; `scripts/scoring/rescore.py
+decodeBlind` re-scores the published session to the committed files. Decode is calibrated (CAL2 GO, in sample on two
+models) and NOT blind-certified on any model (docs/FINDINGS.md, Decode CAL2 and blind rentals).
