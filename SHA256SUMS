@@ -1,5 +1,5 @@
 761fffef37913d630cca278760ecc393e816f239e7cb90376269c29ab9d2cc0c  vm/driver580.log
-8d619601339f5fbe272a20c72b6005f7b197f70626ef7f2f44bc4d13808cca25  vm/gh200-driver.out
+e4ea6a3c35f76ae85226f944f97b1bf111f2f4c65b044158a86ff2cac5bd9f9e  vm/gh200-driver.out
 c03eca8c01aa2ef26b70b7f2f9aac727d6bcfc48cfe6c91ba81a373ae1d10887  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.csv
 0fc8124eb31901dc6425d5e37a38fa4b77b6286eb5f9b3ebf2d10d8c6a82ea76  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json
 c1a9850bf820fabd80ed7a1dd214dd9ed825e51914cda468847024176a5e9241  vm/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d-profile/r3d.ncu-rep
@@ -24,6 +24,12 @@ f6b9d930317e6fd596b900a181fa17cad411c525b6025e4c8f01e814e6d3e1ae  vm/results/202
 26608c9d6470de94dd561e76f69ec0711480e89b29822c82abe374fd9d058af4  vm/results/2026-11-04-nvidia_gh200_480gb-phi-3.5-moe-ds-r3-counters/lock1710/r3d-profile/r3d.ncu.log
 8fd8e489d40fcd4f685e3ab7a58de11ee067568a788c8d5cff62e00c815f0c1a  vm/results/2026-11-04-nvidia_gh200_480gb-phi-3.5-moe-ds-r3-counters/lock1710/r3d-profile/r3d.plan.json
 7f4e4d24ede948462b5cee040d0ddd4fbaf122a80954d0911e14bfff274bfd0b  vm/results/2026-11-04-nvidia_gh200_480gb-phi-3.5-moe-ds-r3-counters/lock1710/r3d.json
+41685a1a961d2ff34fa614788b8eae4322ec398ac16f2b1060172ff505a9d8c3  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.csv
+4fb548e42320b52187f068302e7bb9770781ded6379dad01a5f0c27c3c34b228  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json
+f93c43f883937870cb08942a4d8c4017997fe19f6eea7ed37576e00a3c67bf0d  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.ncu-rep
+488184177503b80b8f0a58ad5b0d487a5d176e9f8b2b7cc626442ccad527117e  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.ncu.log
+58382d7dd8e0e24eb7f49f324a3a3cddead4ed3797aaf3841298064d9e4af010  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.plan.json
+e6de754e47ebfdfc42ddb70445db314feef310ccfc72f2e8b2f81639aa0c306a  vm/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d.json
 b076fd7e3b2b04c857b4de2d96027c7334043175b52346ecfbe1b21049455573  vm/results/2026-11-04-nvidia_gh200_480gb-tile-census-mixtral-8x7b-ds/tile-census.json
 549d13cb6e9ca18d3eac00a54549e5a445f51b91ba4d8ab1885560f338612884  vm/results/calibration/nvidia_gh200_480gb-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-28dc063d/cells.csv
 08a8bab34787eb1379278700fcab7750cbbdee46d977e6a6c506c13265425e7f  vm/results/calibration/nvidia_gh200_480gb-buffer_gb8.0-ceilingtriad-gemm_n8192-settletrue-settle_s30.0-28dc063d/measured_nvidia_gh200_480gb.yaml
@@ -59,12 +65,13 @@ bbe1df7a4683a9c3c4b79c3dfa77952394d298b5e2e9ba7615def2e42b024875  vm/session/clo
 98cb8379ce9a3bdf9f9c8546480017094bb91a1f9399f2969a770fae94db5d99  vm/session/counters-dir-jetmoe-8b-ds.txt
 62c61f3d4d59fb59881887d78df61697f95e05efe930b85eae23f6dab995a776  vm/session/counters-dir-mixtral-8x7b-ds.txt
 829d9b1c8fb709bc4fa93efee3b1e28f23024f248b1b94d6790dfd5c2849eb2a  vm/session/counters-dir-phi-3.5-moe-ds.txt
+9d11581590fa6a769ee97d9f148c80ef3d590bc1cba0ff60c8f6709860619d13  vm/session/counters-dir-qwen1.5-moe-a2.7b-ds.txt
 3fbbd4c6d76130399b0c79cdf41758669224a91e05b7b216953f0c9728750865  vm/session/gh200-driver/instr-variants.json
 d8f0a3d833621a416064a1c276e64f237dc2ccc220dff8afc706da93bc0b516b  vm/session/gh200-driver/locks.env
 08cd03d41c39dac26f525311f13e005f953d173b7958ef4fc59b5e9057c6291a  vm/session/gh200-driver/ruler.env
-e0d72d71d97c80d75ad11788cf97a4e4fdd7a9e595884e524c0f884351f9f1db  vm/session/gh200-driver/status
-4dbf414c6282978b1376a15f98c42a66a29d843745f4bdaa5d706af1755dc10b  vm/session/gh200-driver/summary.new
-4dbf414c6282978b1376a15f98c42a66a29d843745f4bdaa5d706af1755dc10b  vm/session/gh200-driver/summary.txt
+5d242edb0a439bfa7ac75a8a1f9a2fa5169dfcc1ced47fc5dafea03fca15d0dd  vm/session/gh200-driver/status
+5bf021a0377ab5a4edfa0a2cc60d634e11c0d844ef9537c72eeed32b43e1060f  vm/session/gh200-driver/summary.new
+5bf021a0377ab5a4edfa0a2cc60d634e11c0d844ef9537c72eeed32b43e1060f  vm/session/gh200-driver/summary.txt
 eeb2d7dd6817d3afc83ec2728681b5174abb67f63bba0d9de997e470561f7f89  vm/session/git-after-calibrate.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/git-at-start.txt
 3aabf3c46515bed7a0ee3de9b1fa9296303bc11f6ace0a684e6bdc08c42fd5c8  vm/session/lock-plan.txt
@@ -74,6 +81,7 @@ fc708a6c93484a8e904c504394befde86ad1d857a8ac0d538bc6c3bafb650487  vm/session/log
 fcc35256faf5af1c0d0d1dbe680ee031d6d5168a017c3a146dac465ca876b42b  vm/session/logs/driver-decodebytes-jetmoe-8b-ds.log
 7f528640f810434f2576ccb42a3faa10541ce62d5f8b3ba59e50604e0067aab9  vm/session/logs/driver-decodebytes-mixtral-8x7b-ds.log
 4fa5d7545c6e30ccf2339fd53c2a8a6229f7b45366e49541d49994dc68b78f07  vm/session/logs/driver-decodebytes-phi-3.5-moe-ds.log
+d5b46a580eca6a1e7f5606783cce858bf94c733c7efa006b7d9edc9189ceda57  vm/session/logs/driver-decodebytes-qwen1.5-moe-a2.7b-ds.log
 fc6e371333bb54d7f0a01cf6c71c718290d887fc846712578458689aa4867ae6  vm/session/logs/driver-prelude-mixtral-8x7b.log
 d878eb613a2121e0e9495f0d77916386ab20630e4a8fdc4199199539538fdb70  vm/session/logs/driver-tilecensus-mixtral-8x7b-ds.log
 3ef29f883d6980f29295890d9ce58b3cc72a66e7581da615f671d41ba9f4c6e6  vm/session/logs/pf5-probe.log
@@ -86,6 +94,8 @@ cd64609223642e153f3f9df6a1ac0956a82a4845535430bdb7f316b5163ad48b  vm/session/log
 08b7d683c1306caebe7b11381b6964a6ad3acec2c53537e41f61e71c2bccafc5  vm/session/logs/r3d-mixtral-8x7b-ds.log
 31dbb527a477a1476c9bfbb327e58f121a0d57d1ac843be2ce12b667a2f733a3  vm/session/logs/r3d-phi-3.5-moe-ds-dry.log
 7e32eaebe3f9cbb120f8f8ce7304ad1bb5e5758a05d6e1cb74e9b2c8a148c059  vm/session/logs/r3d-phi-3.5-moe-ds.log
+a89fb26ed1d6a25c809a06e8cbd980492f5614aa09f8d77d39bcc7bf4f0e855c  vm/session/logs/r3d-qwen1.5-moe-a2.7b-ds-dry.log
+07ab14c7c34fceb5b105a5cfe8802100b95bbc1d37abc22255f6ed1cd33afde0  vm/session/logs/r3d-qwen1.5-moe-a2.7b-ds.log
 ebcb8cbb058b3864f3db6cd955f27a141e024c46ee2ffe27d09302b323f655be  vm/session/logs/setup_runpod.log
 40a23cb17568c9047da5ed8173800f04758ff6b44cf61fccfa13e23fefb75173  vm/session/logs/tilecensus-mixtral-8x7b-ds-dry.log
 1992a3055bda2b9c8cdc7b3e97510954bb913fe830e08c6e5cbf90a507659108  vm/session/logs/tilecensus-mixtral-8x7b-ds.log

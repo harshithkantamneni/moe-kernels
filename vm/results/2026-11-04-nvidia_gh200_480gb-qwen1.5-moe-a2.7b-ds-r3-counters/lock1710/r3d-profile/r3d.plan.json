@@ -1,0 +1,67 @@
+{
+ "family": "r3-decode",
+ "model": "qwen1.5-moe-a2.7b",
+ "dtype": "bf16",
+ "page": "docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json",
+ "page_sha256": "fc27d04465decc9fbb27fe1f006e5d82f77ba56697811b6dba2260f19041552f",
+ "cells": [
+  [
+   "S-T4-A4",
+   "native"
+  ],
+  [
+   "S-T4-A16",
+   "native"
+  ],
+  [
+   "S-T8-A4",
+   "native"
+  ],
+  [
+   "S-T8-A16",
+   "native"
+  ],
+  [
+   "S-T8-A32",
+   "native"
+  ],
+  [
+   "S-T64-A8",
+   "native"
+  ],
+  [
+   "S-T64-A60",
+   "native"
+  ],
+  [
+   "S-T96-A12",
+   "native"
+  ],
+  [
+   "S-T96-A16",
+   "native"
+  ],
+  [
+   "S-T96-A24",
+   "native"
+  ],
+  [
+   "S-T96-A32",
+   "native"
+  ],
+  [
+   "S-T128-A8",
+   "native"
+  ],
+  [
+   "S-T128-A32",
+   "native"
+  ]
+ ],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "seed": 0,
+ "decl_copies": null,
+ "manifest": "/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json"
+}
