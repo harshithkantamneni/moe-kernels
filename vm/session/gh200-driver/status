@@ -49,3 +49,9 @@
 2026-11-04T02:10:53Z r3decode: locked_r3 exit 0
 2026-11-04T02:10:53Z r3decode END: exit 0 after 12 min [unit 7/9 granite-3.0-3b-a800m dm histogram=docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 2026-11-04T02:10:53Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-04T02:10:56Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 8/9 qwen1.5-moe-a2.7b dc histogram=docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 9 min, cap 27 min, 80 min left)
+2026-11-04T02:10:58Z r3decode: docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json inst GR1 rot auto, session tag gh200-20261104T010334Z-decf
+2026-11-04T02:17:40Z r3decode: 2026-11-04T02:17:39Z G=1 held at lock 1710: R3 exit 0 DONE, cells=234 worst=1710.0 MHz, 400 s, dir nvidia_gh200_480gb-decode-qwen1.5-moe-a2.7b-GR1-qwen1.5-moe-a2.7b-ctl-3defe511
+2026-11-04T02:17:40Z r3decode: locked_r3 exit 0
+2026-11-04T02:17:40Z r3decode END: exit 0 after 7 min [unit 8/9 qwen1.5-moe-a2.7b dc histogram=docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-04T02:17:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

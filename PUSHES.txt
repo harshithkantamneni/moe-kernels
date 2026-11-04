@@ -7,3 +7,4 @@
 2026-11-04T01:45:20Z r3decode (unit 5/9 jetmoe-8b dm histogram=docs/registered/2026-10-14-decode-pages/jetmoe-8b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (12 min)
 2026-11-04T01:58:28Z r3decode (unit 6/9 deepseek-v2-lite dm histogram=docs/registered/2026-10-14-decode-pages/deepseek-v2-lite-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (13 min)
 2026-11-04T02:10:55Z r3decode (unit 7/9 granite-3.0-3b-a800m dm histogram=docs/registered/2026-10-14-decode-pages/granite-3.0-3b-a800m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (12 min)
+2026-11-04T02:17:42Z r3decode (unit 8/9 qwen1.5-moe-a2.7b dc histogram=docs/registered/2026-10-14-decode-pages/qwen1.5-moe-a2.7b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
