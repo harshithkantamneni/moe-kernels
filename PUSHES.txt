@@ -4,3 +4,4 @@
 2026-11-04T21:28:24Z calibrate (unit 2/9 mixtral-8x7b dcal): exit 0 (0 min)
 2026-11-04T21:28:41Z tilecensus (unit 3/9 - ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b): exit 0 (0 min)
 2026-11-04T21:31:03Z decodebytes (unit 4/9 jetmoe-8b ds histogram=docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json kernels=wide): exit 0 (2 min)
+2026-11-04T21:34:54Z decodebytes (unit 5/9 phi-3.5-moe ds histogram=docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json kernels=wide): exit 0 (4 min)
