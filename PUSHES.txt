@@ -2,3 +2,4 @@
 2026-11-04T01:03:33Z setup_vm.sh: READY
 2026-11-04T01:03:35Z prelude (unit 1/9 -): exit 0 (0 min)
 2026-11-04T01:04:02Z calibrate (unit 2/9 mixtral-8x7b dcal): exit 0 (0 min)
+2026-11-04T01:18:07Z r3decode (unit 3/9 phi-3.5-moe dm histogram=docs/registered/2026-10-14-decode-pages/phi-3.5-moe-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (14 min)

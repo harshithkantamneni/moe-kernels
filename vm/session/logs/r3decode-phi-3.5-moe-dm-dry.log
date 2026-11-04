@@ -1,0 +1,66 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-phi-3.5-moe-GRR-phi-3.5-moe-main-d64ca7ae
+model       phi-3.5-moe E=16 k=2 bf16; W_e 150.0 MiB
+page        docs/registered/2026-10-14-decode-pages/phi-3.5-moe-main.json (sha256 039cc6f6d520c757...), phi-3.5-moe-main, 47 cells, 47 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 2 x W_e 150.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    14.8 min
+session     gh200-20261104T010334Z-dec-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-phi-3.5-moe-dm/private_weight_reference/nvidia_gh200_480gb-decode-phi-3.5-moe-GRR-phi-3.5-moe-main-d64ca7ae
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A2               native      naive       16x64x128w4s4  A=2   L=2   P=30   dead=0/0     11714a9c0e2f
+  T=1   U-T1                  native      naive       16x64x128w4s4  A=2   L=2   P=30   dead=0/0     7643bf293d2d
+  T=2   L-T2-A2               native      naive       16x64x128w4s4  A=2   L=4   P=60   dead=0/0     1acde8f682d9
+  T=2   L-T2-A3               native      naive       16x64x128w4s4  A=3   L=4   P=60   dead=0/0     8fedd9c4480f
+  T=2   L-T2-A4               native      naive       16x64x128w4s4  A=4   L=4   P=60   dead=0/0     634cee7984dd
+  T=2   U-T2                  native      naive       16x64x128w4s4  A=4   L=4   P=60   dead=0/0     fd0e9ac80c6a
+  T=4   L-T4-A2               native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=1200/384   874215bebf7d
+  T=4   L-T4-A4               native      small-batch 16x64x128w4s4  A=4   L=4   P=56   dead=800/256   b610e2ff334b
+  T=4   L-T4-A6               native      small-batch 16x64x128w4s4  A=6   L=6   P=88   dead=400/128   a10a220c98ba
+  T=4   L-T4-A8               native      small-batch 16x64x128w4s4  A=8   L=8   P=120  dead=0/0     4fb75c58ed45
+  T=4   MIN-T4                native      small-batch 16x64x128w4s4  A=2   L=2   P=24   dead=1200/384   c7c4738f7b62
+  T=4   U-T4                  native      small-batch 16x64x128w4s4  A=7   L=7   P=104  dead=200/64    bd09247be06b
+  T=8   L-T8-A2               native      small-batch 16x64x128w4s4  A=2   L=2   P=16   dead=2800/896   54c5174b3098
+  T=8   L-T8-A7               native      small-batch 16x64x128w4s4  A=7   L=7   P=96   dead=1800/576   86fd62607bc4
+  T=8   L-T8-A11              native      small-batch 16x64x128w4s4  A=11  L=11  P=160  dead=1000/320   84df3c7dd957
+  T=8   L-T8-A16              native      small-batch 16x64x128w4s4  A=16  L=16  P=240  dead=0/0     0f17d63a5efc
+  T=8   U-T8                  native      small-batch 16x64x128w4s4  A=10  L=10  P=144  dead=1200/384   2f0956bad491
+  T=8   US-T8                 native      small-batch 16x64x128w4s4  A=10  L=10  P=144  dead=1200/384   2f0956bad491
+  T=16  L-T16-A2              native      small-batch 16x64x128w4s4  A=2   L=2   P=0    dead=3000/960   af8d3e6b1f05
+  T=16  L-T16-A7              native      small-batch 16x64x128w4s4  A=7   L=7   P=80   dead=2000/640   20d28d22ca91
+  T=16  L-T16-A11             native      small-batch 16x64x128w4s4  A=11  L=11  P=144  dead=1200/384   a8909149adf9
+  T=16  L-T16-A16             native      small-batch 16x64x128w4s4  A=16  L=16  P=224  dead=200/64    1ce2b747a3a5
+  T=16  MIN-T16               native      small-batch 16x64x128w4s4  A=2   L=2   P=0    dead=3000/960   5aa28f21452c
+  T=16  U-T16                 native      small-batch 16x64x128w4s4  A=14  L=14  P=192  dead=600/192   a649120beea9
+  T=32  L-T32-A2              native      small-batch 16x64x128w4s4  A=2   L=4   P=0    dead=3000/960   83ac945ad712
+  T=32  L-T32-A7              native      small-batch 16x64x128w4s4  A=7   L=7   P=48   dead=2400/768   e934b991a2db
+  T=32  L-T32-A11             native      small-batch 16x64x128w4s4  A=11  L=11  P=112  dead=1600/512   8fd56fdbb95d
+  T=32  L-T32-A16             native      small-batch 16x64x128w4s4  A=16  L=16  P=192  dead=600/192   7d7d8a840358
+  T=32  U-T32                 native      small-batch 16x64x128w4s4  A=16  L=16  P=192  dead=600/192   d1f90cf32571
+  T=32  US-T32                native      small-batch 16x64x128w4s4  A=16  L=16  P=192  dead=600/192   d1f90cf32571
+  T=64  L-T64-A2              native      small-batch 32x64x128w4s3  A=2   L=4   P=0    dead=3200/1024  8b851451da4a
+  T=64  L-T64-A7              native      small-batch 32x64x128w4s3  A=7   L=7   P=96   dead=2600/832   3a4151c3b5de
+  T=64  L-T64-A11             native      small-batch 32x64x128w4s3  A=11  L=11  P=224  dead=1800/576   6294289bfa12
+  T=64  L-T64-A16             native      small-batch 32x64x128w4s3  A=16  L=16  P=384  dead=800/256   fe6b101a2a63
+  T=64  MIN-T64               native      small-batch 32x64x128w4s3  A=2   L=4   P=0    dead=3200/1024  e80e70a75ff8
+  T=64  U-T64                 native      small-batch 32x64x128w4s3  A=16  L=16  P=384  dead=800/256   0efd612272cb
+  T=96  L-T96-A2              native      small-batch 32x128x64w4s3  A=2   L=6   P=0    dead=1600/512   655a030df2a3
+  T=96  L-T96-A7              native      small-batch 32x128x64w4s3  A=7   L=7   P=32   dead=1500/480   0b4e579bdb49
+  T=96  L-T96-A11             native      small-batch 32x128x64w4s3  A=11  L=11  P=160  dead=1100/352   47e5089c4969
+  T=96  L-T96-A16             native      small-batch 32x128x64w4s3  A=16  L=16  P=320  dead=600/192   aff7922df793
+  T=96  U-T96                 native      small-batch 32x128x64w4s3  A=16  L=16  P=320  dead=600/192   991c2833fd4d
+  T=128 L-T128-A2             native      small-batch 64x128x64w4s3  A=2   L=4   P=0    dead=1600/512   b918b4ec74f9
+  T=128 L-T128-A7             native      small-batch 64x128x64w4s3  A=7   L=7   P=192  dead=1300/416   aeca47a2bc17
+  T=128 L-T128-A11            native      small-batch 64x128x64w4s3  A=11  L=11  P=448  dead=900/288   3c27a113a345
+  T=128 L-T128-A16            native      small-batch 64x128x64w4s3  A=16  L=16  P=768  dead=400/128   3a550bc22d31
+  T=128 U-T128                native      small-batch 64x128x64w4s3  A=16  L=16  P=768  dead=400/128   110d2324b721
+  T=128 US-T128               native      small-batch 64x128x64w4s3  A=16  L=16  P=768  dead=400/128   110d2324b721
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================
