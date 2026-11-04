@@ -1802,3 +1802,57 @@ registered on all 247 cells E1 FAILS at 16.70%, none certified. Scored on the fe
 copy, the `.txt` is byte-identical and the JSON differs only in the power file's path; `scripts/scoring/rescore.py
 decodeBlind` re-scores the published session to the committed files. Decode is calibrated (CAL2 GO, in sample on two
 models) and NOT blind-certified on any model (docs/FINDINGS.md, Decode CAL2 and blind rentals).
+
+## 2026-11-04, before any DS page: the decode stage's fourth addendum (a measurement registration)
+
+`2026-11-04-decode-addendum4-gh200` (`scripts/scoring/decode/register_decode_d4.py --write` / `--check`) follows the
+decode blind FAIL's two offline diagnoses (moe-kernels-work 2026-11-04 diag-blind and diag-residual, DIAGNOSIS.md) and
+registers the owner's decisions of 2026-11-04 (D4-7, D4-8): the settling rental DS is a MEASUREMENT registration only.
+It registers no model form, no constant and no gate. Every earlier decode registration, v4d, v4d' and every earlier decode
+scorer stay byte-identical; the addendum pins them, the committed CAL2 score and finalisation, and CAL2's published
+tile census.
+- **The model form.** The decode model form for the new blind will be chosen after DS, from DS's and CAL2's pages. It
+  will be frozen and registered before any page of the three new blind models (Mixtral-8x22B, Qwen2-57B-A14B,
+  Granite-3.0-1B-A400M), which remain unseen: this addendum writes no page of theirs.
+- **Disclosure.** The earlier decode blind pages (Phi-3.5, Qwen1.5, JetMoE, deepseek-v2-lite, Granite-3B) were seen
+  during the diagnosis, and what they showed chose what DS measures. Any later re-score of them is a weak sanity floor.
+- **DS (DESCRIPTIVE).** A tile census of DS's own (the CAL2 plan's `tilecensus` unit on the four decode tiles and the
+  six DS models, D4-8) and six wide counter pages on SEEN models only
+  (`docs/registered/2026-11-04-decode4-pages/*-ds.json`; JetMoE, Phi-3.5, Mixtral-8x7B, Granite-3B, Qwen1.5, OLMoE; DECL
+  arms declare E 16 and 32), run by the D3 driver's `kernels=wide` key (`scripts/plans/rentalDS-settle-d4-2026-11.plan`),
+  every unit nodrop. The ladders identify both regimes on every decode tile: few-CTA long-slab GEMMs within one wave
+  (SUBWAVE) and the drain past a wave boundary (DRAIN), each from 2 or more ladders of 2 or more models. NO FALLBACK (every reading): w1's bytes are priced only at
+  W1RATE's rate on their tile. Where W1RATE reads no rate, SUBWAVE and DRAIN read NOT IDENTIFIED if their ladders hold
+  w1 rows, and LADDERS shows the w1 rows unpriced; 3895.49 GB/s is w2's measured rate, never a w1 fallback. D4-8 replaced
+  Phi T 96 A 5 and T 128 A 3 (every expert past BLOCK_M, so in no GEMM reading) with Phi T 80 A 5 and A 6 and OLMoE
+  T 128 A 16 and A 32, a third DRAIN model on 32x128x64w4s3 and 64x128x64w4s3 (OLMoE's crossing row past one
+  boundary, as JetMoE's and Qwen1.5's); Mixtral T 96 A 7 gives Mixtral a third w1 row past the wave on 32x128x64w4s3.
+- **Stop rules.** The D3 driver's prelude (clean checkout, idle GPU, 1710 supported, persistence, 700 W read back) and
+  its 1710 lock read back per page; the reader's POWER (700 W), PAGE (the registered page's sha256, the grid gate PASS,
+  the wide filter, the CAL2 session's versions, python on major.minor), ROW SANITY (a GEMM row's time and bytes finite
+  and positive, bytes within 0.5 to 2 x n b, implied DRAM rate at most 4,022 GB/s, the GH200 HBM3 spec peak; refused rows listed), the census gate CAL used on DS's own census (missing or an MMA path
+  mismatch: a STOP for the per-CTA readings LADDERS, SUBWAVE, DRAIN and W1RATE), CENSUS (DS's census at the occupancy S
+  uses, per tile) and the cross-check against CAL2's published census (reported, not gating; a difference is a STOP for
+  the per-CTA readings, with the differences listed). G-BAND does not apply (DS fits no sag estimator). No reading is a
+  STOP.
+- **Readings (all DESCRIPTIVE, `read_ds.py`).** LADDERS (every GEMM ladder by n, its wave class and its excess over
+  counted bytes); SUBWAVE (the per-CTA rate of few-CTA long-slab GEMMs within one wave, a registered grid, one offset per
+  ladder); DRAIN (the one-slab drain past a wave boundary, one offset per mixed ladder); W1RATE (w1's counter marginal
+  rate per tile, the w1 byte-rate pairs); CALLS (align, silu_and_mul and moe_sum per call, per model, with a summary
+  line per class that is not a model term); ALIGN and BLOCK (the align kernel per E; the block-scan constants at E 40
+  and 64); SLOPE (the align time per loop iteration, DS spanning 1 to 24). A reading that does not identify reads NOT
+  IDENTIFIED.
+- **Unseen.** "Unseen" means no decode page. Earlier non-decode GEMM pages of Qwen2-57B-A14B and Mixtral-8x22B (the
+  settleS1 r3-counters kr and ar, the cal3 stq instrumented pages, the 2026-09-28 GH200 sessions and the others the
+  registration lists) are published and unused by this addendum.
+- **Published trees.** `reproduce_d4.py` checks that the published CAL2 and decode blind trees reproduce their committed
+  scores (DESCRIPTIVE).
+- **Next round, recorded intent only (not code).** The new blind runs only on GO: CAL2 passes under the post-DS model,
+  and the published decode blind re-scores under 4.0% pooled, labelled a weak sanity floor. Its bars (D4-1: 3% / 8% /
+  1.5%), plan and scorer are registered with the model. The decode blind FAIL and the CAL2 GO stand.
+- **Superseded, never registered:** the earlier builds' v4d'' model, its terms (DRAIN, W1RATE, CALL, BLOCK as model
+  terms), the coded launch gate, the finalisation and the new blind's pages and scorer.
+
+| rental | est. min of units | wall (25 min boot) | cost | deadline | guardian hard cap |
+|---|---:|---:|---:|---:|---:|
+| DS (settling, DESCRIPTIVE) | 49 | about 83 min | about $3.17 | launch + 100 min | launch + 115 min ($4.39) |

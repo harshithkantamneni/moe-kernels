@@ -1,0 +1,351 @@
+{
+ "schema": "moe-kernels/decode-page/1",
+ "model": "phi-3.5-moe",
+ "page": "phi-3.5-moe-ds",
+ "shuffle_seed": 20261014,
+ "decl_copies": 2,
+ "label": "SYNTHETIC (scripts/scoring/decode/d4common.py, 2026-11-04-decode-addendum4-gh200); DS: the settling rental's counter page (kernels=wide: align, silu_and_mul, moe_sum and the GEMMs) on a SEEN model, DESCRIPTIVE: GEMM ladders on both sides of one wave and within a single wave, few-CTA long-slab cells, w1 byte-rate pairs, the call kernels, one-iteration and block-scan align cells (DECL arms declare E x C)",
+ "cells": [
+  {
+   "label": "S-T4-A2",
+   "T": 4,
+   "counts": [
+    4,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T4-A4",
+   "T": 4,
+   "counts": [
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T8-A8",
+   "T": 8,
+   "counts": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native",
+    "decl"
+   ],
+   "role": "DS-ALIGN"
+  },
+  {
+   "label": "S-T16-A16",
+   "T": 16,
+   "counts": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "arms": [
+    "native",
+    "decl"
+   ],
+   "role": "DS-ALIGN"
+  },
+  {
+   "label": "S-T64-A4",
+   "T": 64,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T64-A16",
+   "T": 64,
+   "counts": [
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "arms": [
+    "native",
+    "decl"
+   ],
+   "role": "DS-ALIGN"
+  },
+  {
+   "label": "S-T80-A5",
+   "T": 80,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T80-A6",
+   "T": 80,
+   "counts": [
+    27,
+    27,
+    27,
+    27,
+    26,
+    26,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T96-A6",
+   "T": 96,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T96-A8",
+   "T": 96,
+   "counts": [
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    24,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T96-A16",
+   "T": 96,
+   "counts": [
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    12
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T128-A4",
+   "T": 128,
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  },
+  {
+   "label": "S-T128-A8",
+   "T": 128,
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "arms": [
+    "native"
+   ],
+   "role": "DS"
+  }
+ ]
+}
