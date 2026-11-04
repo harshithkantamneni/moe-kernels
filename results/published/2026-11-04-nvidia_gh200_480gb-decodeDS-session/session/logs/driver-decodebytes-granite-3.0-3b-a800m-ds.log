@@ -1,0 +1,7 @@
+== 2026-11-04T21:38:35Z step decodebytes: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json; every GEMM launch grid held to vLLM's own
+COUNTER ROUTE r3-decode (wide): granite-3.0-3b-a800m, page docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json (sha256 d96c433afc018771...), 12 (cell, arm), 3 calls + 2 warmups each, at most 360 profiled launches (the GEMMs, the align, activation and reduction kernels), about 3.6 min
+  kernel filter: regex:^(fused_moe_kernel|moe_align_block_size\w*|count_and_sort_expert_tokens\w*|act_and_mul\w*|silu\w*|moe_sum\w*)$
+  child: scripts/r3_decode.py --counter-child (vLLM's own tile, the spy's grids in the manifest)
+RESULT: VALIDITY grid PASS 12 cells, 120 GEMM launches attributed, 185 other launches by place; /home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d.json
+2026-11-04T21:39:42Z decodebytes: RESULT: VALIDITY grid PASS 12 cells, 120 GEMM launches attributed, 185 other launches by place; /home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-granite-3
+2026-11-04T21:39:43Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-granite-3.0-3b-a800m-ds-r3-counters/lock1710/r3d.json)

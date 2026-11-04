@@ -26,3 +26,4 @@ date,session,board,commit,models,counter pages
 2026-10-29,2026-10-29-nvidia_gh200_480gb-decodeCAL-session,board 183300,a398c6a,"mixtral-8x7b, olmoe-1b-7b",2
 2026-11-03,2026-11-03-nvidia_gh200_480gb-decodeCAL2-session,board ae5fc5,88768ae,"mixtral-8x7b, olmoe-1b-7b",7
 2026-11-04,2026-11-04-nvidia_gh200_480gb-decodeBlind-session,board ae5fc5,8236421,"deepseek-v2-lite, granite-3.0-3b-a800m, jetmoe-8b, phi-3.5-moe, qwen1.5-moe-a2.7b",0
+2026-11-04,2026-11-04-nvidia_gh200_480gb-decodeDS-session,board cce89f,5410ad0,"granite-3.0-3b-a800m, jetmoe-8b, mixtral-8x7b, olmoe-1b-7b, phi-3.5-moe, qwen1.5-moe-a2.7b",6

@@ -235,13 +235,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7154 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7155 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-four further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-five further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-seven Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-eight Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -282,13 +282,15 @@ GH200 at 700 W and the 1710 MHz lock, and the decode CAL2 rental of 2026-11-03: 
 addendum, then the settling units M1 to M4 (tile and wide counter pages, OLMoE's gap pages, Mixtral's label page at pad
 0 and 52), 21 units on one GH200 at 700 W, and the decode blind rental of 2026-11-04: GRR main pages on Phi-3.5-MoE,
 Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite and Granite-3.0-3B-A800M and GR1 control pages on Qwen1.5 and Granite,
-9 units on one GH200 at 700 W),
+9 units on one GH200 at 700 W, and the decode settling rental DS of 2026-11-04: DS's own tile census and one wide decode
+counter page at the 1710 MHz lock on each of six seen models, JetMoE-8B, Phi-3.5-MoE, Mixtral-8x7B,
+Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B, 9 units on one GH200 at 700 W),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 27 GH200 sessions ran on nineteen distinct boards (counted by
+sessions rather than arms. The 28 GH200 sessions ran on twenty distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -345,7 +347,13 @@ FAILS: over five models no decode page had timed, v4d' reads 11.4% rms on 220 ce
 prices the calls slow), and no model is certified: deepseek-v2-lite 2.35% rms (0.91% at T <= 16, descriptive),
 Qwen1.5 5.3%, Phi-3.5 9.5%, Granite 13.4%, JetMoE 19.5%. The miss concentrates at T <= 16 on Qwen1.5, Phi-3.5 and
 Granite; deepseek-v2-lite misses at T >= 32 and JetMoE at every T. Every rival is excluded. Why the miss grows on these calls is under diagnosis (docs/FINDINGS.md, Decode
-CAL2 and blind rentals). Every
+CAL2 and blind rentals). The fourth decode addendum registered a measurement rental only, with no model form: the
+settling rental DS (2026-11-04) read every registered reading on six seen models, all DESCRIPTIVE (its census SAME as
+CAL2's over 48 entries, 0 rows refused): per decode tile w1's counter rate (3787 to 3898 GB/s), the per-CTA rate of
+few-CTA GEMMs inside one wave (24 to 54 GB/s) and the drain past a wave boundary (46 to 103 GB/s), each call kernel
+per model, and the align kernel at 0.53 us per loop iteration. The decode model form is chosen next from DS's and
+CAL2's pages and frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M (docs/FINDINGS.md,
+Decode settling rental DS). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

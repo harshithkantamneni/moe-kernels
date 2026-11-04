@@ -1,0 +1,127 @@
+{
+ "family": "r3-decode",
+ "order": [
+  [
+   "native",
+   2,
+   "S-T2-A8"
+  ],
+  [
+   "native",
+   4,
+   "S-T4-A8"
+  ],
+  [
+   "native",
+   4,
+   "S-T4-A16"
+  ],
+  [
+   "native",
+   4,
+   "S-T4-A32"
+  ],
+  [
+   "native",
+   8,
+   "S-T8-A8"
+  ],
+  [
+   "native",
+   8,
+   "S-T8-A40"
+  ],
+  [
+   "native",
+   64,
+   "S-T64-A16"
+  ],
+  [
+   "native",
+   64,
+   "S-T64-A40"
+  ],
+  [
+   "native",
+   96,
+   "S-T96-A32"
+  ],
+  [
+   "native",
+   96,
+   "S-T96-A40"
+  ],
+  [
+   "native",
+   120,
+   "S-T120-A40"
+  ],
+  [
+   "native",
+   128,
+   "S-T128-A40"
+  ]
+ ],
+ "grids": {
+  "native/2/S-T2-A8": {
+   "w1": 256,
+   "w2": 384
+  },
+  "native/4/S-T4-A8": {
+   "w1": 512,
+   "w2": 768
+  },
+  "native/4/S-T4-A16": {
+   "w1": 512,
+   "w2": 768
+  },
+  "native/4/S-T4-A32": {
+   "w1": 512,
+   "w2": 768
+  },
+  "native/8/S-T8-A8": {
+   "w1": 672,
+   "w2": 1008
+  },
+  "native/8/S-T8-A40": {
+   "w1": 672,
+   "w2": 1008
+  },
+  "native/64/S-T64-A16": {
+   "w1": 880,
+   "w2": 1320
+  },
+  "native/64/S-T64-A40": {
+   "w1": 880,
+   "w2": 1320
+  },
+  "native/96/S-T96-A32": {
+   "w1": 504,
+   "w2": 756
+  },
+  "native/96/S-T96-A40": {
+   "w1": 504,
+   "w2": 756
+  },
+  "native/120/S-T120-A40": {
+   "w1": 440,
+   "w2": 660
+  },
+  "native/128/S-T128-A40": {
+   "w1": 448,
+   "w2": 672
+  }
+ },
+ "refused": [],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "launch_count": null,
+ "versions": {
+  "python": "3.12.16",
+  "torch": "2.13.0",
+  "triton": "3.7.1",
+  "vllm": "0.27.1"
+ },
+ "page_sha256": "d96c433afc018771076cbf6068f82256f32ecb2605492d10fa2a3dbda74e4a83"
+}

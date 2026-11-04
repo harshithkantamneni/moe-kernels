@@ -1,0 +1,42 @@
+2026-11-04T21:25:57Z setup_vm.sh start: commit 5410ad00016f4c7343a9b9107d63b231811769f8 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-04T23:04:15Z
+2026-11-04T21:27:55Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 8f339f7 to run-gh200-decodeds-20261104t2124: setup_vm.sh: READY
+2026-11-04T21:27:56Z driver start: commit 5410ad00016f4c7343a9b9107d63b231811769f8, steps of the plan scripts/plans/rentalDS-settle-d4-2026-11.plan, deadline 2026-11-04T23:04:15Z (88 min of work left)
+2026-11-04T21:27:56Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalDS-settle-d4-2026-11.plan (sha256 fec3c67f4910ddb4219ea3d60ef9b3c0073938a160872cd0125f5202c0a1aee2), 9 units
+2026-11-04T21:27:56Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/9 -] (estimate 3 min, cap 15 min, 88 min left)
+2026-11-04T21:27:56Z prelude END: exit 0 after 0 min [unit 1/9 -]
+2026-11-04T21:27:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1cc227b to run-gh200-decodeds-20261104t2124: prelude (unit 1/9 -): exit 0 (0 min)
+2026-11-04T21:27:58Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/9 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 88 min left)
+2026-11-04T21:28:23Z calibrate END: exit 0 after 0 min [unit 2/9 mixtral-8x7b dcal]
+2026-11-04T21:28:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 96bacf3 to run-gh200-decodeds-20261104t2124: calibrate (unit 2/9 mixtral-8x7b dcal): exit 0 (0 min)
+2026-11-04T21:28:25Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 16x64x128w4s4 32x64x128w4s3 32x128x64w4s3 64x128x64w4s3 on jetmoe-8b phi-3.5-moe mixtral-8x7b granite-3.0-3b-a800m qwen1.5-moe-a2.7b olmoe-1b-7b; refused on an MMA path mismatch [unit 3/9 - ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b] (estimate 6 min, cap 25 min, 87 min left)
+2026-11-04T21:28:40Z tilecensus END: exit 0 after 0 min [unit 3/9 - ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b]
+2026-11-04T21:28:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 11a966b to run-gh200-decodeds-20261104t2124: tilecensus (unit 3/9 - ds tiles=16x64x128w4s4,32x64x128w4s3,32x128x64w4s3,64x128x64w4s3 models=jetmoe-8b,phi-3.5-moe,mixtral-8x7b,granite-3.0-3b-a800m,qwen1.5-moe-a2.7b,olmoe-1b-7b): exit 0 (0 min)
+2026-11-04T21:28:42Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json; every GEMM launch grid held to vLLM's own [unit 4/9 jetmoe-8b ds histogram=docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json kernels=wide] (estimate 7 min, cap 21 min, 87 min left)
+2026-11-04T21:31:03Z decodebytes END: exit 0 after 2 min [unit 4/9 jetmoe-8b ds histogram=docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json kernels=wide]
+2026-11-04T21:31:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6034403 to run-gh200-decodeds-20261104t2124: decodebytes (unit 4/9 jetmoe-8b ds histogram=docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json kernels=wide): exit 0 (2 min)
+2026-11-04T21:31:05Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json; every GEMM launch grid held to vLLM's own [unit 5/9 phi-3.5-moe ds histogram=docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json kernels=wide] (estimate 7 min, cap 21 min, 85 min left)
+2026-11-04T21:34:53Z decodebytes END: exit 0 after 4 min [unit 5/9 phi-3.5-moe ds histogram=docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json kernels=wide]
+2026-11-04T21:34:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a15b13e to run-gh200-decodeds-20261104t2124: decodebytes (unit 5/9 phi-3.5-moe ds histogram=docs/registered/2026-11-04-decode4-pages/phi-3.5-moe-ds.json kernels=wide): exit 0 (4 min)
+2026-11-04T21:34:56Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json; every GEMM launch grid held to vLLM's own [unit 6/9 mixtral-8x7b ds histogram=docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json kernels=wide] (estimate 7 min, cap 21 min, 81 min left)
+2026-11-04T21:38:32Z decodebytes END: exit 0 after 4 min [unit 6/9 mixtral-8x7b ds histogram=docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json kernels=wide]
+2026-11-04T21:38:33Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 158af09 to run-gh200-decodeds-20261104t2124: decodebytes (unit 6/9 mixtral-8x7b ds histogram=docs/registered/2026-11-04-decode4-pages/mixtral-8x7b-ds.json kernels=wide): exit 0 (4 min)
+2026-11-04T21:38:35Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json; every GEMM launch grid held to vLLM's own [unit 7/9 granite-3.0-3b-a800m ds histogram=docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json kernels=wide] (estimate 6 min, cap 18 min, 77 min left)
+2026-11-04T21:39:43Z decodebytes END: exit 0 after 1 min [unit 7/9 granite-3.0-3b-a800m ds histogram=docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json kernels=wide]
+2026-11-04T21:39:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6c29c50 to run-gh200-decodeds-20261104t2124: decodebytes (unit 7/9 granite-3.0-3b-a800m ds histogram=docs/registered/2026-11-04-decode4-pages/granite-3.0-3b-a800m-ds.json kernels=wide): exit 0 (1 min)
+2026-11-04T21:39:45Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json; every GEMM launch grid held to vLLM's own [unit 8/9 qwen1.5-moe-a2.7b ds histogram=docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json kernels=wide] (estimate 6 min, cap 18 min, 76 min left)
+2026-11-04T21:41:17Z decodebytes END: exit 0 after 2 min [unit 8/9 qwen1.5-moe-a2.7b ds histogram=docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json kernels=wide]
+2026-11-04T21:41:18Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 363edbd to run-gh200-decodeds-20261104t2124: decodebytes (unit 8/9 qwen1.5-moe-a2.7b ds histogram=docs/registered/2026-11-04-decode4-pages/qwen1.5-moe-a2.7b-ds.json kernels=wide): exit 0 (2 min)
+2026-11-04T21:41:20Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json; every GEMM launch grid held to vLLM's own [unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide] (estimate 5 min, cap 15 min, 74 min left)
+2026-11-04T21:42:23Z decodebytes END: exit 0 after 1 min [unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide]
+2026-11-04T21:42:23Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3214935 to run-gh200-decodeds-20261104t2124: decodebytes (unit 9/9 olmoe-1b-7b ds histogram=docs/registered/2026-11-04-decode4-pages/olmoe-1b-7b-ds.json kernels=wide): exit 0 (1 min)
+2026-11-04T21:42:25Z driver end: exit 0

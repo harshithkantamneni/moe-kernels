@@ -475,6 +475,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-11-03-nvidia_gh200_480gb-decodeCAL2-session": SESSION,
         # The decode stage's blind rental of 2026-11-04: one GH200, 9 units of the frozen blind plan (calibrate, GRR main pages on Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite and Granite-3.0-3B-A800M, GR1 control pages on Qwen1.5 and Granite).
         "2026-11-04-nvidia_gh200_480gb-decodeBlind-session": SESSION,
+        # The decode stage's settling rental DS of 2026-11-04: one GH200, 9 units of the DS plan under the fourth addendum (calibrate, DS's own tile census, wide decode counter pages at the 1710 MHz lock on JetMoE-8B, Phi-3.5-MoE, Mixtral-8x7B, Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B), descriptive.
+        "2026-11-04-nvidia_gh200_480gb-decodeDS-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

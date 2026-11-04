@@ -1,0 +1,75 @@
+{
+ "family": "r3-decode",
+ "model": "jetmoe-8b",
+ "dtype": "bf16",
+ "page": "docs/registered/2026-11-04-decode4-pages/jetmoe-8b-ds.json",
+ "page_sha256": "29cacae04093c85d8da45309e896c5f364fe1a26939dc99401c5171adfe509c6",
+ "cells": [
+  [
+   "S-T4-A2",
+   "native"
+  ],
+  [
+   "S-T4-A3",
+   "native"
+  ],
+  [
+   "S-T4-A4",
+   "native"
+  ],
+  [
+   "S-T4-A8",
+   "native"
+  ],
+  [
+   "S-T8-A8",
+   "native"
+  ],
+  [
+   "S-T8-A8",
+   "decl"
+  ],
+  [
+   "S-T16-A8",
+   "native"
+  ],
+  [
+   "S-T16-A8",
+   "decl"
+  ],
+  [
+   "S-T64-A4",
+   "native"
+  ],
+  [
+   "S-T64-A8",
+   "native"
+  ],
+  [
+   "S-T64-A8",
+   "decl"
+  ],
+  [
+   "S-T96-A6",
+   "native"
+  ],
+  [
+   "S-T96-A8",
+   "native"
+  ],
+  [
+   "S-T128-A4",
+   "native"
+  ],
+  [
+   "S-T128-A8",
+   "native"
+  ]
+ ],
+ "calls_per_cell": 3,
+ "warmup_calls": 2,
+ "gemms_per_call": 2,
+ "seed": 0,
+ "decl_copies": 4,
+ "manifest": "/home/ubuntu/moe/results/2026-11-04-nvidia_gh200_480gb-jetmoe-8b-ds-r3-counters/lock1710/r3d-profile/r3d.manifest.json"
+}

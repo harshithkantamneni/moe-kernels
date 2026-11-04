@@ -10,7 +10,9 @@ session to the committed scripts/scoring/decode/cal.score files (it reads only t
 score directory, so it needs nothing off the repo), and the decode CAL2 scorer under the third addendum its published
 session to the committed cal2.score files (scored on the fetched tree before the blind finalisation: equal but for the
 power file's path), and the decode blind scorer under the third addendum its published session, against the committed
-decodeB.finalised.json, to the committed blind.score files."""
+decodeB.finalised.json, to the committed blind.score files, and the decode settling rental DS's registered reader
+under the fourth addendum its published session to the committed ds.readings files (read from the published tree, so
+equal byte for byte)."""
 from __future__ import annotations
 
 import importlib.util
@@ -130,6 +132,22 @@ def test_the_published_decode_blind_session_rescores_to_the_committed_files(tmp_
     txt = (REPO / "scripts/scoring/decode/blind.score.txt").read_text().splitlines()
     assert "power: READ (700.0 W); 27 descriptive cells out of E1-DEC" in txt
     assert sum(" -> NOT CERTIFIED" in t for t in txt) == 5 and not any(" -> CERTIFIED" in t for t in txt)
+
+
+def test_the_published_decode_ds_session_rereads_to_the_committed_files(tmp_path):
+    session = "results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session"
+    assert RS.tree_of("decodeDS") == f"{session}/results"
+    ran = RS.rescore("decodeDS", tmp_path)
+    assert ran == [("scripts/scoring/decode/read_ds.py", 0)], ran
+    rows = dict(RS.compare("decodeDS", tmp_path))
+    assert rows == {"ds.readings.json": "EQUAL", "ds.readings.txt": "EQUAL"}, rows
+    for name in ("ds.readings.json", "ds.readings.txt"):
+        assert (tmp_path / name).read_bytes() == (REPO / "scripts/scoring/decode" / name).read_bytes(), name
+    txt = (REPO / "scripts/scoring/decode/ds.readings.txt").read_text().splitlines()
+    assert "power: READ" in txt and "verdict: READ" in txt and "NOT IDENTIFIED: none" in txt
+    assert "CENSUS CROSS-CHECK (DS's census against CAL2's, reported): SAME over 48 entries" in txt
+    assert any(t.startswith("REFUSED ROWS ") and t.endswith(": 0") for t in txt)
+    assert f'"{session}/session/power-set.txt"' in (REPO / "scripts/scoring/decode/ds.readings.json").read_text()
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

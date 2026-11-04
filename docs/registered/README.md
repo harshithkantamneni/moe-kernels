@@ -1856,3 +1856,21 @@ tile census.
 | rental | est. min of units | wall (25 min boot) | cost | deadline | guardian hard cap |
 |---|---:|---:|---:|---:|---:|
 | DS (settling, DESCRIPTIVE) | 49 | about 83 min | about $3.17 | launch + 100 min | launch + 115 min ($4.39) |
+
+**Read 2026-11-04** on `results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session` (board cce89f, new; 9 units
+at 5410ad00 in about 14.5 minutes on 2026-11-04, every unit nodrop, all exit 0; the readings in
+`scripts/scoring/decode/ds.readings.{json,txt}`, written by `read_ds.py <tree>/results <out>` from the repository root
+with PYTHONHASHSEED=0 on the published copy; no post-page fix). **Power** READ: 700.00 W. **PAGE** READ on all six.
+**Census gate** READ (COMPLETE) on DS's own census; the **cross-check** against CAL2's published census reads SAME over
+48 entries, so no per-CTA STOP. **ROW SANITY**: 0 rows refused. Every reading READ, NOT IDENTIFIED none, all
+DESCRIPTIVE on SEEN models. **W1RATE** c_t 3897.9, 3883.2, 3873.2 and 3787.3 GB/s on 16x64x128w4s4, 32x64x128w4s3,
+32x128x64w4s3 and 64x128x64w4s3 (0.918 to 0.945 of v4d's rate). **SUBWAVE** r_cta 53.8, 24.4, 37.7 and 46.9 GB/s
+(rms 3.39%, 2.93%, 2.03%, 5.18% against 3.71%, 5.24%, 2.16%, 6.35% without the ceiling; one binding row per tile).
+**DRAIN** r1 90.6, 46.1, 67.2 and 103.4 GB/s (rms 2.74%, 3.55%, 1.97%, 2.01% against 3.92%, 5.33%, 4.26%, 3.83%
+without the drain). **CALLS** per model on 8 to 13 NATIVE cells: align medians 5.60 (JetMoE) to 11.78 us (Qwen1.5),
+silu_and_mul 3.87 to 6.46 us, moe_sum 2.67 to 4.24 us. **ALIGN** small-batch E 8 to 64: 4.75 to 11.63 us (DECL
+TRANSFERS); **BLOCK** E 40 8.70 us, E 64 8.13 us. **SLOPE** 0.527 us per loop iteration over 74 rows, iterations 1 to
+24, DIFFERS FROM 0 (t 71.0). No model form is registered; the decode form is chosen next from DS's and CAL2's pages and
+frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M. Read on the fetched tree and on the
+published copy, the `.txt` is byte-identical and the JSON differs only in two paths; `scripts/scoring/rescore.py
+decodeDS` re-reads the published session to the committed files (docs/FINDINGS.md, Decode settling rental DS).

@@ -3215,6 +3215,115 @@ registered blind bars (11.4% rms pooled, 2.35% to 19.5% per model, always pricin
 is excluded. Not established: a blind-certified decode timing model on any model, or the reason the miss grows on the
 smaller and shorter calls.
 
+## Decode settling rental DS (2026-11-04): every registered reading READ, DESCRIPTIVE on six seen models; no model form registered
+
+**Plainly: DS measured, it did not test.** Addendum 4 registers what DS reads and how, and nothing else: no model
+form, no constant, no bar and no gate. Every number below is the registered reader's output on the published
+session, with no post-page fix, and every one is DESCRIPTIVE on SEEN models. None is a model term, none is a
+certification, and none changes a registered verdict: the decode blind FAIL and the CAL2 GO stand.
+
+**What ran.** One Lambda GH200 480GB in us-east-3 (instance 3565dbb9, board `cce89f`, new to the study), launched
+21:24:15Z and terminated 21:44:16Z on 2026-11-04: about 20 min, about $0.76 at $2.29/h (an estimate; the registration
+budgeted about 83 min and $3.17). It ran `scripts/plans/rentalDS-settle-d4-2026-11.plan` (sha256 fec3c67f..., as
+registered) at 5410ad00 through the D3 driver: the prelude, calibrate's ruler, DS's own tile census, and one wide
+decode counter page at the 1710 MHz lock on each of JetMoE-8B, Phi-3.5-MoE, Mixtral-8x7B, Granite-3.0-3B-A800M,
+Qwen1.5-MoE-A2.7B and OLMoE-1B-7B (78 page cells: 69 NATIVE, 9 DECL). All 9 units exit 0 (driver exit 0) in about
+14.5 min against 49 estimated, and 700 W was enforced: GPU Current Power Limit 700.00 W in `session/power-set.txt`,
+and 700.00 W on the driver's `clocks:` line after every unit. Published at
+`results/published/2026-11-04-nvidia_gh200_480gb-decodeDS-session`; read by `read_ds.py <tree>/results <out>`,
+committed as `scripts/scoring/decode/ds.readings.{json,txt}`.
+
+**Validity checks.**
+
+| check | reading |
+|---|---|
+| power | READ, 700.0 W |
+| PAGE (registered sha256, grid gate PASS, wide filter, CAL2's versions) | READ on all six pages |
+| census gate (DS's own census) | READ (COMPLETE): 48 configs, 0 MMA path mismatches; every tile at the occupancy S uses |
+| census cross-check against CAL2's published census | SAME over 48 entries, no difference, so no STOP for the per-CTA readings |
+| ROW SANITY | 0 rows refused |
+| readings | every one READ; NOT IDENTIFIED: none |
+
+**The per-tile readings.** W1RATE is w1's marginal counter rate over the w1 rows past a wave boundary (OLS, one
+offset per ladder). SUBWAVE r_cta is the per-CTA streaming rate of a GEMM whose few long-slab CTAs sit inside one
+wave, on the registered grid. DRAIN r1 is the rate of the one slab per CTA past a wave boundary, fitted over the
+tile's MIXED ladders with SUBWAVE's r_cta in place. Each rms is relative, over the fit's own rows, against the same
+fit without the term (no per-CTA ceiling for SUBWAVE, no drain for DRAIN).
+
+| tile | W1RATE c_t (ratio to v4d's 3577.96 GB/s; rows, ladders) | SUBWAVE r_cta (rows, ladders): rms, without the ceiling | DRAIN r1 (rows, mixed ladders): rms, without the drain |
+|---|---|---|---|
+| 16x64x128w4s4 | 3897.9 GB/s (0.918; 10, 4) | 53.8 GB/s (13, 5): 3.39%, 3.71% | 90.6 GB/s (32, 13): 2.74%, 3.92% |
+| 32x64x128w4s3 | 3883.2 GB/s (0.921; 6, 3) | 24.4 GB/s (4, 2): 2.93%, 5.24% | 46.1 GB/s (10, 5): 3.55%, 5.33% |
+| 32x128x64w4s3 | 3873.2 GB/s (0.924; 6, 2) | 37.7 GB/s (21, 8): 2.03%, 2.16% | 67.2 GB/s (8, 3): 1.97%, 4.26% |
+| 64x128x64w4s3 | 3787.3 GB/s (0.945; 6, 3) | 46.9 GB/s (6, 3): 5.18%, 6.35% | 103.4 GB/s (12, 5): 2.01%, 3.83% |
+
+Beside the table, from `ds.readings.json` (DESCRIPTIVE):
+
+- **W1RATE** on 16x64x128w4s4 re-reads fix R as a replicate: 0.9179 against the registered 0.9185 (fix R itself is
+  unchanged). On 32x128x64w4s3 the fit is loose: 2 ladders, standard error 49 GB/s, rms 8.1 us (the other tiles 0.1
+  to 1.3 us).
+- **SUBWAVE**: on every tile the per-CTA ceiling binds on one row only, and that row is a JetMoE-8B w2 row each time
+  (n 64, 128, 96 and 64). Each r_cta rests on that row. On 32x128x64w4s3 the binding row (JetMoE T 96 w2) is not one
+  of the two qualifying ladders, and the ceiling there moves the rms only from 2.16% to 2.03%.
+- **DRAIN**: the drain coefficient q is 4.3, 2.2, 3.8 and 4.0 standard errors from 0 on the four tiles; 32x64x128w4s3
+  rests on 5 crossing rows.
+
+**CALLS, per model** (the median, minimum and maximum of each class's time per call over the model's NATIVE cells).
+
+| model | E | cells | align (us) | silu_and_mul (us) | moe_sum (us) |
+|---|---:|---:|---|---|---|
+| JetMoE-8B | 8 | 12 | 5.60 (4.70 to 8.74) | 3.87 (3.39 to 5.79) | 2.67 (2.50 to 2.85) |
+| Mixtral-8x7B | 8 | 11 | 6.46 (4.70 to 8.13) | 6.46 (5.34 to 9.31) | 2.98 (2.59 to 3.36) |
+| Phi-3.5-MoE | 16 | 13 | 7.46 (5.41 to 9.22) | 5.60 (3.52 to 6.24) | 3.04 (2.50 to 3.39) |
+| Granite-3.0-3B-A800M | 40 | 12 | 8.62 (7.71 to 20.22) | 4.22 (3.78 to 4.74) | 4.24 (3.94 to 4.80) |
+| Qwen1.5-MoE-A2.7B | 60 | 13 | 11.78 (9.09 to 13.92) | 4.35 (3.46 to 5.41) | 3.65 (3.01 to 4.13) |
+| OLMoE-1B-7B | 64 | 8 | 11.58 (7.87 to 14.94) | 4.34 (3.55 to 5.92) | 4.03 (3.65 to 5.09) |
+
+The summary lines over all 69 NATIVE rows (a summary of DS's pages, not a term and not a rule for any other model):
+silu_and_mul = 3.67 us + 4.18e-05 us x I + 0.250 us per MB, rms 0.46 us; moe_sum = 1.88 us + 1.33e-04 us x kH +
+0.219 us per MB, rms 0.35 us. Granite's align maximum (20.2 us) is its T 120 A 40 cell, 24 loop iterations.
+
+**ALIGN by E** (the median align-pair time per declared E; small-batch at one loop iteration, NATIVE; E 32 is DECL,
+used because DECL TRANSFERS: Mixtral's DECL E 16 reads 5.536 us against Phi's NATIVE E 16 5.552 us, within 1 us).
+
+| path | E 8 | E 16 | E 32 | E 40 | E 60 | E 64 |
+|---|---:|---:|---:|---:|---:|---:|
+| small-batch (us) | 4.75 | 5.55 | 7.26 | 7.78 | 9.18 | 11.63 |
+| block-scan (us) | | | | 8.70 | | 8.13 |
+
+The block-scan points are BLOCK's: Granite T 128 A 40 at E 40, OLMoE T 128 A 64 at E 64. At E 64 the block-scan
+call is 3.5 us shorter than the small-batch call at one iteration; at E 40 it is 0.9 us longer.
+
+**SLOPE.** align_us = a_E + s (iterations - 1), one intercept per declared E: s = 0.527 us per loop iteration
+(standard error 0.0074 us) over 74 rows at E 8, 16, 32, 40, 60 and 64, iterations 1 to 24; DIFFERS FROM 0 (t 71.0).
+The per-E slopes read 0.47 to 0.56 us (median 0.526). CAL2's M2 read 0.61 us (OLMoE) and 0.59 us (Mixtral) on its
+own wide pages; the diagnosis had assumed 0.96.
+
+**Labels.** Every reading is DESCRIPTIVE, on seen models only: all six DS models had decode pages before DS. No
+model form is registered. The decode model form is chosen next, from DS's and CAL2's pages, and frozen and registered
+with its gate before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M, which no decode page has
+timed.
+
+**Disclosure.** The earlier decode blind pages (Phi-3.5, Qwen1.5, JetMoE, deepseek-v2-lite, Granite-3B; published
+2026-11-04) were seen during the diagnosis: the two offline diagnoses read them, and what they showed (a drain at wave
+boundaries, slow few-CTA GEMMs, per-model call kernels, a per-tile w1 rate) chose what DS measures. Any later
+re-score of those pages is a weak sanity floor, never a test.
+
+**What it does not show.**
+
+- **No model and no test.** No reading is fitted into a timing model here, and no prediction was made or scored.
+  Whether these terms close the blind miss is untested.
+- **Nothing on an unseen model.** DS ran only seen models; the three models reserved for the new blind have no
+  decode page.
+- **One board.** Every reading is from board `cce89f` at 700 W and the 1710 MHz lock; no replicate page ran, so no
+  page-noise reading is DS's own.
+
+**Instrument.** The run branch's 122 files match its SHA256SUMS; the one `cuda_utils*.so` is left out as before, so
+121 are published. Read on the fetched tree and on the published copy, `ds.readings.txt` is byte-identical and the
+JSON differs only in two paths (the power file's and DS's census file's); the committed files are the published
+copy's. `register_decode.py`, `register_decode_d2.py`, `register_decode_d3.py` and `register_decode_d4.py --check`
+read `same`. `scripts/scoring/rescore.py decodeDS` re-reads the published session to the committed files.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are
