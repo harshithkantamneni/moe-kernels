@@ -1,0 +1,21 @@
+silu_and_mul: 69 rows, 6 models
+  [1]: in-sample rms 1.476 us, leave-one-model-out rms 1.633 us
+  [1, B]: in-sample rms 0.486 us, leave-one-model-out rms 0.529 us
+  [1, I]: in-sample rms 1.113 us, leave-one-model-out rms 1.418 us
+  [1, I, B]: in-sample rms 0.460 us, leave-one-model-out rms 0.808 us
+  [1, T k I]: in-sample rms 0.486 us, leave-one-model-out rms 0.529 us
+  [1, T k]: in-sample rms 1.436 us, leave-one-model-out rms 1.674 us
+  [1, I, T k]: in-sample rms 0.853 us, leave-one-model-out rms 1.101 us
+  chosen: [1, B] (0.529 us)
+moe_sum: 69 rows, 6 models
+  [1]: in-sample rms 0.709 us, leave-one-model-out rms 0.817 us
+  [1, B]: in-sample rms 0.576 us, leave-one-model-out rms 0.704 us
+  [1, k H]: in-sample rms 0.444 us, leave-one-model-out rms 0.541 us
+  [1, k H, B]: in-sample rms 0.352 us, leave-one-model-out rms 0.509 us
+  [1, k]: in-sample rms 0.366 us, leave-one-model-out rms 0.387 us
+  [1, k, B]: in-sample rms 0.156 us, leave-one-model-out rms 0.201 us
+  [1, H, k]: in-sample rms 0.362 us, leave-one-model-out rms 0.437 us
+  [1, k, T H]: in-sample rms 0.222 us, leave-one-model-out rms 0.262 us
+  [1, k H, T H]: in-sample rms 0.423 us, leave-one-model-out rms 0.570 us
+  chosen: [1, k, B] (0.201 us)
+forms compared: 16 candidates, 15 distinct; [1, T k I] spans the same columns as [1, B] (silu_and_mul)

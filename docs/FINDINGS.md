@@ -3324,6 +3324,123 @@ JSON differs only in two paths (the power file's and DS's census file's); the co
 copy's. `register_decode.py`, `register_decode_d2.py`, `register_decode_d3.py` and `register_decode_d4.py --check`
 read `same`. `scripts/scoring/rescore.py decodeDS` re-reads the published session to the committed files.
 
+## Decode stage closes calibrated, not certified (2026-11-04)
+
+**Plainly: no decode model is certified.** v4d' is calibrated on two models (OLMoE-1B-7B and Mixtral-8x7B: CAL2 GO)
+and failed the registered blind test on five unseen models. A settling rental (DS) then measured the terms that blind
+miss pointed to. v5d, the model built from those measurements, fails its own CAL clause (CAL2 STOP), and its
+registered gate reads NO-GO on both clauses. The
+owner closed the decode stage on 2026-11-04 as calibrated, not certified. The new blind (Mixtral-8x22B,
+Qwen2-57B-A14B, Granite-3.0-1B-A400M) is registered and was not run. No registered verdict changes.
+
+**The sequence.**
+
+| step | registration | reading |
+|---|---|---|
+| CAL2 (2026-11-03) | addendum 3 | GO: v4d' 2.29% rms in sample on 91 kept cells, worst -6.35% |
+| decode blind (2026-11-04) | decodeB-blind, addenda 2 and 3 | FAIL: 11.40% rms pooled over 220 cells, mean +6.0%; deepseek-v2-lite 2.35%, Qwen1.5 5.3%, Phi-3.5 9.5%, Granite-3B 13.4%, JetMoE 19.5%; no model certified |
+| DS (2026-11-04) | addendum 4, measurement only | every reading READ, DESCRIPTIVE on six seen models (section above) |
+| v5d gate (2026-11-04) | addendum 5 | NO-GO on both clauses (below) |
+
+**v5d.** `scripts/r3_timing_model_v5d.py`, over v4d'. Its constants are DS's readings, computed mechanically, and the
+three CAL constants are refitted on CAL2. With every term off it is v4d' exactly on all 350 registered page cells.
+- **GEMM pricing.** On the small-batch and block-scan paths, v4d''s partial-wave tail law is removed. Each GEMM costs
+  max(bandwidth time x s, b / r_cta) + d b / r1, with DS's per-tile r_cta (SUBWAVE) and r1 (DRAIN); d is 1 when the
+  GEMM's CTAs cross a wave boundary. s is DS's w1 rate on the three larger tiles; fix R stays on 16x64x128w4s4. The
+  naive path keeps v4d''s GEMM price.
+- **Call kernels.** silu_and_mul and moe_sum replace v4d's bytes-at-DRAM-speed term, by a rule on the model's shape:
+  silu_and_mul a + g B, moe_sum a + h k + g B, fitted on DS's 69 NATIVE rows per class.
+- **Align kernel.** DS's points by E, plus 0.527 us per loop iteration past the first.
+
+**The gate** (`scripts/scoring/decode/gate_d5.py`; its output on the published trees is committed as
+`scripts/scoring/decode/gate_d5.out.txt`, and a test recomputes it). It reads NO-GO on both clauses.
+
+| clause | bar | v5d reading |
+|---|---|---|
+| CAL: CAL2 under v5d, addendum-3 stop rule | 3% rms, 8% worst cell, 1.5% mean | STOP: 2.41% rms, worst -10.67%, mean -0.42% (T0 8.11 us, s_naive -0.43 us, s_block -2.69 us) |
+| RE-SCORE: the seen decode blind under v5d | under 4.0% pooled over 220 cells | 4.41% pooled |
+
+**Why the CAL clause fails.** The worst cell is Mixtral-8x7B T 128 A 4. v5d prices it at 424.4 us, and the page
+measures 475.0 us. Its w2 GEMM is 128 CTAs of 3.74 MB each, in one wave, at about one CTA per SM, and that GEMM runs
+well under DRAM bandwidth. DS's own ladders show the same thing (`scripts/scoring/decode/d5_build/ladders.py`,
+`ladders.out`, from `ds.readings.json` alone): Mixtral's w2 at T 128 A 4 sits 23.7 us over its A 8 row after bytes,
+and Phi-3.5's sits 16.0 us over. INFERENCE: at a counter offset of 9.91 us (the median of DS's 26 DRAIN-ladder
+offsets) the 128-CTA rows read 21.1 to 24.7 GB/s per CTA (Phi-3.5 and Mixtral at A 4, JetMoE at A 8), and JetMoE's
+64-CTA row reads 34.0. At SUBWAVE's own fitted per-ladder offsets instead, the 128-CTA rows read 28.0 to 30.9 GB/s and
+JetMoE's 64-CTA row 46.7; the conclusion holds either way. DS's per-CTA ceiling cannot price both. On every tile the
+ceiling binds on a single JetMoE w2 row of 64 to 128 CTAs; on 64x128x64w4s3 that gives 46.9 GB/s, set by JetMoE's 64-CTA row, and that ceiling never
+binds on the Mixtral cell. No alternative in D5-1 to D5-5 (the regimes on) moves the cell under 8%: they read -10.6%
+to -12.4% (`d5_build/alternatives.out`). No variant tried reads GO on both clauses. The variants that read CAL GO
+(v4d' itself; W1, CALL or ALIGN alone, the last at worst -5.16%; every term but the regimes, at worst -6.25%)
+re-score at 7.88% to 11.69%, and the only variant under 4.0% (every path, 3.52%) reads CAL STOP (`d5_build/ablation.out`,
+`every_path.out`).
+
+**The re-score is not evidence.** The earlier decode blind pages were read by the two diagnoses that chose what DS
+measures. Their re-score under v5d is post-hoc on seen pages: a weak sanity floor, never a test and never a
+certification. It moves from 11.40% to 4.41% pooled (rms per model: Phi-3.5 4.5%, Qwen1.5 1.9%, JetMoE 6.8%,
+deepseek-v2-lite 1.8%, Granite-3B 5.4%; worst cells +18.2% on Phi-3.5 and +22.2% on JetMoE). This is reported because
+the gate reads it. It certifies nothing, and the blind FAIL stands.
+
+**Forking paths, disclosed** (addendum 5, D5-1 to D5-8).
+- **D5-2, the naive path.** The GEMM terms act on the aligned paths only, because DS read no naive row. This was
+  chosen on CAL2: 2.41% rms against 2.60% for every path. Before the choice, the every-path build's re-score on the
+  seen blind had already been computed: 3.52% against v5d's 4.41% (rms per model 2.4, 1.7, 5.1, 1.8 and 5.2%;
+  `d5_build/every_path.py`, which reproduces both builds). The choice was made on CAL2 alone and goes against that
+  re-score.
+- **D5-4, the call-kernel forms.** 16 candidate forms (15 distinct: `[1, T k I]` duplicates `[1, B]`) were compared by
+  leave-one-model-out over DS's six models, a forking path on DS's pages: silu_and_mul a + g B (0.53 us out of model) and moe_sum a + h k + g B (0.20 us)
+  (`d5_build/call_forms.out`).
+- **Other open choices, scored on CAL2 only.** A SUBWAVE re-read with one offset per tile and GEMM; the w1 scale on the
+  whole w1 price; w2 at the counters' rate; the slope's per-E intercepts; no slope. Each reads STOP, and none was
+  taken (`d5_build/alternatives.out`).
+- **The ablation** (each term alone and every term but one) was scored on CAL2 with the seen blind re-score beside it
+  as a feature profile (`d5_build/ablation.out`). The regimes carry the re-score (11.40% to 6.71% alone) and are what
+  breaks CAL2's worst cell.
+- **D5-8, choices informed by the diagnosis of the old blind pages.** Making the two regimes, the per-tile w1 rate and
+  the call kernels model terms at all; removing v4d''s tail law; replacing its call-kernel bytes.
+
+**DS's weak readings** (D5-7; `d5_build/weak.out`). v5d kept DS's constants: no refit, no fallback, no term dropped.
+- **The per-CTA ceiling** binds on 0 of the 143 new main cells.
+- **W1RATE on 32x128x64w4s3** moves 5 cells per model by at most 0.8% per standard error.
+- **DRAIN on 32x64x128w4s3** is 2.2 standard errors from 0 and acts on 6 cells each of Mixtral-8x22B and Qwen2-57B,
+  by up to 6% over its plausible range.
+
+**What is measured.**
+- CAL2's 91 kept cells.
+- The five-model decode blind (220 cells).
+- DS's DESCRIPTIVE readings on six seen models, one board (`cce89f`), 700 W, the 1710 MHz lock.
+- v5d's gate reading on those published trees.
+
+**What is not claimed.**
+- No decode model is certified on any model, seen or unseen.
+- v5d is not tested: its only test would have been the new blind.
+- The re-score is not a result.
+- DS's readings are not shown to transfer to an unseen model.
+
+**The three unseen models remain unseen and undecoded.** No decode page of Mixtral-8x22B, Qwen2-57B-A14B or
+Granite-3.0-1B-A400M has been timed. Their page lists under `docs/registered/2026-11-04-blind5-pages` are registered
+cell lists; the plan file is never written, and `finalise_decode_d5.py` refuses on NO-GO. GD5 was checked offline: no
+GH200 tuned config exists for any of the three shapes in two vLLM source trees, so a run would use the default tile.
+Neither tree is the pinned vLLM 0.27.1, so this is not GD5 itself: the VM's runtime GD5 readback would still have
+bound.
+No rental was made for this section. The new blind would have cost about $4.24 (72 unit-min, 111 min wall at
+$2.29/h).
+
+**Instrument.**
+- `register_decode_d5.py --check` reads `same`. It recomputes the registration, the pages, the gate output and the
+  absence of a plan file.
+- Every figure in this section traces to a committed file: the registration
+  (`docs/registered/2026-11-04-decode-addendum5-gh200.{json,txt}`), the gate output
+  (`scripts/scoring/decode/gate_d5.out.txt`) and the build records under `scripts/scoring/decode/d5_build/`.
+  `d5_build/run.py --check` recomputes every record, and a test runs it.
+- Every earlier register script's `--check` reads `same`. `scripts/scoring/rental2/register.py` needed one fix. Its
+  rebuild of `2026-10-01-rental2-const-gh200.json` scanned the published G=64 floor captures live. From rental 2's
+  publish (9e04d992, 2026-10-02) on, `--check` read DIFFERS; its parent 38898b45 read `same`. The scan had added 28
+  series rows from the rental 2 and rental 3 captures, all cal false: Mixtral-8x7B TP 2, 4 and 8, Qwen2-57B TP 8 and
+  Granite-3.0-1B-A400M (4 of the 28), the lock1005 and lock1410 captures among them. The scan is now frozen to the 22
+  captures present at its registration commit (2bf6fe38), as addendum 4's earlier-pages list is frozen, and a test
+  holds them to their bytes at that commit. The registered JSON is unchanged.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

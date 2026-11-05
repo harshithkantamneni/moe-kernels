@@ -1874,3 +1874,29 @@ TRANSFERS); **BLOCK** E 40 8.70 us, E 64 8.13 us. **SLOPE** 0.527 us per loop it
 frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M. Read on the fetched tree and on the
 published copy, the `.txt` is byte-identical and the JSON differs only in two paths; `scripts/scoring/rescore.py
 decodeDS` re-reads the published session to the committed files (docs/FINDINGS.md, Decode settling rental DS).
+
+## 2026-11-04, before any new blind page: the decode stage's fifth addendum (model v5d, the gate, the new blind NOT RUN)
+
+`2026-11-04-decode-addendum5-gh200` (`scripts/scoring/decode/register_decode_d5.py --write` / `--check`) registers model
+v5d, the gate addendum 4 recorded as intent, and the new blind. Every earlier decode registration, v4d, v4d' and every
+earlier decode scorer stay byte-identical; the addendum pins them and DS's committed readings.
+- **Model v5d** (`scripts/r3_timing_model_v5d.py`, over v4d'). On the aligned paths (small-batch, block-scan) the CORES
+  rho tail is removed and each GEMM is max(G_bw s, b / r_cta) + d b / r1 per decode tile, at DS's SUBWAVE and DRAIN
+  readings (d = 1 past a wave boundary); w1's bandwidth part is scaled by 3577.96 / c_t on the three larger tiles
+  (DS's W1RATE; fix R stays on 16x64x128w4s4); the naive path keeps v4d''s GEMM price (DS read no naive row). The call
+  kernels replace B_other: silu_and_mul a + g B and moe_sum a + h k + g B, fitted by OLS on DS's NATIVE rows, forms
+  chosen by leave-one-model-out on DS's six models. The align kernel is DS's points by E (piecewise linear, held outside
+  the measured E) plus 0.527 us per loop iteration past the first. The three CAL constants are refitted on CAL2. Every
+  choice is made on DS's and CAL2's pages; the registration lists the alternatives tried, the forking paths, DS's three
+  weak readings and how far they reach, and the choices the old blind's diagnosis informed (D5-1 to D5-8).
+- **The gate** (`gate_d5.py`, one GO / NO-GO line; `finalise_decode_d5.py` refuses unless GO): DS's readings give the
+  registered terms, both published trees reproduce, CAL2 under v5d reads GO, and the SEEN decode blind re-scored under
+  v5d reads under 4.0% pooled over its 220 cells (a weak sanity floor, never a test). **It reads NO-GO on both
+  clauses**: CAL2 2.41% rms but worst cell -10.67% (Mixtral-8x7B T 128 A 4, a single-wave w2 of 128 CTAs at about one
+  CTA per SM, slower than DS's per-CTA ceiling prices it); the re-score 4.41% pooled. Its output is committed as
+  `scripts/scoring/decode/gate_d5.out.txt`.
+- **Closed (owner, 2026-11-04).** The decode stage closes as calibrated, not certified; the NO-GO is not overridden.
+  The new blind (Mixtral-8x22B 47 main cells, Qwen2-57B-A14B 48, Granite-3.0-1B-A400M 48; page lists under
+  `docs/registered/2026-11-04-blind5-pages/`, registered, never timed; the owner's bars 3% / 8% / 1.5%) is registered
+  and NOT RUN: its plan file is never written and nothing is rented. GD5 was checked offline (no GH200 tuned file for
+  any of the three shapes in two vLLM source trees).

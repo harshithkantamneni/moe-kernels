@@ -1,0 +1,29 @@
+(a) CAL2 only, refitted each time
+no ceiling anywhere                CAL STOP rms 0.0241 worst -0.1067 mean -0.0042 n 91 T0 8.11 sn -0.43 sb -2.69
+W1 32x128x64 at c - SE             CAL STOP rms 0.0238 worst -0.1068 mean -0.0038 n 91 T0 8.06 sn -0.38 sb -2.64
+W1 32x128x64 at c + SE             CAL STOP rms 0.0245 worst -0.1066 mean -0.0046 n 91 T0 8.16 sn -0.48 sb -2.74
+W1 32x128x64 off                   CAL STOP rms 0.0247 worst -0.1074 mean -0.0017 n 91 T0 7.79 sn -0.10 sb -2.36
+no drain on 32x64x128              CAL STOP rms 0.0245 worst -0.1059 mean -0.0058 n 91 T0 8.47 sn -0.78 sb -3.05
+drain 32x64x128 at q + 2 SE        CAL STOP rms 0.0271 worst -0.1073 mean -0.0029 n 91 T0 7.80 sn -0.11 sb -2.38
+(b) new models, main cells: v5d's price change at the CAL2 refit's constants (no page of theirs)
+  mixtral-8x22b: 47 cells; the ceiling binds on 0; single-wave GEMMs n 192 to 384; largest b / r_cta over the GEMM at bandwidth 0.40
+    no ceiling anywhere            cells moved  0  max |change| 0.00%  rms 0.00%
+    W1 32x128x64 at c - SE         cells moved  5  max |change| 0.80%  rms 0.26%
+    W1 32x128x64 at c + SE         cells moved  5  max |change| 0.78%  rms 0.25%
+    W1 32x128x64 off               cells moved  5  max |change| 5.15%  rms 1.67%
+    no drain on 32x64x128          cells moved  6  max |change| 5.93%  rms 1.43%
+    drain 32x64x128 at q + 2 SE    cells moved  6  max |change| 5.31%  rms 1.28%
+  qwen2-57b-a14b: 48 cells; the ceiling binds on 0; single-wave GEMMs n none; largest b / r_cta over the GEMM at bandwidth 0.17
+    no ceiling anywhere            cells moved  0  max |change| 0.00%  rms 0.00%
+    W1 32x128x64 at c - SE         cells moved  5  max |change| 0.78%  rms 0.24%
+    W1 32x128x64 at c + SE         cells moved  5  max |change| 0.76%  rms 0.24%
+    W1 32x128x64 off               cells moved  5  max |change| 5.02%  rms 1.56%
+    no drain on 32x64x128          cells moved  6  max |change| 6.04%  rms 1.44%
+    drain 32x64x128 at q + 2 SE    cells moved  6  max |change| 5.40%  rms 1.29%
+  granite-3.0-1b-a400m: 48 cells; the ceiling binds on 0; single-wave GEMMs n 128 to 512; largest b / r_cta over the GEMM at bandwidth 0.63
+    no ceiling anywhere            cells moved  0  max |change| 0.00%  rms 0.00%
+    W1 32x128x64 at c - SE         cells moved  5  max |change| 0.37%  rms 0.11%
+    W1 32x128x64 at c + SE         cells moved  5  max |change| 0.36%  rms 0.11%
+    W1 32x128x64 off               cells moved  5  max |change| 2.40%  rms 0.71%
+    no drain on 32x64x128          cells moved  0  max |change| 0.00%  rms 0.00%
+    drain 32x64x128 at q + 2 SE    cells moved  0  max |change| 0.00%  rms 0.00%
