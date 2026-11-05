@@ -6,3 +6,7 @@
 2026-11-05T22:06:21Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/23 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 174 min left)
 2026-11-05T22:06:23Z prelude END: exit 0 after 0 min [unit 1/23 - lock-mhz=1410 power-limit-w=700]
 2026-11-05T22:06:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2360353 to run-gh200-tileb3-20261105t2202: prelude (unit 1/23 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-05T22:06:25Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/23 mixtral-8x7b tb] (estimate 2 min, cap 30 min, 173 min left)
+2026-11-05T22:06:50Z calibrate END: exit 0 after 0 min [unit 2/23 mixtral-8x7b tb]
+2026-11-05T22:06:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
