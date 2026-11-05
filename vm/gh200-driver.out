@@ -10,3 +10,7 @@
 2026-11-05T22:06:25Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/23 mixtral-8x7b tb] (estimate 2 min, cap 30 min, 173 min left)
 2026-11-05T22:06:50Z calibrate END: exit 0 after 0 min [unit 2/23 mixtral-8x7b tb]
 2026-11-05T22:06:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 253e647 to run-gh200-tileb3-20261105t2202: calibrate (unit 2/23 mixtral-8x7b tb): exit 0 (0 min)
+2026-11-05T22:06:52Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 64x128x64w8s3 on deepseek-v2-lite jetmoe-8b phi-3.5-moe qwen1.5-moe-a2.7b; refused on an MMA path mismatch [unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b] (estimate 4 min, cap 15 min, 173 min left)
+2026-11-05T22:07:04Z tilecensus END: exit 0 after 0 min [unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b]
+2026-11-05T22:07:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
