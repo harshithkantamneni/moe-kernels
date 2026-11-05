@@ -105,3 +105,12 @@
 2026-11-05T22:48:10Z timed: 2026-11-05T22:48:04Z G=1 held at lock 1410: R3 exit 0 DONE, cells=216 worst=1410.0 MHz, 831 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histcd9246dcf-e46372e4
 2026-11-05T22:48:10Z timed END: exit 0 after 14 min [unit 13/23 phi-3.5-moe t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
 2026-11-05T22:48:10Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-05T22:48:12Z timed START: 3c.3 timed R3 histogram page at 1410: G=16, docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 14/23 phi-3.5-moe t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 132 min left)
+2026-11-05T22:48:12Z timed: declared-copies 9 on every page of this unit
+2026-11-05T22:48:13Z timed: histogram page docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json, arms native,shared, deepest tread 4, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-11-05T22:48:13Z timed: G = 16 at treads 4, no G=3 page (timed-groups / timed-treads)
+2026-11-05T23:02:21Z timed: P2 locked_r3 exit 0
+2026-11-05T23:02:21Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-11-05T23:02:21Z timed: 2026-11-05T23:02:16Z G=16 held at lock 1410: R3 exit 0 DONE, cells=216 worst=1410.0 MHz, 841 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist9f5de812-834e87e3
+2026-11-05T23:02:21Z timed END: exit 0 after 14 min [unit 14/23 phi-3.5-moe t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-05T23:02:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
