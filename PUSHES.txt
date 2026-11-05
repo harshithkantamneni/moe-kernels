@@ -10,3 +10,4 @@
 2026-11-05T22:17:21Z bytes (unit 6/23 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
 2026-11-05T22:17:24Z gate (unit 7/23 - gband gate=band): exit 0 (0 min)
 2026-11-05T22:17:27Z gate (unit 8/23 - gsag gate=b3sag): exit 0 (0 min)
+2026-11-05T22:20:04Z bytes: G=64 page exit 1
