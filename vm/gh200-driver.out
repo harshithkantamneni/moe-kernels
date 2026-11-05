@@ -14,3 +14,7 @@
 2026-11-05T22:06:52Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 64x128x64w8s3 on deepseek-v2-lite jetmoe-8b phi-3.5-moe qwen1.5-moe-a2.7b; refused on an MMA path mismatch [unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b] (estimate 4 min, cap 15 min, 173 min left)
 2026-11-05T22:07:04Z tilecensus END: exit 0 after 0 min [unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b]
 2026-11-05T22:07:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed fa14efb to run-gh200-tileb3-20261105t2202: tilecensus (unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b): exit 0 (0 min)
+2026-11-05T22:07:05Z gate START: gate b3census: scripts/tileB3_gate.py census at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 4/23 - gcen gate=b3census] (estimate 1 min, cap 5 min, 173 min left)
+2026-11-05T22:07:06Z gate END: exit 0 after 0 min [unit 4/23 - gcen gate=b3census]
+2026-11-05T22:07:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

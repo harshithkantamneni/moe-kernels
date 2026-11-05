@@ -28,3 +28,7 @@
 2026-11-05T22:07:04Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-11-05-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tb/tile-census.json)
 2026-11-05T22:07:04Z tilecensus END: exit 0 after 0 min [unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b]
 2026-11-05T22:07:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-05T22:07:05Z gate START: gate b3census: scripts/tileB3_gate.py census at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 4/23 - gcen gate=b3census] (estimate 1 min, cap 5 min, 173 min left)
+2026-11-05T22:07:06Z gate b3census at 1410 MHz: RESULT: GATE b3census PASS (exit 0)
+2026-11-05T22:07:06Z gate END: exit 0 after 0 min [unit 4/23 - gcen gate=b3census]
+2026-11-05T22:07:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
