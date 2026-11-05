@@ -42,3 +42,7 @@
 2026-11-05T22:20:15Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 64x128x64 w8 s3 [unit 10/23 mixtral-8x7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 160 min left)
 2026-11-05T22:26:54Z bytes END: exit 0 after 7 min [unit 10/23 mixtral-8x7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 2026-11-05T22:26:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d592340 to run-gh200-tileb3-20261105t2202: bytes (unit 10/23 mixtral-8x7b f64w8 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-11-05T22:26:56Z gate START: gate b3sag64: scripts/tileB3_gate.py sag64 at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 11/23 - gsag64 gate=b3sag64] (estimate 1 min, cap 5 min, 153 min left)
+2026-11-05T22:26:58Z gate END: exit 0 after 0 min [unit 11/23 - gsag64 gate=b3sag64]
+2026-11-05T22:26:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
