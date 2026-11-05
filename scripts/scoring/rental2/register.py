@@ -328,13 +328,43 @@ CAL_MODELS = {"mixtral-8x7b", "mixtral-8x22b", "qwen2-57b-a14b", "olmoe-1b-7b"}
 UNSEEN_MIN = {"mixtral-8x7b-tp8": 11, "mixtral-8x7b-tp4": 10, "mixtral-8x7b-tp2": 10}
 
 
+#: the G=64 floor captures this registration read, FROZEN at its commit (2bf6fe38, 2026-10-01): the published r3f-g64
+#: pages (unlocked ones excluded) as they stood then. The live rglob it replaces picked up every later session's
+#: captures: from rental 2's publish (9e04d992, 2026-10-02) on, --check read DIFFERS (its parent 38898b45 read same),
+#: as the scan added 28 series rows from the rental 2 and rental 3 captures, all cal false: Mixtral-8x7B TP 2, 4 and 8,
+#: Qwen2-57B TP 8 and Granite-3.0-1B-A400M (4 of the 28), the lock1005 and lock1410 captures among them. The
+#: registration reads only these, as addendum 4's earlier_pages literal is frozen
+CAL_PAGES_2BF6FE38 = (
+    "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-27-nvidia_gh200_480gb-session/results/2026-09-27-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-28-nvidia_gh200_480gb-qwen2-57b-session/results/2026-09-28-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-29-nvidia_gh200_480gb-jetmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-29-nvidia_gh200_480gb-olmoe-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-29-nvidia_gh200_480gb-phi3.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-29-nvidia_gh200_480gb-qwen1.5-session/results/2026-09-29-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-30-nvidia_gh200_480gb-granite-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-30-nvidia_gh200_480gb-jetmoe-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json",
+    "2026-09-30-nvidia_gh200_480gb-mixtral8x7b-floor-session/results/2026-09-30-nvidia_gh200_480gb-r3-counters/r3f-g64.json",
+    "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64-lock1710.json",
+    "2026-10-01-nvidia_gh200_480gb-rental1-session/results/2026-10-01-nvidia_gh200_480gb-mixtral-8x7b-tp8-floor-r3-counters/r3f-g64.json",
+)
+
+
 def _cal_series(CP, TM, params, kw):
     """Per published G=64 floor capture (base and 1710 lock) and GEMM, the
     floor-bound (CORES floor share >= 0.97) cells of >= 2 waves."""
     out = {}
-    for f in sorted(PUB.rglob("r3f-g64*.json")):
-        if "unlocked" in f.stem:
-            continue
+    for f in (PUB / x for x in CAL_PAGES_2BF6FE38):
         d = json.loads(f.read_text())
         model = d["plan"]["model"]
         treads = sorted({c["n"] for c in d["cells"]})
