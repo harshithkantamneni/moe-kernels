@@ -46,3 +46,7 @@
 2026-11-05T22:26:56Z gate START: gate b3sag64: scripts/tileB3_gate.py sag64 at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 11/23 - gsag64 gate=b3sag64] (estimate 1 min, cap 5 min, 153 min left)
 2026-11-05T22:26:58Z gate END: exit 0 after 0 min [unit 11/23 - gsag64 gate=b3sag64]
 2026-11-05T22:26:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b88362f to run-gh200-tileb3-20261105t2202: gate (unit 11/23 - gsag64 gate=b3sag64): exit 0 (0 min)
+2026-11-05T22:27:00Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 64x128x64 w8 s3 [unit 12/23 phi-3.5-moe t64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 153 min left)
+2026-11-05T22:34:08Z timed END: exit 0 after 7 min [unit 12/23 phi-3.5-moe t64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-05T22:34:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

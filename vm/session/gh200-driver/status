@@ -87,3 +87,12 @@
 2026-11-05T22:26:58Z gate b3sag64 at 1410 MHz: RESULT: GATE b3sag64 PASS par A 39.4650 us tau 337.5 us ratio 1.4204 olmoe 31.93/300 rms 3.17 sha 5e35d20c0fff mixtral 47.0/375 rms 9.01 sha 7f3222f2883b (exit 0)
 2026-11-05T22:26:58Z gate END: exit 0 after 0 min [unit 11/23 - gsag64 gate=b3sag64]
 2026-11-05T22:26:58Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-05T22:27:00Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 64x128x64 w8 s3 [unit 12/23 phi-3.5-moe t64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 153 min left)
+2026-11-05T22:27:00Z timed: declared-copies 9 on every page of this unit
+2026-11-05T22:27:00Z timed: histogram page docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json, arms native,shared, deepest tread 1, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-11-05T22:27:01Z timed: G = 1 at treads 1, no G=3 page (timed-groups / timed-treads)
+2026-11-05T22:34:08Z timed: P2 locked_r3 exit 0
+2026-11-05T22:34:08Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-11-05T22:34:08Z timed: 2026-11-05T22:34:03Z G=1 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 420 s, dir nvidia_gh200_480gb-armsnative_shared-bm64-budget200.0-decl9-dtypebf16-duty0.25-g1-hista43063a80d-814c1669
+2026-11-05T22:34:08Z timed END: exit 0 after 7 min [unit 12/23 phi-3.5-moe t64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-05T22:34:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
