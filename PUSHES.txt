@@ -5,3 +5,4 @@
 2026-11-05T22:07:04Z tilecensus (unit 3/23 - tb tiles=128x128x64w8s3,64x128x64w8s3 models=deepseek-v2-lite,jetmoe-8b,phi-3.5-moe,qwen1.5-moe-a2.7b): exit 0 (0 min)
 2026-11-05T22:07:07Z gate (unit 4/23 - gcen gate=b3census): exit 0 (0 min)
 2026-11-05T22:10:12Z bytes: G=64 page exit 3
+2026-11-05T22:10:21Z bytes (unit 5/23 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
