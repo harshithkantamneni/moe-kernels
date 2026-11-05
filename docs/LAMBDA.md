@@ -654,8 +654,9 @@ then the driver pushes and exits 143); the decode stage's copy (2026-10-14) stop
 `pkill -TERM -f '[g]h200_settleS1_session.sh'`, the calibration rental C2's copy (2026-10-22) with
 `pkill -TERM -f '[g]h200_cal2_session.sh'`, the calibration rental C3's copy (2026-10-26) with
 `pkill -TERM -f '[g]h200_cal3_session.sh'`, the calibration rental C4's copy (2026-10-27) with
-`pkill -TERM -f '[g]h200_cal4_session.sh'`, and the decode CAL2 rental's D3 copy (2026-10-29) with
-`pkill -TERM -f '[g]h200_decode3_session.sh'`. To resume at a step:
+`pkill -TERM -f '[g]h200_cal4_session.sh'`, the decode CAL2 rental's D3 copy (2026-10-29) with
+`pkill -TERM -f '[g]h200_decode3_session.sh'`, and tile rental B3's copy (2026-11-04) with
+`pkill -TERM -f '[g]h200_tileB3_session.sh'`. To resume at a step:
 `bash ~/moe/repo/scripts/gh200_model_session.sh --from <step> --deadline <epoch s>`;
 a rerun takes a fresh session tag (`...b`), since locked_r3.py refuses one
 already used.
