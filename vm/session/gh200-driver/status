@@ -135,3 +135,9 @@
 2026-11-06T18:36:53Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json --arms native,shared on every page of this unit
 2026-11-06T18:36:53Z bytes: the registered list G = 16 (phi-3.5-moe, b128g16): no tail drop, no re-price, no base-clock control
 2026-11-06T18:41:59Z bytes: G=16 page exit 0 after 304 s
+2026-11-06T18:42:13Z bytes: lock block exit 0 (G=16 exit 0 18:41:59 304 s;)
+2026-11-06T18:42:18Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:42:18Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-06T18:42:19Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g16-r3-counters/lock1410/summary.json)
+2026-11-06T18:42:19Z bytes END: exit 0 after 5 min [unit 19/20 phi-3.5-moe b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared byte-groups=16]
+2026-11-06T18:42:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
