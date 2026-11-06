@@ -5,3 +5,4 @@
 2026-11-06T18:09:48Z regcheck (unit 3/20 - rcp probe=pc): exit 1 (1 min)
 2026-11-06T18:11:26Z perturb (unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710): exit 1 (1 min)
 2026-11-06T18:12:12Z stamps (unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710): exit 0 (1 min)
+2026-11-06T18:13:02Z perturb (unit 6/20 - ptc probe=pc gates=sc,se2): exit 1 (1 min)

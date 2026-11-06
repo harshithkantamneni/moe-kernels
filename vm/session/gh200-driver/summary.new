@@ -3,3 +3,4 @@ tilecensus exit 0 after 0 min [unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,
 regcheck   exit 1 after 1 min [unit 3/20 - rcp probe=pc]
 perturb    exit 1 after 1 min [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710]
 stamps     exit 0 after 1 min [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710]
+perturb    exit 1 after 1 min [unit 6/20 - ptc probe=pc gates=sc,se2]

@@ -42,3 +42,10 @@
 2026-11-06T18:12:04Z stamps: u5-sa exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa, probe=pc)
 2026-11-06T18:12:04Z stamps END: exit 0 after 1 min [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710]
 2026-11-06T18:12:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:12:16Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 6/20 - ptc probe=pc gates=sc,se2] (estimate 4 min, cap 15 min, 109 min left)
+2026-11-06T18:12:54Z perturb: GATE_u7_sc=FAIL median=0.01885249587845733 worst=0.09327108577594956
+2026-11-06T18:12:54Z perturb: HARD_u7_sc=PASS
+2026-11-06T18:12:54Z perturb: GATE_u14_se2=PASS median=0.002341196748037455 worst=0.008610656877284906
+2026-11-06T18:12:54Z perturb: HARD_u14_se2=PASS
+2026-11-06T18:12:54Z perturb END: exit 1 after 1 min [unit 6/20 - ptc probe=pc gates=sc,se2]
+2026-11-06T18:12:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
