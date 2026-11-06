@@ -3,3 +3,4 @@
 2026-11-06T18:08:43Z prelude (unit 1/20 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
 2026-11-06T18:09:03Z tilecensus (unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
 2026-11-06T18:09:48Z regcheck (unit 3/20 - rcp probe=pc): exit 1 (1 min)
+2026-11-06T18:11:26Z perturb (unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710): exit 1 (1 min)

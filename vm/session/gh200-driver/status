@@ -28,3 +28,12 @@
 2026-11-06T18:09:46Z regcheck: REGCHECK_u20_sr=PASS
 2026-11-06T18:09:46Z regcheck END: exit 1 after 1 min [unit 3/20 - rcp probe=pc]
 2026-11-06T18:09:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:09:51Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710] (estimate 8 min, cap 25 min, 111 min left)
+2026-11-06T18:11:20Z perturb: GATE_u5_sa=FAIL median=0.012723635163402192 worst=0.09030816039012024
+2026-11-06T18:11:20Z perturb: HARD_u5_sa=PASS
+2026-11-06T18:11:20Z perturb: GATE_u17_sd=FAIL median=0.009138683160838434 worst=0.044634413192299105
+2026-11-06T18:11:20Z perturb: HARD_u17_sd=FAIL
+2026-11-06T18:11:20Z perturb: GATE_u20_sr=FAIL median=0.009611589246426522 worst=0.034355286674062735
+2026-11-06T18:11:20Z perturb: HARD_u20_sr=PASS
+2026-11-06T18:11:20Z perturb END: exit 1 after 1 min [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710]
+2026-11-06T18:11:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
