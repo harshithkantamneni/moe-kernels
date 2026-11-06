@@ -30,3 +30,5 @@
 2026-11-06T18:13:04Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-c.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json] (estimate 3 min, cap 10 min, 108 min left)
 2026-11-06T18:13:23Z stamps END: exit 0 after 0 min [unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json]
 2026-11-06T18:13:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5dd4559 to run-gh200-pc-20261106t1804: stamps (unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json): exit 0 (0 min)
+2026-11-06T18:13:36Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 8/20 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 108 min left)
