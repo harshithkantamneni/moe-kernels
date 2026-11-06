@@ -50,3 +50,7 @@
 2026-11-06T18:25:01Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 12/20 - pt3 probe=c3] (estimate 4 min, cap 15 min, 96 min left)
 2026-11-06T18:25:24Z perturb END: exit 1 after 0 min [unit 12/20 - pt3 probe=c3]
 2026-11-06T18:25:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f9bc6f4 to run-gh200-pc-20261106t1804: perturb (unit 12/20 - pt3 probe=c3): exit 1 (0 min)
+2026-11-06T18:25:36Z stamps START: stamps at the 1410 lock: the instrumented copy (stamps=ends) at 128x128x64 w8 s3 G=1, docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json, arms native; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_c3.py) [unit 13/20 phi-3.5-moe se1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 4 min, cap 15 min, 96 min left)
+2026-11-06T18:25:51Z stamps END: exit 0 after 0 min [unit 13/20 phi-3.5-moe se1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-11-06T18:25:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
