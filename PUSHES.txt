@@ -31,3 +31,4 @@
 2026-11-06T00:20:57Z bytes (unit 22/23 qwen1.5-moe-a2.7b b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/qwen1.5-moe-a2.7b-128g1.json arms=native,shared byte-groups=1): exit 0 (4 min)
 2026-11-06T00:23:38Z bytes: G=1 page exit 0
 2026-11-06T00:23:49Z bytes (unit 23/23 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1): exit 0 (3 min)
+2026-11-06T00:23:52Z the session ended: driver exit 0

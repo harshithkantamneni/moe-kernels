@@ -206,3 +206,4 @@
 2026-11-06T00:23:46Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/summary.json)
 2026-11-06T00:23:46Z bytes END: exit 0 after 3 min [unit 23/23 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1]
 2026-11-06T00:23:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T00:23:50Z driver end: exit 0
