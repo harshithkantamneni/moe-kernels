@@ -1,0 +1,17 @@
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   64x128x64w4s3 64x128x64w4s2 64x128x64w4s4 64x128x128w4s2 64x128x128w4s3 64x128x64w8s3 16x64x128w4s4 16x64x128w4s2 16x64x128w4s3 128x128x64w8s3
+models  mixtral-8x7b phi-3.5-moe
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  64x128x64w4s2: path wgmma, shared 49152 B, design occupancy 4
+  64x128x64w4s4: path wgmma, shared 98304 B, design occupancy 2
+  64x128x128w4s2: path wgmma, shared 98304 B, design occupancy 2
+  64x128x128w4s3: path wgmma, shared 147456 B, design occupancy 1
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  16x64x128w4s2: path mma.sync, shared 20480 B, design occupancy 10
+  16x64x128w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  mixtral-8x7b: tread 64x128x64w4s3 n 1, 64x128x64w4s2 n 1, 64x128x64w4s4 n 1, 64x128x128w4s2 n 1, 64x128x128w4s3 n 1, 64x128x64w8s3 n 1, 16x64x128w4s4 n 1, 16x64x128w4s2 n 1, 16x64x128w4s3 n 1, 128x128x64w8s3 n 1
+  phi-3.5-moe: tread 64x128x64w4s3 n 1, 64x128x64w4s2 n 1, 64x128x64w4s4 n 1, 64x128x128w4s2 n 1, 64x128x128w4s3 n 1, 64x128x64w8s3 n 1, 16x64x128w4s4 n 1, 16x64x128w4s2 n 1, 16x64x128w4s3 n 1, 128x128x64w8s3 n 1
+DRY RUN: nothing compiled (exit 2)

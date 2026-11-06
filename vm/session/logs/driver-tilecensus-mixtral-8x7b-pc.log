@@ -1,0 +1,42 @@
+== 2026-11-06T18:08:44Z step tilecensus: tile census, compile only (no lock, nothing timed): tiles 64x128x64w4s3 64x128x64w4s2 64x128x64w4s4 64x128x128w4s2 64x128x128w4s3 64x128x64w8s3 16x64x128w4s4 16x64x128w4s2 16x64x128w4s3 128x128x64w8s3 on mixtral-8x7b phi-3.5-moe; refused on an MMA path mismatch
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   64x128x64w4s3 64x128x64w4s2 64x128x64w4s4 64x128x128w4s2 64x128x128w4s3 64x128x64w8s3 16x64x128w4s4 16x64x128w4s2 16x64x128w4s3 128x128x64w8s3
+models  mixtral-8x7b phi-3.5-moe
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  64x128x64w4s3: path wgmma, shared 73728 B, design occupancy 3
+  64x128x64w4s2: path wgmma, shared 49152 B, design occupancy 4
+  64x128x64w4s4: path wgmma, shared 98304 B, design occupancy 2
+  64x128x128w4s2: path wgmma, shared 98304 B, design occupancy 2
+  64x128x128w4s3: path wgmma, shared 147456 B, design occupancy 1
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  16x64x128w4s4: path mma.sync, shared 61440 B, design occupancy 3
+  16x64x128w4s2: path mma.sync, shared 20480 B, design occupancy 10
+  16x64x128w4s3: path mma.sync, shared 40960 B, design occupancy 5
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  mixtral-8x7b: tread 64x128x64w4s3 n 1, 64x128x64w4s2 n 1, 64x128x64w4s4 n 1, 64x128x128w4s2 n 1, 64x128x128w4s3 n 1, 64x128x64w8s3 n 1, 16x64x128w4s4 n 1, 16x64x128w4s2 n 1, 16x64x128w4s3 n 1, 128x128x64w8s3 n 1
+  phi-3.5-moe: tread 64x128x64w4s3 n 1, 64x128x64w4s2 n 1, 64x128x64w4s4 n 1, 64x128x128w4s2 n 1, 64x128x128w4s3 n 1, 64x128x64w8s3 n 1, 16x64x128w4s4 n 1, 16x64x128w4s2 n 1, 16x64x128w4s3 n 1, 128x128x64w8s3 n 1
+  64x128x64w4s3 mixtral-8x7b n 1: 2 configs
+  64x128x64w4s3 phi-3.5-moe n 1: 2 configs
+  64x128x64w4s2 mixtral-8x7b n 1: 2 configs
+  64x128x64w4s2 phi-3.5-moe n 1: 2 configs
+  64x128x64w4s4 mixtral-8x7b n 1: 2 configs
+  64x128x64w4s4 phi-3.5-moe n 1: 2 configs
+  64x128x128w4s2 mixtral-8x7b n 1: 2 configs
+  64x128x128w4s2 phi-3.5-moe n 1: 2 configs
+  64x128x128w4s3 mixtral-8x7b n 1: 2 configs
+  64x128x128w4s3 phi-3.5-moe n 1: 2 configs
+  64x128x64w8s3 mixtral-8x7b n 1: 2 configs
+  64x128x64w8s3 phi-3.5-moe n 1: 2 configs
+  16x64x128w4s4 mixtral-8x7b n 1: 2 configs
+  16x64x128w4s4 phi-3.5-moe n 1: 2 configs
+  16x64x128w4s2 mixtral-8x7b n 1: 2 configs
+  16x64x128w4s2 phi-3.5-moe n 1: 2 configs
+  16x64x128w4s3 mixtral-8x7b n 1: 2 configs
+  16x64x128w4s3 phi-3.5-moe n 1: 2 configs
+  128x128x64w8s3 mixtral-8x7b n 1: 2 configs
+  128x128x64w8s3 phi-3.5-moe n 1: 2 configs
+RESULT: VALIDITY census_path PASS 40 configs, 0 path mismatches, 0 errors
+RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-11-06T18:09:02Z tilecensus: RESULT: VALIDITY census_path PASS 40 configs, 0 path mismatches, 0 errors
+2026-11-06T18:09:02Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-11-06T18:09:02Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-tile-census-mixtral-8x7b-pc/tile-census.json)

@@ -6,3 +6,7 @@
 2026-11-06T18:08:37Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/20 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 113 min left)
 2026-11-06T18:08:42Z prelude END: exit 0 after 0 min [unit 1/20 - lock-mhz=1410 power-limit-w=700]
 2026-11-06T18:08:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 0e647f0 to run-gh200-pc-20261106t1804: prelude (unit 1/20 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-06T18:08:44Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 64x128x64w4s3 64x128x64w4s2 64x128x64w4s4 64x128x128w4s2 64x128x128w4s3 64x128x64w8s3 16x64x128w4s4 16x64x128w4s2 16x64x128w4s3 128x128x64w8s3 on mixtral-8x7b phi-3.5-moe; refused on an MMA path mismatch [unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe] (estimate 4 min, cap 15 min, 113 min left)
+2026-11-06T18:09:02Z tilecensus END: exit 0 after 0 min [unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe]
+2026-11-06T18:09:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
