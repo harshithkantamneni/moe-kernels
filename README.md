@@ -235,13 +235,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7460 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7462 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-six further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-seven further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-nine Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and thirty Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -287,13 +287,16 @@ counter page at the 1710 MHz lock on each of six seen models, JetMoE-8B, Phi-3.5
 Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B, 9 units on one GH200 at 700 W, and tile rental B3 of
 2026-11-05/06: the compile-only census of the four blind models, the four sag pages and their gates, the eight blind
 timed pages of Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and deepseek-v2-lite at 128x128 and 64x128, the OLMoE
-repeat and three byte pages, 23 units on one GH200 at 700 W and the 1410 MHz lock),
+repeat and three byte pages, 23 units on one GH200 at 700 W and the 1410 MHz lock, and rental PC of 2026-11-06:
+per-CTA start and end stamps on synthetic decode shapes, Mixtral-8x7B and its tp shards and JetMoE-8B at the 1710
+and 1410 MHz locks, Phi-3.5-MoE's w1 stamps at 128x128 and 64x128, the two f128 sag pages and G-BAND, three Phi byte pages and
+one Mixtral decode counter page, 20 units on one GH200 at 700 W, one of them refused),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 29 GH200 sessions ran on twenty-one distinct boards (counted by
+sessions rather than arms. The 30 GH200 sessions ran on twenty-two distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again; the DS rental's board cce89f is new; B3's board ebedab is new). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -363,7 +366,11 @@ own bar (3.50% rms; 128 G 1 mean +3.4%, 64x128 G 1 mean -3.2%), and no model is 
 deepseek-v2-lite meet the bar on their own cells (1.18%, 2.05%, 0.65% rms), descriptive only (docs/FINDINGS.md, Tile
 rental B3). Every
 other held-out model was timed from its own counted bytes, which tests
-the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
+the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue). Rental PC (2026-11-06) is a
+measurement and certifies nothing. On synthetic decode shapes at the 1710 MHz lock a CTA alone on its SM streams its
+weight slab at about 36 GB/s, falling to 23 GB/s at 128 live CTAs and to about 8.6 GB/s once the GPU saturates at
+3612 GB/s; H1 (rate = loads in flight over latency) reads NOT IDENTIFIED because two inputs were not read
+(docs/FINDINGS.md, Rental PC).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

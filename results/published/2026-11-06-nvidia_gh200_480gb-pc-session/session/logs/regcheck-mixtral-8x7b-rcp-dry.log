@@ -1,0 +1,7 @@
+INSTRUMENTED KERNEL PC (regcheck): 5 variant(s); upstream vLLM v0.27.1 fused_moe.py sha256 d5955a3460746b66
+  u5-sa        page  docs/registered/2026-11-06-pc-pages/pc-a.json cells 38 tiles 64x128x128w4s2 64x128x128w4s3 64x128x64w4s2 64x128x64w4s3 64x128x64w4s4 64x128x64w8s3 shapes jetmoe-8b mixtral-8x7b mixtral-8x7b-tp2 mixtral-8x7b-tp4 mixtral-8x7b-tp8 pcs-e32-h4096 pcs-e8-h1024 pcs-e8-h128 pcs-e8-h2048 pcs-e8-h256 pcs-e8-h512 pcs-e8-h512-f1792 pcs-e8-h512-f3584 pcs-e8-h512-f7168 spec stamps=ends,evict_a=none,evict_b=none
+  u7-sc        page  docs/registered/2026-11-06-pc-pages/pc-c.json cells 9 tiles 64x128x64w4s2 64x128x64w4s3 64x128x64w4s4 shapes mixtral-8x7b pcs-e32-h4096 pcs-e8-h2048 pcs-e8-h512 spec stamps=ends,evict_a=none,evict_b=none
+  u14-se2      hist  docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json cells 6 tiles 64x128x64w8s3 shapes phi-3.5-moe spec stamps=ends,evict_a=none,evict_b=none
+  u17-sd       page  docs/registered/2026-11-06-pc-pages/pc-d.json cells 15 tiles 16x64x128w4s2 16x64x128w4s3 16x64x128w4s4 shapes mixtral-8x7b pcs-e32-h4096 pcs-e8-h128 pcs-e8-h2048 pcs-e8-h512 spec stamps=ends,evict_a=none,evict_b=none
+  u20-sr       page  docs/registered/2026-11-06-pc-pages/pc-r.json cells 3 tiles 64x128x64w4s3 shapes pcs-e32-h4096 pcs-e8-h512 spec stamps=ends,evict_a=none,evict_b=none
+DRY RUN: nothing launched (exit 2)

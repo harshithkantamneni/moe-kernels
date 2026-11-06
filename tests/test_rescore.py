@@ -14,7 +14,10 @@ decodeB.finalised.json, to the committed blind.score files, and the decode settl
 under the fourth addendum its published session to the committed ds.readings files (read from the published tree, so
 equal byte for byte), and tile rental B3's registered scorer its published session to the committed tileB3.score files
 (where the round-5 frozen chain is on this machine and B3's run commit is in this clone's history: the scorer refuses
-without either), and the committed B3 score names no model CERTIFIED at its top level."""
+without either), and the committed B3 score names no model CERTIFIED at its top level, and rental PC's registered
+reader its published session to the committed pc.read files (where PC's run commit is in this clone's history: the
+reader checks the freeze against it; read from the published tree, so equal byte for byte), and the committed PC
+reading is DESCRIPTIVE with H1 NOT IDENTIFIED."""
 from __future__ import annotations
 
 import importlib.util
@@ -214,6 +217,47 @@ def test_the_committed_tileB3_score_certifies_no_model():
     assert {m: p.get("certification") for m, p in view["per_model"].items()} == {
         "deepseek-v2-lite": None, "jetmoe-8b": "CERTIFIED", "qwen1.5-moe-a2.7b": "CERTIFIED",
         "phi-3.5-moe": "NOT CERTIFIED (3 pages in CLEAN, bar FAILS)"}
+
+
+PC_RUN_COMMIT = "c9c92f1edede773a19079f900ef7a237ee7de37e"
+HAVE_PC_COMMIT = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{PC_RUN_COMMIT}^{{commit}}"],
+                                capture_output=True).returncode == 0
+PC_SESSION = "results/published/2026-11-06-nvidia_gh200_480gb-pc-session"
+PC_READS = REPO / "scripts/scoring/pc"
+
+
+@pytest.mark.skipif(not HAVE_PC_COMMIT, reason="rental PC's run commit is not in this clone's history")
+def test_the_published_pc_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("pc") == PC_SESSION
+    ran = RS.rescore("pc", tmp_path)
+    assert ran == [("scripts/scoring/pc/read_pc.py", 0)], ran
+    rows = dict(RS.compare("pc", tmp_path))
+    assert rows == {"pc.read.json": "EQUAL", "pc.read.txt": "EQUAL"}, rows
+    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    for name in ("pc.read.json", "pc.read.txt"):
+        assert (tmp_path / name).read_bytes() == (PC_READS / name).read_bytes(), name
+    assert f"  pages: {PC_SESSION}" in (PC_READS / "pc.read.txt").read_text().splitlines()
+
+
+def test_the_committed_pc_reading_is_descriptive_and_h1_not_identified():
+    """PC certifies nothing; H1 reads NOT IDENTIFIED (beta_f at G 8 and the G 2 plateau rung NOT READ); the sd unit is
+    refused (its regcheck FAIL); the run commit and the board are the registered ones."""
+    d = json.loads((PC_READS / "pc.read.json").read_text())
+    assert d["status"].startswith("MEASUREMENT, DESCRIPTIVE")
+    assert d["pc"] == PC_SESSION and d["registration"] == "2026-11-06-pc-gh200"
+    assert d["commit"] == {"checked": True, "files": 68, "sha": PC_RUN_COMMIT}
+    assert d["board"]["valid"] and d["board"]["g_band"] == "PASS"
+    h1 = d["H1"]
+    assert h1["label"] == "NOT IDENTIFIED" and h1["why"] == ["unread: beta_f, plateau_spread, plateau_ratio"]
+    assert h1["inputs"]["beta_f"] is None and h1["inputs"]["plateau_ratio"] is None
+    assert d["PC-R4"]["C-G8 / A-G8"]["status"] == "NOT IDENTIFIED: a twin not READ"
+    a_g2 = next(r for r in d["PC-R1"]["A (D64, 1710)"] if r["cell"] == "A-G2")
+    assert a_g2["status"].startswith("NOT READ: overhead")
+    sd = d["PC-R0"]["sd"]
+    assert sd["valid"] is False and sd["regcheck"] == "FAIL" and sd["launches"] == 0
+    assert d["PC-R1"]["D (D16, 1710)"] == []
+    assert d["PC-R7"]["status_sat"] == "READ" and abs(d["PC-R7"]["X_sat"] - 3612.42) < 0.01
+    assert d["PC-R8"]["does the curve price the CAL2 cell (Mixtral T128 A4)"]["reading"].startswith("CARRIES")
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

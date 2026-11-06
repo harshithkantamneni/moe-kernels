@@ -1,0 +1,28 @@
+2026-11-06T18:06:24Z the branch's first commit: the VM can push
+2026-11-06T18:08:36Z setup_vm.sh: READY
+2026-11-06T18:08:43Z prelude (unit 1/20 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-06T18:09:03Z tilecensus (unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-06T18:09:48Z regcheck (unit 3/20 - rcp probe=pc): exit 1 (1 min)
+2026-11-06T18:11:26Z perturb (unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710): exit 1 (1 min)
+2026-11-06T18:12:12Z stamps (unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710): exit 0 (1 min)
+2026-11-06T18:13:02Z perturb (unit 6/20 - ptc probe=pc gates=sc,se2): exit 1 (1 min)
+2026-11-06T18:13:32Z stamps (unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json): exit 0 (0 min)
+2026-11-06T18:16:47Z bytes: G=64 page exit 3
+2026-11-06T18:17:06Z bytes (unit 8/20 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (3 min)
+2026-11-06T18:24:05Z bytes: G=64 page exit 3
+2026-11-06T18:24:24Z bytes (unit 9/20 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64): exit 0 (7 min)
+2026-11-06T18:24:36Z gate (unit 10/20 - gband gate=band): exit 0 (0 min)
+2026-11-06T18:24:59Z regcheck (unit 11/20 - rc3 probe=c3): exit 0 (0 min)
+2026-11-06T18:25:34Z perturb (unit 12/20 - pt3 probe=c3): exit 1 (0 min)
+2026-11-06T18:26:02Z stamps (unit 13/20 phi-3.5-moe se1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
+2026-11-06T18:26:29Z stamps (unit 14/20 phi-3.5-moe se2 probe=pc block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
+2026-11-06T18:31:59Z bytes: G=1 page exit 0
+2026-11-06T18:32:19Z bytes (unit 15/20 phi-3.5-moe b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared byte-groups=1): exit 0 (6 min)
+2026-11-06T18:35:09Z bytes: G=1 page exit 0
+2026-11-06T18:35:29Z bytes (unit 16/20 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1): exit 0 (3 min)
+2026-11-06T18:35:42Z stamps (unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710): exit 2 (0 min)
+2026-11-06T18:36:50Z decodebytes (unit 18/20 mixtral-8x7b cnt histogram=docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json kernels=wide lock-mhz=1710): exit 0 (1 min)
+2026-11-06T18:42:10Z bytes: G=16 page exit 0
+2026-11-06T18:42:30Z bytes (unit 19/20 phi-3.5-moe b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared byte-groups=16): exit 0 (5 min)
+2026-11-06T18:42:58Z stamps (unit 20/20 - sr probe=pc page=docs/registered/2026-11-06-pc-pages/pc-r.json lock-mhz=1710): exit 0 (0 min)
+2026-11-06T18:43:11Z the session ended: driver exit 3

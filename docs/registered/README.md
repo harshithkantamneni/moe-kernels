@@ -1945,3 +1945,56 @@ rule 3 combines the views and without the pooled bar. `b3common.certification` t
 combined verdict and writes the top-level field, while the view block is kept unchanged. The top-level
 `certification` is the certification of record; `tests/test_rescore.py::test_the_committed_tileB3_score_certifies_no_model`
 holds it to NOT CERTIFIED for every blind model.
+
+## 2026-11-06, before any page: rental PC, per-CTA DRAM rate against loads in flight (a measurement registration)
+
+`2026-11-06-pc-gh200` (`scripts/scoring/pc/register_pc.py --write` / `--check`, committed at c9c92f1e) registers
+rental PC as a MEASUREMENT: it certifies nothing, registers no model form, no constant, no bar and no gate on any
+model, and moves no registered verdict. Every reading is DESCRIPTIVE. The core (blocks A, C, D) is motivated by the
+decode CAL2 few-CTA failure (v5d's worst CAL2 cell, Mixtral T128 A4 w2, 128 CTAs in one wave, ran slower than
+bandwidth and no ceiling read off DS's pages priced it); the Phi units ask the launch-schedule question of Phi-3.5's
+B3 miss (the w1 byte law, phi-split REPORT.md, POST-HOC on SEEN pages), not the rate question.
+- **The instrument.** The unchanged instrumented copy (`moe/instrumented/fused_moe_instr.py`, sha256 16a8e398...,
+  stamps=ends) driven by the new host-side probe `scripts/instr_probe_pc.py` on the registered pages
+  (`docs/registered/2026-11-06-pc-pages/`: pc-a 38 cells at 1710 MHz, pc-c 9 at 1410, pc-d 15 at 1710, pc-r 3, and
+  Mixtral's decode counter page) and C3's probe for Phi's E1; per cell a readback, 3 warm-up calls and 3 stamped calls
+  (6 where the read GEMM has under 4 live CTAs), a 240 MiB L2 flush outside the event pair (none on the flush-off
+  control).
+- **The readings.** PC-R0 (validity and ROW SANITY) to PC-R14 and the replicate (`read_pc.py`, by function): the rate
+  curve, the F ladders, beta_Q against the PTX in-flight ratio, beta_f, omega, sigma, the transition into saturation
+  (X_sat, r0, G_90, L_gpu), transfer to real shapes and the CAL2 cell, the L2 control, Phi's w1 re-read pairs (E1 and
+  E2, against B3's counted bytes), Phi 64g1 life against packing, counter against time, the clock at kernel start and
+  placement. A reading that does not clear its rule reads NOT IDENTIFIED or NOT READ with the reason, never zero.
+- **H1** (r = Q_B / L with L rising toward saturation): the reader prints SUPPORTED, FALSIFIED or MIXED beside the
+  numbers (owner decision 4), from bands registered before any page: FALSIFIED on beta_Q < 0.5, beta_f > 0.5,
+  omega > 1.25, no plateau (r(G 2) / r(G 16) > 1.5 with X(G 16) <= 0.25 X_sat) or sigma < 0.6; SUPPORTED when beta_Q in
+  [0.7, 1.3], |beta_f| <= 0.3, omega in [0.85, 1.15], the plateau within 15% over G 2 to 16 and sigma >= 0.85; NOT
+  IDENTIFIED when no falsifier fires and an input is unread.
+- **Seen and reserved.** Loaded, all SEEN: Mixtral-8x7B and its tp2, tp4, tp8 shards, JetMoE-8B, Phi-3.5-MoE,
+  OLMoE-1B-7B and the registered synthetic shapes. Mixtral-8x22B, Qwen2-57B-A14B (and its tp8 shard) and
+  Granite-3.0-1B-A400M are reserved for the decode blind: never loaded, timed or shaped (the probe refuses them,
+  `tests/test_instr_probe_pc.py` asserts nothing in the plan loads them).
+- **Stop rules.** C3's prelude (700 W and the 1410 lock read back; the 1710 probe), unit locks read back before and
+  after, the regcheck drop rule (owner decision 2), G-BAND for the Phi group, C3's gate (a timing FAIL alone runs a page
+  PERTURBED). Plan `scripts/plans/rentalPC-2026-11.plan` (sha256 5c19aa93...), 20 units, 84 min estimated, about 109
+  min wall ($4.16 at $2.29/h); deadline launch + 125 min, guardian hard cap launch + 140 min ($5.34 at most). Driver
+  `scripts/gh200_pc_session.sh` (`tests/test_pc_driver.py`); reader tests `tests/test_read_pc.py`.
+
+**Read 2026-11-06** on `results/published/2026-11-06-nvidia_gh200_480gb-pc-session` (board c9f689, new; 20 units at
+c9c92f1e in about 34.4 minutes on 2026-11-06, none dropped or skipped; driver exit 3 from the one refused unit; the
+readings in `scripts/scoring/pc/pc.read.{json,txt}`, written by `read_pc.py --pc <that directory> --out-dir
+scripts/scoring/pc` from the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix).
+**Commit** checked (68 files). **Board** valid (700 W, both lock probes held, G-BAND PASS in the fallback band).
+**Census** reads the registered occupancy on all four registered configs. **Units**: sa, sc, sr and se1 PERTURBED
+(timing gate worst 9.03%, 9.33%, 3.44%, 3.35%; hard legs PASS), se2 CLEAN; **sd REFUSED** (its regcheck FAIL: the
+stamped 16x64x128 w4 s2 variant at 7 CTAs per SM against the plain 8, so the gate's hard occupancy leg FAIL; block
+D's 15 cells unread). **NOT READ** cells: A-G2 (overhead worst -23.55%), C-G8 (worst -22.16%), C-G8-s4k64 (median
+10.29%) under C3's per-cell bound; A-F7168-G8 (no usable timer path). **H1 NOT IDENTIFIED**: beta_f (C-G8 unread) and
+the plateau (A-G2 unread) are unread; the read inputs beta_Q 0.911, omega 0.945 and sigma 0.963 sit in their support
+bands and no falsifier fires. **PC-R7** r0 35.8 GB/s (READ), X_sat 3612 GB/s (READ), G_90 192, L_gpu 0.91 us at G 4
+to 8 and 1.43 us at G 128. **PC-R3** beta_Q 0.40 to 0.47 at G 128, 0.35 at G 384. **PC-R4** beta_f 0.45 (G 32), 0.24
+(G 128), about 0 at G 512 and 1024. **PC-R8** the CAL2 cell CARRIES (the curve prices Mixtral T128 A4 at -1.1%; its
+transfer t against A-G128 is -0.8%). **PC-R10** 128g1 miss fraction 0.69 to 0.76 over the 10 cells with re-reads,
+64g1 0.22 to 0.52 over 4. The replicate reads within 1.11%. Read on the fetched tree and on the published copy, the two
+outputs differ only in the tree's path; `scripts/scoring/rescore.py pc` re-reads the published session to the
+committed files (docs/FINDINGS.md, Rental PC).

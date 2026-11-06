@@ -479,6 +479,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-11-04-nvidia_gh200_480gb-decodeDS-session": SESSION,
         # Tile rental B3 of 2026-11-05/06: one GH200, 23 units of the B3 plan (calibrate, the compile-only census of the blind models at both tiles, the four sag pages and their gates, the eight blind timed pages of Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and deepseek-v2-lite at 1410 MHz, the OLMoE f128 repeat, three byte pages); E1-TILE FAILS.
         "2026-11-05-nvidia_gh200_480gb-tileB3-session": SESSION,
+        # Rental PC of 2026-11-06: one GH200, 20 units of the PC plan, a measurement (per-CTA start and end stamps on synthetic decode shapes, Mixtral-8x7B and its tp shards and JetMoE-8B at the 1710 and 1410 MHz locks, Phi-3.5-MoE's w1 stamps at 128x128 and 64x128, the sag pages and G-BAND, three Phi byte pages, one Mixtral decode counter page; the sd stamps unit refused), descriptive.
+        "2026-11-06-nvidia_gh200_480gb-pc-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

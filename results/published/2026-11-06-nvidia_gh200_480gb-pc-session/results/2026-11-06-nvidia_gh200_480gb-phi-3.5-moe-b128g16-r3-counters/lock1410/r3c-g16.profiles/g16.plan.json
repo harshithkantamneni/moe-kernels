@@ -1,0 +1,434 @@
+{
+  "family": "r3-arms",
+  "kind": "measure",
+  "model": "phi-3.5-moe",
+  "dtype": "bf16",
+  "block_m": 128,
+  "block_n": 128,
+  "num_stages": 3,
+  "group_m": 16,
+  "treads": [
+    3,
+    4
+  ],
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "cells": [
+    [
+      "native",
+      3,
+      "PT"
+    ],
+    [
+      "shared",
+      3,
+      "PT"
+    ],
+    [
+      "native",
+      3,
+      "PW"
+    ],
+    [
+      "shared",
+      3,
+      "PW"
+    ],
+    [
+      "native",
+      3,
+      "PT2"
+    ],
+    [
+      "shared",
+      3,
+      "PT2"
+    ],
+    [
+      "native",
+      3,
+      "PW2"
+    ],
+    [
+      "shared",
+      3,
+      "PW2"
+    ],
+    [
+      "native",
+      3,
+      "uniform"
+    ],
+    [
+      "shared",
+      3,
+      "uniform"
+    ],
+    [
+      "native",
+      3,
+      "balanced"
+    ],
+    [
+      "shared",
+      3,
+      "balanced"
+    ],
+    [
+      "native",
+      4,
+      "PT"
+    ],
+    [
+      "shared",
+      4,
+      "PT"
+    ],
+    [
+      "native",
+      4,
+      "PW"
+    ],
+    [
+      "shared",
+      4,
+      "PW"
+    ],
+    [
+      "native",
+      4,
+      "PT2"
+    ],
+    [
+      "shared",
+      4,
+      "PT2"
+    ],
+    [
+      "native",
+      4,
+      "PW2"
+    ],
+    [
+      "shared",
+      4,
+      "PW2"
+    ],
+    [
+      "native",
+      4,
+      "uniform"
+    ],
+    [
+      "shared",
+      4,
+      "uniform"
+    ],
+    [
+      "native",
+      4,
+      "balanced"
+    ],
+    [
+      "shared",
+      4,
+      "balanced"
+    ]
+  ],
+  "copies_declared": 9,
+  "declared_reason": "the ladder's id count 2048..18432 does not cross 1024: one kernel throughout",
+  "calls_per_cell": 3,
+  "warmup_calls": 2,
+  "gemms_per_call": 2,
+  "seed": 0,
+  "manifest": "/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g16-r3-counters/lock1410/r3c-g16.profiles/g16.manifest.json",
+  "triton_cache": "/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g16-r3-counters/lock1410/r3c-g16.profiles/g16.triton-cache",
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "9f5de8124e55f3c1eaf8a944996a799ff595b779d1d06b9c51100d0ed6c9e300",
+    "page": "phi-3.5-moe-128g16",
+    "shuffle_seed": 20261420,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 3,
+        "counts": [
+          313,
+          371,
+          301,
+          299,
+          398,
+          368,
+          421,
+          381,
+          366,
+          581,
+          367,
+          341,
+          370,
+          479,
+          404,
+          384
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 3,
+        "counts": [
+          603,
+          708,
+          281,
+          350,
+          229,
+          335,
+          336,
+          389,
+          430,
+          125,
+          270,
+          462,
+          505,
+          346,
+          540,
+          235
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT2",
+        "n": 3,
+        "counts": [
+          349,
+          441,
+          286,
+          362,
+          440,
+          347,
+          353,
+          355,
+          333,
+          394,
+          333,
+          520,
+          347,
+          576,
+          427,
+          281
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW2",
+        "n": 3,
+        "counts": [
+          447,
+          351,
+          524,
+          157,
+          356,
+          164,
+          561,
+          614,
+          214,
+          366,
+          304,
+          406,
+          305,
+          485,
+          384,
+          506
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 3,
+        "counts": [
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 3,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT",
+        "n": 4,
+        "counts": [
+          566,
+          453,
+          460,
+          430,
+          490,
+          581,
+          681,
+          496,
+          415,
+          613,
+          439,
+          515,
+          534,
+          548,
+          495,
+          476
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 4,
+        "counts": [
+          708,
+          164,
+          692,
+          488,
+          404,
+          524,
+          429,
+          433,
+          257,
+          474,
+          687,
+          551,
+          671,
+          519,
+          523,
+          668
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT2",
+        "n": 4,
+        "counts": [
+          362,
+          623,
+          503,
+          494,
+          441,
+          581,
+          440,
+          566,
+          606,
+          582,
+          410,
+          572,
+          511,
+          546,
+          566,
+          389
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW2",
+        "n": 4,
+        "counts": [
+          374,
+          536,
+          318,
+          619,
+          994,
+          495,
+          408,
+          252,
+          124,
+          769,
+          432,
+          825,
+          311,
+          503,
+          784,
+          448
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 4,
+        "counts": [
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512,
+          512
+        ],
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 4,
+        "counts": null,
+        "arms": [
+          "native",
+          "shared"
+        ]
+      }
+    ]
+  }
+}

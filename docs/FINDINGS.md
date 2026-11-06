@@ -3559,6 +3559,161 @@ differ only in the tree's path; the committed files are the published copy's, wi
 `scripts/scoring/rescore.py tileB3` re-scores the published session to the committed files. Every register script's
 `--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
 
+## Rental PC (2026-11-06): per-CTA DRAM rate against loads in flight, measured; H1 NOT IDENTIFIED
+
+**Measured, not tested.** PC is a measurement rental. It certifies nothing, registers no model form, no constant, no
+bar and no gate, and moves no registered verdict. Every number below is DESCRIPTIVE, read by the registered reader
+(`scripts/scoring/pc/read_pc.py`) from per-CTA start and end stamps of vLLM v0.27.1's kernel through the unchanged
+instrumented copy. In the readings, r is one CTA's weight-slab rate (its B bytes over its life, overhead-corrected), G
+the read GEMM's live CTAs, Q_B the B bytes a CTA keeps in flight (32 KB on the base tile 64x128x64 w4 s3: 2 stages in
+flight x BLOCK_K 64 x BLOCK_N 128 x 2 bytes) and X the GPU-wide rate in the steady window. Block A is at the 1710 MHz
+lock, block C its 1410 MHz twin.
+
+**The H1 label.** H1 says a CTA streams at r = Q_B / L, its loads in flight over the memory latency, with L rising as
+the GPU nears saturation. Under the registered rule it reads NOT IDENTIFIED: no falsifier fires, and two inputs are
+unread.
+
+- beta_f at G 8 is unread because the C-G8 1410 MHz twin is NOT READ: its stamp overhead's worst pair is -22.16%,
+  over C3's NOT-READ bound of 20%.
+- The plateau is unread because its first rung, A-G2, is NOT READ: overhead worst pair -23.55%.
+
+The read inputs are beta_Q 0.911 (support band 0.7 to 1.3, falsified under 0.5), omega 0.945 (support 0.85 to 1.15,
+falsified over 1.25) and sigma 0.963 (support at least 0.85, falsified under 0.6). All three sit in their support bands
+and none in a falsify band. The low-load premise holds: X(G 8) is 0.079 of X_sat, under the 0.25 limit. This is not a
+SUPPORTED verdict. Two of five inputs are missing, and SUPPORTED needs all five. Nor does the unread beta_f lean
+SUPPORTED: both low-load clock twins that did read sit outside the |beta_f| <= 0.3 support band (C-G8-s2k64 against
+A-G8-s2k64 0.48, and G 32 0.45), though neither is over the 0.5 falsifier and neither is the registered input. PC-R7's
+plateau, READ over G 4 to 16, is a different reading from H1's plateau input over G 2 to 16, which is unread. beta_Q's G 8 rates are uncorrected
+for the per-CTA constant c0 (PC-R2's G 8 ladder is NOT IDENTIFIED, 3 of 4 rungs read), and its s4 rung A-G8-s4k64
+reads with an overhead median of 9.93%, inside the 10% bound by 0.07 points.
+
+**The per-CTA curve (PC-R7, PC-R1).** At Q_B 32 KB the rate per CTA is flat at low load and falls once the GPU fills:
+
+| G | 4 | 8 | 16 | 32 | 64 | 128 | 192 | 256 | 384 | 512 | 1024 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| r (GB/s per CTA) | 36.2 | 35.8 | 33.9 | 32.8 | 30.6 | 23.0 | 17.6 | 14.1 | 9.2 | 8.6 | 8.7 |
+| X / X_sat | 0.04 | 0.08 | 0.15 | 0.29 | 0.54 | 0.81 | 0.94 | 1.00 | 1.00 | 0.99 | 0.99 |
+| L_gpu (us) | 0.91 | 0.92 | 0.96 | 1.00 | 1.07 | 1.43 | 1.84 | 2.32 | 3.40 | 3.63 | 3.62 |
+
+X_sat reads 3612 GB/s (the median of 18 members: the four w2 rungs at G 416 to 1024 and 14 flushed w1 launches with K
+4096; 7 rungs within 3% of it), against the 3726 GB/s triad. r0, the low-load rate, reads 35.8 GB/s (G 4, 8 and 16
+within 10%). G_90, the least rung at 0.9 X_sat, is 192. The rate gap d(G) = X / min(G r0, X_sat) - 1 is deepest at G 128 (-18.9%): 128 CTAs
+deliver 0.81 of X_sat where 128 x r0 would ask 1.27 of it. Past one wave (G 384 and up, at most about 396 CTAs live at
+3 per SM) r settles at 8.6 to 8.7 GB/s per CTA. L_gpu = Q_B n / X agrees with Q_B / r within 0.6% at every rung from
+G 4 to G 288 except G 192 (1.6%), and 4 to 5% under it past one wave. L_gpu is defined by Little's law, so this is a
+consistency check of the measurement (X is close to n x r), not a test of the law; it is an observation, not a model,
+and it does not choose a form for L.
+
+**The in-flight elasticity (PC-R3).** beta_Q = d ln r / d ln Q_B over the stage variants, scored against the PTX
+in-flight ratio (loads in flight read off the compiled PTX: 1, 2 and 3 at s2, s3 and s4):
+
+| G | BK 64 (s2, s3, s4) | BK 128 (s2, s3) | rates |
+|---|---:|---:|---|
+| 8 | 0.911 | 0.813 | uncorrected |
+| 128 | 0.466 | 0.400 | c0-corrected (both) |
+| 384 | 0.350 | not run | uncorrected |
+
+At low load the rate rises almost in proportion to the loads in flight (0.91 at G 8); the elasticity falls to 0.40 to
+0.47 at G 128 and 0.35 at G 384. The registration says a beta_Q under 1 at G 128 or 384 does not
+falsify H1. rho_seg, r(s2, BK 128) over r(s3, BK 64) at equal Q_B, reads 0.75 at G 8 and 0.90 at G 128.
+
+**beta_f by load (PC-R4).** beta_f = ln(r_1410 / r_1710) / ln(f_1410 / f_1710), f the measured per-CTA clock: 0.45 at
+G 32, 0.24 at G 128, 0.21 at G 256, 0.02 at G 512 and -0.02 at G 1024; Mixtral T128 A4's twin 0.15. The rate's clock
+sensitivity falls toward 0 as the GPU saturates, as a DRAM-bound launch should. At G 8 the twin is unread (above).
+
+**The CAL2 cell (PC-R8).** Mixtral-8x7B T128 A4, v5d's worst CAL2 cell, reads r 22.84 GB/s per CTA against the
+synthetic A-G128's 23.03 (same tile, config, G and F): t = -0.8%. The registered sub-reading prices it off the curve,
+r = Q_B / L_gpu with L_gpu read off the ladder at the anchor's X (1.42 us): 23.08 GB/s, within 1.1% of the measured
+rate, so it reads CARRIES. Its 1410 twin against C-G128 reads +1.0%. The tp shards, each at G 128 with a shorter slab
+(F the w2 K), read slower in step with slab length: tp8 (F 1792) -16.0%, tp4 (3584) -10.1%, tp2 (7168) -3.7%, against
+-0.8% at the full F 14336. PC-R2's G 128 ladder over the same four rungs reads a fixed 4.70 us per CTA plus 23.5 GB/s
+(READ, standard error 0.5%). JetMoE-8B T128 A4 (64 live CTAs, F 5632) reads -11.4% against A-G64.
+
+**Phi re-reads (PC-R10, PC-R11).** From this board's w1 stamps, against B3's counted w1 bytes (board ebedab, by value
+in the priced file), the measured miss fraction of w1 re-reads, (D - C) / R with C the compulsory bytes and R the
+re-read demand:
+
+| tile | cells with re-reads | miss fraction | pooled | launched together | lives overlap |
+|---|---:|---|---:|---|---:|
+| E1 128x128 (128g1) | 10 | 0.69 to 0.76 | 0.74 | 0.22 to 0.44 | 1.00 |
+| E2 64x128 (64g1) | 4 | 0.22 to 0.52 | 0.38 | 0.47 to 0.84 | 0.996 to 1.00 |
+
+This reproduces the post-hoc split's 128g1 figure (0.73, phi-split REPORT.md) and its 64g1 skewed figure (0.38) with
+pair counts and launch gaps from a second board. The miss fraction's D is still B3's counted bytes. This board's own
+counted w1 bytes (units b128g1, b64g1), printed beside, agree with B3's within -1.4% to +2.9% per cell. The registered
+zero-constant rule (a re-read misses only when its life does not overlap its partner's and over 60 MiB streams between
+their starts) predicts almost no misses: every E1 pair's lives overlap, so its bytes fall 22% to 53% under the counted
+w1 bytes on E1 and 11% to 23% under on E2. PC-R11, a printed extra, reads on the 8 skewed 64g1 rows: the frozen
+round-5 price over the stamped time splits as life +5.3% and packing -12.3% (total -7.0%); e_plain -6.5%; the skew
+contrast -2.6 points of life and -0.8 of packing.
+
+**The other readings.**
+
+- **PC-R12, counters against construction.** On unit 18's decode counter page (V_ALIGN grid PASS), counted DRAM bytes
+  over the construction's (each active expert's weights once) read 1.0025 (w1) and 1.0158 (w2) on Mixtral T128 A4 and
+  1.0014 and 1.0079 on T128 A8. ncu's kernel time minus the stamps' span is -1.7 to +2.2 us; the event time minus the
+  span 3.4 to 3.7 us. w2's ncu numbers are confounded, as registered: ncu flushes L2 before each kernel, so w2's A
+  operand (L2-hot in vLLM's call order and in the stamped calls) is a DRAM read under ncu, and its replays run at a
+  lower clock. The T16 A2 and T4 A2 rows have no stamps (block D was refused).
+- **PC-R13, the clock at kernel start.** The median clock of CTAs starting in the first 50 us over the rest's reads
+  0.978 to 0.990 per unit; 41 launches read under 0.97 (sa 10 of 81, sc 7 of 24, se1 16 of 72, se2 6 of 36, sr 2 of
+  9).
+- **PC-R14, placement.** Up to G 64 every CTA has its own SM. At G 128 the tiles holding 2 or more CTAs per SM land on 120
+  SMs with at most 2 per SM; the 1-per-SM tile (64x128x128 s3) on 128. Spearman's rank of start order against pid runs 0.26 to 1.0.
+- **PC-R9, the L2 control.** At G 8 the flush-off cell reads 1.008 x the flushed one.
+- **PC-R5, PC-R6.** omega 0.978 at G 128; sigma 0.960 at G 160 (G 288 NOT IDENTIFIED: no CTA there is alone on its SM).
+- **The replicate.** R-G8, R-G128 and R-G512 against A: +0.26%, -0.69%, -1.11%, within 1.1%.
+
+**Refused and not read.**
+
+- **The sd block (block D, 15 cells at 16x64x128) was refused.** The start-up regcheck read FAIL for it: the stamped
+  16x64x128 w4 s2 variant holds 7 CTAs per SM against the plain kernel's 8, so stamps would change the occupancy they
+  measure. The gate's hard occupancy leg read FAIL and the driver refused the unit (exit 2, so driver exit 3). This is
+  the registered regcheck FAIL path (a variant's exit 1), not the drop rule; every other probe=pc unit ran. PC-R3's D16
+  rows, PC-R8's D anchors (Mixtral T16 A2, T4 A2, T2 A2) and PC-R12's T16 and T4 rows are unread.
+- **The Phi byte units' analyse exit 3.** The three pages wrote (exit 0) and fail R3's attribution gate V1 in analyse
+  (each summary.json: "2 treads; the scorer needs four for an OLS residual; arms ['native', 'shared'], not R3's
+  ['native', 'shared', 'private']; 24 launches attributed against the planned 144", and 1 tread, 12 of 72 on b64g1). A
+  histogram byte page by design has two arms and one or two treads, so this gate cannot pass on it, as on B3's and A2's
+  identical pages. PC-R10 reads their counted bytes descriptively.
+- **NOT READ cells, each with its reason:** A-G2 (overhead worst pair -23.55%, over 20%); C-G8 (worst -22.16%);
+  C-G8-s4k64 (overhead median 10.29%, over 10%); A-F7168-G8 (the globaltimer resolution exceeds a tenth of the median
+  life and no CTA lives 10 resolutions, here or in the call's w1 launch, so no clock64 path). **NOT IDENTIFIED:**
+  PC-R2's G 8 ladder (3 of 4 rungs); PC-R4's C-G8 and C-G8-s4k64 twins; PC-R6 at G 288; PC-R3's D16 rows (no D page);
+  H1.
+
+**What it does not show.**
+
+- **One board, two locks.** Every number is from board `c9f689` at 700 W and the 1710 and 1410 MHz locks. Nothing
+  here speaks for another board, lock, power limit, card or tile family.
+- **Synthetic and seen shapes only.** The cells are the registered synthetic shapes, Mixtral-8x7B and its tp shards,
+  JetMoE-8B and Phi-3.5-MoE: all SEEN. The decode tiles here are 64x128x64 and its variants; block D's 16x64x128 is
+  unread.
+- **PERTURBED pages.** sa, sc, sr and se1 ran PERTURBED (timing gate worst 9.03%, 9.33%, 3.44%, 3.35%) and are read
+  under C3's per-cell rule, overhead-corrected. Only se2 is CLEAN.
+- **No model.** No model form is chosen or tested here. The curve, the elasticities and L_gpu describe this board's
+  pages; they transfer to no unseen model without a registered model and a blind test.
+
+**Seen and unseen.** Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M were not loaded. Checked on the fetched
+tree: no file names a shape or model other than the registered synthetic shapes, Mixtral-8x7B and its tp2, tp4 and
+tp8 shards, JetMoE-8B, Phi-3.5-MoE and OLMoE-1B-7B. No file names Qwen2-57B or Granite-3.0-1B; the only text hits
+for "8x22b" (and for "granite", the 3B model) are old run branch names in `setup_vm.log`, from the clone's fetch.
+`tile-census.json`, the tile census logs and `gh200-driver/status` name deepseek-v2-lite in a fixed "NOT SCORED"
+line; it is not one of the reserved three, and nothing loaded it. The three stay unseen for the decode blind.
+
+**What ran.** One Lambda GH200 480GB (instance d6459e41, board `c9f689`, new to the study), active 18:04:50Z and
+terminated 18:45:12Z on 2026-11-06: about 40.4 min, about $1.54 at $2.29/h (an estimate; the registration budgeted
+about 109 min and $4.16). It ran `scripts/plans/rentalPC-2026-11.plan` (sha256 5c19aa93..., as registered) at
+c9c92f1e: 20 units in about 34.4 min against 84 estimated, none dropped or skipped, unit 17 refused (driver exit 3).
+Published at `results/published/2026-11-06-nvidia_gh200_480gb-pc-session`; read by `read_pc.py --pc <that directory>
+--out-dir scripts/scoring/pc`, committed as `scripts/scoring/pc/pc.read.{json,txt}`.
+
+**Instrument.** The run branch's 3,844 files match its SHA256SUMS; the 18 `cuda_utils*.so` files of the Triton caches
+are left out as before, so 3,826 are published. Read on the fetched tree and on the published copy, the two outputs
+differ only in the tree's path; the committed files are the published copy's, with the path repo-relative.
+`scripts/scoring/rescore.py pc` re-reads the published session to the committed files. Every register script's
+`--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

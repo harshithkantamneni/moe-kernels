@@ -1,0 +1,2 @@
+== 2026-11-06T18:35:31Z step stamps: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-d.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py)
+2026-11-06T18:35:31Z stamps REFUSED: the gate's hard legs for u17-sd read 'FAIL' (instr-gate.env): occupancy, SASS and the upstream file must pass

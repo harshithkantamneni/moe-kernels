@@ -1,0 +1,149 @@
+2026-11-06T18:06:41Z setup_vm.sh start: commit c9c92f1edede773a19079f900ef7a237ee7de37e from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-06T20:09:50Z
+2026-11-06T18:08:36Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-11-06T18:08:37Z driver start: commit c9c92f1edede773a19079f900ef7a237ee7de37e, steps of the plan scripts/plans/rentalPC-2026-11.plan, deadline 2026-11-06T20:09:50Z (113 min of work left)
+2026-11-06T18:08:37Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalPC-2026-11.plan (sha256 5c19aa936ccf7c52c7bc74ad9497cf6696e9d3d0b3e023d4f4462a2453af8ba1), 20 units
+2026-11-06T18:08:37Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/20 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 113 min left)
+2026-11-06T18:08:37Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-11-06T18:08:37Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-11-06T18:08:37Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-11-06T18:08:37Z lock plan: LOCK_PROBE_1710 supported (a plan's floor lock; probed below)
+2026-11-06T18:08:37Z prelude: power.max_limit 900.00 W, at or over the registered 700 W
+2026-11-06T18:08:38Z prelude: the power limit read back after 0 s: enforced.power.limit 700.00 W, -q -d POWER GPU scope Current 700.00 W (Requested 700.00 W), power.limit 700.00 W (S1 read-back)
+2026-11-06T18:08:40Z lock probe: 1710 MHz held
+2026-11-06T18:08:42Z lock probe: the session lock 1410 MHz held (C2)
+2026-11-06T18:08:42Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261106T180837Z, session lock 1410 MHz
+2026-11-06T18:08:42Z prelude END: exit 0 after 0 min [unit 1/20 - lock-mhz=1410 power-limit-w=700]
+2026-11-06T18:08:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:08:44Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 64x128x64w4s3 64x128x64w4s2 64x128x64w4s4 64x128x128w4s2 64x128x128w4s3 64x128x64w8s3 16x64x128w4s4 16x64x128w4s2 16x64x128w4s3 128x128x64w8s3 on mixtral-8x7b phi-3.5-moe; refused on an MMA path mismatch [unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe] (estimate 4 min, cap 15 min, 113 min left)
+2026-11-06T18:09:02Z tilecensus: RESULT: VALIDITY census_path PASS 40 configs, 0 path mismatches, 0 errors
+2026-11-06T18:09:02Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-11-06T18:09:02Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-tile-census-mixtral-8x7b-pc/tile-census.json)
+2026-11-06T18:09:02Z tilecensus END: exit 0 after 0 min [unit 2/20 - pc tiles=64x128x64w4s3,64x128x64w4s2,64x128x64w4s4,64x128x128w4s2,64x128x128w4s3,64x128x64w8s3,16x64x128w4s4,16x64x128w4s2,16x64x128w4s3,128x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe]
+2026-11-06T18:09:03Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:09:04Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/20 - rcp probe=pc] (estimate 3 min, cap 20 min, 112 min left)
+2026-11-06T18:09:46Z regcheck: REGCHECK_u5_sa=PASS
+2026-11-06T18:09:46Z regcheck: REGCHECK_u7_sc=PASS
+2026-11-06T18:09:46Z regcheck: REGCHECK_u14_se2=PASS
+2026-11-06T18:09:46Z regcheck: REGCHECK_u17_sd=FAIL 16-64-128-1-2-4-True-1: stamps=ends,evict_a=none,evict_b=none at 7 CTAs/SM against the plain 8
+2026-11-06T18:09:46Z regcheck: REGCHECK_u20_sr=PASS
+2026-11-06T18:09:46Z regcheck END: exit 1 after 1 min [unit 3/20 - rcp probe=pc]
+2026-11-06T18:09:46Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:09:51Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710] (estimate 8 min, cap 25 min, 111 min left)
+2026-11-06T18:11:20Z perturb: GATE_u5_sa=FAIL median=0.012723635163402192 worst=0.09030816039012024
+2026-11-06T18:11:20Z perturb: HARD_u5_sa=PASS
+2026-11-06T18:11:20Z perturb: GATE_u17_sd=FAIL median=0.009138683160838434 worst=0.044634413192299105
+2026-11-06T18:11:20Z perturb: HARD_u17_sd=FAIL
+2026-11-06T18:11:20Z perturb: GATE_u20_sr=FAIL median=0.009611589246426522 worst=0.034355286674062735
+2026-11-06T18:11:20Z perturb: HARD_u20_sr=PASS
+2026-11-06T18:11:20Z perturb END: exit 1 after 1 min [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710]
+2026-11-06T18:11:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:11:28Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-a.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710] (estimate 6 min, cap 20 min, 110 min left)
+2026-11-06T18:11:28Z stamps: the overhead gate for u5-sa reads 'FAIL median=0.012723635163402192 worst=0.09030816039012024': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:12:04Z stamps: u5-sa exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa, probe=pc)
+2026-11-06T18:12:04Z stamps END: exit 0 after 1 min [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710]
+2026-11-06T18:12:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:12:16Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 6/20 - ptc probe=pc gates=sc,se2] (estimate 4 min, cap 15 min, 109 min left)
+2026-11-06T18:12:54Z perturb: GATE_u7_sc=FAIL median=0.01885249587845733 worst=0.09327108577594956
+2026-11-06T18:12:54Z perturb: HARD_u7_sc=PASS
+2026-11-06T18:12:54Z perturb: GATE_u14_se2=PASS median=0.002341196748037455 worst=0.008610656877284906
+2026-11-06T18:12:54Z perturb: HARD_u14_se2=PASS
+2026-11-06T18:12:54Z perturb END: exit 1 after 1 min [unit 6/20 - ptc probe=pc gates=sc,se2]
+2026-11-06T18:12:54Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:13:04Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-c.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json] (estimate 3 min, cap 10 min, 108 min left)
+2026-11-06T18:13:04Z stamps: the overhead gate for u7-sc reads 'FAIL median=0.01885249587845733 worst=0.09327108577594956': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:13:23Z stamps: u7-sc exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sc, probe=pc)
+2026-11-06T18:13:23Z stamps END: exit 0 after 0 min [unit 7/20 - sc probe=pc page=docs/registered/2026-11-06-pc-pages/pc-c.json]
+2026-11-06T18:13:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:13:36Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 8/20 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 3 min, cap 20 min, 108 min left)
+2026-11-06T18:13:51Z census for olmoe-1b-7b written (/home/ubuntu/moe/session/census-olmoe-1b-7b.json)
+2026-11-06T18:13:51Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-06T18:13:51Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-11-06T18:13:51Z bytes: the registered list G = 64 (olmoe-1b-7b, f128): no tail drop, no re-price, no base-clock control
+2026-11-06T18:16:39Z bytes: G=64 page exit 3 after 165 s
+2026-11-06T18:16:50Z bytes: lock block exit 0 (G=64 exit 3 18:16:39 165 s;)
+2026-11-06T18:16:55Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:16:55Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-06T18:16:57Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/summary.json)
+2026-11-06T18:16:57Z bytes END: exit 0 after 3 min [unit 8/20 olmoe-1b-7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-11-06T18:16:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:17:08Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 64, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64; tile 128x128x64 w8 s3 [unit 9/20 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64] (estimate 7 min, cap 25 min, 104 min left)
+2026-11-06T18:17:08Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-06T18:17:08Z bytes: rental 2 knobs --num-stages 3 --block-k 64 on every page of this unit
+2026-11-06T18:17:08Z bytes: the registered list G = 64 (mixtral-8x7b, f128): no tail drop, no re-price, no base-clock control
+2026-11-06T18:23:57Z bytes: G=64 page exit 3 after 406 s
+2026-11-06T18:24:08Z bytes: lock block exit 0 (G=64 exit 3 18:23:57 406 s;)
+2026-11-06T18:24:13Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:24:14Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
+2026-11-06T18:24:14Z bytes END: exit 0 after 7 min [unit 9/20 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
+2026-11-06T18:24:15Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:24:26Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL drops drop-group phi and its dependents, the session goes on (PC) (tileA2-gates) [unit 10/20 - gband gate=band] (estimate 1 min, cap 5 min, 97 min left)
+2026-11-06T18:24:27Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
+2026-11-06T18:24:27Z gate END: exit 0 after 0 min [unit 10/20 - gband gate=band]
+2026-11-06T18:24:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:24:38Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 11/20 - rc3 probe=c3] (estimate 2 min, cap 10 min, 97 min left)
+2026-11-06T18:24:49Z regcheck: REGCHECK_u13_se1=PASS
+2026-11-06T18:24:49Z regcheck END: exit 0 after 0 min [unit 11/20 - rc3 probe=c3]
+2026-11-06T18:24:50Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:25:01Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 12/20 - pt3 probe=c3] (estimate 4 min, cap 15 min, 96 min left)
+2026-11-06T18:25:24Z perturb: GATE_u13_se1=FAIL median=0.018469161024717518 worst=0.03352276845748314
+2026-11-06T18:25:24Z perturb: HARD_u13_se1=PASS
+2026-11-06T18:25:24Z perturb END: exit 1 after 0 min [unit 12/20 - pt3 probe=c3]
+2026-11-06T18:25:25Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:25:36Z stamps START: stamps at the 1410 lock: the instrumented copy (stamps=ends) at 128x128x64 w8 s3 G=1, docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json, arms native; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_c3.py) [unit 13/20 phi-3.5-moe se1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 4 min, cap 15 min, 96 min left)
+2026-11-06T18:25:37Z stamps: the overhead gate for u13-se1 reads 'FAIL median=0.018469161024717518 worst=0.03352276845748314': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:25:51Z stamps: u13-se1 exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-phi-3.5-moe-se1)
+2026-11-06T18:25:51Z stamps END: exit 0 after 0 min [unit 13/20 phi-3.5-moe se1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-11-06T18:25:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:26:05Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json at 64x128x64 w8 s3; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 14/20 phi-3.5-moe se2 probe=pc block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 4 min, cap 15 min, 95 min left)
+2026-11-06T18:26:19Z stamps: u14-se2 exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-phi-3.5-moe-se2, probe=pc)
+2026-11-06T18:26:19Z stamps END: exit 0 after 0 min [unit 14/20 phi-3.5-moe se2 probe=pc block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-11-06T18:26:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:26:32Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native,shared; tile 128x128x64 w8 s3 [unit 15/20 phi-3.5-moe b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared byte-groups=1] (estimate 6 min, cap 18 min, 95 min left)
+2026-11-06T18:26:48Z census for phi-3.5-moe written (/home/ubuntu/moe/session/census-phi-3.5-moe.json)
+2026-11-06T18:26:48Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-06T18:26:48Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native,shared on every page of this unit
+2026-11-06T18:26:48Z bytes: the registered list G = 1 (phi-3.5-moe, b128g1): no tail drop, no re-price, no base-clock control
+2026-11-06T18:31:49Z bytes: G=1 page exit 0 after 298 s
+2026-11-06T18:32:02Z bytes: lock block exit 0 (G=1 exit 0 18:31:49 298 s;)
+2026-11-06T18:32:07Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:32:07Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-06T18:32:08Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g1-r3-counters/lock1410/summary.json)
+2026-11-06T18:32:08Z bytes END: exit 0 after 6 min [unit 15/20 phi-3.5-moe b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared byte-groups=1]
+2026-11-06T18:32:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:32:21Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json --arms native,shared; tile 64x128x64 w8 s3 [unit 16/20 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1] (estimate 5 min, cap 15 min, 89 min left)
+2026-11-06T18:32:21Z bytes: tile --num-warps 8 --block-m 64 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-06T18:32:21Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json --arms native,shared on every page of this unit
+2026-11-06T18:32:21Z bytes: the registered list G = 1 (phi-3.5-moe, b64g1): no tail drop, no re-price, no base-clock control
+2026-11-06T18:34:59Z bytes: G=1 page exit 0 after 156 s
+2026-11-06T18:35:12Z bytes: lock block exit 0 (G=1 exit 0 18:34:59 156 s;)
+2026-11-06T18:35:17Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:35:17Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-06T18:35:18Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/summary.json)
+2026-11-06T18:35:18Z bytes END: exit 0 after 3 min [unit 16/20 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1]
+2026-11-06T18:35:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:35:31Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-d.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710] (estimate 4 min, cap 15 min, 86 min left)
+2026-11-06T18:35:31Z stamps REFUSED: the gate's hard legs for u17-sd read 'FAIL' (instr-gate.env): occupancy, SASS and the upstream file must pass
+2026-11-06T18:35:31Z stamps END: exit 2 after 0 min [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710]
+2026-11-06T18:35:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:35:43Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json; every GEMM launch grid held to vLLM's own (the D3 driver's step) [unit 18/20 mixtral-8x7b cnt histogram=docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json kernels=wide lock-mhz=1710] (estimate 4 min, cap 15 min, 86 min left)
+2026-11-06T18:36:39Z decodebytes: RESULT: VALIDITY grid PASS 4 cells, 40 GEMM launches attributed, 60 other launches by place; /home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b
+2026-11-06T18:36:40Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b-cnt-r3-counters/lock1710/r3d.json)
+2026-11-06T18:36:40Z decodebytes END: exit 0 after 1 min [unit 18/20 mixtral-8x7b cnt histogram=docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json kernels=wide lock-mhz=1710]
+2026-11-06T18:36:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:36:53Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 16, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json --arms native,shared; tile 128x128x64 w8 s3 [unit 19/20 phi-3.5-moe b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared byte-groups=16] (estimate 7 min, cap 21 min, 84 min left)
+2026-11-06T18:36:53Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-06T18:36:53Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json --arms native,shared on every page of this unit
+2026-11-06T18:36:53Z bytes: the registered list G = 16 (phi-3.5-moe, b128g16): no tail drop, no re-price, no base-clock control
+2026-11-06T18:41:59Z bytes: G=16 page exit 0 after 304 s
+2026-11-06T18:42:13Z bytes: lock block exit 0 (G=16 exit 0 18:41:59 304 s;)
+2026-11-06T18:42:18Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-06T18:42:18Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-06T18:42:19Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g16-r3-counters/lock1410/summary.json)
+2026-11-06T18:42:19Z bytes END: exit 0 after 5 min [unit 19/20 phi-3.5-moe b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared byte-groups=16]
+2026-11-06T18:42:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:42:32Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-r.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 20/20 - sr probe=pc page=docs/registered/2026-11-06-pc-pages/pc-r.json lock-mhz=1710] (estimate 3 min, cap 10 min, 79 min left)
+2026-11-06T18:42:32Z stamps: the overhead gate for u20-sr reads 'FAIL median=0.009611589246426522 worst=0.034355286674062735': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:42:47Z stamps: u20-sr exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sr, probe=pc)
+2026-11-06T18:42:47Z stamps END: exit 0 after 0 min [unit 20/20 - sr probe=pc page=docs/registered/2026-11-06-pc-pages/pc-r.json lock-mhz=1710]
+2026-11-06T18:42:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:43:00Z driver end: exit 3
