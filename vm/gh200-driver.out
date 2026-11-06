@@ -18,3 +18,7 @@
 2026-11-06T18:09:51Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710] (estimate 8 min, cap 25 min, 111 min left)
 2026-11-06T18:11:20Z perturb END: exit 1 after 1 min [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710]
 2026-11-06T18:11:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 0638e99 to run-gh200-pc-20261106t1804: perturb (unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710): exit 1 (1 min)
+2026-11-06T18:11:28Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-a.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710] (estimate 6 min, cap 20 min, 110 min left)
+2026-11-06T18:12:04Z stamps END: exit 0 after 1 min [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710]
+2026-11-06T18:12:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

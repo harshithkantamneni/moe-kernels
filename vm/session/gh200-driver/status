@@ -37,3 +37,8 @@
 2026-11-06T18:11:20Z perturb: HARD_u20_sr=PASS
 2026-11-06T18:11:20Z perturb END: exit 1 after 1 min [unit 4/20 - ptp probe=pc gates=sa,sd,sr lock-mhz=1710]
 2026-11-06T18:11:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:11:28Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-a.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710] (estimate 6 min, cap 20 min, 110 min left)
+2026-11-06T18:11:28Z stamps: the overhead gate for u5-sa reads 'FAIL median=0.012723635163402192 worst=0.09030816039012024': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:12:04Z stamps: u5-sa exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa, probe=pc)
+2026-11-06T18:12:04Z stamps END: exit 0 after 1 min [unit 5/20 - sa probe=pc page=docs/registered/2026-11-06-pc-pages/pc-a.json lock-mhz=1710]
+2026-11-06T18:12:05Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
