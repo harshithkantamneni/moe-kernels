@@ -1,0 +1,1917 @@
+{
+ "cells": [
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 0,
+   "label": "PT",
+   "model": "phi-3.5-moe",
+   "ms": 0.910957,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1767342943,
+    "w2": 917416167
+   },
+   "rivals": {
+    "round4": 0.910957,
+    "v4": 0.968363,
+    "v5pp": 0.910957
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 1,
+   "label": "PW",
+   "model": "phi-3.5-moe",
+   "ms": 0.909977,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1767563571,
+    "w2": 911928716
+   },
+   "rivals": {
+    "round4": 0.909977,
+    "v4": 0.969147,
+    "v5pp": 0.909977
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 2,
+   "label": "PT2",
+   "model": "phi-3.5-moe",
+   "ms": 0.890143,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1756782208,
+    "w2": 907694469
+   },
+   "rivals": {
+    "round4": 0.890143,
+    "v4": 0.926607,
+    "v5pp": 0.890143
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 3,
+   "label": "PW2",
+   "model": "phi-3.5-moe",
+   "ms": 0.908722,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1759137568,
+    "w2": 914531812
+   },
+   "rivals": {
+    "round4": 0.908722,
+    "v4": 0.94863,
+    "v5pp": 0.908722
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 4,
+   "label": "uniform",
+   "model": "phi-3.5-moe",
+   "ms": 0.819226,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1698711962,
+    "w2": 878151973
+   },
+   "rivals": {
+    "round4": 0.819226,
+    "v4": 0.858045,
+    "v5pp": 0.819226
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 64,
+   "cls": "64g1",
+   "index": 5,
+   "label": "balanced",
+   "model": "phi-3.5-moe",
+   "ms": 0.819226,
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "reads": {
+    "w1": 1698711962,
+    "w2": 878151973
+   },
+   "rivals": {
+    "round4": 0.819226,
+    "v4": 0.858045,
+    "v5pp": 0.819226
+   },
+   "unit": "t64g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 6,
+   "label": "PT",
+   "model": "phi-3.5-moe",
+   "ms": 1.146311,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 2342728260,
+    "w2": 949427618
+   },
+   "rivals": {
+    "round4": 1.1077,
+    "v4": 1.026146,
+    "v5pp": 1.121836
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 7,
+   "label": "PW",
+   "model": "phi-3.5-moe",
+   "ms": 1.194716,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 2536232673,
+    "w2": 895826189
+   },
+   "rivals": {
+    "round4": 1.121797,
+    "v4": 1.068773,
+    "v5pp": 1.168678
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 8,
+   "label": "PT2",
+   "model": "phi-3.5-moe",
+   "ms": 1.185121,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 2479627105,
+    "w2": 908973615
+   },
+   "rivals": {
+    "round4": 1.134918,
+    "v4": 1.060335,
+    "v5pp": 1.161441
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 9,
+   "label": "PW2",
+   "model": "phi-3.5-moe",
+   "ms": 1.125837,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 2326467235,
+    "w2": 933029965
+   },
+   "rivals": {
+    "round4": 1.077905,
+    "v4": 1.013714,
+    "v5pp": 1.101569
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 10,
+   "label": "uniform",
+   "model": "phi-3.5-moe",
+   "ms": 0.860022,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 1688802353,
+    "w2": 868015332
+   },
+   "rivals": {
+    "round4": 0.860022,
+    "v4": 0.836034,
+    "v5pp": 0.863334
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 11,
+   "label": "balanced",
+   "model": "phi-3.5-moe",
+   "ms": 0.860022,
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 1688802353,
+    "w2": 868015332
+   },
+   "rivals": {
+    "round4": 0.860022,
+    "v4": 0.836034,
+    "v5pp": 0.863334
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 12,
+   "label": "PT",
+   "model": "phi-3.5-moe",
+   "ms": 1.882901,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 3983545517,
+    "w2": 1075452220
+   },
+   "rivals": {
+    "round4": 1.718832,
+    "v4": 1.642879,
+    "v5pp": 1.774157
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 13,
+   "label": "PW",
+   "model": "phi-3.5-moe",
+   "ms": 1.894144,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 4040637619,
+    "w2": 1089912286
+   },
+   "rivals": {
+    "round4": 1.736689,
+    "v4": 1.647676,
+    "v5pp": 1.781088
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 14,
+   "label": "PT2",
+   "model": "phi-3.5-moe",
+   "ms": 1.929403,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 4145455461,
+    "w2": 1080741866
+   },
+   "rivals": {
+    "round4": 1.772443,
+    "v4": 1.678233,
+    "v5pp": 1.813079
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 15,
+   "label": "PW2",
+   "model": "phi-3.5-moe",
+   "ms": 1.930275,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 4145520297,
+    "w2": 1130462860
+   },
+   "rivals": {
+    "round4": 1.750527,
+    "v4": 1.678239,
+    "v5pp": 1.813089
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 16,
+   "label": "uniform",
+   "model": "phi-3.5-moe",
+   "ms": 1.567536,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 3297077383,
+    "w2": 1003515782
+   },
+   "rivals": {
+    "round4": 1.461014,
+    "v4": 1.378976,
+    "v5pp": 1.499188
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 17,
+   "label": "balanced",
+   "model": "phi-3.5-moe",
+   "ms": 1.567536,
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "reads": {
+    "w1": 3297077383,
+    "w2": 1003515782
+   },
+   "rivals": {
+    "round4": 1.461014,
+    "v4": 1.378976,
+    "v5pp": 1.499188
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 18,
+   "label": "PT",
+   "model": "phi-3.5-moe",
+   "ms": 2.316016,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2008816208,
+    "w2": 1470931805
+   },
+   "rivals": {
+    "round4": 2.316016,
+    "v4": 2.227875,
+    "v5pp": 2.31751
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 19,
+   "label": "PW",
+   "model": "phi-3.5-moe",
+   "ms": 2.350881,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2009048680,
+    "w2": 1466656526
+   },
+   "rivals": {
+    "round4": 2.350881,
+    "v4": 2.261582,
+    "v5pp": 2.352516
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 20,
+   "label": "PT2",
+   "model": "phi-3.5-moe",
+   "ms": 2.384979,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2118003255,
+    "w2": 1520256000
+   },
+   "rivals": {
+    "round4": 2.384979,
+    "v4": 2.295238,
+    "v5pp": 2.38669
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 21,
+   "label": "PW2",
+   "model": "phi-3.5-moe",
+   "ms": 2.34981,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2008258082,
+    "w2": 1457529196
+   },
+   "rivals": {
+    "round4": 2.34981,
+    "v4": 2.261544,
+    "v5pp": 2.351251
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 22,
+   "label": "uniform",
+   "model": "phi-3.5-moe",
+   "ms": 2.077973,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 1960734805,
+    "w2": 1511355490
+   },
+   "rivals": {
+    "round4": 2.077973,
+    "v4": 1.989923,
+    "v5pp": 2.080419
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 23,
+   "label": "balanced",
+   "model": "phi-3.5-moe",
+   "ms": 2.077973,
+   "n": 3,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 1960734805,
+    "w2": 1511355490
+   },
+   "rivals": {
+    "round4": 2.077973,
+    "v4": 1.989923,
+    "v5pp": 2.080419
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 24,
+   "label": "PT",
+   "model": "phi-3.5-moe",
+   "ms": 3.028836,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2024074598,
+    "w2": 1611888944
+   },
+   "rivals": {
+    "round4": 3.028836,
+    "v4": 2.935098,
+    "v5pp": 3.029642
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 25,
+   "label": "PW",
+   "model": "phi-3.5-moe",
+   "ms": 3.149691,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2021608575,
+    "w2": 1619204473
+   },
+   "rivals": {
+    "round4": 3.149691,
+    "v4": 3.054208,
+    "v5pp": 3.150561
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 26,
+   "label": "PT2",
+   "model": "phi-3.5-moe",
+   "ms": 2.995105,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2026329551,
+    "w2": 1617533299
+   },
+   "rivals": {
+    "round4": 2.995105,
+    "v4": 2.90143,
+    "v5pp": 2.995938
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 27,
+   "label": "PW2",
+   "model": "phi-3.5-moe",
+   "ms": 2.995766,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 2026406661,
+    "w2": 1621541552
+   },
+   "rivals": {
+    "round4": 2.995766,
+    "v4": 2.901441,
+    "v5pp": 2.996744
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 28,
+   "label": "uniform",
+   "model": "phi-3.5-moe",
+   "ms": 2.720318,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 1742259201,
+    "w2": 1547184676
+   },
+   "rivals": {
+    "round4": 2.720318,
+    "v4": 2.629566,
+    "v5pp": 2.721257
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 29,
+   "label": "balanced",
+   "model": "phi-3.5-moe",
+   "ms": 2.720318,
+   "n": 4,
+   "page": "phi-3.5-moe-128g16",
+   "reads": {
+    "w1": 1742259201,
+    "w2": 1547184676
+   },
+   "rivals": {
+    "round4": 2.720318,
+    "v4": 2.629566,
+    "v5pp": 2.721257
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 30,
+   "label": "PT",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.549447,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 738744657,
+    "w2": 373236570
+   },
+   "rivals": {
+    "round4": 0.549437,
+    "v4": 0.510834,
+    "v5pp": 0.546294
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 31,
+   "label": "PW",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.521671,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 738704311,
+    "w2": 370832716
+   },
+   "rivals": {
+    "round4": 0.521666,
+    "v4": 0.480763,
+    "v5pp": 0.517378
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 32,
+   "label": "PT2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.521717,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 738195488,
+    "w2": 371847247
+   },
+   "rivals": {
+    "round4": 0.526178,
+    "v4": 0.480747,
+    "v5pp": 0.517323
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 33,
+   "label": "PW2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.549691,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 739883513,
+    "w2": 372961535
+   },
+   "rivals": {
+    "round4": 0.550452,
+    "v4": 0.510871,
+    "v5pp": 0.546511
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 34,
+   "label": "uniform",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.4256,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 700347203,
+    "w2": 367845093
+   },
+   "rivals": {
+    "round4": 0.4256,
+    "v4": 0.393877,
+    "v5pp": 0.4136
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 35,
+   "label": "balanced",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.4256,
+   "n": 1,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 700347203,
+    "w2": 367845093
+   },
+   "rivals": {
+    "round4": 0.4256,
+    "v4": 0.393877,
+    "v5pp": 0.4136
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 36,
+   "label": "PT",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.834732,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 779768509,
+    "w2": 397111114
+   },
+   "rivals": {
+    "round4": 0.834906,
+    "v4": 0.792589,
+    "v5pp": 0.834294
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 37,
+   "label": "PW",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.82092,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 779608603,
+    "w2": 396737481
+   },
+   "rivals": {
+    "round4": 0.821025,
+    "v4": 0.77934,
+    "v5pp": 0.820388
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 38,
+   "label": "PT2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.834735,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 779417397,
+    "w2": 398954646
+   },
+   "rivals": {
+    "round4": 0.834709,
+    "v4": 0.792589,
+    "v5pp": 0.834275
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 39,
+   "label": "PW2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.820919,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 779609668,
+    "w2": 396754148
+   },
+   "rivals": {
+    "round4": 0.821014,
+    "v4": 0.77934,
+    "v5pp": 0.820387
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 40,
+   "label": "uniform",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.687877,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 728282647,
+    "w2": 397845689
+   },
+   "rivals": {
+    "round4": 0.687521,
+    "v4": 0.650325,
+    "v5pp": 0.686547
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 41,
+   "label": "balanced",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 0.687877,
+   "n": 2,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 728282647,
+    "w2": 397845689
+   },
+   "rivals": {
+    "round4": 0.687521,
+    "v4": 0.650325,
+    "v5pp": 0.686547
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 42,
+   "label": "PT",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.474255,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 845761227,
+    "w2": 440485445
+   },
+   "rivals": {
+    "round4": 1.474278,
+    "v4": 1.411266,
+    "v5pp": 1.474229
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 43,
+   "label": "PW",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.455947,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 845633800,
+    "w2": 441699993
+   },
+   "rivals": {
+    "round4": 1.455955,
+    "v4": 1.393397,
+    "v5pp": 1.455919
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 44,
+   "label": "PT2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.474261,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 845636906,
+    "w2": 442203019
+   },
+   "rivals": {
+    "round4": 1.47428,
+    "v4": 1.411266,
+    "v5pp": 1.474231
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 45,
+   "label": "PW2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.455958,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 845507926,
+    "w2": 443002800
+   },
+   "rivals": {
+    "round4": 1.455963,
+    "v4": 1.393397,
+    "v5pp": 1.455926
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 46,
+   "label": "uniform",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.322415,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 748593994,
+    "w2": 442800998
+   },
+   "rivals": {
+    "round4": 1.322394,
+    "v4": 1.2643,
+    "v5pp": 1.322359
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 47,
+   "label": "balanced",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.322415,
+   "n": 4,
+   "page": "qwen1.5-moe-a2.7b-128g1",
+   "reads": {
+    "w1": 748593994,
+    "w2": 442800998
+   },
+   "rivals": {
+    "round4": 1.322394,
+    "v4": 1.2643,
+    "v5pp": 1.322359
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 48,
+   "label": "PT",
+   "model": "jetmoe-8b",
+   "ms": 0.639943,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 433298816,
+    "w2": 294818261
+   },
+   "rivals": {
+    "round4": 0.639943,
+    "v4": 0.609493,
+    "v5pp": 0.639979
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 49,
+   "label": "PW",
+   "model": "jetmoe-8b",
+   "ms": 0.640178,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 433263277,
+    "w2": 292511047
+   },
+   "rivals": {
+    "round4": 0.640178,
+    "v4": 0.609494,
+    "v5pp": 0.640231
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 50,
+   "label": "PT2",
+   "model": "jetmoe-8b",
+   "ms": 0.639942,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 433315214,
+    "w2": 293551658
+   },
+   "rivals": {
+    "round4": 0.639942,
+    "v4": 0.609493,
+    "v5pp": 0.639978
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 51,
+   "label": "PW2",
+   "model": "jetmoe-8b",
+   "ms": 0.639945,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 433278995,
+    "w2": 295894873
+   },
+   "rivals": {
+    "round4": 0.639945,
+    "v4": 0.609493,
+    "v5pp": 0.639981
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 52,
+   "label": "uniform",
+   "model": "jetmoe-8b",
+   "ms": 0.520382,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 424564687,
+    "w2": 278351962
+   },
+   "rivals": {
+    "round4": 0.520382,
+    "v4": 0.516705,
+    "v5pp": 0.520457
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 53,
+   "label": "balanced",
+   "model": "jetmoe-8b",
+   "ms": 0.520382,
+   "n": 3,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 424564687,
+    "w2": 278351962
+   },
+   "rivals": {
+    "round4": 0.520382,
+    "v4": 0.516705,
+    "v5pp": 0.520457
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 54,
+   "label": "PT",
+   "model": "jetmoe-8b",
+   "ms": 0.795329,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 437443551,
+    "w2": 335044391
+   },
+   "rivals": {
+    "round4": 0.795329,
+    "v4": 0.757539,
+    "v5pp": 0.795395
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 55,
+   "label": "PW",
+   "model": "jetmoe-8b",
+   "ms": 0.776845,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 483592888,
+    "w2": 361243950
+   },
+   "rivals": {
+    "round4": 0.776845,
+    "v4": 0.739671,
+    "v5pp": 0.776919
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 56,
+   "label": "PT2",
+   "model": "jetmoe-8b",
+   "ms": 0.7768,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 436602309,
+    "w2": 343085769
+   },
+   "rivals": {
+    "round4": 0.776799,
+    "v4": 0.739671,
+    "v5pp": 0.776865
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 57,
+   "label": "PW2",
+   "model": "jetmoe-8b",
+   "ms": 0.77683,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 483283270,
+    "w2": 356604513
+   },
+   "rivals": {
+    "round4": 0.776829,
+    "v4": 0.739671,
+    "v5pp": 0.7769
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 58,
+   "label": "uniform",
+   "model": "jetmoe-8b",
+   "ms": 0.693206,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 380126349,
+    "w2": 318527975
+   },
+   "rivals": {
+    "round4": 0.693206,
+    "v4": 0.66096,
+    "v5pp": 0.693265
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 59,
+   "label": "balanced",
+   "model": "jetmoe-8b",
+   "ms": 0.693206,
+   "n": 4,
+   "page": "jetmoe-8b-128g16",
+   "reads": {
+    "w1": 380126349,
+    "w2": 318527975
+   },
+   "rivals": {
+    "round4": 0.693206,
+    "v4": 0.66096,
+    "v5pp": 0.693265
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 60,
+   "label": "PT",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.764556,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 951826539,
+    "w2": 513405408
+   },
+   "rivals": {
+    "round4": 1.764557,
+    "v4": 1.693806,
+    "v5pp": 1.764531
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 61,
+   "label": "PW",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.764671,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 965432430,
+    "w2": 511530795
+   },
+   "rivals": {
+    "round4": 1.764671,
+    "v4": 1.693806,
+    "v5pp": 1.764637
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 62,
+   "label": "PT2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.796518,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 943232138,
+    "w2": 511170066
+   },
+   "rivals": {
+    "round4": 1.796518,
+    "v4": 1.724926,
+    "v5pp": 1.796497
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 63,
+   "label": "PW2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.764692,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 961583894,
+    "w2": 510296721
+   },
+   "rivals": {
+    "round4": 1.764692,
+    "v4": 1.693806,
+    "v5pp": 1.764654
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 64,
+   "label": "uniform",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.631785,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 782007130,
+    "w2": 511077884
+   },
+   "rivals": {
+    "round4": 1.631785,
+    "v4": 1.564709,
+    "v5pp": 1.631747
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 65,
+   "label": "balanced",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.631785,
+   "n": 5,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 782007130,
+    "w2": 511077884
+   },
+   "rivals": {
+    "round4": 1.631785,
+    "v4": 1.564709,
+    "v5pp": 1.631747
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 66,
+   "label": "PT",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 2.08508,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 965082473,
+    "w2": 541208510
+   },
+   "rivals": {
+    "round4": 2.08508,
+    "v4": 2.007466,
+    "v5pp": 2.085069
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 67,
+   "label": "PW",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 2.085083,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 960275252,
+    "w2": 540381007
+   },
+   "rivals": {
+    "round4": 2.085083,
+    "v4": 2.007466,
+    "v5pp": 2.085071
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 68,
+   "label": "PT2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 2.103164,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 948269295,
+    "w2": 538314621
+   },
+   "rivals": {
+    "round4": 2.103163,
+    "v4": 2.025335,
+    "v5pp": 2.103154
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 69,
+   "label": "PW2",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 2.07141,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 966393967,
+    "w2": 539965745
+   },
+   "rivals": {
+    "round4": 2.07141,
+    "v4": 1.994215,
+    "v5pp": 2.071393
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 70,
+   "label": "uniform",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.939351,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 777943519,
+    "w2": 536025774
+   },
+   "rivals": {
+    "round4": 1.93935,
+    "v4": 1.865118,
+    "v5pp": 1.939327
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 16,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g16",
+   "index": 71,
+   "label": "balanced",
+   "model": "qwen1.5-moe-a2.7b",
+   "ms": 1.939351,
+   "n": 6,
+   "page": "qwen1.5-moe-a2.7b-128g16",
+   "reads": {
+    "w1": 777943519,
+    "w2": 536025774
+   },
+   "rivals": {
+    "round4": 1.93935,
+    "v4": 1.865118,
+    "v5pp": 1.939327
+   },
+   "unit": "t128g16"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 72,
+   "label": "PT",
+   "model": "jetmoe-8b",
+   "ms": 0.486277,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 468637506,
+    "w2": 221745360
+   },
+   "rivals": {
+    "round4": null,
+    "v4": 0.475273,
+    "v5pp": 0.486111
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 73,
+   "label": "PW",
+   "model": "jetmoe-8b",
+   "ms": 0.486471,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 478132726,
+    "w2": 221795273
+   },
+   "rivals": {
+    "round4": 0.492148,
+    "v4": 0.475167,
+    "v5pp": 0.486281
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 74,
+   "label": "PT2",
+   "model": "jetmoe-8b",
+   "ms": 0.486278,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 468635889,
+    "w2": 221988267
+   },
+   "rivals": {
+    "round4": 0.492043,
+    "v4": 0.47564,
+    "v5pp": 0.486114
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 75,
+   "label": "PW2",
+   "model": "jetmoe-8b",
+   "ms": 0.486471,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 478138446,
+    "w2": 221825954
+   },
+   "rivals": {
+    "round4": 0.489596,
+    "v4": 0.475342,
+    "v5pp": 0.486281
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 76,
+   "label": "uniform",
+   "model": "jetmoe-8b",
+   "ms": 0.365658,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 449539358,
+    "w2": 209397263
+   },
+   "rivals": {
+    "round4": 0.369983,
+    "v4": 0.347244,
+    "v5pp": 0.365284
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 77,
+   "label": "balanced",
+   "model": "jetmoe-8b",
+   "ms": 0.365658,
+   "n": 2,
+   "page": "jetmoe-8b-128g1",
+   "reads": {
+    "w1": 449539358,
+    "w2": 209397263
+   },
+   "rivals": {
+    "round4": 0.369983,
+    "v4": 0.347244,
+    "v5pp": 0.365284
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 78,
+   "label": "PT",
+   "model": "deepseek-v2-lite",
+   "ms": 1.200437,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 867861858,
+    "w2": 449881654
+   },
+   "rivals": {
+    "round4": 1.200521,
+    "v4": 1.145437,
+    "v5pp": 1.200306
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 79,
+   "label": "PW",
+   "model": "deepseek-v2-lite",
+   "ms": 1.200419,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 867998376,
+    "w2": 448751302
+   },
+   "rivals": {
+    "round4": 1.200493,
+    "v4": 1.145437,
+    "v5pp": 1.200297
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 80,
+   "label": "PT2",
+   "model": "deepseek-v2-lite",
+   "ms": 1.232672,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 867901758,
+    "w2": 446973713
+   },
+   "rivals": {
+    "round4": 1.232737,
+    "v4": 1.176557,
+    "v5pp": 1.232584
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 81,
+   "label": "PW2",
+   "model": "deepseek-v2-lite",
+   "ms": 1.200423,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 867819862,
+    "w2": 449656648
+   },
+   "rivals": {
+    "round4": 1.200497,
+    "v4": 1.145437,
+    "v5pp": 1.200296
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 82,
+   "label": "uniform",
+   "model": "deepseek-v2-lite",
+   "ms": 1.066395,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 815488477,
+    "w2": 446885063
+   },
+   "rivals": {
+    "round4": 1.066302,
+    "v4": 1.016341,
+    "v5pp": 1.066185
+   },
+   "unit": "t128g1"
+  },
+  {
+   "G": 1,
+   "arm": "native",
+   "block_m": 128,
+   "cls": "128g1",
+   "index": 83,
+   "label": "balanced",
+   "model": "deepseek-v2-lite",
+   "ms": 1.066395,
+   "n": 3,
+   "page": "deepseek-v2-lite-128g1",
+   "reads": {
+    "w1": 815488477,
+    "w2": 446885063
+   },
+   "rivals": {
+    "round4": 1.066302,
+    "v4": 1.016341,
+    "v5pp": 1.066185
+   },
+   "unit": "t128g1"
+  }
+ ],
+ "commit": {
+  "checked": true,
+  "sha": "a56080792f7404ce56f62eafc70335e66d9a6af1"
+ },
+ "gate": {
+  "inside_held_out_par_span (DESCRIPTIVE)": false,
+  "par": [
+   59.815,
+   612.5
+  ],
+  "ratio_1ms": 1.4039,
+  "verdict": "PASS"
+ },
+ "gate64": {
+  "par": [
+   39.465,
+   337.5
+  ],
+  "ratio_1ms": 1.4204,
+  "verdict": "PASS"
+ },
+ "n_cells": 84,
+ "par": [
+  59.815,
+  612.5
+ ],
+ "par64": [
+  39.465,
+  337.5
+ ],
+ "per_page": {
+  "mixtral-8x7b": {
+   "A_us": 71.27,
+   "cells": 54,
+   "rms_us": 13.2,
+   "sha256": "0b941c8689dc7862bb374327b25ee8946a14ab5c63b45f17270aaa80e8f98a17",
+   "tau_us": 650.0
+  },
+  "olmoe-1b-7b": {
+   "A_us": 48.36,
+   "cells": 54,
+   "rms_us": 6.34,
+   "sha256": "e58975f5f096580e1e59b6e877322765e47cd880d89fb254c84a7d9b2365e8bb",
+   "tau_us": 575.0
+  }
+ },
+ "per_page64": {
+  "mixtral-8x7b": {
+   "A_us": 47.0,
+   "cells": 54,
+   "rms_us": 9.01,
+   "sha256": "7f3222f2883b045aba1c1f79d3483bd4162d67c599d7250750f7d85dd936856f",
+   "tau_us": 375.0
+  },
+  "olmoe-1b-7b": {
+   "A_us": 31.93,
+   "cells": 54,
+   "rms_us": 3.17,
+   "sha256": "5e35d20c0fff329deb0b7e1af4d7faa1c1f2444904f33e0f9bbd284b0e439563",
+   "tau_us": 300.0
+  }
+ },
+ "registration": "2026-11-04-tileB3-gh200",
+ "unpriced": [],
+ "what": "tile rental B3's predictions of record: the frozen round-5 model at this board's 128x128 and 64x128 sag pars, finalised mechanically before any blind page is read"
+}
