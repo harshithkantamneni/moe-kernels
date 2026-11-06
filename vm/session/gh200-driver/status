@@ -76,3 +76,7 @@
 2026-11-06T18:24:14Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/summary.json)
 2026-11-06T18:24:14Z bytes END: exit 0 after 7 min [unit 9/20 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 2026-11-06T18:24:15Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:24:26Z gate START: gate band: scripts/tileA2_gate.py band at the 1410 lock; FAIL drops drop-group phi and its dependents, the session goes on (PC) (tileA2-gates) [unit 10/20 - gband gate=band] (estimate 1 min, cap 5 min, 97 min left)
+2026-11-06T18:24:27Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
+2026-11-06T18:24:27Z gate END: exit 0 after 0 min [unit 10/20 - gband gate=band]
+2026-11-06T18:24:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
