@@ -1,0 +1,82 @@
+{
+ "cells": [
+  {
+   "T": 128,
+   "arms": [
+    "native"
+   ],
+   "counts": [
+    64,
+    64,
+    64,
+    64,
+    0,
+    0,
+    0,
+    0
+   ],
+   "label": "L-T128-A4",
+   "role": "PC-R12"
+  },
+  {
+   "T": 128,
+   "arms": [
+    "native"
+   ],
+   "counts": [
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32
+   ],
+   "label": "L-T128-A8",
+   "role": "PC-R12"
+  },
+  {
+   "T": 16,
+   "arms": [
+    "native"
+   ],
+   "counts": [
+    16,
+    16,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "label": "L-T16-A2",
+   "role": "PC-R12"
+  },
+  {
+   "T": 4,
+   "arms": [
+    "native"
+   ],
+   "counts": [
+    4,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "label": "L-T4-A2",
+   "role": "PC-R12"
+  }
+ ],
+ "decl_copies": null,
+ "label": "SYNTHETIC (scripts/scoring/pc/gen_pc_pages.py, 2026-11-06-pc-gh200): PC unit 16, the same-board counter cross-check of PC's stamped Mixtral cells at vLLM's default tiles (DS's counter step, kernels=wide)",
+ "model": "mixtral-8x7b",
+ "page": "mixtral-8x7b-cnt",
+ "schema": "moe-kernels/decode-page/1",
+ "shuffle_seed": 20261106
+}

@@ -1,0 +1,714 @@
+{
+ "generator": "moe-kernels-work 2026-11-06 build-PC/work/price_pc.py",
+ "rows": [
+  {
+   "T_pred_ms": {
+    "w1": 0.7383898259372409,
+    "w2": 0.34290573395954993
+   },
+   "call_pred_ms": 1.146311,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2202754304.0,
+    "w2": 953315072.0
+   },
+   "label": "PT",
+   "meas_ms_b3": 1.126528024673462,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 900,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.7383898259372409,
+     "live": 2300,
+     "waves": 8.712121212121213
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 288,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.34290573395954993,
+     "live": 736,
+     "waves": 2.787878787878788
+    }
+   },
+   "pred_reads": {
+    "w1": 2342728259.9566092,
+    "w2": 949427617.6107605
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.7801481643472146,
+    "w2": 0.3399578343740703
+   },
+   "call_pred_ms": 1.185121,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2271839744.0,
+    "w2": 923693141.3333334
+   },
+   "label": "PT2",
+   "meas_ms_b3": 1.1459680199623108,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 800,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.7801481643472146,
+     "live": 2400,
+     "waves": 9.090909090909092
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 256,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.3399578343740703,
+     "live": 768,
+     "waves": 2.909090909090909
+    }
+   },
+   "pred_reads": {
+    "w1": 2479627105.246852,
+    "w2": 908973615.4344816
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.7906128507238182,
+    "w2": 0.33908842492090957
+   },
+   "call_pred_ms": 1.194716,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2281604864.0,
+    "w2": 929222912.0
+   },
+   "label": "PW",
+   "meas_ms_b3": 1.1615520119667053,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 800,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.7906128507238182,
+     "live": 2400,
+     "waves": 9.090909090909092
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 256,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.33908842492090957,
+     "live": 768,
+     "waves": 2.909090909090909
+    }
+   },
+   "pred_reads": {
+    "w1": 2536232672.940059,
+    "w2": 895826189.3908303
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.7192770827852519,
+    "w2": 0.3415443790856181
+   },
+   "call_pred_ms": 1.125837,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2170220458.6666665,
+    "w2": 921685674.6666666
+   },
+   "label": "PW2",
+   "meas_ms_b3": 1.0818560123443604,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1000,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.7192770827852519,
+     "live": 2200,
+     "waves": 8.333333333333334
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 320,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.3415443790856181,
+     "live": 704,
+     "waves": 2.6666666666666665
+    }
+   },
+   "pred_reads": {
+    "w1": 2326467235.4109626,
+    "w2": 933029965.2077082
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5334373633236905,
+    "w2": 0.26156923429485573
+   },
+   "call_pred_ms": 0.860022,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 1692112384.0,
+    "w2": 866815232.0
+   },
+   "label": "balanced",
+   "meas_ms_b3": 0.8703039884567261,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5334373633236905,
+     "live": 1600,
+     "waves": 6.0606060606060606
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.26156923429485573,
+     "live": 512,
+     "waves": 1.9393939393939394
+    }
+   },
+   "pred_reads": {
+    "w1": 1688802352.8314736,
+    "w2": 868015331.8166174
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5334373633236905,
+    "w2": 0.26156923429485573
+   },
+   "call_pred_ms": 0.860022,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 1692136618.6666667,
+    "w2": 866802858.6666666
+   },
+   "label": "uniform",
+   "meas_ms_b3": 0.8696320056915283,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5334373633236905,
+     "live": 1600,
+     "waves": 6.0606060606060606
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.26156923429485573,
+     "live": 512,
+     "waves": 1.9393939393939394
+    }
+   },
+   "pred_reads": {
+    "w1": 1688802352.8314736,
+    "w2": 868015331.8166174
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.2405348245917127,
+    "w2": 0.5484974703871508
+   },
+   "call_pred_ms": 1.882901,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 3493136554.6666665,
+    "w2": 1115740928.0
+   },
+   "label": "PT",
+   "meas_ms_b3": 1.780735969543457,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 900,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.2405348245917127,
+     "live": 3900,
+     "waves": 14.772727272727273
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 288,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5484974703871508,
+     "live": 1248,
+     "waves": 4.7272727272727275
+    }
+   },
+   "pred_reads": {
+    "w1": 3983545517.4555383,
+    "w2": 1075452220.4211893
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.286936615353608,
+    "w2": 0.548597741429325
+   },
+   "call_pred_ms": 1.929403,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 3615927893.3333335,
+    "w2": 1178952704.0
+   },
+   "label": "PT2",
+   "meas_ms_b3": 1.8119679689407349,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 800,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.286936615353608,
+     "live": 4000,
+     "waves": 15.151515151515152
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 256,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.548597741429325,
+     "live": 1280,
+     "waves": 4.848484848484849
+    }
+   },
+   "pred_reads": {
+    "w1": 4145455461.2488666,
+    "w2": 1080741866.1761374
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.251551533472211,
+    "w2": 0.548723780511833
+   },
+   "call_pred_ms": 1.894144,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 3495711232.0,
+    "w2": 1178157397.3333333
+   },
+   "label": "PW",
+   "meas_ms_b3": 1.7821439504623413,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 900,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.251551533472211,
+     "live": 3900,
+     "waves": 14.772727272727273
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 288,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.548723780511833,
+     "live": 1248,
+     "waves": 4.7272727272727275
+    }
+   },
+   "pred_reads": {
+    "w1": 4040637618.9826646,
+    "w2": 1089912286.1238446
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.2869487745619903,
+    "w2": 0.5494580415283554
+   },
+   "call_pred_ms": 1.930275,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 3628510720.0,
+    "w2": 1185552042.6666667
+   },
+   "label": "PW2",
+   "meas_ms_b3": 1.8297920227050781,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 800,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.2869487745619903,
+     "live": 4000,
+     "waves": 15.151515151515152
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 256,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5494580415283554,
+     "live": 1280,
+     "waves": 4.848484848484849
+    }
+   },
+   "pred_reads": {
+    "w1": 4145520296.8460445,
+    "w2": 1130462859.6414552
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.0308031024030042,
+    "w2": 0.44286439710910214
+   },
+   "call_pred_ms": 1.567536,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2933616640.0,
+    "w2": 1083056896.0
+   },
+   "label": "balanced",
+   "meas_ms_b3": 1.5156160593032837,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.0308031024030042,
+     "live": 3200,
+     "waves": 12.121212121212121
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.44286439710910214,
+     "live": 1024,
+     "waves": 3.878787878787879
+    }
+   },
+   "pred_reads": {
+    "w1": 3297077382.9673386,
+    "w2": 1003515782.0788298
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 1.0308031024030042,
+    "w2": 0.44286439710910214
+   },
+   "call_pred_ms": 1.567536,
+   "cls": "128g1",
+   "counted_bytes": {
+    "w1": 2909207381.3333335,
+    "w2": 1082542506.6666667
+   },
+   "label": "uniform",
+   "meas_ms_b3": 1.5176960229873657,
+   "model": "phi-3.5-moe",
+   "n": 2,
+   "page": "phi-3.5-moe-128g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 1.0308031024030042,
+     "live": 3200,
+     "waves": 12.121212121212121
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.44286439710910214,
+     "live": 1024,
+     "waves": 3.878787878787879
+    }
+   },
+   "pred_reads": {
+    "w1": 3297077382.9673386,
+    "w2": 1003515782.0788298
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5606167540205534,
+    "w2": 0.29975153030718954
+   },
+   "call_pred_ms": 0.910957,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 2177499221.3333335,
+    "w2": 864127829.3333334
+   },
+   "label": "PT",
+   "meas_ms_b3": 0.9925119876861572,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 700,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5606167540205534,
+     "live": 2500,
+     "waves": 6.313131313131313
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 224,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.29975153030718954,
+     "live": 800,
+     "waves": 2.0202020202020203
+    }
+   },
+   "pred_reads": {
+    "w1": 1767342943.359142,
+    "w2": 917416166.6052152
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5581065553371728,
+    "w2": 0.2814482296345283
+   },
+   "call_pred_ms": 0.890143,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 2043936000.0,
+    "w2": 872600917.3333334
+   },
+   "label": "PT2",
+   "meas_ms_b3": 0.9345439970493317,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 800,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5581065553371728,
+     "live": 2400,
+     "waves": 6.0606060606060606
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 256,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.2814482296345283,
+     "live": 768,
+     "waves": 1.9393939393939394
+    }
+   },
+   "pred_reads": {
+    "w1": 1756782208.4137323,
+    "w2": 907694469.1396233
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5606587392088689,
+    "w2": 0.29873017378298367
+   },
+   "call_pred_ms": 0.909977,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 2012114944.0,
+    "w2": 885457066.6666666
+   },
+   "label": "PW",
+   "meas_ms_b3": 0.9684159755706787,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 700,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5606587392088689,
+     "live": 2500,
+     "waves": 6.313131313131313
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 224,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.29873017378298367,
+     "live": 800,
+     "waves": 2.0202020202020203
+    }
+   },
+   "pred_reads": {
+    "w1": 1767563571.4540179,
+    "w2": 911928716.2842863
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.5589209733345933,
+    "w2": 0.29921301802331457
+   },
+   "call_pred_ms": 0.908722,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 1894571349.3333333,
+    "w2": 873002240.0
+   },
+   "label": "PW2",
+   "meas_ms_b3": 0.9240959882736206,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 700,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.5589209733345933,
+     "live": 2500,
+     "waves": 6.313131313131313
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 224,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.29921301802331457,
+     "live": 800,
+     "waves": 2.0202020202020203
+    }
+   },
+   "pred_reads": {
+    "w1": 1759137567.5713065,
+    "w2": 914531812.2301977
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.4974097258432315,
+    "w2": 0.2712281624728523
+   },
+   "call_pred_ms": 0.819226,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 1684464896.0,
+    "w2": 856585557.3333334
+   },
+   "label": "balanced",
+   "meas_ms_b3": 0.8134719729423523,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.4974097258432315,
+     "live": 1600,
+     "waves": 4.040404040404041
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.2712281624728523,
+     "live": 512,
+     "waves": 1.292929292929293
+    }
+   },
+   "pred_reads": {
+    "w1": 1698711961.7238345,
+    "w2": 878151972.6144321
+   }
+  },
+  {
+   "T_pred_ms": {
+    "w1": 0.4974097258432315,
+    "w2": 0.2712281624728523
+   },
+   "call_pred_ms": 0.819226,
+   "cls": "64g1",
+   "counted_bytes": {
+    "w1": 1684333738.6666667,
+    "w2": 855723861.3333334
+   },
+   "label": "uniform",
+   "meas_ms_b3": 0.8151520192623138,
+   "model": "phi-3.5-moe",
+   "n": 1,
+   "page": "phi-3.5-moe-64g1",
+   "parts": {
+    "w1": {
+     "const_ms": 0.0,
+     "dead_ctas": 1600,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.4974097258432315,
+     "live": 1600,
+     "waves": 4.040404040404041
+    },
+    "w2": {
+     "const_ms": 0.0,
+     "dead_ctas": 512,
+     "dead_ms": 0.0,
+     "gemm_ms": 0.2712281624728523,
+     "live": 512,
+     "waves": 1.292929292929293
+    }
+   },
+   "pred_reads": {
+    "w1": 1698711961.7238345,
+    "w2": 878151972.6144321
+   }
+  }
+ ],
+ "sources_sha256": {
+  "results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g1-r3-counters/lock1410/r3c-g1.json": "9dbcfeec393e10df3b1efcda24a2c3bd3ffb68f99de78f3f600f04a8e40e0d6c",
+  "results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/r3c-g1.json": "ca18424fff41d3780169657c5e5b9f381a8d4312799f89a8769381d88c826f7d",
+  "scripts/scoring/tileB3/b3.predictions.json": "ed3a45cbbc9391d2176e8477a2c9964342b7c3c2105cd64f8496ea3ac8fc5c0d",
+  "~/code/moe-kernels-work/2026-11-06/phi-split/split.json": "608e8d1a97d77966cf81ba63a4f97ec183f579766d55fd0451f831aa11800179"
+ },
+ "what": "PC-R10's counted Phi w1 and w2 bytes (B3's published byte pages, board ebedab, 1410 MHz, ncu kernel replay with L2 flushed before each kernel, NATIVE cells; the cells fail B3's per-cell clock rule and are read DESCRIPTIVELY) and PC-R11's per-GEMM prices (the frozen round-5 model, gemm + dead + const ms, from the phi-split analysis, POST-HOC on SEEN pages), registered by value before any PC page"
+}
