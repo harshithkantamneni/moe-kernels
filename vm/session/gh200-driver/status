@@ -121,3 +121,7 @@
 2026-11-06T18:35:18Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/summary.json)
 2026-11-06T18:35:18Z bytes END: exit 0 after 3 min [unit 16/20 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1]
 2026-11-06T18:35:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:35:31Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-d.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710] (estimate 4 min, cap 15 min, 86 min left)
+2026-11-06T18:35:31Z stamps REFUSED: the gate's hard legs for u17-sd read 'FAIL' (instr-gate.env): occupancy, SASS and the upstream file must pass
+2026-11-06T18:35:31Z stamps END: exit 2 after 0 min [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710]
+2026-11-06T18:35:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

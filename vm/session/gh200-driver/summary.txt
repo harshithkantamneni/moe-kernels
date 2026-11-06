@@ -14,3 +14,4 @@ stamps     exit 0 after 0 min [unit 13/20 phi-3.5-moe se1 block-m=128 block-n=12
 stamps     exit 0 after 0 min [unit 14/20 phi-3.5-moe se2 probe=pc block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
 bytes      exit 0 after 6 min [unit 15/20 phi-3.5-moe b128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native,shared byte-groups=1]
 bytes      exit 0 after 3 min [unit 16/20 phi-3.5-moe b64g1 block-m=64 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-64g1.json arms=native,shared byte-groups=1]
+stamps     exit 2 after 0 min [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710]
