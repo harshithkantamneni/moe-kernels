@@ -141,3 +141,8 @@
 2026-11-06T18:42:19Z bytes: analyse of 1 pages exit 3 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g16-r3-counters/lock1410/summary.json)
 2026-11-06T18:42:19Z bytes END: exit 0 after 5 min [unit 19/20 phi-3.5-moe b128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g16.json arms=native,shared byte-groups=16]
 2026-11-06T18:42:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:42:32Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-06-pc-pages/pc-r.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc.py) [unit 20/20 - sr probe=pc page=docs/registered/2026-11-06-pc-pages/pc-r.json lock-mhz=1710] (estimate 3 min, cap 10 min, 79 min left)
+2026-11-06T18:42:32Z stamps: the overhead gate for u20-sr reads 'FAIL median=0.009611589246426522 worst=0.034355286674062735': the pages run PERTURBED (owner OD-1, C3)
+2026-11-06T18:42:47Z stamps: u20-sr exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sr, probe=pc)
+2026-11-06T18:42:47Z stamps END: exit 0 after 0 min [unit 20/20 - sr probe=pc page=docs/registered/2026-11-06-pc-pages/pc-r.json lock-mhz=1710]
+2026-11-06T18:42:48Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
