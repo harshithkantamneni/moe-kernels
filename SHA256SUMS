@@ -1,5 +1,5 @@
 3e9ce5b7c86115f84b78ebce9f9ca912a71a84d75651074efb678daa6540177f  vm/driver580.log
-d18698ffa9f0120ce7e856bfcf217aa34c6f5efd19ac5ce963fe2a6b1ad43f63  vm/gh200-driver.out
+977139ea3439c8cc377835cbfa469361420106752e8e2f2115d46037c40ef6e9  vm/gh200-driver.out
 7313ba21f4ebd1d7038409663d6db3f78d99be4b30fafb7ce3107cc25ae2c406  vm/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa/ptx/64-128-128-1-2-4-False-2-48763291421918cc.ptx
 7313ba21f4ebd1d7038409663d6db3f78d99be4b30fafb7ce3107cc25ae2c406  vm/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa/ptx/64-128-128-1-2-4-False-2-6e5fbd2e41448a6b.ptx
 41d0a9974af9a4e6dc013c5a69cc90947f5b3fc67b61ff8ee5044c2997c422b4  vm/results/2026-11-06-nvidia_gh200_480gb-instr-pc-sa/ptx/64-128-128-1-2-4-True-1-1611d3ec37e6005c.ptx
@@ -3753,7 +3753,7 @@ c0bbf29e14a75356574eec93e07f5ba333bdb2d814dad092873919c21ac2cd9c  vm/session/gh2
 42112645bab46a2607d341f515c3b8dba114b7daf54465f565152c384b684b8f  vm/session/gh200-driver/locks.env
 b65bf7e158d3b04fb0f09d8f203466562bdc8b2077ecd1ea5468859de25b9a00  vm/session/gh200-driver/pc-locks.env
 ef5d66956f9d9c35f1c5acc77b9ddacc8bc29be70d28b81511e730824affcae7  vm/session/gh200-driver/pc-variants.json
-c1d577842352ae55598d20546a87adabc0c95d004820a78b22019c4b18b37155  vm/session/gh200-driver/status
+f94fc39373d4e847b56cb639e32fbf26d1cf7bb47f39ddd1dbe23becf7a07686  vm/session/gh200-driver/status
 674376d3cab96c32f614e03a96823e0fdac5bf13e0f70b6e6e0a9d7afa9f5785  vm/session/gh200-driver/summary.new
 674376d3cab96c32f614e03a96823e0fdac5bf13e0f70b6e6e0a9d7afa9f5785  vm/session/gh200-driver/summary.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/session/git-at-start.txt
