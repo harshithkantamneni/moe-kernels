@@ -1,0 +1,695 @@
+{
+  "experiment": "private_weight_reference",
+  "kind": "histogram-page",
+  "run_id": "nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-histe789abc65-6173ce43",
+  "session_tag": "gh200-20261105T220621Z-p2g-lock1410",
+  "card": "nvidia_gh200_480gb",
+  "model": "jetmoe-8b",
+  "dtype": "bf16",
+  "block_m": 128,
+  "pinned": {
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 3
+  },
+  "duty": 0.25,
+  "repeats": 9,
+  "copies_declared": 9,
+  "arms": [
+    "native",
+    "shared"
+  ],
+  "declared_by_arm": {
+    "native": 8,
+    "shared": 72,
+    "private": 72
+  },
+  "treads": [
+    2
+  ],
+  "bandwidth_gbps": 3725.6743262028613,
+  "ridge": 174.81440100483138,
+  "histogram": {
+    "schema": "moe-kernels/histogram-page/1",
+    "file_sha256": "e789abc653aca1cfca2f37485f9455720f6a0f96c68f06d99b8617188f1dd752",
+    "page": "jetmoe-8b-128g1",
+    "shuffle_seed": 20261420,
+    "cells": [
+      {
+        "label": "PT",
+        "n": 2,
+        "counts_sha256": "52aa9c435fbe175a0cbc8538580ec63118f2b09df76ef090386f1f4cc97fc661",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW",
+        "n": 2,
+        "counts_sha256": "62fdec4c3b3ea784f57ff2253adf50608431bbbf9e46bae449eaad1b9322b5d0",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PT2",
+        "n": 2,
+        "counts_sha256": "8fe216554d32b430f13e0fd545185fa9818a2820221c52629d8b7db52f531f05",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "PW2",
+        "n": 2,
+        "counts_sha256": "734fcafea56a321afcc8fb7d447e56f6cd28b5a8022a86c4ed5bc2469c283fb2",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "uniform",
+        "n": 2,
+        "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      },
+      {
+        "label": "balanced",
+        "n": 2,
+        "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "arms": [
+          "native",
+          "shared"
+        ]
+      }
+    ]
+  },
+  "histogram_gates": {
+    "G1_lock_thermal": {
+      "verdict": "PASS",
+      "clock_unread": [],
+      "drift": [],
+      "below_top_by_a_step": [],
+      "top_mhz": 1410.0,
+      "lock_slips": {
+        "slipped_repeats": 0,
+        "repeat_rows": 108,
+        "lost_cells": [],
+        "rule": "a lost cell (under --min-clean-repeats clean repeats) is listed, not a FAIL here: the rental-6 scorer's G1 takes the page's slipped-repeat share"
+      }
+    },
+    "G2_host_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "a cell the timer called host-bound is excluded, not voided"
+    },
+    "G3_uniform_control": {
+      "verdict": "SCORED OFFLINE",
+      "rule": "the rental-5 scorer's TOST over the page pair"
+    },
+    "G4_worst_cell_clock": {
+      "verdict": "RECORDED",
+      "worst_mhz": 1410.0,
+      "rule": "the scorer holds the worst cell to the 1710 lock"
+    },
+    "G5_provenance": {
+      "verdict": "PASS",
+      "missing": []
+    }
+  },
+  "treads_table": [
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.4835520088672638,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PT",
+      "counts_sha256": "52aa9c435fbe175a0cbc8538580ec63118f2b09df76ef090386f1f4cc97fc661",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        279,
+        278,
+        185,
+        266,
+        281,
+        365,
+        150,
+        244
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.49273601174354553,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PT",
+      "counts_sha256": "52aa9c435fbe175a0cbc8538580ec63118f2b09df76ef090386f1f4cc97fc661",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        279,
+        278,
+        185,
+        266,
+        281,
+        365,
+        150,
+        244
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.4835360050201416,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PW",
+      "counts_sha256": "62fdec4c3b3ea784f57ff2253adf50608431bbbf9e46bae449eaad1b9322b5d0",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        181,
+        235,
+        419,
+        301,
+        259,
+        185,
+        187,
+        281
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.4941439926624298,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PW",
+      "counts_sha256": "62fdec4c3b3ea784f57ff2253adf50608431bbbf9e46bae449eaad1b9322b5d0",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        181,
+        235,
+        419,
+        301,
+        259,
+        185,
+        187,
+        281
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.481471985578537,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PT2",
+      "counts_sha256": "8fe216554d32b430f13e0fd545185fa9818a2820221c52629d8b7db52f531f05",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        290,
+        184,
+        260,
+        261,
+        258,
+        248,
+        344,
+        203
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.492000013589859,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PT2",
+      "counts_sha256": "8fe216554d32b430f13e0fd545185fa9818a2820221c52629d8b7db52f531f05",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        290,
+        184,
+        260,
+        261,
+        258,
+        248,
+        344,
+        203
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.47942399978637695,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PW2",
+      "counts_sha256": "734fcafea56a321afcc8fb7d447e56f6cd28b5a8022a86c4ed5bc2469c283fb2",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        144,
+        186,
+        310,
+        137,
+        496,
+        278,
+        226,
+        271
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.4902400076389313,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "PW2",
+      "counts_sha256": "734fcafea56a321afcc8fb7d447e56f6cd28b5a8022a86c4ed5bc2469c283fb2",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        144,
+        186,
+        310,
+        137,
+        496,
+        278,
+        226,
+        271
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.37564799189567566,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.3781760036945343,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "uniform",
+      "counts_sha256": "9b3a6d3b0b6482a3621e48cfe58dc96cda729f69025090ff907fa707f94aea90",
+      "shuffle_seed": 20261420,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "native",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.37539198994636536,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 8,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "shuffle_seed": null,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    },
+    {
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1410.0,
+      "lost": false,
+      "arm": "shared",
+      "tiles": 2,
+      "tokens": 1024,
+      "ms_p50": 0.37801599502563477,
+      "sm_clock_load_mhz": 1410.0,
+      "experts_declared": 72,
+      "repeats": 9,
+      "host_bound": false,
+      "histogram": "balanced",
+      "counts_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "shuffle_seed": null,
+      "bincount": [
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256
+      ],
+      "bincount_ok": true,
+      "align_path": "block-scan"
+    }
+  ],
+  "path_census": {
+    "rows": [
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ],
+      [
+        "native",
+        2,
+        2048,
+        8,
+        null,
+        "block-scan"
+      ],
+      [
+        "shared",
+        2,
+        2048,
+        72,
+        null,
+        "block-scan"
+      ]
+    ]
+  },
+  "ladder": "NOT APPLICABLE: histogram page (no slope, ratio or ladder-shaped gate)",
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "tag": "G1_lock_thermal",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G2_host_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G5_provenance",
+      "verdict": "PASS"
+    }
+  ],
+  "align_probe": {
+    "synthetic": false,
+    "note": "",
+    "cells": [
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 0,
+        "ms": 0.005967999808490276,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.09548799693584442
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 0,
+        "ms": 0.007829999551177025,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.1252799928188324
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 1,
+        "ms": 0.006366000045090914,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10185600072145462
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 1,
+        "ms": 0.007833999581634998,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12534399330615997
+      },
+      {
+        "label": "native",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 8,
+        "repeat": 2,
+        "ms": 0.00634999992325902,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.10159999877214432
+      },
+      {
+        "label": "shared",
+        "tread": 2,
+        "numel": 2048,
+        "declared": 72,
+        "repeat": 2,
+        "ms": 0.007788000162690878,
+        "host_bound": false,
+        "host_note": "",
+        "graph_calls": 16,
+        "replay_ms": 0.12460800260305405
+      }
+    ]
+  },
+  "slip_policy": "cell",
+  "lock_mhz": 1410,
+  "min_clean_repeats": 0,
+  "repeat_rows": 108,
+  "lock_slip_rows": 0,
+  "slipped_repeats": [],
+  "lost_cells": {},
+  "early_stop": null
+}

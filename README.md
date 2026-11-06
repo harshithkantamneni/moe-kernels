@@ -235,13 +235,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7265 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7267 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-five further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-six further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and twenty-eight Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and twenty-nine Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -284,13 +284,16 @@ addendum, then the settling units M1 to M4 (tile and wide counter pages, OLMoE's
 Qwen1.5-MoE-A2.7B, JetMoE-8B, deepseek-v2-lite and Granite-3.0-3B-A800M and GR1 control pages on Qwen1.5 and Granite,
 9 units on one GH200 at 700 W, and the decode settling rental DS of 2026-11-04: DS's own tile census and one wide decode
 counter page at the 1710 MHz lock on each of six seen models, JetMoE-8B, Phi-3.5-MoE, Mixtral-8x7B,
-Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B, 9 units on one GH200 at 700 W),
+Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and OLMoE-1B-7B, 9 units on one GH200 at 700 W, and tile rental B3 of
+2026-11-05/06: the compile-only census of the four blind models, the four sag pages and their gates, the eight blind
+timed pages of Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and deepseek-v2-lite at 128x128 and 64x128, the OLMoE
+repeat and three byte pages, 23 units on one GH200 at 700 W and the 1410 MHz lock),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 28 GH200 sessions ran on twenty distinct boards (counted by
+sessions rather than arms. The 29 GH200 sessions ran on twenty-one distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again; the DS rental's board cce89f is new). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new; B3's board ebedab is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -326,8 +329,8 @@ with the counted bytes on both GEMMs in place of W2's, the rest of the frozen mo
 five-model pass estimate A is 0.021; the owner's next step is one final declared model round, and iteration stops
 if it fails the gate (docs/FINDINGS.md, Calibration rental C4). That final round (round 5, offline) failed
 the gate. Its held-out 128 G 1 means were OLMoE +0.45%, Qwen2-57B -1.46%, Mixtral-8x7B +1.77% (+2.01% on C2's board),
-Mixtral-8x22B +0.24% and tp2 +2.39%, with P(A) 0.124. On 2026-10-28 the owner narrowed scope, so B3 is not
-registered and its blind models stay unspent. The only certified timing model is still v3 on R3's tile. On vLLM's
+Mixtral-8x22B +0.24% and tp2 +2.39%, with P(A) 0.124. On 2026-10-28 the owner narrowed scope, so B3 was not
+registered then (it was registered on 2026-11-04 and failed, below). The only certified timing model is still v3 on R3's tile. On vLLM's
 tiles the work stands as MEASURED or HELD-OUT, not blind. A 1% held-out claim holds only for OLMoE-like and
 Mixtral-8x22B-like 128 G 1 shapes. The knee conflict and the large-P w1 byte law are open (docs/FINDINGS.md, Tile
 stage: scope decision). The decode stage's CAL rental (2026-10-29) STOPPED the decode stage, so its blind rental
@@ -353,7 +356,12 @@ CAL2's over 48 entries, 0 rows refused): per decode tile w1's counter rate (3787
 few-CTA GEMMs inside one wave (24 to 54 GB/s) and the drain past a wave boundary (46 to 103 GB/s), each call kernel
 per model, and the align kernel at 0.53 us per loop iteration. The decode model form is chosen next from DS's and
 CAL2's pages and frozen before any page of Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M (docs/FINDINGS.md,
-Decode settling rental DS). Every
+Decode settling rental DS). Tile rental B3 (2026-11-05/06), registered on 2026-11-04 after the
+owner chose to go blind at the working-model bar (rms 3%, worst cell 8%, |mean| 1.5%), FAILS: round 5's frozen
+large-tile model reads 2.41% rms over B2's 84 blind NATIVE cells (mean +0.29%, worst -8.22%), Phi-3.5-MoE fails its
+own bar (3.50% rms; 128 G 1 mean +3.4%, 64x128 G 1 mean -3.2%), and no model is certified. Qwen1.5, JetMoE and
+deepseek-v2-lite meet the bar on their own cells (1.18%, 2.05%, 0.65% rms), descriptive only (docs/FINDINGS.md, Tile
+rental B3). Every
 other held-out model was timed from its own counted bytes, which tests
 the timing model alone (docs/FINDINGS.md, the 2026-09-29/30 held-out queue).
 

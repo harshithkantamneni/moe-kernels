@@ -3441,6 +3441,114 @@ $2.29/h).
   captures present at its registration commit (2bf6fe38), as addendum 4's earlier-pages list is frozen, and a test
   holds them to their bytes at that commit. The registered JSON is unchanged.
 
+## Tile rental B3 (2026-11-05/06): E1-TILE FAILS; the round-5 large-tile model is not certified on any model
+
+**Verdict.** B3 FAILS its registered verdict and certifies no model. The registered verdict is E1-TILE, read by rental
+2's rule 3 over the ALL and CLEAN views. It HOLDS only if the pooled NATIVE cells AND each blind model (Phi-3.5-MoE,
+Qwen1.5-MoE-A2.7B, JetMoE-8B) meet rms <= 3%, every cell within 8% and |mean| <= 1.5%, in both views. A model is
+certified only when E1-TILE HOLDS. The pooled cells fail the worst-cell clause and Phi-3.5-MoE fails rms and
+worst cell, in ALL and in CLEAN alike, so E1-TILE reads FAILS and the scorer's top-level certification reads NOT
+CERTIFIED for all three blind models. The FAIL is final: Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and
+deepseek-v2-lite are now SEEN for this model. No earlier registered verdict changes.
+
+**Per model** (84 NATIVE cells, e = T_model / T_meas - 1; the bar is rms 3%, worst cell 8%, |mean| 1.5%):
+
+| cells | n | rms | mean | worst | bar |
+|---|---:|---:|---:|---:|---|
+| pooled | 84 | 2.41% | +0.29% | -8.22% | FAILS (worst cell) |
+| Phi-3.5-MoE | 30 | 3.50% | +1.30% | -8.22% | FAILS (rms and worst cell) |
+| Qwen1.5-MoE-A2.7B | 30 | 1.18% | -0.74% | -3.68% | met (descriptive) |
+| JetMoE-8B | 18 | 2.05% | +0.57% | +3.82% | met (descriptive) |
+| deepseek-v2-lite | 6 | 0.65% | -0.40% | -0.95% | met (descriptive; in the pooled bar only, never certified) |
+
+Qwen1.5, JetMoE and deepseek-v2-lite each meet the bar on their own cells. That per-model reading is DESCRIPTIVE. It is
+not a certification: the registered rule ties certification to the overall verdict, and the overall verdict FAILS.
+
+**Where Phi misses.** The miss sits in two classes with opposite signs (the score JSON's per-class splits):
+
+| Phi-3.5-MoE class | cells | mean | rms | worst |
+|---|---:|---:|---:|---:|
+| 128g1 | 12 | +3.38% | 4.17% | +6.48% |
+| 128g16 | 12 | +1.50% | 1.52% | +1.80% |
+| 64g1 | 6 | -3.24% | 4.66% | -8.22% |
+
+The model prices Phi's 128 G 1 cells slow by 3.4% on average and its six 64x128 G 1 cells fast by 3.2%, one of them
+by 8.22%, the only cell in the 84 past the 8% clause. The registration's per-call risk block named Phi's large-P w1
+risk before any page: with the estimate's common bias Phi-3.5's mean was expected near +0.9%, and near +1.9% with
+that risk (ROUND5.md section 5: Phi 128g1 about 2 to 3% high if it behaves like tp2). Phi's pooled mean came in at
++1.30%, inside the mean clause, and its 128g1 mean at +3.38%. B-BYTES, the predicted against counted w1 reads on
+the three byte pages, reads mean +3.6% (17 rows, rms 5.06%; DESCRIPTIVE); w2 reads +0.17% (rms 0.91%). E2-TILE, the
+frozen model's time from the counted bytes on 17 128x128 cells, reads rms 1.49%, mean -1.05% (DESCRIPTIVE).
+
+**Validity.** The board reads valid: 700 W read back at the first poll (`C2_POWER_W=700`), the 1410 MHz lock held
+(`LOCK_PROBE_1410=held`), G-BAND PASS in the fallback band [1352.19, 1410]. The three B3 gates PASS before any timed
+unit: census (16 entries compared, no drift, no MMA path mismatch; deepseek-v2-lite admitted), sag (par A 59.815 us,
+tau 612.5 us from OLMoE 48.36 / 575 and Mixtral-8x7B 71.27 / 650) and sag64 (par64 39.465 / 337.5 from 31.93 / 300
+and 47.0 / 375; clock clause PASS, 24 and 15 of 27 cells in band). All 8 timed pages are counted in ALL and in CLEAN
+with 0 non-clean repeat rows (1,512 rows), every page at the 1410 lock with its worst cell at 1410.0 MHz. G3 PASS:
+uniform minus balanced +0.135%, 90% interval [+0.059, +0.211]% inside the 0.36% margin, homogeneous; no cell voided.
+ALL and CLEAN agree on every verdict. The registered commit check read a5608079, and every pin held.
+
+DESCRIPTIVE beside it:
+
+- **Sag drift.** The end-of-rental OLMoE f128 repeat fits A 39.82 us, tau 400 us against the early page's 48.36 us,
+  575 us: 36.55 against 39.86 us of sag at 1 ms, 8% less sag after about two hours on the board. This board's par A
+  (59.8 us) lies above the three SEEN boards' 41.59 to 54.25 us; the registration printed that span beside the gate
+  with no STOP.
+- **Rivals on the same cells.** v5'' 1.99% rms (mean -0.31%, worst -8.22%, 84 cells); round 4's model 2.08% (mean
+  -0.47%, worst -8.22%, 83 cells: JetMoE 128g1 n2 PT is unpriced there); v4 at A2's selections 5.21% (mean -4.29%,
+  worst -11.24%). None is a test of those models.
+- **B2's bar** (2%, 5%, 1%) on the same cells: FAILS (pooled, Phi-3.5 and JetMoE's 2.05% rms); Qwen1.5 and
+  deepseek-v2-lite meet it.
+
+**Order of operations.** The predictions of record were finalised from the board's four sag pages and the sag gate
+records only (`read_b3.py finalise`; an audit hook refuses the run if any blind page is opened) and committed and
+pushed in 0b82fae3 (`scripts/scoring/tileB3/b3.predictions.json`, 84 cells, 0 unpriced) before any blind page was
+scored. `score` re-finalises and refuses unless that file equals the finalised one.
+
+**A defect in the score file, stated plainly.** In `scripts/scoring/tileB3/tileB3.score.json`, the block
+`views.addendum.CLEAN.E1-TILE.per_model` labels Qwen1.5-MoE-A2.7B and JetMoE-8B "CERTIFIED". That label is local to
+the CLEAN view and contradicts both the registered rule and the scorer's own top-level `certification`, which reads
+NOT CERTIFIED for every blind model. The cause is in the reused view code. `b3common.e1_rule` is
+`tcommon.e1tile_rule` (the per-view rule rental B's and B2's scorer `score_tileB.py` uses) with the bar as an
+argument. It runs once per view, and in the CLEAN call it writes `certification: CERTIFIED` for any blind model whose
+own bar holds with at least 2 of its pages in the view. That test reads only the model's own cells and page count: it
+does not consult the view's pooled bar, the other blind models, or the rule-3 verdict over both views, which
+`two_views` combines afterwards. `read_b3.score` then passes the CLEAN block and the combined verdict to
+`b3common.certification`, which rewrites any CERTIFIED as "NOT CERTIFIED (E1-TILE reads FAILS)" and stores that as
+the top-level `certification`; the CLEAN view's block is kept as it was under `views.addendum.CLEAN`. (`timed_view`
+strips the label from the DESCRIPTIVE bar blocks, here only B2's bar; the E1 descriptive block that the homogeneous
+G3-fail path builds, `read_b3.py` lines 510 to 512, keeps its labels, and that path did not run here.) `score_tileB.py` has the same two steps. The scorer is
+pinned by the registration, so it is not edited and the committed file is its unedited output.
+`tests/test_rescore.py::test_the_committed_tileB3_score_certifies_no_model` asserts that E1-TILE reads FAILS, that the
+top-level certification names exactly the three blind models and reads NOT CERTIFIED for every one (in the JSON and
+on the `.txt` certification line), and that deepseek-v2-lite is never certified; it also pins the view's labels as
+they stand, so the view label is not read as a claim. The certification of record is the top-level field.
+
+**What it does not show.**
+
+- **One board, one setting.** Every number is from board `ebedab` at 700 W and the 1410 MHz lock, on the registered
+  84 cells. Nothing here speaks for another board, lock, power limit, tile, card, model or decode.
+- **No post-hoc fix is claimed.** The class means above say where Phi misses, not why; nothing here identifies the
+  cause, and no amended model has been priced against these pages. Any later model scored on them is scored on SEEN
+  pages.
+- **No per-model pass.** Qwen1.5's, JetMoE's and deepseek-v2-lite's numbers meet the bar on their own cells but are
+  DESCRIPTIVE under the registered rule.
+
+**What ran.** One Lambda GH200 480GB (instance 58d3a671, board `ebedab`, new to the study), launched 22:02:22Z on
+2026-11-05 and terminated 00:25:36Z on 2026-11-06: about 143.2 min, about $5.47 at $2.29/h (an estimate; the
+registration budgeted about 168 min and $6.41). It ran `scripts/plans/rentalB3-tile-2026-11.plan` (sha256
+f5ed7386..., as registered) at a5608079: 23 units, all exit 0 (driver exit 0), none dropped, in about 137.5 min
+against 143 estimated. Published at `results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session`; scored by
+`read_b3.py score --b3 <that directory> --out-dir scripts/scoring/tileB3`, committed as
+`scripts/scoring/tileB3/tileB3.score.{json,txt}`.
+
+**Instrument.** The run branch's 624 files match its SHA256SUMS; the 20 `cuda_utils*.so` files of the Triton caches
+are left out as before, so 604 are published. Scored on the fetched tree and on the published copy, the two outputs
+differ only in the tree's path; the committed files are the published copy's, with the path repo-relative.
+`scripts/scoring/rescore.py tileB3` re-scores the published session to the committed files. Every register script's
+`--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

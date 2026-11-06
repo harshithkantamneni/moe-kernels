@@ -1917,3 +1917,31 @@ published at bfc45176. Plan: `scripts/plans/rentalB3-tile-2026-11.plan`, 23 unit
 order byt, srep, dsv), about 168 min wall ($6.41 at $2.29/h); deadline launch + 186 min, hard cap launch + 201 min
 ($7.67 at most). Driver: `scripts/gh200_tileB3_session.sh`, C2's pinned driver with the three B3 gates as its only
 marked lines (`tests/test_tileB3_plan.py`); reader tests `tests/test_tileB3_reader.py`.
+
+**Scored 2026-11-05** on `results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session` (board ebedab, new; 23
+units at a5608079 in about 137.5 minutes on 2026-11-05/06, none dropped, all exit 0; the predictions of record
+finalised from the four sag pages only and committed at 0b82fae3 before any blind page was scored; the score in
+`scripts/scoring/tileB3/tileB3.score.{json,txt}`, written by `read_b3.py score --b3 <that directory>` from the
+repository root with PYTHONHASHSEED=0 on the published copy, at the scorer's default `--out-dir`; no post-page fix).
+**Board** valid (700 W, the 1410 lock held, G-BAND PASS in the fallback band). **Gates** census PASS, sag PASS (par
+59.815 us / 612.5 us), sag64 PASS (par64 39.465 / 337.5). **Pages** all 8 counted in ALL and CLEAN, 0 non-clean repeat
+rows. **G3** PASS (EQUIVALENT, homogeneous), no cell voided. **E1-TILE FAILS** (rule 3: ALL and CLEAN agree): pooled
+84 cells rms 2.41%, mean +0.29%, worst -8.22% (the worst-cell clause fails); Phi-3.5-MoE FAILS (30 cells, rms 3.50%,
+mean +1.30%, worst -8.22%; 128g1 mean +3.38%, 64g1 mean -3.24%); Qwen1.5-MoE-A2.7B (1.18%, -0.74%, -3.68%), JetMoE-8B
+(2.05%, +0.57%, +3.82%) and deepseek-v2-lite (0.65%, -0.40%, -0.95%) meet the bar on their own cells, DESCRIPTIVE.
+**Certification** none: NOT CERTIFIED for Phi-3.5-MoE, Qwen1.5-MoE-A2.7B and JetMoE-8B. The FAIL is final; the four
+blind models are SEEN. DESCRIPTIVE: B2's bar FAILS; rivals v5'' 1.99% rms, round 4 2.08% (83 cells), v4 5.21%;
+B-BYTES outside B2's byte bar (w1 mean +3.60%); E2-TILE rms 1.49%; the sag drift (OLMoE f128 repeat 36.55 against
+39.86 us at 1 ms). `scripts/scoring/rescore.py tileB3` re-scores the published session to the committed files
+(docs/FINDINGS.md, Tile rental B3).
+
+**A defect in the committed score file (noted 2026-11-05; the scorer is pinned and is not edited).** In
+`tileB3.score.json` the block `views.addendum.CLEAN.E1-TILE.per_model` labels Qwen1.5-MoE-A2.7B and JetMoE-8B
+"CERTIFIED". The label is local to the CLEAN view and contradicts the registered rule (certified only when E1-TILE
+HOLDS) and the scorer's top-level `certification`, which reads NOT CERTIFIED for all three blind models. It comes from
+the view rule reused from rental B and B2 (`b3common.e1_rule` is `tcommon.e1tile_rule` with the bar as an argument):
+called once per view, in CLEAN it labels a blind model CERTIFIED from its own bar and its page count alone, before
+rule 3 combines the views and without the pooled bar. `b3common.certification` then overrides that label with the
+combined verdict and writes the top-level field, while the view block is kept unchanged. The top-level
+`certification` is the certification of record; `tests/test_rescore.py::test_the_committed_tileB3_score_certifies_no_model`
+holds it to NOT CERTIFIED for every blind model.

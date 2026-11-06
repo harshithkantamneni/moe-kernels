@@ -1,0 +1,73 @@
+{
+ "gate": "sag",
+ "held_out_par_span": {
+  "A_us": [
+   41.59,
+   54.25
+  ],
+  "tau_us": [
+   412.5,
+   587.5
+  ]
+ },
+ "inside_held_out_par_span (DESCRIPTIVE)": false,
+ "par": [
+  59.815,
+  612.5
+ ],
+ "per_page": {
+  "mixtral-8x7b": {
+   "A_over_tau": 0.1096,
+   "A_us": 71.27,
+   "cells": 54,
+   "file": "/home/ubuntu/moe/results/2026-11-05-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.json",
+   "lin_a_us": 45.84,
+   "lin_slope": 0.00708,
+   "rms_us": 13.2,
+   "sha256": "0b941c8689dc7862bb374327b25ee8946a14ab5c63b45f17270aaa80e8f98a17",
+   "t_range_us": [
+    297.6,
+    7077.2
+   ],
+   "tau_us": 650.0
+  },
+  "olmoe-1b-7b": {
+   "A_over_tau": 0.0841,
+   "A_us": 48.36,
+   "cells": 54,
+   "file": "/home/ubuntu/moe/results/2026-11-05-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json",
+   "lin_a_us": 13.68,
+   "lin_slope": 0.02515,
+   "rms_us": 6.34,
+   "sha256": "e58975f5f096580e1e59b6e877322765e47cd880d89fb254c84a7d9b2365e8bb",
+   "t_range_us": [
+    125.3,
+    1658.1
+   ],
+   "tau_us": 575.0
+  }
+ },
+ "range": {
+  "A_us": [
+   15.0,
+   120.0
+  ],
+  "par_A_us": [
+   25.0,
+   100.0
+  ],
+  "points_min": 48,
+  "ratio_1ms": [
+   1.0,
+   2.5
+  ],
+  "rms_us_max": 20.0,
+  "tau_us": [
+   100.0,
+   2000.0
+  ]
+ },
+ "ratio_1ms": 1.4039,
+ "verdict": "PASS",
+ "why": ""
+}

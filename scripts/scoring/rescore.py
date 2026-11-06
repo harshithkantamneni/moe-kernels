@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind or decodeDS. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS or tileB3. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -53,6 +53,12 @@ decodeDS is the decode stage's settling rental DS, descriptive: its one register
 its session/power-set.txt, for the 700 W check), takes the tree and the output directory, and writes ds.readings.json
 and ds.readings.txt, committed in scripts/scoring/decode/ as read from the published tree.
 
+tileB3 is tile rental B3, the blind test of round 5's frozen large-tile model (2026-11-04-tileB3-gh200): its registered
+scorer (scripts/scoring/tileB3/read_b3.py score) takes the published session directory itself (results/ and session/,
+`--b3`) and an output directory (`--out-dir`), re-finalises the predictions from the four sag pages, refuses unless
+they equal the committed scripts/scoring/tileB3/b3.predictions.json, and writes tileB3.score.json and
+tileB3.score.txt, committed in scripts/scoring/tileB3/ as scored on the published tree.
+
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
 is replaced by the committed one (the tileA2 census score records the merged census under its output
@@ -95,9 +101,11 @@ STAGES = {
                     ["scripts/scoring/decode/score_blind_d3.py"]),
     "decodeDS": ("2026-11-04-nvidia_gh200_480gb-decodeDS-session", "scripts/scoring/decode",
                  ["scripts/scoring/decode/read_ds.py"]),
+    "tileB3": ("2026-11-05-nvidia_gh200_480gb-tileB3-session", "scripts/scoring/tileB3",
+               ["scripts/scoring/tileB3/read_b3.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
-TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": ""}
+TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": "", "tileB3": ""}
 #: the files each stage's scorers write (default: *.score.*)
 OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.read.*", "cal4": "cal4.read.*",
            "decodeDS": "ds.readings.*"}
@@ -108,7 +116,8 @@ ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "decodeCAL": lambda tree, out: [tree, out, "--tile-scores", "scripts/scoring/tileA2"],
         "decodeCAL2": lambda tree, out: [tree, out, "--tile-scores", "scripts/scoring/tileA2"],
         "decodeBlind": lambda tree, out: [tree, "scripts/scoring/decode/decodeB.finalised.json", out],
-        "decodeDS": lambda tree, out: [tree, out]}
+        "decodeDS": lambda tree, out: [tree, out],
+        "tileB3": lambda tree, out: ["score", "--b3", tree, "--out-dir", out]}
 #: the committed name of a scratch score file, where the stage committed it under another name
 COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"}}
 #: the run-tree root a committed score file records, scored on the fetched tree before publication, matched on its

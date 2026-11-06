@@ -1,0 +1,11 @@
+TILE CENSUS (A2): compile only, no lock, nothing timed; each model at its smallest whole tread
+tiles   128x128x64w8s3 64x128x64w8s3
+models  deepseek-v2-lite jetmoe-8b phi-3.5-moe qwen1.5-moe-a2.7b
+per (tile, model, GEMM): registers, shared, warps, stages, CTAs per SM and the binding limit, the MMA path, the main loop's PTX counts; a path other than the predicate's refuses the unit (exit 3)
+  128x128x64w8s3: path wgmma, shared 98304 B, design occupancy 2
+  64x128x64w8s3: path wgmma, shared 73728 B, design occupancy 3
+  deepseek-v2-lite: tread 128x128x64w8s3 n 3, 64x128x64w8s3 n 3
+  jetmoe-8b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1
+  phi-3.5-moe: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1
+  qwen1.5-moe-a2.7b: tread 128x128x64w8s3 n 1, 64x128x64w8s3 n 1
+DRY RUN: nothing compiled (exit 2)

@@ -1,0 +1,3462 @@
+{
+ "E1-TILE": {
+  "bar": {
+   "max_abs": 0.08,
+   "mean_max": 0.015,
+   "rms_max": 0.03
+  },
+  "models_without_a_valid_cell": [],
+  "per_model": {
+   "deepseek-v2-lite": {
+    "label": "DESCRIPTIVE (one page; new model, seen shapes: never CERTIFIED)",
+    "pages_in_view": [
+     "deepseek-v2-lite-128g1"
+    ],
+    "stats": {
+     "cells": 6,
+     "mean": -0.003993,
+     "rms": 0.006498,
+     "worst": -0.009545
+    },
+    "verdict": "HOLDS"
+   },
+   "jetmoe-8b": {
+    "pages_in_view": [
+     "jetmoe-8b-128g16",
+     "jetmoe-8b-128g1"
+    ],
+    "stats": {
+     "cells": 18,
+     "mean": 0.005653,
+     "rms": 0.020496,
+     "worst": 0.038225
+    },
+    "verdict": "HOLDS"
+   },
+   "phi-3.5-moe": {
+    "pages_in_view": [
+     "phi-3.5-moe-64g1",
+     "phi-3.5-moe-128g1",
+     "phi-3.5-moe-128g16"
+    ],
+    "stats": {
+     "cells": 30,
+     "mean": 0.013024,
+     "rms": 0.034963,
+     "worst": -0.08217
+    },
+    "verdict": "FAILS"
+   },
+   "qwen1.5-moe-a2.7b": {
+    "pages_in_view": [
+     "qwen1.5-moe-a2.7b-128g1",
+     "qwen1.5-moe-a2.7b-128g16"
+    ],
+    "stats": {
+     "cells": 30,
+     "mean": -0.007401,
+     "rms": 0.011805,
+     "worst": -0.036769
+    },
+    "verdict": "HOLDS"
+   }
+  },
+  "pooled": {
+   "stats": {
+    "cells": 84,
+    "mean": 0.002935,
+    "rms": 0.02407,
+    "worst": -0.08217
+   },
+   "verdict": "FAILS"
+  },
+  "verdict": "FAILS"
+ },
+ "b3": "results/published/2026-11-05-nvidia_gh200_480gb-tileB3-session",
+ "board": {
+  "c2_power_env": "C2_POWER_W=700",
+  "g_band": "PASS",
+  "g_band_which": "fallback (registered: the primary band left joint_cF None)",
+  "lock_probe": "LOCK_PROBE_1410=held",
+  "valid": true,
+  "why": ""
+ },
+ "bytes": {
+  "B-BYTES (DESCRIPTIVE)": {
+   "per_gemm": {
+    "w1": {
+     "cells": 17,
+     "mean": 0.03597,
+     "rms": 0.050625,
+     "worst": 0.093547
+    },
+    "w2": {
+     "cells": 17,
+     "mean": 0.001663,
+     "rms": 0.009102,
+     "worst": -0.015435
+    }
+   },
+   "reading": "outside B2's B-BYTES bar"
+  },
+  "E2-TILE (DESCRIPTIVE, 128x128 cells)": {
+   "stats": {
+    "cells": 17,
+    "mean": -0.010499,
+    "rms": 0.014864,
+    "worst": -0.032348
+   },
+   "within B2's E2 bar (2%, 5%, 1.5%)": true
+  },
+  "pages": {
+   "phi-3.5-moe-b128g1": "counted",
+   "phi-3.5-moe-b64g1": "counted",
+   "qwen1.5-moe-a2.7b-b128g1": "counted"
+  }
+ },
+ "certification": {
+  "jetmoe-8b": "NOT CERTIFIED (E1-TILE reads FAILS)",
+  "phi-3.5-moe": "NOT CERTIFIED (3 pages in CLEAN, bar FAILS)",
+  "qwen1.5-moe-a2.7b": "NOT CERTIFIED (E1-TILE reads FAILS)"
+ },
+ "commit": {
+  "checked": true,
+  "sha": "a56080792f7404ce56f62eafc70335e66d9a6af1"
+ },
+ "gates": {
+  "census": {
+   "verdict": "PASS",
+   "why": ""
+  },
+  "sag": {
+   "verdict": "PASS",
+   "why": ""
+  },
+  "sag64": {
+   "verdict": "PASS",
+   "why": ""
+  }
+ },
+ "par": [
+  59.815,
+  612.5
+ ],
+ "par64": [
+  39.465,
+  337.5
+ ],
+ "per_page_sag": {
+  "mixtral-8x7b": {
+   "A_us": 71.27,
+   "cells": 54,
+   "rms_us": 13.2,
+   "sha256": "0b941c8689dc7862bb374327b25ee8946a14ab5c63b45f17270aaa80e8f98a17",
+   "tau_us": 650.0
+  },
+  "olmoe-1b-7b": {
+   "A_us": 48.36,
+   "cells": 54,
+   "rms_us": 6.34,
+   "sha256": "e58975f5f096580e1e59b6e877322765e47cd880d89fb254c84a7d9b2365e8bb",
+   "tau_us": 575.0
+  }
+ },
+ "per_page_sag64": {
+  "mixtral-8x7b": {
+   "A_us": 47.0,
+   "cells": 54,
+   "rms_us": 9.01,
+   "sha256": "7f3222f2883b045aba1c1f79d3483bd4162d67c599d7250750f7d85dd936856f",
+   "tau_us": 375.0
+  },
+  "olmoe-1b-7b": {
+   "A_us": 31.93,
+   "cells": 54,
+   "rms_us": 3.17,
+   "sha256": "5e35d20c0fff329deb0b7e1af4d7faa1c1f2444904f33e0f9bbd284b0e439563",
+   "tau_us": 300.0
+  }
+ },
+ "preflight": {
+  "chain_repo_before_pages": "pinned",
+  "fingerprint": "equals the registration",
+  "round5_table": {
+   "mixtral-8x22b": 0.24,
+   "mixtral-8x7b": 1.77,
+   "mixtral-8x7b C2": 2.01,
+   "mixtral-8x7b-tp2": 2.39,
+   "olmoe-1b-7b": 0.45,
+   "qwen2-57b-a14b": -1.46
+  }
+ },
+ "registration": "2026-11-04-tileB3-gh200",
+ "sag drift (DESCRIPTIVE)": {
+  "early": {
+   "A_us": 48.36,
+   "tau_us": 575.0
+  },
+  "repeat": {
+   "A_us": 39.82,
+   "cells": 54,
+   "rms_us": 5.64,
+   "tau_us": 400.0
+  },
+  "sag_at_1ms_us": {
+   "early": 39.86,
+   "repeat": 36.55
+  }
+ },
+ "scope": "A B3 pass certifies the frozen round-5 model's NATIVE time at vLLM's two reachable wgmma tiles (128x128x64 w8 s3 at G 1 and G 16, 64x128x64 w8 s3 at G 1; prefill) on the GH200 at 1410 MHz and 700 W, on the registered cells only (B2's 84: Phi-3.5-MoE 30, Qwen1.5-MoE-A2.7B 30, JetMoE-8B 18, deepseek-v2-lite 6 pooled), at the working-model bar (rms <= 3%, every cell within 8%, |mean| <= 1.5%), each CERTIFIED model named. It does not certify B2's bar, any other lock, power limit, tile, card or model, decode, SHARED cells, the byte law (B-BYTES is DESCRIPTIVE), the per-call constant at other numel, or either sag on another board",
+ "status": "BLIND (E1-TILE at the working-model bar)",
+ "validity": {
+  "valid": true,
+  "why": ""
+ },
+ "views": {
+  "DESCRIPTIVE": {
+   "B2's bar (2%, 5%, 1%) on the same cells": {
+    "bar": {
+     "max_abs": 0.05,
+     "mean_max": 0.01,
+     "rms_max": 0.02
+    },
+    "models_without_a_valid_cell": [],
+    "per_model": {
+     "deepseek-v2-lite": {
+      "label": "DESCRIPTIVE (one page; new model, seen shapes: never CERTIFIED)",
+      "pages_in_view": [
+       "deepseek-v2-lite-128g1"
+      ],
+      "reading": "HOLDS",
+      "stats": {
+       "cells": 6,
+       "mean": -0.003993,
+       "rms": 0.006498,
+       "worst": -0.009545
+      }
+     },
+     "jetmoe-8b": {
+      "pages_in_view": [
+       "jetmoe-8b-128g16",
+       "jetmoe-8b-128g1"
+      ],
+      "reading": "FAILS",
+      "stats": {
+       "cells": 18,
+       "mean": 0.005653,
+       "rms": 0.020496,
+       "worst": 0.038225
+      }
+     },
+     "phi-3.5-moe": {
+      "pages_in_view": [
+       "phi-3.5-moe-64g1",
+       "phi-3.5-moe-128g1",
+       "phi-3.5-moe-128g16"
+      ],
+      "reading": "FAILS",
+      "stats": {
+       "cells": 30,
+       "mean": 0.013024,
+       "rms": 0.034963,
+       "worst": -0.08217
+      }
+     },
+     "qwen1.5-moe-a2.7b": {
+      "pages_in_view": [
+       "qwen1.5-moe-a2.7b-128g1",
+       "qwen1.5-moe-a2.7b-128g16"
+      ],
+      "reading": "HOLDS",
+      "stats": {
+       "cells": 30,
+       "mean": -0.007401,
+       "rms": 0.011805,
+       "worst": -0.036769
+      }
+     }
+    },
+    "pooled": {
+     "reading": "FAILS",
+     "stats": {
+      "cells": 84,
+      "mean": 0.002935,
+      "rms": 0.02407,
+      "worst": -0.08217
+     }
+    },
+    "reading": "FAILS"
+   },
+   "per model and class": {
+    "deepseek-v2-lite 128g1": {
+     "cells": 6,
+     "mean": -0.003993,
+     "rms": 0.006498,
+     "worst": -0.009545
+    },
+    "jetmoe-8b 128g1": {
+     "cells": 6,
+     "mean": -0.00269,
+     "rms": 0.017146,
+     "worst": -0.026594
+    },
+    "jetmoe-8b 128g16": {
+     "cells": 12,
+     "mean": 0.009824,
+     "rms": 0.02198,
+     "worst": 0.038225
+    },
+    "phi-3.5-moe 128g1": {
+     "cells": 12,
+     "mean": 0.033759,
+     "rms": 0.041748,
+     "worst": 0.064811
+    },
+    "phi-3.5-moe 128g16": {
+     "cells": 12,
+     "mean": 0.015017,
+     "rms": 0.015154,
+     "worst": 0.017973
+    },
+    "phi-3.5-moe 64g1": {
+     "cells": 6,
+     "mean": -0.032432,
+     "rms": 0.046552,
+     "worst": -0.08217
+    },
+    "qwen1.5-moe-a2.7b 128g1": {
+     "cells": 18,
+     "mean": -0.009998,
+     "rms": 0.014784,
+     "worst": -0.036769
+    },
+    "qwen1.5-moe-a2.7b 128g16": {
+     "cells": 12,
+     "mean": -0.003505,
+     "rms": 0.004531,
+     "worst": -0.006444
+    }
+   },
+   "rivals (e of each rival, the same cells)": {
+    "round4": {
+     "cells": 83,
+     "mean": -0.004672,
+     "rms": 0.020798,
+     "worst": -0.08217
+    },
+    "v4": {
+     "cells": 84,
+     "mean": -0.042917,
+     "rms": 0.052118,
+     "worst": -0.11241
+    },
+    "v5pp": {
+     "cells": 84,
+     "mean": -0.003121,
+     "rms": 0.019887,
+     "worst": -0.08217
+    }
+   },
+   "split: 128 G 1 cells": {
+    "cells": 42,
+    "mean": 0.004406,
+    "rms": 0.025292,
+    "worst": 0.064811
+   },
+   "split: 128 G 16 cells": {
+    "cells": 36,
+    "mean": 0.007112,
+    "rms": 0.015634,
+    "worst": 0.038225
+   },
+   "split: 64 G 1 cells": {
+    "cells": 6,
+    "mean": -0.032432,
+    "rms": 0.046552,
+    "worst": -0.08217
+   },
+   "the bar without G3's per-stratum voids": "no cell voided"
+  },
+  "G3": {
+   "Q": {
+    "Q": 2.539981,
+    "cells": 14,
+    "df": 13,
+    "heterogeneous": false,
+    "p": 0.99915,
+    "sigma": 0.0018
+   },
+   "pooled": {
+    "cells": 14,
+    "ci": [
+     0.000594,
+     0.002111
+    ],
+    "cluster_means": {
+     "deepseek-v2-lite-deepseek-v2-lite-128g1": 0.003669,
+     "jetmoe-8b-jetmoe-8b-128g1": 0.000682,
+     "jetmoe-8b-jetmoe-8b-128g16": 0.001273,
+     "phi-3.5-moe-phi-3.5-moe-128g1": 0.0003,
+     "phi-3.5-moe-phi-3.5-moe-128g16": 0.000115,
+     "phi-3.5-moe-phi-3.5-moe-64g1": 0.002065,
+     "qwen1.5-moe-a2.7b-qwen1.5-moe-a2.7b-128g1": 0.001391,
+     "qwen1.5-moe-a2.7b-qwen1.5-moe-a2.7b-128g16": 0.001324
+    },
+    "clusters": 8,
+    "df": 7,
+    "margin": 0.0036,
+    "mean": 0.001352,
+    "se": 0.0004,
+    "t": 1.894579,
+    "verdict": "EQUIVALENT"
+   },
+   "verdict": "PASS",
+   "void_strata": []
+  },
+  "addendum": {
+   "CLEAN": {
+    "DESCRIPTIVE": {
+     "B2's bar (2%, 5%, 1%) on the same cells": {
+      "bar": {
+       "max_abs": 0.05,
+       "mean_max": 0.01,
+       "rms_max": 0.02
+      },
+      "models_without_a_valid_cell": [],
+      "per_model": {
+       "deepseek-v2-lite": {
+        "label": "DESCRIPTIVE (one page; new model, seen shapes: never CERTIFIED)",
+        "pages_in_view": [
+         "deepseek-v2-lite-128g1"
+        ],
+        "reading": "HOLDS",
+        "stats": {
+         "cells": 6,
+         "mean": -0.003993,
+         "rms": 0.006498,
+         "worst": -0.009545
+        }
+       },
+       "jetmoe-8b": {
+        "pages_in_view": [
+         "jetmoe-8b-128g16",
+         "jetmoe-8b-128g1"
+        ],
+        "reading": "FAILS",
+        "stats": {
+         "cells": 18,
+         "mean": 0.005653,
+         "rms": 0.020496,
+         "worst": 0.038225
+        }
+       },
+       "phi-3.5-moe": {
+        "pages_in_view": [
+         "phi-3.5-moe-64g1",
+         "phi-3.5-moe-128g1",
+         "phi-3.5-moe-128g16"
+        ],
+        "reading": "FAILS",
+        "stats": {
+         "cells": 30,
+         "mean": 0.013024,
+         "rms": 0.034963,
+         "worst": -0.08217
+        }
+       },
+       "qwen1.5-moe-a2.7b": {
+        "pages_in_view": [
+         "qwen1.5-moe-a2.7b-128g1",
+         "qwen1.5-moe-a2.7b-128g16"
+        ],
+        "reading": "HOLDS",
+        "stats": {
+         "cells": 30,
+         "mean": -0.007401,
+         "rms": 0.011805,
+         "worst": -0.036769
+        }
+       }
+      },
+      "pooled": {
+       "reading": "FAILS",
+       "stats": {
+        "cells": 84,
+        "mean": 0.002935,
+        "rms": 0.02407,
+        "worst": -0.08217
+       }
+      },
+      "reading": "FAILS"
+     },
+     "per model and class": {
+      "deepseek-v2-lite 128g1": {
+       "cells": 6,
+       "mean": -0.003993,
+       "rms": 0.006498,
+       "worst": -0.009545
+      },
+      "jetmoe-8b 128g1": {
+       "cells": 6,
+       "mean": -0.00269,
+       "rms": 0.017146,
+       "worst": -0.026594
+      },
+      "jetmoe-8b 128g16": {
+       "cells": 12,
+       "mean": 0.009824,
+       "rms": 0.02198,
+       "worst": 0.038225
+      },
+      "phi-3.5-moe 128g1": {
+       "cells": 12,
+       "mean": 0.033759,
+       "rms": 0.041748,
+       "worst": 0.064811
+      },
+      "phi-3.5-moe 128g16": {
+       "cells": 12,
+       "mean": 0.015017,
+       "rms": 0.015154,
+       "worst": 0.017973
+      },
+      "phi-3.5-moe 64g1": {
+       "cells": 6,
+       "mean": -0.032432,
+       "rms": 0.046552,
+       "worst": -0.08217
+      },
+      "qwen1.5-moe-a2.7b 128g1": {
+       "cells": 18,
+       "mean": -0.009998,
+       "rms": 0.014784,
+       "worst": -0.036769
+      },
+      "qwen1.5-moe-a2.7b 128g16": {
+       "cells": 12,
+       "mean": -0.003505,
+       "rms": 0.004531,
+       "worst": -0.006444
+      }
+     },
+     "rivals (e of each rival, the same cells)": {
+      "round4": {
+       "cells": 83,
+       "mean": -0.004672,
+       "rms": 0.020798,
+       "worst": -0.08217
+      },
+      "v4": {
+       "cells": 84,
+       "mean": -0.042917,
+       "rms": 0.052118,
+       "worst": -0.11241
+      },
+      "v5pp": {
+       "cells": 84,
+       "mean": -0.003121,
+       "rms": 0.019887,
+       "worst": -0.08217
+      }
+     },
+     "split: 128 G 1 cells": {
+      "cells": 42,
+      "mean": 0.004406,
+      "rms": 0.025292,
+      "worst": 0.064811
+     },
+     "split: 128 G 16 cells": {
+      "cells": 36,
+      "mean": 0.007112,
+      "rms": 0.015634,
+      "worst": 0.038225
+     },
+     "split: 64 G 1 cells": {
+      "cells": 6,
+      "mean": -0.032432,
+      "rms": 0.046552,
+      "worst": -0.08217
+     },
+     "the bar without G3's per-stratum voids": "no cell voided"
+    },
+    "E1-TILE": {
+     "bar": {
+      "max_abs": 0.08,
+      "mean_max": 0.015,
+      "rms_max": 0.03
+     },
+     "models_without_a_valid_cell": [],
+     "per_model": {
+      "deepseek-v2-lite": {
+       "label": "DESCRIPTIVE (one page; new model, seen shapes: never CERTIFIED)",
+       "pages_in_view": [
+        "deepseek-v2-lite-128g1"
+       ],
+       "stats": {
+        "cells": 6,
+        "mean": -0.003993,
+        "rms": 0.006498,
+        "worst": -0.009545
+       },
+       "verdict": "HOLDS"
+      },
+      "jetmoe-8b": {
+       "certification": "CERTIFIED",
+       "pages_in_view": [
+        "jetmoe-8b-128g16",
+        "jetmoe-8b-128g1"
+       ],
+       "stats": {
+        "cells": 18,
+        "mean": 0.005653,
+        "rms": 0.020496,
+        "worst": 0.038225
+       },
+       "verdict": "HOLDS"
+      },
+      "phi-3.5-moe": {
+       "certification": "NOT CERTIFIED (3 pages in CLEAN, bar FAILS)",
+       "pages_in_view": [
+        "phi-3.5-moe-64g1",
+        "phi-3.5-moe-128g1",
+        "phi-3.5-moe-128g16"
+       ],
+       "stats": {
+        "cells": 30,
+        "mean": 0.013024,
+        "rms": 0.034963,
+        "worst": -0.08217
+       },
+       "verdict": "FAILS"
+      },
+      "qwen1.5-moe-a2.7b": {
+       "certification": "CERTIFIED",
+       "pages_in_view": [
+        "qwen1.5-moe-a2.7b-128g1",
+        "qwen1.5-moe-a2.7b-128g16"
+       ],
+       "stats": {
+        "cells": 30,
+        "mean": -0.007401,
+        "rms": 0.011805,
+        "worst": -0.036769
+       },
+       "verdict": "HOLDS"
+      }
+     },
+     "pooled": {
+      "stats": {
+       "cells": 84,
+       "mean": 0.002935,
+       "rms": 0.02407,
+       "worst": -0.08217
+      },
+      "verdict": "FAILS"
+     },
+     "verdict": "FAILS"
+    },
+    "G3": {
+     "Q": {
+      "Q": 2.539981,
+      "cells": 14,
+      "df": 13,
+      "heterogeneous": false,
+      "p": 0.99915,
+      "sigma": 0.0018
+     },
+     "pooled": {
+      "cells": 14,
+      "ci": [
+       0.000594,
+       0.002111
+      ],
+      "cluster_means": {
+       "deepseek-v2-lite-deepseek-v2-lite-128g1": 0.003669,
+       "jetmoe-8b-jetmoe-8b-128g1": 0.000682,
+       "jetmoe-8b-jetmoe-8b-128g16": 0.001273,
+       "phi-3.5-moe-phi-3.5-moe-128g1": 0.0003,
+       "phi-3.5-moe-phi-3.5-moe-128g16": 0.000115,
+       "phi-3.5-moe-phi-3.5-moe-64g1": 0.002065,
+       "qwen1.5-moe-a2.7b-qwen1.5-moe-a2.7b-128g1": 0.001391,
+       "qwen1.5-moe-a2.7b-qwen1.5-moe-a2.7b-128g16": 0.001324
+      },
+      "clusters": 8,
+      "df": 7,
+      "margin": 0.0036,
+      "mean": 0.001352,
+      "se": 0.0004,
+      "t": 1.894579,
+      "verdict": "EQUIVALENT"
+     },
+     "verdict": "PASS",
+     "void_strata": []
+    },
+    "cells": [
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PT/native",
+      "cls": "64g1",
+      "e": -0.08217027975277791,
+      "label": "PT",
+      "meas": 0.9925119876861572,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.910957
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PW/native",
+      "cls": "64g1",
+      "e": -0.06034491070455661,
+      "label": "PW",
+      "meas": 0.9684159755706787,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.909977
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PT2/native",
+      "cls": "64g1",
+      "e": -0.04751086860492437,
+      "label": "PT2",
+      "meas": 0.9345439970493317,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.890143
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PW2/native",
+      "cls": "64g1",
+      "e": -0.016636787161409483,
+      "label": "PW2",
+      "meas": 0.9240959882736206,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.908722
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/uniform/native",
+      "cls": "64g1",
+      "e": 0.00499781714504377,
+      "label": "uniform",
+      "meas": 0.8151520192623138,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.819226
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/balanced/native",
+      "cls": "64g1",
+      "e": 0.007073417707109453,
+      "label": "balanced",
+      "meas": 0.8134719729423523,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.819226
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PT/native",
+      "cls": "128g1",
+      "e": 0.01756101481121397,
+      "label": "PT",
+      "meas": 1.126528024673462,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 1.146311
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PW/native",
+      "cls": "128g1",
+      "e": 0.028551444697807682,
+      "label": "PW",
+      "meas": 1.1615520119667053,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 1.194716
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PT2/native",
+      "cls": "128g1",
+      "e": 0.03416585747216305,
+      "label": "PT2",
+      "meas": 1.1459680199623108,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 1.185121
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PW2/native",
+      "cls": "128g1",
+      "e": 0.04065327285128606,
+      "label": "PW2",
+      "meas": 1.0818560123443604,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 1.125837
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/uniform/native",
+      "cls": "128g1",
+      "e": -0.011050657782410545,
+      "label": "uniform",
+      "meas": 0.8696320056915283,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.860022
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/balanced/native",
+      "cls": "128g1",
+      "e": -0.011814249495694873,
+      "label": "balanced",
+      "meas": 0.8703039884567261,
+      "model": "phi-3.5-moe",
+      "n": 1,
+      "pred": 0.860022
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PT/native",
+      "cls": "128g1",
+      "e": 0.05737236300266102,
+      "label": "PT",
+      "meas": 1.780735969543457,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.882901
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PW/native",
+      "cls": "128g1",
+      "e": 0.0628456806245099,
+      "label": "PW",
+      "meas": 1.7821439504623413,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.894144
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PT2/native",
+      "cls": "128g1",
+      "e": 0.064810765461774,
+      "label": "PT2",
+      "meas": 1.8119679689407349,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.929403
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PW2/native",
+      "cls": "128g1",
+      "e": 0.054914971782625166,
+      "label": "PW2",
+      "meas": 1.8297920227050781,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.930275
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/uniform/native",
+      "cls": "128g1",
+      "e": 0.03283923543169842,
+      "label": "uniform",
+      "meas": 1.5176960229873657,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.567536
+     },
+     {
+      "G": 1,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/balanced/native",
+      "cls": "128g1",
+      "e": 0.03425665779800702,
+      "label": "balanced",
+      "meas": 1.5156160593032837,
+      "model": "phi-3.5-moe",
+      "n": 2,
+      "pred": 1.567536
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PT/native",
+      "cls": "128g16",
+      "e": 0.015497154127732893,
+      "label": "PT",
+      "meas": 2.280672073364258,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.316016
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PW/native",
+      "cls": "128g16",
+      "e": 0.016163037500803945,
+      "label": "PW",
+      "meas": 2.313488006591797,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.350881
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PT2/native",
+      "cls": "128g16",
+      "e": 0.01189460370351636,
+      "label": "PT2",
+      "meas": 2.3569440841674805,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.384979
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PW2/native",
+      "cls": "128g16",
+      "e": 0.01662117511144401,
+      "label": "PW2",
+      "meas": 2.3113919496536255,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.34981
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/uniform/native",
+      "cls": "128g16",
+      "e": 0.01226273380458398,
+      "label": "uniform",
+      "meas": 2.0528000593185425,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.077973
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/balanced/native",
+      "cls": "128g16",
+      "e": 0.01188419101392002,
+      "label": "balanced",
+      "meas": 2.0535680055618286,
+      "model": "phi-3.5-moe",
+      "n": 3,
+      "pred": 2.077973
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PT/native",
+      "cls": "128g16",
+      "e": 0.014775187747795515,
+      "label": "PT",
+      "meas": 2.9847359657287598,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 3.028836
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PW/native",
+      "cls": "128g16",
+      "e": 0.016774547595197475,
+      "label": "PW",
+      "meas": 3.0977280139923096,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 3.149691
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PT2/native",
+      "cls": "128g16",
+      "e": 0.014843955864916714,
+      "label": "PT2",
+      "meas": 2.951296091079712,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 2.995105
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PW2/native",
+      "cls": "128g16",
+      "e": 0.014160773786269676,
+      "label": "PW2",
+      "meas": 2.953935980796814,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 2.995766
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/uniform/native",
+      "cls": "128g16",
+      "e": 0.017358162034516456,
+      "label": "uniform",
+      "meas": 2.6739039421081543,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 2.720318
+     },
+     {
+      "G": 16,
+      "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/balanced/native",
+      "cls": "128g16",
+      "e": 0.01797338463586362,
+      "label": "balanced",
+      "meas": 2.672287940979004,
+      "model": "phi-3.5-moe",
+      "n": 4,
+      "pred": 2.720318
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT/native",
+      "cls": "128g1",
+      "e": 0.006991883227192464,
+      "label": "PT",
+      "meas": 0.545632004737854,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.549447
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW/native",
+      "cls": "128g1",
+      "e": -0.017938614178971246,
+      "label": "PW",
+      "meas": 0.5311999917030334,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.521671
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT2/native",
+      "cls": "128g1",
+      "e": -0.03676850104032359,
+      "label": "PT2",
+      "meas": 0.5416319966316223,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.521717
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW2/native",
+      "cls": "128g1",
+      "e": -0.0024480868507525955,
+      "label": "PW2",
+      "meas": 0.55103999376297,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.549691
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/uniform/native",
+      "cls": "128g1",
+      "e": -0.01188707615568596,
+      "label": "uniform",
+      "meas": 0.4307200014591217,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.4256
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/balanced/native",
+      "cls": "128g1",
+      "e": -0.011005350589486818,
+      "label": "balanced",
+      "meas": 0.43033599853515625,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 1,
+      "pred": 0.4256
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT/native",
+      "cls": "128g1",
+      "e": -0.006687672325388472,
+      "label": "PT",
+      "meas": 0.8403519988059998,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.834732
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW/native",
+      "cls": "128g1",
+      "e": -0.01297565434305692,
+      "label": "PW",
+      "meas": 0.831712007522583,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.82092
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT2/native",
+      "cls": "128g1",
+      "e": -0.0027346569961316236,
+      "label": "PT2",
+      "meas": 0.8370239734649658,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.834735
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW2/native",
+      "cls": "128g1",
+      "e": -0.010960049895737067,
+      "label": "PW2",
+      "meas": 0.830016016960144,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.820919
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/uniform/native",
+      "cls": "128g1",
+      "e": -0.027917019155128897,
+      "label": "uniform",
+      "meas": 0.7076319754123688,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.687877
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/balanced/native",
+      "cls": "128g1",
+      "e": -0.02615554937127562,
+      "label": "balanced",
+      "meas": 0.706352025270462,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 2,
+      "pred": 0.687877
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT/native",
+      "cls": "128g1",
+      "e": 0.004315626638734971,
+      "label": "PT",
+      "meas": 1.4679200053215027,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.474255
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW/native",
+      "cls": "128g1",
+      "e": -0.004673999478107205,
+      "label": "PW",
+      "meas": 1.4627840518951416,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.455947
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT2/native",
+      "cls": "128g1",
+      "e": -0.002605378916434975,
+      "label": "PT2",
+      "meas": 1.4781120419502258,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.474261
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW2/native",
+      "cls": "128g1",
+      "e": -0.005677921944144182,
+      "label": "PW2",
+      "meas": 1.4642720222473145,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.455958
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/uniform/native",
+      "cls": "128g1",
+      "e": -0.006145411985416405,
+      "label": "uniform",
+      "meas": 1.3305920362472534,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.322415
+     },
+     {
+      "G": 1,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/balanced/native",
+      "cls": "128g1",
+      "e": -0.0046852301640851746,
+      "label": "balanced",
+      "meas": 1.3286399841308594,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 4,
+      "pred": 1.322415
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PT/native",
+      "cls": "128g16",
+      "e": 0.03120806346651195,
+      "label": "PT",
+      "meas": 0.620576024055481,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.639943
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PW/native",
+      "cls": "128g16",
+      "e": 0.03822521837655146,
+      "label": "PW",
+      "meas": 0.6166080236434937,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.640178
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PT2/native",
+      "cls": "128g16",
+      "e": 0.03291085043174391,
+      "label": "PT2",
+      "meas": 0.6195520162582397,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.639942
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PW2/native",
+      "cls": "128g16",
+      "e": 0.034625742482204735,
+      "label": "PW2",
+      "meas": 0.6185280084609985,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.639945
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/uniform/native",
+      "cls": "128g16",
+      "e": -0.022044235650457766,
+      "label": "uniform",
+      "meas": 0.5321120023727417,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.520382
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/3/balanced/native",
+      "cls": "128g16",
+      "e": -0.021779501030706916,
+      "label": "balanced",
+      "meas": 0.5319679975509644,
+      "model": "jetmoe-8b",
+      "n": 3,
+      "pred": 0.520382
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PT/native",
+      "cls": "128g16",
+      "e": 0.0049950660533844005,
+      "label": "PT",
+      "meas": 0.7913760244846344,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.795329
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PW/native",
+      "cls": "128g16",
+      "e": 0.0005937834789777607,
+      "label": "PW",
+      "meas": 0.7763839960098267,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.776845
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PT2/native",
+      "cls": "128g16",
+      "e": 0.004385789024704989,
+      "label": "PT2",
+      "meas": 0.7734079957008362,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.7768
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PW2/native",
+      "cls": "128g16",
+      "e": 0.004632385842262998,
+      "label": "PW2",
+      "meas": 0.773248016834259,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.77683
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/uniform/native",
+      "cls": "128g16",
+      "e": 0.003924675048885939,
+      "label": "uniform",
+      "meas": 0.690496027469635,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.693206
+     },
+     {
+      "G": 16,
+      "cell": "jetmoe-8b/jetmoe-8b-128g16/4/balanced/native",
+      "cls": "128g16",
+      "e": 0.006209635651766687,
+      "label": "balanced",
+      "meas": 0.6889280080795288,
+      "model": "jetmoe-8b",
+      "n": 4,
+      "pred": 0.693206
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT/native",
+      "cls": "128g16",
+      "e": -0.004111000862226044,
+      "label": "PT",
+      "meas": 1.7718400359153748,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.764556
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW/native",
+      "cls": "128g16",
+      "e": -0.004800935560180131,
+      "label": "PW",
+      "meas": 1.7731839418411255,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.764671
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT2/native",
+      "cls": "128g16",
+      "e": 0.004027243396713898,
+      "label": "PT2",
+      "meas": 1.7893120050430298,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.796518
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW2/native",
+      "cls": "128g16",
+      "e": -0.004941750768762798,
+      "label": "PW2",
+      "meas": 1.7734559774398804,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.764692
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/uniform/native",
+      "cls": "128g16",
+      "e": -0.006443719852413876,
+      "label": "uniform",
+      "meas": 1.642367959022522,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.631785
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/balanced/native",
+      "cls": "128g16",
+      "e": -0.005086808095510542,
+      "label": "balanced",
+      "meas": 1.6401280164718628,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 5,
+      "pred": 1.631785
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT/native",
+      "cls": "128g16",
+      "e": -0.0037193226239640165,
+      "label": "PT",
+      "meas": 2.0928640365600586,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 2.08508
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW/native",
+      "cls": "128g16",
+      "e": -0.0021922100538456224,
+      "label": "PW",
+      "meas": 2.0896639823913574,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 2.085083
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT2/native",
+      "cls": "128g16",
+      "e": 0.000568966781843594,
+      "label": "PT2",
+      "meas": 2.1019680500030518,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 2.103164
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW2/native",
+      "cls": "128g16",
+      "e": -0.005170538048767104,
+      "label": "PW2",
+      "meas": 2.0821759700775146,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 2.07141
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/uniform/native",
+      "cls": "128g16",
+      "e": -0.0057302563615011515,
+      "label": "uniform",
+      "meas": 1.9505280256271362,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 1.939351
+     },
+     {
+      "G": 16,
+      "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/balanced/native",
+      "cls": "128g16",
+      "e": -0.004456303298206121,
+      "label": "balanced",
+      "meas": 1.948032021522522,
+      "model": "qwen1.5-moe-a2.7b",
+      "n": 6,
+      "pred": 1.939351
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PT/native",
+      "cls": "128g1",
+      "e": 0.005635363069051547,
+      "label": "PT",
+      "meas": 0.4835520088672638,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.486277
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PW/native",
+      "cls": "128g1",
+      "e": 0.006069858189228672,
+      "label": "PW",
+      "meas": 0.4835360050201416,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.486471
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PT2/native",
+      "cls": "128g1",
+      "e": 0.009981919125965577,
+      "label": "PT2",
+      "meas": 0.481471985578537,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.486278
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PW2/native",
+      "cls": "128g1",
+      "e": 0.01469888911853201,
+      "label": "PW2",
+      "meas": 0.47942399978637695,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.486471
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/uniform/native",
+      "cls": "128g1",
+      "e": -0.026594024488889256,
+      "label": "uniform",
+      "meas": 0.37564799189567566,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.365658
+     },
+     {
+      "G": 1,
+      "cell": "jetmoe-8b/jetmoe-8b-128g1/2/balanced/native",
+      "cls": "128g1",
+      "e": -0.025930201514838158,
+      "label": "balanced",
+      "meas": 0.37539198994636536,
+      "model": "jetmoe-8b",
+      "n": 2,
+      "pred": 0.365658
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT/native",
+      "cls": "128g1",
+      "e": -0.0033169250030781194,
+      "label": "PT",
+      "meas": 1.2044320106506348,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.200437
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW/native",
+      "cls": "128g1",
+      "e": -0.0058542537357800795,
+      "label": "PW",
+      "meas": 1.207487940788269,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.200419
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT2/native",
+      "cls": "128g1",
+      "e": 0.006729657898139285,
+      "label": "PT2",
+      "meas": 1.2244319915771484,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.232672
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW2/native",
+      "cls": "128g1",
+      "e": -0.006061716993026822,
+      "label": "PW2",
+      "meas": 1.2077440023422241,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.200423
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/uniform/native",
+      "cls": "128g1",
+      "e": -0.009545170122897684,
+      "label": "uniform",
+      "meas": 1.0766720175743103,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.066395
+     },
+     {
+      "G": 1,
+      "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/balanced/native",
+      "cls": "128g1",
+      "e": -0.005911076639208868,
+      "label": "balanced",
+      "meas": 1.0727360248565674,
+      "model": "deepseek-v2-lite",
+      "n": 3,
+      "pred": 1.066395
+     }
+    ],
+    "cells_measured": 84,
+    "dropped_rows": {
+     "deepseek-v2-lite-t128g1": [
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "deepseek-v2-lite/deepseek-v2-lite-128g1/3/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "jetmoe-8b-t128g1": [
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g1/2/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "jetmoe-8b-t128g16": [
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/3/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "jetmoe-8b/jetmoe-8b-128g16/4/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "phi-3.5-moe-t128g1": [
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/1/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g1/2/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "phi-3.5-moe-t128g16": [
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/3/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-128g16/4/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "phi-3.5-moe-t64g1": [
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "phi-3.5-moe/phi-3.5-moe-64g1/1/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "qwen1.5-moe-a2.7b-t128g1": [
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/balanced/shared",
+       "no registered prediction"
+      ]
+     ],
+     "qwen1.5-moe-a2.7b-t128g16": [
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/balanced/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW2/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/uniform/shared",
+       "no registered prediction"
+      ],
+      [
+       "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/balanced/shared",
+       "no registered prediction"
+      ]
+     ]
+    },
+    "pages": {
+     "deepseek-v2-lite-t128g1": "counted",
+     "jetmoe-8b-t128g1": "counted",
+     "jetmoe-8b-t128g16": "counted",
+     "phi-3.5-moe-t128g1": "counted",
+     "phi-3.5-moe-t128g16": "counted",
+     "phi-3.5-moe-t64g1": "counted",
+     "qwen1.5-moe-a2.7b-t128g1": "counted",
+     "qwen1.5-moe-a2.7b-t128g16": "counted"
+    },
+    "voided_cells": []
+   },
+   "pages": {
+    "deepseek-v2-lite-t128g1": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2h-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2h-lock1410",
+      "use": "counted"
+     }
+    },
+    "jetmoe-8b-t128g1": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2g-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2g-lock1410",
+      "use": "counted"
+     }
+    },
+    "jetmoe-8b-t128g16": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2e-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2e-lock1410",
+      "use": "counted"
+     }
+    },
+    "phi-3.5-moe-t128g1": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2b-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2b-lock1410",
+      "use": "counted"
+     }
+    },
+    "phi-3.5-moe-t128g16": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2c-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2c-lock1410",
+      "use": "counted"
+     }
+    },
+    "phi-3.5-moe-t64g1": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 108 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2-lock1410",
+      "use": "counted"
+     }
+    },
+    "qwen1.5-moe-a2.7b-t128g1": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 324 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2d-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 324 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2d-lock1410",
+      "use": "counted"
+     }
+    },
+    "qwen1.5-moe-a2.7b-t128g16": {
+     "ALL": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2f-lock1410",
+      "use": "counted"
+     },
+     "CLEAN": {
+      "failed_but_not_gating": [],
+      "failed_gates": [],
+      "g1_r7": "0 of 216 repeat rows non-clean (0.00%)",
+      "session_tag": "gh200-20261105T220621Z-p2f-lock1410",
+      "use": "counted"
+     }
+    }
+   },
+   "rule": "rental 2's addendum rule 3, the rental-3 gate definitions",
+   "verdicts": [
+    {
+     "ALL": "EQUIVALENT",
+     "CLEAN": "EQUIVALENT",
+     "path": "G3 / pooled / verdict",
+     "registered": "EQUIVALENT"
+    },
+    {
+     "ALL": "PASS",
+     "CLEAN": "PASS",
+     "path": "G3 / verdict",
+     "registered": "PASS"
+    },
+    {
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "path": "E1-TILE / verdict",
+     "registered": "FAILS"
+    },
+    {
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "path": "E1-TILE / pooled / verdict",
+     "registered": "FAILS"
+    },
+    {
+     "ALL": "FAILS",
+     "CLEAN": "FAILS",
+     "path": "E1-TILE / per_model / phi-3.5-moe / verdict",
+     "registered": "FAILS"
+    },
+    {
+     "ALL": "HOLDS",
+     "CLEAN": "HOLDS",
+     "path": "E1-TILE / per_model / qwen1.5-moe-a2.7b / verdict",
+     "registered": "HOLDS"
+    },
+    {
+     "ALL": "HOLDS",
+     "CLEAN": "HOLDS",
+     "path": "E1-TILE / per_model / jetmoe-8b / verdict",
+     "registered": "HOLDS"
+    },
+    {
+     "ALL": "HOLDS",
+     "CLEAN": "HOLDS",
+     "path": "E1-TILE / per_model / deepseek-v2-lite / verdict",
+     "registered": "HOLDS"
+    }
+   ]
+  },
+  "cells": [
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PT/native",
+    "cls": "64g1",
+    "e": -0.08217027975277791,
+    "label": "PT",
+    "meas": 0.9925119876861572,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.910957
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PW/native",
+    "cls": "64g1",
+    "e": -0.06034491070455661,
+    "label": "PW",
+    "meas": 0.9684159755706787,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.909977
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PT2/native",
+    "cls": "64g1",
+    "e": -0.04751086860492437,
+    "label": "PT2",
+    "meas": 0.9345439970493317,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.890143
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/PW2/native",
+    "cls": "64g1",
+    "e": -0.016636787161409483,
+    "label": "PW2",
+    "meas": 0.9240959882736206,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.908722
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/uniform/native",
+    "cls": "64g1",
+    "e": 0.00499781714504377,
+    "label": "uniform",
+    "meas": 0.8151520192623138,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.819226
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-64g1/1/balanced/native",
+    "cls": "64g1",
+    "e": 0.007073417707109453,
+    "label": "balanced",
+    "meas": 0.8134719729423523,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.819226
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PT/native",
+    "cls": "128g1",
+    "e": 0.01756101481121397,
+    "label": "PT",
+    "meas": 1.126528024673462,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 1.146311
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PW/native",
+    "cls": "128g1",
+    "e": 0.028551444697807682,
+    "label": "PW",
+    "meas": 1.1615520119667053,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 1.194716
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PT2/native",
+    "cls": "128g1",
+    "e": 0.03416585747216305,
+    "label": "PT2",
+    "meas": 1.1459680199623108,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 1.185121
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/PW2/native",
+    "cls": "128g1",
+    "e": 0.04065327285128606,
+    "label": "PW2",
+    "meas": 1.0818560123443604,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 1.125837
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/uniform/native",
+    "cls": "128g1",
+    "e": -0.011050657782410545,
+    "label": "uniform",
+    "meas": 0.8696320056915283,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.860022
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/1/balanced/native",
+    "cls": "128g1",
+    "e": -0.011814249495694873,
+    "label": "balanced",
+    "meas": 0.8703039884567261,
+    "model": "phi-3.5-moe",
+    "n": 1,
+    "pred": 0.860022
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PT/native",
+    "cls": "128g1",
+    "e": 0.05737236300266102,
+    "label": "PT",
+    "meas": 1.780735969543457,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.882901
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PW/native",
+    "cls": "128g1",
+    "e": 0.0628456806245099,
+    "label": "PW",
+    "meas": 1.7821439504623413,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.894144
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PT2/native",
+    "cls": "128g1",
+    "e": 0.064810765461774,
+    "label": "PT2",
+    "meas": 1.8119679689407349,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.929403
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/PW2/native",
+    "cls": "128g1",
+    "e": 0.054914971782625166,
+    "label": "PW2",
+    "meas": 1.8297920227050781,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.930275
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/uniform/native",
+    "cls": "128g1",
+    "e": 0.03283923543169842,
+    "label": "uniform",
+    "meas": 1.5176960229873657,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.567536
+   },
+   {
+    "G": 1,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g1/2/balanced/native",
+    "cls": "128g1",
+    "e": 0.03425665779800702,
+    "label": "balanced",
+    "meas": 1.5156160593032837,
+    "model": "phi-3.5-moe",
+    "n": 2,
+    "pred": 1.567536
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PT/native",
+    "cls": "128g16",
+    "e": 0.015497154127732893,
+    "label": "PT",
+    "meas": 2.280672073364258,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.316016
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PW/native",
+    "cls": "128g16",
+    "e": 0.016163037500803945,
+    "label": "PW",
+    "meas": 2.313488006591797,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.350881
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PT2/native",
+    "cls": "128g16",
+    "e": 0.01189460370351636,
+    "label": "PT2",
+    "meas": 2.3569440841674805,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.384979
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/PW2/native",
+    "cls": "128g16",
+    "e": 0.01662117511144401,
+    "label": "PW2",
+    "meas": 2.3113919496536255,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.34981
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/uniform/native",
+    "cls": "128g16",
+    "e": 0.01226273380458398,
+    "label": "uniform",
+    "meas": 2.0528000593185425,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.077973
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/3/balanced/native",
+    "cls": "128g16",
+    "e": 0.01188419101392002,
+    "label": "balanced",
+    "meas": 2.0535680055618286,
+    "model": "phi-3.5-moe",
+    "n": 3,
+    "pred": 2.077973
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PT/native",
+    "cls": "128g16",
+    "e": 0.014775187747795515,
+    "label": "PT",
+    "meas": 2.9847359657287598,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 3.028836
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PW/native",
+    "cls": "128g16",
+    "e": 0.016774547595197475,
+    "label": "PW",
+    "meas": 3.0977280139923096,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 3.149691
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PT2/native",
+    "cls": "128g16",
+    "e": 0.014843955864916714,
+    "label": "PT2",
+    "meas": 2.951296091079712,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 2.995105
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/PW2/native",
+    "cls": "128g16",
+    "e": 0.014160773786269676,
+    "label": "PW2",
+    "meas": 2.953935980796814,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 2.995766
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/uniform/native",
+    "cls": "128g16",
+    "e": 0.017358162034516456,
+    "label": "uniform",
+    "meas": 2.6739039421081543,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 2.720318
+   },
+   {
+    "G": 16,
+    "cell": "phi-3.5-moe/phi-3.5-moe-128g16/4/balanced/native",
+    "cls": "128g16",
+    "e": 0.01797338463586362,
+    "label": "balanced",
+    "meas": 2.672287940979004,
+    "model": "phi-3.5-moe",
+    "n": 4,
+    "pred": 2.720318
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT/native",
+    "cls": "128g1",
+    "e": 0.006991883227192464,
+    "label": "PT",
+    "meas": 0.545632004737854,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.549447
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW/native",
+    "cls": "128g1",
+    "e": -0.017938614178971246,
+    "label": "PW",
+    "meas": 0.5311999917030334,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.521671
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT2/native",
+    "cls": "128g1",
+    "e": -0.03676850104032359,
+    "label": "PT2",
+    "meas": 0.5416319966316223,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.521717
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW2/native",
+    "cls": "128g1",
+    "e": -0.0024480868507525955,
+    "label": "PW2",
+    "meas": 0.55103999376297,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.549691
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/uniform/native",
+    "cls": "128g1",
+    "e": -0.01188707615568596,
+    "label": "uniform",
+    "meas": 0.4307200014591217,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.4256
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/balanced/native",
+    "cls": "128g1",
+    "e": -0.011005350589486818,
+    "label": "balanced",
+    "meas": 0.43033599853515625,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 1,
+    "pred": 0.4256
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT/native",
+    "cls": "128g1",
+    "e": -0.006687672325388472,
+    "label": "PT",
+    "meas": 0.8403519988059998,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.834732
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW/native",
+    "cls": "128g1",
+    "e": -0.01297565434305692,
+    "label": "PW",
+    "meas": 0.831712007522583,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.82092
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT2/native",
+    "cls": "128g1",
+    "e": -0.0027346569961316236,
+    "label": "PT2",
+    "meas": 0.8370239734649658,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.834735
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW2/native",
+    "cls": "128g1",
+    "e": -0.010960049895737067,
+    "label": "PW2",
+    "meas": 0.830016016960144,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.820919
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/uniform/native",
+    "cls": "128g1",
+    "e": -0.027917019155128897,
+    "label": "uniform",
+    "meas": 0.7076319754123688,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.687877
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/balanced/native",
+    "cls": "128g1",
+    "e": -0.02615554937127562,
+    "label": "balanced",
+    "meas": 0.706352025270462,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 2,
+    "pred": 0.687877
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT/native",
+    "cls": "128g1",
+    "e": 0.004315626638734971,
+    "label": "PT",
+    "meas": 1.4679200053215027,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.474255
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW/native",
+    "cls": "128g1",
+    "e": -0.004673999478107205,
+    "label": "PW",
+    "meas": 1.4627840518951416,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.455947
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT2/native",
+    "cls": "128g1",
+    "e": -0.002605378916434975,
+    "label": "PT2",
+    "meas": 1.4781120419502258,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.474261
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW2/native",
+    "cls": "128g1",
+    "e": -0.005677921944144182,
+    "label": "PW2",
+    "meas": 1.4642720222473145,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.455958
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/uniform/native",
+    "cls": "128g1",
+    "e": -0.006145411985416405,
+    "label": "uniform",
+    "meas": 1.3305920362472534,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.322415
+   },
+   {
+    "G": 1,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/balanced/native",
+    "cls": "128g1",
+    "e": -0.0046852301640851746,
+    "label": "balanced",
+    "meas": 1.3286399841308594,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 4,
+    "pred": 1.322415
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PT/native",
+    "cls": "128g16",
+    "e": 0.03120806346651195,
+    "label": "PT",
+    "meas": 0.620576024055481,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.639943
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PW/native",
+    "cls": "128g16",
+    "e": 0.03822521837655146,
+    "label": "PW",
+    "meas": 0.6166080236434937,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.640178
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PT2/native",
+    "cls": "128g16",
+    "e": 0.03291085043174391,
+    "label": "PT2",
+    "meas": 0.6195520162582397,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.639942
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/PW2/native",
+    "cls": "128g16",
+    "e": 0.034625742482204735,
+    "label": "PW2",
+    "meas": 0.6185280084609985,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.639945
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/uniform/native",
+    "cls": "128g16",
+    "e": -0.022044235650457766,
+    "label": "uniform",
+    "meas": 0.5321120023727417,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.520382
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/3/balanced/native",
+    "cls": "128g16",
+    "e": -0.021779501030706916,
+    "label": "balanced",
+    "meas": 0.5319679975509644,
+    "model": "jetmoe-8b",
+    "n": 3,
+    "pred": 0.520382
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PT/native",
+    "cls": "128g16",
+    "e": 0.0049950660533844005,
+    "label": "PT",
+    "meas": 0.7913760244846344,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.795329
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PW/native",
+    "cls": "128g16",
+    "e": 0.0005937834789777607,
+    "label": "PW",
+    "meas": 0.7763839960098267,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.776845
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PT2/native",
+    "cls": "128g16",
+    "e": 0.004385789024704989,
+    "label": "PT2",
+    "meas": 0.7734079957008362,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.7768
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/PW2/native",
+    "cls": "128g16",
+    "e": 0.004632385842262998,
+    "label": "PW2",
+    "meas": 0.773248016834259,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.77683
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/uniform/native",
+    "cls": "128g16",
+    "e": 0.003924675048885939,
+    "label": "uniform",
+    "meas": 0.690496027469635,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.693206
+   },
+   {
+    "G": 16,
+    "cell": "jetmoe-8b/jetmoe-8b-128g16/4/balanced/native",
+    "cls": "128g16",
+    "e": 0.006209635651766687,
+    "label": "balanced",
+    "meas": 0.6889280080795288,
+    "model": "jetmoe-8b",
+    "n": 4,
+    "pred": 0.693206
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT/native",
+    "cls": "128g16",
+    "e": -0.004111000862226044,
+    "label": "PT",
+    "meas": 1.7718400359153748,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.764556
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW/native",
+    "cls": "128g16",
+    "e": -0.004800935560180131,
+    "label": "PW",
+    "meas": 1.7731839418411255,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.764671
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT2/native",
+    "cls": "128g16",
+    "e": 0.004027243396713898,
+    "label": "PT2",
+    "meas": 1.7893120050430298,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.796518
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW2/native",
+    "cls": "128g16",
+    "e": -0.004941750768762798,
+    "label": "PW2",
+    "meas": 1.7734559774398804,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.764692
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/uniform/native",
+    "cls": "128g16",
+    "e": -0.006443719852413876,
+    "label": "uniform",
+    "meas": 1.642367959022522,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.631785
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/balanced/native",
+    "cls": "128g16",
+    "e": -0.005086808095510542,
+    "label": "balanced",
+    "meas": 1.6401280164718628,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 5,
+    "pred": 1.631785
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT/native",
+    "cls": "128g16",
+    "e": -0.0037193226239640165,
+    "label": "PT",
+    "meas": 2.0928640365600586,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 2.08508
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW/native",
+    "cls": "128g16",
+    "e": -0.0021922100538456224,
+    "label": "PW",
+    "meas": 2.0896639823913574,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 2.085083
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT2/native",
+    "cls": "128g16",
+    "e": 0.000568966781843594,
+    "label": "PT2",
+    "meas": 2.1019680500030518,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 2.103164
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW2/native",
+    "cls": "128g16",
+    "e": -0.005170538048767104,
+    "label": "PW2",
+    "meas": 2.0821759700775146,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 2.07141
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/uniform/native",
+    "cls": "128g16",
+    "e": -0.0057302563615011515,
+    "label": "uniform",
+    "meas": 1.9505280256271362,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 1.939351
+   },
+   {
+    "G": 16,
+    "cell": "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/balanced/native",
+    "cls": "128g16",
+    "e": -0.004456303298206121,
+    "label": "balanced",
+    "meas": 1.948032021522522,
+    "model": "qwen1.5-moe-a2.7b",
+    "n": 6,
+    "pred": 1.939351
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PT/native",
+    "cls": "128g1",
+    "e": 0.005635363069051547,
+    "label": "PT",
+    "meas": 0.4835520088672638,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.486277
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PW/native",
+    "cls": "128g1",
+    "e": 0.006069858189228672,
+    "label": "PW",
+    "meas": 0.4835360050201416,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.486471
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PT2/native",
+    "cls": "128g1",
+    "e": 0.009981919125965577,
+    "label": "PT2",
+    "meas": 0.481471985578537,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.486278
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/PW2/native",
+    "cls": "128g1",
+    "e": 0.01469888911853201,
+    "label": "PW2",
+    "meas": 0.47942399978637695,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.486471
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/uniform/native",
+    "cls": "128g1",
+    "e": -0.026594024488889256,
+    "label": "uniform",
+    "meas": 0.37564799189567566,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.365658
+   },
+   {
+    "G": 1,
+    "cell": "jetmoe-8b/jetmoe-8b-128g1/2/balanced/native",
+    "cls": "128g1",
+    "e": -0.025930201514838158,
+    "label": "balanced",
+    "meas": 0.37539198994636536,
+    "model": "jetmoe-8b",
+    "n": 2,
+    "pred": 0.365658
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT/native",
+    "cls": "128g1",
+    "e": -0.0033169250030781194,
+    "label": "PT",
+    "meas": 1.2044320106506348,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.200437
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW/native",
+    "cls": "128g1",
+    "e": -0.0058542537357800795,
+    "label": "PW",
+    "meas": 1.207487940788269,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.200419
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT2/native",
+    "cls": "128g1",
+    "e": 0.006729657898139285,
+    "label": "PT2",
+    "meas": 1.2244319915771484,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.232672
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW2/native",
+    "cls": "128g1",
+    "e": -0.006061716993026822,
+    "label": "PW2",
+    "meas": 1.2077440023422241,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.200423
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/uniform/native",
+    "cls": "128g1",
+    "e": -0.009545170122897684,
+    "label": "uniform",
+    "meas": 1.0766720175743103,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.066395
+   },
+   {
+    "G": 1,
+    "cell": "deepseek-v2-lite/deepseek-v2-lite-128g1/3/balanced/native",
+    "cls": "128g1",
+    "e": -0.005911076639208868,
+    "label": "balanced",
+    "meas": 1.0727360248565674,
+    "model": "deepseek-v2-lite",
+    "n": 3,
+    "pred": 1.066395
+   }
+  ],
+  "cells_measured": 84,
+  "dropped_rows": {
+   "deepseek-v2-lite-t128g1": [
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "deepseek-v2-lite/deepseek-v2-lite-128g1/3/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "jetmoe-8b-t128g1": [
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g1/2/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "jetmoe-8b-t128g16": [
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/3/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "jetmoe-8b/jetmoe-8b-128g16/4/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "phi-3.5-moe-t128g1": [
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/1/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g1/2/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "phi-3.5-moe-t128g16": [
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/3/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-128g16/4/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "phi-3.5-moe-t64g1": [
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "phi-3.5-moe/phi-3.5-moe-64g1/1/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "qwen1.5-moe-a2.7b-t128g1": [
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/1/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/2/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g1/4/balanced/shared",
+     "no registered prediction"
+    ]
+   ],
+   "qwen1.5-moe-a2.7b-t128g16": [
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/5/balanced/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PT2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/PW2/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/uniform/shared",
+     "no registered prediction"
+    ],
+    [
+     "qwen1.5-moe-a2.7b/qwen1.5-moe-a2.7b-128g16/6/balanced/shared",
+     "no registered prediction"
+    ]
+   ]
+  },
+  "pages": {
+   "deepseek-v2-lite-t128g1": "counted",
+   "jetmoe-8b-t128g1": "counted",
+   "jetmoe-8b-t128g16": "counted",
+   "phi-3.5-moe-t128g1": "counted",
+   "phi-3.5-moe-t128g16": "counted",
+   "phi-3.5-moe-t64g1": "counted",
+   "qwen1.5-moe-a2.7b-t128g1": "counted",
+   "qwen1.5-moe-a2.7b-t128g16": "counted"
+  },
+  "voided_cells": []
+ }
+}

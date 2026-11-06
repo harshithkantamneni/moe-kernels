@@ -429,23 +429,33 @@ PINNED = """
 2026-10-27-nvidia_gh200_480gb-cal4-session/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
 2026-10-27-nvidia_gh200_480gb-cal4-session/results/2026-10-27-nvidia_gh200_480gb-mixtral-8x7b-tp2-b128g1-r3-counters/lock1410/r3c-g1.json V10 None PASS
 2026-10-27-nvidia_gh200_480gb-cal4-session/results/2026-10-27-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-05-nvidia_gh200_480gb-mixtral-8x7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-05-nvidia_gh200_480gb-mixtral-8x7b-f64w8-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-05-nvidia_gh200_480gb-olmoe-1b-7b-f128-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-05-nvidia_gh200_480gb-olmoe-1b-7b-f64w8-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-olmoe-1b-7b-f128r-r3-counters/lock1410/r3c-g64.json V10 PASS PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b128g1-r3-counters/lock1410/r3c-g1.json V10 None PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-phi-3.5-moe-b64g1-r3-counters/lock1410/r3c-g1.json V10 None PASS
+2026-11-05-nvidia_gh200_480gb-tileB3-session/results/2026-11-06-nvidia_gh200_480gb-qwen1.5-moe-a2.7b-b128g1-r3-counters/lock1410/r3c-g1.json V10 None PASS
 """
 
 
 def test_the_regate_of_every_published_lock_page_is_pinned():
-    """194 lock pages (summary.json files repeat their pages' gates and are
+    """202 lock pages (summary.json files repeat their pages' gates and are
     not pages; 19 of them rental 3's, 2026-10-06, 7 rental 4's, 2026-10-07, 4 rental 5's,
     2026-10-09, 4 rental 6's, 2026-10-13, 1 rental 7's, 2026-10-14, 10 tile rental A's,
     2026-10-20, 11 tile rental A2's at 1410, 2026-10-21, 12 settle rental S1's at 1410, 1305
     and 1005, 2026-10-21, 4 calibration rental C2's at 1410, 2026-10-21, 2 calibration
     rental C3's at 1410, 2026-10-27 (its two f128 pages, both storing V10 PASS; its stamp
     pages are not lock pages), and 3 calibration rental C4's at 1410, 2026-10-27 (its two
-    f128 pages, both storing V10 PASS, and tp2's b128g1 histogram byte page), all PASS). The
+    f128 pages, both storing V10 PASS, and tp2's b128g1 histogram byte page), and 8 tile rental
+    B3's at 1410, 2026-11-05/06 (its four sag pages and the OLMoE f128 repeat, each storing V10
+    PASS, and three histogram byte pages), all PASS). The
     8x22B floor, the lock not in force, fails; every other page passes, 78 stored FAILs among
     them; rental 5's and rental 6's two histogram byte pages each, rental 7's one, tile rental
-    A's and A2's four each, C2's two and C4's one store no gate (R3's histogram byte mode records none),
+    A's and A2's four each, C2's two, C4's one and B3's three store no gate (R3's histogram byte mode records none),
     and S1's nine G 1 and G 16 pages store no V10 (its seven histogram pages none at all, its
-    two ladder pages V0 and V1 only), so 103 verdicts change. The published JSONs are read,
+    two ladder pages V0 and V1 only), so 106 verdicts change. The published JSONs are read,
     never written."""
     want = [tuple(line.split()) for line in PINNED.strip().splitlines()]
     before = {p: p.stat().st_mtime_ns for p in LG.published_lock_pages()}
@@ -457,7 +467,7 @@ def test_the_regate_of_every_published_lock_page_is_pinned():
     assert fails == [("2026-09-28-nvidia_gh200_480gb-8x22b-session/results/2026-09-28-"
                       "nvidia_gh200_480gb-r3-counters/r3f-g64-lock1710.json", "FL1", "FAIL",
                       "FAIL")]
-    assert sum(1 for g in got if g[2] != g[3]) == 103
+    assert sum(1 for g in got if g[2] != g[3]) == 106
 
 
 def test_the_8x22b_floor_fails_on_two_independent_readings():
@@ -471,7 +481,7 @@ def test_the_8x22b_floor_fails_on_two_independent_readings():
 def test_the_cli_prints_the_table(capsys):
     assert LG.main([]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[-1].startswith("194 lock pages; 103 verdicts change; new verdict "
+    assert out.splitlines()[-1].startswith("202 lock pages; 106 verdicts change; new verdict "
                                            "not PASS on 1: 2026-09-28-nvidia_gh200_480gb-8x22b")
 
 
