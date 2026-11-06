@@ -3476,9 +3476,19 @@ The model prices Phi's 128 G 1 cells slow by 3.4% on average and its six 64x128 
 by 8.22%, the only cell in the 84 past the 8% clause. The registration's per-call risk block named Phi's large-P w1
 risk before any page: with the estimate's common bias Phi-3.5's mean was expected near +0.9%, and near +1.9% with
 that risk (ROUND5.md section 5: Phi 128g1 about 2 to 3% high if it behaves like tp2). Phi's pooled mean came in at
-+1.30%, inside the mean clause, and its 128g1 mean at +3.38%. B-BYTES, the predicted against counted w1 reads on
-the three byte pages, reads mean +3.6% (17 rows, rms 5.06%; DESCRIPTIVE); w2 reads +0.17% (rms 0.91%). E2-TILE, the
-frozen model's time from the counted bytes on 17 128x128 cells, reads rms 1.49%, mean -1.05% (DESCRIPTIVE).
++1.30%, inside the mean clause, and its 128g1 mean at +3.38%. B-BYTES, the predicted against counted w1 reads,
+reads mean +3.6% (17 rows, rms 5.06%; DESCRIPTIVE); w2 reads +0.17% (rms 0.91%). E2-TILE, the frozen model's time
+from the counted bytes on 17 128x128 cells, reads rms 1.49%, mean -1.05% (DESCRIPTIVE). Every one of those B-BYTES
+rows and E2-TILE cells is Qwen1.5-MoE-A2.7B 128g1: they contain no Phi-3.5 cell. All 18 Phi byte cells (the b128g1
+and b64g1 pages) fail the per-cell clock rule (ncu ran them at 1304 to 1350 MHz, under the band's 1352.19 MHz floor),
+and the scorer's bytes legs drop them. So the +3.6% says nothing about Phi's miss. A later split of Phi's miss
+(POST-HOC on SEEN pages, using those same clock-failing Phi byte cells descriptively; moe-kernels-work 2026-11-06
+phi-split/REPORT.md) finds that counted bytes explain almost all of it (a w1 byte-law miss, not a rate miss); the
+inferred mechanism is the L2 hit fraction of w1 re-reads. Pricing
+with counted bytes in place of predicted ones takes 128g1 from +3.38% (rms 4.17%, worst +6.48%) to +0.20% (rms
+0.99%, worst +1.65%), and 64g1 from -3.24% (rms 4.66%) to -0.07% (rms 0.77%, worst +1.16%). The w1 re-read miss
+fraction reads 0.73 measured against 0.96 priced at 128g1, and 0.38 (skewed cells) against 0.08 at 64g1. No verdict changes:
+E1-TILE FAILS as registered.
 
 **Validity.** The board reads valid: 700 W read back at the first poll (`C2_POWER_W=700`), the 1410 MHz lock held
 (`LOCK_PROBE_1410=held`), G-BAND PASS in the fallback band [1352.19, 1410]. The three B3 gates PASS before any timed
