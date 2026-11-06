@@ -125,3 +125,8 @@
 2026-11-06T18:35:31Z stamps REFUSED: the gate's hard legs for u17-sd read 'FAIL' (instr-gate.env): occupancy, SASS and the upstream file must pass
 2026-11-06T18:35:31Z stamps END: exit 2 after 0 min [unit 17/20 - sd probe=pc page=docs/registered/2026-11-06-pc-pages/pc-d.json lock-mhz=1710]
 2026-11-06T18:35:32Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-06T18:35:43Z decodebytes START: decode counter page at the 1710 lock (dram_counter_route_decode3.py --kernels wide, family r3-decode): docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json; every GEMM launch grid held to vLLM's own (the D3 driver's step) [unit 18/20 mixtral-8x7b cnt histogram=docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json kernels=wide lock-mhz=1710] (estimate 4 min, cap 15 min, 86 min left)
+2026-11-06T18:36:39Z decodebytes: RESULT: VALIDITY grid PASS 4 cells, 40 GEMM launches attributed, 60 other launches by place; /home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b
+2026-11-06T18:36:40Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-06-nvidia_gh200_480gb-mixtral-8x7b-cnt-r3-counters/lock1710/r3d.json)
+2026-11-06T18:36:40Z decodebytes END: exit 0 after 1 min [unit 18/20 mixtral-8x7b cnt histogram=docs/registered/2026-11-06-pc-pages/mixtral-8x7b-cnt.json kernels=wide lock-mhz=1710]
+2026-11-06T18:36:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
