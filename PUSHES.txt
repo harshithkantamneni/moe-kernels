@@ -6,3 +6,4 @@
 2026-11-10T21:10:43Z perturb (unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710): exit 1 (2 min)
 2026-11-10T21:11:09Z stamps (unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710): exit 0 (0 min)
 2026-11-10T21:11:35Z stamps (unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:08Z stamps (unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710): exit 0 (0 min)
