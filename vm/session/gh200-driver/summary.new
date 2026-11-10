@@ -5,3 +5,4 @@ perturb    exit 1 after 2 min [unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr 
 stamps     exit 0 after 0 min [unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710]
 stamps     exit 0 after 0 min [unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710]
 stamps     exit 0 after 0 min [unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710]
+stamps     exit 0 after 0 min [unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710]
