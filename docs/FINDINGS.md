@@ -3904,6 +3904,137 @@ differ only in the tree's path; the committed files are the published copy's, wi
 `scripts/scoring/rescore.py pc2` re-reads the published session to the committed files. Every register script's
 `--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
 
+## Decode closes after v6d (2026-11-10)
+
+**Plainly: decode closes as calibrated, not certified, and no decode model is certified on any model.** v6d, the
+model built on rentals PC and PC2, reads GO on CAL2 and fails the second gate clause on the seen decode blind (4.52%
+pooled against 4.0%). This was the last decode round under the owner's stopping rule (2026-11-10): decode gets PC2
+plus at most one decode blind, run only on a gate GO, and closes whatever the result. The gate read NO-GO, so the new
+blind did not run. The owner accepted the closure, the D6-20 deviation and the D6-24 defect as recorded (2026-11-11). No registered verdict changes.
+
+**The sequence, end to end.**
+
+| step | registration | reading |
+|---|---|---|
+| v4d' CAL2 (2026-11-03) | addendum 3 | GO: 2.29% rms in sample on 91 kept cells |
+| v4d' decode blind (2026-11-04) | addenda 2 and 3 | FAIL: 11.40% rms pooled over 220 cells on five unseen models, no model certified |
+| DS (2026-11-04) | addendum 4 | measurement: every reading READ, DESCRIPTIVE on six seen models |
+| v5d gate (2026-11-04) | addendum 5 | NO-GO on both clauses: CAL2 STOP (2.41% rms, worst -10.67%), re-score 4.41% |
+| PC (2026-11-06) | 2026-11-06-pc-gh200 | measurement: the per-CTA rate against load, H1 NOT IDENTIFIED |
+| PC2 (2026-11-10) | 2026-11-10-pc2-gh200 | measurement: the 16x64x128 tile, short slabs, big single waves, the naive path |
+| v6d gate (2026-11-10) | addendum 6 | NO-GO on clause 2: CAL2 GO (1.81%), re-score 4.52% |
+
+**Choice order.** Every v6d choice was set on SEEN measurement pages only: PC, PC2, DS and CAL2 (CAL, the first CAL
+rental, was not used). The old decode blind pages were not read, computed on or re-scored in this build before the
+freeze. They had been seen earlier: the two 2026-11-04 diagnoses read them, addendum 5's build re-scored them under
+v5d variants, and design-D6 re-scored them under v6d variants. v6d was frozen at 2026-11-10T22:35:03Z
+(`scripts/scoring/decode/d6_build/FROZEN.txt`):
+
+```
+9653cea5c32337d819e400343c1c6d379d33c2ad8d554262736db18eda5110ae  scripts/r3_timing_model_v6d.py
+9af3fadc3f4f87a3977faad7bad2a41f6a9c855570fb2bb9f94680b7c0c5522a  scripts/scoring/decode/d6_build/v6d_constants.json
+827230ae8103e14e60fbc2ab2a27267368dadfd6159366506349a65d17263d75  scripts/scoring/decode/d6_build/pc_spans.json
+cf36479eae47efed9b34809db5070ae896c59b29127f7184e160db6a05034527  scripts/scoring/decode/d6common.py
+```
+
+The gate ran at 2026-11-10T22:36:41Z. No choice changed after it.
+
+**v6d.** Over v5d (byte-identical), every aligned GEMM is priced by design-D6's law: a CTA's life is c0 plus its B
+slab streamed at the latency read off PC's rate curve at the GPU-wide load, never faster than the tile's X_sat share;
+the slowest CTA sets the wave (kappa, read by fill); waves past the first stream at X_sat. PC2's READ values are
+taken: on 16x64x128 X_sat 3781.89 GB/s, Q_B 48 KB and c0 2.72 us at G 8; on 64x128x64 c0 2.40 us at G 8; on the
+4-per-SM tiles PC2-R3's kappa at the K 14336 rungs. PC2's empty slots are filled by D6-18 to D6-24: c0 is linear in G
+between G 8 (PC2's board) and G 128 (PC's 4.70 us, on PC's board), held outside, so D6-18 interpolates across two
+boards, and a multi-wave GEMM runs every wave at c0(S); kappa is indexed by
+fill on every tile, with term 3's 7% to 8% fall at a full 4-per-SM wave inside the table; a naive cell with no
+non-fetching follower is priced by the law as its aligned twin, and any other naive cell keeps v4d''s price. CALL, ALIGN
+and SLOPE stay v5d's. The constants are the readings, mechanically (`d6common.law_from`), and the registration holds
+them equal to the model's numbers.
+
+**The gate output, verbatim** (`scripts/scoring/decode/gate_d6.out.txt`):
+
+```
+NO-GO: RE-SCORE: the SEEN decode blind under v6d reads pooled rms 4.52%, not under 4.0% (the weak sanity floor): do not launch the new blind; decode closes as calibrated, not certified (the owner's stopping rule, 2026-11-10)
+```
+
+Clause 1: CAL2 under v6d reads GO, 1.81% rms, worst +5.97%, mean -0.03% over 91 kept cells (T0 -1.87 us, s_naive
+-2.14 us, s_block -0.72 us).
+
+Clause 2, the re-score. **POST-HOC on SEEN pages, a weak sanity floor, never a test and never a certification:**
+
+| model | cells | rms | worst | mean |
+|---|---:|---:|---:|---:|
+| pooled | 220 | 4.52% | -31.47% | +0.41% |
+| Phi-3.5-MoE | 42 | 3.18% | -8.37% | +1.73% |
+| Qwen1.5-MoE-A2.7B | 52 | 6.70% | -31.47% | -1.41% |
+| JetMoE-8B | 41 | 2.28% | -6.75% | -0.02% |
+| deepseek-v2-lite | 43 | 1.39% | -3.85% | +0.03% |
+| Granite-3.0-3B-A800M | 42 | 5.85% | +15.58% | +2.14% |
+
+**The deviation from the brief (D6-20).** The brief said to take PC2's kappa on 16x64x128 where read. v6d keeps PC's
+kappa there instead. Inside v6d's form, PC2-R1e's G 256 reading (1.196) multiplies a life the form bounds by the
+fair-share ceiling, while the reading divides the span by a median life that beats that ceiling. Taken as read, it
+prices PC2's own D-G256 launch +14.8% and D-G256-F1024 +15.7% (PC's kappa: +0.2% and +1.0%), its 9 long single-wave
+rungs read 5.7% rms against 2.4%, and CAL2 reads STOP (3.13% rms, worst -9.80%; Mixtral-8x7B L-T2-A4's w2 is 256 CTAs of
+this tile at D-G256's slab). The choice was made on PC2 and CAL2 before the freeze.
+
+**The D6-24 defect, found after the gate, not fixed.** D6-24 prices a naive cell by the law or by v4d', and both
+branches take one CAL2 fit. That fit selects its rho form (fixed or scaled) by the registered rule, the lower rms on
+CAL2's sub-wave cells, and the law-priced cells dominate it: under v6d it selects FIXED (sub-wave 1.48% against 3.32%
+scaled; in sample 1.81%, s_naive -2.14 us). Every earlier decode CAL fit selected SCALED (CAL under v4d, CAL2 under
+v4d', v5d's gate), and with v4d' on every naive cell CAL2 also selects scaled (sub-wave 1.44% against 7.88% fixed; in
+sample 1.48%, s_naive +9.55 us); at the fixed form that fit reads 5.47% in sample with s_naive -1.83 us, close to
+v6d's -2.14 us. The rho form changes v4d''s naive GEMM bodies themselves: OLMoE L-T2-A11's body is 69.20 us under
+fixed and 53.81 us under scaled. So the v4d' branch inherits a rho form chosen by a fit the law dominates; the
+constant is not what moved. CAL2 holds 4 v4d'-branch cells (OLMoE T 2) and reads them within 6%. On the seen blind
+the 13 v4d'-branch cells (Qwen1.5 7, deepseek-v2-lite 4, Phi-3.5 2) read 13.2% rms, mean -8.6% (Qwen1.5 L-T2-A4
+-31.5%, A5 -26.6%, A7 -20.2%), and the other 207 cells 3.27%. POST-HOC counterfactuals on those 13 cells
+(d6_build/post_gate.out), never a choice: the fixed form with s_naive raised by 11.69 us alone reads 12.7% rms (mean
++10.3%); the scaled form with s_naive +9.55 us reads 1.36%. The code does what D6-24 says; the defect is the rule's
+shared fit. Any fix would be chosen on the seen re-score, so none is made and the NO-GO stands. The new blind's naive
+main cells all take the law branch (2, 7 and 2).
+
+**What the measurement chain established (DESCRIPTIVE mechanism, on seen and synthetic shapes, at the 1710 MHz lock,
+700 W, four boards).**
+- A CTA streams its weight slab at a rate set by the GPU-wide load: about 36 GB/s alone on its SM, 23 GB/s at 128
+  live CTAs on 64x128x64, about 8.6 GB/s once the GPU saturates (X_sat 3612 GB/s on PC's board, 3782 GB/s on
+  16x64x128 on PC2's). Past saturation, Little's law at X_sat prices the latency within 3% at G 528. This
+  load-dependent rate on a 3-per-SM tile is what v5d's worst CAL2 cell missed: Mixtral-8x7B T 128 A 4's w2, 128 CTAs,
+  reads 22.84 GB/s per CTA against the synthetic G 128 rung's 23.03 (PC-R8; Rental PC).
+- The slowest CTA sets a GEMM: the span runs 0% to 7% over the median life at single waves on 64x128x64, and on the
+  4-per-SM tiles it falls 7% to 8% from G 396 to a full wave of 528.
+- A CTA's fixed cost c0 rises with load: 2.40 us (64x128x64) and 2.72 us (16x64x128) at G 8 on PC2's board, 4.70 us
+  at G 128 on PC's board. The join is cross-board; PC2's 64x128x64 long-slab lives at G 8, 32, 128 and 256 sit within
+  1.4% of PC's (the addendum's board check). At short slabs c0 is most of a CTA's life (59% of a 66 KB slab's at G 8).
+- A naive cell with no follower costs what its aligned twin costs (t ratio 0.93 to 1.02 where both read). A launch
+  whose followers re-read an expert already read is shorter, and its leaders and followers run at about the same
+  per-CTA rate.
+- Launches of a few microseconds vary by a few hundred nanoseconds from call to call, so short slabs read NOT READ
+  under three calls and a 3% spread bound.
+- The call kernels (silu_and_mul, moe_sum) follow a constant plus a bytes term, and the align kernel costs 0.53 us per
+  loop iteration past the first (DS).
+
+**What is claimed.** v6d is calibrated on CAL2 (OLMoE-1B-7B and Mixtral-8x7B, in sample, 1.81% rms) and its constants
+are the registered readings. The mechanisms above are DESCRIPTIVE readings of the named pages.
+
+**What is not claimed.**
+- No decode model is certified on any model, seen or unseen.
+- v6d is not tested: its only test would have been the new blind.
+- The re-score is not a result; it is a floor on seen pages.
+- None of PC's, PC2's or DS's readings is shown to transfer to an unseen model, another board, lock or power limit.
+
+**The three reserved models remain untimed at decode.** No decode page of Mixtral-8x22B, Qwen2-57B-A14B or
+Granite-3.0-1B-A400M has been timed (`d6_build/check_unseen.out`: `d4common.no_decode_page` reads NO DECODE PAGE for
+each; the only text hit in every session since 2026-11-04 is the old run branch name in `setup_vm.log`). The new blind
+(addendum 5's pages, units and the owner's bars 3% / 8% / 1.5%) is registered again under v6d and NOT RUN: its plan
+file is never written, and `finalise_decode_d6.py` refuses on NO-GO. It would have cost about $4.24 (72 unit-min, 111
+min wall at $2.29/h). No rental was made for this section.
+
+**Instrument.** `register_decode_d6.py --check` reads `same`: it recomputes the registration, the gate output and the
+absence of a plan file. `d6_build/run.py --check` recomputes every build record (the PC span reading, the PTX scan, the
+PC, PC2, DS and naive checks, the CAL2 alternatives, the reach, the unseen check and the post-gate record). Every
+earlier register script's `--check` reads `same`, and the pinned files are byte-identical.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

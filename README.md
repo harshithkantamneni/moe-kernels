@@ -235,7 +235,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7622 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7644 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
@@ -378,7 +378,14 @@ decode tile it reads X_sat 3782 GB/s and kappa at 8 single-wave rungs, but c0 at
 IDENTIFIED; c0 reads at G 8 only (2.40 us on 64x128x64); v6d's big-single-wave assumption DOES NOT HOLD on both
 4-per-SM tiles (G 528 saturates, kappa falls 7% to 8% from G 396); a naive cell with no follower costs what its
 aligned twin costs within 7%, where both read (10 of 22 GEMMs). 81 of 220 cell GEMMs are NOT READ on the per-call spread, mostly short slabs, so v6d
-cannot be completed from PC2's readings alone (docs/FINDINGS.md, Rental PC2).
+cannot be completed from PC2's readings alone (docs/FINDINGS.md, Rental PC2). The sixth and last decode addendum (2026-11-10) registers v6d, design-D6's per-CTA law
+with PC2's READ values and the empty slots filled on PC, PC2, DS and CAL2 only, frozen before its gate ran. The gate
+reads NO-GO: CAL2 GO at 1.81% rms, but the seen decode blind re-scores at 4.52% pooled against 4.0%, a miss carried by
+13 naive cells that keep v4d''s price under a rho form (fixed) chosen by a CAL2 fit the law-priced cells dominate,
+where every earlier decode CAL fit chose scaled: a defect recorded and not fixed. Under the owner's stopping rule decode
+closes as calibrated, not certified; no decode model is certified, the new blind is registered and NOT RUN, and
+Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M remain untimed at decode (docs/FINDINGS.md, Decode closes after
+v6d).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

@@ -1,0 +1,17 @@
+CANDIDATE (frozen v6d)                   CAL2 GO   rms 0.0181 worst +0.0597 mean -0.0003 n 91 T0 -1.87 sn -2.14 sb -0.72 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+design-D6 v6d (frozen 2026-11-10T05:17Z) CAL2 GO   rms 0.0167 worst -0.0429 mean +0.0029 n 91 T0 -2.85 sn 10.53 sb 0.42 | worst: olmoe-1b-7b/main/L-T32-A27/32 -4.29%; mixtral-8x7b/main/L-T2-A4/2 +4.07%
+D6-18 c0 const 4.70 (v6d)                CAL2 GO   rms 0.0183 worst +0.0597 mean -0.0004 n 91 T0 -1.85 sn -2.15 sb -0.58 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+D6-18 c0 const 2.40                      CAL2 STOP rms 0.0235 worst +0.1057 mean +0.0020 n 91 T0 2.73 sn -3.91 sb -0.53 | worst: olmoe-1b-7b/main/L-T2-A11/2 +10.57%; olmoe-1b-7b/main/L-T2-A13/2 +8.78%
+D6-18 c0 interp in ln G                  CAL2 GO   rms 0.0182 worst +0.0597 mean -0.0003 n 91 T0 -1.86 sn -2.14 sb -0.68 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+D6-18 multi-wave remainder at c0(k)      CAL2 GO   rms 0.0203 worst +0.0604 mean -0.0010 n 91 T0 -1.61 sn -2.35 sb 0.37 | worst: olmoe-1b-7b/main/L-T2-A11/2 +6.04%; olmoe-1b-7b/main/L-T2-A16/2 -5.92%
+D6-20 X_sat 16 DS ratio (v6d)            CAL2 GO   rms 0.0189 worst -0.0577 mean +0.0039 n 91 T0 -3.01 sn -1.35 sb 0.42 | worst: olmoe-1b-7b/main/L-T2-A8/2 -5.77%; olmoe-1b-7b/main/L-T2-A11/2 +5.40%
+D6-20 kappa 16 PC2-R1e as read           CAL2 STOP rms 0.0313 worst -0.0980 mean -0.0026 n 91 T0 -5.72 sn -1.10 sb 3.13 | worst: olmoe-1b-7b/main/L-T2-A8/2 -9.80%; olmoe-1b-7b/main/L-T2-A16/2 -8.17%
+D6-20 L table 16 PC2's own               CAL2 GO   rms 0.0196 worst +0.0609 mean -0.0024 n 91 T0 -1.64 sn -2.29 sb -0.95 | worst: olmoe-1b-7b/main/L-T2-A11/2 +6.09%; olmoe-1b-7b/main/L-T2-A16/2 -5.29%
+D6-21 kappa 4/SM v6d (PC by m, held)     CAL2 GO   rms 0.0180 worst +0.0597 mean -0.0005 n 91 T0 -1.72 sn -2.29 sb -0.87 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+D6-21 kappa PC by fill on every tile     CAL2 GO   rms 0.0178 worst +0.0597 mean -0.0002 n 91 T0 -1.75 sn -2.25 sb -0.84 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+D6-21 kappa fill pooled                  CAL2 GO   rms 0.0247 worst -0.0749 mean -0.0009 n 91 T0 -3.83 sn -1.57 sb -0.74 | worst: olmoe-1b-7b/main/L-T2-A8/2 -7.49%; olmoe-1b-7b/main/L-T2-A16/2 -7.23%
+D6-21 X_sat 4/SM PC2-R3                  CAL2 GO   rms 0.0178 worst +0.0597 mean -0.0000 n 91 T0 -1.90 sn -2.10 sb -0.69 | worst: olmoe-1b-7b/main/L-T2-A11/2 +5.97%; olmoe-1b-7b/main/L-T2-A16/2 -5.40%
+D6-24 naive v4d' (D6-13)                 CAL2 GO   rms 0.0148 worst -0.0457 mean -0.0007 n 91 T0 -1.87 sn 9.55 sb -0.72 | worst: olmoe-1b-7b/main/L-T32-A27/32 -4.57%; olmoe-1b-7b/main/L-T16-A27/16 -3.84%
+D6-24 naive twin on every cell           CAL2 STOP rms 0.0247 worst +0.1122 mean -0.0003 n 91 T0 -1.87 sn -3.43 sb -0.72 | worst: olmoe-1b-7b/main/L-T2-A8/2 +11.22%; olmoe-1b-7b/main/L-T2-A11/2 +10.36%
+D6-24 naive fetchers only                CAL2 STOP rms 0.0253 worst -0.1357 mean -0.0010 n 91 T0 -1.87 sn 1.33 sb -0.72 | worst: olmoe-1b-7b/main/L-T2-A8/2 -13.57%; olmoe-1b-7b/main/L-T2-A11/2 -8.74%
+D6-24 naive all@fetch (R4 literal)       CAL2 STOP rms 0.0242 worst -0.1139 mean -0.0010 n 91 T0 -1.87 sn 1.43 sb -0.72 | worst: olmoe-1b-7b/main/L-T2-A8/2 -11.39%; olmoe-1b-7b/main/L-T1-A8/1 +8.58%

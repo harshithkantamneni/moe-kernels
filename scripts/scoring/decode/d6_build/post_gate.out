@@ -1,0 +1,30 @@
+the SEEN decode blind under v6d at the CAL2 refit (the gate's re-score): the 12 worst cells
+  qwen1.5-moe-a2.7b      L-T2-A4    T   2 meas   38.55 us pred   26.42 us e -31.47%
+  qwen1.5-moe-a2.7b      L-T2-A5    T   2 meas   40.82 us pred   29.95 us e -26.64%
+  qwen1.5-moe-a2.7b      L-T2-A7    T   2 meas   47.78 us pred   38.14 us e -20.19%
+  granite-3.0-3b-a800m   L-T2-A8    T   2 meas   29.62 us pred   34.23 us e +15.58%
+  granite-3.0-3b-a800m   L-T2-A11   T   2 meas   33.68 us pred   37.95 us e +12.65%
+  granite-3.0-3b-a800m   L-T2-A16   T   2 meas   39.85 us pred   44.05 us e +10.55%
+  granite-3.0-3b-a800m   MIN-T16    T  16 meas   32.72 us pred   36.01 us e +10.05%
+  granite-3.0-3b-a800m   U-T2       T   2 meas   37.92 us pred   41.72 us e +10.03%
+  granite-3.0-3b-a800m   L-T16-A8   T  16 meas   32.77 us pred   36.01 us e +9.89%
+  granite-3.0-3b-a800m   L-T2-A13   T   2 meas   36.92 us pred   40.55 us e +9.81%
+  granite-3.0-3b-a800m   L-T8-A8    T   8 meas   31.82 us pred   34.84 us e +9.49%
+  granite-3.0-3b-a800m   MIN-T4     T   4 meas   31.37 us pred   34.26 us e +9.21%
+CAL2 olmoe-1b-7b: naive cells by D6-24 branch: law 3, v4d' 4 (L-T2-A8, L-T2-A11, L-T2-A13, U-T2)
+CAL2 mixtral-8x7b: naive cells by D6-24 branch: law 2, v4d' 0
+SEEN blind phi-3.5-moe: naive cells by D6-24 branch: law 4, v4d' 2 (L-T2-A2, L-T2-A3)
+SEEN blind qwen1.5-moe-a2.7b: naive cells by D6-24 branch: law 5, v4d' 7 (L-T2-A4, L-T2-A5, L-T2-A7, L-T3-A4, L-T3-A7, L-T3-A9, U-T3)
+SEEN blind jetmoe-8b: naive cells by D6-24 branch: law 2, v4d' 0
+SEEN blind deepseek-v2-lite: naive cells by D6-24 branch: law 3, v4d' 4 (L-T2-A6, L-T2-A8, L-T2-A10, U-T2)
+SEEN blind granite-3.0-3b-a800m: naive cells by D6-24 branch: law 2, v4d' 0
+new blind mixtral-8x22b: naive main cells by D6-24 branch: law 2, v4d' 0
+new blind qwen2-57b-a14b: naive main cells by D6-24 branch: law 7, v4d' 0
+new blind granite-3.0-1b-a400m: naive main cells by D6-24 branch: law 2, v4d' 0
+the re-score pooled 0.0452 over 220; its 13 naive cells on the v4d' branch read rms 0.1321 mean -0.0858; the other 207 cells read rms 0.0327 (ARITHMETIC on the gate's rows, POST-HOC, never a choice)
+CAL2's fit, both rho forms (CAL2 only; CAL constants in us; in-sample rms over 91 kept cells and sub-wave rms, the registered selection rule):
+  v6d (D6-24)                fixed  T0 -1.87 s_naive -2.14 s_block -0.72 rms 0.0181 sub-wave 0.0148  (selected)
+  v6d (D6-24)                scaled T0 -1.87 s_naive +3.44 s_block -0.72 rms 0.0340 sub-wave 0.0332
+  v4d' on every naive cell   fixed  T0 -1.87 s_naive -1.83 s_block -0.72 rms 0.0547 sub-wave 0.0788
+  v4d' on every naive cell   scaled T0 -1.87 s_naive +9.55 s_block -0.72 rms 0.0148 sub-wave 0.0144  (selected)
+COUNTERFACTUALS on the 13 v4d'-branch cells (POST-HOC, never a choice): the fixed rho form with s_naive raised by +11.69 us alone: rms 0.1274 mean +0.1028; the scaled rho form with s_naive +9.55 us (v4d' everywhere's CAL2 fit): rms 0.0136 mean -0.0089

@@ -2053,3 +2053,26 @@ k 2 specialisations were regchecked (each tile's w1 compile at top_k 2, its w2 a
 top_k 4, 6 and 8 rest on the reader's fail-closed occupancy leg alone, which read 3 CTAs per SM on all 14 of sn's
 stamped compiles. Read on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
 `scripts/scoring/rescore.py pc2` re-reads the published session to the committed files (docs/FINDINGS.md, Rental PC2).
+
+## 2026-11-10, before any new blind page: the decode stage's sixth and last addendum (model v6d, the gate NO-GO, the new blind NOT RUN)
+
+`2026-11-10-decode-addendum6-gh200` (`scripts/scoring/decode/register_decode_d6.py --write` / `--check`) registers model
+v6d, its gate reading and addendum 5's new blind under it. Every earlier decode registration, v4d, v4d', v5d and every
+earlier decode scorer stay byte-identical; the addendum pins them, PC's and PC2's readings and its build records.
+- **Model v6d** (`scripts/r3_timing_model_v6d.py`, over v5d). Every aligned GEMM, and every naive GEMM of a cell with no
+  non-fetching follower, is priced by design-D6's per-CTA law: life = c0(G) plus the B slab at the latency read off
+  PC's rate curve at the duty load, never under the tile's X_sat share; the wave is kappa(fill) times the life; waves
+  past the first stream at X_sat. Constants are numbers in the model, recomputed by `d6common.law_from` from PC
+  (`pc.read.json` and the new span reading `d6_build/pc_spans.json`), PC2 (`pc2.read.json`) and DS. Choices D6-18 to
+  D6-24 (c0 linear in G between G 8 and G 128; kappa by fill with PC2-R3's rungs on the 4-per-SM tiles; PC's kappa kept
+  on 16x64x128, the one place the brief's "kappa where read" was not followed; the naive rule) were made on PC, PC2, DS
+  and CAL2 only and frozen at 2026-11-10T22:35:03Z (`d6_build/FROZEN.txt`). CALL, ALIGN and SLOPE stay v5d's.
+- **The gate** (`gate_d6.py`, run at 22:36:41Z after the freeze; `finalise_decode_d6.py` and `score_blind_d6.py` refuse
+  unless GO). **It reads NO-GO**: CAL2 GO (1.81% rms, worst +5.97%), the SEEN decode blind re-score 4.52% pooled against
+  4.0%. Output committed as `scripts/scoring/decode/gate_d6.out.txt`. A defect found after the gate (the v4d' naive
+  branch inherits the fixed rho form chosen by a CAL2 fit the law-priced cells dominate, where every earlier decode CAL
+  fit chose scaled; its 13 seen-blind cells read 13.2% rms) is recorded in the registration and
+  `d6_build/post_gate.out`, not fixed.
+- **Closed (owner's stopping rule, 2026-11-10).** Decode closes as calibrated, not certified. The owner accepted the closure, the D6-20 deviation and the D6-24 defect as recorded (2026-11-11). The new blind (addendum
+  5's pages, units, bars and $4.24 rental) is registered and NOT RUN; no plan file is written. Build records:
+  `d6_build/run.py --check`. Tests `tests/test_stage_decode_addendum6.py` (docs/FINDINGS.md, Decode closes after v6d).

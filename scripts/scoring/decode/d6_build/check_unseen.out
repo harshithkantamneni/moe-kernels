@@ -1,0 +1,16 @@
+mixtral-8x22b: no_decode_page -> NO DECODE PAGE 
+qwen2-57b-a14b: no_decode_page -> NO DECODE PAGE 
+granite-3.0-1b-a400m: no_decode_page -> NO DECODE PAGE 
+published sessions dated 2026-11-04 to PC2's: 2026-11-04-nvidia_gh200_480gb-decodeBlind-session, 2026-11-04-nvidia_gh200_480gb-decodeDS-session, 2026-11-05-nvidia_gh200_480gb-tileB3-session, 2026-11-06-nvidia_gh200_480gb-pc-session, 2026-11-10-nvidia_gh200_480gb-pc2-session
+  2026-11-04-nvidia_gh200_480gb-decodeBlind-session: file names naming a reserved model: 0; text files with a hit: 1
+     session/setup_vm.log: ['8x22b']
+  2026-11-04-nvidia_gh200_480gb-decodeDS-session: file names naming a reserved model: 0; text files with a hit: 1
+     session/setup_vm.log: ['8x22b']
+  2026-11-05-nvidia_gh200_480gb-tileB3-session: file names naming a reserved model: 0; text files with a hit: 1
+     session/setup_vm.log: ['8x22b']
+  2026-11-06-nvidia_gh200_480gb-pc-session: file names naming a reserved model: 0; text files with a hit: 1
+     session/setup_vm.log: ['8x22b']
+  2026-11-10-nvidia_gh200_480gb-pc2-session: file names naming a reserved model: 0; text files with a hit: 1
+     session/setup_vm.log: ['8x22b']
+2026-11-06-pc-shapes.json: registered synthetic shapes equal to a reserved model's (E, H, F, k): none
+2026-11-10-pc2-shapes.json: registered synthetic shapes equal to a reserved model's (E, H, F, k): none
