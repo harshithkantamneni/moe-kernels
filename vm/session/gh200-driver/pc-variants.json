@@ -1,0 +1,8 @@
+[
+ {"id": "u5-sd", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-d.json", "spec": "stamps=ends"},
+ {"id": "u6-ss", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-s.json", "spec": "stamps=ends"},
+ {"id": "u7-sn", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-n.json", "spec": "stamps=ends"},
+ {"id": "u8-sw", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-w.json", "spec": "stamps=ends"},
+ {"id": "u9-sd3", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-d3.json", "spec": "stamps=ends"},
+ {"id": "u10-sr", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-10-pc2-pages/pc2-r.json", "spec": "stamps=ends"}
+]

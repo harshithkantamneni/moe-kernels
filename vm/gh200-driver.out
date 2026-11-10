@@ -1,2 +1,8 @@
 2026-11-10T21:05:23Z setup_vm.sh start: commit e7786f4eff48a65d017ac073a2ac10d576dd19a7 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-10T22:18:33Z
 2026-11-10T21:08:00Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 54de68e to run-gh200-pc2-20261110t2103: setup_vm.sh: READY
+2026-11-10T21:08:01Z driver start: commit e7786f4eff48a65d017ac073a2ac10d576dd19a7, steps of the plan scripts/plans/rentalPC2-2026-11.plan, deadline 2026-11-10T22:18:33Z (62 min of work left)
+2026-11-10T21:08:01Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalPC2-2026-11.plan (sha256 4a83311b8c3ab12e7422dea9ae22a7edeb14a87bae3e7bc33992e29be201ec0e), 10 units
+2026-11-10T21:08:01Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/10 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 62 min left)
+2026-11-10T21:08:06Z prelude END: exit 0 after 0 min [unit 1/10 - lock-mhz=1410 power-limit-w=700]
+2026-11-10T21:08:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
