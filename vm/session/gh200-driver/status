@@ -73,3 +73,4 @@
 2026-11-10T21:13:23Z stamps: u10-sr exit 0 (/home/ubuntu/moe/results/2026-11-10-nvidia_gh200_480gb-instr-pc-sr, probe=pc)
 2026-11-10T21:13:23Z stamps END: exit 0 after 0 min [unit 10/10 - sr probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-r.json lock-mhz=1710]
 2026-11-10T21:13:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-10T21:13:35Z driver end: exit 0
