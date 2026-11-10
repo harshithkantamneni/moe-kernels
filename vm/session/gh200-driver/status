@@ -20,3 +20,12 @@
 2026-11-10T21:08:20Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-11-10-nvidia_gh200_480gb-tile-census-mixtral-8x7b-pc2/tile-census.json)
 2026-11-10T21:08:20Z tilecensus END: exit 0 after 0 min [unit 2/10 - pc2 tiles=16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3 models=mixtral-8x7b,phi-3.5-moe]
 2026-11-10T21:08:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-10T21:08:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/10 - rcp probe=pc] (estimate 3 min, cap 20 min, 62 min left)
+2026-11-10T21:08:54Z regcheck: REGCHECK_u5_sd=PASS
+2026-11-10T21:08:54Z regcheck: REGCHECK_u6_ss=PASS
+2026-11-10T21:08:54Z regcheck: REGCHECK_u7_sn=PASS
+2026-11-10T21:08:54Z regcheck: REGCHECK_u8_sw=PASS
+2026-11-10T21:08:54Z regcheck: REGCHECK_u9_sd3=PASS
+2026-11-10T21:08:54Z regcheck: REGCHECK_u10_sr=PASS
+2026-11-10T21:08:54Z regcheck END: exit 0 after 1 min [unit 3/10 - rcp probe=pc]
+2026-11-10T21:08:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
