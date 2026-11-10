@@ -34,3 +34,7 @@
 2026-11-10T21:12:10Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-w.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710] (estimate 4 min, cap 15 min, 58 min left)
 2026-11-10T21:12:28Z stamps END: exit 0 after 0 min [unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710]
 2026-11-10T21:12:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4cdeaaf to run-gh200-pc2-20261110t2103: stamps (unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:41Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-d3.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710] (estimate 2 min, cap 8 min, 57 min left)
+2026-11-10T21:12:56Z stamps END: exit 0 after 0 min [unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710]
+2026-11-10T21:12:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
