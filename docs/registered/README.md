@@ -1998,3 +1998,37 @@ transfer t against A-G128 is -0.8%). **PC-R10** 128g1 miss fraction 0.69 to 0.76
 64g1 0.22 to 0.52 over 4. The replicate reads within 1.11%. Read on the fetched tree and on the published copy, the two
 outputs differ only in the tree's path; `scripts/scoring/rescore.py pc` re-reads the published session to the
 committed files (docs/FINDINGS.md, Rental PC).
+
+## 2026-11-10, before any page: rental PC2, what v6d cannot yet price (a measurement registration)
+
+`2026-11-10-pc2-gh200` (`scripts/scoring/pc2/register_pc2.py --write` / `--check`; built 2026-11-10, not yet rented)
+registers rental PC2 as a MEASUREMENT: it certifies nothing, registers no model form, no constant, no bar and no gate,
+and moves no registered verdict. Every reading is DESCRIPTIVE. Owner, 2026-11-10: run PC2 before building v6d's
+addendum 6; v6d stays as frozen, with the duty factor; Granite-3.0-1B stays in the blind. PC2 measures the four things
+design-D6 section 7 says v6d cannot price, on SEEN or synthetic shapes only.
+- **The instrument.** The unchanged instrumented copy (stamps=ends), driven by `scripts/instr_probe_pc2.py` (PC's pinned
+  probe plus lines marked PC2: its rules module is `scripts/scoring/pc2/pc2common.py`), started by
+  `scripts/gh200_pc2_session.sh` (PC's pinned driver plus lines marked PC2) through `scripts/vm_run_pc2.sh` (vm_run.sh,
+  pinned by PC, plus lines marked PC2). Pages `docs/registered/2026-11-10-pc2-pages/`: pc2-d (29 cells, the 16x64x128
+  w4 s4 decode tile: G 4 to 1024, F ladders at G 8 and 128, short slabs under load), pc2-s (20, short slabs of 66 to
+  459 KB on 64x128x64 at G 8, 32, 128, 256 with a 3.67 MB anchor), pc2-n (26, naive-path cells on six SEEN models and
+  one synthetic k 8 shape, each with an aligned twin or a naive pair), pc2-w (29, single waves of 165/198 to 528 CTAs on
+  32x64x128 and 32x128x64, one rung past a wave and two waves), pc2-d3 (3, the decode tile at s3), pc2-r (3, replicate).
+- **The decode tile.** PC's own regcheck page reads the stamped copy at the plain kernel's occupancy at s4 (3 = 3) and s3
+  (5 = 5); only s2's w2 changed it (8 against 7), which refused PC's whole block D. PC2 stamps s4 and s3 in variants of
+  their own, leaves s2 out, and refuses any stamped compile whose CTAs per SM are not its tile's registered occupancy.
+  Every cell's plain-kernel event median (PLAIN, from the perturb unit) is printed beside, its limit stated.
+- **The readings.** PC2-R0 (validity, PC's ROW SANITY unchanged, the occupancy leg) to PC2-R6, SPAN (the GEMM's own
+  time and kappa, now registered) and PLAIN (`read_pc2.py`, over `read_pc.py`'s pinned functions); and how each of
+  v6d's open terms will be read off them. The naive-path term will be chosen after PC2's pages are read, with the seen
+  decode blind in view, and disclosed as such.
+- **Regcheck scope.** One specialisation per tile per variant is regchecked (the probe's rule, PC's); the reader's
+  occupancy leg checks every stamped compile and fails closed (the whole unit NOT READ).
+- **Seen and reserved.** Mixtral-8x22B, Qwen2-57B-A14B (and its tp8 shard) and Granite-3.0-1B-A400M are never loaded,
+  by name, by shape or by GEMM dimensions (`pc2common.gemm_guard`: no PC2 GEMM, w1 or w2, has either reserved GEMM's
+  (N, K)). Not built: the optional E 32 block-scan align page (unreachable on SEEN models within the pinned decode
+  page's T <= 128).
+- **Plan.** `scripts/plans/rentalPC2-2026-11.plan` (sha256 4a83311b...), 10 units, 35 min estimated (27 nodrop), about
+  60 min wall ($2.29 at $2.29/h); deadline launch + 75 min ($2.86), guardian hard cap launch + 90 min ($3.44 at most);
+  cut order rep, d3, w. Tests `tests/test_instr_probe_pc2.py`, `tests/test_pc2_driver.py`, `tests/test_read_pc2.py`,
+  `tests/test_pc2_registration.py`.
