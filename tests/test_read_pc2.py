@@ -207,6 +207,36 @@ def test_a_g528_rung_below_the_plateau_reads_below_and_the_short_siblings_stay_o
     assert d["PC2-R3"]["32x128x64w4s3"]["v6d term 3"]["label"] == "HOLDS"
 
 
+def test_r1d_x_sat_takes_no_short_slab_w2_rung_past_one_wave(tmp_path, monkeypatch):
+    """R1d's long-slab filter (w2 K >= 14336, PC's F 14336) is what keeps D-G512-F1024 (w2 K 1024) and D-G1024-F3584
+    (w2 K 3584) out of X_sat on 16x64x128: both are READ and past one wave of 396, so G > wave alone would admit them.
+    With the filter lowered to 0 they enter the pool, so this test fails if the filter is dropped."""
+    def pool(d):
+        return [lab for lab, _x in d["PC2-R1"]["R1d X_sat"]["pool"]]
+    d = _sd(tmp_path / "filtered")
+    rows = {r["cell"]: r for r in d["PC2-R1"]["R1a rate curve"]}
+    for short in ("D-G512-F1024", "D-G1024-F3584"):
+        assert rows[short]["status"] == "READ" and rows[short]["G"] > P.wave(P.D16), rows[short]
+    x = d["PC2-R1"]["R1d X_sat"]
+    assert x["status"] == "READ" and x["composition"]["w2 long-slab rungs past one wave"] == 2
+    w2 = [lab for lab in pool(d) if " w2 " in lab]
+    assert w2 == ["D-G512 w2 G 512 K 14336", "D-G1024 w2 G 1024 K 14336"], w2
+    monkeypatch.setattr(P, "X_SAT_W2_MIN_K", 0)
+    unfiltered = pool(_sd(tmp_path / "unfiltered"))
+    assert "D-G512-F1024 w2 G 512 K 1024" in unfiltered and "D-G1024-F3584 w2 G 1024 K 3584" in unfiltered
+
+
+def test_the_committed_pc2_r1d_pool_holds_no_short_slab_w2_rung():
+    """On PC2's own pages the filter binds: D-G512-F1024 and D-G1024-F3584 are READ w2 rungs past one wave, and R1d's
+    pool holds only the two long-slab w2 rungs (D-G512, D-G1024) beside its w1 launches."""
+    d = json.loads((REPO / "scripts" / "scoring" / "pc2" / "pc2.read.json").read_text())
+    rows = {r["cell"]: r for r in d["PC2-R1"]["R1a rate curve"]}
+    for short in ("D-G512-F1024", "D-G1024-F3584"):
+        assert rows[short]["status"] == "READ" and rows[short]["G"] > P.wave(P.D16), rows[short]
+    w2 = [lab for lab, _x in d["PC2-R1"]["R1d X_sat"]["pool"] if " w2 " in lab]
+    assert w2 == ["D-G512 w2 G 512 K 14336", "D-G1024 w2 G 1024 K 14336"], w2
+
+
 def test_term3_reads_its_registered_label():
     sat, held = {"status": "SATURATED"}, {"status": "HELD", "ratio": 1.01}
     assert R.term3(sat, held)["label"] == "HOLDS"

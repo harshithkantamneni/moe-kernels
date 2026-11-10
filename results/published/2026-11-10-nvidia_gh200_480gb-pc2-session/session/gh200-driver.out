@@ -1,0 +1,46 @@
+2026-11-10T21:05:23Z setup_vm.sh start: commit e7786f4eff48a65d017ac073a2ac10d576dd19a7 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-10T22:18:33Z
+2026-11-10T21:08:00Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 54de68e to run-gh200-pc2-20261110t2103: setup_vm.sh: READY
+2026-11-10T21:08:01Z driver start: commit e7786f4eff48a65d017ac073a2ac10d576dd19a7, steps of the plan scripts/plans/rentalPC2-2026-11.plan, deadline 2026-11-10T22:18:33Z (62 min of work left)
+2026-11-10T21:08:01Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalPC2-2026-11.plan (sha256 4a83311b8c3ab12e7422dea9ae22a7edeb14a87bae3e7bc33992e29be201ec0e), 10 units
+2026-11-10T21:08:01Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/10 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 62 min left)
+2026-11-10T21:08:06Z prelude END: exit 0 after 0 min [unit 1/10 - lock-mhz=1410 power-limit-w=700]
+2026-11-10T21:08:06Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 716925e to run-gh200-pc2-20261110t2103: prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-10T21:08:07Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 16x64x128w4s4 16x64x128w4s3 64x128x64w4s3 32x64x128w4s3 32x128x64w4s3 on mixtral-8x7b phi-3.5-moe; refused on an MMA path mismatch [unit 2/10 - pc2 tiles=16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3 models=mixtral-8x7b,phi-3.5-moe] (estimate 3 min, cap 15 min, 62 min left)
+2026-11-10T21:08:20Z tilecensus END: exit 0 after 0 min [unit 2/10 - pc2 tiles=16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3 models=mixtral-8x7b,phi-3.5-moe]
+2026-11-10T21:08:21Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed d88ea95 to run-gh200-pc2-20261110t2103: tilecensus (unit 2/10 - pc2 tiles=16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-10T21:08:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/10 - rcp probe=pc] (estimate 3 min, cap 20 min, 62 min left)
+2026-11-10T21:08:54Z regcheck END: exit 0 after 1 min [unit 3/10 - rcp probe=pc]
+2026-11-10T21:08:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 399e0f0 to run-gh200-pc2-20261110t2103: regcheck (unit 3/10 - rcp probe=pc): exit 0 (1 min)
+2026-11-10T21:08:58Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710] (estimate 8 min, cap 25 min, 61 min left)
+2026-11-10T21:10:39Z perturb END: exit 1 after 2 min [unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710]
+2026-11-10T21:10:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 9ebc711 to run-gh200-pc2-20261110t2103: perturb (unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710): exit 1 (2 min)
+2026-11-10T21:10:46Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-d.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710] (estimate 4 min, cap 15 min, 59 min left)
+2026-11-10T21:11:03Z stamps END: exit 0 after 0 min [unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710]
+2026-11-10T21:11:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 81d9dd2 to run-gh200-pc2-20261110t2103: stamps (unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:11:12Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-s.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710] (estimate 3 min, cap 12 min, 59 min left)
+2026-11-10T21:11:29Z stamps END: exit 0 after 0 min [unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710]
+2026-11-10T21:11:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a6b0504 to run-gh200-pc2-20261110t2103: stamps (unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:11:38Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-n.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710] (estimate 4 min, cap 15 min, 58 min left)
+2026-11-10T21:12:01Z stamps END: exit 0 after 0 min [unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710]
+2026-11-10T21:12:02Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 3b95cde to run-gh200-pc2-20261110t2103: stamps (unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:10Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-w.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710] (estimate 4 min, cap 15 min, 58 min left)
+2026-11-10T21:12:28Z stamps END: exit 0 after 0 min [unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710]
+2026-11-10T21:12:29Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 4cdeaaf to run-gh200-pc2-20261110t2103: stamps (unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:41Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-d3.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710] (estimate 2 min, cap 8 min, 57 min left)
+2026-11-10T21:12:56Z stamps END: exit 0 after 0 min [unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710]
+2026-11-10T21:12:57Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 00ee1cb to run-gh200-pc2-20261110t2103: stamps (unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:13:08Z stamps START: stamps (probe=pc) at the 1710 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-10-pc2-pages/pc2-r.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_pc2.py) [unit 10/10 - sr probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-r.json lock-mhz=1710] (estimate 2 min, cap 8 min, 57 min left)
+2026-11-10T21:13:23Z stamps END: exit 0 after 0 min [unit 10/10 - sr probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-r.json lock-mhz=1710]
+2026-11-10T21:13:24Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 940821f to run-gh200-pc2-20261110t2103: stamps (unit 10/10 - sr probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-r.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:13:35Z driver end: exit 0

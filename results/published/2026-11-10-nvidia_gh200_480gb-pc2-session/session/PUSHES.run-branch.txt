@@ -1,0 +1,13 @@
+2026-11-10T21:05:05Z the branch's first commit: the VM can push
+2026-11-10T21:08:00Z setup_vm.sh: READY
+2026-11-10T21:08:06Z prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-10T21:08:21Z tilecensus (unit 2/10 - pc2 tiles=16x64x128w4s4,16x64x128w4s3,64x128x64w4s3,32x64x128w4s3,32x128x64w4s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-10T21:08:56Z regcheck (unit 3/10 - rcp probe=pc): exit 0 (1 min)
+2026-11-10T21:10:43Z perturb (unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710): exit 1 (2 min)
+2026-11-10T21:11:09Z stamps (unit 5/10 - sd probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:11:35Z stamps (unit 6/10 - ss probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-s.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:08Z stamps (unit 7/10 - sn probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-n.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:12:37Z stamps (unit 8/10 - sw probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-w.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:13:05Z stamps (unit 9/10 - sd3 probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-d3.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:13:33Z stamps (unit 10/10 - sr probe=pc page=docs/registered/2026-11-10-pc2-pages/pc2-r.json lock-mhz=1710): exit 0 (0 min)
+2026-11-10T21:13:44Z the session ended: driver exit 0

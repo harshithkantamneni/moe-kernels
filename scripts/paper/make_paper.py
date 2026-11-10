@@ -640,7 +640,9 @@ def T4(out: Path) -> None:
     (session/commit.txt or the pages' git_sha), models (the pages' `design.model` /
     `plan.model`), page count. A session with no counter page (the decode blind
     rental's) takes its board from session/PREFLIGHT.json and its models from its timed
-    decode pages' `report.json` `model`; its page count stays 0."""
+    decode pages' `report.json` `model`; its page count stays 0. A session with neither (rental PC2's, stamp pages
+    only) takes its board from session/PREFLIGHT.json and its models from its stamp pages' cells (`stamps.json`
+    `cells[*].shape`, the registered synthetic shapes `pcs-` and `pcs2-` left out); its page count stays 0."""
     import dram_counter_route as DCR
     rows = []
     for s in sorted(PUB.glob("*-nvidia_gh200_480gb*-session")):
@@ -659,14 +661,21 @@ def T4(out: Path) -> None:
             if d.get("git_sha"):
                 shas.add(str(d["git_sha"])[:7])
         pf = s / "session/PREFLIGHT.json"
-        if not boards and pf.exists() and (pages or list(s.glob("results/*/private_weight_reference/*-decode-*/report.json"))):
+        decode = list(s.glob("results/*/private_weight_reference/*-decode-*/report.json"))
+        stamps = [] if pages or decode else sorted(s.glob("results/*/stamps.json"))
+        if not boards and pf.exists() and (pages or decode or stamps):
             uuid = (json.loads(pf.read_text()).get("card") or {}).get("uuid")
             if uuid:
                 boards.add(DCR.board(uuid))
         if not pages:
-            for p in s.glob("results/*/private_weight_reference/*-decode-*/report.json"):
+            for p in decode:
                 m = json.loads(p.read_text()).get("model")
                 if m:
+                    models.add(m)
+        for p in stamps:
+            for c in (json.loads(p.read_text()).get("cells") or {}).values():
+                m = str(c.get("shape") or "")
+                if m and not m.startswith(("pcs-", "pcs2-")):
                     models.add(m)
         ct = s / "session/commit.txt"
         commit = ct.read_text().split()[0][:7] if ct.exists() and ct.read_text().strip() \

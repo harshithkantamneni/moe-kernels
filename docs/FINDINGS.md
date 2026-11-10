@@ -3714,6 +3714,196 @@ differ only in the tree's path; the committed files are the published copy's, wi
 `scripts/scoring/rescore.py pc` re-reads the published session to the committed files. Every register script's
 `--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
 
+## Rental PC2 (2026-11-10): what v6d cannot yet price, measured; term 3 DOES NOT HOLD, the 16x64x128 c0 and L table NOT IDENTIFIED
+
+**Measured, not tested.** PC2 is a measurement rental. It certifies nothing, registers no model form, no constant, no
+bar and no gate, and moves no registered verdict. Every number below is DESCRIPTIVE, read by the registered reader
+(`scripts/scoring/pc2/read_pc2.py`, over `read_pc.py`'s pinned functions) from per-CTA start and end stamps of vLLM
+v0.27.1's kernel through the unchanged instrumented copy, all at the 1710 MHz lock. Numbers marked POST-HOC were
+computed outside that reader, on the same pages, after they were read; they explain a reading and change none. r, G,
+Q_B and X are PC's (a CTA's slab rate, the live CTAs, the B bytes a CTA keeps in flight, the GPU-wide rate); t is the
+GEMM's own time (first start to last end over 1 + o) and kappa that span over the median CTA life (single-wave
+launches only); PLAIN is the plain kernel's event-time median from the perturb unit.
+
+**What was measured.** Four things design-D6 section 7 says v6d cannot price:
+
+- **The 16x64x128 decode tile** at w4 s4 (unit sd, 29 cells; s3 in unit sd3, 3 cells). PC's block D was refused at s2;
+  here every stamped compile holds the plain kernel's occupancy (s4 3, s3 5 CTAs per SM) and both units read.
+- **Short slabs of 66 to 459 KB** on 64x128x64 at G 8, 32, 128 and 256 with a 3.67 MB anchor (unit ss, 20 cells), and
+  F ladders at G 8 and 128 on 16x64x128.
+- **Single waves of 165 to 528 CTAs** on the two 4-per-SM tiles, 32x64x128 and 32x128x64, with rungs past one wave
+  (unit sw, 29 cells).
+- **The naive path** (unit sn, 26 cells): naive T 1 and T 2 cells of Mixtral-8x7B, JetMoE-8B, Phi-3.5-MoE,
+  Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B, deepseek-v2-lite and a k 8 synthetic shape, each with an aligned twin (same
+  active experts and live CTAs) or a naive pair (same live CTAs, no follower).
+
+**The decode tile 16x64x128 s4 (PC2-R1).** n_if reads 3 off the stamped PTX, so Q_B is 48 KB, as v6d holds. The rate
+curve at the 1.84 MB slab (K 14336):
+
+| G | 8 | 16 | 32 | 64 | 128 | 192 | 256 | 384 | 512 | 1024 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| r (GB/s per CTA) | 49.3 | 48.3 | 44.9 | 38.6 | 27.4 | 19.2 | 15.7 | 9.9 | 8.9 | 9.0 |
+| t (us) | 37.3 | 38.3 | 41.9 | 49.3 | 71.7 | 104.7 | 141.5 | 193.8 | 280.7 | 512.3 |
+| kappa | 1.003 | 1.008 | 1.027 | 1.033 | 1.075 | 1.079 | 1.196 | 1.043 | past a wave | past a wave |
+
+D-G4 is NOT READ (overhead worst pair -47.8%) and D-G320 NOT READ (per-call spread 3.55%). X_sat on this tile reads
+3782 GB/s (12 members: 10 w1 launches, the two long-slab w2 rungs past one wave), against v6d's frozen 3717.9 (PC's
+64x128x64 level times DS's tile ratio). The G 8 F ladder reads c0 2.72 us and r_inf 53.2 GB/s (5 of 6 rungs, standard
+error 0.4%). The G 128 F ladder is NOT IDENTIFIED: its four short rungs (66 to 459 KB) are NOT READ on the per-call
+spread, leaving 2 of the 4 rungs it needs, so the L table (built on c0 at G 128) is NOT IDENTIFIED on every row.
+Mixtral-8x7B T16 A2 reads -0.4% against D-G128 (same tile, G and F; per-expert spread 0.4%). The s3 factorial (unit
+sd3, CLEAN) gives beta_Q from s3 to s4 of 0.79 at G 16, 0.27 at G 128 and -0.01 at G 384.
+
+**Short slabs (PC2-R2).** On 64x128x64 the G 8 ladder over F 256 to 14336 reads c0 2.40 us and r_inf 36.1 GB/s (4
+rungs, standard error 0.2%). A 66 KB slab's life is 4.43 us, 2.62 us of it fixed (59%); a 262 KB slab's 9.54 us, 2.28
+fixed (24%). Every other ladder is NOT IDENTIFIED: G 32 and G 256 read 3 of the 4 rungs they need, G 128 reads 1, and
+the short-rung-only ladders (R2b) read 3, 2, 0 and 2 at G 8, 32, 128 and 256. PC's c0 of 4.70 us at G 128 (board
+c9f689) is printed beside, cross-board, never pooled. kappa at short slabs, where read, sits at or above its same-G
+3.67 MB anchor on this board: at G 8, 1.010 to 1.051 against 1.005; at G 32, 1.055 and 1.060 against 1.015; at G
+256, 1.072 and 1.190 against 1.036. On 16x64x128 the G 8 F rungs read 1.004 to 1.032, D-G256-F1024 1.217 and
+D-G384-F1024 1.080.
+
+**Big single waves on the 4-per-SM tiles (PC2-R3).**
+
+| tile | X_sat (GB/s) | X(528) / X_sat | kappa G 396 | kappa G 528 | ratio | term 3 |
+|---|---:|---:|---:|---:|---:|---|
+| 32x64x128 s3 | 3726 (7 members) | 1.026 SATURATED | 1.100 | 1.026 | 0.932 MOVED | DOES NOT HOLD |
+| 32x128x64 s3 | 3650 (8 members) | 1.022 SATURATED | 1.105 | 1.019 | 0.923 MOVED | DOES NOT HOLD |
+
+At G 528 the rate is 7.05 and 6.78 GB/s per CTA, L_gpu 4.39 and 4.46 us, every launch on 132 SMs at 4 per SM. Little's
+law at X_sat holds at G 528 (within 3%), but kappa does not stay at its G 396 value: it falls 7% to 8% as the wave
+fills. v6d's assumption (kappa held past G 384) therefore DOES NOT HOLD under the registered label, in the direction of
+a shorter tail. kappa(528) reads 1.026 and 1.019, within 1.3% of v6d's frozen 1.032; what moved is the "held from G
+396" assumption, since kappa(396) reads 1.100 and 1.105. v6d's frozen X_sat on these tiles is 3703.8 and 3694.4 GB/s.
+
+**The naive path (PC2-R4).** A naive cell with no follower costs what its aligned twin costs: where both t read (10 of
+22 GEMMs), t naive over twin is 0.93 to 1.02 (Mixtral 0.999 and 1.005, Phi-3.5 T1 1.010 and 0.932, Phi-3.5 T2 A4 1.004
+and 0.977, JetMoE w2 0.994, Granite-3B w2 1.019, Qwen1.5 w1 0.980, deepseek w1 0.941), and the median CTA life 0.97 to
+1.01. A naive cell with followers against its naive pair reads t 0.96 (k 8 w1) and 0.98 (Phi-3.5 w1); the other 6 pair
+GEMMs are NOT READ. PLAIN, present on all 52 cell GEMMs, reads the follower pairs at 0.62 (Phi-3.5 w2), 0.76 (Qwen1.5
+w2), 0.78 (deepseek w2) and 0.87 (k 8 w2): a launch whose followers re-read an expert already read is shorter, and its
+leaders and followers run at about the same per-CTA rate (Qwen1.5 T2 A4 w2 17.9 and 17.9 GB/s; k 8 T2 A8 w2 11.6 and
+12.6). The seen decode blind's naive cell counts are printed beside (deepseek-v2-lite 7, Granite-3B 2, JetMoE 2,
+Phi-3.5 6, Qwen1.5 12).
+
+**The other readings.** PC2-R5, the replicate: R-D-G8 r -1.3% and t +1.8%, R-D-G128 r 0.0% and t +1.3%,
+R-S-G128-F512 NOT READ. PC2-R6: the clock at kernel start reads per-unit medians 0.98 to 1.03, 9 launches under 0.97
+(all sw); at G 128 the aligned launches sit on 120 SMs at up to 2 per SM, as on PC's board.
+
+**What is NOT READ, and why.** 138 of 220 cell GEMMs read. 81 are NOT READ on the per-call spread rule (the three calls'
+per-CTA medians must agree within 3%, 5% at G <= 8) and 1 on C3's overhead bound alone (D-G4 w2); D-G4 w1 fails both
+and is counted under the spread. NOT READ cells give no t
+and no kappa either, since SPAN reads only where the cell GEMM is READ. By unit:
+
+| unit | w2, slab over 459 KB | w2, slab 459 KB or less | w1 |
+|---|---:|---:|---:|
+| sd (16x64x128 s4) | 13 of 15 (1 spread, 1 overhead) | 7 of 14 | 16 of 29 |
+| sd3 (16x64x128 s3) | 3 of 3 | none | 2 of 3 |
+| ss (64x128x64 short) | 4 of 4 | 7 of 16 | 11 of 20 |
+| sn (naive) | 8 of 9 | 6 of 17 | 18 of 26 |
+| sw (4-per-SM tiles) | 12 of 13 | 4 of 16 | 23 of 29 |
+| sr (replicate) | 2 of 2 | 0 of 1 | 2 of 3 |
+| all | 42 of 46 | 24 of 64 | 72 of 110 |
+
+The short slabs carry the loss: 40 of the 64 w2 cells with a slab of 459 KB or less are NOT READ on the spread,
+against 3 of the 46 with a longer slab. The w1 launches, whose slabs are K = H, 16 KB to 1.08 MB, lose 38 of 110. It is real launch-to-launch variability, not an artefact of the stamps or the estimator (POST-HOC, on the same
+pages):
+
+- Binned by median CTA life, the cells NOT READ on the spread are 13 of 21 under 6 us, 14 of 20 at 6 to 10 us, 26 of 44
+  at 10 to 20 us, 26 of 62 at 20 to 50 us and 2 of 73 over 50 us. The median per-call spread falls with the life, from
+  5.6% to 0.8%.
+- The whole GEMM's span moves with the median rate: in 63 of the 81 cells the span's own per-call spread is over 3% too.
+  The per-CTA clock moves 0.4% to 0.7% (median per life bin), so the clock is not the cause.
+- The plain kernel moves the same way, with no stamp in it: its 8 burst medians of 10 calls each spread (binned by the
+  plain event time) 4.3% (median) under 10 us, 2.4% at 10 to 20 us, 2.1% at 20 to 50 us and 0.7% over 50 us.
+- The slow call is not a warm-up: across the 81 cells the slowest call is call 0 in 13, call 1 in 40 and call 2 in 28.
+
+A launch of a few microseconds varies by a few hundred nanoseconds from call to call, and three calls under a 3% bound
+(PC's rule, set on PC's long-slab pages) cannot read it. The registered rule stands; reading short slabs under it
+would take more calls per cell.
+
+**v6d's open terms, as registered** (the registration's "v6d terms"; a slot whose reading is not READ stays as v6d froze
+it):
+
+| term | slot | PC2 reading | status |
+|---|---|---|---|
+| 1 | Q_B on 16x64x128 | R1g: n_if 3, 48 KB | READ (v6d's value) |
+| 1 | X_sat on 16x64x128 | R1d: 3782 GB/s | READ (v6d 3717.9) |
+| 1 | kappa on 16x64x128 | R1e per rung: 1.003 to 1.196 | READ on 8 of 10 single-wave rungs (G 4, G 320 NOT READ) |
+| 1 | c0 on 16x64x128 | R1b at G 128 | NOT IDENTIFIED (2 of 4 rungs); G 8 reads 2.72 us beside |
+| 1 | L table on 16x64x128 | R1c | NOT IDENTIFIED (c0 at G 128 unread) |
+| 2 | c0 at low load, c0(G) | R2a, R1b | READ at G 8 only (2.40 us on 64x128x64, 2.72 us on 16x64x128); NOT IDENTIFIED at G 32, 128, 256 and on every short-rung-only ladder |
+| 2 | kappa at short slabs | R2c | READ on 7 of 16 short cells on 64x128x64 and 7 of 14 single-wave F rungs on 16x64x128; the rest NOT READ |
+| 3 | big single wave | R3, term 3 label | DOES NOT HOLD on both tiles (G 528 SATURATED, kappa MOVED) |
+| 4 | naive path | R4 | no v6d slot; twin t READ on 10 of 22 GEMMs, pair t on 2 of 8, PLAIN on all |
+
+**v6d cannot be completed from the registered readings alone.** What PC2 fills: Q_B on 16x64x128 (unchanged), X_sat on
+16x64x128 and kappa at 8 of its single-wave rungs. What stays empty: the 16x64x128 c0 and L table (they stay as v6d
+froze them, PC's 64x128x64 values); c0's load dependence (one G per tile reads, and a load-dependent c0 would be a form
+change, the owner's); kappa at short slabs across loads (about half the cells read). Term 3 says v6d's held kappa does
+not hold at G 528 but registers no value to replace it, so using R3's kappa would be a choice informed by PC2's pages,
+disclosed as such. The naive-path term has no slot: any term addendum 6 takes is chosen with the seen decode blind in
+view and disclosed, as registered.
+
+**Reader defect: none in any value; one in the text file.** A note said R3p's PLAIN times were all None. They are not:
+`pc2.read.json` holds all 58 of R3p's plain-kernel medians, each equal to the perturb unit's `plain_ms` for its
+(cell, GEMM) times 1000, and no `plain_us` anywhere in the reading is null. The cause is the text file:
+`read_pc2.txt` (`scripts/scoring/pc2/read_pc2.py:857-859`, pinned) caps each reading's line at 20,000 characters, and
+PC2-R3's JSON is 27,005. Its keys sort the two tiles first, so the cap falls inside the R3p key and every R3p value is
+cut ("TRUNCATED: 7005 more characters"); PC2-R1, R2 and R4 are cut the same way (8,088, 7,404 and 1,362 characters).
+Consequence: `pc2.read.txt` is not a complete record of the reading; `pc2.read.json` is, and every number here is
+quoted from it. The data are in the tree and nothing was recomputed. The reader is pinned and stays unchanged.
+
+**Two review residuals.**
+
+- **R1d's long-slab filter now has a test.** R1d takes a w2 rung into X_sat only when its K is at least 14336
+  (`read_pc2.x_sat`); on 16x64x128, D-G512-F1024 and D-G1024-F3584 are READ w2 rungs past one wave, so the K filter
+  alone keeps them out. `tests/test_read_pc2.py::test_r1d_x_sat_takes_no_short_slab_w2_rung_past_one_wave` plants them
+  READ past one wave, asserts the pool holds only the two long-slab w2 rungs, and shows they enter when the filter is
+  lowered to 0; `test_the_committed_pc2_r1d_pool_holds_no_short_slab_w2_rung` holds the committed reading to the same
+  pool.
+- **The registration's regcheck-scope note over-claims.** It says the aligned twins' specialisation is regchecked in
+  pc2-d's variant. Only the k 2 specialisations were regchecked: each tile's w1 compile at top_k 2 and its w2 compile
+  at top_k 1 (`regcheck.json`, 16 rows over six variants). sn's stamped compiles at top_k 4, 6 and 8 (Qwen1.5,
+  deepseek-v2-lite, Granite-3B and the k 8 synthetic, naive and aligned; 8 of sn's 14 compiles) were never regchecked.
+  They are held by the reader's fail-closed occupancy leg alone, which read 3 CTAs per SM on all 14. The registration is
+  frozen and stays as written; this is the correction of record.
+
+**What it does not show.**
+
+- **One board, one lock.** Every number is from board `588570` at 700 W and the 1710 MHz lock. Nothing here speaks for
+  another board, lock, power limit or card; X_sat and the rates are this board's, and PC's c9f689 numbers are not
+  pooled with them.
+- **Synthetic and seen shapes only.** The decode tile, the short slabs and the big waves are synthetic shapes and
+  Mixtral-8x7B; the naive cells are six SEEN models and one synthetic shape. Granite-3.0-1B's regime is reached by
+  shape class, never by its GEMMs.
+- **PERTURBED pages.** sd, ss, sn, sw and sr ran PERTURBED (timing gate worst 7.18%, 6.76%, 4.20%, 5.67%, 6.78%; hard
+  legs PASS) and are read under C3's per-cell rule, overhead-corrected. Only sd3 is CLEAN.
+- **PLAIN has limits.** An event pair times the whole launch with its fixed cost; it has no per-CTA life, no c0 split and
+  no kappa, and fills no v6d slot alone.
+- **No model.** No form is chosen or tested here, and no v6d term is refitted. Term 3's label and the twin ratios
+  describe this board's pages; they transfer to no unseen model without a registered model and a blind test.
+
+**Seen and unseen.** Mixtral-8x22B, Qwen2-57B-A14B (and its tp8 shard) and Granite-3.0-1B-A400M were not loaded.
+Checked on the fetched tree: the only text hit for any of their names is the old run branch name
+`run-gh200-8x22b-2026-09-28`, twice in `setup_vm.log`, from the clone's fetch. The shapes the stamp pages name are the registered synthetic shapes (`pcs-`,
+`pcs2-`), Mixtral-8x7B, JetMoE-8B, Phi-3.5-MoE, Granite-3.0-3B-A800M, Qwen1.5-MoE-A2.7B and deepseek-v2-lite, and none
+of the 57 distinct (N, K) launched equals either GEMM of a reserved model (`pc2common.reserved_gemms`). The three stay
+unseen for the decode blind.
+
+**What ran.** One Lambda GH200 480GB (instance ce7894ed, board `588570`, new to the study), active 21:03:33Z and
+terminated 21:15:43Z on 2026-11-10: about 12.2 min, about $0.46 at $2.29/h (an estimate; the registration budgeted
+about 60 min and $2.29). It ran `scripts/plans/rentalPC2-2026-11.plan` (sha256 4a83311b..., as registered) at
+e7786f4e: 10 units in about 5.6 min against 35 estimated, none dropped, skipped or refused, driver exit 0. Published at
+`results/published/2026-11-10-nvidia_gh200_480gb-pc2-session`; read by `read_pc2.py --pc2 <that directory> --out-dir
+scripts/scoring/pc2`, committed as `scripts/scoring/pc2/pc2.read.{json,txt}`.
+
+**Instrument.** The run branch's 3,303 files match its SHA256SUMS; the 9 `cuda_utils*.so` files of the Triton caches
+are left out as before, so 3,294 are published. Read on the fetched tree and on the published copy, the two outputs
+differ only in the tree's path; the committed files are the published copy's, with the path repo-relative.
+`scripts/scoring/rescore.py pc2` re-reads the published session to the committed files. Every register script's
+`--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

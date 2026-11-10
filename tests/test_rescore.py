@@ -17,7 +17,9 @@ equal byte for byte), and tile rental B3's registered scorer its published sessi
 without either), and the committed B3 score names no model CERTIFIED at its top level, and rental PC's registered
 reader its published session to the committed pc.read files (where PC's run commit is in this clone's history: the
 reader checks the freeze against it; read from the published tree, so equal byte for byte), and the committed PC
-reading is DESCRIPTIVE with H1 NOT IDENTIFIED."""
+reading is DESCRIPTIVE with H1 NOT IDENTIFIED, and rental PC2's registered reader its published session to the
+committed pc2.read files (where PC2's run commit is in this clone's history; read from the published tree, so equal
+byte for byte), and the committed PC2 reading is DESCRIPTIVE with v6d's term 3 DOES NOT HOLD on both 4-per-SM tiles."""
 from __future__ import annotations
 
 import importlib.util
@@ -258,6 +260,57 @@ def test_the_committed_pc_reading_is_descriptive_and_h1_not_identified():
     assert d["PC-R1"]["D (D16, 1710)"] == []
     assert d["PC-R7"]["status_sat"] == "READ" and abs(d["PC-R7"]["X_sat"] - 3612.42) < 0.01
     assert d["PC-R8"]["does the curve price the CAL2 cell (Mixtral T128 A4)"]["reading"].startswith("CARRIES")
+
+
+PC2_RUN_COMMIT = "e7786f4eff48a65d017ac073a2ac10d576dd19a7"
+HAVE_PC2_COMMIT = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{PC2_RUN_COMMIT}^{{commit}}"],
+                                 capture_output=True).returncode == 0
+PC2_SESSION = "results/published/2026-11-10-nvidia_gh200_480gb-pc2-session"
+PC2_READS = REPO / "scripts/scoring/pc2"
+
+
+@pytest.mark.skipif(not HAVE_PC2_COMMIT, reason="rental PC2's run commit is not in this clone's history")
+def test_the_published_pc2_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("pc2") == PC2_SESSION
+    ran = RS.rescore("pc2", tmp_path)
+    assert ran == [("scripts/scoring/pc2/read_pc2.py", 0)], ran
+    rows = dict(RS.compare("pc2", tmp_path))
+    assert rows == {"pc2.read.json": "EQUAL", "pc2.read.txt": "EQUAL"}, rows
+    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    for name in ("pc2.read.json", "pc2.read.txt"):
+        assert (tmp_path / name).read_bytes() == (PC2_READS / name).read_bytes(), name
+    assert f"  pages: {PC2_SESSION}" in (PC2_READS / "pc2.read.txt").read_text().splitlines()
+
+
+def test_the_committed_pc2_reading_is_descriptive_and_term3_does_not_hold():
+    """PC2 certifies nothing; every unit is valid (sd3 CLEAN, the rest PERTURBED); v6d's term 3 DOES NOT HOLD on both
+    4-per-SM tiles (G 528 SATURATED, kappa 528 / 396 MOVED); c0 on 16x64x128 at G 128 is NOT IDENTIFIED, so the L
+    table is too; X_sat on 16x64x128 is READ; c0 on 64x128x64 reads at G 8 only; PLAIN is present on every cell."""
+    d = json.loads((PC2_READS / "pc2.read.json").read_text())
+    assert d["status"].startswith("MEASUREMENT, DESCRIPTIVE")
+    assert d["pc2"] == PC2_SESSION and d["registration"] == "2026-11-10-pc2-gh200"
+    assert d["commit"] == {"checked": True, "files": 72, "sha": PC2_RUN_COMMIT}
+    assert d["board"]["valid_decode"] is True
+    r0 = d["PC2-R0"]
+    assert all(u["valid"] and u["occupancy_leg"] == "PASS" and u["regcheck"] == "PASS" for u in r0.values()), r0
+    assert {k: u["page_label"] for k, u in r0.items()} == {
+        "sd": "PERTURBED", "sd3": "CLEAN", "sn": "PERTURBED", "sr": "PERTURBED", "ss": "PERTURBED", "sw": "PERTURBED"}
+    r1 = d["PC2-R1"]
+    assert r1["R1g n_if"]["sd"] == {"16x64x128w4s4": 3}
+    assert r1["R1b F ladders"]["G 128"]["status"].startswith("NOT IDENTIFIED")
+    assert r1["R1b F ladders"]["G 8"]["status"] == "READ"
+    assert all(row["status"].startswith("NOT IDENTIFIED") for row in r1["R1c L table (c0 = R1b G 128)"])
+    assert r1["R1d X_sat"]["status"] == "READ" and abs(r1["R1d X_sat"]["X_sat"] - 3781.89) < 0.01
+    r2a = d["PC2-R2"]["R2a c0 per G (F 256 to 14336)"]
+    assert {G: v["status"] == "READ" for G, v in r2a.items()} == {"G 8": True, "G 32": False, "G 128": False,
+                                                                   "G 256": False}
+    r3 = d["PC2-R3"]
+    for tile in ("32x64x128w4s3", "32x128x64w4s3"):
+        assert r3[tile]["v6d term 3"]["label"] == "DOES NOT HOLD", tile
+        assert r3[tile]["G 528"]["status"] == "SATURATED" and r3[tile]["kappa 528 / kappa 396"]["status"] == "MOVED"
+    plain = [v for k, v in r3.items() if k.startswith("R3p PLAIN")][0]
+    assert len(plain) == 58 and all(v["plain_us"] is not None for v in plain.values())
+    assert d["v6d terms"].startswith("read off as registered")
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

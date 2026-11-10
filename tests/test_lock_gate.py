@@ -457,7 +457,8 @@ def test_the_regate_of_every_published_lock_page_is_pinned():
     B3's at 1410, 2026-11-05/06 (its four sag pages and the OLMoE f128 repeat, each storing V10
     PASS, and three histogram byte pages), and 5 rental PC's at 1410, 2026-11-06 (its two f128 pages, each storing
     V10 PASS, and three Phi histogram byte pages; its decode counter page is r3d, not a lock page, and its stamp pages
-    are not lock pages), all PASS). The
+    are not lock pages), all PASS; rental PC2's session, 2026-11-10, adds none: it holds stamp, perturb, regcheck and
+    census pages only). The
     8x22B floor, the lock not in force, fails; every other page passes, 78 stored FAILs among
     them; rental 5's and rental 6's two histogram byte pages each, rental 7's one, tile rental
     A's and A2's four each, C2's two, C4's one, B3's three and PC's three store no gate (R3's histogram byte mode records none),

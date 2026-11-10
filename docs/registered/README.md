@@ -2032,3 +2032,24 @@ design-D6 section 7 says v6d cannot price, on SEEN or synthetic shapes only.
   60 min wall ($2.29 at $2.29/h); deadline launch + 75 min ($2.86), guardian hard cap launch + 90 min ($3.44 at most);
   cut order rep, d3, w. Tests `tests/test_instr_probe_pc2.py`, `tests/test_pc2_driver.py`, `tests/test_read_pc2.py`,
   `tests/test_pc2_registration.py`.
+
+**Read 2026-11-10** on `results/published/2026-11-10-nvidia_gh200_480gb-pc2-session` (board 588570, new; 10 units at
+e7786f4e in about 5.6 minutes on 2026-11-10, none dropped, skipped or refused; driver exit 0; the readings in
+`scripts/scoring/pc2/pc2.read.{json,txt}`, written by `read_pc2.py --pc2 <that directory> --out-dir scripts/scoring/pc2`
+from the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix). **Commit** checked (72
+files). **Board** valid (700 W, the 1710 lock probe held). **Census** reads the registered occupancy on all five tiles.
+**Units**: every unit valid, every stamped compile at its registered occupancy; sd3 CLEAN; sd, ss, sn, sw and sr
+PERTURBED (timing gate worst 7.18%, 6.76%, 4.20%, 5.67%, 6.78%; hard legs PASS); EXACT TIME APPLIED and a 32 ns timer on
+every unit. **NOT READ**: 82 of 220 cell GEMMs, 81 on the per-call spread (40 of the 64 w2 cells with a slab of 459 KB
+or less) and 1 on the overhead bound alone (D-G4 w2); D-G4 w1 fails both and is counted under the
+spread. **v6d's terms** as registered: term 1 Q_B 48 KB READ, X_sat 3782 GB/s
+READ, kappa READ on 8 of 10 single-wave rungs, c0 at G 128 and the L table NOT IDENTIFIED; term 2 c0 READ at G 8
+only (2.40 us on 64x128x64, 2.72 us on 16x64x128), kappa at short slabs READ on about half the cells; **term 3 DOES
+NOT HOLD** on both 4-per-SM tiles (G 528 SATURATED at 1.026 and 1.022 of X_sat, kappa 528 / 396 MOVED at 0.932 and
+0.923); term 4 (no v6d slot) twin t ratios 0.93 to 1.02 on the 10 of 22 GEMMs that read. The text file cuts PC2-R1, R2,
+R3 and R4 at the reader's 20,000-character cap (R3p's PLAIN values are in the JSON, all 58 present); the JSON is the
+complete reading. **Correction of record to the regcheck-scope note above** (the registration is frozen): only the
+k 2 specialisations were regchecked (each tile's w1 compile at top_k 2, its w2 at top_k 1); sn's stamped compiles at
+top_k 4, 6 and 8 rest on the reader's fail-closed occupancy leg alone, which read 3 CTAs per SM on all 14 of sn's
+stamped compiles. Read on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
+`scripts/scoring/rescore.py pc2` re-reads the published session to the committed files (docs/FINDINGS.md, Rental PC2).

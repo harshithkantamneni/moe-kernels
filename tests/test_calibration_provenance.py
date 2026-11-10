@@ -481,6 +481,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-11-05-nvidia_gh200_480gb-tileB3-session": SESSION,
         # Rental PC of 2026-11-06: one GH200, 20 units of the PC plan, a measurement (per-CTA start and end stamps on synthetic decode shapes, Mixtral-8x7B and its tp shards and JetMoE-8B at the 1710 and 1410 MHz locks, Phi-3.5-MoE's w1 stamps at 128x128 and 64x128, the sag pages and G-BAND, three Phi byte pages, one Mixtral decode counter page; the sd stamps unit refused), descriptive.
         "2026-11-06-nvidia_gh200_480gb-pc-session": SESSION,
+        # Rental PC2 of 2026-11-10: one GH200, 10 units of the PC2 plan, a measurement (per-CTA start and end stamps on the 16x64x128 decode tile at s4 and s3, short slabs of 66 to 459 KB on 64x128x64 and 16x64x128, single waves of 165 to 528 CTAs on the two 4-per-SM tiles, naive-path cells of six SEEN models and a k 8 synthetic shape, all at 1710 MHz; none refused), descriptive.
+        "2026-11-10-nvidia_gh200_480gb-pc2-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}
