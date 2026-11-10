@@ -14,3 +14,7 @@
 2026-11-10T21:08:22Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/10 - rcp probe=pc] (estimate 3 min, cap 20 min, 62 min left)
 2026-11-10T21:08:54Z regcheck END: exit 0 after 1 min [unit 3/10 - rcp probe=pc]
 2026-11-10T21:08:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 399e0f0 to run-gh200-pc2-20261110t2103: regcheck (unit 3/10 - rcp probe=pc): exit 0 (1 min)
+2026-11-10T21:08:58Z perturb START: perturbation gate at the 1710 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710] (estimate 8 min, cap 25 min, 61 min left)
+2026-11-10T21:10:39Z perturb END: exit 1 after 2 min [unit 4/10 - pt probe=pc gates=sd,ss,sn,sw,sd3,sr lock-mhz=1710]
+2026-11-10T21:10:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
