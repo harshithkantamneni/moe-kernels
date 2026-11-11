@@ -2076,3 +2076,32 @@ earlier decode scorer stay byte-identical; the addendum pins them, PC's and PC2'
 - **Closed (owner's stopping rule, 2026-11-10).** Decode closes as calibrated, not certified. The owner accepted the closure, the D6-20 deviation and the D6-24 defect as recorded (2026-11-11). The new blind (addendum
   5's pages, units, bars and $4.24 rental) is registered and NOT RUN; no plan file is written. Build records:
   `d6_build/run.py --check`. Tests `tests/test_stage_decode_addendum6.py` (docs/FINDINGS.md, Decode closes after v6d).
+
+## 2026-11-11, before any page: rental RR, the w1 re-read L2 hit mechanism (a measurement registration)
+
+`2026-11-11-rr-gh200` (`scripts/scoring/rr/register_rr.py --write` / `--check`; built 2026-11-11, not yet rented)
+registers rental RR as a MEASUREMENT: no model form, no constant, no gate and no blind. Owner, 2026-11-11: prefill gets
+this one measurement rental and no blind, then closes, and the project moves to the write-up. Every reading is
+DESCRIPTIVE. The 42.5 MiB constant and the four forms it reads were found post-hoc on seen pages (design-P1 section 2.3);
+RR measures them on fresh synthetic cells.
+- **The instrument.** The unchanged instrumented copy (stamps=ends), driven by `scripts/instr_probe_rr.py` (PC2's pinned
+  probe plus lines marked RR; rules module `scripts/scoring/rr/rrcommon.py`), and the plain kernel's counted DRAM bytes
+  on the same cells and board through `scripts/dram_counter_route_rr.py` (a wrapper over the pinned counter route's
+  functions), started by `scripts/gh200_rr_session.sh` (PC2's pinned driver plus lines marked RR) through
+  `scripts/vm_run_rr.sh` (vm_run_pc2.sh plus lines marked RR). Pages `docs/registered/2026-11-11-rr-pages/`: rr-128 and
+  rr-64 (40 cells each at 128x128x64 w8 s3 and 64x128x64 w8 s3: series A, E 8, H 4096, P 20 to 224, m_e 2, 4, 8 and a
+  skew; series B, K 8192; series C, E 64, k 8). Every unit runs at the 1410 MHz session lock.
+- **The readings.** RR-R0 (validity), RR-R1 (the counted miss fraction m = (D - C_u) / R), RR-R2 (the per-pair rule's
+  four forms against m on the same cells: step at 42.5 MiB between starts, step at 45 MiB between mid-lives, step at
+  30 MiB, random replacement at 62.5 MiB; a descriptive refit), RR-R3 (the wave-start spread against wave index, NUMBERS
+  ONLY: w_inf, k_90 and the slope per tile, series and W_c / P group, the stand-in's beside; an earlier draft's label band,
+  set with PC's pages in view, was removed on the owner's decision before any page), RR-R4 (the Phi-3.5 128g1 replicate,
+  kept, its bytes under RR-R1's rules), and a stand-in on both boards' published stamps (C3's Mixtral-8x7B and Qwen2-57B,
+  PC's Phi-3.5) that reads design-P1's fit within 0.0011 (`read_rr.py`).
+- **The launcher (adopted by the owner).** `vm_run_rr.sh` gives the driver upgrade one 600 s budget: it waits for a held
+  apt or dpkg lock (fail closed without fuser), runs `dpkg --configure -a` before each install attempt, and bounds each
+  attempt with the VM's timeout (the whole process group), stdin /dev/null and no prompts; a spent budget refuses prepare.
+- **Plan.** `scripts/plans/rentalRR-2026-11.plan`, 10 units, 43 min estimated (35 nodrop), about 68 min wall ($2.60 at
+  $2.29/h), deadline launch + 85 min ($3.24), guardian hard cap launch + 100 min ($3.82 at most); cut order rep (the core
+  alone: 60 min wall, $2.29). Tests `tests/test_instr_probe_rr.py`, `tests/test_dram_counter_route_rr.py`,
+  `tests/test_rr_driver.py`, `tests/test_read_rr.py`, `tests/test_rr_registration.py`.

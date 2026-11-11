@@ -1,0 +1,84 @@
+{
+ "registration": "2026-11-11-rr-gh200",
+ "schema": "moe-kernels/rr-shapes/1",
+ "shapes": [
+  {
+   "E": 8,
+   "F": 1280,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p20"
+  },
+  {
+   "E": 8,
+   "F": 2304,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p36"
+  },
+  {
+   "E": 8,
+   "F": 3072,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p48"
+  },
+  {
+   "E": 8,
+   "F": 4096,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p64"
+  },
+  {
+   "E": 8,
+   "F": 5120,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p80"
+  },
+  {
+   "E": 8,
+   "F": 6400,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p100"
+  },
+  {
+   "E": 8,
+   "F": 10240,
+   "H": 4096,
+   "k": 2,
+   "name": "rrs-e8-h4096-p160"
+  },
+  {
+   "E": 8,
+   "F": 1536,
+   "H": 8192,
+   "k": 2,
+   "name": "rrs-e8-h8192-p24"
+  },
+  {
+   "E": 8,
+   "F": 2560,
+   "H": 8192,
+   "k": 2,
+   "name": "rrs-e8-h8192-p40"
+  },
+  {
+   "E": 64,
+   "F": 2304,
+   "H": 4096,
+   "k": 8,
+   "name": "rrs-e64-h4096-p36-k8"
+  },
+  {
+   "E": 64,
+   "F": 4096,
+   "H": 4096,
+   "k": 8,
+   "name": "rrs-e64-h4096-p64-k8"
+  }
+ ],
+ "what": "RR's synthetic expert shapes (design-P1 section 4): built in the probe and counter processes as moe.spec.MoEConfig, never added to moe/spec.py; series A E 8 H 4096 F 64 P, series B E 8 H 8192, series C E 64 k 8; no shape equals any MODEL_CONFIGS entry's (E, H, F, k) (series A's P 224 is Mixtral-8x7B's and runs by that name), and no GEMM of any shape equals a reserved model's GEMM"
+}
