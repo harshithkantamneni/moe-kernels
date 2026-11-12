@@ -4035,6 +4035,183 @@ absence of a plan file. `d6_build/run.py --check` recomputes every build record 
 PC, PC2, DS and naive checks, the CAL2 alternatives, the reach, the unseen check and the post-gate record). Every
 earlier register script's `--check` reads `same`, and the pinned files are byte-identical.
 
+## Rental RR (2026-11-12): the w1 re-read L2 hit rule on fresh synthetic cells, measured; F2 reads lowest, RR-R4 NOT IDENTIFIED
+
+**Measured, not tested.** RR is a measurement rental. It certifies nothing, registers no model form, no constant, no
+bar and no gate, and moves no registered verdict. No model is tested here. Under the owner's stopping rule
+(2026-11-11), prefill gets this one measurement rental and no blind, and closes after it; the project moves to the
+write-up. Every number below is DESCRIPTIVE, read by the registered reader (`scripts/scoring/rr/read_rr.py`) from two
+kinds of page taken on the same cells and the same board at the 1410 MHz lock: per-CTA start and end stamps of vLLM
+v0.27.1's kernel through the unchanged instrumented copy (the "ends" level), and the plain kernel's counted w1 DRAM
+bytes under ncu. m is the counted miss fraction of the w1 slab re-reads, (D - C_u) / R: D the counted w1 DRAM read, C_u
+each active expert's w1 once plus the unique tokens' A rows once, R the re-read demand (design-P1 2.2). P is the N-tiles
+per M-tile, m_e the M-tiles per expert, W_c the resident CTAs (264 at 128x128x64 with 2 per SM, 396 at 64x128x64 with
+3).
+
+**What was measured.** Two registered pages of 40 cells each, rr-128 at 128x128x64 w8 s3 and rr-64 at 64x128x64 w8 s3:
+series A (E 8, H 4096, P 20, 36, 48, 64, 80, 100, 160 and 224, each at m_e 2, 4 and 8 and one skewed layout), series B
+(K 8192, P 24 and 40, m_e 2 and 4) and series C (E 64, k 8, P 36 and 64, m_e 2 and a skew). P 100 and 224 are the seen
+anchors (the w1 GEMMs of Phi-3.5 and Mixtral-8x7B; P 224 runs at Mixtral-8x7B's own shape); every other cell is
+fresh. The replicate is Phi-3.5's registered 128g1 page: stamps (sr) and counted bytes (br).
+
+**Validity (RR-R0).** Every stamps and counter unit is valid. The three stamps units are PERTURBED: the perturbation
+gate's hard legs PASS, its timing leg FAILS (median and worst pair against C3's 1% and 2%: s128 2.11% and 6.15%, s64
+0.998% and 2.90%, failing on its worst pair only, sr 1.60% and 2.87%), so they are read under C3's per-cell NOT-READ bound. Every stamped compile holds
+its tile's registered occupancy (2 and 3 CTAs per SM, the census agrees), EXACT TIME is applied and the timer reads 32
+ns on every launch (240, 240 and 72). Both counter units read their lock back at 1410 before and after the tool and
+attribute every launch to the child's grid.
+
+**READ and NOT READ, per tile.**
+
+| tile | stamps (RR-R0) | counted (RR-R1) | both (RR-R2) | wave numbers per cell (RR-R3) |
+|---|---:|---:|---:|---:|
+| 128x128x64 | 39 of 40 | 38 of 40 | 37 of 40 | 23 of 40 |
+| 64x128x64 | 40 of 40 | 32 of 40 | 32 of 40 | 18 of 40 |
+
+Every NOT READ, with its reason:
+- **Stamps:** A128-P20-m2, w1 overhead median 5.53% and worst pair -23.94%, over C3's bound.
+- **Counted, on the 3% per-call spread of the three calls' w1 DRAM reads** (the spread in brackets): on 128x128x64
+  A128-P100-m8 (6.3%) and A128-P100-skew (3.3%); on 64x128x64 A64-P100-m8 (7.5%), A64-P36-m8 (3.3%), A64-P48-m8 (3.6%),
+  A64-P48-skew (3.9%), A64-P64-m4 (3.7%), A64-P64-m8 (3.1%), A64-P64-skew (3.5%) and A64-P80-skew (3.5%). No cell
+  failed the counter sanity bound.
+- **RR-R2** reads a cell only where both of its pages read, so its NOT READ cells are the union of the two lists
+  above (3 on 128x128x64, 8 on 64x128x64).
+- **RR-R3 per cell:** NOT IDENTIFIED where fewer than 2 full waves read at k >= 5: 14 cells with no such wave and 2
+  with one at 128x128x64, 20 and 2 at 64x128x64; A128-P20-m2's stamps are NOT READ. Every cell whose launch runs under
+  7 waves (0.8 to 6.5) is NOT IDENTIFIED and every cell over 7 (7.3 to 54.3) reads; the pooled curves below read.
+- **RR-R4:** every one of the 12 replicate cells is NOT READ on its counted side (br wrote no page), and the stamps of
+  balanced n 1 and uniform n 1 are NOT READ (no re-read pair in the launch).
+
+**The counted miss fraction (RR-R1).** m per cell, series A:
+
+| P | 128x128x64 m_e 2 | m_e 4 | m_e 8 | skew | 64x128x64 m_e 2 | m_e 4 | m_e 8 | skew |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | 0.12 | 0.10 | 0.10 | 0.05 | 0.04 | 0.02 | 0.06 | 0.06 |
+| 36 | 0.24 | 0.26 | 0.24 | 0.22 | 0.14 | 0.17 | NOT READ | 0.17 |
+| 48 | 0.26 | 0.33 | 0.38 | 0.30 | 0.04 | 0.25 | NOT READ | NOT READ |
+| 64 | 0.21 | 0.44 | 0.49 | 0.46 | 0.08 | NOT READ | NOT READ | NOT READ |
+| 80 | 0.51 | 0.56 | 0.60 | 0.59 | 0.25 | 0.42 | 0.52 | NOT READ |
+| 100 | 0.63 | 0.72 | NOT READ | NOT READ | 0.05 | 0.41 | NOT READ | 0.56 |
+| 160 | 0.88 | 0.96 | 0.98 | 0.98 | 0.81 | 0.86 | 0.93 | 0.88 |
+| 224 | 0.99 | 1.00 | 1.00 | 1.00 | 0.81 | 0.92 | 0.96 | 0.94 |
+
+Series B (K 8192): on 128x128x64 0.17 and 0.17 at P 24 (m_e 2, 4), 0.26 and 0.31 at P 40; on 64x128x64 0.04 and 0.12,
+0.03 and 0.26. Series C (E 64, k 8): on 128x128x64 0.28 and 0.28 at P 36 (m_e 2, skew), 0.54 and 0.48 at P 64; on
+64x128x64 0.13 and 0.21, 0.30 and 0.48. 64x128x64 reads a lower m than 128x128x64 on every cell both read but two
+(A-P20-skew 0.057 against 0.054, C-P64-skew 0.483 against 0.482). At P 160 and 224, 128x128x64 reads 0.88 to 1.00 and
+64x128x64 0.81 to 0.96. Printed beside, POST-HOC on SEEN pages and cross-board,
+never pooled: design-P1's measured m on the seen models' own cells, Mixtral-8x7B 0.98 to 0.99 (128x128) and 0.68 to
+0.87 (64x128), Phi-3.5 0.68 to 0.77 and 0.23 to 0.53.
+
+**The four forms (RR-R2).** Each form predicts a cell's m from the stamps alone (m_hat, the mean over a cell's
+re-read pairs of the form's miss indicator or probability); the residual is m_hat - m. The constants were found POST-HOC on SEEN pages (design-P1 2.3):
+F1, the step at 42.5 MiB of B bytes streamed between the partners' starts, read rms 0.048 there, and F2, the step at
+45.0 MiB between their mid-lives, 0.043. RR measures them on fresh synthetic cells. That is a DESCRIPTIVE replication,
+never a certification: the forms and their constants were chosen with those seen pages in view, nothing here was
+blind, and no bar was registered. Recomputed from the per-cell residuals in `rr.read.json` (equal to the reader's pooled
+values where the reader pools; the two per-tile fresh rows are computed from those per-cell residuals here, since the
+reader does not pool them):
+
+| pool | cells | F1 step 42.5 MiB, starts | F2 step 45.0 MiB, mid-lives | F3 step 30.0 MiB, starts | F4 1 - exp(-d / 62.5 MiB), starts |
+|---|---:|---:|---:|---:|---:|
+| fresh synthetic cells (P not 100 or 224) | 56 | 0.030 | **0.024** | 0.052 | 0.060 |
+| both tiles, every cell read on both | 69 | 0.028 | **0.022** | 0.048 | 0.061 |
+| fresh, 128x128x64 | 31 | 0.029 | 0.024 | 0.029 | 0.041 |
+| fresh, 64x128x64 | 25 | 0.031 | 0.024 | 0.072 | 0.078 |
+| seen anchors (P 100, 224) | 13 | 0.011 | 0.011 | 0.020 | 0.064 |
+| series A (both tiles) | 53 | 0.023 | 0.023 | 0.028 | 0.056 |
+| series B | 8 | 0.041 | 0.020 | 0.039 | 0.031 |
+| series C | 8 | 0.037 | 0.020 | 0.115 | 0.103 |
+
+rms of m_hat - m. On the fresh cells the means are -0.002 (F1), +0.001 (F2), +0.016 (F3) and +0.005 (F4); the largest
+residuals are +0.081 (F1) and +0.083 (F2), both on A128-P80-m2 (m 0.51, m_hat 0.59), and +0.214 (F3) and +0.205 (F4),
+both on C64-P36-m2 (m 0.13). As a share of the counted w1 bytes ((m_hat - m) R / D) the fresh rms reads 0.048, 0.047,
+0.060 and 0.069. F2 has the lowest rms on the fresh cells and on both tiles pooled; F1 is second. Both read lower here
+than on the seen pages they were found on (0.030 against 0.048, 0.024 against 0.043); design-P1's figure joined stamps
+from one board to counts from every board holding the cell, RR's joins the same cells on one board. F3 (one L2
+partition) reads close to F1 at 128x128x64 (0.029) and 0.072 at 64x128x64 and 0.115 on series C. The seen anchors read 0.011 under
+F1 and F2.
+
+**The refit, DESCRIPTIVE, never a registered constant.** The constant on RR's grid (10 to 150 MiB by 2.5) that
+minimises rms(m_hat - m) over RR's READ cells: the step between starts 45.0 MiB (rms 0.030 on the fresh cells, 0.027 on
+both tiles), the step between mid-lives 47.5 MiB (0.024, 0.022), the exponential between starts 62.5 MiB (0.061 on
+both). The two steps land one grid step (2.5 MiB) above their seen constants (42.5 and 45.0); the exponential lands on
+its seen 62.5. The same constants read on the fresh cells and on both tiles.
+
+**The wave-start spread (RR-R3), numbers only.** The owner dropped the label before any page (2026-11-11). Per full
+schedule wave k, the spread of the wave's starts (q90 - q10) over the launch's median life; w_inf is the median spread
+over k >= 5, k_90 the first wave reaching 0.9 w_inf, the slope the OLS slope over k >= 5 per wave, and "waves" the
+pooled curve's length:
+
+| tile | curve | cells | w_inf | k_90 | slope per wave | waves |
+|---|---|---:|---:|---:|---:|---:|
+| 128x128x64 | pooled | 39 | 0.586 | 5 | +0.0072 | 54 |
+| 128x128x64 | series A | 31 | 0.549 | 4 | +0.0080 | 54 |
+| 128x128x64 | series B | 4 | NOT IDENTIFIED (0 waves at k >= 5) | | | 4 |
+| 128x128x64 | series C | 4 | 0.557 | 4 | -0.0015 | 39 |
+| 64x128x64 | pooled | 40 | 0.897 | 8 | +0.0070 | 36 |
+| 64x128x64 | series A | 32 | 0.901 | 7 | +0.0121 | 36 |
+| 64x128x64 | series B | 4 | NOT IDENTIFIED (0 waves at k >= 5) | | | 3 |
+| 64x128x64 | series C | 4 | 0.697 | 9 | +0.0702 | 26 |
+
+By W_c / P group: at 128x128x64 0.545 (under 2, k_90 12), 0.553 (2 to 4, 4), 0.584 (4 to 8, 4), NOT IDENTIFIED (8 and
+over); at 64x128x64 0.907 (under 2, 7), 0.859 (2 to 4, 7), 0.724 (4 to 8, 8), 0.623 (8 and over, 3, slope +0.156 over
+14 waves). Printed beside: the life spread past the first wave, median 0.047 and 0.094 of a life; the re-reading CTAs'
+median life on F1's misses over its hits, 1.023 and 1.058. The stand-in's numbers on SEEN pages, frozen at
+registration: Mixtral-8x7B (C3 st7) w_inf 0.419, k_90 7; Qwen2-57B (C3 stq) 0.579, 6; Phi-3.5 128x128 (PC se1) 0.581,
+5; Phi-3.5 64x128 (PC se2) NOT IDENTIFIED.
+
+**The replicate (RR-R4): NOT IDENTIFIED.** The stamps unit sr read 10 of its 12 cells (F1's m_hat 0.66 to 0.76), but
+no cell has a counted m to read it against, because the bytes unit br refused before any launch and wrote no page. Its
+plan line (`scripts/scoring/rr/rrcommon.py:502`, the registered PLAN's br row) runs the counter route with
+`--arms native` on `docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json`, and that page gives every one of
+its 12 cells its own arms list, `[native, shared]`. The route builds its plan from the page
+(`scripts/dram_counter_route.py:5595`, through `private_weight_reference.histogram_plan_cells`), and `cell_arms`
+(`scripts/private_weight_reference.py:8094-8100`) refuses any cell that asks for an arm the run does not run. The
+console holds the one line `REFUSE: cell PT n=1 asks arms ['shared'] that the run's --arms native does not run`, exit
+2 (REFUSED, `dram_counter_route.py:8037-8039`) after 5 s; the driver's bytes step logged `lock block exit 2`
+(`scripts/gh200_rr_session.sh:1104`) and `no page written`, and the driver exited 3. PC's and B3's byte units on the
+same page ran `arms=native,shared`. **It is a defect of RR's build, in the registered plan line**: not the environment
+(br's own census passed CEN1 to CEN3 and the lock held) and not a registered refusal (RR-R4 registered br's NATIVE
+counted bytes; nothing registered a refusal). The guard in the tool worked as designed. `tests/test_rescore.py` holds
+the cause off the GPU. The plan is registered, so nothing is re-run here, and the replicate's counted bytes were not
+measured.
+
+**The clock.** The stamps ran at the 1410 MHz lock. The counted runs share that lock but not the SM clock: under ncu's
+kernel replay the per-cell SM clock read 1271 to 1387 MHz on 128x128x64 (median 1326) and 1266 to 1392 MHz on
+64x128x64 (median 1318), against B3's board's 1304 to 1350. The partner gaps (in bytes) are read off the stamps only;
+whether the counted run's lower SM clock moves D, and so m, is not measured here.
+
+**What it does not show.**
+- **One board.** Every number is from board `73996e` at 700 W and the 1410 MHz lock. Nothing here speaks for another
+  board, lock, power limit or card.
+- **Synthetic shapes.** The fresh cells are registered synthetic shapes; the two seen anchors are Phi-3.5's and
+  Mixtral-8x7B's w1 GEMMs at RR's synthetic layouts, not those models' routings.
+- **PERTURBED pages.** All three stamps units ran PERTURBED (timing gate worst 6.15%, 2.90%, 2.87%; hard legs PASS) and
+  are read under C3's per-cell bound.
+- **No model.** No form is chosen, no constant is set and nothing is priced in time. F2's lowest rms is a printed
+  ranking, not a selection; the refit is printed beside, never registered. No model is tested, and the forms transfer
+  to no unseen model without a registered model and a blind test, which the stopping rule does not run.
+- **No replicate.** RR-R4 is NOT IDENTIFIED, so no Phi-3.5 cell on this board joins stamps to counted bytes.
+
+**Seen and unseen.** No page names or loads Mixtral-8x22B, Qwen2-57B-A14B or Granite-3.0-1B-A400M: the shapes the pages
+name are the registered `rrs-` shapes, Mixtral-8x7B and Phi-3.5-MoE (series C's skew is a count vector from a seen
+Qwen2-57B counter page, rescaled, as registered). The only text hit for any of their names in the run tree is the old
+run branch name `run-gh200-8x22b-2026-09-28`, twice in `setup_vm.log`, from the clone's fetch.
+
+**What ran.** One Lambda GH200 480GB (instance edf829f9, board `73996e`, new to the study), active 01:50:22Z and
+terminated 02:16:47Z on 2026-11-12: about 26.4 min, about $1.01 at $2.29/h (an estimate; the registration budgeted about
+68 min and $2.60). It ran `scripts/plans/rentalRR-2026-11.plan` (sha256 ce4d32e5..., as registered) at 51d33d9b: 10
+units in about 20.1 min against 43 estimated, none dropped or skipped, br refused (exit 2), driver exit 3. Published
+at `results/published/2026-11-12-nvidia_gh200_480gb-rr-session`; read by `read_rr.py --rr <that directory> --out-dir
+scripts/scoring/rr`, committed as `scripts/scoring/rr/rr.read.{json,txt}`.
+
+**Instrument.** The run branch's 1,823 files match its SHA256SUMS; the 7 `cuda_utils*.so` files of the Triton caches
+are left out as before, so 1,816 are published. Read on the fetched tree and on the published copy, the two outputs
+differ only in the tree's path; the committed files are the published copy's, with the path repo-relative.
+`scripts/scoring/rescore.py rr` re-reads the published session to the committed files. Every register script's
+`--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

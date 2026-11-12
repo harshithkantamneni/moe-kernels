@@ -642,7 +642,10 @@ def T4(out: Path) -> None:
     rental's) takes its board from session/PREFLIGHT.json and its models from its timed
     decode pages' `report.json` `model`; its page count stays 0. A session with neither (rental PC2's, stamp pages
     only) takes its board from session/PREFLIGHT.json and its models from its stamp pages' cells (`stamps.json`
-    `cells[*].shape`, the registered synthetic shapes `pcs-` and `pcs2-` left out); its page count stays 0."""
+    `cells[*].shape`, the registered synthetic shapes `pcs-` and `pcs2-` left out); its page count stays 0. A session
+    whose counter pages name no model (rental RR's `rr-counter` r3d pages carry a page path and synthetic cell shapes,
+    no `design.model`) takes its models from its stamp pages the same way (RR's synthetic shapes `rrs-` left out); its
+    page count is its counter pages'."""
     import dram_counter_route as DCR
     rows = []
     for s in sorted(PUB.glob("*-nvidia_gh200_480gb*-session")):
@@ -662,7 +665,7 @@ def T4(out: Path) -> None:
                 shas.add(str(d["git_sha"])[:7])
         pf = s / "session/PREFLIGHT.json"
         decode = list(s.glob("results/*/private_weight_reference/*-decode-*/report.json"))
-        stamps = [] if pages or decode else sorted(s.glob("results/*/stamps.json"))
+        stamps = [] if (pages and models) or decode else sorted(s.glob("results/*/stamps.json"))
         if not boards and pf.exists() and (pages or decode or stamps):
             uuid = (json.loads(pf.read_text()).get("card") or {}).get("uuid")
             if uuid:
@@ -675,7 +678,7 @@ def T4(out: Path) -> None:
         for p in stamps:
             for c in (json.loads(p.read_text()).get("cells") or {}).values():
                 m = str(c.get("shape") or "")
-                if m and not m.startswith(("pcs-", "pcs2-")):
+                if m and not m.startswith(("pcs-", "pcs2-", "rrs-")):
                     models.add(m)
         ct = s / "session/commit.txt"
         commit = ct.read_text().split()[0][:7] if ct.exists() and ct.read_text().strip() \

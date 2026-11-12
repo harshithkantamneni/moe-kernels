@@ -235,13 +235,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7796 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7799 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Thirty-eight further directories
+arms carrying 26 `*.report.json` files and no CSV. Thirty-nine further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and thirty-one Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and thirty-two Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -293,13 +293,15 @@ and 1410 MHz locks, Phi-3.5-MoE's w1 stamps at 128x128 and 64x128, the two f128 
 one Mixtral decode counter page, 20 units on one GH200 at 700 W, one of them refused, and rental PC2 of 2026-11-10:
 per-CTA start and end stamps at the 1710 MHz lock on the 16x64x128 decode tile at s4 and s3, short slabs on 64x128x64,
 single waves of 165 to 528 CTAs on the two 4-per-SM tiles and naive-path cells of six seen models, 10 units on one
-GH200 at 700 W),
+GH200 at 700 W, and rental RR of 2026-11-12: per-CTA start and end stamps and the plain kernel's counted w1 DRAM bytes
+on the same 40 cells per tile at 128x128x64 and 64x128x64 (synthetic shapes, Mixtral-8x7B's as an anchor) at the
+1410 MHz lock, and Phi-3.5-MoE's 128g1 replicate stamps, 10 units on one GH200 at 700 W, one of them refused),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 31 GH200 sessions ran on twenty-three distinct boards (counted by
+sessions rather than arms. The 32 GH200 sessions ran on twenty-four distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
@@ -385,7 +387,14 @@ reads NO-GO: CAL2 GO at 1.81% rms, but the seen decode blind re-scores at 4.52% 
 where every earlier decode CAL fit chose scaled: a defect recorded and not fixed. Under the owner's stopping rule decode
 closes as calibrated, not certified; no decode model is certified, the new blind is registered and NOT RUN, and
 Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M remain untimed at decode (docs/FINDINGS.md, Decode closes after
-v6d).
+v6d). Rental RR (2026-11-12) is a measurement and certifies nothing, and under the owner's stopping rule (2026-11-11)
+prefill closes after it with no blind; no model is tested. On 40 cells at each of vLLM's two prefill tiles it
+counts the w1 re-read miss fraction (70 of 80 READ) and reads design-P1's four per-pair hit forms against it
+from stamps on the same cells and board: rms 0.030 (F1, the 42.5 MiB step between starts), 0.024 (F2, the 45 MiB step
+between mid-lives), 0.052 and 0.060 over 56 fresh cells, a DESCRIPTIVE replication of constants found post hoc on seen
+pages (0.048 and 0.043 there, joining one board's stamps to every board's counts, so not like for like with RR's
+same-board join). The Phi-3.5 replicate is NOT IDENTIFIED: its counted-bytes unit refused on a defect in
+RR's registered plan line (arms native on a page that asks native and shared) (docs/FINDINGS.md, Rental RR).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

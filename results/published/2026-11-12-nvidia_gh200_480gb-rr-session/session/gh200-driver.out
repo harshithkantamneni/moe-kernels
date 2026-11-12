@@ -1,0 +1,46 @@
+2026-11-12T01:52:23Z setup_vm.sh start: commit 51d33d9b09301e73cab5a938baecb27012c37b83 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-12T03:15:22Z
+2026-11-12T01:54:51Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed d9ce8be to run-gh200-rr-20261112t0150: setup_vm.sh: READY
+2026-11-12T01:54:53Z driver start: commit 51d33d9b09301e73cab5a938baecb27012c37b83, steps of the plan scripts/plans/rentalRR-2026-11.plan, deadline 2026-11-12T03:15:22Z (72 min of work left)
+2026-11-12T01:54:53Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalRR-2026-11.plan (sha256 ce4d32e5d722b7b64c8eb9dd15ffce38d441e94283c15252ef75edffc23a1073), 10 units
+2026-11-12T01:54:53Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/10 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 72 min left)
+2026-11-12T01:54:55Z prelude END: exit 0 after 0 min [unit 1/10 - lock-mhz=1410 power-limit-w=700]
+2026-11-12T01:54:56Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed ea8ac30 to run-gh200-rr-20261112t0150: prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
+2026-11-12T01:54:57Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 64x128x64w8s3 on mixtral-8x7b phi-3.5-moe; refused on an MMA path mismatch [unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe] (estimate 2 min, cap 15 min, 72 min left)
+2026-11-12T01:55:07Z tilecensus END: exit 0 after 0 min [unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe]
+2026-11-12T01:55:08Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 0796c2f to run-gh200-rr-20261112t0150: tilecensus (unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-12T01:55:09Z regcheck START: regcheck, compile only (no lock, nothing timed): every instrumented variant's CTAs per SM against the plain kernel's (rental 5) [unit 3/10 - rcp probe=pc] (estimate 3 min, cap 20 min, 72 min left)
+2026-11-12T01:55:30Z regcheck END: exit 0 after 0 min [unit 3/10 - rcp probe=pc]
+2026-11-12T01:55:31Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed dfe2172 to run-gh200-rr-20261112t0150: regcheck (unit 3/10 - rcp probe=pc): exit 0 (0 min)
+2026-11-12T01:55:33Z perturb START: perturbation gate at the 1410 lock: plain vs the instrumented copy on every later instrumented unit's cells (decision 2) [unit 4/10 - pt probe=pc gates=s128,s64,sr] (estimate 5 min, cap 25 min, 71 min left)
+2026-11-12T01:57:03Z perturb END: exit 1 after 2 min [unit 4/10 - pt probe=pc gates=s128,s64,sr]
+2026-11-12T01:57:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 382e817 to run-gh200-rr-20261112t0150: perturb (unit 4/10 - pt probe=pc gates=s128,s64,sr): exit 1 (2 min)
+2026-11-12T01:57:07Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-11-rr-pages/rr-128.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json] (estimate 3 min, cap 12 min, 70 min left)
+2026-11-12T01:57:27Z stamps END: exit 0 after 0 min [unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json]
+2026-11-12T01:57:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 920f84d to run-gh200-rr-20261112t0150: stamps (unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json): exit 0 (0 min)
+2026-11-12T01:57:35Z decodebytes START: RR counter page at the 1410 lock (dram_counter_route_rr.py over the pinned route's functions, family rr-counter): docs/registered/2026-11-11-rr-pages/rr-128.json; every fused_moe_kernel launch grid held to vLLM's own (the spy's readback) [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr] (estimate 9 min, cap 25 min, 69 min left)
+2026-11-12T02:05:30Z decodebytes END: exit 0 after 8 min [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr]
+2026-11-12T02:05:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1ca0b90 to run-gh200-rr-20261112t0150: decodebytes (unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:05:35Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-11-rr-pages/rr-64.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json] (estimate 3 min, cap 12 min, 61 min left)
+2026-11-12T02:05:54Z stamps END: exit 0 after 0 min [unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json]
+2026-11-12T02:05:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a168a9e to run-gh200-rr-20261112t0150: stamps (unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json): exit 0 (0 min)
+2026-11-12T02:06:04Z decodebytes START: RR counter page at the 1410 lock (dram_counter_route_rr.py over the pinned route's functions, family rr-counter): docs/registered/2026-11-11-rr-pages/rr-64.json; every fused_moe_kernel launch grid held to vLLM's own (the spy's readback) [unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr] (estimate 8 min, cap 25 min, 61 min left)
+2026-11-12T02:13:50Z decodebytes END: exit 0 after 8 min [unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr]
+2026-11-12T02:13:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed afc89ff to run-gh200-rr-20261112t0150: decodebytes (unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:13:57Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json at 128x128x64 w8 s3; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 2 min, cap 10 min, 53 min left)
+2026-11-12T02:14:12Z stamps END: exit 0 after 0 min [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-11-12T02:14:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed c721461 to run-gh200-rr-20261112t0150: stamps (unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
+2026-11-12T02:14:21Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native; tile 128x128x64 w8 s3 [unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1] (estimate 6 min, cap 18 min, 53 min left)
+2026-11-12T02:14:51Z bytes END: exit 2 after 1 min [unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1]
+2026-11-12T02:14:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 5d7787f to run-gh200-rr-20261112t0150: bytes (unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1): exit 2 (1 min)
+2026-11-12T02:14:59Z driver end: exit 3

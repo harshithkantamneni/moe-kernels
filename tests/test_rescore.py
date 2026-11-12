@@ -19,7 +19,10 @@ reader its published session to the committed pc.read files (where PC's run comm
 reader checks the freeze against it; read from the published tree, so equal byte for byte), and the committed PC
 reading is DESCRIPTIVE with H1 NOT IDENTIFIED, and rental PC2's registered reader its published session to the
 committed pc2.read files (where PC2's run commit is in this clone's history; read from the published tree, so equal
-byte for byte), and the committed PC2 reading is DESCRIPTIVE with v6d's term 3 DOES NOT HOLD on both 4-per-SM tiles."""
+byte for byte), and the committed PC2 reading is DESCRIPTIVE with v6d's term 3 DOES NOT HOLD on both 4-per-SM tiles, and
+rental RR's registered reader its published session to the committed rr.read files (where RR's run commit is in
+this clone's history; read from the published tree, so equal byte for byte), and the committed RR reading is
+DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page."""
 from __future__ import annotations
 
 import importlib.util
@@ -311,6 +314,112 @@ def test_the_committed_pc2_reading_is_descriptive_and_term3_does_not_hold():
     plain = [v for k, v in r3.items() if k.startswith("R3p PLAIN")][0]
     assert len(plain) == 58 and all(v["plain_us"] is not None for v in plain.values())
     assert d["v6d terms"].startswith("read off as registered")
+
+
+RR_RUN_COMMIT = "51d33d9b09301e73cab5a938baecb27012c37b83"
+HAVE_RR_COMMIT = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{RR_RUN_COMMIT}^{{commit}}"],
+                                capture_output=True).returncode == 0
+RR_SESSION = "results/published/2026-11-12-nvidia_gh200_480gb-rr-session"
+RR_READS = REPO / "scripts/scoring/rr"
+RR_FORMS = ("F1 step at 42.5 MiB, between starts", "F2 step at 45.0 MiB, between mid-lives",
+            "F3 step at 30.0 MiB, between starts (one partition's capacity)",
+            "F4 random replacement 1 - exp(-d / 62.5 MiB), between starts")
+
+
+@pytest.mark.skipif(not HAVE_RR_COMMIT, reason="rental RR's run commit is not in this clone's history")
+def test_the_published_rr_session_rereads_to_the_committed_files(tmp_path):
+    assert RS.tree_of("rr") == RR_SESSION
+    ran = RS.rescore("rr", tmp_path)
+    assert ran == [("scripts/scoring/rr/read_rr.py", 0)], ran
+    rows = dict(RS.compare("rr", tmp_path))
+    assert rows == {"rr.read.json": "EQUAL", "rr.read.txt": "EQUAL"}, rows
+    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    for name in ("rr.read.json", "rr.read.txt"):
+        assert (tmp_path / name).read_bytes() == (RR_READS / name).read_bytes(), name
+    assert f"  pages: {RR_SESSION}" in (RR_READS / "rr.read.txt").read_text().splitlines()
+
+
+def test_the_committed_rr_reading_is_descriptive_and_the_replicate_not_identified():
+    """RR certifies nothing; every stamps and counter unit is valid (the three stamps units PERTURBED, timing gate only);
+    RR-R1 reads 38 of 40 cells on 128x128x64 and 32 of 40 on 64x128x64, every NOT READ on the 3% per-call spread;
+    RR-R2 reads 69 cells on both units (56 fresh), F2 the lowest rms on the fresh cells and on both tiles; the
+    descriptive refit reads 45 and 47.5 MiB; RR-R3 is numbers only; RR-R4 is NOT IDENTIFIED: the br unit wrote no
+    counter page."""
+    d = json.loads((RR_READS / "rr.read.json").read_text())
+    assert d["status"].startswith("MEASUREMENT, DESCRIPTIVE")
+    assert d["rr"] == RR_SESSION and d["registration"] == "2026-11-11-rr-gh200"
+    assert d["commit"] == {"checked": True, "files": 79, "sha": RR_RUN_COMMIT}
+    assert d["board"]["valid"] is True
+    assert d["census"]["occupancy"] == {"128x128x64w8s3": 2, "64x128x64w8s3": 3}
+    r0 = d["RR-R0"]
+    assert all(u["valid"] for u in {**r0["stamps"], **r0["counters"]}.values()), r0
+    assert {k: (u["page_label"], u["hard"], u["regcheck"]) for k, u in r0["stamps"].items()} == {
+        k: ("PERTURBED", "PASS", "PASS") for k in ("s128", "s64", "sr")}
+    r1 = d["RR-R1"]
+    for unit, n_read in (("c128", 38), ("c64", 32)):
+        cells = r1[unit]
+        assert len(cells) == 40 and sum(c["status"] == "READ" for c in cells.values()) == n_read, unit
+        assert all(c["status"].startswith("NOT READ: the calls' w1 DRAM reads spread")
+                   for c in cells.values() if c["status"] != "READ"), unit
+    r2 = d["RR-R2"]
+    assert [sum(c["status"] == "READ" for c in r2[t]["cells"]) for t in ("128x128x64w8s3", "64x128x64w8s3")] == [37, 32]
+    fresh, both = r2["pooled, FRESH synthetic cells (P not 100 or 224)"], r2["pooled, both tiles"]
+    assert (fresh["cells"], both["cells"]) == (56, 69)
+    assert [round(fresh[f]["rms"], 3) for f in RR_FORMS] == [0.030, 0.024, 0.052, 0.060]
+    assert fresh["lowest rms (DESCRIPTIVE)"] == both["lowest rms (DESCRIPTIVE)"] == RR_FORMS[1]
+    for k in ("refit (DESCRIPTIVE), FRESH cells", "refit (DESCRIPTIVE), both tiles"):
+        assert r2[k]["step between starts"]["C_star_mib"] == 45.0
+        assert r2[k]["step between mid-lives"]["C_star_mib"] == 47.5
+    assert all(r3["status"] == "READ" for t, r3 in d["RR-R3"].items() if t.endswith("w8s3"))
+    r4 = d["RR-R4"]
+    assert r4["status"] == "NOT IDENTIFIED: no cell read on both"
+    assert r4["br unit"]["valid"] is False and r4["br unit"]["dir"] is None
+    assert all(c["counted"] == "NOT READ: not counted" for c in r4["cells"].values())
+
+
+def test_rr_br_refused_on_its_plan_lines_arms_against_the_registered_page(monkeypatch, tmp_path):
+    """Why RR's br unit exited 2 within 5 s and wrote no page: its registered plan line (rrcommon.py PLAN, the br row)
+    runs --arms native on docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json, whose every cell names its own
+    arms [native, shared]; cell_arms (scripts/private_weight_reference.py) refuses a cell asking an arm the run does
+    not run, before any launch. PC's and B3's byte units on the same page ran arms native,shared. The published log
+    holds exactly this refusal."""
+    monkeypatch.syspath_prepend(str(REPO / "scripts"))
+    import dram_counter_route as dcr
+    import private_weight_reference as r3
+    monkeypatch.syspath_prepend(str(REPO / "scripts" / "scoring" / "rr"))
+    import rrcommon as RRC
+    plan = (REPO / "scripts/plans/rentalRR-2026-11.plan").read_text().splitlines()
+    br = [ln for ln in plan if " bytes label=br " in ln]
+    assert len(br) == 1 and " arms=native " in br[0], br
+    # the registered source of that line: rrcommon.UNITS' br row
+    rows = [u for u in RRC.UNITS if u[1] == "bytes" and u[2] == "br"]
+    assert len(rows) == 1 and " arms=native " in f" {rows[0][3]} ", rows
+    # PC's and B3's byte units on the same page ran both arms
+    for plan_file, line in (("rentalPC-2026-11.plan", 34), ("rentalB3-tile-2026-11.plan", 62)):
+        ln = (REPO / "scripts/plans" / plan_file).read_text().splitlines()[line - 1]
+        assert "phi-3.5-moe-128g1.json" in ln and " arms=native,shared " in ln, (plan_file, ln)
+    page = "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json"
+    assert all(c["arms"] == ["native", "shared"] for c in json.loads((REPO / page).read_text())["cells"])
+    hp = r3.load_histogram_page(REPO / page, r3.MODEL_CONFIGS["phi-3.5-moe"], 128, "phi-3.5-moe")
+    assert len(r3.histogram_cells(hp, ("native", "shared"))) == 24
+    with pytest.raises(r3.HistogramRefused) as e:
+        r3.histogram_cells(hp, ("native",))
+    msg = "cell PT n=1 asks arms ['shared'] that the run's --arms native does not run"
+    assert str(e.value) == msg
+    # the counter route's own plan build (dram_counter_route.r3_plan, as do_run_r3 calls it) refuses the same way
+    def r3_plan(arms):
+        return dcr.r3_plan(model="phi-3.5-moe", dtype="bf16", block_m=128, block_n=128, num_stages=3, group_m=1,
+                           treads=hp.treads, kind="measure", arms=arms, histogram=hp, calls=dcr.R3_CALLS_PER_CELL,
+                           warmups=dcr.R3_WARMUP_CALLS, profile_dir=tmp_path, stem="g1", block_k=64)
+    assert len(r3_plan(("native", "shared"))["cells"]) == 24
+    with pytest.raises(r3.CounterPlanRefused) as e:
+        r3_plan(("native",))
+    assert str(e.value) == msg
+    log = REPO / RR_SESSION / "session/logs/r3c-phi-3.5-moe-br-g1-lock1410.log"
+    assert log.read_text().strip() == f"REFUSE: {msg}"
+    assert (REPO / RR_SESSION / "session/logs/lock1410-pages-phi-3.5-moe-br.status").read_text().startswith(
+        "G=1 exit 2 ")
+    assert not list((REPO / RR_SESSION / "results").glob("*-phi-3.5-moe-br-r3-counters"))
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

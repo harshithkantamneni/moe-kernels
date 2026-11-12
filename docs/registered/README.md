@@ -2105,3 +2105,24 @@ RR measures them on fresh synthetic cells.
   $2.29/h), deadline launch + 85 min ($3.24), guardian hard cap launch + 100 min ($3.82 at most); cut order rep (the core
   alone: 60 min wall, $2.29). Tests `tests/test_instr_probe_rr.py`, `tests/test_dram_counter_route_rr.py`,
   `tests/test_rr_driver.py`, `tests/test_read_rr.py`, `tests/test_rr_registration.py`.
+
+**Read 2026-11-12** on `results/published/2026-11-12-nvidia_gh200_480gb-rr-session` (board 73996e, new; 10 units at
+51d33d9b in about 20.1 minutes on 2026-11-12, none dropped or skipped; br refused, driver exit 3; the readings in
+`scripts/scoring/rr/rr.read.{json,txt}`, written by `read_rr.py --rr <that directory> --out-dir scripts/scoring/rr` from
+the repository root with PYTHONHASHSEED=0 on the published copy; no post-page fix). MEASUREMENT only: under the owner's
+stopping rule (2026-11-11) prefill closes after RR, and no model is tested. **Commit** checked (79 files). **Board**
+valid (700 W, the 1410 lock probe held). **Census** reads the registered occupancy (2 and 3 CTAs per SM). **RR-R0**:
+every stamps and counter unit valid; s128, s64 and sr PERTURBED (timing gate worst 6.15%, 2.90%, 2.87%; hard legs
+PASS). **READ**: stamps 39 of 40 (128x128x64; A128-P20-m2 over C3's overhead bound) and 40 of 40 (64x128x64); counted
+38 of 40 and 32 of 40, every NOT READ on the 3% per-call spread; both 37 and 32. **RR-R2** on the 56 fresh cells: rms
+F1 0.030, F2 0.024, F3 0.052, F4 0.060 (on all 69: 0.028, 0.022, 0.048, 0.061); F2 lowest. F1 and F2 were found
+POST-HOC on SEEN pages (0.048, 0.043, joining one board's stamps to every board's counts; RR joins stamps and counts on
+one board, so the two are not like for like); this is a DESCRIPTIVE replication, never a certification. Refit, DESCRIPTIVE:
+45.0 MiB (starts) and 47.5 MiB (mid-lives). **RR-R3**, numbers only: pooled w_inf 0.586 (k_90 5) on 128x128x64 and
+0.897 (k_90 8) on 64x128x64; series B NOT IDENTIFIED on both tiles. **RR-R4 NOT IDENTIFIED**: br refused before any
+launch (`REFUSE: cell PT n=1 asks arms ['shared'] that the run's --arms native does not run`, exit 2). Its registered
+plan line (`rrcommon.py:502`) runs `arms=native` on a page whose every cell names `[native, shared]`, and `cell_arms`
+(`private_weight_reference.py:8094-8100`) refuses it. **Defect of record in this registration's plan line** (the
+registration is frozen and stays as written): PC's and B3's byte units on the same page ran `arms=native,shared`. Read
+on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
+`scripts/scoring/rescore.py rr` re-reads the published session to the committed files (docs/FINDINGS.md, Rental RR).
