@@ -5,3 +5,4 @@
 2026-11-12T01:55:32Z regcheck (unit 3/10 - rcp probe=pc): exit 0 (0 min)
 2026-11-12T01:57:05Z perturb (unit 4/10 - pt probe=pc gates=s128,s64,sr): exit 1 (2 min)
 2026-11-12T01:57:31Z stamps (unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json): exit 0 (0 min)
+2026-11-12T02:05:33Z decodebytes (unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr): exit 0 (8 min)

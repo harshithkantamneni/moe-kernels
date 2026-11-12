@@ -38,3 +38,8 @@
 2026-11-12T01:57:27Z stamps: u5-s128 exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-pc-s128, probe=pc)
 2026-11-12T01:57:27Z stamps END: exit 0 after 0 min [unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json]
 2026-11-12T01:57:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-12T01:57:35Z decodebytes START: RR counter page at the 1410 lock (dram_counter_route_rr.py over the pinned route's functions, family rr-counter): docs/registered/2026-11-11-rr-pages/rr-128.json; every fused_moe_kernel launch grid held to vLLM's own (the spy's readback) [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr] (estimate 9 min, cap 25 min, 69 min left)
+2026-11-12T02:05:29Z decodebytes: RESULT: VALIDITY grid PASS 40 cells, 240 launches attributed; /home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c128-r3-counters/lock1410/r3d.
+2026-11-12T02:05:30Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c128-r3-counters/lock1410/r3d.json)
+2026-11-12T02:05:30Z decodebytes END: exit 0 after 8 min [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr]
+2026-11-12T02:05:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

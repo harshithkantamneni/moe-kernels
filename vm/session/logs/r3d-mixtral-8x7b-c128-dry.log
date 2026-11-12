@@ -1,0 +1,5 @@
+COUNTER ROUTE rr-counter: page docs/registered/2026-11-11-rr-pages/rr-128.json (sha256 0192ece861d8b9c6...), 40 cells on ['128x128x64w8s3'], 12 shapes, NATIVE, one weight copy each
+  2 warm-up calls per cell (the readback first, skipped by ncu), then 3 measured calls: 240 profiled launches (w1 and w2), about 8.3 min
+  ncu over the pinned route's r3_ncu_argv: --cache-control all, --clock-control none under the driver's lock, -k regex:^fused_moe_kernel$, kernel replay; the grids held to the child's readback (attribute_launches)
+  child: scripts/dram_counter_route_rr.py --counter-child (RR's probe's Card and inputs, the plain kernel)
+REFUSED. Nothing was measured: --dry-run was given
