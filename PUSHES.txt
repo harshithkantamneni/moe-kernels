@@ -4,3 +4,4 @@
 2026-11-12T01:55:08Z tilecensus (unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
 2026-11-12T01:55:32Z regcheck (unit 3/10 - rcp probe=pc): exit 0 (0 min)
 2026-11-12T01:57:05Z perturb (unit 4/10 - pt probe=pc gates=s128,s64,sr): exit 1 (2 min)
+2026-11-12T01:57:31Z stamps (unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json): exit 0 (0 min)

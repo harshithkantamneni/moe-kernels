@@ -33,3 +33,8 @@
 2026-11-12T01:57:03Z perturb: HARD_u9_sr=PASS
 2026-11-12T01:57:03Z perturb END: exit 1 after 2 min [unit 4/10 - pt probe=pc gates=s128,s64,sr]
 2026-11-12T01:57:04Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-12T01:57:07Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-11-rr-pages/rr-128.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json] (estimate 3 min, cap 12 min, 70 min left)
+2026-11-12T01:57:07Z stamps: the overhead gate for u5-s128 reads 'FAIL median=0.02109398503057902 worst=0.06150290877413156': the pages run PERTURBED (owner OD-1, C3)
+2026-11-12T01:57:27Z stamps: u5-s128 exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-pc-s128, probe=pc)
+2026-11-12T01:57:27Z stamps END: exit 0 after 0 min [unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json]
+2026-11-12T01:57:28Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
