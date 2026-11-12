@@ -49,6 +49,9 @@ pages, so CLEAN drops nothing, and 0 of 14 verdicts differ between the views in 
 
 ### (a) Does CLEAN now certify more than OLMoE?
 
+NOTE 2026-11-12: rental 6 registered no certification rule, so OLMoE was never certified; it HOLDS in CLEAN.
+Rental 7's per-shape rule is the first certification rule, and it certifies Mixtral and Phi only.
+
 **Yes.** Rental 6's CLEAN view held OLMoE's three pages alone (42 cells, rms 0.54%, worst -1.47%,
 mean +0.16%; board ff9942); Mixtral and Phi met the bar only in ALL because R3's histogram G1
 removed their pages. Under the registered rental-7 rule (r7-median-run3, rebuilt from cells.csv),
@@ -70,7 +73,8 @@ shapes CERTIFIED; it loses one cell (Phi skb DW SHARED n 2, 5 of 9 clean). Renta
 **Does v3 now meet the working bar (rms <= 2%, no cell beyond 5%, here also \|mean\| <= 1%) on R3's
 tile across several models in CLEAN?** Yes. With rental 7, the CLEAN view certifies it on Mixtral
 8x7B and Phi-3.5-MoE (rental 7) and on OLMoE (rental 6): three models, two boards, every CLEAN
-cell within 1.61%. Four limits go with it. (1) The cells are R3's tile 32 x 64 x 64 w8 s4 at G = 8.
+cell within 1.61%. (NOTE 2026-11-12: certified on Mixtral and Phi only; OLMoE HOLDS in CLEAN under rental 6, which
+registered no certification rule. Of rental 7's 84 cells, the 48 skewed cells are the blind part (Mixtral's are BLIND-CALMODEL).) Four limits go with it. (1) The cells are R3's tile 32 x 64 x 64 w8 s4 at G = 8.
 The registration says nothing here is the working bar on vLLM's own tile, and **the tile stage
 (vLLM's tiles) is still pending.** (2) These cells are floor-bound, so the bytes do not reach time
 (rental 6's decomposition), and E1 tests the timing model, not the byte model. (3) The

@@ -811,7 +811,11 @@ changed (w1 K 6144 x 512 N-tiles, w2 K 16384 x 96), nothing was fitted on
 (G=3, 8, 32, treads 1 to 8) read rms 1.71%, worst -4.73%, none beyond 5%
 (registered: at or under 2%, none beyond 5%). These times are priced from the byte model's
 PREDICTED bytes (`scripts/cross_model_predict.py`, the registered JSON's T), so this is the one
-time test in the study that held end to end, from predicted bytes to predicted time. The G >= 8 SHARED slope read
+time test in the study that held end to end, from predicted bytes to predicted time. NOTE 2026-11-12: rental 6's and
+rental 7's E1-SKEW tests also price time from model v3's predicted bytes, and both HOLD, but on seen models' shapes
+under synthetic skew on R3's tile, where the byte term carries at most 0.06% of ln T (Rental 6 below). They test the
+timing model, not bytes to time. This remains the only test on an unseen model, from predicted bytes to predicted
+time, that held. The G >= 8 SHARED slope read
 0.9155 and 0.9141 ms per tread (band 0.908 to 0.946), G=3's period-3 ripple
 and G=2's zig-zag kept their phase. The miss sat at tread 1 (-3.9 to -4.7%):
 8x22B's w2 at n=1 is 768 CTAs, 1.45 waves of 528, and the model priced the
@@ -1914,7 +1918,15 @@ CLEAN drops the six Mixtral and Phi timed pages (G1, below), so every CLEAN skew
   -1.01%) and Phi (38 cells, rms 0.65%, worst -1.55%) meet it in ALL. Rental 5's largest residual,
   SHARED at each shape's first tread (+2.64% under v2), does not recur: OLMoE SHARED n 3 reads
   +0.13%. The largest residual is now Phi n 2, about 1% too little time on both arms. Every cell is
-  R3's tile 32 x 64 x 64 w8 s4 at G = 8, not vLLM's.
+  R3's tile 32 x 64 x 64 w8 s4 at G = 8, not vLLM's. CORRECTED 2026-11-12: "certifies" overstates the
+  registration. Rental 6's skew registration (`docs/registered/2026-10-09-rental6-skew-gh200.{txt,json}`) has no
+  certification rule; its registered verdict is E1-SKEW HOLDS, and CLEAN holds OLMoE's three pages only. The
+  per-shape CERTIFIED rule was first registered at rental 7 (`2026-10-13-rental7-skew-gh200.txt`, E1-SKEW
+  `certification:`). OLMoE reads HOLDS in CLEAN, not certified. The registration labels it "BLIND draws, IN-SAMPLE
+  for (b)": h is SEEN-FITTED partly on OLMoE (owner decision 2 of 2026-10-09). The same overstatement is in
+  commit 80514a67's message ("with rental 6's OLMoE v3 is certified on three models"), in
+  `docs/registered/README.md`'s rental 7 entry and in `scripts/scoring/rental6/SCORES.md` and
+  `scripts/scoring/rental7/SCORES.md`; the files carry dated notes, and the commit message stays as written.
 - The bytes do not reach time on these cells. The decomposition puts at most 0.06% of ln T in the
   byte term (under 0.002% on every OLMoE cell); scaling a cell's counted reads by +-20% moves its
   predicted time by under 0.03%. So E1 and E2 test the timing model, and the byte tests are the
@@ -1968,7 +1980,8 @@ CLEAN drops the six Mixtral and Phi timed pages (G1, below), so every CLEAN skew
   67 held GH200 ladder pages; it is a proposal to the owner, not applied.
 
 **What the paper can claim, after rental 6.** Model v3 prices skewed routing to the time bar on R3's
-tile (blind draws; registered E1-SKEW HOLDS, CLEAN on OLMoE, ALL on Mixtral, OLMoE and Phi), and
+tile (blind draws; registered E1-SKEW HOLDS, CLEAN on OLMoE, ALL on Mixtral, OLMoE and Phi; NOTE 2026-11-12:
+OLMoE's cells are IN-SAMPLE for (b) and Mixtral's draws are BLIND-CALMODEL, as registered), and
 v2 is excluded where term (b) acts. The byte model's skewed reads hold on Phi and on OLMoE w2,
 and miss OLMoE w1 (open). Not claimed: term (b) on control pairs (Q1-H undecided, pages lost), the
 n = 1 SHARED residual (Q1-C not scored), second K, the 60 MiB row-key reading (SEEN), or anything on
@@ -2027,7 +2040,12 @@ loses one cell and passes every page; it moves no verdict.
   draws, each with 3 of 3 pages in CLEAN. Rental 6 certified OLMoE (42 cells, rms 0.54%, board
   ff9942). Pooled descriptively over the 126 CLEAN cells of the two boards: rms 0.59%, worst -1.61%.
   Every cell is R3's tile 32 x 64 x 64 w8 s4 at G = 8, not vLLM's, and the tile stage on vLLM's
-  tiles is still to come.
+  tiles is still to come. CORRECTED 2026-11-12, two phrases. (1) "on fresh BLIND draws": only the 48
+  skewed cells (PT, PW, DW, PW2; 24 per model) are fresh BLIND draws. The other 36 of the 84 E1 cells are
+  uniform cells whose counts are rental 6's, SEEN replicates, and Mixtral's skewed draws are BLIND-CALMODEL
+  (`docs/registered/2026-10-13-rental7-skew-gh200.txt`, `leakage` and `labels`). The 36 balanced cells (E1-UNI)
+  are SEEN replicates outside the 84. (2) "Rental 6 certified OLMoE": rental 6's registration has no certification
+  rule; OLMoE HOLDS in CLEAN (Rental 6 above). The 126-cell pool mixes two CERTIFIED shapes with one that HOLDS.
 - The residual is a function of the tread, not of the skew. On both shapes v3 predicts about 1% too
   little time at the first tread (Mixtral n 3 -0.88 / -0.51% NATIVE / SHARED; Phi n 2 -1.11 /
   -1.00%), about 0.1 to 0.2% at the second and +0.3% at the third. Rental 6 showed the same order on
@@ -2089,6 +2107,12 @@ moved files changed at rental 6, and every pin of rentals 6 and 7 matches today
 `register.py --check` reproduces every rental 3, 4 and 5 registration, and their 16 scorers, re-run
 on the three published sessions, write their committed score files byte for byte (checked
 2026-10-14 for the tile stage's build).
+
+NOTE 2026-11-12, rescore coverage: `scripts/scoring/rescore.py` covers the stages from tile rental A onward only (its
+docstring lists them). Rentals 1 to 7 and the sessions before them have no rescore entry; their verdicts rest on their
+own scorers and committed score files (`scripts/scoring/rental1/` to `rental7/`, `session0927/`, `crossmodel/`),
+re-run by hand. The byte-for-byte re-run above covered rentals 3 to 5 on 2026-10-14, and this file records no later
+re-run of these scorers against their published sessions.
 
 ---
 
@@ -2813,6 +2837,12 @@ B3, the blind test of a tile model on rental B2's 84 frozen NATIVE cells
 Qwen1.5-MoE-A2.7B and JetMoE-8B, stay unspent. No registered verdict changes, and no page, constant or pinned file
 changes with this section.
 
+NOTE 2026-11-12: the paragraph above, and the statements below that E1-TILE has never been scored and what would
+reopen B3, describe 2026-10-28. B3 was registered later, on 2026-11-04 (a5608079,
+`docs/registered/2026-11-04-tileB3-gh200`), after the owner chose to go blind with round 5's frozen model at the
+working-model bar (rms 3%, worst cell 8%, |mean| 1.5%). It ran on 2026-11-05/06 and E1-TILE FAILS (Tile rental B3
+below). Its blind models, with deepseek-v2-lite in the pool, are now spent.
+
 Rounds 2 to 5 are offline work in moe-kernels-work and are not in this repository: refit4 (REFIT.md, ROUND2.md;
 2026-10-22), round 3 and round 4 (ROUND3.md, ROUND4.md; 2026-10-27), and round 5 (ROUND5.md; 2026-10-28). The
 diagnosis and knee rounds before them are 2026-10-22 diag-v5 (DIAGNOSIS.md) and knee-v5 (KNEE.md). Numbers from
@@ -2825,6 +2855,11 @@ routing, on three models in CLEAN:
 - Phi-3.5-MoE, rental 7: 42 cells, rms 0.69%, worst -1.61% (the same file; Rental 7 above).
 
 That is the study's only certified timing model. It is not vLLM's tile.
+
+CORRECTED 2026-11-12: in the registered sense CERTIFIED covers Mixtral-8x7B and Phi-3.5-MoE only, under rental 7's
+certification rule. Rental 6's registration has no certification rule, so OLMoE is a registered E1-SKEW HOLDS in
+CLEAN, not a certification (Rental 6 above). Of rental 7's 84 cells, the 48 skewed cells are the blind part; 36 are
+SEEN uniform replicates, and Mixtral is BLIND-CALMODEL (Rental 7 above).
 
 **What the large-tile work established (vLLM's 128x128 and 64x128 wgmma tiles).** Every item here is MEASURED, or
 HELD-OUT inside an offline round. None is blind-certified.
@@ -2931,7 +2966,8 @@ models would carry the forking-paths risk above. A new CAL page read under a mod
 13. Why tp2's counted w1 reads exceed M4's at P 112 (BEYOND-M4) is not read (Calibration rental C4).
 
 **What the paper can claim, after the scope decision.** Certified: model v3 on R3's tile under skew, on Mixtral-8x7B,
-Phi-3.5-MoE and OLMoE. MEASURED or HELD-OUT on vLLM's 128x128 tile, not blind:
+Phi-3.5-MoE and OLMoE (CORRECTED 2026-11-12: certified on Mixtral-8x7B and Phi-3.5-MoE; OLMoE HOLDS in CLEAN, see
+"What is CERTIFIED" above). MEASURED or HELD-OUT on vLLM's 128x128 tile, not blind:
 - the clock sag and the 700 W ceiling;
 - the clock conversion on R3's tile;
 - the w2 launch-together reading;
@@ -3333,6 +3369,12 @@ registered gate reads NO-GO on both clauses. The
 owner closed the decode stage on 2026-11-04 as calibrated, not certified. The new blind (Mixtral-8x22B,
 Qwen2-57B-A14B, Granite-3.0-1B-A400M) is registered and was not run. No registered verdict changes.
 
+NOTE 2026-11-12, a forking path disclosed: this closure did not hold. PC (registered 2026-11-06) measured the
+per-CTA rate (its registration names v5d's worst CAL2 cell as its motivation); design-D6 (2026-11-09) and v6d
+(addendum 6, built on PC, PC2, DS and CAL2) followed. The stopping rule that ended it was set on 2026-11-10 (Decode
+closes after v6d, below). The reopening was chosen with the decode blind pages, both diagnoses of them and v5d's
+re-score already known, so v6d is one more path through the same seen pages. Nothing in this section changes.
+
 **The sequence.**
 
 | step | registration | reading |
@@ -3682,6 +3724,14 @@ contrast -2.6 points of life and -0.8 of packing.
   PC-R2's G 8 ladder (3 of 4 rungs); PC-R4's C-G8 and C-G8-s4k64 twins; PC-R6 at G 288; PC-R3's D16 rows (no D page);
   H1.
 
+**Defect of record (noted 2026-11-12).** PC's reader (`read_pc.launch`, pinned) casts globaltimer stamps to float64.
+At an absolute stamp of about 1.7e18 ns the float64 step is 256 ns, so PC's lives and starts are quantised to 256 ns
+although the timer ticks at 32 ns. Two cells were lost to it: A-F7168-G8 (call 0; its NOT READ above, for the timer
+resolution) and A-TP8-G128 (w1, calls 0 and 1). On PC's block A it moves median lives by up to 1.6% (median 0.07%, call 0;
+POST-HOC on SEEN pages). It was found while building PC2 and is recorded in PC2's registration
+(`docs/registered/2026-11-10-pc2-gh200.txt`, EXACT TIME and TIMER); PC2's reader rebases each unit's stamps before
+reading. PC's pinned reader and its published reading are unchanged.
+
 **What it does not show.**
 
 - **One board, two locks.** Every number is from board `c9f689` at 700 W and the 1710 and 1410 MHz locks. Nothing
@@ -3911,6 +3961,12 @@ model built on rentals PC and PC2, reads GO on CAL2 and fails the second gate cl
 pooled against 4.0%). This was the last decode round under the owner's stopping rule (2026-11-10): decode gets PC2
 plus at most one decode blind, run only on a gate GO, and closes whatever the result. The gate read NO-GO, so the new
 blind did not run. The owner accepted the closure, the D6-20 deviation and the D6-24 defect as recorded (2026-11-11). No registered verdict changes.
+
+NOTE 2026-11-12, a forking path disclosed: this is decode's second closure. The first, on 2026-11-04 after v5d's
+NO-GO (Decode stage closes calibrated, not certified, above), was set aside: PC (registered 2026-11-06) measured the
+per-CTA rate, then PC2; design-D6 (2026-11-09) and v6d followed. That choice was made with the decode blind pages, the two diagnoses of them
+and v5d's re-score in view, and the stopping rule applied here was set afterwards, on 2026-11-10. v6d's gate is
+therefore one more model chosen on the same seen pages; its NO-GO, like v5d's, says nothing about an unseen model.
 
 **The sequence, end to end.**
 

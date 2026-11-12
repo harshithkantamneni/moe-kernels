@@ -1279,7 +1279,8 @@ row (longest 2). The P20 view, printed beside every verdict, passes every page t
 rows dropped, one cell lost, Phi skb DW SHARED n 2). CLEAN equals ALL. **skew**: G3 PASS (36 cells,
 6 pages, CI [-0.013, +0.015]%). E1-SKEW HOLDS: 84 cells rms 0.61%, worst -1.61%, mean -0.24%;
 Mixtral 42 cells rms 0.51% and Phi 42 cells rms 0.69%, each CERTIFIED in CLEAN (3 of 3 pages), so
-CLEAN now certifies Mixtral and Phi beside rental 6's OLMoE. E1-UNI (36 cells rms 0.46%) and
+CLEAN now certifies Mixtral and Phi beside rental 6's OLMoE (NOTE 2026-11-12: rental 6 registered no certification
+rule, so OLMoE HOLDS in CLEAN and is not certified; docs/FINDINGS.md, Rental 6). E1-UNI (36 cells rms 0.46%) and
 SKEW-RATIO v3 (48 ratios rms 0.45%) HOLD. E1 rivals: LT3 EXCLUDED (1.83% against 0.68% on 62 lever
 cells); v2, H8, v3_all and v3_noca UNDECIDED by construction. SKEW-RATIO: U EXCLUDED, LT3 UNDECIDED
 (4). The residual tracks the tread again: about -1% at each shape's first tread, +0.3% at the third.

@@ -304,14 +304,23 @@ decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new,
 it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
-Rental 3) failed. Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
+Rental 3) failed. (Note 2026-11-12: that count dates from rental 3. Rental 6's and rental 7's skew tests
+below also price time from predicted bytes and HOLD, but on seen models' shapes under synthetic skew on R3's tile, where
+the byte term carries at most 0.06% of ln T: they test the timing model, so 8x22B stays the only unseen-model test from
+predicted bytes to time that held; the blind tests on vLLM's tiles, B3 and the
+decode blind, FAIL. Also, "every verdict they printed can be re-derived" above holds through
+`scripts/scoring/rescore.py` only from tile rental A onward; rentals 1 to 7 and the sessions before them are
+re-derived by running their own scorers under `scripts/scoring/` by hand, last recorded byte for byte for rentals 3
+to 5 on 2026-10-14, docs/FINDINGS.md, Provenance note.) Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
 and Qwen1.5 in its ALL view and is NOT SCORED as registered (docs/FINDINGS.md, Rental 5).
 Rental 6's skew test of model v3 from predicted bytes HOLDS as registered: 0.55% rms over 122
 Mixtral, OLMoE and Phi cells (ALL), 0.54% over OLMoE's 42 (CLEAN), on R3's tile, not vLLM's
 (docs/FINDINGS.md, Rental 6). Rental 7's repeats it on fresh Mixtral and Phi draws and HOLDS
 in both views with every page in CLEAN: 0.61% rms over 84 cells, each model certified (Mixtral
 0.51%, Phi 0.69%), again on R3's tile; its S - N gap test (Q1-H) FAILS on the 15-copy pages
-(docs/FINDINGS.md, Rental 7). Tile rental A STOPPED the tile stage: the 128x128 wgmma counter
+(docs/FINDINGS.md, Rental 7). (Note 2026-11-12: only rental 7's 48 skewed cells are fresh blind draws; the other 36
+of the 84 are uniform cells that replicate SEEN counts, and Mixtral's skewed draws are BLIND-CALMODEL. Rental 6 registered
+no certification rule, so OLMoE HOLDS in CLEAN and is not certified.) Tile rental A STOPPED the tile stage: the 128x128 wgmma counter
 pages ran NATIVE and SHARED at 1599 to 1640 MHz under the 1710 MHz lock, below the counter clock
 band, so the floor calibration is NOT SCORED, model v4 has no wgmma constants and rental B does not
 run (docs/FINDINGS.md, Tile rental A). Tile rental A2 STOPPED it again, at the 1410 MHz lock its
@@ -379,7 +388,8 @@ weight slab at about 36 GB/s, falling to 23 GB/s at 128 live CTAs and to about 8
 decode tile it reads X_sat 3782 GB/s and kappa at 8 single-wave rungs, but c0 at G 128 and so the L table read NOT
 IDENTIFIED; c0 reads at G 8 only (2.40 us on 64x128x64); v6d's big-single-wave assumption DOES NOT HOLD on both
 4-per-SM tiles (G 528 saturates, kappa falls 7% to 8% from G 396); a naive cell with no follower costs what its
-aligned twin costs within 7%, where both read (10 of 22 GEMMs). 81 of 220 cell GEMMs are NOT READ on the per-call spread, mostly short slabs, so v6d
+aligned twin costs within 7%, where both read (10 of 22 GEMMs). 81 of 220 cell GEMMs are NOT READ on the per-call spread, mostly short slabs (and 1 more on the stamp-overhead
+bound alone: 82 NOT READ and 138 READ in all, corrected 2026-11-12), so v6d
 cannot be completed from PC2's readings alone (docs/FINDINGS.md, Rental PC2). The sixth and last decode addendum (2026-11-10) registers v6d, design-D6's per-CTA law
 with PC2's READ values and the empty slots filled on PC, PC2, DS and CAL2 only, frozen before its gate ran. The gate
 reads NO-GO: CAL2 GO at 1.81% rms, but the seen decode blind re-scores at 4.52% pooled against 4.0%, a miss carried by

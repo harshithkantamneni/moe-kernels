@@ -47,7 +47,8 @@ Numbers marked DESCRIPTIVE are printed from the scorers' own functions (`page_re
 
 **Does v3 meet the owner's working bar (rms <= 2%, no cell beyond 5%, here also \|mean\| <=
 1%)?** Yes, as a registered verdict, on R3's tile: E1-SKEW HOLDS in both views. The CLEAN view
-that certifies it is OLMoE's three pages alone (42 cells, rms 0.54%, worst -1.47%, mean +0.16%);
+that certifies it is OLMoE's three pages alone (42 cells, rms 0.54%, worst -1.47%, mean +0.16%; NOTE 2026-11-12: "certifies"
+is loose, this registration has no certification rule, so OLMoE's verdict is E1-SKEW HOLDS in CLEAN, not CERTIFIED);
 Mixtral and Phi meet the bar in ALL (Mixtral 42 cells rms 0.44%, worst -1.01%; Phi 38 cells rms
 0.65%, worst -1.55%) and are out of CLEAN only because of the histogram G1 drift rule (below). E2-SKEW
 (from counted bytes) also HOLDS. Four limits, stated with it: (1) the cells are R3's tile 32 x 64
