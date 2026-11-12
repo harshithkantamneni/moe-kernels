@@ -26,3 +26,7 @@
 2026-11-12T01:57:35Z decodebytes START: RR counter page at the 1410 lock (dram_counter_route_rr.py over the pinned route's functions, family rr-counter): docs/registered/2026-11-11-rr-pages/rr-128.json; every fused_moe_kernel launch grid held to vLLM's own (the spy's readback) [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr] (estimate 9 min, cap 25 min, 69 min left)
 2026-11-12T02:05:30Z decodebytes END: exit 0 after 8 min [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr]
 2026-11-12T02:05:30Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1ca0b90 to run-gh200-rr-20261112t0150: decodebytes (unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:05:35Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-11-11-rr-pages/rr-64.json; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json] (estimate 3 min, cap 12 min, 61 min left)
+2026-11-12T02:05:54Z stamps END: exit 0 after 0 min [unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json]
+2026-11-12T02:05:55Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

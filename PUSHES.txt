@@ -6,3 +6,4 @@
 2026-11-12T01:57:05Z perturb (unit 4/10 - pt probe=pc gates=s128,s64,sr): exit 1 (2 min)
 2026-11-12T01:57:31Z stamps (unit 5/10 - s128 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-128.json): exit 0 (0 min)
 2026-11-12T02:05:33Z decodebytes (unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr): exit 0 (8 min)
+2026-11-12T02:05:59Z stamps (unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json): exit 0 (0 min)
