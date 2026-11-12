@@ -2,3 +2,4 @@
 2026-11-12T01:54:51Z setup_vm.sh: READY
 2026-11-12T01:54:56Z prelude (unit 1/10 - lock-mhz=1410 power-limit-w=700): exit 0 (0 min)
 2026-11-12T01:55:08Z tilecensus (unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe): exit 0 (0 min)
+2026-11-12T01:55:32Z regcheck (unit 3/10 - rcp probe=pc): exit 0 (0 min)
