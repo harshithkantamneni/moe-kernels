@@ -1542,6 +1542,9 @@ Open defect, not fixed: the prelude's log names `power-set-unsettled.txt` for th
 
 ### The calibration rental C2 (2026-10-22, CALIBRATION)
 
+NOTE 2026-11-12: dated 2026-10-22 here and in the file name, but first committed 2026-10-21 17:24Z (2366efcf),
+before C2's instance launched at 18:42:47Z that day (docs/FINDINGS.md, Calibration rental C2).
+
 | file | registers |
 |---|---|
 | `2026-10-22-cal2-gh200` | Mixtral-8x22B as a fourth held-out CAL model in the large-K, x near 1, G 1 regime (knee-v5 section 8, the owner's option (b) of 2026-10-22): C2-T its 128x128 w8 s3 G 1 timed page (n 2, six cells, NATIVE and SHARED) and C2-B its byte page; C2-F the averaged-fit sag estimator's two pages on C2's board (OLMoE and Mixtral-8x7B f128) and G-BAND; C2-M the A2-type Mixtral-8x7B b128g1 byte page on A2's E1-CAL cells and C2-MT its timed page (owner, 2026-10-22; DESCRIPTIVE C2-S6: Mixtral's held-out mean on C2's board beside +3.13 and the GEMM against per-call split on one board). The primary reading C2-R1 (8x22B's held-out 128 G 1 mean X under v5'' and F1 par, `scripts/scoring/cal2/read_c2.py`), the four-model table beside the three registered CAL means (+0.13, -0.82, +3.13), the pass estimates A, B and D (power5's method, ported), the bands CLEAN (abs X <= 1), PARTIAL, REGIME (X >= 2, a regime or E 8 family property), OPPOSITE (X < -1) and what each means for B3 (CLEAN changes which estimate is credible, D over A; A stays under 0.09 at every X); v5'' and the sag estimator FROZEN (every work file by sha256, constants by value, a six-cell fingerprint the reader must reproduce) and tied to the rental's commit (the reader refuses unless that commit holds the registration, the reader, the driver and every repo module the chain imports, each at its registered sha256); histogram page drawn into `2026-10-22-cal2-hist` by `scripts/scoring/cal2/hist_c2.py` |
@@ -1685,6 +1688,12 @@ unscored. B3 reopens only if a declared model passes the same gate on held-out C
 with the blind models still unspent. docs/FINDINGS.md, "Tile stage: scope decision (2026-10-28)", records what is
 certified, what is MEASURED or HELD-OUT on vLLM's tiles, what is not established, and the open defects carried.
 
+NOTE 2026-11-12: this paragraph describes 2026-10-28. The registered sequence it follows (C4's AFTER line)
+contradicts itself: it lets the owner choose going blind after a failed round, and it registers B3 only after a
+declared round passes. On 2026-11-04 the owner chose to go blind under the working-model bar (rms 3%, worst cell
+8%, |mean| 1.5%), set after round 5's numbers were known, and B3 was registered with no round passing (2026-11-04
+US Central, committed 2026-11-05 03:37Z as a5608079; tile rental B3, below; its registration discloses this). B3's E1-TILE FAILS, and its blind models are spent.
+
 ## 2026-10-28, before any decode page: the decode stage's second addendum
 
 `2026-10-28-decode-addendum2-gh200` (`scripts/scoring/decode/register_decode_d2.py --write` / `--check`) follows the
@@ -1744,6 +1753,10 @@ pin moved (`tests/test_calibration_provenance.py`). Next (owner): offline diagno
 Decode CAL rental).
 
 ## 2026-10-29 (amended 2026-11-03), before any CAL2 page: the decode stage's third addendum
+
+NOTE 2026-11-12: git first holds this addendum in 88768aea, committed 2026-11-03 18:20Z, before CAL2 launched at
+22:03:20Z; no 2026-10-29 version was ever committed. Its decisions D3-1 to D3-5 are of 2026-10-29 and D3-6 to D3-11
+of 2026-11-03 (docs/FINDINGS.md, Decode CAL2 and blind rentals).
 
 `2026-10-29-decode-addendum3-gh200` (`scripts/scoring/decode/register_decode_d3.py --write` / `--check`, committed at
 88768aea) follows the offline diagnosis of the decode CAL STOP and the owner's decisions D3-1 to D3-11; its `.txt` is
@@ -2056,6 +2069,10 @@ stamped compiles. Read on the fetched tree and on the published copy, the two ou
 `scripts/scoring/rescore.py pc2` re-reads the published session to the committed files (docs/FINDINGS.md, Rental PC2).
 
 ## 2026-11-10, before any new blind page: the decode stage's sixth and last addendum (model v6d, the gate NO-GO, the new blind NOT RUN)
+
+NOTE 2026-11-12: "frozen before its gate ran" rests only on the timestamps in FROZEN.txt and in this registration;
+FROZEN.txt, the gate output and this addendum first appear in git together in 019ace6a, after the gate ran
+(docs/FINDINGS.md, Decode closes after v6d, NOTE 2026-11-12).
 
 `2026-11-10-decode-addendum6-gh200` (`scripts/scoring/decode/register_decode_d6.py --write` / `--check`) registers model
 v6d, its gate reading and addendum 5's new blind under it. Every earlier decode registration, v4d, v4d', v5d and every

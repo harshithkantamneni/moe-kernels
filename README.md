@@ -311,7 +311,9 @@ predicted bytes to time that held; the blind tests on vLLM's tiles, B3 and the
 decode blind, FAIL. Also, "every verdict they printed can be re-derived" above holds through
 `scripts/scoring/rescore.py` only from tile rental A onward; rentals 1 to 7 and the sessions before them are
 re-derived by running their own scorers under `scripts/scoring/` by hand, last recorded byte for byte for rentals 3
-to 5 on 2026-10-14, docs/FINDINGS.md, Provenance note.) Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
+to 5 on 2026-10-14, docs/FINDINGS.md, Provenance note.) (Note 2026-11-12: `rescore.py cal2`, `cal4` and `tileB3`
+also need `~/code/moe-kernels-work`, which is not in this repository: their readers import the frozen model chains
+from it and refuse without them; docs/FINDINGS.md, Provenance note.) Rental 5's skew test of model v2 from predicted bytes reads 1.26% rms on OLMoE
 and Qwen1.5 in its ALL view and is NOT SCORED as registered (docs/FINDINGS.md, Rental 5).
 Rental 6's skew test of model v3 from predicted bytes HOLDS as registered: 0.55% rms over 122
 Mixtral, OLMoE and Phi cells (ALL), 0.54% over OLMoE's 42 (CLEAN), on R3's tile, not vLLM's
@@ -391,7 +393,9 @@ IDENTIFIED; c0 reads at G 8 only (2.40 us on 64x128x64); v6d's big-single-wave a
 aligned twin costs within 7%, where both read (10 of 22 GEMMs). 81 of 220 cell GEMMs are NOT READ on the per-call spread, mostly short slabs (and 1 more on the stamp-overhead
 bound alone: 82 NOT READ and 138 READ in all, corrected 2026-11-12), so v6d
 cannot be completed from PC2's readings alone (docs/FINDINGS.md, Rental PC2). The sixth and last decode addendum (2026-11-10) registers v6d, design-D6's per-CTA law
-with PC2's READ values and the empty slots filled on PC, PC2, DS and CAL2 only, frozen before its gate ran. The gate
+with PC2's READ values and the empty slots filled on PC, PC2, DS and CAL2 only, frozen before its gate ran (Note
+2026-11-12: that order rests only on FROZEN.txt's and the registration's own timestamps; all three first appear in
+git together in 019ace6a, after the gate ran; docs/FINDINGS.md, Decode closes after v6d). The gate
 reads NO-GO: CAL2 GO at 1.81% rms, but the seen decode blind re-scores at 4.52% pooled against 4.0%, a miss carried by
 13 naive cells that keep v4d''s price under a rho form (fixed) chosen by a CAL2 fit the law-priced cells dominate,
 where every earlier decode CAL fit chose scaled: a defect recorded and not fixed. Under the owner's stopping rule decode

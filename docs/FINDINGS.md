@@ -1041,6 +1041,12 @@ JetMoE), 594c0f (the two 2026-09-30 floor sessions, the seventh board), 7269a7 (
 (2026-10-07) ran on bb7a34 again: 15 GH200 sessions on ten boards. Rental 5 (2026-10-09) ran on an
 eleventh, 1cd741: 16 GH200 sessions on eleven boards. Rental 6 (2026-10-13) ran on a twelfth,
 ff9942: 17 GH200 sessions on twelve boards.
+CORRECTED 2026-11-12: 0f77622 above is the code commit the four files were written at
+(0f776220, which adds the per-CTA fixed cost F to `r3_timing_model`, committed 2026-09-29 17:24Z), not the
+registration commit. Git first holds the four `.json` and `.txt` files in ef0608b3, committed three
+minutes later (17:27Z). Both are in a1b6118, the tree the Qwen1.5, Phi-3.5 and JetMoE sessions ran,
+and in a156392, Granite's. `docs/registered/README.md` states it correctly ("written by
+`scripts/cross_model_predict.py` at 0f77622").
 
 **Registered outcomes.** Time is the primary test (`scripts/cross_model_score.py`,
 each model's own counted bytes, not the byte model's predicted bytes, VALID lock-1710 pages; bar: SHARED and PRIVATE
@@ -2091,6 +2097,13 @@ dependence of the S - N gap (Q1-H FAILS at 15 copies), the block-scan path condi
 against it, descriptively), OLMoE's skewed w1 bytes under v3 (the 60 MiB row key is named; OPEN), or
 anything on vLLM's own tile, which is the next stage.
 
+CORRECTED 2026-11-12: the three models in the first sentence do not have the same standing. Mixtral 8x7B and
+Phi-3.5-MoE are CERTIFIED in CLEAN under rental 7's certification rule, the first one registered. OLMoE is a
+registered E1-SKEW HOLDS in CLEAN under rental 6, whose registration has no certification rule, and its cells are
+IN-SAMPLE for term (b) (Rental 6 above). Read as a list of certified models, the sentence overstates OLMoE.
+Of rental 7's 84 cells, the 48 skewed cells are the blind part, and Mixtral's skewed draws are BLIND-CALMODEL
+(Rental 7 above).
+
 ---
 
 ## Provenance note (2026-10-14): code pins of rentals 3 to 5
@@ -2114,6 +2127,36 @@ own scorers and committed score files (`scripts/scoring/rental1/` to `rental7/`,
 re-run by hand. The byte-for-byte re-run above covered rentals 3 to 5 on 2026-10-14, and this file records no later
 re-run of these scorers against their published sessions.
 
+NOTE 2026-11-12, when each registration was committed and pushed (a git check). For every published GH200
+session from 2026-09-27 on, the commit that first added each registration that predicts the session's pages is an
+ancestor of the commit its VM ran (`session/commit.txt`). (The 2026-09-25 session was set up from a bundle and is
+scored against no registration.) Three registrations are gates on pages already published, not predictions of a
+session's pages, and no run commit of the pages they read contains them: addendum 3's reduction check (on the
+decode CAL pages, run at a398c6a0) and the gates of addenda 5 and 6 (on the CAL2 and decode blind pages). Every
+session's `session/setup_vm.log` from 2026-09-27 on fetches the run commit from
+github.com/harshithkantamneni/moe-kernels, and `scripts/setup_vm.sh` (lines 523 to 530 today; the same check is in
+the 2026-09-27 run commit 161f9ec1) refuses a commit the fetched source does not hold. So each such registration was
+on GitHub before the first page it predicts. The one exception is rental 2's gate addendum
+(`docs/registered/2026-10-02-rental2-addendum-gates`, 38898b45, committed 2026-10-02 06:15Z). Rental 2's first unit
+began at 05:26Z (the run branch's first push, with no page, was 05:24Z; `session/PUSHES.run-branch.txt`), and its
+floor and byte pages were pushed before the addendum. The addendum came before any score, as disclosed (Rental 2
+above; `docs/registered/README.md`, 2026-10-02). Pushed before the instance was launched, and not only before the
+first page, can be shown only from rental 5's measuring launch on. Git does not record pushes. The one push record is
+the canonical checkout's reflog of `origin/gh200-analysis-2026-09-27`, which is outside this repository. Its first
+entry is rental 5's run commit d4d1767e, pushed 2026-10-08 07:37Z, before the measuring launch (instance 0e169708,
+2026-10-08 23:26Z); rental 5's two earlier launches (2026-10-07 17:49Z and 2026-10-08 07:22Z) were refused before
+any unit and predate the record. From rental 6 on, each run commit's push precedes its launch in the same record
+(rental 6: 650d295c pushed 2026-10-09 18:18Z, launched 2026-10-13 10:50Z). Every rental's registration commit time,
+except rental 2's gate addendum, also precedes its launch, but a commit time does not show a push. No verdict
+changes.
+
+NOTE 2026-11-12, re-scoring needs a folder outside the repository: `rescore.py cal2`, `rescore.py cal4` and
+`rescore.py tileB3` run readers (`scripts/scoring/cal2/read_c2.py`, `cal4/read_c4.py`, `tileB3/read_b3.py`) that
+import the frozen model chains from `~/code/moe-kernels-work` (C2's from 2026-10-22 knee-v5/work, C4's from
+2026-10-27/round3/work, B3's from 2026-10-28/round5/work, each with what it imports), and each refuses unless every frozen file
+matches its registered sha256. That folder is not in this repository, so those three stages cannot be re-derived
+from the repository alone (the `rescore.py` docstring says so for cal2 and cal4).
+
 ---
 
 ## Tile rental A (2026-10-20): STOP, the wgmma floor is not calibrated because its NATIVE and SHARED cells ran under the counter clock band; v4's A key falls to CLAMP; sigma_page 0.13% at 128x128; every dead-CTA law excluded
@@ -2126,7 +2169,10 @@ rental B's two frozen ones, their scorers, the SYNTHETIC histograms and the plan
 before any page (eb84555; unchanged at c4914ba). Published at
 `results/published/2026-10-20-nvidia_gh200_480gb-tileA-session`. Every verdict is the committed
 scorers' output in `scripts/scoring/tileA/` (`SCORES.md` has the tables). No post-page fix. The
-instance id and the bill are not in the run files.
+instance id and the bill are not in the run files. (NOTE 2026-11-12, cost: launch and terminate times not
+recorded, so no bill is derived. A lower bound from `session/PUSHES.run-branch.txt`, the VM's first push at
+05:59:00Z to the session's end at 07:55:41Z on 2026-10-20: at least 116.7 min, at least $4.45 at $2.29/h, an
+ESTIMATE.)
 
 **Registered outcomes.**
 
@@ -2263,7 +2309,10 @@ rental B2's two (`2026-10-20-tileB2-*`), the decode addendum (`2026-10-20-decode
 their scorers, the SYNTHETIC histograms and the plan were committed before any page (36291487, the run
 commit). Published at `results/published/2026-10-21-nvidia_gh200_480gb-tileA2-session`. Every verdict
 is the committed scorers' output in `scripts/scoring/tileA2/` (`SCORES.md` has the tables). No
-post-page fix. The instance id and the bill are not in the run files.
+post-page fix. The instance id and the bill are not in the run files. (NOTE 2026-11-12, cost: launch and
+terminate times not recorded, so no bill is derived. A lower bound from `session/PUSHES.run-branch.txt`, the VM's
+first push at 2026-10-20 22:43:52Z to the session's end at 2026-10-21 01:29:36Z: at least 165.7 min, at least $6.33
+at $2.29/h, an ESTIMATE.)
 
 What A2 changed from rental A, by the owner's decisions of 2026-10-20 (docs/registered/README.md): a
 900 W GPU power limit instead of 700 W, and a lock ladder 1710, 1410, 1305 MHz whose first rung that
@@ -2393,7 +2442,9 @@ against 47 estimated; none was dropped and every unit and the driver exit 0. The
 (`docs/registered/2026-10-21-settleS1-gh200`), its reader `scripts/scoring/settleS1/read_s1.py`, the SYNTHETIC
 histograms and the plan were committed before any page (52ed2cac, the run commit). Published at
 `results/published/2026-10-21-nvidia_gh200_480gb-settleS1-session`. Every reading is the pinned reader's
-output, `scripts/scoring/settleS1/settleS1.read.{json,txt}`. No post-page fix.
+output, `scripts/scoring/settleS1/settleS1.read.{json,txt}`. No post-page fix. (NOTE 2026-11-12, cost: 30.2 min
+of instance time, about $1.15 at $2.29/h, an ESTIMATE derived 2026-11-12 from the instance times above; no bill
+is recorded.)
 
 S1 is DESCRIPTIVE. It certifies nothing, no model verdict is scored on its pages, and every S1 page is SEEN for
 model v5: a constant v5 takes from an S1 reading is SEEN-MEASURED or SEEN-FITTED, and v5's blind test must use
@@ -2494,6 +2545,14 @@ new to the study) ran `scripts/plans/rentalC2-cal-2026-10.plan` unattended throu
 and the plan were committed before any page (2366efcf); one reader fix followed before the rental (09b340ce, the
 run commit). Published at `results/published/2026-10-21-nvidia_gh200_480gb-cal2-session`. Every reading is the
 pinned reader's output, `scripts/scoring/cal2/cal2.read.{json,txt}`. No post-page fix.
+
+NOTE 2026-11-12, the registration's date. The file is named 2026-10-22 (`docs/registered/2026-10-22-cal2-gh200`),
+and its `docs/registered/README.md` entry and this section cite owner decisions of 2026-10-22, but git first
+holds it in 2366efcf, committed 2026-10-21 17:24Z, before C2's instance launched at 18:42:47Z the same day. The
+order against the pages holds; the date in the name is one day late. The offline work it rests on
+(moe-kernels-work `2026-10-22/` diag-v5, knee-v5 and build-C2) carries the same folder date, and its files are dated 2026-10-21. Cost, not given above: 36.6 min
+of instance time, about $1.40 at $2.29/h, an ESTIMATE derived 2026-11-12 from the instance times; no bill is
+recorded.
 
 **What C2 registered.** C2 is a CALIBRATION rental: it certifies nothing, scores no verdict, and every C2 page
 is SEEN for model v5'' and for B3 (the blind test of v5'' on rental B2's frozen pages of Phi-3.5-MoE,
@@ -2596,7 +2655,9 @@ the driver exit 0. Every unit exit 0 except the perturbation gate (exit 1, its t
 (`docs/registered/2026-10-26-cal3-gh200`), its priced table, the reader `scripts/scoring/cal3/read_c3.py`, the probe
 `scripts/instr_probe_c3.py`, the driver and the plan were committed before any page (e10fda1b, the run commit).
 Published at `results/published/2026-10-27-nvidia_gh200_480gb-cal3-session`. Every reading is the pinned reader's
-output, `scripts/scoring/cal3/cal3.read.{json,txt}`. No post-page fix.
+output, `scripts/scoring/cal3/cal3.read.{json,txt}`. No post-page fix. (NOTE 2026-11-12, cost: 16.1 min of
+instance time, about $0.61 at $2.29/h, an ESTIMATE derived 2026-11-12 from the instance times above; no bill is
+recorded.)
 
 **What C3 registered.** C3 is a CALIBRATION rental and DESCRIPTIVE: it certifies nothing, scores no verdict and
 moves no registered verdict, and every C3 page is SEEN once read. It is the owner's option (b) of 2026-10-22, after
@@ -2724,6 +2785,8 @@ every unit and the driver exit 0. The registration (`docs/registered/2026-10-27-
 `scripts/scoring/cal4/read_c4.py`, the tp2 histogram page, the driver and the plan were committed before any page
 (aa5e1b7c, the run commit). Published at `results/published/2026-10-27-nvidia_gh200_480gb-cal4-session`. Every
 reading is the pinned reader's output, `scripts/scoring/cal4/cal4.read.{json,txt}`. No post-page fix.
+(NOTE 2026-11-12, cost: 26.2 min of instance time, about $1.00 at $2.29/h, an ESTIMATE derived 2026-11-12 from
+the instance times above; no bill is recorded.)
 
 **What C4 registered.** C4 is a CALIBRATION rental: it certifies nothing, scores no verdict, and every C4 page is
 SEEN once read. It follows round 4 (moe-kernels-work 2026-10-27 round3, ROUND4.md; not in this repository), whose
@@ -2815,6 +2878,13 @@ pages and 103 changed verdicts.
 held-out 128 G 1 mean within 1.0%, Mixtral-8x7B on C2's board as well, now on five models; G2 an estimated P(A) of
 at least 0.5). If it fails the gate, iteration stops and the owner chooses between narrowing scope and going blind.
 B3 is registered only after a declared round passes.
+NOTE 2026-11-12: these two sentences, as registered (`docs/registered/2026-10-27-cal4-gh200.txt`, AFTER),
+contradict each other: going blind after a failed round means registering B3 with no round passed. Round 5
+failed the gate (Tile stage: scope decision, below). On 2026-11-04 the owner chose to go blind under a new bar,
+the working-model bar (rms 3%, worst cell 8%, |mean| 1.5%), set after round 5's numbers were known, and B3 was
+registered (a5608079; 2026-11-04 US Central, committed 2026-11-05 03:37Z) with no declared round passing. B3's registration discloses
+this (`docs/registered/2026-11-04-tileB3-gh200.txt`, BAR, "relation to the round-5 gate": round 5's FAIL
+stands, and the registration is made knowingly below both old thresholds). The registered text is unchanged.
 
 **What the paper can claim, after calibration rental C4.** Measured, on board 183300 at a 700 W enforced limit and
 a 1410 MHz lock: the round-4 model, frozen before the page, under-predicts Mixtral-8x7B-tp2's 128x128 G 1 time by
@@ -2847,6 +2917,14 @@ Rounds 2 to 5 are offline work in moe-kernels-work and are not in this repositor
 2026-10-22), round 3 and round 4 (ROUND3.md, ROUND4.md; 2026-10-27), and round 5 (ROUND5.md; 2026-10-28). The
 diagnosis and knee rounds before them are 2026-10-22 diag-v5 (DIAGNOSIS.md) and knee-v5 (KNEE.md). Numbers from
 them are cited by file and section. Sign throughout: e = model / measured - 1.
+
+CORRECTED 2026-11-12, round numbers and dates. refit4's REFIT.md is round 1, not one of rounds 2 to 5; ROUND2.md,
+in the same folder, is round 2. Both ran on 2026-10-21, not 2026-10-22: REFIT.md read the repository at 09b340ce
+(committed 2026-10-21 18:20Z), and ROUND2.md records its declaration (`work/DECLARED2.txt`) as written at
+2026-10-21T19:51:23Z, after round 1's outputs. The folder is named 2026-10-22, as are diag-v5's and knee-v5's,
+whose files are also dated 2026-10-21. The offline rounds are: round 1 (refit4 REFIT.md) and round 2 (refit4
+ROUND2.md), 2026-10-21; rounds 3 and 4 (ROUND3.md, ROUND4.md), 2026-10-27; round 5 (ROUND5.md, declared
+2026-10-27T23:19:46Z, in a folder named 2026-10-28).
 
 **What is CERTIFIED (unchanged).** Model v3 on R3's tile, 32 x 64 x 64 w8 s4 at G 8, blind under synthetic skewed
 routing, on three models in CLEAN:
@@ -2989,7 +3067,9 @@ committed before any decode page (a398c6a0, the run commit). Published at
 `results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session`. Every reading is the registered scorer's
 output, run as registered from the repository root (`PYTHONHASHSEED=0 .venv/bin/python
 scripts/scoring/decode/score_cal_d2.py <tree>/results <out> --tile-scores scripts/scoring/tileA2`), committed as
-`scripts/scoring/decode/cal.score.{json,txt}`. No post-page fix.
+`scripts/scoring/decode/cal.score.{json,txt}`. No post-page fix. (NOTE 2026-11-12, cost: 79.0 min of instance
+time, about $3.02 at $2.29/h, an ESTIMATE derived 2026-11-12 from the instance times above; no bill is
+recorded.)
 
 **What was registered.** decodeC-cal (2026-10-14): vLLM's own decode call at T 1 to 128 on OLMoE-1B-7B and
 Mixtral-8x7B, timed on GRR main pages (one CUDA graph of back-to-back calls on rotating weight copies), fits model
@@ -3140,6 +3220,26 @@ not priced, 27 DESCRIPTIVE; T0_GR 28.02 us, s_naive -12.71 us, s_block -14.43 us
 mechanically from the CAL2 score and committed with the blind plan at 82364213, before any blind page. The addendum's
 own estimates (registered, not measured) were: CAL2 GO about 0.7, the pooled blind bar holding about 0.05, at least
 one model certified about 0.15.
+
+NOTE 2026-11-12, addendum 3's date. The addendum is dated 2026-10-29 (amended 2026-11-03) in its file name, in its
+`.txt` ("REGISTERED 2026-10-29") and in `docs/registered/README.md`, but git first holds it in 88768aea,
+committed 2026-11-03 18:20Z (the CAL2 run commit, before CAL2 launched at 22:03:20Z). No 2026-10-29 version was
+ever committed, on any branch. In the file itself, decisions D3-1 to D3-5 are dated 2026-10-29 and D3-6 to D3-11
+2026-11-03. The order against the pages holds; 2026-10-29 is when the decisions began, not when anything was
+registered.
+
+NOTE 2026-11-12, "unseen". The five blind models are unseen in a narrow sense: no decode page had timed them.
+Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and Granite-3.0-3B-A800M are SEEN-MODEL, with published R3-tile pages;
+deepseek-v2-lite is SEEN-SHAPE, from a published H200 page whose GEMMs are Qwen1.5's. The decode call, its tile
+and its instrument were blind on all five (`docs/registered/2026-10-14-decodeB-blind-gh200.txt`, lines 132 to
+136). "Five unseen models" in the heading above, in Decode stage closes calibrated, not certified, and in Decode
+closes after v6d means the same. So does "The three unseen models remain unseen and undecoded" (Decode stage
+closes calibrated, not certified): no decode page of them exists, but Mixtral-8x22B and Qwen2-57B-A14B have
+published R3-tile pages, Mixtral-8x22B is C2's held-out CAL model on vLLM's 128x128 tile (Calibration rental C2),
+and Granite-3.0-1B-A400M has rental 2's launch-floor pages.
+
+NOTE 2026-11-12, cost, not given above: CAL2 89.2 min of instance time, about $3.41, and the blind 86.8 min, about
+$3.31, at $2.29/h, ESTIMATES derived 2026-11-12 from the instance times; no bill is recorded.
 
 **What CAL2 reads** (`cal2.score.txt`).
 
@@ -3492,6 +3592,14 @@ certified only when E1-TILE HOLDS. The pooled cells fail the worst-cell clause a
 worst cell, in ALL and in CLEAN alike, so E1-TILE reads FAILS and the scorer's top-level certification reads NOT
 CERTIFIED for all three blind models. The FAIL is final: Phi-3.5-MoE, Qwen1.5-MoE-A2.7B, JetMoE-8B and
 deepseek-v2-lite are now SEEN for this model. No earlier registered verdict changes.
+
+NOTE 2026-11-12, how B3 came to be registered. C4's registration said B3 "is registered only after a declared
+round passes" and, in the same line, let the owner choose between narrowing scope and going blind if the final
+round failed (Calibration rental C4 above). Round 5 failed. B3 was registered on 2026-11-04 US Central (a5608079,
+committed 2026-11-05 03:37Z) under the
+owner's working-model bar, set after round 5's numbers were known, with no declared round passing. B3's
+registration discloses this (`docs/registered/2026-11-04-tileB3-gh200.txt`, BAR, "relation to the round-5
+gate"). The FAIL above stands either way.
 
 **Per model** (84 NATIVE cells, e = T_model / T_meas - 1; the bar is rms 3%, worst cell 8%, |mean| 1.5%):
 
@@ -3994,6 +4102,12 @@ cf36479eae47efed9b34809db5070ae896c59b29127f7184e160db6a05034527  scripts/scorin
 ```
 
 The gate ran at 2026-11-10T22:36:41Z. No choice changed after it.
+
+NOTE 2026-11-12, what the freeze order rests on. Freeze before gate rests only on timestamps written in the files
+themselves: FROZEN.txt's 22:35:03Z and the registration's "ran: 2026-11-10T22:36:41Z". FROZEN.txt, the gate
+output (`scripts/scoring/decode/gate_d6.out.txt`) and addendum 6 first appear in git together, in 019ace6a
+(authored 2026-11-10 23:25:57Z, committed 2026-11-11 04:34Z), after the gate ran; no earlier commit holds any of
+them. The four files FROZEN.txt lists match its sha256 today. No page is involved, and no verdict changes.
 
 **v6d.** Over v5d (byte-identical), every aligned GEMM is priced by design-D6's law: a CTA's life is c0 plus its B
 slab streamed at the latency read off PC's rate curve at the GPU-wide load, never faster than the tile's X_sat share;
