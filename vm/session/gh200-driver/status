@@ -58,3 +58,14 @@
 2026-11-12T02:14:12Z stamps: u9-sr exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-phi-3.5-moe-sr, probe=pc)
 2026-11-12T02:14:12Z stamps END: exit 0 after 0 min [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
 2026-11-12T02:14:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-12T02:14:21Z bytes START: 3c.2 byte pages at the 1410 lock, the registered G = 1, treads 1,2,3,4,5,6,7,8,9; no base-clock control; knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native; tile 128x128x64 w8 s3 [unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1] (estimate 6 min, cap 18 min, 53 min left)
+2026-11-12T02:14:37Z census for phi-3.5-moe written (/home/ubuntu/moe/session/census-phi-3.5-moe.json)
+2026-11-12T02:14:37Z bytes: tile --num-warps 8 --block-m 128 --block-n 128 through scripts/dram_counter_route_tile.py on every page of this unit
+2026-11-12T02:14:37Z bytes: rental 2 knobs --num-stages 3 --block-k 64 --histogram docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json --arms native on every page of this unit
+2026-11-12T02:14:37Z bytes: the registered list G = 1 (phi-3.5-moe, br): no tail drop, no re-price, no base-clock control
+2026-11-12T02:14:46Z bytes: lock block exit 2 (G=1 exit 2 02:14:45 5 s;)
+2026-11-12T02:14:51Z bytes: no base-clock control (a registered --byte-groups list, or a knob unit)
+2026-11-12T02:14:51Z bytes: no C5 references (the 2026-09-25 timed pages are mixtral-8x7b's)
+2026-11-12T02:14:51Z bytes: no page written, nothing to analyse
+2026-11-12T02:14:51Z bytes END: exit 2 after 1 min [unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1]
+2026-11-12T02:14:52Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
