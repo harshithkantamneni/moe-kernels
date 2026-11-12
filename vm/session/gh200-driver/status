@@ -53,3 +53,8 @@
 2026-11-12T02:13:50Z decodebytes: exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-mixtral-8x7b-c64-r3-counters/lock1410/r3d.json)
 2026-11-12T02:13:50Z decodebytes END: exit 0 after 8 min [unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr]
 2026-11-12T02:13:51Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-12T02:13:57Z stamps START: stamps (probe=pc) at the 1410 lock: the instrumented copy (stamps=ends) on docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json at 128x128x64 w8 s3; runs on a PASS regcheck and gate hard legs, PERTURBED on a timing FAIL (scripts/instr_probe_rr.py) [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native] (estimate 2 min, cap 10 min, 53 min left)
+2026-11-12T02:13:57Z stamps: the overhead gate for u9-sr reads 'FAIL median=0.01600281293846917 worst=0.028725569294656084': the pages run PERTURBED (owner OD-1, C3)
+2026-11-12T02:14:12Z stamps: u9-sr exit 0 (/home/ubuntu/moe/results/2026-11-12-nvidia_gh200_480gb-instr-phi-3.5-moe-sr, probe=pc)
+2026-11-12T02:14:12Z stamps END: exit 0 after 0 min [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
+2026-11-12T02:14:13Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000

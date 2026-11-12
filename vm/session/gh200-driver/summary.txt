@@ -6,3 +6,4 @@ stamps     exit 0 after 0 min [unit 5/10 - s128 probe=pc page=docs/registered/20
 decodebytes exit 0 after 8 min [unit 6/10 - c128 histogram=docs/registered/2026-11-11-rr-pages/rr-128.json kernels=rr]
 stamps     exit 0 after 0 min [unit 7/10 - s64 probe=pc page=docs/registered/2026-11-11-rr-pages/rr-64.json]
 decodebytes exit 0 after 8 min [unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr]
+stamps     exit 0 after 0 min [unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native]
