@@ -1,0 +1,5 @@
+[
+ {"id": "u5-s128", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-11-rr-pages/rr-128.json", "spec": "stamps=ends"},
+ {"id": "u7-s64", "kind": "stamps", "probe": "pc", "page": "docs/registered/2026-11-11-rr-pages/rr-64.json", "spec": "stamps=ends"},
+ {"id": "u9-sr", "kind": "stamps", "probe": "pc", "model": "phi-3.5-moe", "groups": [1], "arms": ["native"], "block_m": 128, "block_n": 128, "block_k": 64, "num_warps": 8, "num_stages": 3, "histogram": "docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json", "spec": "stamps=ends"}
+]
