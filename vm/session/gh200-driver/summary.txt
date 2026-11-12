@@ -1,3 +1,4 @@
 prelude    exit 0 after 0 min [unit 1/10 - lock-mhz=1410 power-limit-w=700]
 tilecensus exit 0 after 0 min [unit 2/10 - rr tiles=128x128x64w8s3,64x128x64w8s3 models=mixtral-8x7b,phi-3.5-moe]
 regcheck   exit 0 after 0 min [unit 3/10 - rcp probe=pc]
+perturb    exit 1 after 2 min [unit 4/10 - pt probe=pc gates=s128,s64,sr]
