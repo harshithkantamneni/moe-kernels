@@ -10,3 +10,4 @@
 2026-11-12T02:13:55Z decodebytes (unit 8/10 - c64 histogram=docs/registered/2026-11-11-rr-pages/rr-64.json kernels=rr): exit 0 (8 min)
 2026-11-12T02:14:18Z stamps (unit 9/10 phi-3.5-moe sr probe=pc block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json instr-stamps=ends stamp-groups=1 stamp-arms=native): exit 0 (0 min)
 2026-11-12T02:14:57Z bytes (unit 10/10 phi-3.5-moe br block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-10-14-tileB-hist/phi-3.5-moe-128g1.json arms=native byte-groups=1): exit 2 (1 min)
+2026-11-12T02:15:04Z the session ended: driver exit 3
