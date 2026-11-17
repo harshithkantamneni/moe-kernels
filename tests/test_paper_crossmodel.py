@@ -14,6 +14,9 @@ import crossmodel_runs as CR  # noqa: E402
 import cross_model_score as X  # noqa: E402
 import score_registered as SR  # noqa: E402
 
+sys.path.insert(0, str(ROOT / "tests"))
+import _reproduce as RT  # noqa: E402
+
 OUT = ROOT / "scripts/scoring/crossmodel"
 MAN = json.loads((OUT / "MANIFEST.json").read_text())
 
@@ -77,12 +80,20 @@ def test_registered_rms_values():
         assert round(s["rms"], 4) == rms and s["beyond_5pct"] == beyond
 
 
+#: cases whose committed output reproduces byte for byte only under macOS 26.6.2's Accelerate (jetmoe-floor moved
+#: 1.2e-14 relative on 27.2.1): held by tests/_reproduce.py, labels exact, floats within REL_TOL 1e-12
+REPRODUCED = {"jetmoe-floor"}
+
+
 @pytest.mark.parametrize("case", ["8x22b", "jetmoe-floor"])
 def test_score_registered_regenerates_byte_identical(case, tmp_path):
     SR.main([case, "--out-dir", str(tmp_path)])
     for ext in ("json", "txt"):
-        assert (tmp_path / f"{case}.registered.{ext}").read_bytes() == \
-            (OUT / f"{case}.registered.{ext}").read_bytes()
+        got, want = tmp_path / f"{case}.registered.{ext}", OUT / f"{case}.registered.{ext}"
+        if case in REPRODUCED:
+            RT.assert_reproduces(got.read_text(), want.read_text(), ext, what=got.name)
+        else:
+            assert got.read_bytes() == want.read_bytes()
 
 
 def test_score_registered_key_numbers():

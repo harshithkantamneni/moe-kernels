@@ -164,6 +164,19 @@ numbers omit them and are therefore not comparable to each other:
   throttling; on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096
   while flagged and unflagged replicates timed at ratio 0.998). Every
   `merged.csv` under `results/published/` predates the LEVEL flag.
+- **Reproduction is checked to stated tolerances, labels exact (since
+  2026-11-17).** The committed scorer and reader outputs were produced on a
+  laptop running macOS 26.6.2, with numpy 2.5.3 on uv's cpython 3.12.13 linking
+  Apple's Accelerate for BLAS and LAPACK. Under that OS they re-read byte for
+  byte. macOS 27.2.1 (installed 2026-11-16) replaced Accelerate, and the
+  outputs that pass through a least-squares fit now differ in the last digits
+  of some floats, with no verdict, band, status or gate changed. Since
+  2026-11-17 the reproduction tests that re-run such a fit hold each output to
+  its committed file with `tests/_reproduce.py`: every string, label, key, list
+  length and integer exact, floats within 1e-12 relative (decode DS 1e-6, its
+  W1RATE fit's conditioning; cal3's floats not compared, its fit being
+  ill-conditioned, docs/FINDINGS.md, C3-R1 defect of record). Reproduction
+  tests whose outputs still match byte for byte keep the byte check.
 
 ## Routing traces
 
@@ -235,7 +248,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7799 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7806 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder

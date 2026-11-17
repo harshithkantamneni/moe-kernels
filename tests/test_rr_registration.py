@@ -30,6 +30,10 @@ NEW = [P.PROBE, P.DRIVER, P.LAUNCHER, P.COUNTER, "scripts/scoring/rr/rrcommon.py
        "tests/test_rr_driver.py", "tests/test_read_rr.py", "tests/test_rr_registration.py", "tests/rr_fakes.py",
        "tests/test_dram_counter_route_rr.py", *(f"{P.PAGES_DIR}/{n}" for n in P.page_files())]
 ENV = {"PYTHONHASHSEED": "0", "PATH": "/usr/bin:/bin"}
+#: earlier registrations whose --check compares recomputed floats byte for byte (pinned generators, not edited): read
+#: by tests/_reproduce.py's re-expression of that --check instead, labels exact and floats within REL_TOL 1e-12, since
+#: their committed files reproduce byte for byte only under macOS 26.6.2's Accelerate (defect of record 2026-11-17)
+REPRODUCED = {"scripts/scoring/decode/register_decode_d5.py": "register_decode_d5"}
 
 
 def sha(rel: str) -> str:
@@ -47,8 +51,10 @@ def test_the_registration_reads_same_under_its_generator():
                                        ("scripts/scoring/decode/register_decode_d4.py", 4),
                                        ("scripts/scoring/decode/register_decode_d5.py", 3)])
 def test_every_earlier_registration_rr_leans_on_still_reads_same(script, n):
-    got = subprocess.run([sys.executable, "-B", str(REPO / script), "--check"], capture_output=True, text=True,
-                         timeout=600, env=ENV)
+    argv = [sys.executable, "-B", str(REPO / script), "--check"]
+    if script in REPRODUCED:
+        argv = [sys.executable, "-B", str(REPO / "tests" / "_reproduce.py"), REPRODUCED[script]]
+    got = subprocess.run(argv, capture_output=True, text=True, timeout=600, env=ENV)
     assert got.returncode == 0 and "DIFFERS" not in got.stdout and got.stdout.count(": same") >= n, got.stdout + got.stderr
 
 

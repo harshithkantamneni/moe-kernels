@@ -24,6 +24,7 @@ for p in (REPO, REPO / "scripts", REPO / "tests", REPO / "scripts" / "scoring" /
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import _reproduce as RT  # noqa: E402
 import d4common as D4  # noqa: E402
 import d5common as D5  # noqa: E402
 import d6common as D6  # noqa: E402
@@ -68,8 +69,13 @@ def gate_doc(rdir):
 
 # ---------------------------------------------------------------- registration and freeze
 
-def test_the_addendum_recomputes_to_its_committed_files(capsys):
-    assert RG6.main(["--check"]) == 0, capsys.readouterr().out
+def test_the_addendum_recomputes_to_its_committed_files():
+    """register_decode_d6.py --check re-expressed by tests/_reproduce.py (check_d6): the JSON, text and gate output
+    within REL_TOL 1e-12 with every label exact, the rest as the generator checks it. The registered generator compares
+    floats byte for byte and is pinned; its committed files reproduce byte for byte only under macOS 26.6.2's
+    Accelerate (defect of record 2026-11-17)."""
+    rc, text = RT.report(RT.check_d6(RG6))
+    assert rc == 0, text
 
 
 def test_the_addendum_pins_every_earlier_decode_file_and_its_own_code_at_their_bytes():
@@ -214,7 +220,9 @@ def test_the_gate_reads_no_go_on_clause_2_as_registered(gate_doc):
 
 
 def test_the_committed_gate_output_reproduces_on_the_published_trees(gate_doc):
-    assert (REPO / RG6.GATE_OUT).read_text() == "\n".join(G6.lines(gate_doc)) + "\n"
+    """Every label and verdict exact, floats within REL_TOL 1e-12 (tests/_reproduce.py; byte for byte only under
+    macOS 26.6.2)."""
+    RT.assert_reproduces("\n".join(G6.lines(gate_doc)) + "\n", (REPO / RG6.GATE_OUT).read_text(), "txt", what="gate_d6")
 
 
 def test_the_gate_cli_prints_one_line_and_exits_1_on_no_go(rdir, tmp_path, capsys):

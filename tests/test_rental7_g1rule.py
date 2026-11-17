@@ -27,6 +27,7 @@ for p in (REPO, REPO / "scripts", REPO / "tests", R7DIR):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import _reproduce as RT  # noqa: E402
 import private_weight_reference as PW  # noqa: E402
 import r7common as C7  # noqa: E402
 import test_rental6_plumbing as T6  # noqa: E402
@@ -394,5 +395,15 @@ def test_the_rental6_scorers_still_give_their_committed_outputs_byte_for_byte(tm
                          cwd=REPO, env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1"})
     assert got.returncode == 0, got.stderr[-2000:]
     for ext in ("json", "txt"):
-        want = (REPO / "scripts" / "scoring" / "rental6" / f"{part}.score.{ext}").read_bytes()
-        assert (tmp_path / f"{part}.score.{ext}").read_bytes() == want, (part, ext)
+        want = REPO / "scripts" / "scoring" / "rental6" / f"{part}.score.{ext}"
+        if part in REPRODUCED_R6:
+            RT.assert_reproduces((tmp_path / want.name).read_text(), want.read_text(), ext, what=(part, ext))
+        else:
+            assert (tmp_path / want.name).read_bytes() == want.read_bytes(), (part, ext)
+
+
+#: rental 6's scorers whose committed output reproduces byte for byte only under macOS 26.6.2's Accelerate (secondk
+#: moved 8.4e-16 relative on 27.2.1): held by tests/_reproduce.py, labels exact, floats within REL_TOL 1e-12. The
+#: registration's sentence "write their committed score files byte for byte" (2026-10-13-rental7-g1rule) stays as
+#: registered; docs/FINDINGS.md records the environment dependence as a defect of record (2026-11-17).
+REPRODUCED_R6 = {"secondk"}

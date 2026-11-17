@@ -25,6 +25,7 @@ for p in (REPO, REPO / "scripts", REPO / "tests", REPO / "scripts" / "scoring" /
         sys.path.insert(0, str(p))
 
 import d3common as D3  # noqa: E402
+import _reproduce as RT  # noqa: E402
 import d4common as D4  # noqa: E402
 import d5common as D5  # noqa: E402
 import dcommon as DC  # noqa: E402
@@ -73,8 +74,13 @@ def gate_doc():
 
 # ---------------------------------------------------------------- registration
 
-def test_the_addendum_recomputes_to_its_committed_files(capsys):
-    assert RG5.main(["--check"]) == 0, capsys.readouterr().out
+def test_the_addendum_recomputes_to_its_committed_files():
+    """register_decode_d5.py --check re-expressed by tests/_reproduce.py (check_d5): the JSON, text and gate output
+    within REL_TOL 1e-12 with every label exact, the rest as the generator checks it. The registered generator compares
+    floats byte for byte and is pinned; its committed files reproduce byte for byte only under macOS 26.6.2's
+    Accelerate (defect of record 2026-11-17)."""
+    rc, text = RT.report(RT.check_d5(RG5))
+    assert rc == 0, text
 
 
 def test_the_addendum_pins_every_earlier_decode_file_and_its_own_code_at_their_bytes():
@@ -267,8 +273,9 @@ def test_the_gate_reads_no_go_on_both_clauses_as_registered(gate_doc):
 
 
 def test_the_committed_gate_output_reproduces_on_the_published_trees(gate_doc):
-    """scripts/scoring/decode/gate_d5.out.txt is gate_d5.lines on the published trees, recomputed here."""
-    assert (REPO / RG5.GATE_OUT).read_text() == "\n".join(G5.lines(gate_doc)) + "\n"
+    """scripts/scoring/decode/gate_d5.out.txt is gate_d5.lines on the published trees, recomputed here: every label
+    and verdict exact, floats within REL_TOL 1e-12 (tests/_reproduce.py; byte for byte only under macOS 26.6.2)."""
+    RT.assert_reproduces("\n".join(G5.lines(gate_doc)) + "\n", (REPO / RG5.GATE_OUT).read_text(), "txt", what="gate_d5")
 
 
 def test_the_new_blind_is_registered_and_not_run():

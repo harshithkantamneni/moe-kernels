@@ -22,11 +22,18 @@ committed pc2.read files (where PC2's run commit is in this clone's history; rea
 byte for byte), and the committed PC2 reading is DESCRIPTIVE with v6d's term 3 DOES NOT HOLD on both 4-per-SM tiles, and
 rental RR's registered reader its published session to the committed rr.read files (where RR's run commit is in
 this clone's history; read from the published tree, so equal byte for byte), and the committed RR reading is
-DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page."""
+DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page.
+
+Since 2026-11-17 the cal3, decode CAL, CAL2 and DS, PC, PC2 and RR re-reads are held to their committed files by
+tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's not
+compared) instead of byte for byte: those files reproduce byte for byte only under macOS 26.6.2's Accelerate, and the
+macOS 27.2.1 update moved the last digits of their fitted floats (docs/FINDINGS.md, defect of record 2026-11-17). The
+census, settleS1, cal2, cal4, decode blind and tileB3 re-reads still reproduce byte for byte and are held so."""
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +45,34 @@ spec = importlib.util.spec_from_file_location("rescore", REPO / "scripts" / "sco
 RS = importlib.util.module_from_spec(spec)
 sys.modules["rescore"] = RS
 spec.loader.exec_module(RS)
+if str(REPO / "tests") not in sys.path:
+    sys.path.insert(0, str(REPO / "tests"))
+import _reproduce as RT  # noqa: E402
+
+
+def _reproduces(stage: str, out: Path) -> list[str]:
+    """RS.compare's file set and normalisation (the scratch directory named as the committed one, a fetched tree's
+    path as the published one), each file held to its committed file by tests/_reproduce.py with the profile for its
+    name instead of RS.compare's text equality. Returns the scratch file names compared."""
+    names = []
+    for p in sorted(out.glob(RS.OUTPUTS.get(stage, "*.score.*"))):
+        if p.suffix not in (".json", ".txt"):
+            continue
+        c = REPO / RS.STAGES[stage][1] / RS.COMMITTED_AS.get(stage, {}).get(p.name, p.name)
+        assert c.exists(), (p.name, "MISSING")
+        got = p.read_text().replace(str(out), RS.STAGES[stage][1])
+        want = c.read_text()
+        if stage in RS.FETCHED:
+            want = re.sub(r'(?<=")[^"]*' + re.escape(RS.FETCHED[stage]), f"{RS.PUB}/{RS.STAGES[stage][0]}", want)
+        RT.assert_reproduces(got, want, p.suffix[1:], RT.profile_for(c.name), what=f"{stage} {p.name}")
+        names.append(p.name)
+    return names
+
+
+def _raw_reproduces(got: Path, want: Path) -> None:
+    """The scratch file as written (no path normalisation) against the committed file: read from the published tree,
+    the output records that tree repo-relative, so every string, the paths included, is exact."""
+    RT.assert_reproduces(got.read_text(), want.read_text(), want.suffix[1:], RT.profile_for(want.name), what=str(got.name))
 
 
 def test_the_scorer_subprocess_runs_with_hash_seed_zero():
@@ -86,8 +121,9 @@ def test_the_published_cal3_session_rereads_to_the_committed_files(tmp_path):
     assert RS.tree_of("cal3") == "results/published/2026-10-27-nvidia_gh200_480gb-cal3-session"
     ran = RS.rescore("cal3", tmp_path)
     assert ran == [("scripts/scoring/cal3/read_c3.py", 0)], ran
-    rows = dict(RS.compare("cal3", tmp_path))
-    assert rows == {"cal3.read.json": "EQUAL", "cal3.read.txt": "EQUAL"}, rows
+    # labels, structure and counts exact; cal3's floats are not compared (read_c3.wave_theta's ill-conditioned fit,
+    # tests/_reproduce.py CAL3; the C3-R1 defect of record in docs/FINDINGS.md)
+    assert _reproduces("cal3", tmp_path) == ["cal3.read.json", "cal3.read.txt"]
 
 
 _c4spec = importlib.util.spec_from_file_location("read_c4_for_rescore", REPO / "scripts" / "scoring" / "cal4" / "read_c4.py")
@@ -110,8 +146,7 @@ def test_the_published_decode_cal_session_rescores_to_the_committed_files(tmp_pa
     assert RS.tree_of("decodeCAL") == "results/published/2026-10-29-nvidia_gh200_480gb-decodeCAL-session/results"
     ran = RS.rescore("decodeCAL", tmp_path)
     assert ran == [("scripts/scoring/decode/score_cal_d2.py", 0)], ran
-    rows = dict(RS.compare("decodeCAL", tmp_path))
-    assert rows == {"cal.score.json": "EQUAL", "cal.score.txt": "EQUAL"}, rows
+    assert _reproduces("decodeCAL", tmp_path) == ["cal.score.json", "cal.score.txt"]
     txt = (REPO / "scripts/scoring/decode/cal.score.txt").read_text().splitlines()
     assert "power: READ (700.0 W)" in txt and "STOP: STOP" in txt
 
@@ -121,15 +156,13 @@ def test_the_published_decode_cal2_session_rescores_to_the_committed_files(tmp_p
     assert RS.tree_of("decodeCAL2") == f"{session}/results"
     ran = RS.rescore("decodeCAL2", tmp_path)
     assert ran == [("scripts/scoring/decode/score_cal_d3.py", 0)], ran
-    rows = dict(RS.compare("decodeCAL2", tmp_path))
-    assert rows == {"cal.score.json": "EQUAL", "cal.score.txt": "EQUAL"}, rows
-    # the .txt is byte-identical; the JSON differs from the committed file only in the power file's path
-    assert (tmp_path / "cal.score.txt").read_bytes() == (REPO / "scripts/scoring/decode/cal2.score.txt").read_bytes()
-    got = (tmp_path / "cal.score.json").read_text().splitlines()
-    want = (REPO / "scripts/scoring/decode/cal2.score.json").read_text().splitlines()
-    diff = [(g, w) for g, w in zip(got, want) if g != w]
-    assert len(got) == len(want) and len(diff) == 1, diff
-    assert diff[0][0].strip() == f'"file": "{session}/session/power-set.txt",', diff
+    assert _reproduces("decodeCAL2", tmp_path) == ["cal.score.json", "cal.score.txt"]
+    # the .txt reproduces as written; the JSON differs from the committed file only in the power file's path
+    _raw_reproduces(tmp_path / "cal.score.txt", REPO / "scripts/scoring/decode/cal2.score.txt")
+    got = json.loads((tmp_path / "cal.score.json").read_text())
+    want = json.loads((REPO / "scripts/scoring/decode/cal2.score.json").read_text())
+    assert not RT.compare_json(got, want, skip={("POWER", "file")})
+    assert got["POWER"]["file"] == f"{session}/session/power-set.txt" != want["POWER"]["file"]
     txt = (REPO / "scripts/scoring/decode/cal2.score.txt").read_text().splitlines()
     assert "power: READ (700.0 W)" in txt and "STOP (addendum 3, G3-D label DESCRIPTIVE): GO" in txt
 
@@ -150,10 +183,10 @@ def test_the_published_decode_ds_session_rereads_to_the_committed_files(tmp_path
     assert RS.tree_of("decodeDS") == f"{session}/results"
     ran = RS.rescore("decodeDS", tmp_path)
     assert ran == [("scripts/scoring/decode/read_ds.py", 0)], ran
-    rows = dict(RS.compare("decodeDS", tmp_path))
-    assert rows == {"ds.readings.json": "EQUAL", "ds.readings.txt": "EQUAL"}, rows
+    # floats within DS_REL_TOL 1e-6 (the W1RATE fit's conditioning, tests/_reproduce.py DS), labels exact
+    assert _reproduces("decodeDS", tmp_path) == ["ds.readings.json", "ds.readings.txt"]
     for name in ("ds.readings.json", "ds.readings.txt"):
-        assert (tmp_path / name).read_bytes() == (REPO / "scripts/scoring/decode" / name).read_bytes(), name
+        _raw_reproduces(tmp_path / name, REPO / "scripts/scoring/decode" / name)
     txt = (REPO / "scripts/scoring/decode/ds.readings.txt").read_text().splitlines()
     assert "power: READ" in txt and "verdict: READ" in txt and "NOT IDENTIFIED: none" in txt
     assert "CENSUS CROSS-CHECK (DS's census against CAL2's, reported): SAME over 48 entries" in txt
@@ -236,11 +269,10 @@ def test_the_published_pc_session_rereads_to_the_committed_files(tmp_path):
     assert RS.tree_of("pc") == PC_SESSION
     ran = RS.rescore("pc", tmp_path)
     assert ran == [("scripts/scoring/pc/read_pc.py", 0)], ran
-    rows = dict(RS.compare("pc", tmp_path))
-    assert rows == {"pc.read.json": "EQUAL", "pc.read.txt": "EQUAL"}, rows
-    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    assert _reproduces("pc", tmp_path) == ["pc.read.json", "pc.read.txt"]
+    # read on the published tree: reproduces as written, and the tree is recorded repo-relative
     for name in ("pc.read.json", "pc.read.txt"):
-        assert (tmp_path / name).read_bytes() == (PC_READS / name).read_bytes(), name
+        _raw_reproduces(tmp_path / name, PC_READS / name)
     assert f"  pages: {PC_SESSION}" in (PC_READS / "pc.read.txt").read_text().splitlines()
 
 
@@ -277,11 +309,10 @@ def test_the_published_pc2_session_rereads_to_the_committed_files(tmp_path):
     assert RS.tree_of("pc2") == PC2_SESSION
     ran = RS.rescore("pc2", tmp_path)
     assert ran == [("scripts/scoring/pc2/read_pc2.py", 0)], ran
-    rows = dict(RS.compare("pc2", tmp_path))
-    assert rows == {"pc2.read.json": "EQUAL", "pc2.read.txt": "EQUAL"}, rows
-    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    assert _reproduces("pc2", tmp_path) == ["pc2.read.json", "pc2.read.txt"]
+    # read on the published tree: reproduces as written, and the tree is recorded repo-relative
     for name in ("pc2.read.json", "pc2.read.txt"):
-        assert (tmp_path / name).read_bytes() == (PC2_READS / name).read_bytes(), name
+        _raw_reproduces(tmp_path / name, PC2_READS / name)
     assert f"  pages: {PC2_SESSION}" in (PC2_READS / "pc2.read.txt").read_text().splitlines()
 
 
@@ -331,11 +362,10 @@ def test_the_published_rr_session_rereads_to_the_committed_files(tmp_path):
     assert RS.tree_of("rr") == RR_SESSION
     ran = RS.rescore("rr", tmp_path)
     assert ran == [("scripts/scoring/rr/read_rr.py", 0)], ran
-    rows = dict(RS.compare("rr", tmp_path))
-    assert rows == {"rr.read.json": "EQUAL", "rr.read.txt": "EQUAL"}, rows
-    # read on the published tree: equal byte for byte, and the tree is recorded repo-relative
+    assert _reproduces("rr", tmp_path) == ["rr.read.json", "rr.read.txt"]
+    # read on the published tree: reproduces as written, and the tree is recorded repo-relative
     for name in ("rr.read.json", "rr.read.txt"):
-        assert (tmp_path / name).read_bytes() == (RR_READS / name).read_bytes(), name
+        _raw_reproduces(tmp_path / name, RR_READS / name)
     assert f"  pages: {RR_SESSION}" in (RR_READS / "rr.read.txt").read_text().splitlines()
 
 
