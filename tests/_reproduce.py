@@ -4,7 +4,7 @@ fit uses to hold a regenerated output to its committed file.
 Why not byte identity. The committed outputs were written on macOS 26.6.2, where numpy 2.5.3 (uv cpython 3.12.13)
 links Apple's Accelerate for BLAS and LAPACK. The update to macOS 27.2.1 (2026-11-16) replaced Accelerate, and every
 output that goes through a least-squares fit or a matrix product now differs from its committed file in the last
-digits of some floats (the diagnosis: ~/code/moe-kernels-work/2026-11-17/numdrift/REPORT.md, the coordinator's work
+digits of some floats (the diagnosis: ~/code/moe-kernels-work/2026-11-17/numdrift/REPORT.md, the owner's work
 folder, not in this repo). No verdict, band, READ / NOT READ, status, key or list length moved. So a reproduction test
 holds every string, bool, null, integer, key and list length exactly, and every float within the tolerance below.
 
