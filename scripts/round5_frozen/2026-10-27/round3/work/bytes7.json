@@ -1,0 +1,1371 @@
+{
+ "reductions": {
+  "W2_vs_round3": 0.0,
+  "W2T_r1_vs_W2": 0.0,
+  "cells": 114
+ },
+ "selection": {
+  "eligible": [
+   "W2"
+  ],
+  "best_S": 7.01,
+  "within_1": [
+   "W2"
+  ],
+  "chosen": "W2"
+ },
+ "candidates": {
+  "W2": {
+   "admissible": true,
+   "b2_unpriced": [
+    "jetmoe-8b 128g1 n2 PT"
+   ],
+   "scores": {
+    "olmoe-1b-7b": {
+     "w1": {
+      "n": 24,
+      "mean": 4.58,
+      "rms": 7.97,
+      "worst": 17.77
+     },
+     "w2": {
+      "n": 24,
+      "mean": 0.64,
+      "rms": 0.89,
+      "worst": 1.45
+     }
+    },
+    "qwen2-57b-a14b": {
+     "w1": {
+      "n": 16,
+      "mean": -4.45,
+      "rms": 6.23,
+      "worst": -12.11
+     },
+     "w2": {
+      "n": 16,
+      "mean": -0.53,
+      "rms": 0.97,
+      "worst": -2.69
+     }
+    },
+    "mixtral-8x7b": {
+     "w1": {
+      "n": 8,
+      "mean": -0.53,
+      "rms": 0.56,
+      "worst": -0.81
+     },
+     "w2": {
+      "n": 8,
+      "mean": -4.96,
+      "rms": 5.34,
+      "worst": -9.63
+     }
+    },
+    "mixtral-8x22b": {
+     "w1": {
+      "n": 6,
+      "mean": 0.06,
+      "rms": 0.06,
+      "worst": 0.08
+     },
+     "w2": {
+      "n": 6,
+      "mean": -7.01,
+      "rms": 8.65,
+      "worst": -17.72
+     }
+    }
+   },
+   "S": 7.01,
+   "pooled w2 rms": 3.63,
+   "guard": true,
+   "per_cell": [
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PT",
+     "w1": 4.47,
+     "w2": -0.04
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PW",
+     "w1": 3.73,
+     "w2": 0.27
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 balanced",
+     "w1": -0.25,
+     "w2": -0.17
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PT",
+     "w1": 8.44,
+     "w2": 1.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PW",
+     "w1": 7.65,
+     "w2": 0.99
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 uniform",
+     "w1": -2.18,
+     "w2": 0.24
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 balanced",
+     "w1": -2.03,
+     "w2": 0.1
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PT",
+     "w1": 17.31,
+     "w2": 1.45
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PW",
+     "w1": 16.94,
+     "w2": 1.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 uniform",
+     "w1": 0.33,
+     "w2": 1.26
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 balanced",
+     "w1": 0.37,
+     "w2": 1.31
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PT",
+     "w1": 4.52,
+     "w2": -0.0
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PW",
+     "w1": 3.73,
+     "w2": 0.3
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 balanced",
+     "w1": -0.25,
+     "w2": -0.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PT",
+     "w1": 8.28,
+     "w2": 1.2
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PW",
+     "w1": 7.58,
+     "w2": 0.97
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 uniform",
+     "w1": -1.94,
+     "w2": 0.21
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 balanced",
+     "w1": -1.75,
+     "w2": 0.17
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PT",
+     "w1": 17.77,
+     "w2": 1.44
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PW",
+     "w1": 16.81,
+     "w2": 1.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 uniform",
+     "w1": 0.31,
+     "w2": 1.3
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 balanced",
+     "w1": 0.52,
+     "w2": 1.35
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PT",
+     "w1": 0.65,
+     "w2": 0.62
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PW",
+     "w1": -4.51,
+     "w2": -0.11
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 uniform",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 balanced",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PT",
+     "w1": -12.11,
+     "w2": -2.69
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PW",
+     "w1": -10.38,
+     "w2": -1.77
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 uniform",
+     "w1": -2.98,
+     "w2": -0.56
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 balanced",
+     "w1": -3.31,
+     "w2": -0.45
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PT",
+     "w1": -0.09,
+     "w2": 0.62
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PW",
+     "w1": -4.77,
+     "w2": -0.4
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 uniform",
+     "w1": -0.21,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 balanced",
+     "w1": -0.22,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PT",
+     "w1": -11.63,
+     "w2": -0.85
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PW",
+     "w1": -10.62,
+     "w2": -1.5
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 uniform",
+     "w1": -5.58,
+     "w2": -0.46
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 balanced",
+     "w1": -4.97,
+     "w2": -0.21
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PT",
+     "w1": -0.3,
+     "w2": -9.63
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PW",
+     "w1": -0.32,
+     "w2": -5.3
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 uniform",
+     "w1": -0.49,
+     "w2": -3.78
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 balanced",
+     "w1": -0.42,
+     "w2": -4.13
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PT",
+     "w1": -0.66,
+     "w2": -6.14
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PW",
+     "w1": -0.46,
+     "w2": -3.63
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 uniform",
+     "w1": -0.81,
+     "w2": -3.69
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 balanced",
+     "w1": -0.8,
+     "w2": -3.41
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT",
+     "w1": 0.05,
+     "w2": -4.35
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW",
+     "w1": 0.04,
+     "w2": -17.72
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT2",
+     "w1": 0.08,
+     "w2": -8.17
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW2",
+     "w1": 0.03,
+     "w2": -5.3
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 uniform",
+     "w1": 0.07,
+     "w2": -3.03
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 balanced",
+     "w1": 0.06,
+     "w2": -3.46
+    }
+   ]
+  },
+  "W2m": {
+   "admissible": true,
+   "b2_unpriced": [],
+   "scores": {
+    "olmoe-1b-7b": {
+     "w1": {
+      "n": 24,
+      "mean": 4.57,
+      "rms": 7.97,
+      "worst": 17.77
+     },
+     "w2": {
+      "n": 24,
+      "mean": 0.64,
+      "rms": 0.89,
+      "worst": 1.45
+     }
+    },
+    "qwen2-57b-a14b": {
+     "w1": {
+      "n": 16,
+      "mean": -5.4,
+      "rms": 7.73,
+      "worst": -14.76
+     },
+     "w2": {
+      "n": 16,
+      "mean": -0.72,
+      "rms": 1.12,
+      "worst": -2.79
+     }
+    },
+    "mixtral-8x7b": {
+     "w1": {
+      "n": 8,
+      "mean": -2.09,
+      "rms": 2.1,
+      "worst": -2.5
+     },
+     "w2": {
+      "n": 8,
+      "mean": -4.96,
+      "rms": 5.34,
+      "worst": -9.63
+     }
+    },
+    "mixtral-8x22b": {
+     "w1": {
+      "n": 6,
+      "mean": -0.01,
+      "rms": 0.02,
+      "worst": -0.04
+     },
+     "w2": {
+      "n": 6,
+      "mean": -7.22,
+      "rms": 8.85,
+      "worst": -17.89
+     }
+    }
+   },
+   "S": 7.22,
+   "pooled w2 rms": 3.69,
+   "guard": false,
+   "per_cell": [
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PT",
+     "w1": 4.47,
+     "w2": -0.04
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PW",
+     "w1": 3.68,
+     "w2": 0.27
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 balanced",
+     "w1": -0.25,
+     "w2": -0.17
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PT",
+     "w1": 8.44,
+     "w2": 1.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PW",
+     "w1": 7.65,
+     "w2": 0.99
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 uniform",
+     "w1": -2.18,
+     "w2": 0.24
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 balanced",
+     "w1": -2.03,
+     "w2": 0.1
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PT",
+     "w1": 17.31,
+     "w2": 1.45
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PW",
+     "w1": 16.94,
+     "w2": 1.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 uniform",
+     "w1": 0.33,
+     "w2": 1.26
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 balanced",
+     "w1": 0.37,
+     "w2": 1.31
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PT",
+     "w1": 4.52,
+     "w2": -0.0
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PW",
+     "w1": 3.68,
+     "w2": 0.3
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 balanced",
+     "w1": -0.25,
+     "w2": -0.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PT",
+     "w1": 8.28,
+     "w2": 1.2
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PW",
+     "w1": 7.58,
+     "w2": 0.97
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 uniform",
+     "w1": -1.94,
+     "w2": 0.21
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 balanced",
+     "w1": -1.75,
+     "w2": 0.17
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PT",
+     "w1": 17.77,
+     "w2": 1.44
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PW",
+     "w1": 16.81,
+     "w2": 1.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 uniform",
+     "w1": 0.31,
+     "w2": 1.3
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 balanced",
+     "w1": 0.52,
+     "w2": 1.35
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PT",
+     "w1": 0.65,
+     "w2": 0.62
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PW",
+     "w1": -4.51,
+     "w2": -0.22
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 uniform",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 balanced",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PT",
+     "w1": -14.76,
+     "w2": -2.79
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PW",
+     "w1": -13.75,
+     "w2": -1.83
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 uniform",
+     "w1": -3.8,
+     "w2": -1.19
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 balanced",
+     "w1": -4.13,
+     "w2": -1.09
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PT",
+     "w1": -0.09,
+     "w2": 0.62
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PW",
+     "w1": -4.77,
+     "w2": -0.51
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 uniform",
+     "w1": -0.21,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 balanced",
+     "w1": -0.22,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PT",
+     "w1": -14.29,
+     "w2": -0.95
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PW",
+     "w1": -13.98,
+     "w2": -1.57
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 uniform",
+     "w1": -6.38,
+     "w2": -1.1
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 balanced",
+     "w1": -5.77,
+     "w2": -0.85
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PT",
+     "w1": -2.15,
+     "w2": -9.63
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PW",
+     "w1": -2.11,
+     "w2": -5.3
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 uniform",
+     "w1": -1.8,
+     "w2": -3.78
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 balanced",
+     "w1": -1.72,
+     "w2": -4.13
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PT",
+     "w1": -2.5,
+     "w2": -6.14
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PW",
+     "w1": -2.25,
+     "w2": -3.63
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 uniform",
+     "w1": -2.11,
+     "w2": -3.69
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 balanced",
+     "w1": -2.1,
+     "w2": -3.41
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT",
+     "w1": -0.0,
+     "w2": -4.63
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW",
+     "w1": -0.04,
+     "w2": -17.89
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT2",
+     "w1": -0.01,
+     "w2": -8.63
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW2",
+     "w1": -0.01,
+     "w2": -5.68
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 uniform",
+     "w1": 0.02,
+     "w2": -3.03
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 balanced",
+     "w1": 0.01,
+     "w2": -3.46
+    }
+   ]
+  },
+  "W2T": {
+   "admissible": true,
+   "b2_unpriced": [
+    "jetmoe-8b 128g1 n2 PT"
+   ],
+   "scores": {
+    "olmoe-1b-7b": {
+     "w1": {
+      "n": 24,
+      "mean": 5.34,
+      "rms": 8.75,
+      "worst": 19.45
+     },
+     "w2": {
+      "n": 24,
+      "mean": 0.93,
+      "rms": 1.23,
+      "worst": 2.02
+     }
+    },
+    "qwen2-57b-a14b": {
+     "w1": {
+      "n": 16,
+      "mean": -1.22,
+      "rms": 2.68,
+      "worst": -5.86
+     },
+     "w2": {
+      "n": 16,
+      "mean": 0.95,
+      "rms": 1.22,
+      "worst": 2.08
+     }
+    },
+    "mixtral-8x7b": {
+     "w1": {
+      "n": 8,
+      "mean": -1.37,
+      "rms": 1.38,
+      "worst": -1.77
+     },
+     "w2": {
+      "n": 8,
+      "mean": -1.98,
+      "rms": 2.62,
+      "worst": -6.16
+     }
+    },
+    "mixtral-8x22b": {
+     "w1": {
+      "n": 6,
+      "mean": -0.04,
+      "rms": 0.04,
+      "worst": -0.06
+     },
+     "w2": {
+      "n": 6,
+      "mean": -2.39,
+      "rms": 5.39,
+      "worst": -12.9
+     }
+    }
+   },
+   "S": 2.39,
+   "pooled w2 rms": 2.31,
+   "guard": false,
+   "per_cell": [
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PT",
+     "w1": 4.8,
+     "w2": 0.09
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PW",
+     "w1": 4.21,
+     "w2": 0.46
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 balanced",
+     "w1": -0.25,
+     "w2": -0.17
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PT",
+     "w1": 9.42,
+     "w2": 1.56
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PW",
+     "w1": 8.6,
+     "w2": 1.35
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 uniform",
+     "w1": -1.66,
+     "w2": 0.47
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 balanced",
+     "w1": -1.5,
+     "w2": 0.33
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PT",
+     "w1": 18.99,
+     "w2": 2.02
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PW",
+     "w1": 18.48,
+     "w2": 1.72
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 uniform",
+     "w1": 1.41,
+     "w2": 1.73
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 balanced",
+     "w1": 1.44,
+     "w2": 1.79
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PT",
+     "w1": 4.85,
+     "w2": 0.13
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PW",
+     "w1": 4.21,
+     "w2": 0.49
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 balanced",
+     "w1": -0.25,
+     "w2": -0.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PT",
+     "w1": 9.26,
+     "w2": 1.57
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PW",
+     "w1": 8.52,
+     "w2": 1.33
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 uniform",
+     "w1": -1.41,
+     "w2": 0.43
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 balanced",
+     "w1": -1.22,
+     "w2": 0.39
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PT",
+     "w1": 19.45,
+     "w2": 2.0
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PW",
+     "w1": 18.34,
+     "w2": 1.7
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 uniform",
+     "w1": 1.38,
+     "w2": 1.77
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 balanced",
+     "w1": 1.6,
+     "w2": 1.82
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PT",
+     "w1": 2.63,
+     "w2": 1.38
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PW",
+     "w1": -1.88,
+     "w2": 1.34
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 uniform",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 balanced",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PT",
+     "w1": -5.86,
+     "w2": 0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PW",
+     "w1": -3.61,
+     "w2": 0.9
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 uniform",
+     "w1": 1.15,
+     "w2": 1.48
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 balanced",
+     "w1": 0.81,
+     "w2": 1.59
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PT",
+     "w1": 1.87,
+     "w2": 1.38
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PW",
+     "w1": -2.14,
+     "w2": 1.05
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 uniform",
+     "w1": -0.21,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 balanced",
+     "w1": -0.22,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PT",
+     "w1": -5.34,
+     "w2": 2.08
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PW",
+     "w1": -3.87,
+     "w2": 1.17
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 uniform",
+     "w1": -1.56,
+     "w2": 1.58
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 balanced",
+     "w1": -0.92,
+     "w2": 1.83
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PT",
+     "w1": -1.41,
+     "w2": -6.16
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PW",
+     "w1": -1.28,
+     "w2": -2.14
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 uniform",
+     "w1": -1.13,
+     "w2": -1.17
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 balanced",
+     "w1": -1.05,
+     "w2": -1.53
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PT",
+     "w1": -1.77,
+     "w2": -2.54
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PW",
+     "w1": -1.42,
+     "w2": -0.41
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 uniform",
+     "w1": -1.44,
+     "w2": -1.08
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 balanced",
+     "w1": -1.43,
+     "w2": -0.79
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT",
+     "w1": -0.04,
+     "w2": 0.82
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW",
+     "w1": -0.06,
+     "w2": -12.9
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT2",
+     "w1": -0.03,
+     "w2": -2.46
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW2",
+     "w1": -0.06,
+     "w2": 0.81
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 uniform",
+     "w1": -0.03,
+     "w2": -0.08
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 balanced",
+     "w1": -0.04,
+     "w2": -0.52
+    }
+   ]
+  },
+  "W2mT": {
+   "admissible": true,
+   "b2_unpriced": [],
+   "scores": {
+    "olmoe-1b-7b": {
+     "w1": {
+      "n": 24,
+      "mean": 5.34,
+      "rms": 8.75,
+      "worst": 19.45
+     },
+     "w2": {
+      "n": 24,
+      "mean": 0.93,
+      "rms": 1.23,
+      "worst": 2.02
+     }
+    },
+    "qwen2-57b-a14b": {
+     "w1": {
+      "n": 16,
+      "mean": -2.52,
+      "rms": 4.57,
+      "worst": -9.37
+     },
+     "w2": {
+      "n": 16,
+      "mean": 0.61,
+      "rms": 0.87,
+      "worst": 1.5
+     }
+    },
+    "mixtral-8x7b": {
+     "w1": {
+      "n": 8,
+      "mean": -2.08,
+      "rms": 2.1,
+      "worst": -2.6
+     },
+     "w2": {
+      "n": 8,
+      "mean": -2.26,
+      "rms": 2.9,
+      "worst": -6.64
+     }
+    },
+    "mixtral-8x22b": {
+     "w1": {
+      "n": 6,
+      "mean": -0.13,
+      "rms": 0.13,
+      "worst": -0.16
+     },
+     "w2": {
+      "n": 6,
+      "mean": -3.27,
+      "rms": 5.81,
+      "worst": -13.62
+     }
+    }
+   },
+   "S": 3.27,
+   "pooled w2 rms": 2.43,
+   "guard": false,
+   "per_cell": [
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PT",
+     "w1": 4.79,
+     "w2": 0.09
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 PW",
+     "w1": 4.15,
+     "w2": 0.46
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n1 balanced",
+     "w1": -0.25,
+     "w2": -0.17
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PT",
+     "w1": 9.42,
+     "w2": 1.56
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 PW",
+     "w1": 8.6,
+     "w2": 1.35
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 uniform",
+     "w1": -1.66,
+     "w2": 0.47
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n2 balanced",
+     "w1": -1.5,
+     "w2": 0.33
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PT",
+     "w1": 18.99,
+     "w2": 2.02
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 PW",
+     "w1": 18.48,
+     "w2": 1.72
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 uniform",
+     "w1": 1.41,
+     "w2": 1.73
+    },
+    {
+     "cell": "olmoe-1b-7b A2 b128g1 n4 balanced",
+     "w1": 1.44,
+     "w2": 1.79
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PT",
+     "w1": 4.84,
+     "w2": 0.13
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 PW",
+     "w1": 4.15,
+     "w2": 0.49
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 uniform",
+     "w1": -0.25,
+     "w2": -0.19
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n1 balanced",
+     "w1": -0.25,
+     "w2": -0.18
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PT",
+     "w1": 9.26,
+     "w2": 1.57
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 PW",
+     "w1": 8.52,
+     "w2": 1.33
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 uniform",
+     "w1": -1.41,
+     "w2": 0.43
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n2 balanced",
+     "w1": -1.22,
+     "w2": 0.39
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PT",
+     "w1": 19.45,
+     "w2": 2.0
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 PW",
+     "w1": 18.34,
+     "w2": 1.7
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 uniform",
+     "w1": 1.38,
+     "w2": 1.77
+    },
+    {
+     "cell": "olmoe-1b-7b S1 st n4 balanced",
+     "w1": 1.6,
+     "w2": 1.82
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PT",
+     "w1": 2.53,
+     "w2": 1.37
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 PW",
+     "w1": -1.96,
+     "w2": 1.15
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 uniform",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n1 balanced",
+     "w1": -0.21,
+     "w2": -0.18
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PT",
+     "w1": -9.37,
+     "w2": -0.39
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 PW",
+     "w1": -8.2,
+     "w2": 0.72
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 uniform",
+     "w1": 0.08,
+     "w2": 0.59
+    },
+    {
+     "cell": "qwen2-57b-a14b A2 b128g1 n2 balanced",
+     "w1": -0.26,
+     "w2": 0.7
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PT",
+     "w1": 1.78,
+     "w2": 1.37
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 PW",
+     "w1": -2.22,
+     "w2": 0.86
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 uniform",
+     "w1": -0.21,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n1 balanced",
+     "w1": -0.22,
+     "w2": -0.19
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PT",
+     "w1": -8.87,
+     "w2": 1.5
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 PW",
+     "w1": -8.44,
+     "w2": 0.99
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 uniform",
+     "w1": -2.59,
+     "w2": 0.69
+    },
+    {
+     "cell": "qwen2-57b-a14b S1 st n2 balanced",
+     "w1": -1.97,
+     "w2": 0.94
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PT",
+     "w1": -2.25,
+     "w2": -6.64
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 PW",
+     "w1": -2.1,
+     "w2": -2.51
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 uniform",
+     "w1": -1.73,
+     "w2": -1.31
+    },
+    {
+     "cell": "mixtral-8x7b S1 b128g1 n2 balanced",
+     "w1": -1.65,
+     "w2": -1.67
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PT",
+     "w1": -2.6,
+     "w2": -3.04
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 PW",
+     "w1": -2.24,
+     "w2": -0.79
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 uniform",
+     "w1": -2.04,
+     "w2": -1.22
+    },
+    {
+     "cell": "mixtral-8x7b C2 b128g1 n2 balanced",
+     "w1": -2.03,
+     "w2": -0.93
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT",
+     "w1": -0.13,
+     "w2": -0.07
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW",
+     "w1": -0.16,
+     "w2": -13.62
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PT2",
+     "w1": -0.15,
+     "w2": -3.99
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 PW2",
+     "w1": -0.13,
+     "w2": -0.7
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 uniform",
+     "w1": -0.1,
+     "w2": -0.39
+    },
+    {
+     "cell": "mixtral-8x22b C2 b128g1 n2 balanced",
+     "w1": -0.11,
+     "w2": -0.83
+    }
+   ]
+  }
+ }
+}

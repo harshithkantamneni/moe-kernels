@@ -1,0 +1,98 @@
+refit4 ROUND 4 declarations (offline, read-only; repo ~/code/moe-kernels read at e10fda1b). Written before any round-4
+byte law, knee, time model, pass estimate or blind cell was scored. No amendment is made after scores are seen: any
+change after scoring is a new declared round (DECLARED5.txt). The UTC write time and sha256 are in DECLARED4.sha256,
+re-checked after all scoring.
+
+WEAKER EVIDENCE, STATED PLAINLY: this round is informed by round 3's results, including its UNDECLARED, DESCRIPTIVE
+clock table (work/clock_desc.out: under ncu every floor-side 128 G 1 GEMM runs at 1296 to 1377 MHz and the
+cycles-domain model misses its wall time by -4 to -9% before sag, while Mixtral-8x7B's DRAM-side w1 matches wall time
+to 0.4%). Every held-out number of this round is weaker evidence than a round declared blind to it.
+
+ALSO SEEN BEFORE WRITING (pre-declaration, no held-out score):
+  work/diag4.out:
+  - v5'' ALREADY applies F1's sag on the floor side: d5.v5_parts scales the per-k-step c by fac = 1 + D / tf (D =
+    A (1 - exp(-tf / tau)) minus R3's 1410 share, tf the GEMM's floor-only time). The DRAM side is untouched. On one
+    timed cell: Mixtral-8x7B w1 +0.86% (an added sag would be +2.34), Qwen2-57B w1 +2.33%.
+  - Round 3 ROUND3.md section 2c's sentence "v5'' adds the F1 sag to every GEMM alike" is WRONG and is corrected
+    in ROUND4.md.
+  - What v5'' does differently from a clock deficit: (a) it adds D in absolute time to the floor, D / tf, where a
+    clock deficit is a fraction of the GEMM's time, D / t, and the estimator fits D against the GEMM's time t, not
+    its floor time; (b) the knee (K1 p, S0) was fitted in the cycles domain, against counted cycles / 1400.8 MHz,
+    which for a DRAM-side GEMM is shorter than its wall time by the clock deficit (f_eff / 1400.8).
+  - JetMoE 128g1 n2 PT under W2: w1 has two fixed-point roots, 1.273 and 1.519. The 60 MiB cut is a step in a fill
+    that scales with q, so a served branch and a missed branch are both self-consistent. Under W1 (no cut) and M4 the
+    cell has one root (1.2727 and 1.247).
+  work/explore_tail.py (stamps only):
+  - No lifetime-generating zero-constant option reproduces the measured gap tail.
+  - Resampling Mixtral w2's measured lifetimes gives p90 0.062 (measured 0.060) but doubles the median (0.037
+    against 0.015). Resampling w1's lifetimes, or adding the measured per-turnover dispatch delay (0.0088 L), leaves
+    p90 at 0.030.
+  - Hence the quantile map below.
+
+INPUTS (MEASURED-PERTURBED, IN-SAMPLE FOR MIXTRAL-8x7B): sigma_gap 0.0375 (sigma_gap.json, unchanged); the tail map
+  r(u) = Q_meas(u) / Q_LS(u), u 0.005 to 0.995 step 0.005 (work/tailmap.json, stamps only, computed before this file):
+  the measured over the W2 law's own launch-gap quantiles on C3-R2's 1872 pairs (r 0.55 at u 0.1, 1.03 at 0.5, 2.03
+  at 0.9, 3.22 at 0.95).
+
+PART A. BYTE LAWS (128x128 only; all zero fitted constants; every form else as DECLARED3.txt PART A's W2)
+  W2    as round 3 (CARRIED): the LS law at sigma_gap, the carried soft survival, the cut at the 60 MiB L2 on the fill
+        F = (W_c dt / L) fbar(q).
+  W2m   THE JETMOE FIX (principled, not a fit): the cut is a statement of CERTAIN miss, so it is tested on the fill
+        that is certain, the compulsory part: F_min = (W_c dt / L) fbar(q_min), fbar(q_min) = q_min W_g / live, the
+        DRAM bytes per live CTA when only first reads miss. A later-wave slab re-read with F_min >= 60 MiB misses;
+        below it the carried soft survival on the full fill F(q), as before. The cut no longer depends on q, so it
+        cannot create a second fixed point.
+  W2T   THE TAIL CORRECTION: W2 with every later-wave SAME-WAVE slab re-read's launch gap multiplied by r(u). u is the
+        pair's quantile among that cell's later-wave same-wave pairs, within each replica: (rank - 0.5) / m, where m
+        is their count. r is linearly interpolated and held at its end values outside 0.005 to 0.995. Cross-wave
+        pairs and the first window are unchanged. It is the measured shape of the gap distribution (Mixtral-8x7B
+        w2) carried as a scale-free correction to every GEMM.
+  W2mT  W2m and W2T together.
+  Scoring, folds, guard and selection as DECLARED3.txt PART A:
+  - 54 NATIVE 128 G 1 counter cells; S = the larger of the LOMO and E-family-out max |w2 mean| (equal to SEEN here).
+  - Guard: LOMO w1 rms within M4's + 1.0 (7.12 / 8.93 / 0.34 / 0.05).
+  - A law leaving any scored cell unpriced is inadmissible.
+  - Selection: the smallest S; within 1.0 point of it, the law that prices all 84 of B2's blind NATIVE cells (a
+    pricing check, no score); then the smaller pooled w2 rms.
+
+PART B. THE CLOCK FORM AND THE KNEE IN THE WALL DOMAIN (128x128 only; 64x128 keeps v5'''s F1 as is, CARRIED)
+  CLOCK FORM (pricing): F1's measured sag applied as an SM-clock deficit that lengthens the floor side only.
+  - fac_g = 1 + D_net(t0) / t0, D_net(t) = A (1 - exp(-t / tau)) - 6.11 (1 - exp(-t / 50 us)) us (R3's 1410 share,
+    CARRIED as v5'' subtracts it), t0 = the GEMM's sag-free model time (price_parts' "gemm" at fac 1).
+  - fac_g scales c (the per-k-step time) exactly where v5'''s fac does. DRAM side untouched.
+  - (A, tau) = F1 par from the same estimator pages (MEASURED-ON-BOARD). No new constant: it differs from v5'' only
+    in t0 for tf, in the sat argument and in the denominator, which is where the estimator measures D.
+  KNEE FIT IN THE WALL DOMAIN (fit rows only; prediction uses the clock form above):
+  - Rows: the 138 NATIVE 128x128 counter rows of R2-A (knee2r).
+  - Target: t_row - 6.11 (1 - exp(-t_row / 50 us)) us, t_row the row's ncu gpu_time (the GEMM part in v5'''s book).
+  - Model: gemm_form at c x kappa_row, plus dead x kappa_row, with the row's MEASURED clock deficit kappa_row =
+    1 + (off_row - 6.11 (1 - exp(-t_row / 50 us)) us) / (cycles_row / 1410 MHz), off_row = t_row - cycles_row /
+    1410 MHz, at counted bytes.
+  - Forms: N0 (p, carried bw), K1 at the triad (p, S0), and K1-CYC (round 2's K1 at its knee2r.json LOMO
+    constants, not refitted, scored in this domain).
+  - Grids, fit (equal-weight rms over the training models' rows per fold), score (R2-A: max over the four models of
+    |LOMO mean of the per-cell w1 + w2 sum error| on G 1 cells) and selection (smallest score; within 0.25 fewer
+    constants; then pooled LOMO rms) as DECLARED2.txt R2-A. E-family-out printed beside.
+  - Disclosed: c is held at the rows' 1400.8 MHz conversion while the deficit is read against 1410 MHz, as v5''
+    does (0.66%).
+
+PART C. COMBINED VARIANT AND TABLE
+  - The PART A selected law (both GEMMs) + the PART B selected knee at its LOMO constants + the clock form with F1
+    par from the fold's estimator pages on the timed page's board; everything else as DECLARED3.txt PART C.
+  - Same timed cells (OLMoE 10, Qwen2-57B 8, Mixtral-8x7B A2 4, Mixtral-8x22B 6; 8x7B on C2 4 beside).
+  - DESCRIPTIVE beside, to separate the parts: round 3's combined (reproduced: +0.29 / -2.00 / +0.48 / -0.52); the
+    clock form with round 2's K1 constants and W2; v5'''s sag form with the selected wall knee and the selected law;
+    the selected knee and clock form with counted bytes (oracle).
+  Pass estimate: read_c2.pass_estimates (A, B, D), B2's noise model, board 0.26%, R 200,000, seed 20261022, an
+  ESTIMATE.
+  - REGISTERED UNPRICED RULE: a blind cell the selected law cannot price (the fixed-point guard refuses it) is
+    registered UNPRICED and excluded from E1-TILE's statistics, so the estimate is computed on the remaining cells.
+  - The 84-cell estimate is printed beside.
+
+PART D. BLIND STAKES: B2's 84 cells, the combined variant at SEEN constants against v5'' (null, p 5.75, M4), F1 par at
+  A2's values (42.02 / 425; 30.37 / 300 at 64x128), A2's selections; per blind model and class, Phi-3.5 by cell, and
+  each unpriced cell named.
+
+PART E. GATE (unchanged): G1 every four-model held-out 128 G 1 mean of the PART C selected variant within 1.0% (OLMoE,
+  Qwen2-57B, Mixtral-8x7B on A2's cells, Mixtral-8x22B, and Mixtral-8x7B on C2's board) AND G2 estimated P(A) >= 0.5
+  (on the registered cells). PASS iff both.
