@@ -2126,6 +2126,45 @@ docstring lists them). Rentals 1 to 7 and the sessions before them have no resco
 own scorers and committed score files (`scripts/scoring/rental1/` to `rental7/`, `session0927/`, `crossmodel/`),
 re-run by hand. The byte-for-byte re-run above covered rentals 3 to 5 on 2026-10-14, and this file records no later
 re-run of these scorers against their published sessions.
+(NOTE 2026-11-17: `crossmodel/` holds the cross-model sessions' registered files, score files and MANIFEST.json, not
+a scorer; their scorer is `scripts/cross_model_score.py`, named with its argv in MANIFEST.json's "scorer" entries.)
+
+NOTE 2026-11-17, rounding in the rental costs. The dollar figures in the opening lines of Rentals 2 to 7 are copied
+from each session's `session/README.md` (published pages, unchanged) and are ESTIMATES; no bill is recorded.
+Recomputed at $2.29/h from the minutes and instance times this file states, five differ from the figure stated:
+rental 3, 06:55:50Z to 09:20:25Z is 144.6 min, $5.52 (the stated 2 h 25 min gives the stated $5.53); rental 6,
+10:50Z to 12:57Z is 127 min (2 h 7 min, not the stated 2 h 8 min), $4.85, and 2 h 8 min would give $4.89, against
+$4.90 stated; rental 7, about 1 h 35 min (95 min), $3.63 against $3.65; rental 2, 05:22:58Z to 07:41:41Z is 138.7
+min, $5.29 (the stated 2 h 19 min gives $5.31) against $5.30; rental 5, 1 h 55 min (115 min), $4.39 against $4.40.
+Rental 4's $3.85 matches its 101 min. The minutes-derived values are the ones to sum or draw; the stated figures stay
+as written in each section because the session READMEs and other files quote them. Every cost this file states from
+tile rental A on reproduces from its own minutes to the cent. No verdict depends on a cost.
+
+**Defect of record (noted 2026-11-17): the committed reproduction outputs are byte-identical only under macOS
+26.6.2's Accelerate.** The committed scorer, reader, registration and gate outputs were written on a laptop
+running macOS 26.6.2, where numpy 2.5.3 (uv cpython 3.12.13) links Apple's Accelerate for BLAS and LAPACK. macOS
+27.2.1 (installed 2026-11-16) replaced Accelerate, and on 2026-11-17 the 17 reproduction tests that compared a
+regenerated output with its committed file byte for byte failed, with the code and the venv unchanged.
+Regenerated on 27.2.1: decode CAL, CAL2, PC, PC2, RR, rental 6's secondk, cross-model jetmoe-floor and addenda 3,
+5 and 6 (registrations and gate outputs) move at most 1.4e-13 relative, most near 1e-15, in full-precision floats
+only; decode DS's readings move at most 1.4e-7 relative (W1RATE offsets_us, phi-3.5-moe T96, 34.524621 to
+34.524616), below every printed digit, because the W1RATE fit (`scripts/scoring/decode/d4common.py:838-845`)
+puts 0/1 ladder columns beside an unscaled byte count of about 1e8, condition about 1e8; cal3's thetas move up
+to 2.6e-2 relative (Calibration rental C3, Defect of record). No verdict, band, READ / NOT READ, status, key,
+list length or gate changed: the d5 gate still reads NO-GO (CAL STOP), d6 still CAL GO, every printed rms, worst
+and mean the same. Two strings changed, neither a result: addendum 3's "reduction (fixes off)" recomputes
+DIFFERS with a new score_sha256, because it states byte identity with the committed cal.score.json, and
+pc2.read.txt's truncated dump is cut 2 characters later. Single-threaded Accelerate does not restore the bytes,
+numpy on OpenBLAS moves more fields, and the 26.6.2 Accelerate cannot be loaded on the 27.2.1 machine. Since
+2026-11-17 those 17 tests hold each output to its committed file with every string, label, key, list length and
+integer exact and floats within stated tolerances (`tests/_reproduce.py`: 1e-12 relative; decode DS 1e-6, the
+W1RATE fit's conditioning; cal3's floats not compared); the other reproduction tests still match byte for byte
+and keep their byte checks. Read every "byte for byte" and "re-reads to the committed files" in this file as
+made on macOS 26.6.2. Two registered sentences state byte identity and stay as registered: addendum 3's
+reduction, IDENTICAL with the published score's sha256 (its test now checks that sha256 against the committed
+file and the recomputation within 1e-12), and the rental 7 g1rule registration's "rental 6's three scorers on
+the published rental-6 session write their committed score files byte for byte" (secondk now within 1e-12).
+The diagnosis is moe-kernels-work 2026-11-17 numdrift REPORT.md (not in this repository).
 
 NOTE 2026-11-12, when each registration was committed and pushed (a git check). For every published GH200
 session from 2026-09-27 on, the commit that first added each registration that predicts the session's pages is an
@@ -2646,7 +2685,7 @@ and a 1410 MHz lock: v5'', frozen before the page, over-predicts Mixtral-8x22B's
 both at 128 G 1 (+32.5% and +22.3%) and gets w1 right. Not established: whether the miss is the regime's or the
 E 8 family's, and whether the w2 byte excess causes any of it.
 
-## Calibration rental C3 (2026-10-27): CALIBRATION, DESCRIPTIVE, PERTURBED pages; C3-R1 OUT (theta_L 0.351, C5's constant stays SEEN-FITTED), C3-R2 LAUNCH-TOGETHER (0.901), C3-R3 NOT REPRODUCED (Mixtral-8x7B w1 +0.94% on this board)
+## Calibration rental C3 (2026-10-27): CALIBRATION, DESCRIPTIVE, PERTURBED pages; C3-R1 OUT as committed (theta_L 0.351; not supported, defect of record 2026-11-17: NEAR or OUT (PERTURBED) well-conditioned), C5's constant stays SEEN-FITTED, C3-R2 LAUNCH-TOGETHER (0.901), C3-R3 NOT REPRODUCED (Mixtral-8x7B w1 +0.94% on this board)
 
 One Lambda GH200 480GB (instance f3128422, us-east-3, 04:10:28Z to 04:26:34Z on 2026-10-27; board `02e86e`, the
 board of rental 7) ran `scripts/plans/rentalC3-cal-2026-10.plan` unattended through `scripts/gh200_cal3_session.sh`
@@ -2711,29 +2750,57 @@ lowest variant median, 1.45%, is at Qwen2-57B's 1.46%, and its lowest worst, 2.2
 |---|---|---|---|
 | board | valid | 700 W on enforced.power.limit and the `-q` GPU scope at the first poll; lock 1410 held; G-BAND PASS on the fallback band [1352.19, 1410] MHz (primary [1374.75, 1410] left joint_cF None: 0 OLMoE and 4 of 27 Mixtral-8x7B cells in band; fallback 18 and 16 of 27); commit check 33 files at e10fda1b | `session/power-set.txt`, `session/gh200-driver/{c2-power,locks}.env`, `session/gh200-driver/gate-band-1410.json` |
 | C3-R4 validity | valid on both models | every launch stamped live or dead, live CTAs the expected pids, USE_TD False, 132 SMs, timer resolution under L / 10; the histogram the registered file | the two `instr-*` pages |
-| **C3-R1** | **OUT, MEASURED-PERTURBED** | Mixtral-8x7B w2 theta_L 0.3513, the median over 12 launches; theta (1 + o) 0.3562 at o 1.38%; per cell PT 0.262, PW 0.350, balanced 0.353, uniform 0.353 | `results/2026-10-27-nvidia_gh200_480gb-instr-mixtral-8x7b-st7/` |
+| **C3-R1** | **OUT, MEASURED-PERTURBED** as committed; not supported as a reading (defect of record below) | Mixtral-8x7B w2 theta_L 0.3513, the median over 12 launches; theta (1 + o) 0.3562 at o 1.38%; per cell PT 0.262, PW 0.350, balanced 0.353, uniform 0.353 (the committed output's values, from an ill-conditioned fit and environment-dependent in the 4th decimal; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead) | `results/2026-10-27-nvidia_gh200_480gb-instr-mixtral-8x7b-st7/` |
 | **C3-R2** | **LAUNCH-TOGETHER** | 0.901 of 1872 Mixtral-8x7B w2 re-read pairs in waves 1 and later that the schedule puts in their partner's wave launch within 0.5 of M4's staggered gap; all pairs 0.877 of 3840; schedule same-wave share 0.925 (OD-4's 0.925) | the same page |
 | **C3-R3** | **NOT REPRODUCED, DESCRIPTIVE ONLY** | Mixtral-8x7B w1 e_plain +0.94% under K1 (N0 +1.70%), under the registered +2%; overhead-corrected LIFE +0.034, PACKING -0.030, total +0.003, so the life share is not read (total under 0.005) | the same page and `results/2026-10-27-nvidia_gh200_480gb-perturb-pt3/perturb.json` |
-| descriptive: theta_L | | Mixtral-8x7B w1 0.494; Qwen2-57B w1 0.742, w2 0.477 | the two stamp pages |
+| descriptive: theta_L | | Mixtral-8x7B w1 0.494; Qwen2-57B w1 0.742, w2 0.477 (committed, the same ill-conditioned fit; wave-centered 0.487, 0.732, 0.467) | the two stamp pages |
 | descriptive: the pair-gap theta (median g over schedule-same-wave pairs in waves >= 1) | | Mixtral-8x7B w2 per cell 0.071 to 0.175 | the Mixtral-8x7B page |
 | descriptive: e_plain under K1 | | Mixtral-8x7B w2 -5.27%; Qwen2-57B w1 -4.59%, w2 -4.29% | the perturb unit against the priced table |
 | descriptive: the instrument's cost on the stamped call | | stamped over plain time, mean over cells: Mixtral-8x7B w1 +2.88%, w2 +2.49%; Qwen2-57B w1 +3.05%, w2 +1.44% | the stamp pages and the perturb unit |
 | descriptive: per-CTA SM clock | | Mixtral-8x7B w1 1358 to 1375 MHz, w2 1324 to 1356 MHz; Qwen2-57B 1354 to 1388 MHz | the stamp pages |
 
 **What it shows.** Measured, on PERTURBED pages at 1.4% w2 overhead: on Mixtral-8x7B w2 at 128x128 G 1, a later
-wave's CTAs launch over 0.35 of a median lifetime across the wave (theta_L 0.351), just outside NEAR's upper edge
+wave's CTAs launch over 0.35 of a median lifetime across the wave (theta_L 0.351 in the committed output; QUALIFIED 2026-11-17, see the defect of record below), just outside NEAR's upper edge
 (0.35) and outside C5's fitted 0.25 to 0.30, so by the registration C3-R1 reads OUT: C5's constant is not this
 launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times. The registration's
 bias analysis puts a PERTURBED theta between the true value over 1 + o and the true value, unless the cost is not
 uniform across CTAs (which C3 does not test), so under it the true theta is at or above the 0.351 read, not inside
 NEAR; theta (1 + o) is 0.356. One of the four cells (PT, 0.262) is inside IN; the other three read 0.350 to
-0.353. On the same GEMM, 0.901 of the later-wave re-reads that the schedule puts in their
+0.353. (QUALIFIED 2026-11-17: these are the committed output's values. Well-conditioned they are theta_L 0.349 and
+theta (1 + o) 0.354, which straddle NEAR's upper edge, and cells PT 0.258, PW 0.351, balanced 0.360, uniform
+0.347; the OUT, and with it "C5's constant is not this launch spread", is not supported. See the defect of record
+below.) On the same GEMM, 0.901 of the later-wave re-reads that the schedule puts in their
 partner's wave launch within half of M4's staggered gap of the partner (0.877 over all pairs), so C3-R2 reads
 LAUNCH-TOGETHER: M4's staggered-stream picture is wrong for Mixtral-8x7B w2 at 128x128 G 1, and by the
 registration a next byte law prices the measured launch gap, not the rank distance. That supports building the
 w2 byte law from measured launch times; it is not itself a byte law, and no byte law was fitted or tested here.
 On C3's board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94% (e_plain), below the
 registered +2%, so C3-R3 reads NOT REPRODUCED: the LIFE / PACKING split is printed and nothing is attributed.
+
+**Defect of record (noted 2026-11-17): C3-R1's OUT comes from an ill-conditioned fit and is not supported as a
+reading.** The pinned reader's `read_c3.wave_theta` (`scripts/scoring/cal3/read_c3.py:161-163`) fits
+`np.linalg.lstsq`, with an intercept column, to raw globaltimer stamps of about 1.793e18 ns. At that magnitude the
+float64 spacing is 256 ns and the fitted slope is a few 1e4 ns, so the fit keeps about three good digits, and
+which digits depends on the LAPACK build's operation order. The committed output (macOS 26.6.2, Accelerate) reads
+theta_L 0.351349 and theta (1 + o) 0.356187, OUT. The same reader gives 0.351506 and 0.356346 (still OUT) under
+macOS 27.2.1's Accelerate, and 0.348582 and 0.353381 under numpy on OpenBLAS, where it prints NEAR or OUT
+(PERTURBED). A diagnostic recomputation on wave-centered stamps (each wave's first start subtracted, which is
+exact: every stamp is a multiple of 256 ns) gives theta_L 0.349060 and theta (1 + o) 0.353866 under both
+Accelerate and OpenBLAS (agreeing to 2.7e-15 relative). By the registered rule that reads NEAR or OUT
+(PERTURBED): not resolved at the measured overhead, and neither band's meaning applies. Every theta in C3's
+output comes from this fit: centered, Mixtral-8x7B w2's cells read PT 0.258, PW 0.351, balanced 0.360, uniform
+0.347, and the descriptive theta_L Mixtral-8x7B w1 0.487, Qwen2-57B w1 0.732, w2 0.467. The pair-gap theta,
+C3-R2 and C3-R3 do not use it and do not move. The registered reader and its committed output stay as they are
+(pinned). The published OUT is the committed output's label, not a supported reading, and so is the reader's own
+meaning line ("the jitter picture is not the launch: C5's 0.25 to 0.30 absorbs something else. C5 stays
+SEEN-FITTED and cannot be argued from launch physics"), which stays in the pinned output. What holds either way:
+C5's constant stays SEEN-FITTED (neither NEAR nor OUT measures it), and theta_L is outside C5's fitted 0.25 to
+0.30. What C3 does not show: whether C5's constant is the launch spread. Every place in this file, the README
+and the registered README that argued from the OUT carries a QUALIFIED note that points here. The diagnosis is
+moe-kernels-work 2026-11-17 numdrift REPORT.md (not in this repository). Rule for later registrations: a fit on
+timestamps fits on times centered per wave or per launch, never on raw globaltimer values. The 3-decimal theta
+quotes in this section (0.351, 0.353, 0.356) are the committed output's values and are environment-dependent in
+the 4th decimal (on 27.2.1 the committed reader rounds theta_L to 0.352 and balanced to 0.355).
 
 **What it does not show.**
 
@@ -2742,7 +2809,8 @@ registered +2%, so C3-R3 reads NOT REPRODUCED: the LIFE / PACKING split is print
   registered bound and C3-R3 is descriptive only. No C3 constant is MEASURED; theta_L is
   MEASURED-PERTURBED and in-sample for Mixtral-8x7B.
 - **What C5's 0.25 to 0.30 absorbs is not read.** OUT says the fitted constant is not the launch spread; no C3
-  reading says what it is instead.
+  reading says what it is instead. (QUALIFIED 2026-11-17: that OUT is not supported, see the defect of record
+  above; C3 does not show whether the fitted constant is the launch spread.)
 - **The pair theta and theta_L disagree, and neither is banded against the other.** C5 puts a same-wave re-read
   g = theta_L behind its partner (g in units of M4's gap P L / W_c); the median g over Mixtral-8x7B w2's
   schedule-same-wave pairs in waves 1 and later (the descriptive pair-gap theta) reads 0.071 to 0.175 per cell,
@@ -2771,10 +2839,12 @@ PASS, so `tests/test_lock_gate.py` moves to 191 pages with 102 changed verdicts.
 
 **What the paper can claim, after calibration rental C3.** Measured, on board 02e86e at a 700 W enforced limit and
 a 1410 MHz lock, with an instrumented copy that costs 0.5 to 3.1% per cell (PERTURBED): Mixtral-8x7B's 128x128 G 1 w2
-launches a later wave's CTAs over 0.35 of a lifetime (outside C5's fitted 0.25 to 0.30), and 0.90 of its
+launches a later wave's CTAs over about 0.35 of a lifetime (0.351 as committed, 0.349 well-conditioned: at NEAR's
+upper edge, and outside C5's fitted 0.25 to 0.30 either way; QUALIFIED 2026-11-17, defect of record above), and
+0.90 of its
 later-wave, schedule-same-wave slab re-reads launch within half of M4's staggered gap of their partner. On this
 board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94%. Not established: what C5's fitted constant
-absorbs, and why the w1 miss read on the S1 and C2 counter pages did not reproduce here.
+absorbs, whether it is the launch spread (C3-R1's OUT is not supported), and why the w1 miss read on the S1 and C2 counter pages did not reproduce here.
 
 ## Calibration rental C4 (2026-10-27): CALIBRATION, no verdict; LOW-FAR x BEYOND-M4: Mixtral-8x7B-tp2's held-out 128 G 1 mean is -4.44% under the frozen round-4 model, and its counted w1 bytes exceed both byte laws at P 112
 
@@ -2996,6 +3066,10 @@ HELD-OUT inside an offline round. None is blind-certified.
     under round 5's (ROUND5.md section 5).
 - **C5's jitter constant is not the launch spread** (C3-R1 OUT). Mixtral-8x7B w2 theta_L reads 0.351
   (MEASURED-PERTURBED), outside C5's fitted 0.25 to 0.30. What C5's constant absorbs is not read.
+  (QUALIFIED 2026-11-17: not supported. The OUT and 0.351 are the committed output of an ill-conditioned fit,
+  environment-dependent in the 4th decimal; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead. So C3 does not show whether
+  C5's constant is the launch spread; theta_L is outside 0.25 to 0.30 either way. Calibration rental C3, defect of
+  record.)
 
 **Where a 1% claim is supported (held out, not blind).** Only two kinds of shape:
 - OLMoE-like shapes: small P, floor-side. OLMoE reads +0.40 to +0.53% in every round-5 variant.
@@ -3040,8 +3114,14 @@ models would carry the forking-paths risk above. A new CAL page read under a mod
 11. At 128x128 G 16, M4's charge-once activation assumption fails (S1 M4 A-DOMINATED), and Mixtral b128g16 w2 stays
     +62% under M4 (ROUND3.md section 1c).
 12. C3's pair-gap theta (0.071 to 0.175 per cell) and its wave-fit theta_L (0.351) disagree, and why is not read
-    (Calibration rental C3).
+    (Calibration rental C3). (0.351 is the committed output's; 0.349 well-conditioned, Calibration rental C3,
+    defect of record 2026-11-17.)
 13. Why tp2's counted w1 reads exceed M4's at P 112 (BEYOND-M4) is not read (Calibration rental C4).
+
+(NOTE 2026-11-17: this list is of 2026-10-28. Defects found later are recorded in their own sections, among them
+PC's float64 stamps (Rental PC, Defect of record), B3's misattribution of PipeWeave's errors in its bar's reason
+(Tile rental B3, Defect of record), C3-R1's ill-conditioned wave fit (Calibration rental C3, Defect of record) and
+the committed reproduction outputs' dependence on macOS 26.6.2's Accelerate (Provenance note, Defect of record).)
 
 **What the paper can claim, after the scope decision.** Certified: model v3 on R3's tile under skew, on Mixtral-8x7B,
 Phi-3.5-MoE and OLMoE (CORRECTED 2026-11-12: certified on Mixtral-8x7B and Phi-3.5-MoE; OLMoE HOLDS in CLEAN, see
@@ -3601,6 +3681,18 @@ owner's working-model bar, set after round 5's numbers were known, with no decla
 registration discloses this (`docs/registered/2026-11-04-tileB3-gh200.txt`, BAR, "relation to the round-5
 gate"). The FAIL above stands either way.
 
+**Defect of record (noted 2026-11-17): the bar's reason misattributes PipeWeave's errors.** B3's registration
+(`docs/registered/2026-11-04-tileB3-gh200.txt`, BAR, reason) gives PipeWeave (ISCA 2026, arXiv 2601.14910) as
+"6.0% on seen GPUs and 11.5% on unseen GPUs for Triton fused_moe" and calls the cited numbers "published accuracy
+for this problem". In PipeWeave v2 (arXiv 2601.14910v2, checked 2026-11-17) 6.0% and 11.5% are average MAPE over
+all its kernels, about 1M samples on 11 GPUs (section VI-C); 33,264 is its count of fused MoE samples (section
+V-B); it reports no fused-MoE-only error; and its fused MoE kernel is SGLang's Triton kernel (section VII), not
+vLLM's. The registration is pinned (later registrations keep it byte-identical) and is not changed. The bar's
+values (rms 3%, worst cell 8%, |mean| 1.5%) do not depend on the attribution: they still sit 2 to 4 times under
+every mean error cited, and no verdict moves. Rule for later registrations: a published error cited as a bar's
+reason is quoted with its scope (which kernels, which samples, which GPUs), the paper's version and the section
+it comes from.
+
 **Per model** (84 NATIVE cells, e = T_model / T_meas - 1; the bar is rms 3%, worst cell 8%, |mean| 1.5%):
 
 | cells | n | rms | mean | worst | bar |
@@ -4076,6 +4168,24 @@ per-CTA rate, then PC2; design-D6 (2026-11-09) and v6d followed. That choice was
 and v5d's re-score in view, and the stopping rule applied here was set afterwards, on 2026-11-10. v6d's gate is
 therefore one more model chosen on the same seen pages; its NO-GO, like v5d's, says nothing about an unseen model.
 
+NOTE 2026-11-17, an owner decision and a forking path disclosed: decode and prefill reopen for one unified model.
+On 2026-11-17 (US Central) the owner reopened both stages. This is an owner decision, not a registration: it
+registers no model form, constant, bar or gate. It supersedes the owner's stopping rules of 2026-11-10 (decode: PC2
+plus at most one decode blind, then decode closes) and 2026-11-11 (prefill: one measurement rental RR, no prefill
+blind, then prefill closes, Rental RR below). Both stages closed as recorded here and in Rental RR, and those records
+stand; the reopening is a new forking path, chosen with every decode and prefill page, both blind failures and both
+NO-GO gates in view, as decode's 2026-11-04 closure and reopening was (Decode stage closes calibrated, not
+certified, NOTE 2026-11-12). The plan, as the owner set it: one script, "v7", built from v4's trunk, plus a w1 L2
+re-read byte term from rental RR, plus PC's per-CTA rate and lifetime term from the decode branch, covering R3's
+tile, vLLM's prefill tiles and vLLM's decode tiles; v7 must re-price v3's 300 registered R3 predictions bit for bit
+or say why not. The steps: offline design and build; a gate registered before it is scored, on pages already
+published in all three regimes; only on GO, one blind GH200 rental on models with no prefill or decode page; one
+blind, pass or fail, after which the stage stops and is reported either way. State at the commit that records this
+(FINDINGS corrections 3): offline design only; no v7 code is in the repository, no page has a v7 score, no gate is
+written and nothing is rented. Every rule and constant v7 may draw on (RR's F1 and F2 hit rules, PC's rate curve,
+round 5's terms) was found or fitted on SEEN pages, and the gate's registration must disclose that. Nothing in this
+section, and no registered verdict, changes.
+
 **The sequence, end to end.**
 
 | step | registration | reading |
@@ -4217,6 +4327,11 @@ bytes under ncu. m is the counted miss fraction of the w1 slab re-reads, (D - C_
 each active expert's w1 once plus the unique tokens' A rows once, R the re-read demand (design-P1 2.2). P is the N-tiles
 per M-tile, m_e the M-tiles per expert, W_c the resident CTAs (264 at 128x128x64 with 2 per SM, 396 at 64x128x64 with
 3).
+
+NOTE 2026-11-17: the owner's stopping rule of 2026-11-11 quoted above is superseded. On 2026-11-17 the owner
+reopened prefill and decode together for one unified model, v7 (an owner decision, not a registration; a forking
+path, disclosed). Prefill closed after RR as recorded here, and nothing in this section changes. The plan, its
+steps and its state are recorded once, in Decode closes after v6d, NOTE 2026-11-17.
 
 **What was measured.** Two registered pages of 40 cells each, rr-128 at 128x128x64 w8 s3 and rr-64 at 64x128x64 w8 s3:
 series A (E 8, H 4096, P 20, 36, 48, 64, 80, 100, 160 and 224, each at m_e 2, 4 and 8 and one skewed layout), series B
@@ -4405,6 +4520,14 @@ pools any crossing here is computed from. The tree holds twenty published
 directories. CORRECTED 2026-10-05: those twenty are the 14 arms below and these six sessions;
 `results/published` holds 34 directories, the other 14 being the 2026-09-25 H100 session and the 13
 GH200 sessions read in the GH200 sections (`ls -d results/published/*/`).
+
+NOTE 2026-11-17, the counter run's cost. This file states session costs in each rental's own section, the first
+being rental 2's; the counter run has no section, so its cost was stated nowhere here. Its `session/README.md`
+(lines 6 to 10) gives it: Lambda instance accf77cf, launched about 00:05Z and terminated 02:22Z on 2026-09-25,
+about 2 h 17 min, about $4.54 at $1.99/h (137 min at $1.99/h is $4.54), an ESTIMATE from instance times that the
+owner's session gave and no file in the session records; no bill is recorded. The two other 2026-09-25 sessions
+state theirs in their own session READMEs: GH200 about 2.1 h, about $4.9 at $2.29/h; H100 about 1.58 h, about $6.8
+at $4.29/h.
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|

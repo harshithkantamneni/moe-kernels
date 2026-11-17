@@ -1621,6 +1621,12 @@ legs, so by OD-1 every stamp page is **PERTURBED**; the read GEMM's overhead, Mi
 2.97% worst burst pair, inside the NOT-READ bound (10%, 20%). **C3-R1: OUT**: theta_L 0.3513 over 12 launches
 (theta (1 + o) 0.3562; cells 0.262 to 0.353), MEASURED-PERTURBED and in-sample for Mixtral-8x7B: C5's 0.25 to 0.30
 is not the launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times.
+(QUALIFIED 2026-11-17, defect of record: the OUT and 0.3513 / 0.3562 are the committed output of
+`read_c3.wave_theta`'s ill-conditioned least squares on raw globaltimer stamps (`read_c3.py:161-163`), and their
+4th decimal depends on the BLAS build; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead.
+The reader and its output stay as registered; the OUT is not supported as a reading, and C3 does not show whether
+C5's constant is the launch spread. Rule for later registrations: fit on centered times. docs/FINDINGS.md,
+Calibration rental C3.)
 **C3-R2: LAUNCH-TOGETHER**: 0.901 of 1872 later-wave, schedule-same-wave re-read pairs launch within 0.5 of M4's
 staggered gap (all pairs 0.877; schedule share 0.925): M4's staggered distance is the wrong picture for Mixtral w2
 at 128x128 G 1. **C3-R3: NOT REPRODUCED** (DESCRIPTIVE ONLY): K1 over-predicts this board's plain Mixtral-8x7B w1
@@ -1921,6 +1927,12 @@ earlier decode scorer stay byte-identical; the addendum pins them and DS's commi
 |---|---|
 | `2026-11-04-tileB3-gh200` | the blind test of round 5's selected large-tile model as frozen (moe-kernels-work 2026-10-28 round5/ROUND5.md: the STAG-CUT w1 byte law with W2 on w2, the K1 wall knee at round 4's SEEN p 6.0 and S0 2.75, the clock form of F1, F1 par; 64x128 at v5'') on rental B2's 84 frozen NATIVE cells (`2026-10-20-tileB2-e1tile-gh200`'s pages, unchanged: Phi-3.5-MoE 30, Qwen1.5-MoE-A2.7B 30, JetMoE-8B 18, deepseek-v2-lite 6 pooled only), at 1410 MHz and 700 W, under the owner's working-model bar of 2026-11-04 (rms <= 3% per blind model and pooled, every cell within 8%, \|mean\| <= 1.5%; the reason is the published state of the art, none pre-registered: TileSight 10.35% wMAPE, PipeWeave 6.0% seen / 11.5% unseen GPUs, NeuSight 8.9%); B2's bar (2%, 5%, 1%) is printed beside, DESCRIPTIVE. The model is FROZEN (32 work files by sha256, constants by value, 84 predictions at A2's, C2's and C4's pars computed before the rental, a fingerprint, round 5's selected table re-priced: +0.45, -1.46, +1.77, +0.24, tp2 +2.39, +2.01 on C2's board), tied to the rental's commit with C2's git-tracked-file rule; JetMoE 128g1 n2 PT, round 4's UNPRICED cell, is priced (84 of 84). On-board inputs, each fitted on the VM by the frozen chain's estimator copied verbatim and each a STOP before any timed unit: the 128x128 sag par (OLMoE and Mixtral-8x7B f128, `scripts/tileB3_gate.py sag`) and the 64x128 sag par (OLMoE and Mixtral-8x7B f64w8, `sag64`, the owner's choice over A2's CARRIED par, with a clock clause: r6common's clock rule in the band in force, lock_gate PASS and at least 14 of 27 cells in band). The other stops: 700 W read back, the 1410 lock read back, the census gate, G-BAND. DISCLOSED, NOT MODELLED: round 5's single per-call constant (T0 + s_block = 36.16 us) does not price block-scan align by numel (B3's cells run numel 1,024 to 46,080; the align grows 0.532 us per 1000 ids at 1710 MHz); the B3 per-call check puts estimate A at 0.30 to 0.40 under that risk; with the estimate's common bias Phi-3.5's mean is about +0.9%, about +1.9% with its large-P w1 risk, past the 1.5% bar; the silu_and_mul and moe_sum byte terms (80 to 625 MB) are extrapolated beyond their fitted range; an align amendment was tried offline and worsened the held-out fit (OLMoE +0.45 -> +2.01), so it is not adopted. Finalisation: `read_b3.py finalise` recomputes every fit with the frozen chain and the repo copy, refuses on any difference with the gate records (pars to a relative 1e-9), and prices the 84 cells with no blind page opened (an audit hook: gaps-* paths and any path naming a blind model, the census aside); the owner commits its file before `score`, which refuses unless the file equals the finalised one. E1-TILE HOLDS iff the pool and each blind model hold in ALL and CLEAN (rule 3); a model is CERTIFIED with its bar in CLEAN and at least 2 of its pages there. G3 as r5common.g3_rule reads it (per-stratum voids applied to the verdict). The estimate at the working-model bar, by the knee round's method on round 5's five held-out means: A 0.4283, B 0.5745, D 0.4741 (at B2's bar, reproduced: 0.124, 0.1903, 0.1381) |
 
+NOTE 2026-11-17, a defect of record in the bar's reason: PipeWeave's 6.0% seen / 11.5% unseen are, in PipeWeave v2
+(arXiv 2601.14910v2, section VI-C), average MAPE over all its kernels (about 1M samples, 11 GPUs), not a Triton
+fused_moe error; it reports no fused-MoE-only error, and its fused MoE kernel is SGLang's (section VII). The
+registration's text ("for Triton fused_moe", "for this problem") is pinned and unchanged; the bar's values do not
+depend on it and no verdict moves (docs/FINDINGS.md, Tile rental B3, Defect of record).
+
 Relation to the earlier gate, stated in the registration: round 5 FAILED B3's model-round gate (G1 1%, G2 P(A) >= 0.5
 at B2's bar), and that FAIL stands; B3 is registered because the owner chose to go blind under the new bar, decided
 after round 5's numbers were known (disclosed). A FAIL spends the four blind models. SEEN: every A, A2, S1, C2, C3 and
@@ -2095,6 +2107,15 @@ earlier decode scorer stay byte-identical; the addendum pins them, PC's and PC2'
   5's pages, units, bars and $4.24 rental) is registered and NOT RUN; no plan file is written. Build records:
   `d6_build/run.py --check`. Tests `tests/test_stage_decode_addendum6.py` (docs/FINDINGS.md, Decode closes after v6d).
 
+NOTE 2026-11-17: the stopping rules of 2026-11-10 (decode) and 2026-11-11 (prefill, rental RR below) are superseded.
+On 2026-11-17 (US Central) the owner reopened decode and prefill together for one unified model, v7: an owner
+decision, not a registration (no model form, constant, bar or gate), and a forking path, disclosed. Both closures stand
+as recorded. Plan: offline design and build; a gate registered before it is scored, on published pages in all three
+regimes (R3's tile, vLLM's prefill and decode tiles); only on GO, one blind GH200 rental on models with no prefill or
+decode page, then the stage stops and is reported either way. At this note: offline design only, no v7 code, score, gate
+or rental. Every rule and constant v7 may draw on was found or fitted on SEEN pages (docs/FINDINGS.md, Decode closes
+after v6d, NOTE 2026-11-17).
+
 ## 2026-11-11, before any page: rental RR, the w1 re-read L2 hit mechanism (a measurement registration)
 
 `2026-11-11-rr-gh200` (`scripts/scoring/rr/register_rr.py --write` / `--check`; built 2026-11-11, not yet rented)
@@ -2144,3 +2165,7 @@ plan line (`rrcommon.py:502`) runs `arms=native` on a page whose every cell name
 registration is frozen and stays as written): PC's and B3's byte units on the same page ran `arms=native,shared`. Read
 on the fetched tree and on the published copy, the two outputs differ only in the tree's path;
 `scripts/scoring/rescore.py rr` re-reads the published session to the committed files (docs/FINDINGS.md, Rental RR).
+
+NOTE 2026-11-17: "prefill closes after RR" held until 2026-11-17, when the owner reopened prefill and decode for one
+unified model (an owner decision, not a registration; the 2026-11-10 decode entry above, NOTE 2026-11-17). RR's
+readings and labels are unchanged.

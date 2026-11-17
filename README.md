@@ -351,7 +351,9 @@ beside Mixtral-8x7B's +3.13% (+3.37% on C2's board), so the blind test B3 is not
 registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental C2). Calibration rental C3
 (descriptive, no verdict; its stamp pages PERTURBED, the instrumented copy failing its 1%/2% timing gate at 2.03%
 and 1.46% median while its hard legs passed) read C5's launch-spread constant OUT (Mixtral-8x7B w2 theta_L 0.351
-against the fitted 0.25 to 0.30, so it stays SEEN-FITTED), 0.901 of Mixtral w2's same-wave slab re-reads launching
+against the fitted 0.25 to 0.30, so it stays SEEN-FITTED; QUALIFIED 2026-11-17: that OUT is the committed output
+of an ill-conditioned fit and is not supported, since well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead;
+docs/FINDINGS.md, Calibration rental C3, defect of record), 0.901 of Mixtral w2's same-wave slab re-reads launching
 with their partner (LAUNCH-TOGETHER, against M4's staggered picture), and the Mixtral-8x7B w1 miss NOT REPRODUCED on
 its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Calibration rental C4 (no verdict) read
 LOW-FAR and BEYOND-M4: the round-4 model, frozen before the page, under-predicts Mixtral-8x7B-tp2's held-out 128 G 1
@@ -421,7 +423,12 @@ from stamps on the same cells and board: rms 0.030 (F1, the 42.5 MiB step betwee
 between mid-lives), 0.052 and 0.060 over 56 fresh cells, a DESCRIPTIVE replication of constants found post hoc on seen
 pages (0.048 and 0.043 there, joining one board's stamps to every board's counts, so not like for like with RR's
 same-board join). The Phi-3.5 replicate is NOT IDENTIFIED: its counted-bytes unit refused on a defect in
-RR's registered plan line (arms native on a page that asks native and shared) (docs/FINDINGS.md, Rental RR).
+RR's registered plan line (arms native on a page that asks native and shared) (docs/FINDINGS.md, Rental RR). (Note
+2026-11-17: both stopping rules above are superseded. The owner reopened decode and prefill on 2026-11-17 for one
+unified model, v7, an owner decision and not a registration, disclosed as a forking path: offline design and build, a
+gate registered before it is scored on published pages in all three regimes, and only on GO one blind GH200 rental,
+after which the stage stops either way. At this note nothing is built, scored, gated or rented; docs/FINDINGS.md,
+Decode closes after v6d, NOTE 2026-11-17.)
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile
@@ -446,7 +453,14 @@ equal parameter count, but whether it is traffic or time this grid cannot say.
 **The re-read is a property of the schedule.** `GROUP_SIZE_M` from 1 to 16
 moves the per-tile cost by 24% while compiling byte-identical shared memory, an
 identical PTX instruction census and identical occupancy. The model has no slot
-for a schedule.
+for a schedule. (CORRECTED 2026-11-17: the session measured none of the three. The
+shared memory is the residency model's 49152 B at every setting; the compiled
+shared memory was not read (`occupancy` V9 UNKNOWN), no PTX census of these
+settings is in the session or in docs/FINDINGS.md, and the occupancy is the
+modelled residency. The G=1 settings also ran at 1374 MHz
+against 1454-1471 for G > 1, worth roughly a fifth of the effect. docs/FINDINGS.md,
+"GROUP_SIZE_M moves the per-M-tile cost 24% at an identical geometry", states both
+caveats.)
 
 **Two results that stand on their own.** Of 56 power-of-two tiles, the 17 whose
 arithmetic-intensity ceiling clears this card's ridge all need an accumulator of
