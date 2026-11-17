@@ -2158,7 +2158,7 @@ pc2.read.txt's truncated dump is cut 2 characters later. Single-threaded Acceler
 numpy on OpenBLAS moves more fields, and the 26.6.2 Accelerate cannot be loaded on the 27.2.1 machine. Since
 2026-11-17 those 17 tests hold each output to its committed file with every string, label, key, list length and
 integer exact and floats within stated tolerances (`tests/_reproduce.py`: 1e-12 relative; decode DS 1e-6, the
-W1RATE fit's conditioning; cal3's floats not compared); the other reproduction tests still match byte for byte
+W1RATE fit's conditioning; cal3's theta fields not compared); the other reproduction tests still match byte for byte
 and keep their byte checks. Read every "byte for byte" and "re-reads to the committed files" in this file as
 made on macOS 26.6.2. Two registered sentences state byte identity and stay as registered: addendum 3's
 reduction, IDENTICAL with the published score's sha256 (its test now checks that sha256 against the committed
@@ -2760,15 +2760,17 @@ lowest variant median, 1.45%, is at Qwen2-57B's 1.46%, and its lowest worst, 2.2
 | descriptive: per-CTA SM clock | | Mixtral-8x7B w1 1358 to 1375 MHz, w2 1324 to 1356 MHz; Qwen2-57B 1354 to 1388 MHz | the stamp pages |
 
 **What it shows.** Measured, on PERTURBED pages at 1.4% w2 overhead: on Mixtral-8x7B w2 at 128x128 G 1, a later
-wave's CTAs launch over 0.35 of a median lifetime across the wave (theta_L 0.351 in the committed output; QUALIFIED 2026-11-17, see the defect of record below), just outside NEAR's upper edge
-(0.35) and outside C5's fitted 0.25 to 0.30, so by the registration C3-R1 reads OUT: C5's constant is not this
-launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times. The registration's
+wave's CTAs launch over 0.35 of a median lifetime across the wave (theta_L 0.351 in the committed output;
+QUALIFIED 2026-11-17, see the defect of record below), just outside NEAR's upper edge (0.35) and outside C5's
+fitted 0.25 to 0.30, so by the registration C3-R1 reads OUT: C5's constant is not this launch spread, C5 stays
+SEEN-FITTED, and a next byte law starts from the measured launch times. The registration's
 bias analysis puts a PERTURBED theta between the true value over 1 + o and the true value, unless the cost is not
 uniform across CTAs (which C3 does not test), so under it the true theta is at or above the 0.351 read, not inside
 NEAR; theta (1 + o) is 0.356. One of the four cells (PT, 0.262) is inside IN; the other three read 0.350 to
 0.353. (QUALIFIED 2026-11-17: these are the committed output's values. Well-conditioned they are theta_L 0.349 and
 theta (1 + o) 0.354, which straddle NEAR's upper edge, and cells PT 0.258, PW 0.351, balanced 0.360, uniform
-0.347; the OUT, and with it "C5's constant is not this launch spread", is not supported. See the defect of record
+0.347; the OUT, and with it "C5's constant is not this launch spread", is not supported, and the bias argument
+then puts the true theta between 0.349 and 0.354, not clear of NEAR. See the defect of record
 below.) On the same GEMM, 0.901 of the later-wave re-reads that the schedule puts in their
 partner's wave launch within half of M4's staggered gap of the partner (0.877 over all pairs), so C3-R2 reads
 LAUNCH-TOGETHER: M4's staggered-stream picture is wrong for Mixtral-8x7B w2 at 128x128 G 1, and by the
@@ -2794,9 +2796,12 @@ C3-R2 and C3-R3 do not use it and do not move. The registered reader and its com
 (pinned). The published OUT is the committed output's label, not a supported reading, and so is the reader's own
 meaning line ("the jitter picture is not the launch: C5's 0.25 to 0.30 absorbs something else. C5 stays
 SEEN-FITTED and cannot be argued from launch physics"), which stays in the pinned output. What holds either way:
-C5's constant stays SEEN-FITTED (neither NEAR nor OUT measures it), and theta_L is outside C5's fitted 0.25 to
-0.30. What C3 does not show: whether C5's constant is the launch spread. Every place in this file, the README
-and the registered README that argued from the OUT carries a QUALIFIED note that points here. The diagnosis is
+C5's constant stays SEEN-FITTED (the reading is not resolved, so neither band's meaning applies; a resolved NEAR
+would have replaced it with the measured value), and theta_L is outside C5's fitted 0.25 to
+0.30. What C3 does not show: whether C5's constant is the launch spread. Every place in this file, the README and
+the registered README that argued from the OUT carries a QUALIFIED note that points here; the published session
+README (results/published/2026-10-27-nvidia_gh200_480gb-cal3-session/session/README.md) and the reader's output
+(scripts/scoring/cal3/cal3.read.txt) state it unqualified and stay as published. The diagnosis is
 moe-kernels-work 2026-11-17 numdrift REPORT.md (not in this repository). Rule for later registrations: a fit on
 timestamps fits on times centered per wave or per launch, never on raw globaltimer values. The 3-decimal theta
 quotes in this section (0.351, 0.353, 0.356) are the committed output's values and are environment-dependent in
@@ -2844,7 +2849,8 @@ upper edge, and outside C5's fitted 0.25 to 0.30 either way; QUALIFIED 2026-11-1
 0.90 of its
 later-wave, schedule-same-wave slab re-reads launch within half of M4's staggered gap of their partner. On this
 board K1's held-out price over-predicts the plain kernel's Mixtral-8x7B w1 by 0.94%. Not established: what C5's fitted constant
-absorbs, whether it is the launch spread (C3-R1's OUT is not supported), and why the w1 miss read on the S1 and C2 counter pages did not reproduce here.
+absorbs, whether it is the launch spread (C3-R1's OUT is not supported), and why the w1 miss read on the S1 and C2
+counter pages did not reproduce here.
 
 ## Calibration rental C4 (2026-10-27): CALIBRATION, no verdict; LOW-FAR x BEYOND-M4: Mixtral-8x7B-tp2's held-out 128 G 1 mean is -4.44% under the frozen round-4 model, and its counted w1 bytes exceed both byte laws at P 112
 
@@ -3067,7 +3073,8 @@ HELD-OUT inside an offline round. None is blind-certified.
 - **C5's jitter constant is not the launch spread** (C3-R1 OUT). Mixtral-8x7B w2 theta_L reads 0.351
   (MEASURED-PERTURBED), outside C5's fitted 0.25 to 0.30. What C5's constant absorbs is not read.
   (QUALIFIED 2026-11-17: not supported. The OUT and 0.351 are the committed output of an ill-conditioned fit,
-  environment-dependent in the 4th decimal; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead. So C3 does not show whether
+  environment-dependent in the 4th decimal; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o)
+  0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead. So C3 does not show whether
   C5's constant is the launch spread; theta_L is outside 0.25 to 0.30 either way. Calibration rental C3, defect of
   record.)
 

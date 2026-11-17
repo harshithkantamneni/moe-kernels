@@ -1623,10 +1623,10 @@ legs, so by OD-1 every stamp page is **PERTURBED**; the read GEMM's overhead, Mi
 is not the launch spread, C5 stays SEEN-FITTED, and a next byte law starts from the measured launch times.
 (QUALIFIED 2026-11-17, defect of record: the OUT and 0.3513 / 0.3562 are the committed output of
 `read_c3.wave_theta`'s ill-conditioned least squares on raw globaltimer stamps (`read_c3.py:161-163`), and their
-4th decimal depends on the BLAS build; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead.
-The reader and its output stay as registered; the OUT is not supported as a reading, and C3 does not show whether
-C5's constant is the launch spread. Rule for later registrations: fit on centered times. docs/FINDINGS.md,
-Calibration rental C3.)
+4th decimal depends on the BLAS build; well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o)
+0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead. The reader and its output stay as
+registered; the OUT is not supported as a reading, and C3 does not show whether C5's constant is the launch spread.
+Rule for later registrations: fit on centered times. docs/FINDINGS.md, Calibration rental C3.)
 **C3-R2: LAUNCH-TOGETHER**: 0.901 of 1872 later-wave, schedule-same-wave re-read pairs launch within 0.5 of M4's
 staggered gap (all pairs 0.877; schedule share 0.925): M4's staggered distance is the wrong picture for Mixtral w2
 at 128x128 G 1. **C3-R3: NOT REPRODUCED** (DESCRIPTIVE ONLY): K1 over-predicts this board's plain Mixtral-8x7B w1

@@ -174,7 +174,7 @@ numbers omit them and are therefore not comparable to each other:
   2026-11-17 the reproduction tests that re-run such a fit hold each output to
   its committed file with `tests/_reproduce.py`: every string, label, key, list
   length and integer exact, floats within 1e-12 relative (decode DS 1e-6, its
-  W1RATE fit's conditioning; cal3's floats not compared, its fit being
+  W1RATE fit's conditioning; cal3's theta fields not compared, its fit being
   ill-conditioned, docs/FINDINGS.md, C3-R1 defect of record). Reproduction
   tests whose outputs still match byte for byte keep the byte check.
 
@@ -352,7 +352,8 @@ registered next step is a four-model refit (docs/FINDINGS.md, Calibration rental
 (descriptive, no verdict; its stamp pages PERTURBED, the instrumented copy failing its 1%/2% timing gate at 2.03%
 and 1.46% median while its hard legs passed) read C5's launch-spread constant OUT (Mixtral-8x7B w2 theta_L 0.351
 against the fitted 0.25 to 0.30, so it stays SEEN-FITTED; QUALIFIED 2026-11-17: that OUT is the committed output
-of an ill-conditioned fit and is not supported, since well-conditioned (wave-centered stamps), theta_L 0.349 and theta (1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead;
+of an ill-conditioned fit and is not supported, since well-conditioned (wave-centered stamps), theta_L 0.349 and theta
+(1 + o) 0.354 read NEAR or OUT (PERTURBED), not resolved at the measured overhead;
 docs/FINDINGS.md, Calibration rental C3, defect of record), 0.901 of Mixtral w2's same-wave slab re-reads launching
 with their partner (LAUNCH-TOGETHER, against M4's staggered picture), and the Mixtral-8x7B w1 miss NOT REPRODUCED on
 its board (+0.94% under K1) (docs/FINDINGS.md, Calibration rental C3). Calibration rental C4 (no verdict) read
@@ -456,7 +457,8 @@ identical PTX instruction census and identical occupancy. The model has no slot
 for a schedule. (CORRECTED 2026-11-17: the session measured none of the three. The
 shared memory is the residency model's 49152 B at every setting; the compiled
 shared memory was not read (`occupancy` V9 UNKNOWN), no PTX census of these
-settings is in the session or in docs/FINDINGS.md, and the occupancy is the
+settings is in the session (their PTX is in the occupancy_vs_swizzle arm's Triton
+cache; no census was taken) or in docs/FINDINGS.md, and the occupancy is the
 modelled residency. The G=1 settings also ran at 1374 MHz
 against 1454-1471 for G > 1, worth roughly a fifth of the effect. docs/FINDINGS.md,
 "GROUP_SIZE_M moves the per-M-tile cost 24% at an identical geometry", states both
