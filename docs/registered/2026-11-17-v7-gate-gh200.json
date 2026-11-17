@@ -1,0 +1,275 @@
+{
+ "registered": "2026-11-17",
+ "name": "2026-11-17-v7-gate-gh200",
+ "status": "REGISTERED BEFORE gate_v7.py RAN, NOT BEFORE ITS VALUES WERE KNOWN: during implementation the build computed every clause value except G2's P(A) (R3 GO by construction; PREFILL NO-GO on G1, four of six held-out means outside 1.0% whatever G2 reads; DECODE GO, CAL2 1.60% rms and the re-score 3.19%), so this gate registers known results and decides nothing new; the blind, registered separately, is the test. Model v7 (one price() over a declared regime switch) and its gate, the old bars per regime unchanged and each regime's GO independent. A DRAFT in the build clone until the owner pushes it; gate_v7.py runs only after this file is public. Every earlier registered verdict stands (B3 FAIL, round 5's gate FAIL, the decode blind FAIL of 2026-11-04, addendum 6's NO-GO)",
+ "design": "moe-kernels-work 2026-11-17 design-v7 DESIGN.md (offline, 2026-11-17) and the owner's decisions on it (2026-11-17): the structure (one module, one price(), the regime switch: R3's tile v3 exactly, the prefill tiles round 5 plus the RR w1 re-read term at G 1, the decode tiles v6d's law); the RR rule F2 at 47.5 MiB between mid-lives with life spread sigma 0.08 (128x128) and 0.06 (64x128); the D6-24 fix adopted behind its own switch; every new term behind its own switch; the owner's piece miss_fraction implemented in the repository at the owner's request; the old bars per regime, unchanged",
+ "tool": "scripts/r3_timing_model_v7.py (the model; --check-r3), scripts/round5_chain.py and scripts/round5_frozen/ (round 5, vendored), scripts/scoring/v7/gate_v7.py [--out dir] (the gate), scripts/scoring/v7/register_v7.py --write / --check / --trace (this file; --trace, the freeze's import closure)",
+ "model v7": {
+  "module": "scripts/r3_timing_model_v7.py",
+  "structure": "a declared REGIME SWITCH, not one physical law: one price(cell) dispatching on the tile key (r3: 32x64x64w8s4; prefill: 128x128x64w8s3, 64x128x64w8s3; decode: 16x64x128w4s4, 32x64x128w4s3, 32x128x64w4s3, 64x128x64w4s3; any other key Refused) and, for the RR term, on GROUP_SIZE_M (1 only), each a domain of measured support",
+  "branches": {
+   "r3": "v3 = v4 at R3's tile (c scale exactly 1.0, F-step, the v3 byte key); no v7 term is defined there",
+   "prefill": "round 5 as B3 froze it (STAG-CUT w1 and W2 w2, the K1 wall knee, the clock form of F1, v5'' at 64x128), its 32 work files vendored byte for byte (scripts/round5_frozen, the sha256 of B3's frozen.files); switch RR replaces the w1 DRAM reads at G 1 only",
+   "decode": "v6d (addendum 6) at its registered law and terms; switch D6FIX re-prices only the naive cells v6d prices by v4d''s naive GEMMs (a non-fetching follower, D6-24)"
+  },
+  "switches (registered: both on)": {
+   "RR": "prefill tiles, G 1: Bytes_w1 = C_u + mhat R; C_u = (experts with a row) x W_e + (unique tokens) x H x 2; R = sum_e (m_e - 1) W_e, m_e = ceil(c_e / BLOCK_M); mhat = the share of re-read pairs (r, r - P) whose F2 distance d = ((s_r + l_r / 2) - (s_{r-P} + l_{r-P} / 2)) x W_c x slab exceeds 47.5 MiB (strict), with starts s and lives l from L-SCHED (pid order onto W_c slots, 264 at 128x128 and 396 at 64x128; life max(0.05, 1 + sigma eps), sigma 0.08 at 128x128 and 0.06 at 64x128; numpy default_rng seed 7, 6 replicas); slab 128 x K x 2",
+   "D6FIX": "a decode cell v6d prices by v4d''s naive GEMMs is priced at the CAL2 fit v4d' selects with v4d' on every naive cell (its constants and rho form; on the committed CAL2 tree scaled, T0 -1.87, s_naive +9.55, s_block -0.72 us, d6_build/post_gate.out); every other cell at v6d's CAL2 fit; the CAL fit itself (bodies with no constants) is v6d's"
+  },
+  "constants": {
+   "RR": {
+    "form": "F2",
+    "C_mib": 47.5,
+    "sigma": {
+     "128": 0.08,
+     "64": 0.06
+    },
+    "reps": 6,
+    "seed": 7,
+    "life_min": 0.05,
+    "W_c": {
+     "128": 264,
+     "64": 396
+    },
+    "block_n": 128
+   }
+  },
+  "not built": "RR at decode: the design counts 0 aligned w1 re-reads on CAL2's 91 kept cells and on the 220 re-score cells (design-v7 section 0 item 3), so the term would be inert on every gate page; the decode branch is v6d's law. A deviation from design-v7's table 1.1, made because the owner's decision named v6d's law for the decode tiles and an untested branch with no effect on any page cannot be checked",
+  "miss_fraction": "the step rule on measured stamps (the owner's piece: each CTA pulls its slab evenly over its life; F1 starts, F2 mid-lives; d > C strict): over sorted start and end events with running byte sums, on times centered on the earliest stamp before any float conversion (integer arithmetic for integer stamps; a non-positive life refused); equals read_rr's m_hat on all 810 (launch, step form) readings of RR's published stamps; it is the measurement side of the term, the launch layer's byte clock (dt x W_c x slab) the pricing side, the two equal while every slot is busy",
+  "reductions (COMPUTED by the build, tests/test_timing_model_v7*.py)": {
+   "r3": "300 of 300 registered v3 predictions equal to 6 decimals and to rental 6's pricer bit for bit, with RR and D6FIX on and every v7 term patched to raise",
+   "prefill, RR off": "B3's 84 committed predictions (ms to 6 decimals, reads to the byte) and round 5's held-out table (tileB3.score.json preflight.round5_table) exactly",
+   "decode, D6FIX off": "gate_d6's CAL2 rows, fit and stop verdict and its 220 re-score rows exactly",
+   "switch isolation": "RR moves only B3's 48 G 1 cells and only their w1; D6FIX moves no prefill cell and exactly the 17 v4d'-branch decode page cells; RR moves no decode cell"
+  },
+  "numerical hygiene": "v7 fits nothing on stamps and differences no absolute stamp (miss_fraction and bytes_streamed center on the earliest stamp before any float conversion, in integer arithmetic when the stamps are integers such as int64 globaltimer ns, and refuse a non-positive life; the launch layer's times start at 0). Constants v7 carries from PC: c0 at G 128 (PC-R2, an OLS of rung lives on slab bytes, no stamp in the fit), the L table and X_sat (PC-R7) and kappa (d6_build/pc_spans.py) were read by PC's pinned reader, which casts absolute globaltimer stamps to float64 (a 256 ns step; the defect of record of 2026-11-12, median lives moved up to 1.6%, median 0.07%); on the 116 spans kappa is read from one step is at most 1.7% of a span, median 0.19%. PC2's constants were read after EXACT TIME's rebase; DS's W1RATE ratio carries the environment dependence of record (1.4e-7 relative). Not refitted: a reading would change v6d's registered constants"
+ },
+ "gate": {
+  "GO rule": "one GO / NO-GO per regime (R3, PREFILL, DECODE), each regime's GO independent of the others; a regime may go to ONE blind only on its own GO, the blind (models, cells, bars) registered separately before any blind page; no bar may be changed after this file is public; the gate (gate_v7.py) runs only after this file is public, on v7 with every switch on (RR, D6FIX), and its first reading on the published pages is the reading",
+  "bars": "the old bars, unchanged: R3's reduction (v4's --check, 2026-10-14), C4's next-round gate (2026-10-27), addendum 6's two clauses (2026-11-10)",
+  "R3": {
+   "G-R3": "v7 at R3's tile (32x64x64 w8 s4) re-prices the 300 registered v3 predictions (rentals 6 and 7: docs/registered/2026-10-09-rental6-skew-gh200.json, 2026-10-13-rental7-skew-gh200.json) bit for bit: every one equal to the registered number at 6 decimals and to rental 6's pricer exactly (r3_timing_model_v7.check_r3)"
+  },
+  "PREFILL": {
+   "G1": "every held-out 128 G 1 model mean within 1.0% (|mean| <= 1.0%, the mean as r4.summ prints it, 2 decimals): OLMoE-1B-7B, Qwen2-57B-A14B and Mixtral-8x7B on A2's cells, Mixtral-8x22B and Mixtral-8x7B on C2's board, and Mixtral-8x7B-tp2 on C4's (C4's restatement: G1 covers the five CAL models and Mixtral-8x7B on C2's board); held out leave-one-model-out exactly as round 5 computed it (the fold's LOMO K1 constants, SEEN for tp2; the fold's F1 par on the timed page's board, C4's two pages for tp2); RR's C and sigma are carried unchanged into every fold (not refitted per fold; fitted on RR's synthetic pages and chosen with this table in view, see disclosures)",
+   "G2": "estimated P(A) >= 0.5 by the registered method: r7.pass_estimates5 (read_c2.power at B2's bar 2% / 5% / 1%, R 200,000, seed 20261022) on the five models' held-out means (OLMoE, Qwen2-57B, Mixtral-8x7B on A2, Mixtral-8x22B, tp2) over B2's power cells that v7 prices, its 'A (5 models)'",
+   "refusal (TREES, as decode's)": "before any clause, v7 with every switch off must reproduce round 5's held-out table (tileB3.score.json preflight.round5_table) and B3's 84 committed predictions (b3.predictions.json, ms to 6 decimals, w1 and w2 reads to the byte) on the pages the clauses read (gate_v7.prefill_trees); any difference and the regime reads NO-GO (REFUSED), nothing judged",
+   "printed, never a clause": "B3's 84 NATIVE cells re-priced at B3's board pars (b3.predictions.json par, par64) against B3's measured times: pooled and per model mean / rms / worst. SEEN: B3's FAIL stands and this is not a pass"
+  },
+  "DECODE": {
+   "CAL (addendum 6's clause 1)": "CAL2 under v7 reads GO by the addendum-3 stop rule at 3% rms, 8% worst cell, 1.5% |mean| (v6d's three CAL constants refitted on v7's body on CAL2's kept cells, and, for the v4d'-branch cells only, D6FIX's three constants from a second CAL2 fit with v4d' on every naive cell; score_cal_d3's rules)",
+   "RE-SCORE (addendum 6's clause 2)": "the published decode blind (five SEEN models) re-scored under v7 at the CAL2 refit reads a pooled rms under 4.0% over the committed 220 cells; a WEAK SANITY FLOOR on SEEN pages, never a test and never a certification",
+   "refusals (as gate_d6)": "READINGS: the committed readings give v6d's registered law and terms; TREES: the CAL2 and decode blind trees reproduce their committed scores (d4common.reproduce)",
+   "D6FIX's constants": "the CAL2 fit with v4d' on every naive cell, its rho form by the registered selection rule, read by the gate on CAL2's tree"
+  },
+  "ablation (DESCRIPTIVE, never a verdict)": "each regime's clauses printed beside at every switch off (prefill: round 5; decode: v6d); R3 has no v7 term"
+ },
+ "disclosures": {
+  "every v7 constant and rule is SEEN": [
+   "RR's form F2 and C 47.5 MiB: RR's DESCRIPTIVE refit on its own fresh pages (rr.read.txt), never registered there; F1 and F2 were found POST-HOC on four stamp families with B3, PC and PC2 in view (design-P1 2.3)",
+   "RR's sigma 0.08 / 0.06: fitted on RR's 57 fresh cells at C fixed, chosen AFTER pricing launch-layer variants on SEEN pages: six scored on the 125 seen counted G 1 w1 cells and four priced in time on B3's and round 5's pages (design-v7 sections 3 and 5.2); the forks {F1, F2} x {C from P1, RR, free} x {one sigma, per tile} are 12 paths",
+   "D6FIX: the D6-24 defect was found on SEEN pages after addendum 6's gate (addendum 6 'after the gate'); the fix is chosen knowing it moves the 13 seen v4d'-branch cells from 13.2% to 1.36% rms (post_gate.out's counterfactual). Addendum 6 itself says of this defect: 'Any fix would be chosen on the seen re-score, so none is made and the NO-GO stands.' v7 makes that fix, and clause 2 is read on the same 220 seen cells, so under D6FIX clause 2 is not evidence: the fix was chosen with its effect on 13 of these 220 cells known, and a DECODE GO is the owner's 2026-11-17 decision to reopen applied to a SEEN floor, not a test the model passed",
+   "round 5's terms were built over five declared rounds, each with the earlier rounds' held-out numbers in view (B3's SEEN block); its gate FAILED and B3 FAILED; v6d's choices were made on PC, PC2, DS and CAL2 pages after the decode blind was seen"
+  ],
+  "the gate is a registered statement of a known estimate, not a blind test": "moe-kernels-work 2026-11-17 design-v7 DESIGN.md section 5 already priced these pages (POST-HOC, SEEN). Prefill, round 5's held-out 128 G 1 table under the RR term: means OLMoE +0.37, Qwen2-57B -1.50, Mixtral-8x7B +1.42 (C2's board +1.66), Mixtral-8x22B -0.01, tp2 -1.99 (section 5.2): four of six outside 1.0%, so G1 reads NO-GO as estimated (G2 not estimated there). Decode: CAL2 1.81% GO under v6d (section 5.3); the re-score 4.52% as frozen and about 3.19% with D6FIX (207 cells at 3.27% and 13 at 1.36%): GO only with the D6-24 fix, as estimated. R3: 300 of 300 by construction",
+  "computed by the build before this registration (POST-HOC, SEEN; disclosed, not a gate reading)": [
+   "while checking the RR implementation against the design's prototype: the six held-out means under RR (equal to the design's to 1e-9: +0.37, -1.50, +1.42, -0.01, -1.99, C2 +1.66) and B3's 84 cells (equal to the design's per cell)",
+   "while checking D6FIX: CAL2 under v7 reads GO (rms 1.60%, worst -5.40%, mean -0.17%; the 4 OLMoE v4d'-branch cells move) and the re-score pools 3.19% over 220 cells (Granite-3B 5.85% rms unchanged). All 13 seen-blind v4d'-branch cells take a new price at the CAL2 refit (17 page cells in all with CAL2's 4, as at v6d's committed constants); 11 of the 13 change their scored error and 2 do not, Qwen1.5 L-T3-A4 and deepseek-v2-lite L-T2-A6, because E1-DEC counts an absolute error at or under 1 us as 0 (dcommon.FLOOR_US) and both are inside that floor before and after the fix (0.94 us and 1.00 us under v6d, 0.17 us and 0.12 us under v7); P(A) and the ablation print were not computed"
+  ],
+  "the owner's reopening (2026-11-17)": "decode closed after v6d under the owner's stopping rule (2026-11-10) and prefill after RR (2026-11-11); the owner reopened both on 2026-11-17 for one unified model (docs/FINDINGS.md: Decode closes after v6d, Rental RR; README): a forking path the paper must disclose whatever the gate reads",
+  "no verdict moves": "this registration changes no earlier verdict, bar, label or file; every registration it quotes is in the freeze at its bytes"
+ },
+ "freeze": {
+  "statement": "the gate (gate_v7.verify_freeze, reading this registration at its committed path only) refuses every regime unless each file below has its sha256 and r3_timing_model_v7.constants_sha256() is constants_sha256; the code list is computed, not written by hand (register_v7.trace): the 100 repository source files on the gate's import closure, 77 of them loaded by the gate's load in a fresh interpreter (sys.modules) and the rest reached from those files' import statements, function-level imports included; the vendored files are round 5's 32 work files at B3's registered hashes",
+  "constants_sha256": "97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6",
+  "constants": {
+   "regimes": {
+    "r3": [
+     "32x64x64w8s4"
+    ],
+    "prefill": [
+     "128x128x64w8s3",
+     "64x128x64w8s3"
+    ],
+    "decode": [
+     "16x64x128w4s4",
+     "32x64x128w4s3",
+     "32x128x64w4s3",
+     "64x128x64w4s3"
+    ]
+   },
+   "rr_domain": "prefill tiles at GROUP_SIZE_M 1",
+   "switches_registered": {
+    "RR": true,
+    "D6FIX": true
+   },
+   "RR": {
+    "form": "F2",
+    "C_mib": 47.5,
+    "sigma": {
+     "128": 0.08,
+     "64": 0.06
+    },
+    "reps": 6,
+    "seed": 7,
+    "life_min": 0.05,
+    "W_c": {
+     "128": 264,
+     "64": 396
+    },
+    "block_n": 128
+   },
+   "D6FIX": "a decode cell v6d prices by v4d''s naive GEMMs (a naive cell with a non-fetching follower, D6-24) is priced at the CAL2 fit v4d' selects with v4d' on every naive cell (its constants and rho form); every other cell at v6d's CAL2 fit"
+  },
+  "files": {
+   "moe/__init__.py": "a7cb786129ce60d6981c407d974be1dda25c663af886a0a8892e7cf15a925042",
+   "moe/baselines/__init__.py": "85e49644e5a0c59f6f9efe8684ff84326db902d0ba22957eb9cf48503e1b756e",
+   "moe/baselines/_framework_config.py": "1ddb47f222fa58fe90f1ad97ec95d6debcb43c192e398b036aad54a6b4ddfe5a",
+   "moe/bench/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "moe/bench/ai_model.py": "f915d94133c669249fba3628893effa9f2079cf2e297572240ca152e458eb027",
+   "moe/bench/bytes_model.py": "6d3a6788cae7f9b66504d2397010712d8a56a75a9fb48684e2c07db93647d2e3",
+   "moe/bench/calibrate.py": "b2bb7193b20bd9ab458f3c8055f0902ee27c19b913bfbbd64f2037d5f9172007",
+   "moe/bench/counter_probe_kernel.py": "da59ca206e4cfc9c8bd5f1ab704961167ba858ac0edc2fe673a8fd6adaf2036d",
+   "moe/bench/driver.py": "f4ab79576669c046f0b065c3f306dee25a0b65c781b2922c905366c1d9dc6b03",
+   "moe/bench/exit_codes.py": "89c2a3dab3bef3e418e696b263a53b3362e1c2bc416d9809a1f4858e0bdcdd55",
+   "moe/bench/force_tile.py": "ba3ee455cb8279aad55e341de0f6edd16a2016d14f5c4dccd0cae389220a1a8e",
+   "moe/bench/provenance.py": "777a450890ccbca0e16d2d0418940d6f90908c4f878c26479caecca51bae4285",
+   "moe/bench/published.py": "5e08a6ac0b9b45f63c90200045e88c6a380a0c36b0a58974ede1de481764472c",
+   "moe/bench/read_probe.py": "4da02cfa2bbbcc52e545de196ca6e2e5f7105f5cf2909ba1618a6120af33ffcd",
+   "moe/bench/roofline.py": "301ae87c8a11e34f100f0b258e458d762a0af22cd9a675925be617448731910a",
+   "moe/bench/schema.py": "7fb29c5467f1a897bc2d5bfedf67f3454b6ae954b8d71bb1e465f440214c8cac",
+   "moe/bench/tile_resolve.py": "80578881e3f71fc09a42554190e7a9a8ff14ca0d3295f32dfff777791c139adc",
+   "moe/bench/timing.py": "264b580cb0f38b7b5c09aabee9ced0f41f1787edd3e81c22d55dac1044a0c155",
+   "moe/bench/tolerance.py": "0525b09694b64de17823929e2274c9dd730f7ec8019eb366dc96dc944625e04c",
+   "moe/bench/weights.py": "c54b2e714d39eb530e47dd34a184c304b8dcc3f3ca15d3e53de7c52a38d1e58e",
+   "moe/instrumented/__init__.py": "331d8130c6aaee92c0e0cedab7fa7d2f79fc1479c1a5ddfea8cd1b3b44141488",
+   "moe/instrumented/cubin.py": "3a252162ba5af0da7e71ed86f80e940ba4cd3035e16503c4e48569251a66a28f",
+   "moe/instrumented/fused_moe_instr.py": "16a8e39877add06bdab08de7de53de0808a0171a468816cb3c9ee23594594250",
+   "moe/kernels/__init__.py": "cdaeb445485a2bc08964c860b29956c02f8566a5c4ab48192bb47ebd462e2a42",
+   "moe/pipeline.py": "c54b6c27b74486fa103bc46cb9302ce1b00f335bffd2f61fde29c3b4ad432b93",
+   "moe/quant.py": "e4f31b990fdc548ca89688e455ea9e2e7919ebfcaac6e0ca699846b4750354c5",
+   "moe/reference/__init__.py": "48de58e32c7a60cc4a142f4e579ad05598b31840b8ff81a6d36d644f56a38645",
+   "moe/reference/torch_ref.py": "6857b4e454a5d54fa05cca5ccc442f3db246a32e87ed85ca9bf1cc831f7dd859",
+   "moe/routing/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "moe/routing/distributions.py": "253476cf178f90cbf2042ee0bbed66d16ed030b3319e478948b996419d631cbf",
+   "moe/routing/imbalance.py": "afa84fef5692b2e1a5a3d678ebc4eea4e1c2984e2ecefe02b88e08c1eab5b883",
+   "moe/spec.py": "58fb9b7fe2fdbd82867e0ab789cfc02bc03705c01722f9cfa0769c40bf6f87de",
+   "moe/stages.py": "38d254d30ded31f50ee682b85d6d68ce81c2b6985c6a7f4189735637a9d86f05",
+   "moe/state.py": "aad96b311d39ae7687870762a85ca4f5cbe7052d09e7abe7fef8fc514d71f8d4",
+   "scripts/alpha_g_chain_helpers.py": "c8045c7879accee9bef54a49f40b9139c6b3d14ef2f07f4e2c3699dd7b1a2043",
+   "scripts/atile_pooled_fit.py": "943b2e55a4e78b015e26617b10e5623e2e07209c000b1d6b013166f2ef183588",
+   "scripts/block_m_crossing_sweep.py": "54eaffb89a342723b8c214f188273710c1f53891639fd4b3496bccd317f4aaef",
+   "scripts/clock_elasticity.py": "193ae94b9207e6c84a05eda43b484790f902e9db546901e211b2fe85146c0b69",
+   "scripts/cores_heldout_predict.py": "e37c003c372363c1e20610c2df67ec7b675a768a426e1016baab71209198b46e",
+   "scripts/cross_model_predict.py": "a8a354326121972b53cbed03922177dc9c4a00805fc817b939142e9aa49fb08d",
+   "scripts/decode_synth.py": "45fa76a8a1edfa72351f90505a6a93214138ac5c709165f73455b3032e33ffbd",
+   "scripts/dram_counter_route.py": "130d5dc894d5355080b193d3e63468672e3f756c457df26a65c25b9216630e3c",
+   "scripts/floor_estimator.py": "40c785ea144740ae663ed11f5692b0978f2436fa836bf682fd5cc71201989cda",
+   "scripts/instr_probe.py": "a5b421bfd6825da67a8241a9535319c83824620928309633ac3b096ca479a6fe",
+   "scripts/launch_floor.py": "ec24465c1bca3f9afe305fcb5b2feac62cfcdc820ddcc5556f0b5569223da16a",
+   "scripts/lock_gate.py": "71c56a15a2ea168b5669a36363e941aa310acdbe51dd794a0a2bc6f7bd26f1d4",
+   "scripts/per_tile_model_fit.py": "1b25fed30ab783e02e9dae3d54ef2d26e248ecd519003bc739c55beaaa5e0230",
+   "scripts/private_weight_reference.py": "daa4070636866c9cf695d1fc7133a2077cb518728badc9a31b352406d0a4f70d",
+   "scripts/r3_decode.py": "f043e438d50287162bfb55644b7b1998cfffad8d50d50fcf1dad4afb189c1db8",
+   "scripts/r3_tile.py": "be9ee1991a9765881ca82e92665b4538b39295a98e7445b7828d5b1cb3cbf1cf",
+   "scripts/r3_timing_model.py": "09ef7543ffe53e733f1eef5dd8b5150b7f806cfbb3db15da6ad7537f73811ef0",
+   "scripts/r3_timing_model_v3.py": "595982d3dc0b4b6eea919cbdbbc674150d11d00c39fdd4d08deb6f826e2e8c07",
+   "scripts/r3_timing_model_v4.py": "e3c2b4143cd5751785140381fa61b4fa39fdbea65762fa836c48b6ab54887c14",
+   "scripts/r3_timing_model_v4L.py": "9a944af2e272035e1d8673e72faf1539fb90f1dbbda16e156a6387f2b7090d63",
+   "scripts/r3_timing_model_v4d.py": "52a8f6fefcc93d3f0bc2d8efd45f774efe2833d6101c0a322fce8c14b7028c70",
+   "scripts/r3_timing_model_v4dp.py": "6deb24fd5801130f0a8e8501523a180bab5d1c4ebd4310aacaa435e1857c9c22",
+   "scripts/r3_timing_model_v5d.py": "7051d530be6a3afac6baa3b383ddd6cccf5385e96b6f05667858601daa18a27b",
+   "scripts/r3_timing_model_v6d.py": "9653cea5c32337d819e400343c1c6d379d33c2ad8d554262736db18eda5110ae",
+   "scripts/r3_timing_model_v7.py": "d733466a53b5ded16da79c017ebef0bc9edc5bd27950d9350fb38d9a8ca700bb",
+   "scripts/round5_chain.py": "68f5e0a7e85df65b4efe97b0a6702d776e3a76f6f7776d735fa6ec6d0e1d7757",
+   "scripts/ruler_rebaseline.py": "1b500afa4cec57fb31d8ef1d40bcdcb554369c9093939cf5bd5e3133adc75d55",
+   "scripts/scoring/cal2/read_c2.py": "b57982f7ba784da7c519f76de6018c64503242f78a27d84f630ce6f500b77fde",
+   "scripts/scoring/decode/d2common.py": "16b1b1045ce938e48afb73e206cee8f27aa4ce283e866e348415c6daca5402a4",
+   "scripts/scoring/decode/d3common.py": "9f1d53b1050000e700e0b60394a7853862d43a5e0c558cb411e2980754964bc1",
+   "scripts/scoring/decode/d4common.py": "9941153628b96f58d5b3df2861ed13a11887d0af9deb75715c72f798e1a30bb2",
+   "scripts/scoring/decode/d5common.py": "b404e2093cd537b5f7044ccdf79823f7a2ba15573788b5ff3c9d00ccac50a5b5",
+   "scripts/scoring/decode/d6common.py": "cf36479eae47efed9b34809db5070ae896c59b29127f7184e160db6a05034527",
+   "scripts/scoring/decode/dcommon.py": "4cade228054581ac533aa799af9025cda6fa56e322e3e33f4f92ae3f2a65622c",
+   "scripts/scoring/decode/finalise_decode.py": "78b8e7fae8603313c4098d2fd1fe7ed7110c3410103230d11b50f584271e8812",
+   "scripts/scoring/decode/gate_d6.py": "b84ccf1e959a4e4f8bc50d8a9432732d1fa0c60d46a3df8d98d165dfc3e2ce0c",
+   "scripts/scoring/decode/score_blind.py": "54611aa819bfd9855460e18b45cd343d810685220b41cd4f70d07b7fc18163a3",
+   "scripts/scoring/decode/score_blind_d2.py": "3f90791987cc472f48d0033956810e5eaae6db086d1b91c6b0976a5ae2564f81",
+   "scripts/scoring/decode/score_blind_d3.py": "984621a437a1523033c8f87143848ba072a3c17cd3d3e344285d0f84a7e491d0",
+   "scripts/scoring/decode/score_cal.py": "8b8684c63e7d7b41ebcf1b17bb6c4d7e7b6ffb1fe023eba2008528d39135aa64",
+   "scripts/scoring/decode/score_cal_d2.py": "2f0ddb6688872c8d4624fd2c4ba1fd3ae366e431e7a24391671670cb1bcd7d18",
+   "scripts/scoring/decode/score_cal_d3.py": "ad9c7c24648c0c57062411a5149a33bbc116affcedb7fa47d877c109ab88ecb2",
+   "scripts/scoring/rental2/common.py": "dd8a1b890f342168f76dd01ec1c31a583f09fcfd1dc764265a634d72d475b453",
+   "scripts/scoring/rental3/r3common.py": "5dfdb3e2d8fa85634e0577df389e514659f9ff337d03ce7c3a28f105c669f305",
+   "scripts/scoring/rental4/r4common.py": "f2cb03333cce44470855b0633292af135084b755352e10e0334d09a94ff37665",
+   "scripts/scoring/rental5/r5common.py": "b3ae6f0d7feaa733e5c1aa7ed2f34706025bc02739aac6f4536ed8d3567e1086",
+   "scripts/scoring/rental5/skewmodel.py": "262b785e976dd6e712288c69e67dae7b429231f2c1adb4c389205b37f51e0b11",
+   "scripts/scoring/rental6/r6common.py": "59b096345ce7e00f56cdc76fe7d37226c37a49651f04d54811a614c343ea06b9",
+   "scripts/scoring/rental6/r6model.py": "04c2042561085201a1b4c679be07db007369a3bdf71cefdd746f23ef488c045b",
+   "scripts/scoring/rental6/reg6.py": "d3632633b1009362087035300f55a7fd76b69b2b8afac1a0340d7897928cff03",
+   "scripts/scoring/rental6/rowkeys.py": "7a5fa23be6d2dc39542ac8555f1a06bd5fad5f9d3a65518c6e6a369c240e7633",
+   "scripts/scoring/rental7/r7common.py": "6e224a8e70944ea6c7127b724a286d861030a4a4c0b67cb846bbe7f66f1d9851",
+   "scripts/scoring/rental7/reg7.py": "392af92b6117e02587911eab9d0023ffe4cd5c37f5d21f78d1ddef95d3fa5150",
+   "scripts/scoring/tileA/finalise.py": "a463577e7ec55b44483ae94c95fe1c0dd01b281443240d5d4766aedd0442bfe0",
+   "scripts/scoring/tileA/power_tile.py": "9b5804cfe351108ff451f1a058997ef426daf5f5f90b5b522c5016dc3926c9d5",
+   "scripts/scoring/tileA/regtile.py": "ee331a0b62ebae5a209d689ce3f3e33aaa7f480aa5c0d8e342a0824c5d942686",
+   "scripts/scoring/tileA/rowkeys_tile.py": "0575d71bca4b031147daa76a0f75e16d80ce051f02690c9c2f7459417cb18172",
+   "scripts/scoring/tileA/tcommon.py": "1b94cc123ce6169e3c49482e6bf3b975a3b6cf1e4f0f8cad4739676ec6e68d6d",
+   "scripts/scoring/tileA2/a2common.py": "d99eef413cddbae593d5f9115d8bc6db776c4ad4a7a6cb43c0eb7848517a3d9a",
+   "scripts/scoring/v7/gate_v7.py": "d4aa99309181242503c0bbbc4720acff1c6fc115a8d5aef344c36f3fca389e70",
+   "scripts/skew_synth.py": "228e69bef533a4654b94d851cf7472eaa503eb901eac084a51dc8a5595316f03",
+   "scripts/skew_synth_tile.py": "f010c8defe1a96f17465000cbfe5075d02c2a03d3be5816665a4a4ac7d03150e",
+   "scripts/tile_census.py": "8dbdb8439b59f621ebe2b6a3e95e2c43b2aa01aeeae965eed0053a5e5786045e",
+   "scripts/wave_split_bytes.py": "3693e0a1c34624ef928ff43876418009adb4341496fc5821ce2bd1ec8c952b39",
+   "scripts/wave_split_bytes_v3.py": "24992697b2ba19e13be0df64dba200498c6796ebc6517776af85253df266a066",
+   "scripts/wave_split_bytes_v4.py": "927f9c2df7d3fb70e546dcd632a901cd4e414f4e65f959ba6a20da2cc4332265",
+   "scripts/round5_frozen/2026-10-20/scoreA2/bytes.score.json": "f90eeebb98c0445e01c08277a1137ead3c67601e71aa5859ed886b2d9c6e2c13",
+   "scripts/round5_frozen/2026-10-20/scoreA2/census.score.json": "736ebb7ff3005323801513c4aecadb0b3173f5c5d6379f1c9e09189524ff0436",
+   "scripts/round5_frozen/2026-10-20/scoreA2/floor.score.json": "f313f46c6c34cab5d618545fb96034ee0383b8a71c91ca193620f5dd631e8689",
+   "scripts/round5_frozen/2026-10-20/scoreA2/rep.score.json": "9c09c8b48640684f40ecd2bc6d87d72597c3789c022848694539e863d2db9733",
+   "scripts/round5_frozen/2026-10-21/diag-A2/work/common.py": "f4ac72d293fb2fbd71704397ae7a8b4b7de8bf339d0c1cc82a7d2333d4cb0921",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/v5price.py": "ff2565f18fbd81a5a8dbc650bdfbb1fffffde60a421fc2f755b60dfe89d3191a",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/kneefit.py": "df0b63145411ce5fddb0b4044c7ba1661949bb73f71062e0f88b453d448c9a35",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/sag.py": "a7261341ff39885384821632a1930279c10b3aed33605043a94a0fb7083f10e0",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/b2risk.py": "dad0d98c787736823d23336b0124b4dda6e0f0da70d7812fdef0d99171e97435",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/f3fit.json": "1a1fad978a7d9473f4851cb71aa26e0cdfc2004445280fdd8e4f198f64e44552",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/kneefit.json": "43ac3b0cba2db4a00d66a60da8669cbd33266d9fb93fb846e15f981fcecb8e53",
+   "scripts/round5_frozen/2026-10-21/design-v5/work/kneefit64.json": "51b38850fa075e23e8711572ab90340e35c73b73f5fa32bfd77633e475d614bf",
+   "scripts/round5_frozen/2026-10-22/diag-v5/work/d5.py": "09e86b88d56834f8055e3e0639697563d6fe571b2fe2c542bae398d33f27e12a",
+   "scripts/round5_frozen/2026-10-22/diag-v5/work/bw.py": "d112e8a15d83f6e893177e595dd368a7a263e7f17e2d2eb64184f951a4bf91dd",
+   "scripts/round5_frozen/2026-10-22/diag-v5/work/knee2.py": "86e21ee57e57c2a3cb92adc6f728f40a74a2ec9a254f6bd8f31c44afa7a952f8",
+   "scripts/round5_frozen/2026-10-22/diag-v5/work/v5prime.py": "95aa801c8257b36bd4c255aa34f58ae4406ea3af3e4e1c066f2eb6403d71d8e4",
+   "scripts/round5_frozen/2026-10-22/diag-v5/work/bytes_lomo.json": "cc51368d9a14a68100b22a3ccd9f0f3dbc2f9257060c4b7a684b6729edddc1aa",
+   "scripts/round5_frozen/2026-10-22/knee-v5/work/k5.py": "02e06a689ecec4e492deac6c911f6a8fe107c152144850c517a6a8c894b80435",
+   "scripts/round5_frozen/2026-10-22/refit4/work/r4.py": "cbc0587e57e645ac3a6476577dfeb230bfbb38783282ae766da19a2b82b5c3d6",
+   "scripts/round5_frozen/2026-10-22/refit4/work/refit4.py": "4ab08ff866efd5062077f1e9e86993cbe8ac735ec58b34643b43949cd3f238df",
+   "scripts/round5_frozen/2026-10-22/refit4/work/bytes4.json": "86a6a2edd6e0096af8f226140904fa4e40b7bd0862d00656c53012a478f968bb",
+   "scripts/round5_frozen/2026-10-27/round3/work/r5.py": "d418b2d3713a5633320beb94e777392a1157ba744d89cb2e9862555eed60e323",
+   "scripts/round5_frozen/2026-10-27/round3/work/r6.py": "57865d964ff13c8c8f02c9d76eb626ebc79f5357f9bb6b2504f0584e3ef78179",
+   "scripts/round5_frozen/2026-10-27/round3/work/tailmap.json": "b0bbbc6e41fa0dae495c161ebb676a85191ed8a2f89332abc9d82914e316db7b",
+   "scripts/round5_frozen/2026-10-27/round3/work/knee4.json": "bbd13b49cba45d0983e7aa3915209ed13457724bc9e5da29de8ad7ba1d7a9122",
+   "scripts/round5_frozen/2026-10-27/round3/work/bytes7.json": "8ed65b98081ab7e83debb69ad43ebcd4c3715888a2db5f5beab402dc78297b4c",
+   "scripts/round5_frozen/2026-10-27/round3/work/combo4.json": "7e9303f9b257676524402183da6126bae9ae86c1309d05b5a0543e3e5ea4e17a",
+   "scripts/round5_frozen/2026-10-27/round3/work/DECLARED4.txt": "54c8e9a20726f335e6f1378cd4404d1d6f4b083f4623aa59be192ab6cab89a65",
+   "scripts/round5_frozen/2026-10-28/round5/work/r7.py": "4d2a3555a6ac18a2c3208be897dfcfffaa1ca38562b2bad98b87c0a59ba61410",
+   "scripts/round5_frozen/2026-10-28/round5/work/bytes8.json": "73732e14fe8b3dde3c63bfdb27b66c3bf05ae7f3f1ad37a72bb1dd53556e55a0",
+   "scripts/round5_frozen/2026-10-28/round5/work/combo5.json": "a6934571113b956b75f0728519b1743fe42dd6fbda4cd7a020a73712a54a597a",
+   "scripts/round5_frozen/2026-10-28/round5/work/DECLARED5.txt": "e2dd41fe512362bf531400039dceae6acfe89ad3fe97194d4ec7534d03df18d6",
+   "scripts/scoring/pc/pc.read.json": "ac6d7b27779ef52230353505827c66165f30d8e83f363e8878cd1255e17f19db",
+   "scripts/scoring/pc2/pc2.read.json": "04b3d7c39f5407a029713a8e7f7ad7d80c5ec1a6c223b9d4c8ca24b29993bee2",
+   "scripts/scoring/decode/d6_build/pc_spans.json": "827230ae8103e14e60fbc2ab2a27267368dadfd6159366506349a65d17263d75",
+   "scripts/scoring/decode/ds.readings.json": "ce89289f4dbf383b9dee30da52b9dae6b388ef36d2b02d4c62cb8928fc4252eb",
+   "scripts/scoring/decode/d6_build/v6d_constants.json": "9af3fadc3f4f87a3977faad7bad2a41f6a9c855570fb2bb9f94680b7c0c5522a",
+   "scripts/scoring/decode/gate_d6.out.txt": "d75e1f0ae62b09f9543229fa51f0f417693e1c462863402de28e1c304b44230a",
+   "scripts/scoring/tileB3/b3.predictions.json": "ed3a45cbbc9391d2176e8477a2c9964342b7c3c2105cd64f8496ea3ac8fc5c0d",
+   "scripts/scoring/tileB3/tileB3.score.json": "f6683c2e3c9d2b92b2a3a15098e7282352d8a24a310cf01d856f42086db37438",
+   "docs/registered/2026-10-09-rental6-skew-gh200.json": "a5a79b169c86b89edacac84992613a66a84fb14d2b764876f2157b228714859e",
+   "docs/registered/2026-10-13-rental7-skew-gh200.json": "3a61e8fc9dc372c8d71caf24b221c063360dbe07d2a508b59b7351713a920ab6",
+   "docs/registered/2026-10-27-cal4-gh200.json": "1a6c5fd419a53a40d4979bb5cfb4ee6d4eb27cfdbddcc8b0925d2f60be51c9e9",
+   "docs/registered/2026-10-27-cal4-gh200.txt": "1ffb44fb6719b233613327ea069b955678c2a0033ef65645f3605ab9fa850df0",
+   "docs/registered/2026-11-04-tileB3-gh200.json": "c53e708b78a2bf576c408e5f21cbb1f84402c37acfc8a69a5a943ac3366b58de",
+   "docs/registered/2026-11-04-tileB3-gh200.txt": "fb08c8a2876bea9243a6c40364df721478400dc268b8585cb72015e250dead49",
+   "docs/registered/2026-11-10-decode-addendum6-gh200.json": "d3695ac6bf6d85800f23b04f160e9ddc21448c023f4b1a075b1dc6b984922198",
+   "docs/registered/2026-11-10-decode-addendum6-gh200.txt": "00b4efbf0ab3e1434bb38fd5a3fa3bf46e005222ede7e971bfcd1d280b287765"
+  }
+ }
+}

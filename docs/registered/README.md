@@ -2169,3 +2169,27 @@ on the fetched tree and on the published copy, the two outputs differ only in th
 NOTE 2026-11-17: "prefill closes after RR" held until 2026-11-17, when the owner reopened prefill and decode for one
 unified model (an owner decision, not a registration; the 2026-11-10 decode entry above, NOTE 2026-11-17). RR's
 readings and labels are unchanged.
+
+`2026-11-17-v7-gate-gh200` (`scripts/scoring/v7/register_v7.py --write` / `--check`; built 2026-11-17, a DRAFT until
+pushed) registers model v7 (`scripts/r3_timing_model_v7.py`: one `price()` over a declared regime switch on the tile
+key; R3's tile is v3 exactly, the prefill tiles are round 5 as B3 froze it, vendored byte for byte in
+`scripts/round5_frozen/` and loaded by `scripts/round5_chain.py`, plus switch RR on the w1 reads at GROUP_SIZE_M 1, the
+decode tiles are v6d plus switch D6FIX on the D6-24 cells) and its gate (`scripts/scoring/v7/gate_v7.py`). It was
+registered before gate_v7.py ran, NOT before its values were known: during implementation the build computed every
+clause value except G2's P(A) (R3 GO by construction; PREFILL NO-GO on G1, four of six held-out means outside 1.0%;
+DECODE GO, CAL2 1.60% rms and the re-score 3.19%), so the gate registers known results and the blind, registered
+separately, is the test. The old bars, unchanged, each regime's GO independent: R3, the 300 registered v3 predictions
+bit for bit; prefill, C4's next-round gate (G1 every held-out 128 G 1 mean within 1.0%, RR's C and sigma carried
+unchanged into every fold; G2 estimated P(A) >= 0.5), after a TREES refusal (with every switch off v7 must reproduce
+round 5's held-out table and B3's 84 committed predictions), B3's 84 cells printed as SEEN information; decode,
+addendum 6's two clauses (CAL2 under the addendum-3 stop rule, with v6d's three CAL constants plus D6FIX's three from a
+second CAL2 fit; the SEEN decode blind re-scored under 4.0% pooled over 220 cells). Addendum 6 said of the D6-24 defect
+"Any fix would be chosen on the seen re-score, so none is made and the NO-GO stands"; v7 makes that fix, so under
+D6FIX clause 2 is not evidence and a DECODE GO is the owner's 2026-11-17 reopening applied to a SEEN floor. A regime
+may go to ONE blind only on its own GO; no bar may change after the file is public. Disclosed: every v7 constant and
+rule was found or fitted on SEEN pages, and design-v7's feasibility estimate already priced the gate pages. The freeze
+pins 148 files (the 100 repository source files on the gate's import closure, computed by `register_v7.py --trace`;
+round 5's 32 vendored files; 8 readings and committed numbers; 8 quoted registrations) and v7's constants hash; the
+gate reads this registration at its committed path only and refuses every regime on any difference. Tests
+`tests/test_timing_model_v7.py`, `tests/test_timing_model_v7_prefill.py`, `tests/test_v7_gate.py` (the gate on
+synthetic fixtures only).

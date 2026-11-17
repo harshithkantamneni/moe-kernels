@@ -10,6 +10,7 @@ document with every reading the tests check.
   b3_on     v7 (RR on) on the same 84 cells: which cells moved, by tile and G; with D6FIX also on and off (no change);
             the RR term's parts per moved cell. B3's 84 cells are SEEN information, not a gate clause: no statistic
             against measurement is computed here
+  gate_trees  gate_v7.prefill_trees() on this tree (the prefill regime's TREES refusal): must be no difference
   trace     every file the job opened outside the repository and the interpreter (an audit hook from before the chain
             loads): must be none
 """
@@ -34,10 +35,11 @@ def _hook(ev, args):
 
 
 sys.addaudithook(_hook)
-for p in (REPO, REPO / "scripts"):
+for p in (REPO, REPO / "scripts", REPO / "scripts" / "scoring" / "v7"):
     sys.path.insert(0, str(p))
 import r3_timing_model_v7 as V7  # noqa: E402
 import round5_chain as R5  # noqa: E402
+import gate_v7 as GV  # noqa: E402
 
 
 def outside(paths) -> list:
@@ -78,6 +80,7 @@ def main() -> dict:
         r5[k] = C["r4"].summ(e)["mean"]
     out["r5_off"] = r5
     out["r5_want"] = json.loads((REPO / "scripts/scoring/tileB3/tileB3.score.json").read_text())["preflight"]["round5_table"]
+    out["gate_trees"] = GV.prefill_trees()
     out["trace"] = outside(OPENED)
     return out
 

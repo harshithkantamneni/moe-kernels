@@ -2,7 +2,8 @@
 tests/v7_chain_job.py in its own interpreter: the vendored work files are B3's frozen ones; with RR off v7 is round 5
 exactly (B3's 84 committed predictions to 6 decimals and their reads to the byte; round 5's held-out table as
 tileB3.score.json preflight records it); with RR on only the 48 G 1 cells move, only in w1, and D6FIX moves none; the
-chain opens nothing outside the repository. No gate statistic of v7 is computed (the gate runs after its
+gate's prefill TREES refusal (gate_v7.prefill_trees) passes on this tree; the chain opens nothing outside the
+repository. No gate statistic of v7 is computed (the gate runs after its
 registration is public)."""
 from __future__ import annotations
 
@@ -91,6 +92,12 @@ def test_rr_moves_only_the_g1_cells_and_only_their_w1_and_d6fix_moves_no_prefill
     assert {m["rr"]["sigma"] for m in moved if m["tile"].startswith("128")} == {0.08}
     assert {m["rr"]["sigma"] for m in moved if m["tile"].startswith("64")} == {0.06}
     assert on["ms"] == on["ms_rr_without_d6fix"]
+
+
+@need
+def test_the_gates_prefill_trees_refusal_passes_on_this_tree(job):
+    """gate_v7.prefill_trees (every switch off): round 5's table and B3's 84 predictions reproduce, no difference."""
+    assert job["gate_trees"] == []
 
 
 @need
