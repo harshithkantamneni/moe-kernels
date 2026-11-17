@@ -1,7 +1,7 @@
-"""tests/_reproduce.py still catches real changes: a flipped verdict or label fails, a number moved beyond the
-tolerance fails, a changed key or list length fails, a cal3 label or count change fails though cal3's floats are not
-compared; a drift inside the tolerance passes; the truncated-dump rule is narrow. Run on the committed files
-themselves (pc2.read, cal3.read, ds.readings, decode cal.score), edited in memory."""
+"""tests/_reproduce.py still catches real changes: a flipped verdict or label fails, a number moved beyond the tolerance
+fails, a changed key or list length fails, a cal3 label, count or non-theta float change fails though cal3's theta
+fields are not compared; a drift inside the tolerance passes; the truncated-dump rule is narrow. Run on the committed
+files themselves (pc2.read, cal3.read, ds.readings, decode cal.score), edited in memory."""
 from __future__ import annotations
 
 import copy
@@ -89,10 +89,10 @@ def test_a_number_moved_beyond_the_tolerance_fails_and_a_drift_within_it_passes(
         assert RT.compare_json(e, ds, RT.DEFAULT), "DS's drift fails the default tolerance"
 
 
-def test_text_numbers_hold_to_the_tolerance_and_to_one_rounded_unit_only():
+def test_text_numbers_hold_to_the_tolerance():
     assert RT.compare_text("x 0.30000000000000004 y", "x 0.3 y") == []
     assert RT.compare_text("x 0.3001 y", "x 0.3 y")                       # beyond tolerance, decimals differ
-    assert RT.compare_text("theta 0.3515", "theta 0.3514") == []          # one unit in the last place, 4 digits
+    assert RT.compare_text("theta 0.3515", "theta 0.3514")                # one unit in the last place, 4 digits
     assert RT.compare_text("theta 0.3516", "theta 0.3514")                # two units
     assert RT.compare_text("x 0.2", "x 0.1")                              # one unit, but 50% of the value
     assert RT.compare_text("cells 7720", "cells 7721")                    # an integer is exact
@@ -130,13 +130,24 @@ def _first_list(d, path=()):
     return None
 
 
-def test_cal3_floats_are_not_compared_but_its_labels_and_counts_are():
+def test_cal3_thetas_are_not_compared_but_its_other_floats_labels_and_counts_are():
     d = _load(CAL3)
     assert d["C3-R1"]["band"] == "OUT"
+    # the theta fields (read_c3.wave_theta's outputs) are free
     e = copy.deepcopy(d)
-    path, v = _first(e, _is_float)
-    _set(e, path, v * 1.5)
+    e["C3-R1"]["theta_L_mixtral_w2"] *= 1.5
     assert RT.compare_json(e, d, RT.CAL3) == [] and RT.compare_json(e, d, RT.DEFAULT)
+    # every other float is held to REL_TOL: C3-R2's share 0.901 moved fails, inside 1e-12 passes
+    for scale, fails in ((0.5 / 0.9011752136752137, True), (1 + 1e-13, False)):
+        e = copy.deepcopy(d)
+        e["C3-R2"]["together_sw_later_share_mixtral_w2"] *= scale
+        assert bool(RT.compare_json(e, d, RT.CAL3)) is fails, scale
+    t = _f(CAL3, ".txt").read_text()
+    # text: a printed theta may move; the same line's 0.9012 share may not
+    th = "w2: theta_L 0.3513 over 12 launches"
+    assert th in t and RT.compare_text(t.replace(th, "w2: theta_L 0.3515 over 12 launches"), t, RT.CAL3) == []
+    assert RT.compare_text(t.replace("together (waves >= 1, schedule same-wave) 0.9012 ",
+                                     "together (waves >= 1, schedule same-wave) 0.9013 "), t, RT.CAL3)
     e = copy.deepcopy(d)
     e["C3-R1"]["band"] = "NEAR or OUT (PERTURBED)"
     assert RT.compare_json(e, d, RT.CAL3)
@@ -144,8 +155,8 @@ def test_cal3_floats_are_not_compared_but_its_labels_and_counts_are():
     path, v = _first(e, lambda x: type(x) is int and not isinstance(x, bool))
     _set(e, path, v + 1)
     assert RT.compare_json(e, d, RT.CAL3), path
-    t = _f(CAL3, ".txt").read_text()
     assert RT.compare_text(t.replace(" OUT", " NEAR", 1), t, RT.CAL3)
+    assert RT.compare_text(t.replace("over 12 launches", "over 13 launches", 1), t, RT.CAL3)
 
 
 def test_the_truncated_dump_rule_is_narrow():

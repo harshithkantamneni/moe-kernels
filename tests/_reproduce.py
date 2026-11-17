@@ -4,8 +4,8 @@ fit uses to hold a regenerated output to its committed file.
 Why not byte identity. The committed outputs were written on macOS 26.6.2, where numpy 2.5.3 (uv cpython 3.12.13)
 links Apple's Accelerate for BLAS and LAPACK. The update to macOS 27.2.1 (2026-11-16) replaced Accelerate, and every
 output that goes through a least-squares fit or a matrix product now differs from its committed file in the last
-digits of some floats (the diagnosis: ~/code/moe-kernels-work/2026-11-17/numdrift/REPORT.md, the owner's work
-folder, not in this repo). No verdict, band, READ / NOT READ, status, key or list length moved. So a reproduction test
+digits of some floats (the diagnosis: moe-kernels-work 2026-11-17 numdrift REPORT.md, the owner's work folder, not
+in this repo). No verdict, band, READ / NOT READ, status, key or list length moved. So a reproduction test
 holds every string, bool, null, integer, key and list length exactly, and every float within the tolerance below.
 
 JSON (compare_json): the same structure (dict keys equal as sets and in order, list lengths equal), every str, bool
@@ -13,26 +13,29 @@ and None equal, every int equal (an int is a count, an id or a size), every floa
 |got - want| <= max(rel * max(|got|, |want|), abs). A float never matches an int or a bool.
 
 Text (compare_text): the same number of lines; each line split into numeric and non-numeric tokens; every non-numeric
-token exact (whitespace included); an integer token exact; a decimal token within the profile's tolerance, or one unit
-in its last printed place when both sides print the same number of decimals and that unit is at most 1e-3 of the
-value (a rounded value whose rounding flipped; a shorter rounded value, where one unit is a real change, is held to
-the tolerance). One narrow rule for the truncated dumps read_pc.py and read_pc2.py write (a line "  <first 20000
-characters of a json.dumps> ... [TRUNCATED: N more characters; the whole reading is in X]"): the cut point and N move
-with float print length (pc2.read.txt line 10 cut 2 characters later on 27.2.1), so on two such lines the wording
-after the cut is exact, the two bodies are compared token by token up to the last token before the shorter cut, the
-token count may differ by at most 2, and N is not compared. The whole reading is in the .json beside it, which
-compare_json holds in full.
+token exact (whitespace included); an integer token exact; a decimal token within the profile's tolerance (a printed
+value rounded to fewer digits is held to the same tolerance, so its rounding may not flip). One narrow rule for the
+truncated dumps read_pc.py and read_pc2.py write (a line "  <first 20000 characters of a json.dumps> ... [TRUNCATED: N
+more characters; the whole reading is in X]"): the cut point and N move with float print length (pc2.read.txt line 10
+cut 2 characters later on 27.2.1), so on two such lines the wording after the cut is exact, the two bodies are compared
+token by token up to the last token before the shorter cut, the token count may differ by at most 2, and N is not
+compared. The whole reading is in the .json beside it, which compare_json holds in full.
 
 Profiles (tolerances; magnitudes from numdrift/REPORT.md, section 2):
 - DEFAULT, REL_TOL 1e-12: every drifted output but two moved at most 1.4e-13 relative (rr.read), most near 1e-15.
 - DS, DS_REL_TOL 1e-6: decode DS's W1RATE fit (scripts/scoring/decode/d4common.py:838-845) puts 0/1 ladder columns
   beside an unscaled ~1e8 byte count, condition about 1e8; ds.readings moved 1.4e-7 relative (offsets_us
   phi-3.5-moe/T96 34.524621 to 34.524616), below every printed digit.
-- CAL3, numbers not compared: read_c3.wave_theta (scripts/scoring/cal3/read_c3.py:161-163) fits np.linalg.lstsq on
-  raw globaltimer stamps (~1.793e18 ns, float64 spacing 256 ns), an ill-conditioned fit that keeps about three good
-  digits; cal3.read thetas moved up to 2.6e-2 relative. Its C3-R1 reading is a defect of record (docs/FINDINGS.md):
-  a well-conditioned recomputation reads NEAR or OUT (PERTURBED) where the committed file reads OUT. So for cal3 the
-  structure, every label and every int (counts) are held exactly, and no float is compared.
+- CAL3, REL_TOL 1e-12 except the theta fields: read_c3.wave_theta (scripts/scoring/cal3/read_c3.py:161-163) fits
+  np.linalg.lstsq on raw globaltimer stamps (~1.793e18 ns, float64 spacing 256 ns), an ill-conditioned fit that
+  keeps about three good digits; cal3.read thetas moved up to 2.6e-2 relative. Its C3-R1 reading is a defect of
+  record (docs/FINDINGS.md): a well-conditioned recomputation reads NEAR or OUT (PERTURBED) where the committed file
+  reads OUT. The floats that moved, on macOS 27.2.1's Accelerate and on OpenBLAS alike, are exactly the 30 under the
+  keys theta, theta_L, theta_L_mixtral_w2 and theta_times_1_plus_o (wave_theta's outputs); those are not compared.
+  Every other float in cal3.read.json (C3-R2's shares, the pair gaps, L, f, waves, overheads, C3-R3) is held to
+  REL_TOL 1e-12, and the structure, every label and every int exactly. In cal3.read.txt only a decimal printed
+  right after one of those names ("theta_L 0.3513", "theta 0.3532", '"theta_L_mixtral_w2": 0.35...') is not
+  compared; every other token is held as under DEFAULT.
 
 ABS_TOL is the floor for values near zero (differences of nearly equal numbers): 1e-15 for DEFAULT, 1e-12 for DS.
 
@@ -59,8 +62,6 @@ ABS_TOL = 1e-15
 #: decode DS (W1RATE fit, condition about 1e8, d4common.py:838-845; ds.readings moved 1.4e-7 relative)
 DS_REL_TOL = 1e-6
 DS_ABS_TOL = 1e-12
-#: one unit in the last printed place is allowed only where that unit is at most this fraction of the value
-ROUNDED_UNIT_MAX = 1e-3
 #: how far the token counts of two truncated dumps may differ (the cut moves with float print length)
 TRUNC_TOKEN_SLACK = 2
 
@@ -70,20 +71,24 @@ class Profile:
     name: str
     rel: float
     abs: float
-    numbers: bool = True          # False: floats are not compared (cal3); ints, strings and structure still are
+    #: JSON keys whose float values are not compared (cal3's wave_theta outputs); every other float is held
+    free_keys: frozenset = frozenset()
+    #: text: a decimal token is not compared when the line up to it matches this (the same fields, as printed)
+    free_text: str | None = None
 
 
 DEFAULT = Profile("default", REL_TOL, ABS_TOL)
 DS = Profile("decode DS", DS_REL_TOL, DS_ABS_TOL)
-CAL3 = Profile("cal3", math.nan, math.nan, numbers=False)
+#: the floats read_c3.wave_theta's fit gives (the only cal3 floats that moved, on 27.2.1's Accelerate and OpenBLAS)
+CAL3_THETA_KEYS = frozenset({"theta", "theta_L", "theta_L_mixtral_w2", "theta_times_1_plus_o"})
+CAL3 = Profile("cal3", REL_TOL, ABS_TOL, free_keys=CAL3_THETA_KEYS,
+               free_text=r'(?:\btheta(?:_L)? |"(?:theta_L_mixtral_w2|theta_times_1_plus_o)": )$')
 
 _NUM = re.compile(r"-?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?")
 _TRUNC = re.compile(r"^(?P<body>.*) \.\.\. \[TRUNCATED: (?P<n>\d+) more characters; (?P<tail>[^\]]*)\]$")
 
 
 def _close(a: float, b: float, p: Profile) -> bool:
-    if not p.numbers:
-        return True
     if math.isnan(a) or math.isnan(b):
         return math.isnan(a) and math.isnan(b)
     if math.isinf(a) or math.isinf(b):
@@ -119,6 +124,8 @@ def compare_json(got, want, profile: Profile = DEFAULT, skip=(), _path=()) -> li
     if type(got) is not type(want):
         return [f"{where}: {got!r} ({type(got).__name__}), committed {want!r} ({type(want).__name__})"]
     if isinstance(want, float):
+        if _path and _path[-1] in profile.free_keys:
+            return []
         return [] if _close(got, want, profile) else [f"{where}: {got!r}, committed {want!r} (beyond {profile.name})"]
     return [] if got == want else [f"{where}: {got!r}, committed {want!r}"]
 
@@ -135,34 +142,32 @@ def _tokens(line: str) -> list[tuple[str, str]]:
     return out
 
 
-def _decimals(tok: str) -> int | None:
-    if "e" in tok.lower() or "." not in tok:
-        return None
-    return len(tok.split(".", 1)[1])
+def _is_int(tok: str) -> bool:
+    return "." not in tok and "e" not in tok.lower()
 
 
 def _num_ok(g: str, w: str, p: Profile) -> bool:
-    gi, wi = "." not in g and "e" not in g.lower(), "." not in w and "e" not in w.lower()
-    if gi or wi:
+    if _is_int(g) or _is_int(w):
         return g == w                                    # an integer token is a count, an id or a size: exact
-    a, b = float(g), float(w)
-    if _close(a, b, p):
-        return True
-    d = _decimals(g)
-    if d is not None and d == _decimals(w):              # a rounded value whose last printed digit flipped
-        unit = 10.0 ** -d
-        return abs(a - b) <= unit * (1 + 1e-9) and unit <= ROUNDED_UNIT_MAX * max(abs(a), abs(b))
-    return False
+    return _close(float(g), float(w), p)
+
+
+def _tokens_ok(tg: list, tw: list, p: Profile) -> str | None:
+    before = ""                                          # the committed line up to the current token
+    for (kg, sg), (kw, sw) in zip(tg, tw, strict=True):
+        free = (kg == kw == "n" and p.free_text is not None and not _is_int(sw) and not _is_int(sg)
+                and re.search(p.free_text, before))
+        if kg != kw or (kg == "s" and sg != sw) or (kg == "n" and not free and not _num_ok(sg, sw, p)):
+            return f"{sg!r}, committed {sw!r}"
+        before += sw
+    return None
 
 
 def _line_diffs(g: str, w: str, p: Profile) -> str | None:
     tg, tw = _tokens(g), _tokens(w)
     if len(tg) != len(tw):
         return f"token count {len(tg)}, committed {len(tw)}"
-    for (kg, sg), (kw, sw) in zip(tg, tw, strict=True):
-        if kg != kw or (kg == "s" and sg != sw) or (kg == "n" and not _num_ok(sg, sw, p)):
-            return f"{sg!r}, committed {sw!r}"
-    return None
+    return _tokens_ok(tg, tw, p)
 
 
 def _trunc_diffs(mg: re.Match, mw: re.Match, p: Profile) -> str | None:
@@ -174,10 +179,7 @@ def _trunc_diffs(mg: re.Match, mw: re.Match, p: Profile) -> str | None:
     if abs(len(tg) - len(tw)) > TRUNC_TOKEN_SLACK:
         return f"truncated body {len(tg)} tokens, committed {len(tw)}"
     n = min(len(tg), len(tw)) - 1                        # the last token before the shorter cut may itself be cut
-    for (kg, sg), (kw, sw) in zip(tg[:n], tw[:n], strict=True):
-        if kg != kw or (kg == "s" and sg != sw) or (kg == "n" and not _num_ok(sg, sw, p)):
-            return f"{sg!r}, committed {sw!r}"
-    return None
+    return _tokens_ok(tg[:n], tw[:n], p)
 
 
 def compare_text(got: str, want: str, profile: Profile = DEFAULT) -> list[str]:

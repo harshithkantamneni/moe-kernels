@@ -25,10 +25,11 @@ this clone's history; read from the published tree, so equal byte for byte), and
 DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page.
 
 Since 2026-11-17 the cal3, decode CAL, CAL2 and DS, PC, PC2 and RR re-reads are held to their committed files by
-tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's not
-compared) instead of byte for byte: those files reproduce byte for byte only under macOS 26.6.2's Accelerate, and the
-macOS 27.2.1 update moved the last digits of their fitted floats (docs/FINDINGS.md, defect of record 2026-11-17). The
-census, settleS1, cal2, cal4, decode blind and tileB3 re-reads still reproduce byte for byte and are held so."""
+tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's theta
+fields not compared) instead of byte for byte: those files reproduce byte for byte only under macOS 26.6.2's Accelerate,
+and the macOS 27.2.1 update moved the last digits of their fitted floats (docs/FINDINGS.md, defect of record
+2026-11-17). The census, settleS1, cal2, cal4, decode blind and tileB3 re-reads still reproduce byte for byte and are
+held so, and so is decodeDS's ds.readings.txt, which prints no digit the drift reaches."""
 from __future__ import annotations
 
 import importlib.util
@@ -121,8 +122,8 @@ def test_the_published_cal3_session_rereads_to_the_committed_files(tmp_path):
     assert RS.tree_of("cal3") == "results/published/2026-10-27-nvidia_gh200_480gb-cal3-session"
     ran = RS.rescore("cal3", tmp_path)
     assert ran == [("scripts/scoring/cal3/read_c3.py", 0)], ran
-    # labels, structure and counts exact; cal3's floats are not compared (read_c3.wave_theta's ill-conditioned fit,
-    # tests/_reproduce.py CAL3; the C3-R1 defect of record in docs/FINDINGS.md)
+    # labels, structure and counts exact, every other float within 1e-12; cal3's theta fields are not compared
+    # (read_c3.wave_theta's ill-conditioned fit, tests/_reproduce.py CAL3; the C3-R1 defect of record in FINDINGS)
     assert _reproduces("cal3", tmp_path) == ["cal3.read.json", "cal3.read.txt"]
 
 
@@ -183,10 +184,11 @@ def test_the_published_decode_ds_session_rereads_to_the_committed_files(tmp_path
     assert RS.tree_of("decodeDS") == f"{session}/results"
     ran = RS.rescore("decodeDS", tmp_path)
     assert ran == [("scripts/scoring/decode/read_ds.py", 0)], ran
-    # floats within DS_REL_TOL 1e-6 (the W1RATE fit's conditioning, tests/_reproduce.py DS), labels exact
+    # floats within DS_REL_TOL 1e-6 (the W1RATE fit's conditioning, tests/_reproduce.py DS), labels exact; the .txt,
+    # which prints no digit the drift reaches, is still equal byte for byte
     assert _reproduces("decodeDS", tmp_path) == ["ds.readings.json", "ds.readings.txt"]
-    for name in ("ds.readings.json", "ds.readings.txt"):
-        _raw_reproduces(tmp_path / name, REPO / "scripts/scoring/decode" / name)
+    _raw_reproduces(tmp_path / "ds.readings.json", REPO / "scripts/scoring/decode/ds.readings.json")
+    assert (tmp_path / "ds.readings.txt").read_bytes() == (REPO / "scripts/scoring/decode/ds.readings.txt").read_bytes()
     txt = (REPO / "scripts/scoring/decode/ds.readings.txt").read_text().splitlines()
     assert "power: READ" in txt and "verdict: READ" in txt and "NOT IDENTIFIED: none" in txt
     assert "CENSUS CROSS-CHECK (DS's census against CAL2's, reported): SAME over 48 entries" in txt

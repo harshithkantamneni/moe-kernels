@@ -80,8 +80,9 @@ def test_registered_rms_values():
         assert round(s["rms"], 4) == rms and s["beyond_5pct"] == beyond
 
 
-#: cases whose committed output reproduces byte for byte only under macOS 26.6.2's Accelerate (jetmoe-floor moved
-#: 1.2e-14 relative on 27.2.1): held by tests/_reproduce.py, labels exact, floats within REL_TOL 1e-12
+#: cases whose committed .json reproduces byte for byte only under macOS 26.6.2's Accelerate (jetmoe-floor moved
+#: 1.2e-14 relative on 27.2.1): held by tests/_reproduce.py, labels exact, floats within REL_TOL 1e-12; its .txt
+#: prints no digit the drift reaches and is still held byte for byte
 REPRODUCED = {"jetmoe-floor"}
 
 
@@ -90,7 +91,7 @@ def test_score_registered_regenerates_byte_identical(case, tmp_path):
     SR.main([case, "--out-dir", str(tmp_path)])
     for ext in ("json", "txt"):
         got, want = tmp_path / f"{case}.registered.{ext}", OUT / f"{case}.registered.{ext}"
-        if case in REPRODUCED:
+        if case in REPRODUCED and ext == "json":
             RT.assert_reproduces(got.read_text(), want.read_text(), ext, what=got.name)
         else:
             assert got.read_bytes() == want.read_bytes()
