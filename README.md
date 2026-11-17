@@ -456,7 +456,9 @@ moves the per-tile cost by 24% while compiling byte-identical shared memory, an
 identical PTX instruction census and identical occupancy. The model has no slot
 for a schedule. (CORRECTED 2026-11-17: the session measured none of the three. The
 shared memory is the residency model's 49152 B at every setting; the compiled
-shared memory was not read (`occupancy` V9 UNKNOWN), no PTX census of these
+shared memory was not read by the session (`occupancy` V9 UNKNOWN); its published
+Triton cache (occupancy_vs_swizzle arm, fused_moe_kernel.json "shared") records
+49152 B for all four s3w8g{1,8,16,64}-bm64 kernels, equal across G; no PTX census of these
 settings is in the session (their PTX is in the occupancy_vs_swizzle arm's Triton
 cache; no census was taken) or in docs/FINDINGS.md, and the occupancy is the
 modelled residency. The G=1 settings also ran at 1374 MHz
