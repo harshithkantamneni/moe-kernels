@@ -4504,6 +4504,98 @@ differ only in the tree's path; the committed files are the published copy's, wi
 `scripts/scoring/rescore.py rr` re-reads the published session to the committed files. Every register script's
 `--check` reads `same`, and the pinned files are byte-identical to their registered sha256.
 
+## Model v7 gate (2026-11-18): R3 GO, DECODE GO on a SEEN floor, PREFILL NO-GO (REFUSED, a defect of record); decode may go to one blind, prefill gets none
+
+**Registered, then run.** Registration `2026-11-17-v7-gate-gh200` (docs/registered/README.md) was committed in
+6ed4c57d and became public when that commit was pushed, 2026-11-18T01:10Z. The registered gate then ran once, on the
+published pages, at 6ed4c57d in the canonical checkout on the owner's laptop (macOS 27.2.1, no GPU), outputs written
+2026-11-18T01:11:41Z:
+
+```
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/scoring/v7/gate_v7.py --out <work folder>/2026-11-18/gate-v7
+```
+
+exit 1. Its output is committed byte for byte as `scripts/scoring/v7/gate_v7.out.txt` (sha256 882c7491...) and
+`scripts/scoring/v7/gate_v7.json` (sha256 db84baf4...); `tests/test_v7_gate_result.py` holds both to those hashes.
+This is the reading; it is not re-run or replaced:
+
+```
+R3: GO: this regime may go to ONE blind
+PREFILL: NO-GO: REFUSED: ModuleNotFoundError: No module named 'refit4': no blind for this regime
+DECODE: GO: this regime may go to ONE blind
+```
+
+The freeze HOLDS (148 files and v7's constants hash; gate.json records the registration's sha256 6336a5c9...).
+
+**Known results.** As the registration discloses, every clause value except G2's P(A) was computed during
+implementation, before the registration was written: R3 GO by construction, PREFILL NO-GO on G1, DECODE GO at CAL2
+1.60% and re-score 3.19%. The gate therefore registers known results. A GO here is a floor a regime must clear before
+its blind, not a test the model passed; the blind is the test.
+
+| regime | clause | v7 (every switch on) | every switch off (DESCRIPTIVE) | reading |
+|---|---|---|---|---|
+| R3 | G-R3: 300 registered v3 predictions bit for bit | 300 of 300, 0 differ from the registered number, 0 from rental 6's pricer | (no v7 term) | GO |
+| DECODE | CAL: CAL2 under the addendum-3 stop rule (3% / 8% / 1.5%) | 91 cells, rms 1.60%, worst -5.40%, mean -0.17% (rho fixed) | rms 1.81%, worst +5.97%, mean -0.03%: GO | GO |
+| DECODE | RE-SCORE: SEEN decode blind pooled rms < 4.0% over 220 cells | 3.19% (worst +15.58%, mean +0.86%) | 4.52% (worst -31.47%): FAILS | PASSES |
+| PREFILL | TREES, G1, G2 | not read: REFUSED before G2 | not read | NO-GO |
+
+Decode's D6FIX constants, read by the gate from the second CAL2 fit (v4d' on every naive cell): rho scaled, T0 -1.87 us,
+s_naive +9.55 us, s_block -0.72 us. Per seen-blind model under v7 (rms): Phi-3.5 2.85%, Qwen1.5 1.92%, JetMoE 2.28%,
+deepseek-v2-lite 1.17%, Granite-3.0-3B 5.85%. Off (v6d) Qwen1.5 reads 6.70% and deepseek-v2-lite 1.39%; the other
+three are unchanged, as D6FIX moves only the v4d'-branch cells.
+
+**DECODE's GO is not evidence on the re-score.** D6FIX is the D6-24 fix, and D6-24 was found on SEEN pages after
+addendum 6's gate. Addendum 6 said of it: "Any fix would be chosen on the seen re-score, so none is made and the
+NO-GO stands" (Decode closes after v6d). v7 makes that fix, chosen with its effect on 13 of the 220 cells known, so
+under D6FIX the RE-SCORE clause (4.52% to 3.19%) is not evidence: DECODE's GO is the owner's 2026-11-17 reopening
+applied to a SEEN floor. It entitles decode to one blind and nothing more. Addendum 6's NO-GO for v6d stands.
+
+**Defect of record (2026-11-18): PREFILL was REFUSED by a loader defect, not by a clause.** G2 calls round 5's
+`r7.pass_estimates5`, which calls `r7._rc()` (`scripts/round5_frozen/2026-10-28/round5/work/r7.py:203-208`):
+`os.chdir(r5.REFIT4); import refit4`. That import resolves only while REFIT4's folder (or `''`, the current
+directory) is on sys.path. In the original work-folder runs it was, because r5 puts REFIT4 on sys.path at import
+(`r5.py:23-24`) and nothing removed it. `round5_chain.chain()` imports refit4 once (`RF = r7._rc()`, while r5's entry
+is live), then pops the chain's module names from sys.modules and restores sys.path, as `read_b3.chain` does; the
+later call from `pass_estimates5` finds no refit4. Reproduced on this tree: a script that calls
+`round5_chain.pass_estimate` after `chain()` fails with this error, and so does the same call under `python -m
+pytest` (sys.path[0] is then an absolute directory, not `''`); it succeeds with `''` put on sys.path (which re-imports
+refit4 a second time, under the real HOME) and with `r7._rc` bound to the chain's cached RF (no second import). Both
+read P(A) 0.124 at round 5's means, B3's frozen value. No test exercised the path: `tests/test_v7_gate.py` stubs
+`round5_chain.pass_estimate`, the chain job (`tests/v7_chain_job.py`) runs the TREES refusal but not G2, and the
+registered gate was never run as a script on pages shaped like the real ones before the registration was public.
+The registered reading stands: PREFILL is NO-GO (REFUSED). **Rule for future registrations: every clause of a gate
+is exercised end to end, as the script the registration names, on a fixture shaped like the real pages, before the
+registration is public.** A unit test with a stubbed clause does not count.
+
+**DESCRIPTIVE prefill re-run (POST-HOC, post-registration, not a verdict).** `scripts/scoring/v7/prefill_rerun_v7.py`
+runs exactly gate_v7's PREFILL computation and clauses (`compute_prefill`: TREES, the six held-out means, G2's
+estimate, B3's 84 cells as information; `prefill_clauses`: G1, G2; the every-switch-off rung beside) after the
+freeze check, with one fix applied in memory: `r7._rc` returns the refit4 module `round5_chain.chain()` already
+imported. Nothing else changes. Its output (`prefill_rerun_v7.{json,txt}`) quotes the registered PREFILL line as
+standing and renames the clause verdict "reads (DESCRIPTIVE, not a verdict)". TREES reproduces. It reads:
+
+| held-out 128 G 1 set | v7 mean (%) | round 5, every switch off (%) |
+|---|---:|---:|
+| OLMoE-1B-7B | +0.37 | +0.45 |
+| Qwen2-57B-A14B | -1.50 | -1.46 |
+| Mixtral-8x7B (A2) | +1.42 | +1.77 |
+| Mixtral-8x22B | -0.01 | +0.24 |
+| Mixtral-8x7B-tp2 (C4) | -1.99 | +2.39 |
+| Mixtral-8x7B on C2's board | +1.66 | +2.01 |
+
+G1 FAILS (four of six outside 1.0%: Qwen2-57B, Mixtral-8x7B, tp2, Mixtral-8x7B on C2). G2 FAILS: estimated P(A)
+0.2067 against 0.5 on B2's 84 cells (B 0.284, D 0.1885; round 5's 0.124, 0.1903, 0.1381). B3's 84 cells, SEEN
+information, never a clause: pooled mean +0.19%, rms 1.48%, worst +3.82% (round 5: +0.29%, 2.41%, -8.22%); Phi-3.5
+1.43% rms (round 5 3.50%), Qwen1.5 1.21%, JetMoE 2.05%, deepseek-v2-lite 0.67%. The six means equal design-v7's
+feasibility estimate and the registration's disclosure; G2's 0.2067 is the only number the build had not computed.
+With the defect fixed the regime would still read NO-GO, on both clauses.
+
+**Consequences.** Prefill gets no blind: NO-GO either way, REFUSED as registered and NO-GO on G1 and G2 as re-run.
+Decode may go to ONE blind on its own GO, on models with no decode page; that blind's kit and registration come
+next, registered before any blind page. R3's GO is by construction: v7 at R3's tile is v3 bit for bit, so it restates
+v3's registered predictions and certifies nothing beyond v3's certification (Mixtral-8x7B and Phi-3.5). No earlier
+registered verdict, bar or file changes.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

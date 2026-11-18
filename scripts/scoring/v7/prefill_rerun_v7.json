@@ -1,0 +1,158 @@
+{
+ "what": "model v7's PREFILL clauses re-run after the registered gate refused the regime",
+ "label": "DESCRIPTIVE, post-registration, NOT A VERDICT: gate_v7's PREFILL clauses with one fix (r7._rc returns the refit4 module round5_chain.chain() imported); the registered PREFILL verdict stands",
+ "registration": "2026-11-17-v7-gate-gh200",
+ "registration_sha256": "6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1",
+ "registered_verdict (stands)": "PREFILL: NO-GO: REFUSED: ModuleNotFoundError: No module named 'refit4': no blind for this regime",
+ "freeze": {
+  "verdict": "HOLDS",
+  "files": 148
+ },
+ "fix": "r7._rc returns round5_chain.chain()['RF'] (in memory); nothing else changed",
+ "switches": {
+  "RR": true,
+  "D6FIX": true
+ },
+ "prefill": {
+  "G1": {
+   "means_pct": {
+    "olmoe-1b-7b": 0.37,
+    "qwen2-57b-a14b": -1.5,
+    "mixtral-8x7b": 1.42,
+    "mixtral-8x22b": -0.01,
+    "mixtral-8x7b-tp2": -1.99,
+    "mixtral-8x7b C2": 1.66
+   },
+   "max_abs_mean_pct": 1.0,
+   "outside": {
+    "qwen2-57b-a14b": -1.5,
+    "mixtral-8x7b": 1.42,
+    "mixtral-8x7b-tp2": -1.99,
+    "mixtral-8x7b C2": 1.66
+   },
+   "verdict": "FAILS"
+  },
+  "G2": {
+   "P_A": 0.2067,
+   "min": 0.5,
+   "verdict": "FAILS"
+  },
+  "why": [
+   "G1: held-out means outside 1.0%: qwen2-57b-a14b -1.50, mixtral-8x7b +1.42, mixtral-8x7b-tp2 -1.99, mixtral-8x7b C2 +1.66",
+   "G2: estimated P(A) 0.2067 under 0.5"
+  ],
+  "information": {
+   "B3 84 cells (SEEN, never a clause)": {
+    "phi-3.5-moe": {
+     "n": 30,
+     "mean": 0.9,
+     "rms": 1.43,
+     "worst": 2.66
+    },
+    "pooled": {
+     "n": 84,
+     "mean": 0.19,
+     "rms": 1.48,
+     "worst": 3.82
+    },
+    "qwen1.5-moe-a2.7b": {
+     "n": 30,
+     "mean": -0.79,
+     "rms": 1.21,
+     "worst": -3.52
+    },
+    "jetmoe-8b": {
+     "n": 18,
+     "mean": 0.85,
+     "rms": 2.05,
+     "worst": 3.82
+    },
+    "deepseek-v2-lite": {
+     "n": 6,
+     "mean": -0.42,
+     "rms": 0.67,
+     "worst": -0.98
+    }
+   },
+   "estimate": {
+    "A (5 models)": 0.2067,
+    "B (5 models)": 0.284,
+    "D (O, Q, 8x22B, tp2; 8x7B G1 aside)": 0.1885
+   },
+   "estimate_cells": 84
+  },
+  "reads (DESCRIPTIVE, not a verdict)": "NO-GO",
+  "ablation (DESCRIPTIVE)": {
+   "off (round 5)": {
+    "G1": {
+     "means_pct": {
+      "olmoe-1b-7b": 0.45,
+      "qwen2-57b-a14b": -1.46,
+      "mixtral-8x7b": 1.77,
+      "mixtral-8x22b": 0.24,
+      "mixtral-8x7b-tp2": 2.39,
+      "mixtral-8x7b C2": 2.01
+     },
+     "max_abs_mean_pct": 1.0,
+     "outside": {
+      "qwen2-57b-a14b": -1.46,
+      "mixtral-8x7b": 1.77,
+      "mixtral-8x7b-tp2": 2.39,
+      "mixtral-8x7b C2": 2.01
+     },
+     "verdict": "FAILS"
+    },
+    "G2": {
+     "P_A": 0.124,
+     "min": 0.5,
+     "verdict": "FAILS"
+    },
+    "why": [
+     "G1: held-out means outside 1.0%: qwen2-57b-a14b -1.46, mixtral-8x7b +1.77, mixtral-8x7b-tp2 +2.39, mixtral-8x7b C2 +2.01",
+     "G2: estimated P(A) 0.124 under 0.5"
+    ],
+    "information": {
+     "B3 84 cells (SEEN, never a clause)": {
+      "phi-3.5-moe": {
+       "n": 30,
+       "mean": 1.3,
+       "rms": 3.5,
+       "worst": -8.22
+      },
+      "pooled": {
+       "n": 84,
+       "mean": 0.29,
+       "rms": 2.41,
+       "worst": -8.22
+      },
+      "qwen1.5-moe-a2.7b": {
+       "n": 30,
+       "mean": -0.74,
+       "rms": 1.18,
+       "worst": -3.68
+      },
+      "jetmoe-8b": {
+       "n": 18,
+       "mean": 0.57,
+       "rms": 2.05,
+       "worst": 3.82
+      },
+      "deepseek-v2-lite": {
+       "n": 6,
+       "mean": -0.4,
+       "rms": 0.65,
+       "worst": -0.95
+      }
+     },
+     "estimate": {
+      "A (5 models)": 0.124,
+      "B (5 models)": 0.1903,
+      "D (O, Q, 8x22B, tp2; 8x7B G1 aside)": 0.1381
+     },
+     "estimate_cells": 84
+    },
+    "reads (DESCRIPTIVE, not a verdict)": "NO-GO"
+   }
+  }
+ }
+}

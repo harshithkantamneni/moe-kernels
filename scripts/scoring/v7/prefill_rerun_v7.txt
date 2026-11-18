@@ -1,0 +1,11 @@
+DESCRIPTIVE, post-registration, NOT A VERDICT: gate_v7's PREFILL clauses with one fix (r7._rc returns the refit4 module round5_chain.chain() imported); the registered PREFILL verdict stands
+REGISTERED (stands): PREFILL: NO-GO: REFUSED: ModuleNotFoundError: No module named 'refit4': no blind for this regime
+freeze HOLDS (148 files); fix: r7._rc returns round5_chain.chain()['RF'] (in memory); nothing else changed
+PREFILL re-run, v7 every switch on (DESCRIPTIVE): reads NO-GO: G1: held-out means outside 1.0%: qwen2-57b-a14b -1.50, mixtral-8x7b +1.42, mixtral-8x7b-tp2 -1.99, mixtral-8x7b C2 +1.66; G2: estimated P(A) 0.2067 under 0.5
+  G1 FAILS: held-out 128 G 1 means (%, |mean| <= 1.0): olmoe-1b-7b +0.37, qwen2-57b-a14b -1.50, mixtral-8x7b +1.42, mixtral-8x22b -0.01, mixtral-8x7b-tp2 -1.99, mixtral-8x7b C2 +1.66
+  G2 FAILS: estimated P(A) 0.2067 (bar 0.5); A (5 models) 0.2067, B (5 models) 0.284, D (O, Q, 8x22B, tp2; 8x7B G1 aside) 0.1885; on 84 cells
+  B3 84 cells (SEEN information, never a clause), % mean / rms / worst: phi-3.5-moe +0.90 / 1.43 / +2.66 (n 30), pooled +0.19 / 1.48 / +3.82 (n 84), qwen1.5-moe-a2.7b -0.79 / 1.21 / -3.52 (n 30), jetmoe-8b +0.85 / 2.05 / +3.82 (n 18), deepseek-v2-lite -0.42 / 0.67 / -0.98 (n 6)
+PREFILL re-run, off (round 5) (DESCRIPTIVE): reads NO-GO: G1: held-out means outside 1.0%: qwen2-57b-a14b -1.46, mixtral-8x7b +1.77, mixtral-8x7b-tp2 +2.39, mixtral-8x7b C2 +2.01; G2: estimated P(A) 0.124 under 0.5
+  G1 FAILS: held-out 128 G 1 means (%, |mean| <= 1.0): olmoe-1b-7b +0.45, qwen2-57b-a14b -1.46, mixtral-8x7b +1.77, mixtral-8x22b +0.24, mixtral-8x7b-tp2 +2.39, mixtral-8x7b C2 +2.01
+  G2 FAILS: estimated P(A) 0.124 (bar 0.5); A (5 models) 0.124, B (5 models) 0.1903, D (O, Q, 8x22B, tp2; 8x7B G1 aside) 0.1381; on 84 cells
+  B3 84 cells (SEEN information, never a clause), % mean / rms / worst: phi-3.5-moe +1.30 / 3.50 / -8.22 (n 30), pooled +0.29 / 2.41 / -8.22 (n 84), qwen1.5-moe-a2.7b -0.74 / 1.18 / -3.68 (n 30), jetmoe-8b +0.57 / 2.05 / +3.82 (n 18), deepseek-v2-lite -0.40 / 0.65 / -0.95 (n 6)

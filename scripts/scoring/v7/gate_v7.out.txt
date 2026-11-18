@@ -1,0 +1,3 @@
+R3: GO: this regime may go to ONE blind
+PREFILL: NO-GO: REFUSED: ModuleNotFoundError: No module named 'refit4': no blind for this regime
+DECODE: GO: this regime may go to ONE blind

@@ -248,7 +248,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7865 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7869 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
@@ -430,6 +430,14 @@ unified model, v7, an owner decision and not a registration, disclosed as a fork
 gate registered before it is scored on published pages in all three regimes, and only on GO one blind GH200 rental,
 after which the stage stops either way. At this note nothing is built, scored, gated or rented; docs/FINDINGS.md,
 Decode closes after v6d, NOTE 2026-11-17.)
+Model v7's gate (registration `2026-11-17-v7-gate-gh200`, public 2026-11-18T01:10Z, run once after it at 6ed4c57d,
+output committed as `scripts/scoring/v7/gate_v7.out.txt`) reads R3 GO (300 of 300 bit for bit), DECODE GO (CAL2
+1.60% rms; the SEEN decode blind re-scored 3.19% pooled, not evidence under D6FIX, the D6-24 fix chosen on seen
+pages) and PREFILL NO-GO: REFUSED (`No module named 'refit4'`, a loader defect of record: round 5's `r7._rc` re-imports
+a module `round5_chain` had removed). Every clause value but G2 was known before the registration. A DESCRIPTIVE
+post-registration re-run with that one fix (`prefill_rerun_v7.py`, not a verdict) reads G1 FAILS (four of six
+held-out means outside 1.0%) and G2 P(A) 0.2067 against 0.5, so prefill gets no blind either way; decode may go to
+one blind, registered next (docs/FINDINGS.md, Model v7 gate).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

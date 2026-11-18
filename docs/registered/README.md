@@ -2193,3 +2193,15 @@ round 5's 32 vendored files; 8 readings and committed numbers; 8 quoted registra
 gate reads this registration at its committed path only and refuses every regime on any difference. Tests
 `tests/test_timing_model_v7.py`, `tests/test_timing_model_v7_prefill.py`, `tests/test_v7_gate.py` (the gate on
 synthetic fixtures only).
+
+RESULT 2026-11-18: public when 6ed4c57d was pushed (01:10Z); the gate ran once after that at 6ed4c57d (macOS 27.2.1,
+outputs 01:11:41Z), exit 1, committed byte for byte as `scripts/scoring/v7/gate_v7.out.txt` and `gate_v7.json`: R3 GO
+(300 of 300); DECODE GO (CAL2 91 cells 1.60% rms, worst -5.40%, mean -0.17%; re-score 220 cells 3.19% pooled; v6d
+beside 4.52%), a SEEN floor and not evidence under D6FIX; PREFILL NO-GO: REFUSED: ModuleNotFoundError: No module named
+'refit4', a defect of record (round 5's `r7._rc` imports refit4 again after `round5_chain.chain()` removed it from
+sys.modules and sys.path; never exercised because the tests stub G2). The reading stands. A DESCRIPTIVE re-run after
+registration with that single fix (`scripts/scoring/v7/prefill_rerun_v7.py`, `prefill_rerun_v7.{json,txt}`, not a
+verdict) reads G1 FAILS (+0.37, -1.50, +1.42, -0.01, -1.99, C2 +1.66) and G2 P(A) 0.2067. Prefill gets no blind;
+decode may go to ONE blind, registered separately (docs/FINDINGS.md, Model v7 gate). Rule from this defect: a gate's
+every clause is run end to end as the registered script on a fixture shaped like the real pages before its
+registration is public.
