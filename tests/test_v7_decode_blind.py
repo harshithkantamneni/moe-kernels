@@ -6,7 +6,8 @@ the pinned decode driver's dry run lists every unit; the launcher is RR's plus l
 plan and every page byte for byte on a stub VM, and refuses a DRAFT plan; the scorer certifies a model v7 prices and
 not one it misprices. The registration's unseen scan is computed over the live tree, so since the blind's own session
 was published (2026-11-18) it is recomputed over the sessions published before it (_build), and the live scan is held
-to the registered one plus exactly that session's line."""
+to the registered one plus exactly that session's line and, since the v7 domain map's session was published
+(2026-11-18), that session's line, which names no reserved model in a file name."""
 from __future__ import annotations
 
 import hashlib
@@ -108,17 +109,26 @@ def test_the_bars_are_the_owners_d4_1_registered_for_these_cells_verbatim():
 #: the blind's own published session: the unseen scan (V.unseen_scan, every published session dated 2026-11-04 or
 #: later) reads it since its publication, so the registration's scan is the live one without this line
 BLIND_SESSION = "2026-11-18-nvidia_gh200_480gb-v7b-session"
+#: the v7 domain map's published session (2026-11-18-v7-domain-map-gh200; synthetic shapes only), dated after the
+#: 2026-11-04 cut, so the scan reads it too
+MAP_SESSION = "2026-11-18-nvidia_gh200_480gb-v7m-session"
+#: the sessions published after the registration, which its scan therefore does not hold
+LATER = (BLIND_SESSION, MAP_SESSION)
+
+
+def _before(lines: list[str]) -> list[str]:
+    return [ln for ln in lines if not ln.startswith(tuple(s + ":" for s in LATER))]
 
 
 def _registered_scan() -> list[str]:
-    return [ln for ln in V.unseen_scan() if not ln.startswith(BLIND_SESSION + ":")]
+    return _before(V.unseen_scan())
 
 
 def _build(draft: bool, pred) -> dict:
-    """RG.build on the tree the registration was computed on: the unseen scan without the blind's own session (the
-    pinned builder and v7bcommon are not edited)."""
+    """RG.build on the tree the registration was computed on: the unseen scan without the sessions published after it
+    (the pinned builder and v7bcommon are not edited)."""
     live = V.unseen_scan
-    V.unseen_scan = lambda: [ln for ln in live() if not ln.startswith(BLIND_SESSION + ":")]
+    V.unseen_scan = lambda: _before(live())
     try:
         return RG.build(draft=draft, pred=pred)
     finally:
@@ -139,13 +149,29 @@ def test_the_live_unseen_scan_is_the_registered_one_plus_the_blinds_own_session(
     registered = _reg()["models"][key]
     live = V.unseen_scan()
     assert _registered_scan() == registered
-    extra = [ln for ln in live if ln not in registered]
-    assert len(live) == len(registered) + 1 and len(extra) == 1 and extra[0].startswith(BLIND_SESSION + ": ")
+    extra = [ln for ln in live if ln not in registered and ln.startswith(BLIND_SESSION + ":")]
+    assert len(extra) == 1 and extra[0].startswith(BLIND_SESSION + ": ")
     assert int(re.search(r"file names naming a reserved model: (\d+);", extra[0]).group(1)) > 0
     pages = sorted(p.name for p in (REPO / "results/published" / BLIND_SESSION / "results").glob("gaps-*"))
     assert pages == [f"gaps-nvidia_gh200_480gb-{m}-{u}" for m, u in (
         ("granite-3.0-1b-a400m", "dc"), ("granite-3.0-1b-a400m", "dm"), ("mixtral-8x22b", "dm"),
         ("qwen2-57b-a14b", "dc"), ("qwen2-57b-a14b", "dm"))]
+
+
+def test_the_live_unseen_scan_adds_only_the_blinds_and_the_maps_sessions_and_the_map_names_no_reserved_model():
+    """Since the v7 domain map's session was published the live scan is the registered one plus exactly two lines,
+    the blind's and the map's, in that order; the map's pages time synthetic shapes only, so no file name in its
+    session names a reserved model (the text hits are setup logs and READMEs, as in every earlier line).
+    register_v7_blind.py --check reads DIFFERS on this field alone (length 8 against 6; docs/FINDINGS.md, Model v7
+    decode domain map)."""
+    key = "unseen scan (COMPUTED: published sessions dated 2026-11-04 or later, check_unseen's pattern)"
+    registered = _reg()["models"][key]
+    live = V.unseen_scan()
+    extra = [ln for ln in live if ln not in registered]
+    assert len(live) == len(registered) + 2 and [ln.split(":")[0] for ln in extra] == list(LATER)
+    assert int(re.search(r"file names naming a reserved model: (\d+);", extra[1]).group(1)) == 0
+    pages = sorted(p.name for p in (REPO / "results/published" / MAP_SESSION / "results").glob("gaps-*"))
+    assert len(pages) == 14 and all(p.startswith("gaps-nvidia_gh200_480gb-map-") and p.endswith("-dm") for p in pages)
 
 
 def test_the_committed_registration_and_plan_are_final_and_the_committed_gate_reads_decode_go():

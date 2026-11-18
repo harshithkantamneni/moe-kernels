@@ -248,13 +248,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7936 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7941 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Forty further directories
+arms carrying 26 `*.report.json` files and no CSV. Forty-one further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and thirty-three Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and thirty-four Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -310,13 +310,15 @@ GH200 at 700 W, and rental RR of 2026-11-12: per-CTA start and end stamps and th
 on the same 40 cells per tile at 128x128x64 and 64x128x64 (synthetic shapes, Mixtral-8x7B's as an anchor) at the
 1410 MHz lock, and Phi-3.5-MoE's 128g1 replicate stamps, 10 units on one GH200 at 700 W, one of them refused, and model
 v7's decode blind rental of 2026-11-18: GRR main pages on Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M and GR1
-control pages on Qwen2-57B and Granite-1B, 7 units on one GH200 at 700 W and the 1710 MHz lock),
+control pages on Qwen2-57B and Granite-1B, 7 units on one GH200 at 700 W and the 1710 MHz lock, and model v7's decode
+domain map rental of 2026-11-18: one GRR main page on each of 14 synthetic decode shapes, 16 units on one GH200 at 700 W
+and the 1710 MHz lock),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 33 GH200 sessions ran on twenty-five distinct boards (counted by
+sessions rather than arms. The 34 GH200 sessions ran on twenty-six distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new; the v7 decode blind's board e165c7 is new). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new; the v7 decode blind's board e165c7 is new; the v7 domain map's board 1e520d is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. (Note 2026-11-12: that count dates from rental 3. Rental 6's and rental 7's skew tests
@@ -457,6 +459,17 @@ twins read within 0.33 us). Plan: Phase 0 offline diagnosis (done), Phase 1 one 
 mechanical per-path threshold rule registered before its pages, Phase 2 one domain blind on models with no decode page
 (DeepSeek-V3, -tp4, -tp8, Qwen2-57B-tp8); v7 unchanged; then the stage stops. At this commit no map or domain
 registration exists and nothing is rented for it (docs/FINDINGS.md, Model v7 decode blind).
+Model v7's decode domain map (registration `2026-11-18-v7-domain-map-gh200`, REGISTERED, DESCRIPTIVE, public at the
+push of 556029e1; run 2026-11-18 on one GH200, board 1e520d, about 48 min and $2.05) reads D EMPTY by its registered
+rule: on 14 synthetic shapes, 130 of 130 cells valid, no decode path has an X_p (naive and small-batch fail the
+replicate-bounded 6% cap at every counted candidate, block-scan the 1.0% |mean| cap, its mean error +1.09% to +2.12%
+past 70.5 us), and the slab guard is not triggered. As registered, an empty D means no domain blind runs:
+`register_v7d_blind.py --write --final` refuses the committed readout (`REFUSED: D is EMPTY: no path has an X_p`), the
+domain blind's registration stays an unregistered DRAFT, and by the stop rule the second reopening of decode ends with
+no blind. Decode stays registered FAIL at the v7 blind, with no validity domain certified; R3 CERTIFIED (v3) and
+prefill NO-GO at the gate stand. DESCRIPTIVE beside it, read after D was known: v7 reads 4.61% rms on the map (worst
+-19.39%, a short naive call priced fast), over-prices the aligned step by a median 1.7 to 4.2 us by E, and Phase 0's
+"naive twins within 0.33 us" holds only on some of the new shapes (docs/FINDINGS.md, Model v7 decode domain map).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

@@ -2266,6 +2266,33 @@ launcher `scripts/vm_run_v7m.sh` (vm_run_v7b.sh plus lines marked V7M) runs the 
 d2common.RATE $2.29/h ($4.96 at Lambda's list price of 2026-11-18, $2.59/h); deadline launch + 130 min, hard cap + 145
 min ($5.53 / $6.26). Tests `tests/test_v7_domain_map.py` (synthetic trees and a stub VM only).
 
+RESULT 2026-11-18: public at the push of 556029e1, pushed before the 09:40:04Z launch, which is also the run commit;
+one GH200 (Lambda instance 5b9c188e, board 1e520d, new; the guardian's log names a region, us-east-3, only for a first
+attempt at 09:07:07Z refused for capacity, not for this launch, whose launcher output reads us-east-3), launched 09:40:04Z, termination confirmed 10:27:33Z, about 47.5 min,
+about $2.05 at $2.59/h ($1.81 at the registered $2.29/h); 16 units, every one exit 0, none dropped, 700 W read back,
+every page held the 1710 lock with no slipped repeat. Published at
+`results/published/2026-11-18-nvidia_gh200_480gb-v7m-session` (1364 of the run branch's 1379 files, the 15
+`cuda_utils` .so files left out). Read by `read_map.py` on the published session root from a clean checkout of the
+publishing commit c1074957 (exit 0; git_dirty false), committed as `scripts/scoring/v7domain/map.domain.{json,txt}`;
+read first on the fetched tree's `vm/` at 6080bd76 with the same rows, D and tables; `scripts/scoring/rescore.py
+v7domain` re-reads it. Power READ; 130 of 130 cells valid and in scope. **D is EMPTY: no path has an X_p**, by the
+registered rule, mechanically: naive (16 cells) and small-batch (75) fail (i), the replicate-bounded e_ub cap of 6%, at
+every counted candidate of the full set (naive: short calls priced fast, worst -19.39%, and map-b-e32k4-h2560i1152
+L-T1-A4 at e_ub 6.81% in the last counted set; small-batch: map-b-e32k4-h2560i1152 L-T96-A32 at T_v7 198.0 us, e_ub
+7.38%, 9th by T_v7 and so in every set of at least 10 cells, its twin at 184.4 us, e_ub 6.37%, in every counted set but
+the last; its rms never under 2.64%); block-scan (39) passes (i) and
+(ii) from 70.5 us (max e_ub 3.33%, rms 1.83%) but fails (iii) at every candidate (mean +1.09% to +2.12% over the counted
+sets). The verbatim rule (iv) does not say what happens when the full set or a fold gives
+no value; the registration's points (committed at 556029e1 before any page; `.txt` line 27) do: "a path where any of
+them is none has no X_p", which `read_map.py` implements. DESCRIPTIVE disclosure: the fold without
+map-b-e32k4-h2560i1152 gives naive 27.6 us and small-batch 111.1 us, so under the other reading (the largest over the
+folds that give a value) the result would differ (naive X_p 27.6 us, small-batch 111.1 us); that reading is not the
+registered one, and nothing here says what a blind under it would have read. Slab guard NOT TRIGGERED (b -0.0094 us/MB, 95% [-0.0603, +0.0415]). As
+registered ("If D is empty, no Phase 2 blind runs"), no domain blind is rented. DESCRIPTIVE beside it: pooled 130 cells
+4.61% rms, worst -19.39%; aligned-step over-price by E, median +1.71 to +4.19 us. The map's `--check` reads same; the v7
+blind's `--check` reads DIFFERS on its computed unseen scan alone (8 sessions against 6) (docs/FINDINGS.md, Model v7
+decode domain map).
+
 `2026-11-18-v7-domain-blind-gh200` (`scripts/scoring/v7dblind/register_v7d_blind.py --write` / `--check`; DRAFT,
 written 2026-11-18 while the map rental ran, before any page of its four models; finalised by `--write --final` only
 once the map's readout `scripts/scoring/v7domain/map.domain.json` is committed and verifies) registers model v7's
@@ -2295,3 +2322,14 @@ verify its freeze and agree with the final document outside the domain labels (l
 predictions, bars); the scorer recomputes the labels from the frozen readout and names the inherited all-cell blocks
 (rivals, KNEE_D, SIGMA_D, G3-D label, pooled_over) DESCRIPTIVE. Tests `tests/test_v7_domain_blind.py` (synthetic
 trees, synthetic map readouts and a stub VM only).
+
+NOT FINALISED 2026-11-18: the map's readout (`scripts/scoring/v7domain/map.domain.json`, committed, read from a clean
+checkout, git_dirty false) verifies and reads D EMPTY, so `register_v7d_blind.py --write --final` refuses it, as
+registered: run in a scratch clone with the readout committed, it exits 2 with `REFUSED: D is EMPTY: no path has an X_p
+(the map registration: no domain blind runs)`, its only refusal (every other check of the readout passed first). This
+registration stays the DRAFT of 6080bd76, NOT REGISTERED; its plan keeps the DRAFT line and `scripts/vm_run_v7d.sh`
+refuses it; nothing is rented. By the stop rule of the owner's 2026-11-18 decision the second reopening of decode ends
+here with no blind: decode stays registered FAIL at the v7 blind, no validity domain is certified; R3 CERTIFIED (v3) and
+prefill NO-GO stand. `--check` reads same (it rebuilds over the sessions the DRAFT records). Tests: the committed
+readout verifies and `--final` refuses it for the empty D alone (`tests/test_v7_domain_blind.py`) (docs/FINDINGS.md,
+Model v7 decode domain map).

@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2, rr or v7blind. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2, rr, v7blind or v7domain. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -86,6 +86,14 @@ checkout it ran in (the JSON's provenance git_head and git_dirty, the .txt's clo
 values are compared as present, not as equal (checkout_free), since a re-score runs at a later commit by design. The
 registration's sha256 beside them is compared exactly.
 
+v7domain is model v7's decode domain map rental (2026-11-18-v7-domain-map-gh200), descriptive: its registered reader
+(scripts/scoring/v7domain/read_map.py, which reads the registration at its committed path only, verifies its freeze
+and plan, and applies the registered threshold-selection rule) takes the published session directory itself (the
+session root, as v7blind) and an output directory, and writes domain.json and domain.txt, committed in
+scripts/scoring/v7domain/ as map.domain.json and map.domain.txt (the readout path the domain blind's registration
+names), read from a clean checkout of the published tree. It records the checkout it ran in as score_blind_v7 does,
+compared as present (checkout_free); the registration's sha256 is compared exactly.
+
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
 is replaced by the committed one (the tileA2 census score records the merged census under its output
@@ -135,14 +143,16 @@ STAGES = {
     "rr": ("2026-11-12-nvidia_gh200_480gb-rr-session", "scripts/scoring/rr", ["scripts/scoring/rr/read_rr.py"]),
     "v7blind": ("2026-11-18-nvidia_gh200_480gb-v7b-session", "scripts/scoring/v7blind",
                 ["scripts/scoring/v7blind/score_blind_v7.py"]),
+    "v7domain": ("2026-11-18-nvidia_gh200_480gb-v7m-session", "scripts/scoring/v7domain",
+                 ["scripts/scoring/v7domain/read_map.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
 TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": "", "tileB3": "", "pc": "", "pc2": "", "rr": "",
-        "v7blind": ""}
+        "v7blind": "", "v7domain": ""}
 #: the files each stage's scorers write (default: *.score.*)
 OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.read.*", "cal4": "cal4.read.*",
            "decodeDS": "ds.readings.*", "pc": "pc.read.*", "pc2": "pc2.read.*",
-           "rr": "rr.read.*"}
+           "rr": "rr.read.*", "v7domain": "domain.*"}
 #: the command-line each stage's scorers take after the script (default: the repo, the tree, the output directory)
 ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "cal3": lambda tree, out: ["--c3", tree, "--out-dir", out],
@@ -155,15 +165,17 @@ ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "pc": lambda tree, out: ["--pc", tree, "--out-dir", out],
         "pc2": lambda tree, out: ["--pc2", tree, "--out-dir", out],
         "rr": lambda tree, out: ["--rr", tree, "--out-dir", out],
-        "v7blind": lambda tree, out: [tree, out]}
+        "v7blind": lambda tree, out: [tree, out],
+        "v7domain": lambda tree, out: [tree, out]}
 #: the committed name of a scratch score file, where the stage committed it under another name
-COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"}}
+COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"},
+                "v7domain": {"domain.json": "map.domain.json", "domain.txt": "map.domain.txt"}}
 #: the run-tree root a committed score file records, scored on the fetched tree before publication, matched on its
 #: run-relative tail (the part before it is whichever machine fetched it); it reads as the published session (the
 #: fetched tree's vm/ is the session's top level)
 FETCHED = {"decodeCAL2": "/runs/gh200-tile2-20261103T2203Z/tree/vm"}
-#: stages whose scorer records the checkout it ran in (score_blind_v7.provenance)
-CHECKOUT = {"v7blind"}
+#: stages whose scorer records the checkout it ran in (score_blind_v7.provenance, read_map.provenance)
+CHECKOUT = {"v7blind", "v7domain"}
 _CHECKOUT = ((re.compile(r'("git_head": )"[0-9a-f]{40}"'), r'\1"<checkout>"'),
              (re.compile(r'("git_dirty": )(?:true|false)'), r'\1"<checkout>"'),
              (re.compile(r'(, commit )[0-9a-f]{40}$', re.M), r'\1<checkout>'))

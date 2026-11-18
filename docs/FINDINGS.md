@@ -4736,6 +4736,124 @@ Model v7's status at this commit, by regime:
 
 No earlier registered verdict, bar or file changes.
 
+## Model v7 decode domain map (2026-11-18): READ, DESCRIPTIVE; by the registered rule D is EMPTY (no path has an X_p), so no domain blind runs and the second reopening of decode ends; decode stays registered FAIL, no validity domain certified
+
+**Registered, then run.** Registration `2026-11-18-v7-domain-map-gh200` (docs/registered/README.md; sha256
+bf33f4cc...; REGISTERED, DESCRIPTIVE, no DRAFT stage) became public when 556029e1 was pushed, before the 09:40:04Z
+launch and before any page of its shapes. It freezes model v7 unchanged (every switch on, the CAL2 refit, the v7 gate's freeze)
+and its 130 predictions on 14 SYNTHETIC decode shapes (family A: naive and aligned twins at E 8 to 256 on a 6.29 MB
+slab; family B: slab per expert 2.36 to 37.75 MB at E 32, k 4; family C: block-scan at E 256; naive 16 cells,
+small-batch 75, block-scan 39), and, verbatim from Phase 0 section 6, the threshold-selection rule that decides v7's
+decode validity domain D from the map's pages mechanically: per path, X_p is the smallest predicted call time X such
+that every set {T_v7 >= X'}, X' >= X, of at least 10 cells has (i) every replicate-bounded error e_ub <= 6%, (ii) rms
+e <= 2.5% and (iii) |mean e| <= 1.0%; (iv) "X_p is the largest of the values this rule gives with each synthetic
+shape's cells removed in turn". The verbatim rule does not say what happens when the full set or a fold gives no
+value; the registration's points, part of the registration and committed at 556029e1 before any page (the JSON's rule
+points, the `.txt`'s line 27), settle it: "a path where any of them is none has no X_p and is outside the domain", and
+`read_map.py` implements exactly that. A slab guard on family B
+adds W_e >= S_p only on a significant slope worth 1 us over 35 MB. The registration also says what an empty D means:
+"If D is empty, no Phase 2 blind runs." The Phase 2 registration (`2026-11-18-v7-domain-blind-gh200`, DeepSeek-V3,
+-tp4, -tp8 and Qwen2-57B-A14B-tp8) was written as a DRAFT while the map ran (466f0d67, regenerated in 6080bd76),
+before D was known, its `--write --final` registered to refuse an empty D.
+
+The rental ran at 556029e1 on one GH200 (Lambda instance 5b9c188e, board 1e520d, new), launched 09:40:04Z,
+termination confirmed 10:27:33Z, about 47.5 min: about $2.05 at Lambda's $2.59/h, $1.81 at the registration's $2.29/h
+(registered: 76 unit-min, about 115 min wall, $4.39 at $2.29/h, $4.96 at $2.59/h). A first launch at 09:07:07Z, in
+us-east-3, was refused for capacity; the guardian's log names a region only for that attempt and does not record the
+region of the launch that ran (the launcher's output beside it in the guardian's state reads us-east-3). 16 units in about 42 min, every
+unit and the driver exit 0, none dropped, 700 W read back, every page held the 1710 MHz lock with no slipped repeat.
+The 1379 run-branch files verified against SHA256SUMS; published at
+`results/published/2026-11-18-nvidia_gh200_480gb-v7m-session` (1364 files, the 15 `cuda_utils` .so files left out
+as before). The registered reader ran on the published session root from a clean checkout of the commit that
+published it (c1074957), exit 0:
+
+```
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/scoring/v7domain/read_map.py results/published/2026-11-18-nvidia_gh200_480gb-v7m-session <out>
+```
+
+Its `domain.json` and `domain.txt` are committed as `scripts/scoring/v7domain/map.domain.{json,txt}`, the readout path
+the domain blind's registration names (provenance: registration sha256 bf33f4cc..., git_head c1074957, git_dirty
+false). Read first on the fetched tree's `vm/` at 6080bd76, before publication, the rows, D and every table were the
+same; only the power file's path and the recorded checkout differ. `scripts/scoring/rescore.py v7domain` re-reads the
+published session to the committed files. This is the reading (each path's fold list shortened here; the `.txt`
+prints it in full):
+
+```
+power: READ (700.0 W); cells 130 valid of 130 (130 in scope)
+DOMAIN (the registered rule, mechanically):
+  D is EMPTY: no path has an X_p
+  naive        16 cells: X_p - us (full set -; ...); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  small-batch  75 cells: X_p - us (full set -; ...); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  block-scan   39 cells: X_p - us (full set -; ...); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  slab guard: NOT TRIGGERED: D has no slab condition (30 family B cells under a wave; b -0.0094 us/MB, 95% [-0.0603, +0.0415], |b| x 35 MB 0.33 us)
+```
+
+**Why each path has no X_p** (the readout's rows; every counted set, not a choice of set). On every path the full
+set gives no X, which leaves the path without an X_p under the registration's points for (iv) ("a path where any of
+them is none has no X_p"). DESCRIPTIVE disclosure: the readout also records the folds. On naive and small-batch the one
+fold without map-b-e32k4-h2560i1152 gives a value (27.6 us and 111.1 us), every other fold none; on block-scan every
+fold gives none. Under the other reading of the verbatim rule (iv), the largest over the folds that give a value, the
+result would differ: naive X_p 27.6 us and small-batch 111.1 us. That reading is not the registered one; this says
+nothing either way about what a domain blind would have read under it.
+
+| path | cells | what fails at every counted candidate of the full set | the cells that carry it |
+|---|---:|---|---|
+| naive | 16 | (i) e_ub; (ii) and (iii) too, down to the last counted set | the short calls run slower than priced: map-a-e8k2 L-T1-A2 15.8 us priced, 19.6 us measured (-19.39%), map-b-e32k4-h1024i384 L-T1-A4 13.6 against 16.8 us (-19.15%); the last counted set (11 cells, X 27.6 us) still holds map-b-e32k4-h2560i1152 L-T1-A4, 32.5 against 34.9 us, e_ub 6.81%, and reads rms 2.51%, mean -1.14% |
+| small-batch | 75 | (i) e_ub everywhere; (ii) rms everywhere (2.64% at its lowest); (iii) at X 37.05 us and below | map-b-e32k4-h2560i1152 L-T96-A32 at T_v7 198.0 us (213.7 measured, e_ub 7.38%) is 9th by T_v7, so it lies in every set of at least 10 cells; its twin L-T64-A32 at 184.4 us (196.9 measured, e_ub 6.37%) is 11th, in every counted set but the last (10 cells from 195.1 us) |
+| block-scan | 39 | (iii) at every candidate; (i) and (ii) too below X 70.5 us | from X 70.5 us (36 cells) max e_ub 3.33% and rms 1.83% pass, but the mean e is +1.09% to +2.12% over the counted sets (+1.09% at 70.5 us, +2.12% at the 10-cell tail, X 638.2 us); below it three short aligned cells, MIN-T8 and MIN-T16 at E 128 and MIN-T16 at E 256 (37.6 to 39.8 us priced, +11.25% to +14.72%) |
+
+**The consequence, by the registered plan.** D is empty, so by the map registration ("If D is empty, no Phase 2 blind
+runs") no domain blind is rented. The Phase 2 registration cannot be finalised: in a scratch clone of this tree with
+the readout committed, `register_v7d_blind.py --write --final` exits 2 with the one line `REFUSED: D is EMPTY: no path
+has an X_p (the map registration: no domain blind runs)`. The empty-D refusal is reached only after every other check
+of the readout passes (committed, the map registration at its sha256, its freeze and plan, READ, D recomputed equal,
+the published session re-read to the same rows and D, no decode page of the four models), and it is the only one
+printed. The registration stays the DRAFT of 6080bd76, unregistered, and its plan keeps its DRAFT line, which
+`scripts/vm_run_v7d.sh` refuses. By the stop rule of the owner's 2026-11-18 decision (one mapping rental and one blind,
+then the stage stops), the second reopening of decode ends here, with no blind: decode stays registered FAIL at the v7
+blind (E1-DEC pooled 4.17%, none certified), and no validity domain is certified for v7 at decode. R3 CERTIFIED (v3)
+and prefill NO-GO at the gate stand. Nothing is refit and nothing is re-read under another rule.
+
+**DESCRIPTIVE and POST-HOC** (read after D was known; not a verdict, no bar; none of it says that another rule would
+have certified anything, and none of it is a rule):
+
+- On the map, out of sample on synthetic shapes, v7 reads 4.61% rms over 130 cells, worst -19.39%, mean +0.69%;
+  naive 8.45% (mean -5.06%), small-batch 3.54% (+1.21%), block-scan 4.17% (+2.05%); family A 5.67%, B 4.58%, C 2.07%.
+- Block-scan: past its three short aligned cells v7 prices block-scan calls slow by a steady margin (mean e +1.09% to
+  +2.12% over the 36 longest cells, max e_ub 3.33%). That bias, not scatter, is what (iii) reads.
+- Small-batch: the long calls scatter both ways (the two map-b-e32k4-h2560i1152 cells above run 6.3% and 7.3% slower
+  than priced; map-b-e32k4-h3072i1536 L-T8-A10 -5.98%), while the shortest aligned twins are priced slow
+  (map-a-e32k8 MIN-T2 +9.11%, map-a-e16k4 MIN-T2 +7.63%).
+- Naive: v7 under-prices the short naive calls, by 1.45 to 3.80 us at T_v7 13.6 to 32.5 us (e -6.03% to -19.39%), on
+  family A at E 8 and 16 and on family B's slabs 2.36 to 17.69 MB; family C's two L-T1 cells read 2.28 and 1.69 us
+  slower than priced.
+- The aligned-step over-price (v7's naive-to-aligned step minus the measured one, the same GEMMs), median by E: +3.43
+  us (E 8), +3.09 (E 16), +1.71 (E 32), +2.47 (E 64) on small-batch, +4.19 (E 128) and +3.85 (E 256) on block-scan.
+- Phase 0's "naive twins within 0.33 us" (part of the POST-HOC reading that motivated the domain, Model v7 decode blind)
+  does not hold on the new shapes in general: it holds on family A's four E 32 to 256 naive cells (+0.23 to +0.28 us)
+  and on the two largest family B slabs (-0.05 and -0.18 us), but the naive cells at E 8 and 16 and at the smaller B
+  slabs run 1.45 to 3.80 us slower than priced (above).
+
+**What this does not establish.** It is not a certification or a failure of v7 on any model: the map is DESCRIPTIVE and
+its only output is D. It does not say v7 is wrong by a fixed offset per path, nor which term would fix it; no term was
+chosen and nothing was fitted. It does not say that a looser threshold, another minimum set size, another candidate
+grid or another reading of (iv) would have given a non-empty D; the rule was registered before the pages and is applied
+as written.
+
+Model v7's status at this commit, by regime:
+
+| regime | status | where |
+|---|---|---|
+| R3 tile | CERTIFIED (v3, unchanged: v7 re-prices v3's 300 registered predictions bit for bit; Mixtral-8x7B and Phi-3.5) | Rental 7; Model v7 gate |
+| prefill | NO-GO at the gate: REFUSED as registered (a loader defect of record); the DESCRIPTIVE re-run fails G1 and G2; no blind | Model v7 gate |
+| decode | GO at the gate on a SEEN floor; registered FAIL at the blind (E1-DEC pooled 4.17%; none certified); the validity-domain map reads D EMPTY by its registered rule, so no domain blind runs and no domain is certified; the second reopening (owner, 2026-11-18) ends here | Model v7 decode blind; this section |
+
+Publication moves one computed field of the v7 blind's registration again: its unseen scan reads every published
+session dated 2026-11-04 or later, so it now also reads this session (a line naming no reserved model in any file
+name), and `register_v7_blind.py --check` reads DIFFERS on that field alone (8 sessions against the registered 6; the
+pinned builder is not edited). The map's and the domain blind's `--check` read same. No earlier registered verdict, bar
+or pinned file changes.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

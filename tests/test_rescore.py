@@ -25,7 +25,11 @@ this clone's history; read from the published tree, so equal byte for byte), and
 DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page,
 and model v7's decode blind scorer its published session (the session root, as first scored on the fetched tree's vm/)
 to the committed scripts/scoring/v7blind/blind.score files (equal but for the power file's path and the checkout the
-scorer records), and the committed v7 blind score reads E1-DEC pooled FAILS with no model certified.
+scorer records), and the committed v7 blind score reads E1-DEC pooled FAILS with no model certified, and model v7's
+decode domain map reader its published session (the session root) to the committed
+scripts/scoring/v7domain/map.domain files (read from a clean checkout of the published tree, so equal but for the
+checkout the reader records), and the committed map readout reads D EMPTY, no path with an X_p, the slab guard not
+triggered.
 
 Since 2026-11-17 the cal3, decode CAL, CAL2 and DS, PC, PC2 and RR re-reads are held to their committed files by
 tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's theta
@@ -520,6 +524,63 @@ def test_checkout_free_frees_the_recorded_checkout_only():
     t = "registration sha256 ab, commit %s\n"
     assert RS.checkout_free(t % ("1" * 40)) == RS.checkout_free(t % ("2" * 40))
     assert RS.checkout_free(t % ("1" * 40)) != RS.checkout_free((t % ("1" * 40)).replace("ab", "cd"))
+
+
+V7M_SESSION = "results/published/2026-11-18-nvidia_gh200_480gb-v7m-session"
+V7M_READOUT = REPO / "scripts/scoring/v7domain"
+V7M_REG_SHA = "bf33f4cc100b86f39179cc8dec3188e6b751f62f941c1986f1c5f3630913201b"
+V7M_READ_AT = "c1074957bb84cfec56e99a9492c28f84c867fe23"
+
+
+def test_the_published_v7_domain_map_session_rereads_to_the_committed_readout(tmp_path):
+    """Read on the published session root from a clean checkout of the commit that published it: the committed files
+    are this directory's (the power file's path repo-relative), held to the re-read by tests/_reproduce.py (labels
+    exact, floats within REL_TOL) and by RS.compare's text equality, the checkout the reader records aside
+    (checkout_free)."""
+    assert RS.tree_of("v7domain") == V7M_SESSION
+    ran = RS.rescore("v7domain", tmp_path)
+    assert ran == [("scripts/scoring/v7domain/read_map.py", 0)], ran
+    assert _reproduces("v7domain", tmp_path) == ["domain.json", "domain.txt"]
+    assert dict(RS.compare("v7domain", tmp_path)) == {"domain.json": "EQUAL", "domain.txt": "EQUAL"}
+    got = json.loads((tmp_path / "domain.json").read_text())
+    want = json.loads((V7M_READOUT / "map.domain.json").read_text())
+    assert not RT.compare_json(got, want, skip={("provenance", "git_head"), ("provenance", "git_dirty")})
+    assert got["POWER"]["file"] == want["POWER"]["file"] == f"{V7M_SESSION}/session/power-set.txt"
+    assert got["provenance"]["registration_sha256"] == want["provenance"]["registration_sha256"] == V7M_REG_SHA
+
+
+def test_the_committed_v7_domain_map_readout_reads_d_empty_from_a_clean_checkout():
+    """The registered rule, mechanically: power READ; 130 of 130 cells valid and in scope; no path has an X_p (naive
+    16, small-batch 75, block-scan 39 cells, the full set none on each); the slab guard NOT TRIGGERED; D EMPTY. Read at the
+    publishing commit with git_dirty false, the provenance the domain blind's --final requires."""
+    d = json.loads((V7M_READOUT / "map.domain.json").read_text())
+    assert d["registration"] == "2026-11-18-v7-domain-map-gh200" and d["verdict"] == "READ"
+    assert d["provenance"] == {"registration_path": "docs/registered/2026-11-18-v7-domain-map-gh200.json",
+                               "registration_sha256": V7M_REG_SHA, "git_head": V7M_READ_AT, "git_dirty": False}
+    assert d["POWER"]["verdict"] == "READ" and d["POWER"]["gpu_current_power_limit_w"] == 700.0
+    assert d["cells"] == {"registered": 130, "valid": 130, "valid in scope": 130}
+    assert set(d["pages"].values()) == {"counted"} and len(d["pages"]) == 14
+    dom = d["domain"]
+    assert dom["D"] == [] and dom["statement"] == "D is EMPTY: no path has an X_p"
+    per = {p: (x["cells"], x["X_p_us"], x["verdict"]) for p, x in dom["per_path"].items()}
+    assert per == {"naive": (16, None, "OUTSIDE THE DOMAIN (no X_p)"),
+                   "small-batch": (75, None, "OUTSIDE THE DOMAIN (no X_p)"),
+                   "block-scan": (39, None, "OUTSIDE THE DOMAIN (no X_p)")}
+    # (iv): a path where the full set or any fold gives none has no X_p; every full set gives none, and only the fold
+    # without map-b-e32k4-h2560i1152 gives a value (naive 27.6 us, small-batch 111.1 us), which (iv) does not use
+    folds = {p: {s: round(v, 3) for s, v in x["rule"]["folds"].items() if v is not None} for p, x in dom["per_path"].items()}
+    assert all(x["rule"]["full"] is None for x in dom["per_path"].values())
+    assert folds == {"naive": {"map-b-e32k4-h2560i1152": 27.629}, "small-batch": {"map-b-e32k4-h2560i1152": 111.145},
+                     "block-scan": {}}
+    assert dom["slab_guard"]["triggered"] is False and dom["slab_guard"]["cells"] == 30
+    pooled = d["descriptive"]["pooled"]
+    assert pooled["cells"] == 130 and round(pooled["rms"], 4) == 0.0461 and round(pooled["worst"], 4) == -0.1939
+    txt = (V7M_READOUT / "map.domain.txt").read_text().splitlines()
+    assert txt[0] == ("MODEL v7 DECODE DOMAIN MAP (2026-11-18-v7-domain-map-gh200): READ, DESCRIPTIVE (a measurement, "
+                      "not a certification)")
+    assert "  D is EMPTY: no path has an X_p" in txt
+    assert sum("OUTSIDE THE DOMAIN (no X_p)" in t for t in txt) == 3
+    assert txt[-1] == f"registration sha256 {V7M_REG_SHA}, commit {V7M_READ_AT}"
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

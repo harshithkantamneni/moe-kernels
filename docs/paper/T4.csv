@@ -32,3 +32,4 @@ date,session,board,commit,models,counter pages
 2026-11-10,2026-11-10-nvidia_gh200_480gb-pc2-session,board 588570,e7786f4,"deepseek-v2-lite, granite-3.0-3b-a800m, jetmoe-8b, mixtral-8x7b, phi-3.5-moe, qwen1.5-moe-a2.7b",0
 2026-11-12,2026-11-12-nvidia_gh200_480gb-rr-session,board 73996e,51d33d9,"mixtral-8x7b, phi-3.5-moe",2
 2026-11-18,2026-11-18-nvidia_gh200_480gb-v7b-session,board e165c7,e58c153,"granite-3.0-1b-a400m, mixtral-8x22b, qwen2-57b-a14b",0
+2026-11-18,2026-11-18-nvidia_gh200_480gb-v7m-session,board 1e520d,556029e,"map-a-e128k8-h2048i512, map-a-e16k4-h2048i512, map-a-e256k8-h2048i512, map-a-e32k8-h2048i512, map-a-e64k8-h2048i512, map-a-e8k2-h2048i512, map-b-e32k4-h1024i384, map-b-e32k4-h1536i512, map-b-e32k4-h2048i768, map-b-e32k4-h2560i1152, map-b-e32k4-h3072i1536, map-b-e32k4-h4096i1536, map-c-e256k8-h4096i1024, map-c-e256k8-h7168i384",0

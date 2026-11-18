@@ -6,7 +6,9 @@ before D is known; --final refuses without a committed, verified map readout, a 
 D and a D under which no model reaches the minimum, and labels each cell by D (a path with no X_p, X_p, the slab
 guard's S_p, the second tile); the scorer scores only IN-DOMAIN cells, applies the minimum, and handles off-lock cells,
 a missing page and a failed power check; the launcher is vm_run_v7b.sh plus lines marked V7D, delivers the plan and
-pages on a stub VM and refuses a DRAFT plan."""
+pages on a stub VM and refuses a DRAFT plan. Since the map's readout was committed (2026-11-18, D EMPTY), one test
+reads the real one: it verifies, and --final refuses it for the empty D alone and writes nothing, so the registration
+stays DRAFT and no domain blind runs."""
 from __future__ import annotations
 
 import argparse
@@ -207,6 +209,44 @@ def test_the_committed_draft_or_final_matches_whether_the_readout_is_committed(t
         assert have and V.is_committed(V.DOMAIN) and "# DRAFT" not in PLAN.read_text()
         assert reg["domain"]["readout"]["sha256"] == V.sha256(REPO / V.DOMAIN)
         assert SV.refusals(reg) == []
+
+
+def test_the_committed_map_readout_verifies_and_final_refuses_it_for_an_empty_d(pred, tmp_path, capsys, monkeypatch):
+    """The map's committed readout (scripts/scoring/v7domain/map.domain.json, read by read_map.py on the published
+    map session from a clean checkout) against the live published sessions: the map registration at its registered
+    sha256, freeze and plan, READ, D recomputed equal, the published session re-read to the same rows and D, the four
+    models with no decode page; the one refusal is the empty D, as the map registration says ('If D is empty, no
+    Phase 2 blind runs'). Whether the readout is committed is git state, held by its provenance (git_dirty false,
+    tests/test_rescore.py) and by test_the_committed_draft_or_final_matches_whether_the_readout_is_committed."""
+    monkeypatch.setattr(V, "is_committed", lambda rel, root=V.REPO: True)
+    dom = json.loads((REPO / V.DOMAIN).read_text())
+    assert dom["domain"]["D"] == [] and dom["provenance"]["git_dirty"] is False
+    sessions = V.published_sessions()
+    assert V.map_sessions(sessions) == ["2026-11-18-nvidia_gh200_480gb-v7m-session"]
+    got, sha, why = RG.final_refusals(sessions, pred)
+    assert why == ["D is EMPTY: no path has an X_p (the map registration: no domain blind runs)"]
+    assert got is not None and sha == V.sha256(REPO / V.DOMAIN)
+    assert RG.main(["--write", "--final", "--root", str(tmp_path)]) == 2
+    assert capsys.readouterr().out.strip() == (
+        "REFUSED: D is EMPTY: no path has an X_p (the map registration: no domain blind runs)")
+    assert not (tmp_path / V.REG_JSON).exists() and _reg()["draft"] is True
+
+
+def test_loso_gives_no_x_when_the_full_set_gives_none_even_if_a_fold_gives_one():
+    """(iv) as the map registration's points fix it ('a path where any of them is none has no X_p'), the reading
+    read_map.loso implements: one shape's single bad cell at the longest call sits in every counted set, so the full set
+    gives no X; the fold without that shape gives one; X is still None (the map's naive and small-batch paths read
+    so, the fold without map-b-e32k4-h2560i1152 giving 27.6 and 111.1 us)."""
+    bad, good = MS.NAMES[0], MS.NAMES[1:4]
+    cells = [_row(good[i % 3], "naive", 20.0 + 5 * i, 0.001) for i in range(20)]
+    cells.append(_row(bad, "naive", 500.0, 0.07))
+    assert RM.threshold(cells)["X"] is None
+    r = RM.loso(cells, MS.NAMES)
+    assert r["full"] is None and r["folds"][bad] == 20.0
+    assert all(v is None for s, v in r["folds"].items() if s != bad)
+    assert r["X"] is None and "(full set)" in r["none in"]
+    d = RM.domain(cells)
+    assert d["per_path"]["naive"]["X_p_us"] is None and d["D"] == []
 
 
 # ---------------------------------------------------------------- D from synthetic map readouts

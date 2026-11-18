@@ -1,0 +1,79 @@
+MODEL v7 DECODE DOMAIN MAP (2026-11-18-v7-domain-map-gh200): READ, DESCRIPTIVE (a measurement, not a certification)
+power: READ (700.0 W); cells 130 valid of 130 (130 in scope)
+
+DOMAIN (the registered rule, mechanically):
+  D is EMPTY: no path has an X_p
+  naive        16 cells: X_p - us (full set -; raised by removing none; none in ['map-a-e128k8-h2048i512', 'map-a-e16k4-h2048i512', 'map-a-e256k8-h2048i512', 'map-a-e32k8-h2048i512', 'map-a-e64k8-h2048i512', 'map-a-e8k2-h2048i512', 'map-b-e32k4-h1024i384', 'map-b-e32k4-h1536i512', 'map-b-e32k4-h2048i768', 'map-b-e32k4-h3072i1536', 'map-b-e32k4-h4096i1536', 'map-c-e256k8-h4096i1024', 'map-c-e256k8-h7168i384', '(full set)']); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  small-batch  75 cells: X_p - us (full set -; raised by removing none; none in ['map-a-e128k8-h2048i512', 'map-a-e16k4-h2048i512', 'map-a-e256k8-h2048i512', 'map-a-e32k8-h2048i512', 'map-a-e64k8-h2048i512', 'map-a-e8k2-h2048i512', 'map-b-e32k4-h1024i384', 'map-b-e32k4-h1536i512', 'map-b-e32k4-h2048i768', 'map-b-e32k4-h3072i1536', 'map-b-e32k4-h4096i1536', 'map-c-e256k8-h4096i1024', 'map-c-e256k8-h7168i384', '(full set)']); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  block-scan   39 cells: X_p - us (full set -; raised by removing none; none in ['map-a-e128k8-h2048i512', 'map-a-e16k4-h2048i512', 'map-a-e256k8-h2048i512', 'map-a-e32k8-h2048i512', 'map-a-e64k8-h2048i512', 'map-a-e8k2-h2048i512', 'map-b-e32k4-h1024i384', 'map-b-e32k4-h1536i512', 'map-b-e32k4-h2048i768', 'map-b-e32k4-h2560i1152', 'map-b-e32k4-h3072i1536', 'map-b-e32k4-h4096i1536', 'map-c-e256k8-h4096i1024', 'map-c-e256k8-h7168i384', '(full set)']); S_p - MB; OUTSIDE THE DOMAIN (no X_p)
+  slab guard: NOT TRIGGERED: D has no slab condition (30 family B cells under a wave; b -0.0094 us/MB, 95% [-0.0603, +0.0415], |b| x 35 MB 0.33 us)
+
+DESCRIPTIVE (v7 out of sample on new synthetic shapes; not a certification, no bar)
+  pooled        130 cells rms 4.61% worst -19.39% mean +0.69% max e_ub 19.67%
+  naive          16 cells rms 8.45% worst -19.39% mean -5.06% max e_ub 19.67%
+  small-batch    75 cells rms 3.54% worst +9.11% mean +1.21% max e_ub 9.31%
+  block-scan     39 cells rms 4.17% worst +14.72% mean +2.05% max e_ub 14.81%
+  family A       48 cells rms 5.67% worst -19.39% mean +1.60% max e_ub 19.67%
+  family B       52 cells rms 4.58% worst -19.15% mean -0.30% max e_ub 19.19%
+  family C       30 cells rms 2.07% worst -4.21% mean +0.96% max e_ub 4.27%
+  aligned step over-price by E (v7's naive-to-aligned step minus the measured one, same GEMMs):
+    E    8 small-batch 4 pairs: median +3.43 us (+3.41 to +3.48)
+    E   16 small-batch 4 pairs: median +3.09 us (+2.98 to +3.97)
+    E   32 small-batch 16 pairs: median +1.71 us (+0.44 to +3.97)
+    E   64 small-batch 3 pairs: median +2.47 us (+2.16 to +2.49)
+    E  128 block-scan  2 pairs: median +4.19 us (+3.54 to +4.84)
+    E  256 block-scan  5 pairs: median +3.85 us (+0.94 to +4.85)
+  slab sweep (family B): W_e MB / label / T / path / waves / v7 us / measured us / resid us / e / e_ub
+      2.36 L-T1-A4     T1    naive        0.16    13.56    16.78   -3.21 -19.15% 19.19%
+      2.36 MIN-T4      T4    small-batch  0.16    22.98    22.35   +0.63 +0.00% 2.99%
+      2.36 MIN-T16     T16   small-batch  0.16    23.57    22.81   +0.76 +0.00% 3.38%
+      2.36 L-T8-A27    T8    small-batch  1.09    39.94    39.20   +0.74 +0.00% 1.97%
+      2.36 L-T64-A32   T64   small-batch  0.97    48.12    45.33   +2.79 +6.15% 6.28%
+      2.36 L-T96-A32   T96   small-batch  0.48    50.19    48.01   +2.18 +4.54% 4.61%
+      2.36 L-T128-A32  T128  small-batch  0.65    52.73    50.37   +2.36 +4.69% 4.80%
+      4.72 L-T1-A4     T1    naive        0.24    16.75    19.56   -2.81 -14.35% 14.47%
+      4.72 MIN-T4      T4    small-batch  0.24    26.18    25.85   +0.32 +0.00% 1.46%
+      4.72 MIN-T16     T16   small-batch  0.24    26.79    26.33   +0.46 +0.00% 1.78%
+      4.72 L-T8-A14    T8    small-batch  0.85    40.37    38.49   +1.89 +4.90% 5.00%
+      4.72 L-T8-A29    T8    small-batch  1.76    60.15    63.46   -3.31 -5.21% 5.26%
+      4.72 L-T64-A32   T64   small-batch  1.45    68.28    69.09   -0.81 +0.00% 1.21%
+      4.72 L-T96-A32   T96   small-batch  0.73    72.21    70.15   +2.06 +2.93% 3.02%
+      4.72 L-T128-A32  T128  small-batch  0.97    74.14    73.33   +0.82 +0.00% 1.21%
+      9.44 L-T1-A4     T1    naive        0.32    22.64    24.10   -1.45 -6.03% 6.26%
+      9.44 MIN-T4      T4    small-batch  0.32    32.08    32.27   -0.19 +0.00% 0.64%
+      9.44 MIN-T16     T16   small-batch  0.32    32.73    32.64   +0.08 +0.00% 0.31%
+      9.44 L-T8-A7     T8    small-batch  0.57    40.63    38.57   +2.05 +5.32% 5.38%
+      9.44 L-T8-A15    T8    small-batch  1.21    60.85    61.03   -0.18 +0.00% 0.33%
+      9.44 L-T8-A30    T8    small-batch  2.42    99.65    99.15   +0.50 +0.00% 0.53%
+      9.44 L-T64-A32   T64   small-batch  1.94   111.14   113.20   -2.05 -1.81% 1.87%
+      9.44 L-T96-A32   T96   small-batch  0.97   116.84   112.44   +4.40 +3.91% 4.04%
+      9.44 L-T128-A32  T128  small-batch  1.29   117.90   120.24   -2.34 -1.95% 2.01%
+     17.69 L-T1-A4     T1    naive        0.40    32.53    34.88   -2.34 -6.72% 6.81%
+     17.69 MIN-T4      T4    small-batch  0.40    41.98    40.41   +1.56 +3.87% 3.91%
+     17.69 L-T8-A4     T8    small-batch  0.40    42.03    40.52   +1.51 +3.72% 3.78%
+     17.69 MIN-T16     T16   small-batch  0.40    42.67    41.30   +1.37 +3.33% 3.39%
+     17.69 L-T8-A8     T8    small-batch  0.81    61.20    61.67   -0.47 +0.00% 0.81%
+     17.69 L-T8-A16    T8    small-batch  1.62   100.34    99.52   +0.82 +0.00% 0.84%
+     17.69 L-T8-A32    T8    small-batch  3.23   174.88   174.66   +0.22 +0.00% 0.16%
+     17.69 L-T64-A32   T64   small-batch  2.42   184.39   196.86  -12.47 -6.33% 6.37%
+     17.69 L-T128-A32  T128  small-batch  1.62   195.07   195.62   -0.55 +0.00% 0.33%
+     17.69 L-T96-A32   T96   small-batch  1.21   198.05   213.70  -15.65 -7.32% 7.38%
+     28.31 L-T1-A4     T1    naive        0.48    44.69    44.73   -0.05 +0.00% 0.16%
+     28.31 MIN-T4      T4    small-batch  0.48    54.14    52.50   +1.64 +3.13% 3.21%
+     28.31 MIN-T16     T16   small-batch  0.48    54.88    53.21   +1.68 +3.16% 3.22%
+     28.31 L-T8-A5     T8    small-batch  0.61    61.31    61.91   -0.61 +0.00% 1.03%
+     28.31 L-T8-A10    T8    small-batch  1.21   100.21   106.59   -6.38 -5.98% 6.01%
+     28.31 L-T8-A23    T8    small-batch  2.79   198.64   195.16   +3.47 +1.78% 1.79%
+     28.31 L-T64-A32   T64   small-batch  2.91   278.49   272.83   +5.66 +2.07% 2.14%
+     28.31 L-T96-A32   T96   small-batch  1.45   282.23   289.62   -7.39 -2.55% 2.62%
+     28.31 L-T128-A32  T128  small-batch  1.94   291.25   283.14   +8.11 +2.87% 2.91%
+     37.75 L-T1-A4     T1    naive        0.65    54.88    55.05   -0.18 +0.00% 0.50%
+     37.75 MIN-T4      T4    small-batch  0.65    64.34    63.40   +0.94 +0.00% 1.52%
+     37.75 L-T8-A4     T8    small-batch  0.65    64.42    63.81   +0.61 +0.00% 1.02%
+     37.75 MIN-T16     T16   small-batch  0.65    65.12    64.85   +0.27 +0.00% 0.49%
+     37.75 L-T8-A7     T8    small-batch  1.13    95.77    98.01   -2.23 -2.28% 2.31%
+     37.75 L-T8-A17    T8    small-batch  2.75   202.13   195.73   +6.40 +3.27% 3.29%
+     37.75 L-T64-A32   T64   small-batch  3.88   362.09   354.16   +7.94 +2.24% 2.27%
+     37.75 L-T96-A32   T96   small-batch  1.94   365.87   369.89   -4.02 -1.09% 1.12%
+     37.75 L-T128-A32  T128  small-batch  2.59   377.37   365.74  +11.63 +3.18% 3.20%
+registration sha256 bf33f4cc100b86f39179cc8dec3188e6b751f62f941c1986f1c5f3630913201b, commit c1074957bb84cfec56e99a9492c28f84c867fe23
