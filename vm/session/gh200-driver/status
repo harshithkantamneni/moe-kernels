@@ -58,3 +58,7 @@
 2026-11-18T22:22:38Z gate band at 1410 MHz: RESULT: GATE band PASS (exit 0)
 2026-11-18T22:22:38Z gate END: exit 0 after 0 min [unit 7/14 - gband gate=band]
 2026-11-18T22:22:39Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T22:22:40Z gate START: gate b3sag: scripts/tileB3_gate.py sag at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 8/14 - gsag gate=b3sag] (estimate 1 min, cap 5 min, 112 min left)
+2026-11-18T22:22:40Z gate b3sag at 1410 MHz: RESULT: GATE b3sag PASS par A 64.3250 us tau 612.5 us ratio 1.6368 olmoe 46.37/550 rms 6.66 sha 101dfec91a55 mixtral 82.28/675 rms 14.0 sha eda0801aa7a2 (exit 0)
+2026-11-18T22:22:40Z gate END: exit 0 after 0 min [unit 8/14 - gsag gate=b3sag]
+2026-11-18T22:22:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
