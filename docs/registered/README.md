@@ -2265,3 +2265,25 @@ launcher `scripts/vm_run_v7m.sh` (vm_run_v7b.sh plus lines marked V7M) runs the 
 `moe.spec`. Plan `scripts/plans/rentalV7M-domain-map-2026-11.plan`: 76 unit-min, about 115 min wall, $4.39 at
 d2common.RATE $2.29/h ($4.96 at Lambda's list price of 2026-11-18, $2.59/h); deadline launch + 130 min, hard cap + 145
 min ($5.53 / $6.26). Tests `tests/test_v7_domain_map.py` (synthetic trees and a stub VM only).
+
+`2026-11-18-v7-domain-blind-gh200` (`scripts/scoring/v7dblind/register_v7d_blind.py --write` / `--check`; DRAFT,
+written 2026-11-18 while the map rental ran, before any page of its four models; finalised by `--write --final` only
+once the map's readout `scripts/scoring/v7domain/map.domain.json` is committed and verifies) registers model v7's
+decode DOMAIN blind, the plan's Phase 2: v7 frozen and unchanged (every switch on, the CAL2 refit, the v7 blind's fit
+to the bit) priced on 192 main cells of DeepSeek-V3, DeepSeek-V3-tp4, DeepSeek-V3-tp8 and Qwen2-57B-A14B-tp8 (no
+decode page of any; the census reads every registered page list and every published session, the v7 blind's
+included, classifies each gaps directory by its reports, and finds Qwen2-57B-tp8's R3-tile pages and DeepSeek-V3's
+H200 and A100 fused_experts rows, none at a decode tile on a GH200), the v7 blind's cell recipe (decode_synth's
+frozen generators, GRR main pages, GR1 control pages on Qwen2-57B-tp8 and DeepSeek-V3-tp8 in drop group gr1, 20
+second-tile cells DESCRIPTIVE). D is a required input: `--final` verifies the readout (the map registration at its
+registered sha256, its freeze and plan, verdict READ, `read_map.domain` on the readout's own rows giving the same D,
+D not empty, the map session published) and labels each cell IN-DOMAIN (its path has an X_p, T_v7 >= X_p, W_e >= S_p
+when set, every active expert in one M-tile) or OUT, DESCRIPTIVE. Scored by `score_blind_v7d.py`: E1-DEC on the
+in-domain cells only, per model and pooled, the old bars (rms 3%, worst 8%, |mean| 1.5%, owner D4-1), decodeB-blind's
+rule, and a minimum registered before D is known: a model with fewer than 10 in-domain cells scored is reported, BELOW
+THE MINIMUM, not certified. Plan `scripts/plans/rentalV7D-domain-blind-2026-11.plan` (DRAFT line; the launcher
+`scripts/vm_run_v7d.sh`, vm_run_v7b.sh plus lines marked V7D, refuses it): 89 unit-min, about 131 min wall, $5.00 at
+$2.29/h, $5.65 at $2.59/h; deadline launch + 145 min, hard cap + 160 min ($6.11 / $6.91); without the gr1 pages,
+which the driver drops first, about 107 min. Disclosed: the second reopening of decode, the POST-HOC origin of the
+domain idea, D computed by the rule registered before the map's pages (556029e1), Phase 0's offline pricing of these
+four models. Tests `tests/test_v7_domain_blind.py` (synthetic trees, synthetic map readouts and a stub VM only).
