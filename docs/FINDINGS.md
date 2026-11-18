@@ -4881,7 +4881,9 @@ new to the study), launched 22:02:55Z after three launch attempts refused for ca
 23:28:45Z, about 86 min: about $3.70 at Lambda's $2.59/h, $3.28 at the registration's $2.29/h (registered: 84
 unit-min, about 125 min wall, $4.77 at $2.29/h, $5.40 at $2.59/h; deadline launch + 140 min, hard cap + 155 min,
 $5.92 / $6.69). 14 units in about 76 min, every unit and the driver exit 0, none dropped, 700 W read back, every
-timed page held the 1410 MHz lock (worst 1410.0 MHz on all six). The 335 run-branch files verified against
+timed page held the 1410 MHz lock (worst 1410.0 MHz on all six). Both f128 byte pages exit 3 at the page (G=64
+INVALID on a validity check, the page written), as B3's did; the sag gate reads them for the par, as registered, and
+passed. The 335 run-branch files verified against
 SHA256SUMS; published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session` (325 files, the 10
 `cuda_utils` .so files left out as before). The registered scorer ran on the published session root from a clean
 checkout of the commit that published it (148dbfc1), exit 0:
@@ -4917,7 +4919,7 @@ registration sha256 998a8c101c8b8a2a13fb0f002d281153b2bdaf10a54d7a8bebd0a9ab5066
 
 e is (predicted - measured) / measured. Validity: the power check reads 700 W, LOCK_PROBE_1410 held, G-BAND PASS on
 its registered fallback band (the primary band left OLMoE's byte page without a cell in band), v7pcensus PASS (2 CTAs
-per SM on all six model-and-tread entries, no MMA path mismatch), b3sag PASS at par 64.325 / 612.5 us. G3 PASS,
+per SM on all six model-and-GEMM (w1, w2) entries, no MMA path mismatch), b3sag PASS at par 64.325 / 612.5 us. G3 PASS,
 EQUIVALENT (4 cells, pooled mean -0.05%, inside the 0.36% margin); no stratum voided. Every page counted in ALL and
 CLEAN; the G 1 pages read 0 of 216 repeat rows non-clean. The registered host-bound rule (G2: v3 + F240 under 0.40 ms)
 dropped 30 of the 54 NATIVE cells: all 12 G 1 cells of each Granite and Qwen2-57B-tp8's 6 tread-1 G 1 cells. So the
@@ -4938,7 +4940,8 @@ gate's reading.
 DESCRIPTIVE beside (no verdict): B3's E1-TILE conjunction FAILS on these models; B2's bar (2%, 5%, 1%) on the same
 cells FAILS; round 5 (every switch off) on the same cells reads rms 3.12%, worst -4.72%, mean -2.97% against v7's
 3.13% / -4.72% / -2.99% (RR's rung acts only at G 1, and the only G 1 cells scored are Qwen2-57B-tp8's six; at G 16
-the two are equal), so v7's switches move nothing measurable here; splits: 128 G 1, 6 cells, rms 2.33%, mean -2.24%;
+the two are equal): RR moves those six by about -0.18 points on the four PT/PW cells and +0.02 on uniform and
+balanced, pooled 3.12% to 3.13%, the verdict unchanged; splits: 128 G 1, 6 cells, rms 2.33%, mean -2.24%;
 128 G 16, 18 cells, rms 3.36%, mean -3.25%; per model and class, Granite-1B G 16 4.25% / -4.24%, Granite-3B G 16
 3.07% / -3.00%, Qwen2-57B-tp8 G 1 2.33% / -2.24% and G 16 2.52% / -2.50%; no stratum was voided, so the bars without
 G3's voids are the bars.

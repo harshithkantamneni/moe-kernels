@@ -54,7 +54,7 @@ PASS. Each does. `power-set.txt` reads a GPU Current Power Limit of 700.00 W (Re
 reads 1000 W), and the driver's `clocks:` line after every unit reads 700.00 W. `locks.env` reads LOCK_PROBE_1410=held.
 G-BAND PASS on its registered fallback band [1352.19, 1410.0] MHz (the primary band [1374.75, 1410.0] left OLMoE's
 page with no cell in band, so its joint fit was None; the registration names the fallback for that case). The census
-gate (v7pcensus) PASS: all six model-and-tread entries at 128x128x64 w8 s3 read 2 CTAs per SM, no MMA path mismatch,
+gate (v7pcensus) PASS: all six model-and-GEMM (w1, w2) entries at 128x128x64 w8 s3 read 2 CTAs per SM, no MMA path mismatch,
 no drift. The sag gate (b3sag) PASS with par A 64.325 us, tau 612.5 us (OLMoE 46.37 / 550, rms 6.66; Mixtral 82.28 /
 675, rms 14.0).
 
@@ -70,8 +70,8 @@ non-clean.
 | 2 | calibrate | mixtral-8x7b tp (the ruler) | 22:11:42 to 22:12:07 | 0 | 0 | triad 3726.2 GB/s |
 | 3 | tilecensus | tp, 128x128x64w8s3, the three models | 22:12:09 to 22:12:18 | 0 | 0 | |
 | 4 | gate | gcen (v7pcensus) | 22:12:20 to 22:12:21 | 0 | 0 | PASS, 2 CTAs/SM |
-| 5 | bytes | olmoe-1b-7b f128 | 22:12:23 to 22:15:35 | 3 | 0 | |
-| 6 | bytes | mixtral-8x7b f128 | 22:15:37 to 22:22:34 | 7 | 0 | |
+| 5 | bytes | olmoe-1b-7b f128 | 22:12:23 to 22:15:35 | 3 | 0 | page exit 3 (INVALID on V4 V5) |
+| 6 | bytes | mixtral-8x7b f128 | 22:15:37 to 22:22:34 | 7 | 0 | page exit 3 (INVALID on V5 V7) |
 | 7 | gate | gband (G-BAND) | 22:22:37 to 22:22:38 | 0 | 0 | PASS (fallback band) |
 | 8 | gate | gsag (b3sag) | 22:22:40 to 22:22:40 | 0 | 0 | PASS, par 64.325 / 612.5 us |
 | 9 | timed | granite-3.0-1b-a400m t128g1 | 22:22:42 to 22:36:41 | 14 | 0 | R3 cells=216 |
@@ -81,7 +81,9 @@ non-clean.
 | 13 | timed | granite-3.0-3b-a800m t128g16 | 23:12:08 to 23:19:36 | 7 | 0 | R3 cells=108 |
 | 14 | timed | qwen2-57b-a14b-tp8 t128g16 | 23:19:39 to 23:27:08 | 7 | 0 | R3 cells=108 |
 
-14 units in about 76 min against 84 estimated; none dropped; every unit is nodrop.
+14 units in about 76 min against 84 estimated; none dropped; every unit is nodrop. Both byte pages exit 3 at the page
+(G=64 INVALID on a validity check, "the page is written, go on", `logs/driver-bytes-*.log`), as B3's byte pages did;
+the sag gate reads them for the par, as registered (B3's), and passed.
 
 ## What the scorer reads (`scripts/scoring/v7pblind/prefill_blind.score.txt`)
 
@@ -104,7 +106,9 @@ Every one of the 24 scored cells is under-priced: e runs from -1.57% to -4.72%. 
 bars: each model's rms is within 0.1 point of its |mean|.
 
 DESCRIPTIVE beside, no verdict: B2's bar (2% / 5% / 1%) on the same cells FAILS; round 5 (every switch off) on the
-same cells reads rms 3.12%, worst -4.72%, mean -2.97%, so v7's switches move nothing here; the G 1 cells read rms
+same cells reads rms 3.12%, worst -4.72%, mean -2.97%: v7's RR term moves only Qwen2-57B-tp8's six G 1 cells (by
+about -0.18 points on the four PT/PW cells, +0.02 on uniform and balanced), pooled 3.12% to 3.13%, the verdict
+unchanged; the G 1 cells read rms
 2.33%, mean -2.24% (6, all Qwen2-57B-tp8) and the G 16 cells rms 3.36%, mean -3.25% (18); per model and class, Qwen2-57B-tp8
 G 16 reads rms 2.52%, mean -2.50%; with no stratum voided, the bars without G3's voids are the bars.
 

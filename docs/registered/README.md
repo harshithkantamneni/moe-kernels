@@ -2371,7 +2371,8 @@ commit on top); one GH200 (Lambda instance 365b52c0, region not recorded for the
 attempts in us-east-3 refused for capacity), board 8d8469, new to the study, launched 22:02:55Z, termination confirmed
 23:28:45Z, about 86 min and $3.70 at $2.59/h (registered: 84 unit-min, about 125 min, $4.77 at $2.29/h, $5.40 at
 $2.59/h); 14 units, every one exit 0, none dropped, 700 W read back, the 1410 MHz lock held on every timed page (worst
-1410.0 MHz). Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session`. Scored by
+1410.0 MHz); both f128 byte pages exit 3 at the page (G=64 INVALID on a validity check, the page written), as B3's
+did, and the sag gate read them for the par and passed. Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session`. Scored by
 `score_blind_v7p.py` from a clean checkout: first on the fetched tree's `vm/` at the run commit, then on the published
 copy at 148dbfc1 (git_dirty false), the same reading; the JSON differing only in the session path and the recorded
 checkout. Committed as `scripts/scoring/v7pblind/prefill_blind.score.{json,txt}`; `scripts/scoring/rescore.py

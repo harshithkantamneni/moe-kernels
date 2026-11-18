@@ -472,12 +472,12 @@ prefill NO-GO at the gate stand. DESCRIPTIVE beside it, read after D was known: 
 "naive twins within 0.33 us" holds only on some of the new shapes (docs/FINDINGS.md, Model v7 decode domain map).
 
 Model v7's prefill blind (registration `2026-11-18-v7-prefill-blind-gh200`, public at the push of 43a8802b; run
-2026-11-18 on one GH200, board 8d8469, about 86 min and $3.70) certifies no model: pooled rms 3.13% over 24 cells
-(worst -4.72%, mean -2.99%; every scored cell under-priced) against the working-model bar (rms 3%, worst 8%, |mean|
+2026-11-18 on one GH200, board 8d8469, about 86 min and $3.70) certifies no model: the pooled bar FAILS, rms 3.13% over 24
+cells (worst -4.72%, mean -2.99%; every scored cell under-priced), against the working-model bar (rms 3%, worst 8%, |mean|
 1.5%, per model and pooled, a model certified when its own bar and the pooled bar hold with at least 10 cells in
 CLEAN), on 54 cells at 128x128x64 w8 s3, G 1 and G 16, of three models no prefill-tile page had timed:
-Granite-3.0-1B-A400M (6 cells scored, rms 4.25%, below the minimum), Granite-3.0-3B-A800M (6, 3.07%, below the
-minimum) and Qwen2-57B-A14B-tp8 (12, 2.43%, mean -2.37%); the registered host-bound rule dropped the other 30 cells.
+Granite-3.0-1B-A400M (6 cells scored, rms 4.25%, FAILS, below the minimum), Granite-3.0-3B-A800M (6, 3.07%, FAILS,
+below the minimum) and Qwen2-57B-A14B-tp8 (12, 2.43%, mean -2.37%, FAILS); the registered host-bound rule dropped the other 30 cells.
 It was the third reopening of prefill, registered by the owner against the v7 gate's PREFILL NO-GO with the gate's
 own pass estimate beside it (P(A) 0.2067 at B2's bar), a forking path disclosed in the registration; it reverses no
 earlier verdict. Its registered verdict stands and the blind is spent; by the registration, prefill stops here. v7's

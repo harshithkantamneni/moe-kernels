@@ -101,7 +101,8 @@ v7blind) and an output directory, and writes prefill_blind.score.json and prefil
 scripts/scoring/v7pblind/ under those names, scored from a clean checkout of the published tree. It records the
 checkout it ran in as score_blind_v7 does, compared as present (checkout_free); the registration's sha256 is compared
 exactly. Its exit 1 is the registered NOT SCORED reading (the power check, a gate, or G3's homogeneous void), which
-still writes both files, so a re-score exiting 1 is held to the committed files like an exit 0 (OK_EXITS).
+still writes both files, so a re-score must exit as the committed verdict implies (1 on NOT SCORED, else 0) and is
+then held to the committed files (ok_exits).
 
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
@@ -111,6 +112,7 @@ directory). Exits 0 when every file is equal, 1 otherwise, printing each file's 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -190,8 +192,18 @@ FETCHED = {"decodeCAL2": "/runs/gh200-tile2-20261103T2203Z/tree/vm"}
 #: score_blind_v7p.provenance)
 CHECKOUT = {"v7blind", "v7domain", "v7pblind"}
 #: the exit codes a stage's scorer gives with both score files written (default: 0 only); score_blind_v7p exits 1 on
-#: its registered NOT SCORED reading
+#: its registered NOT SCORED reading, so its re-score must exit as the committed verdict implies (ok_exits), never
+#: 1 on a committed SCORED reading (an uncaught exception also exits 1)
 OK_EXITS = {"v7pblind": (0, 1)}
+
+
+def ok_exits(stage: str) -> tuple:
+    """The exit codes a re-score of this stage may give: for v7pblind, exactly the exit its committed verdict implies
+    (1 on NOT SCORED, else 0); every other stage, OK_EXITS or 0 only."""
+    if stage == "v7pblind":
+        committed = json.loads((REPO / "scripts/scoring/v7pblind/prefill_blind.score.json").read_text())
+        return (1,) if committed.get("verdict") == "NOT SCORED" else (0,)
+    return OK_EXITS.get(stage, (0,))
 _CHECKOUT = ((re.compile(r'("git_head": )"[0-9a-f]{40}"'), r'\1"<checkout>"'),
              (re.compile(r'("git_dirty": )(?:true|false)'), r'\1"<checkout>"'),
              (re.compile(r'(, commit )[0-9a-f]{40}$', re.M), r'\1<checkout>'))
@@ -267,7 +279,7 @@ def main(argv=None) -> int:
         rows = compare(a.stage, out)
         for name, state in rows:
             print(f"  {name}: {state}")
-        ok = all(rc in OK_EXITS.get(a.stage, (0,)) for _s, rc in ran) and rows and all(state == "EQUAL" for _n, state in rows)
+        ok = all(rc in ok_exits(a.stage) for _s, rc in ran) and rows and all(state == "EQUAL" for _n, state in rows)
         print("RESCORE", a.stage, "EQUAL" if ok else "NOT EQUAL")
         return 0 if ok else 1
     finally:

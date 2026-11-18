@@ -653,8 +653,12 @@ def test_the_committed_v7_prefill_blind_score_is_from_a_clean_checkout_and_reads
 
 def test_a_v7p_not_scored_exit_is_a_scored_exit_for_rescore_only():
     """score_blind_v7p exits 1 on its registered NOT SCORED reading with both files written; rescore.py holds that
-    exit to the committed files (OK_EXITS); every other stage still asks exit 0."""
+    exit to the committed files, but only when the committed verdict is NOT SCORED (ok_exits); on a committed SCORED
+    reading it asks exit 0, so an uncaught exception (also exit 1) cannot pass; every other stage still asks exit 0."""
     assert RS.OK_EXITS == {"v7pblind": (0, 1)} and "v7pblind" in RS.CHECKOUT
+    verdict = json.loads((RS.REPO / "scripts/scoring/v7pblind/prefill_blind.score.json").read_text())["verdict"]
+    assert RS.ok_exits("v7pblind") == ((1,) if verdict == "NOT SCORED" else (0,))
+    assert RS.ok_exits("v7blind") == (0,) and RS.ok_exits("tileA") == (0,)
     assert RS.OUTPUTS.get("v7pblind", "*.score.*") == "*.score.*" and "v7pblind" not in RS.COMMITTED_AS
 
 
