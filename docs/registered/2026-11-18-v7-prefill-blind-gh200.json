@@ -268,7 +268,8 @@
     "2026-11-06-nvidia_gh200_480gb-pc-session",
     "2026-11-10-nvidia_gh200_480gb-pc2-session",
     "2026-11-12-nvidia_gh200_480gb-rr-session",
-    "2026-11-18-nvidia_gh200_480gb-v7b-session"
+    "2026-11-18-nvidia_gh200_480gb-v7b-session",
+    "2026-11-18-nvidia_gh200_480gb-v7m-session"
    ],
    "per model": {
     "mixtral-8x7b": {
