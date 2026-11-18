@@ -6,3 +6,7 @@
 2026-11-18T03:41:19Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/7 -] (estimate 3 min, cap 15 min, 112 min left)
 2026-11-18T03:41:19Z prelude END: exit 0 after 0 min [unit 1/7 -]
 2026-11-18T03:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a1974a7 to run-gh200-v7b-20261118t0336: prelude (unit 1/7 -): exit 0 (0 min)
+2026-11-18T03:41:21Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/7 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 112 min left)
+2026-11-18T03:41:46Z calibrate END: exit 0 after 0 min [unit 2/7 mixtral-8x7b dcal]
+2026-11-18T03:41:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
