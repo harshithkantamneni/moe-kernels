@@ -2583,7 +2583,7 @@
    "applied by": "v7pcommon.apply_fix, before every pass estimate"
   },
   "on-board input": "the 128x128 sag par of this board's OLMoE f128 and Mixtral-8x7B f128 pages (B3's estimator, b3common.page_fit = the chain's r4.sag_page_fit; gate b3sag's registered range); no other constant is read from the rental",
-  "finalisation (mechanical, after the rental, before any blind page)": "score_blind_v7p.py: the board's validity and the gate records first; then the par from the two f128 pages by the repo's estimator and the frozen chain's, equal to each other and to the b3sag record (each page's sha256, b3common.PAR_RTOL); every cell priced by v7pcommon.price at that par; an audit hook refuses the run if finalisation opens a gaps-* path or a path naming a blind model (the census aside)",
+  "finalisation (mechanical, after the rental, before any blind page)": "score_blind_v7p.py: a clean checkout, and the run commit on the session's ledger equal to the working copy for the registration, the plan and every frozen file (B3's check_tree rule), else REFUSED; the board's validity and the gate records first; then the par from the two f128 pages by the repo's estimator and the frozen chain's, equal to each other and to the b3sag record (each page's sha256, b3common.PAR_RTOL); every cell priced by v7pcommon.price at that par; an audit hook refuses the run if finalisation opens a gaps-* path or a path naming a blind model (the census aside)",
   "gate reproduction (COMPUTED with the registered pricer and the fix)": {
    "means_pct": {
     "olmoe-1b-7b": 0.37,
@@ -4221,7 +4221,7 @@
   "POST-HOC ORIGIN: the owner chose this blind on 2026-11-18 after seeing v7's decode blind result (FAIL) and the decode domain map's design, with the gate's NO-GO and the re-run's numbers in view; the models were chosen after the census and the gate were read (MODEL_CHOICE), before any page of them",
   "v7 UNCHANGED: every switch on (RR and D6FIX; D6FIX has no prefill term), v7 as the gate froze it, round 5's prefill branch with its SEEN constants; no refit, no new constant; the only addition is the refit4 fix, which changes no price and is registered verbatim",
   "RR's constants were chosen after pricing variants on SEEN pages (design-v7 section 3; RR's own pages, 2026-11-12); at G 16 v7 is round 5 exactly; RR moves these cells by granite-3.0-1b-a400m 128g1 -0.096% (-0.293 to +0.036); granite-3.0-1b-a400m 128g16 +0.000% (+0.000 to +0.000); granite-3.0-3b-a800m 128g1 -0.257% (-0.800 to +0.047); granite-3.0-3b-a800m 128g16 +0.000% (+0.000 to +0.000); qwen2-57b-a14b-tp8 128g1 -0.284% (-0.681 to +0.024); qwen2-57b-a14b-tp8 128g16 +0.000% (+0.000 to +0.000) at A2's par (COMPUTED)",
-  "the per-call risk B3 disclosed applies unchanged (one per-call constant, 36.16 us, at every numel; the block-scan align not priced by numel): every cell here is block-scan (R3's dry run), at numel 4,096 to 73,728 (k 8 x M), mostly past the 11,520 the align fit was measured to; the Granite cells are short calls (0.12 to 0.71 ms at A2's par), so a per-call error weighs more on them than on B3's (0.5 to 3 ms)",
+  "the per-call risk B3 disclosed applies unchanged (one per-call constant, 36.16 us, at every numel; the block-scan align not priced by numel): every cell here is block-scan (R3's dry run), at numel 5,120 to 73,728 (k 8 x M), mostly past the 11,520 the align fit was measured to; the Granite cells are short calls (0.12 to 0.71 ms at A2's par), so a per-call error weighs more on them than on B3's (0.5 to 3 ms)",
   "these three models were priced offline while this kit was built (their v7 predictions, no measurement); Mixtral-8x7B-tp8 and DeepSeek-V3-tp8 trial cells were priced too and left out (MODEL_CHOICE; no page of any)",
   "Qwen2-57B-A14B-tp8 is a TP shard of Qwen2-57B-A14B, a CAL model whose held-out 128 G 1 mean under v7 is -1.50% (prefill_rerun_v7); the Granite models share no (E, H, I, k) with any CAL or B3 model (census)",
   "the 64x128x64 w8 s3 tile, B3's byte pages and its sag repeat are left out to keep the rental near 2 h; the blind tests v7 at 128x128x64 w8 s3 only",
@@ -4245,9 +4245,9 @@
    "docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-3b-a800m-128g16.json": "0b360eb659131480b67ece4e961c616133ed59b68868e133979b0e1163529de1",
    "docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g1.json": "a273b439c7102a34ecc0b3d1995b16f0da26b0959e88252994c48c9d98a79cd3",
    "docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json": "7b6cd5405ac6dcd39eae38ac335b3d0bf03acf872212b8d5641daff4cb7dbad2",
-   "scripts/scoring/v7pblind/v7pcommon.py": "ac235802ba4abd2625907cb0af135cf4cd78a1496df868f81fa18e067d7f97ff",
-   "scripts/scoring/v7pblind/register_v7p_blind.py": "b342ac1b0c95fc9f7124093be675c83a5779de0c33e03dd1fc0d987dd609f919",
-   "scripts/scoring/v7pblind/score_blind_v7p.py": "bfd26d6e208cf19c628f879b9a1b4d12d19df77b4dbea71e7d4f53f7633e8a5f",
+   "scripts/scoring/v7pblind/v7pcommon.py": "450637a33336716b0ecd510b13411381cbe80218cb5a4aa4c8c2474baee6a583",
+   "scripts/scoring/v7pblind/register_v7p_blind.py": "b479777817e40e9ba827a81f1e3de83f3cd537a6fccfa599844dc17fe783e3b5",
+   "scripts/scoring/v7pblind/score_blind_v7p.py": "0e3d9acea617a635e13ad2f38ae48a973ffa6faf6f70f6cc01743050b030e5b8",
    "scripts/v7p_gate.py": "4e86b12d22ac183a2f617c0e17d7600efd19fcc4e1d534283fd1b2091f5ad26a",
    "scripts/gh200_v7p_session.sh": "6fcd1cc87f2cd3291eb7c119795a5583765263343b4e9b1ee496b7df8d9910d1",
    "scripts/gh200_tileB3_session.sh": "b634bce6729883f2c071cb3978bde804357e621eee9e8e14dd7f4f2cded28d98",
