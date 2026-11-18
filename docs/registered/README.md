@@ -2244,3 +2244,24 @@ second time to certify a validity domain for v7 (no refit): a DESCRIPTIVE mappin
 threshold rule registered before its pages, then one domain blind on models with no decode page (DeepSeek-V3, -tp4,
 -tp8, Qwen2-57B-tp8), then the stage stops. No map or domain registration exists at this entry (docs/FINDINGS.md,
 Model v7 decode blind).
+
+`2026-11-18-v7-domain-map-gh200` (`scripts/scoring/v7domain/register_v7_domain.py --write` / `--check`; registered
+2026-11-18, final when pushed, before any page of its shapes) registers model v7's decode domain MAP, DESCRIPTIVE: v7
+frozen and unchanged (every switch on, the CAL2 refit, the v7 gate registration's freeze) priced on 130 cells of 14
+SYNTHETIC shapes (`scripts/scoring/v7domain/map_shapes.py`, names `map-<family>-e<E>k<k>-h<H>i<I>`): A, naive and
+aligned twins across E 8 to 256 at one slab; B, slab per expert 2.36 to 37.75 MB at a fixed predicted call time; C,
+block-scan at E 256. The map design is Phase 0's (moe-kernels-work 2026-11-18 domain-phase0), regenerated cell for
+cell. Registered with it, verbatim, the threshold-selection rule that decides the domain D from the map's pages
+mechanically: per path (naive, small-batch, block-scan), X_p the smallest predicted call time past which every set of
+at least 10 cells has every replicate-bounded |e| under 6%, rms 2.5% and |mean| 1.0%, the maximum over leave-one-shape-out
+folds; a path with no X_p is outside; a slab guard fitted on family B adds W_e >= S only on a significant slope worth
+1 us over 35 MB. `scripts/scoring/v7domain/read_map.py` reads the committed registration only, verifies the freeze and
+the plan, applies the rule and writes `domain.json` / `domain.txt` with DESCRIPTIVE tables (the aligned-step over-price
+by E, the slab sweep). The domain blind it feeds (DeepSeek-V3, -tp4, -tp8, Qwen2-57B-A14B-tp8 at the old bars) is the
+next step, registered separately. Disclosed: the second reopening of decode (owner, 2026-11-18), the POST-HOC origin,
+Phase 0's offline pricing of these shapes. The shapes are not in `moe/spec.py` (frozen by twelve registrations); the
+launcher `scripts/vm_run_v7m.sh` (vm_run_v7b.sh plus lines marked V7M) runs the pinned decode driver with
+`scripts/scoring/v7domain/vmsite` on its PYTHONPATH, whose `sitecustomize.py` adds them when a process imports
+`moe.spec`. Plan `scripts/plans/rentalV7M-domain-map-2026-11.plan`: 76 unit-min, about 115 min wall, $4.39 at
+d2common.RATE $2.29/h ($4.96 at Lambda's list price of 2026-11-18, $2.59/h); deadline launch + 130 min, hard cap + 145
+min ($5.53 / $6.26). Tests `tests/test_v7_domain_map.py` (synthetic trees and a stub VM only).

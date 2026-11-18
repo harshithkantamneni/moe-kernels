@@ -1,0 +1,311 @@
+REGISTERED 2026-11-18, before any page of the map's 14 synthetic shapes: model v7's decode domain map (DESCRIPTIVE), 2026-11-18-v7-domain-map-gh200
+status: REGISTERED BEFORE ANY PAGE of the map's shapes (none exists): final when pushed; no DRAFT stage. DESCRIPTIVE: a measurement that decides v7's decode validity domain D by the rule below, not a certification
+design: the owner-approved plan of 2026-11-18 (moe-kernels-work 2026-11-18 build-domain/PLAN.md), Phase 1: one mapping rental, DESCRIPTIVE, its threshold-selection rule registered before any page so the map decides the range mechanically; Phase 0's diagnosis and map design (moe-kernels-work 2026-11-18 domain-phase0 (REPORT.md, p6_map.py, out/map.json, out/map.txt))
+tool: scripts/scoring/v7domain/register_v7_domain.py --write / --check (this file, the pages and the plan), scripts/scoring/v7domain/read_map.py <results tree> <out dir> (the readout), scripts/vm_run_v7m.sh (the launcher), scripts/gh200_decode_session.sh (the pinned decode driver, unchanged)
+
+THRESHOLD-SELECTION RULE (verbatim, Phase 0 section 6):
+  For each decode path p (naive, small-batch, block-scan):
+  - Take the valid map cells on p in the certified scope (every active expert in one M-tile).
+  - For each cell, e = dcommon.e_dec(T_v7, T_meas).
+  - e_ub = max(|T_v7/T_lo - 1|, |T_v7/T_hi - 1|), where T_lo, T_hi = T_meas ∓ 2.306 × 1.2533 × s/√n, and s is the sd of the cell's n clean repeats.
+  - The candidates are the cells' predicted times. X_p is the smallest candidate X such that every candidate X' ≥ X whose set {T_v7 ≥ X'} holds at least 10 cells has:
+    - (i) every e_ub ≤ 6%;
+    - (ii) rms e ≤ 2.5%;
+    - (iii) |mean e| ≤ 1.0%;
+    - and (iv) X_p is the largest of the values this rule gives with each synthetic shape's cells removed in turn.
+  - A path with no such X is outside the domain.
+  - D = {decode calls whose path has an X_p, whose T_v7 ≥ X_p, and whose every active expert fits one M-tile}.
+  
+  Slab guard: over family B's cells under a wave, fit resid_us = a + b·W_e_MB + c·1[T=2]. If b's 95% interval excludes 0 and |b|·35 MB ≥ 1 us, D adds W_e ≥ S, with S chosen by the same rule; otherwise D has no slab condition.
+
+HOW read_map.py COMPUTES IT (fixed before any page):
+  - valid: the session's power check reads 700 W (d2common.power_check; else nothing is read and D is NOT READ); the page is counted by dcommon.decode_page against this registration's page sha256 and counts sha256 (G5, inst GRR, slip-policy cell, GD4, the r7-median-run3 rebuild and G1); the cell's NATIVE row passes dcommon.row_drop (at least 6 of 9 clean repeats, G2 and GD1, the G4 clock at or over 1705 MHz): an off-lock or lost cell is not valid
+  - path: the frozen prediction's path (r3_decode.geometry); scope: no active expert over BLOCK_M rows (d2common.second_tile is None; every registered map cell is in scope by construction, the test is applied anyway)
+  - T_v7: the registered prediction in us; T_meas: the rebuilt row's ms_p50 in us (the median of the clean repeats); e = dcommon.e_dec(T_v7, T_meas) (0 at or under 1 us absolute); rms, mean over a set's e
+  - s and n: the cell's clean repeats as the rebuild counts them (r7common.clean_r7 at the page's lock: status ok, a time, no lock slip, no run guard), n their number, s their sample standard deviation (n - 1); 2.306 and 1.2533 are constants (t(0.975, 8) and the median's efficiency factor), whatever n is; e_ub carries no 1 us floor (as written: e's floor is dcommon.e_dec's alone); when T_lo <= 0, or n < 2, e_ub is infinite
+  - candidates: the distinct T_v7 of the set's cells; a candidate counts only when its set {T_v7 >= X} holds at least 10 cells (a candidate with fewer is neither tested nor eligible as X); X(set) is the smallest counted candidate X such that every counted candidate X' >= X passes (i), (ii) and (iii); none when no counted candidate passes so
+  - (iv): the rule above on the path's cells, and again with each synthetic shape's cells removed in turn (the 14 shapes, a shape with no cell on the path giving the full set again); X_p is the largest of these values; a path where any of them is none has no X_p and is outside the domain
+  - the slab guard: family B's valid in-scope cells (both paths) with waves under 1 (waves = the larger GEMM's live CTAs over the tile's resident slots, SLOTS); resid_us = T_v7 - T_meas in us; ordinary least squares with an intercept; a regressor constant over the fitted cells (1[T=2] has no family B cell at T 2) is left out; b's 95% interval b +/- t(0.975, n - p) x se(b), p the fitted coefficients; fitted only when n - p >= 1, else NOT FITTED and no slab condition; the guard triggers when the interval excludes 0 and |b| x 35 >= 1 us
+  - S when the guard triggers: per path with an X_p, over its cells with T_v7 >= X_p, the same rule with W_e (MB, registered per cell) in place of T_v7: candidates the distinct W_e, counted at 10 or more cells, (i) to (iii), (iv) by shape, S_p the largest; a path with an X_p and no S_p is outside the domain; D then also requires W_e >= S_p
+  - D is written per path: X_p (us) or OUTSIDE, S_p (MB) or no slab condition, and the scope condition; read_map.py prints it and writes it to domain.json and domain.txt
+
+what: v7 with every switch on at its CAL2 refit, frozen and UNCHANGED (no offset fix, no refit), priced on 130 cells of 14 synthetic shapes built to separate slab size, call length, decode path, tile and wave fill; the map's pages decide, by the registered rule, the decode calls v7 is valid on (D)
+label: DESCRIPTIVE
+shapes:
+  what: 14 SYNTHETIC decode shapes, Phase 0's map geometry (synA-/synB-/synC- there, renamed map-<family>-e<E>k<k>-h<H>i<I> here): no real model's name, config or checkpoint; synthetic weights, as the apparatus always uses; routing never reads the carried fields (each cell names its counts)
+  shapes:
+    - {"name": "map-a-e8k2-h2048i512", "family": "A", "E": 8, "k": 2, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-a-e16k4-h2048i512", "family": "A", "E": 16, "k": 4, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-a-e32k8-h2048i512", "family": "A", "E": 32, "k": 8, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-a-e64k8-h2048i512", "family": "A", "E": 64, "k": 8, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-a-e128k8-h2048i512", "family": "A", "E": 128, "k": 8, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-a-e256k8-h2048i512", "family": "A", "E": 256, "k": 8, "H": 2048, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h1024i384", "family": "B", "E": 32, "k": 4, "H": 1024, "I": 384, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h1536i512", "family": "B", "E": 32, "k": 4, "H": 1536, "I": 512, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h2048i768", "family": "B", "E": 32, "k": 4, "H": 2048, "I": 768, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h2560i1152", "family": "B", "E": 32, "k": 4, "H": 2560, "I": 1152, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h3072i1536", "family": "B", "E": 32, "k": 4, "H": 3072, "I": 1536, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-b-e32k4-h4096i1536", "family": "B", "E": 32, "k": 4, "H": 4096, "I": 1536, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-c-e256k8-h7168i384", "family": "C", "E": 256, "k": 8, "H": 7168, "I": 384, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+    - {"name": "map-c-e256k8-h4096i1024", "family": "C", "E": 256, "k": 8, "H": 4096, "I": 1024, "gate_fn": "softmax", "norm_topk_prob": false, "routed_scaling_factor": 1.0, "shared_experts": 0, "num_layers": 24, "first_moe_layer": 0, "tensor_parallel": 1, "hf_repo": null, "verified": true}
+  Phase 0 names:
+    map-a-e8k2-h2048i512: synA-E8k2
+    map-a-e16k4-h2048i512: synA-E16k4
+    map-a-e32k8-h2048i512: synA-E32k8
+    map-a-e64k8-h2048i512: synA-E64k8
+    map-a-e128k8-h2048i512: synA-E128k8
+    map-a-e256k8-h2048i512: synA-E256k8
+    map-b-e32k4-h1024i384: synB-H1024I384
+    map-b-e32k4-h1536i512: synB-H1536I512
+    map-b-e32k4-h2048i768: synB-H2048I768
+    map-b-e32k4-h2560i1152: synB-H2560I1152
+    map-b-e32k4-h3072i1536: synB-H3072I1536
+    map-b-e32k4-h4096i1536: synB-H4096I1536
+    map-c-e256k8-h7168i384: synC-H7168I384
+    map-c-e256k8-h4096i1024: synC-H4096I1024
+  where they live: scripts/scoring/v7domain/map_shapes.py, NOT moe/spec.py: moe/spec.py is frozen at sha256 58fb9b7f... by twelve registrations (CAL2, CAL4, tileB3, decode addenda 2 to 6, PC, PC2, RR and the v7 gate; the v7 decode blind through the gate's freeze), and adding the 14 entries there voids those freezes (16 tests fail; gate_v7.py and score_blind_v7.py refuse). On the laptop map_shapes.installed() adds them for one block; on the VM scripts/scoring/v7domain/vmsite/sitecustomize.py, on the driver's PYTHONPATH (set by scripts/vm_run_v7m.sh), adds them when a process first imports moe.spec. The pinned driver, r3_decode.py and locked_r3.py run unchanged
+  no collision: no map name is a moe.spec model name, an hf_repo, or matches the reserved-model scan (v7bcommon.PAT); tests/test_v7_domain_map.py holds this
+the domain registration this feeds: NEXT STEP, NOT REGISTERED HERE (the plan's Phase 2, registered separately after this map is read): one blind GH200 rental on the models no decode page has timed, DeepSeek-V3, DeepSeek-V3-tp4, DeepSeek-V3-tp8 and Qwen2-57B-A14B-tp8, v7 frozen and unchanged; only their cells inside D (as this map's rule produces it, mechanically) scored, at the old bars rms 3%, worst 8%, |mean| 1.5%, own and pooled, decodeB-blind's rule (a model CERTIFIED when its own bar and the pooled bar hold); every other cell reported DESCRIPTIVE. A pass would read: v7 predicts vLLM's fused MoE decode call on GH200 within 3% rms / 8% worst on unseen models, inside D. A fail closes decode. If D is empty, no Phase 2 blind runs
+model v7 (frozen):
+  module: scripts/r3_timing_model_v7.py
+  as frozen by: the v7 gate registration 2026-11-17-v7-gate-gh200 (its freeze: 148 files and constants_sha256 97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6), unchanged since and used unchanged by the v7 decode blind 2026-11-17-v7-decode-blind-gh200; this registration holds that freeze and adds its own files (freeze, below)
+  switches:
+    RR: true
+    D6FIX: true
+  fit: the CAL2 refit under v7 by the v7 blind's code path (v7bcommon.decode_fit, gate_v7.compute_decode's fit), every switch on; D6FIX's constants from the CAL2 fit with v4d' on every naive cell
+  CAL2 refit under v7 (COMPUTED):
+    verdict: GO
+    E1_CAL_IN_SAMPLE: {"cells": 91, "rms": 0.016032, "worst": -0.053955, "mean": -0.001724}
+    rho: fixed
+    constants: {"T0_GR_ms": -0.001867147154960224, "s_naive_GR_ms": -0.0021375435249685803, "s_block_GR_ms": -0.0007223242955973449}
+  D6FIX constants (COMPUTED):
+    rho_form: scaled
+    T0_GR_ms: -0.001867147154960224
+    s_naive_GR_ms: 0.009550916583607093
+    s_block_GR_ms: -0.0007223242955973451
+rental:
+  units_min: 76
+  boot_setup_min: 25
+  wall_min: 115
+  cost_usd: 4.39
+  rate: gpu_1x_gh200 at $2.29/h
+  deadline_after_launch_min: 130
+  hard_cap_after_launch_min: 145
+  cost_at_hard_cap_usd: 5.53
+  rule: units (prelude, calibrate and the CAL census included) x 1/0.84 (rentals 4 to 7) plus 25 min boot and setup; deadline launch + wall + 15 min, rounded to 5 min; the guardian's hard cap 15 min later
+  list_rate: gpu_1x_gh200 at $2.59/h (Lambda's list price, 2026-11-18)
+  cost_usd_at_list: 4.96
+  cost_at_hard_cap_usd_at_list: 6.26
+  plan: scripts/plans/rentalV7M-domain-map-2026-11.plan
+  plan_sha256: 4d0f423de268aba54b6ba13963a3149e414e5bad7e9d700b4a7ebcd28dcd81bd
+  driver: scripts/gh200_decode_session.sh (pinned, unchanged)
+  launcher: scripts/vm_run_v7m.sh: scripts/vm_run_v7b.sh (RR's, with the apt-lock fix and the prepare lock handling, and V7B's decode-driver-only and DRAFT refusal) with lines marked V7M: this plan named, and start runs the driver with PYTHONPATH=$HOME/moe/repo/scripts/scoring/v7domain/vmsite so the map shapes reach moe.spec
+  lock: 1710 MHz at G 1 (G4 1705), 700 W (prelude), as every decode rental
+  machine: one gpu_1x_gh200 (Lambda), the decode driver's prelude and calibrate, then the 14 pages
+  guardian: outside the repository (moe-kernels-work 2026-11-18 guardians/tV7M_*): deadline launch + 130 min, hard cap launch + 145 min, terminate on the cap
+  estimate_against_phase0: 76 unit-min against Phase 0's 69: the decode registrations' rule rounds each page's estimate up to whole minutes (d5common._rd_est), Phase 0 summed the fractions (63.5 page-min)
+disclosures:
+  - the second reopening of decode (owner, 2026-11-18): decode closed after v6d (2026-11-10), reopened for v7 (2026-11-17), and v7's one decode blind failed (published: E1-DEC pooled FAILS, 125 cells rms 4.17%, worst +17.20%; Mixtral-8x22B and Qwen2-57B-A14B hold their own bars, Granite-3.0-1B-A400M fails at 6.74%); this map and the domain blind it feeds reopen it a second time, with every decode page in view
+  - POST-HOC origin: the domain question and the map were designed after the blind's pages were read: moe-kernels-work 2026-11-18 v7-domain/REPORT.md (every cell over 8% among the 345 out-of-sample decode cells is a Granite small-batch 16x64x128 cell under one wave, over-priced by +2.5 to +4.6 us; a 44 us call-time cut separates them) and domain-phase0/REPORT.md (the over-price is the aligned path's fixed block, s_path plus ALIGN, a per-call offset on the aligned paths; the rule's margins chosen on seen data)
+  - Phase 0 priced these map shapes offline before this registration: the predictions are v7's, computed without any measurement of a map shape; family B's T8 ladder picks each A by v7's price; no page of any map shape exists
+  - v7 is frozen and unchanged (every switch on, the CAL2 refit, the v7 gate's freeze): no offset fix and no refit, which would be a refit on seen pages
+  - cost: 76 unit-min, about 115 min wall: $4.39 at the inherited d2common.RATE $2.29/h, $4.96 at Lambda's list price of 2026-11-18 ($2.59/h); deadline launch + 130 min, hard cap + 145 min ($5.53 / $6.26); above the plan's ~1 h / ~$3
+  - the map shapes are not in moe/spec.py (its bytes are frozen by twelve registrations and through the v7 gate's freeze by the v7 decode blind); they reach the pinned driver through a sitecustomize hook on the driver's PYTHONPATH, set by the launcher copy
+seen-data analogue (ESTIMATE, Phase 0 section 4, not computed here): per path on the seen decode pages, the smallest call time with every cell's bound under 6%: small-batch 112.5 us, block-scan 51.6, naive 56.3 (under 8%: 44.1, 40.1, 20.8); the map, not these, decides D
+unchanged: every earlier registration, page, verdict and pinned file; moe/spec.py; the decode driver and setup_vm.sh; the 1710 lock and 700 W; v7 and the v7 gate registration
+
+cells:
+  design: Phase 0's map, regenerated exactly (moe-kernels-work 2026-11-18 domain-phase0 (REPORT.md, p6_map.py, out/map.json, out/map.txt)): A, path twins across E (naive T1 base, MIN-T2/4/8/16 aligned twins with the same GEMMs, BALANCED T32/64/96/128); B, slab per expert 2.36 to 37.75 MB at E 32, k 4 (naive T1 twin, MIN-T4/T16, a T8 ladder whose A gives v7 about 40/60/100/200 us, chosen by v7's price, T64/96/128 BALANCED); C, block-scan at E 256, k 8 (naive T1 and T8, block-scan MIN-T12/T16 twins, ladders T16 to T128). Every cell a ladder: the first A experts, T k rows balanced, no expert over BLOCK_M; one GRR main page per shape, NATIVE arm, shuffle seed 20261014
+  count: 130
+  by family and path: {"A block-scan": 13, "A naive": 6, "A small-batch": 29, "B naive": 6, "B small-batch": 46, "C block-scan": 26, "C naive": 4}
+  by path: {"block-scan": 39, "naive": 16, "small-batch": 75}
+  by tile: {"16x64x128w4s4": 86, "32x128x64w4s3": 12, "32x64x128w4s3": 16, "64x128x64w4s3": 16}
+  predicted call time (us): {"under 60": 55, "60 to 200": 40, "200 and over": 35}
+  in scope (every active expert in one M-tile): 130
+  D6FIX-branch cells: 0
+  reproduces Phase 0: the 130 cells equal Phase 0's out/map.json cell for cell (shape, label, T, counts, path, tile) and v7's prices to 5e-7 us (map.json's rounding)
+  pages (path, sha256, cells, est min, R, weights GB):
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json 5f942490b88cb313232aecbb8cf797bd3677a3491993cc3e91f0d23dfbeb58de 9 5 20 1.006633
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json 01add7fd7994ecd926092f2f80d4a4401ff9173081d1f0e0605ce18670e66678 9 5 10 1.006633
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json 3f96e595413ac352eeb97acd43d779ec46fb7e93b4c0e2f7c2fc0c5a839436a7 9 5 5 1.006633
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json 6d85df9c22b3af045c039fb010015b6a9f73c47548dd339abf16fc9559d5a96e 8 5 5 2.013266
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json d4338aba4d5ec6ca9b93de629382ef05b66a07dd8d6e4e8ca475ebcaa3471ee5 7 4 5 4.026532
+    docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json e12a5372698bd03db7d6a8f718b9ceaf6d593bbfacdbb254989dfec726f3a56e 6 4 5 8.053064
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json 3771a977078a24defb74b09b9b6228a9206b1d449b34c759bd41f6e3056ee9cc 7 4 27 2.038432
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json e133ff1cb0a6804aa39dd74feaff1d0b877deacb8a27f91f4dc7504cdaf26c34 8 5 14 2.113929
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json c9bea339385a8599cf6ad77b9b5b0ff62583790dcdcfdfd3468ed0e453105e2f 9 5 7 2.113929
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json e9ff314ade4cb65562a18f5c6afd7b65358084a51ada4059818d8a50d46e6f47 10 5 4 2.264924
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json 6a417fc3ee5da52f28f7c583a3e251dfce77ba2abe14ac5d92be25683c25881c 9 5 3 2.717909
+    docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json 313e904a5010f4eaadf68c7ea924d6b377008eb218f0e202e1d4c39f4e9c26e2 9 5 2 2.415919
+    docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json 53f02c8fc4ae3fa26ebaafd389993a70dde4f2f590bb3211c79ee010fa555e88 15 7 2 8.455717
+    docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json eb406dc7c2657759b18ba1ca141c70c8b1470074fc63f445e8cd6d865a618fdb 15 7 2 12.884902
+  rule constants: {"e_ub_max": 0.06, "rms_max": 0.025, "mean_max": 0.01, "min_cells": 10, "t975_8": 2.306, "median_se": 1.2533, "slab_span_MB": 35.0, "slab_min_us": 1.0, "slots": {"16x64x128w4s4": 396, "64x128x64w4s3": 396, "32x64x128w4s3": 528, "32x128x64w4s3": 528}, "paths": ["naive", "small-batch", "block-scan"]}
+
+PREDICTIONS: COMPUTED by v7 before any page of the map (v7mcommon.price: r3_timing_model_v7.price_decode_cell at the CAL2 refit under v7, D6FIX on); read_map.py reads them from this file. Phase 0 priced the same cells offline before this registration (v7's prices, no measurement)
+  constants: {"T0_GR_ms": -0.001867147154960224, "s_naive_GR_ms": -0.0021375435249685803, "s_block_GR_ms": -0.0007223242955973449}, rho fixed, D6FIX {"rho_form": "scaled", "T0_GR_ms": -0.001867147154960224, "s_naive_GR_ms": 0.009550916583607093, "s_block_GR_ms": -0.0007223242955973451}
+  family / shape / label / T / path / tile / A / waves / W_e MB / in scope / v7 us (3 decimals) / why
+    A map-a-e8k2-h2048i512 L-T1-A2 T1 naive 16x64x128w4s4 A2 0.16 6.29 in 15.783 | naive twin base
+    A map-a-e8k2-h2048i512 MIN-T2 T2 small-batch 16x64x128w4s4 A2 0.16 6.29 in 22.678 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e8k2-h2048i512 MIN-T4 T4 small-batch 16x64x128w4s4 A2 0.16 6.29 in 22.688 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e8k2-h2048i512 MIN-T8 T8 small-batch 16x64x128w4s4 A2 0.16 6.29 in 22.707 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e8k2-h2048i512 MIN-T16 T16 small-batch 16x64x128w4s4 A2 0.16 6.29 in 22.746 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e8k2-h2048i512 L-T32-A8 T32 small-batch 16x64x128w4s4 A8 0.65 6.29 in 33.888 | BALANCED: tile / waves / long call
+    A map-a-e8k2-h2048i512 L-T64-A8 T64 small-batch 32x64x128w4s3 A8 0.48 6.29 in 35.660 | BALANCED: tile / waves / long call
+    A map-a-e8k2-h2048i512 L-T96-A8 T96 small-batch 32x128x64w4s3 A8 0.24 6.29 in 42.090 | BALANCED: tile / waves / long call
+    A map-a-e8k2-h2048i512 L-T128-A8 T128 small-batch 64x128x64w4s3 A8 0.32 6.29 in 43.706 | BALANCED: tile / waves / long call
+    A map-a-e16k4-h2048i512 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.32 6.29 in 19.496 | naive twin base
+    A map-a-e16k4-h2048i512 MIN-T2 T2 small-batch 16x64x128w4s4 A4 0.32 6.29 in 27.194 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e16k4-h2048i512 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.32 6.29 in 27.212 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e16k4-h2048i512 MIN-T8 T8 small-batch 16x64x128w4s4 A4 0.32 6.29 in 27.246 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e16k4-h2048i512 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.32 6.29 in 27.843 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e16k4-h2048i512 L-T32-A16 T32 small-batch 16x64x128w4s4 A16 1.29 6.29 in 50.014 | BALANCED: tile / waves / long call
+    A map-a-e16k4-h2048i512 L-T64-A16 T64 small-batch 32x64x128w4s3 A16 0.97 6.29 in 53.263 | BALANCED: tile / waves / long call
+    A map-a-e16k4-h2048i512 L-T96-A16 T96 small-batch 32x128x64w4s3 A16 0.48 6.29 in 57.602 | BALANCED: tile / waves / long call
+    A map-a-e16k4-h2048i512 L-T128-A16 T128 small-batch 64x128x64w4s3 A16 0.65 6.29 in 60.709 | BALANCED: tile / waves / long call
+    A map-a-e32k8-h2048i512 L-T1-A8 T1 naive 16x64x128w4s4 A8 0.65 6.29 in 27.629 | naive twin base
+    A map-a-e32k8-h2048i512 MIN-T2 T2 small-batch 16x64x128w4s4 A8 0.65 6.29 in 37.047 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e32k8-h2048i512 MIN-T4 T4 small-batch 16x64x128w4s4 A8 0.65 6.29 in 37.079 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e32k8-h2048i512 MIN-T8 T8 small-batch 16x64x128w4s4 A8 0.65 6.29 in 37.671 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e32k8-h2048i512 MIN-T16 T16 small-batch 16x64x128w4s4 A8 0.65 6.29 in 38.855 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e32k8-h2048i512 L-T32-A32 T32 small-batch 16x64x128w4s4 A32 2.59 6.29 in 82.451 | BALANCED: tile / waves / long call
+    A map-a-e32k8-h2048i512 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 1.94 6.29 in 87.786 | BALANCED: tile / waves / long call
+    A map-a-e32k8-h2048i512 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 0.97 6.29 in 92.813 | BALANCED: tile / waves / long call
+    A map-a-e32k8-h2048i512 L-T128-A32 T128 block-scan 64x128x64w4s3 A32 1.29 6.29 in 83.789 | BALANCED: tile / waves / long call
+    A map-a-e64k8-h2048i512 L-T1-A8 T1 naive 16x64x128w4s4 A8 0.65 6.29 in 27.629 | naive twin base
+    A map-a-e64k8-h2048i512 MIN-T4 T4 small-batch 16x64x128w4s4 A8 0.65 6.29 in 41.447 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e64k8-h2048i512 MIN-T8 T8 small-batch 16x64x128w4s4 A8 0.65 6.29 in 41.875 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e64k8-h2048i512 MIN-T16 T16 small-batch 16x64x128w4s4 A8 0.65 6.29 in 42.659 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e64k8-h2048i512 L-T32-A64 T32 small-batch 16x64x128w4s4 A64 5.17 6.29 in 138.046 | BALANCED: tile / waves / long call
+    A map-a-e64k8-h2048i512 L-T64-A64 T64 small-batch 32x64x128w4s3 A64 3.88 6.29 in 144.380 | BALANCED: tile / waves / long call
+    A map-a-e64k8-h2048i512 L-T96-A64 T96 small-batch 32x128x64w4s3 A64 1.94 6.29 in 145.751 | BALANCED: tile / waves / long call
+    A map-a-e64k8-h2048i512 L-T128-A64 T128 block-scan 64x128x64w4s3 A64 2.59 6.29 in 143.319 | BALANCED: tile / waves / long call
+    A map-a-e128k8-h2048i512 L-T1-A8 T1 naive 16x64x128w4s4 A8 0.65 6.29 in 27.629 | naive twin base
+    A map-a-e128k8-h2048i512 MIN-T8 T8 block-scan 16x64x128w4s4 A8 0.65 6.29 in 37.649 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e128k8-h2048i512 MIN-T16 T16 block-scan 16x64x128w4s4 A8 0.65 6.29 in 39.816 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e128k8-h2048i512 L-T32-A128 T32 block-scan 16x64x128w4s4 A128 10.34 6.29 in 238.881 | BALANCED: tile / waves / long call
+    A map-a-e128k8-h2048i512 L-T64-A128 T64 block-scan 32x64x128w4s3 A128 7.76 6.29 in 246.491 | BALANCED: tile / waves / long call
+    A map-a-e128k8-h2048i512 L-T96-A128 T96 block-scan 32x128x64w4s3 A128 3.88 6.29 in 247.313 | BALANCED: tile / waves / long call
+    A map-a-e128k8-h2048i512 L-T128-A128 T128 block-scan 64x128x64w4s3 A128 5.17 6.29 in 253.704 | BALANCED: tile / waves / long call
+    A map-a-e256k8-h2048i512 L-T1-A8 T1 naive 16x64x128w4s4 A8 0.65 6.29 in 27.629 | naive twin base
+    A map-a-e256k8-h2048i512 MIN-T16 T16 block-scan 16x64x128w4s4 A8 0.65 6.29 in 39.816 | aligned twin of L-T1 (same GEMMs)
+    A map-a-e256k8-h2048i512 L-T32-A256 T32 block-scan 16x64x128w4s4 A256 20.69 6.29 in 451.676 | BALANCED: tile / waves / long call
+    A map-a-e256k8-h2048i512 L-T64-A256 T64 block-scan 32x64x128w4s3 A256 15.52 6.29 in 463.987 | BALANCED: tile / waves / long call
+    A map-a-e256k8-h2048i512 L-T96-A256 T96 block-scan 32x128x64w4s3 A256 7.76 6.29 in 467.518 | BALANCED: tile / waves / long call
+    A map-a-e256k8-h2048i512 L-T128-A256 T128 block-scan 64x128x64w4s3 A256 10.34 6.29 in 480.668 | BALANCED: tile / waves / long call
+    B map-b-e32k4-h1024i384 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.16 2.36 in 13.564 | naive twin base
+    B map-b-e32k4-h1024i384 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.16 2.36 in 22.981 | aligned twin
+    B map-b-e32k4-h1024i384 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.16 2.36 in 23.570 | aligned twin, T16
+    B map-b-e32k4-h1024i384 L-T8-A27 T8 small-batch 16x64x128w4s4 A27 1.09 2.36 in 39.939 | fixed call ~40 us
+    B map-b-e32k4-h1024i384 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 0.97 2.36 in 48.123 | 32x64x128, over a wave
+    B map-b-e32k4-h1024i384 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 0.48 2.36 in 50.195 | 32x128x64
+    B map-b-e32k4-h1024i384 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 0.65 2.36 in 52.728 | 64x128x64
+    B map-b-e32k4-h1536i512 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.24 4.72 in 16.753 | naive twin base
+    B map-b-e32k4-h1536i512 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.24 4.72 in 26.177 | aligned twin
+    B map-b-e32k4-h1536i512 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.24 4.72 in 26.792 | aligned twin, T16
+    B map-b-e32k4-h1536i512 L-T8-A14 T8 small-batch 16x64x128w4s4 A14 0.85 4.72 in 40.373 | fixed call ~40 us
+    B map-b-e32k4-h1536i512 L-T8-A29 T8 small-batch 16x64x128w4s4 A29 1.76 4.72 in 60.154 | fixed call ~60 us
+    B map-b-e32k4-h1536i512 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 1.45 4.72 in 68.282 | 32x64x128, over a wave
+    B map-b-e32k4-h1536i512 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 0.73 4.72 in 72.206 | 32x128x64
+    B map-b-e32k4-h1536i512 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 0.97 4.72 in 74.142 | 64x128x64
+    B map-b-e32k4-h2048i768 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.32 9.44 in 22.645 | naive twin base
+    B map-b-e32k4-h2048i768 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.32 9.44 in 32.078 | aligned twin
+    B map-b-e32k4-h2048i768 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.32 9.44 in 32.728 | aligned twin, T16
+    B map-b-e32k4-h2048i768 L-T8-A7 T8 small-batch 16x64x128w4s4 A7 0.57 9.44 in 40.626 | fixed call ~40 us
+    B map-b-e32k4-h2048i768 L-T8-A15 T8 small-batch 16x64x128w4s4 A15 1.21 9.44 in 60.845 | fixed call ~60 us
+    B map-b-e32k4-h2048i768 L-T8-A30 T8 small-batch 16x64x128w4s4 A30 2.42 9.44 in 99.653 | fixed call ~100 us
+    B map-b-e32k4-h2048i768 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 1.94 9.44 in 111.145 | 32x64x128, over a wave
+    B map-b-e32k4-h2048i768 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 0.97 9.44 in 116.841 | 32x128x64
+    B map-b-e32k4-h2048i768 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 1.29 9.44 in 117.902 | 64x128x64
+    B map-b-e32k4-h2560i1152 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.40 17.69 in 32.531 | naive twin base
+    B map-b-e32k4-h2560i1152 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.40 17.69 in 41.975 | aligned twin
+    B map-b-e32k4-h2560i1152 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.40 17.69 in 42.672 | aligned twin, T16
+    B map-b-e32k4-h2560i1152 L-T8-A4 T8 small-batch 16x64x128w4s4 A4 0.40 17.69 in 42.032 | fixed call ~40 us
+    B map-b-e32k4-h2560i1152 L-T8-A8 T8 small-batch 16x64x128w4s4 A8 0.81 17.69 in 61.205 | fixed call ~60 us
+    B map-b-e32k4-h2560i1152 L-T8-A16 T8 small-batch 16x64x128w4s4 A16 1.62 17.69 in 100.335 | fixed call ~100 us
+    B map-b-e32k4-h2560i1152 L-T8-A32 T8 small-batch 16x64x128w4s4 A32 3.23 17.69 in 174.885 | fixed call ~200 us
+    B map-b-e32k4-h2560i1152 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 2.42 17.69 in 184.393 | 32x64x128, over a wave
+    B map-b-e32k4-h2560i1152 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 1.21 17.69 in 198.048 | 32x128x64
+    B map-b-e32k4-h2560i1152 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 1.62 17.69 in 195.069 | 64x128x64
+    B map-b-e32k4-h3072i1536 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.48 28.31 in 44.686 | naive twin base
+    B map-b-e32k4-h3072i1536 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.48 28.31 in 54.141 | aligned twin
+    B map-b-e32k4-h3072i1536 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.48 28.31 in 54.885 | aligned twin, T16
+    B map-b-e32k4-h3072i1536 L-T8-A5 T8 small-batch 16x64x128w4s4 A5 0.61 28.31 in 61.307 | fixed call ~60 us
+    B map-b-e32k4-h3072i1536 L-T8-A10 T8 small-batch 16x64x128w4s4 A10 1.21 28.31 in 100.213 | fixed call ~100 us
+    B map-b-e32k4-h3072i1536 L-T8-A23 T8 small-batch 16x64x128w4s4 A23 2.79 28.31 in 198.636 | fixed call ~200 us
+    B map-b-e32k4-h3072i1536 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 2.91 28.31 in 278.489 | 32x64x128, over a wave
+    B map-b-e32k4-h3072i1536 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 1.45 28.31 in 282.226 | 32x128x64
+    B map-b-e32k4-h3072i1536 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 1.94 28.31 in 291.251 | 64x128x64
+    B map-b-e32k4-h4096i1536 L-T1-A4 T1 naive 16x64x128w4s4 A4 0.65 37.75 in 54.877 | naive twin base
+    B map-b-e32k4-h4096i1536 MIN-T4 T4 small-batch 16x64x128w4s4 A4 0.65 37.75 in 64.340 | aligned twin
+    B map-b-e32k4-h4096i1536 MIN-T16 T16 small-batch 16x64x128w4s4 A4 0.65 37.75 in 65.115 | aligned twin, T16
+    B map-b-e32k4-h4096i1536 L-T8-A4 T8 small-batch 16x64x128w4s4 A4 0.65 37.75 in 64.423 | fixed call ~60 us
+    B map-b-e32k4-h4096i1536 L-T8-A7 T8 small-batch 16x64x128w4s4 A7 1.13 37.75 in 95.773 | fixed call ~100 us
+    B map-b-e32k4-h4096i1536 L-T8-A17 T8 small-batch 16x64x128w4s4 A17 2.75 37.75 in 202.132 | fixed call ~200 us
+    B map-b-e32k4-h4096i1536 L-T64-A32 T64 small-batch 32x64x128w4s3 A32 3.88 37.75 in 362.092 | 32x64x128, over a wave
+    B map-b-e32k4-h4096i1536 L-T96-A32 T96 small-batch 32x128x64w4s3 A32 1.94 37.75 in 365.875 | 32x128x64
+    B map-b-e32k4-h4096i1536 L-T128-A32 T128 small-batch 64x128x64w4s3 A32 2.59 37.75 in 377.370 | 64x128x64
+    C map-c-e256k8-h7168i384 L-T1-A8 T1 naive 16x64x128w4s4 A8 2.26 16.52 in 51.925 | naive twin base
+    C map-c-e256k8-h7168i384 L-T8-A64 T8 naive 16x64x128w4s4 A64 18.10 16.52 in 299.906 | naive, no follower
+    C map-c-e256k8-h7168i384 MIN-T12 T12 block-scan 16x64x128w4s4 A8 2.26 16.52 in 70.485 | block-scan twin of L-T1 (same GEMMs)
+    C map-c-e256k8-h7168i384 MIN-T16 T16 block-scan 16x64x128w4s4 A8 2.26 16.52 in 74.205 | block-scan twin of L-T1 (same GEMMs)
+    C map-c-e256k8-h7168i384 L-T16-A16 T16 block-scan 16x64x128w4s4 A16 4.53 16.52 in 108.395 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T16-A32 T16 block-scan 16x64x128w4s4 A32 9.05 16.52 in 176.566 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T16-A64 T16 block-scan 16x64x128w4s4 A64 18.10 16.52 in 315.676 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T16-A128 T16 block-scan 16x64x128w4s4 A128 36.20 16.52 in 589.120 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T32-A32 T32 block-scan 16x64x128w4s4 A32 9.05 16.52 in 191.446 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T32-A128 T32 block-scan 16x64x128w4s4 A128 36.20 16.52 in 602.787 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T32-A256 T32 block-scan 16x64x128w4s4 A256 72.40 16.52 in 1149.064 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T64-A64 T64 block-scan 32x64x128w4s3 A64 13.58 16.52 in 338.856 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T64-A256 T64 block-scan 32x64x128w4s3 A256 54.30 16.52 in 1181.393 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T128-A128 T128 block-scan 64x128x64w4s3 A128 18.10 16.52 in 638.222 | block-scan call-time / wave sweep
+    C map-c-e256k8-h7168i384 L-T128-A256 T128 block-scan 64x128x64w4s3 A256 36.20 16.52 in 1214.889 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T1-A8 T1 naive 16x64x128w4s4 A8 1.29 25.17 in 69.025 | naive twin base
+    C map-c-e256k8-h4096i1024 L-T8-A64 T8 naive 16x64x128w4s4 A64 10.34 25.17 in 444.952 | naive, no follower
+    C map-c-e256k8-h4096i1024 MIN-T12 T12 block-scan 16x64x128w4s4 A8 1.29 25.17 in 82.280 | block-scan twin of L-T1 (same GEMMs)
+    C map-c-e256k8-h4096i1024 MIN-T16 T16 block-scan 16x64x128w4s4 A8 1.29 25.17 in 84.447 | block-scan twin of L-T1 (same GEMMs)
+    C map-c-e256k8-h4096i1024 L-T16-A16 T16 block-scan 16x64x128w4s4 A16 2.59 25.17 in 138.768 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T16-A32 T16 block-scan 16x64x128w4s4 A32 5.17 25.17 in 244.655 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T16-A64 T16 block-scan 16x64x128w4s4 A64 10.34 25.17 in 456.581 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T16-A128 T16 block-scan 16x64x128w4s4 A128 20.69 25.17 in 879.433 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T32-A32 T32 block-scan 16x64x128w4s4 A32 5.17 25.17 in 253.469 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T32-A128 T32 block-scan 16x64x128w4s4 A128 20.69 25.17 in 885.854 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T32-A256 T32 block-scan 16x64x128w4s4 A256 41.37 25.17 in 1732.039 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T64-A64 T64 block-scan 32x64x128w4s3 A64 7.76 25.17 in 477.674 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T64-A256 T64 block-scan 32x64x128w4s3 A256 31.03 25.17 in 1773.278 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T128-A128 T128 block-scan 64x128x64w4s3 A128 10.34 25.17 in 938.552 | block-scan call-time / wave sweep
+    C map-c-e256k8-h4096i1024 L-T128-A256 T128 block-scan 64x128x64w4s3 A256 20.69 25.17 in 1823.710 | block-scan call-time / wave sweep
+
+FREEZE: read_map.py refuses unless every file of the v7 gate registration's freeze has its sha256 there and v7's constants hash is the one registered there (v7 as the gate froze it, unchanged since), and every file under 'own' has its sha256 here; the plan's sha256 is computed by the registration builder from the same document
+  gate registration: {"name": "2026-11-17-v7-gate-gh200", "json sha256": "6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1", "files": 148, "constants_sha256": "97d4445c3f5f236dc4bd09cf248c0b28ebf702eeb596c07c276f9542fa9c87a6"}
+  own files (31):
+    5f942490b88cb313232aecbb8cf797bd3677a3491993cc3e91f0d23dfbeb58de  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e8k2-h2048i512-main.json
+    01add7fd7994ecd926092f2f80d4a4401ff9173081d1f0e0605ce18670e66678  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json
+    3f96e595413ac352eeb97acd43d779ec46fb7e93b4c0e2f7c2fc0c5a839436a7  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json
+    6d85df9c22b3af045c039fb010015b6a9f73c47548dd339abf16fc9559d5a96e  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e64k8-h2048i512-main.json
+    d4338aba4d5ec6ca9b93de629382ef05b66a07dd8d6e4e8ca475ebcaa3471ee5  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json
+    e12a5372698bd03db7d6a8f718b9ceaf6d593bbfacdbb254989dfec726f3a56e  docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json
+    3771a977078a24defb74b09b9b6228a9206b1d449b34c759bd41f6e3056ee9cc  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json
+    e133ff1cb0a6804aa39dd74feaff1d0b877deacb8a27f91f4dc7504cdaf26c34  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json
+    c9bea339385a8599cf6ad77b9b5b0ff62583790dcdcfdfd3468ed0e453105e2f  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2048i768-main.json
+    e9ff314ade4cb65562a18f5c6afd7b65358084a51ada4059818d8a50d46e6f47  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h2560i1152-main.json
+    6a417fc3ee5da52f28f7c583a3e251dfce77ba2abe14ac5d92be25683c25881c  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h3072i1536-main.json
+    313e904a5010f4eaadf68c7ea924d6b377008eb218f0e202e1d4c39f4e9c26e2  docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json
+    53f02c8fc4ae3fa26ebaafd389993a70dde4f2f590bb3211c79ee010fa555e88  docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json
+    eb406dc7c2657759b18ba1ca141c70c8b1470074fc63f445e8cd6d865a618fdb  docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json
+    9af74ae761b80c427587ef0b2122a900499ed013fb5a90d67f09f7f40b58c4f9  scripts/scoring/v7domain/map_shapes.py
+    4fa9b53c765d24254109f026a4e01c42cf2fbf731c9e3985b063155330cebe0c  scripts/scoring/v7domain/vmsite/sitecustomize.py
+    0ee110289da4d174a379e824806f97928a3d44dcc572312c5efc8ac1de215fab  scripts/scoring/v7domain/v7mcommon.py
+    13f5b0ee8c7a4b33a13e760121a43f6cc9db5baa6315dc3a6dd503619325e636  scripts/scoring/v7domain/register_v7_domain.py
+    0f8e562e8ef717de516098208f1b4822486954fb1e3df4c884760bbbb93237fa  scripts/scoring/v7domain/read_map.py
+    55462f94bf859afa868e02a23b91f5123f32e84d909a78d139922ac7a6eeddca  scripts/scoring/v7blind/v7bcommon.py
+    79d32b456cb255dd14fc101d110f9244ae67c240b75c4ed98f0fe0dff76e4b54  scripts/replicate_noise_floor.py
+    a4a906a229c41153ae8a736919430da371a94c90ddf863f4adf37c2d2e52076d  scripts/gh200_decode_session.sh
+    e4672e0284094215ee8117dff63ec47b63eb2bbcca261ebd987e7b29023f416f  scripts/setup_vm.sh
+    b09221033775aa352473096f26a1e7c9c345c7cea2c8fe0610d2701162fea87c  scripts/vm_results_push.sh
+    6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6  scripts/locked_r3.py
+    d762264a61cf0900d6083e8c79419cee97902f12c24f898fbe7011af34f81960  scripts/vm_run_v7m.sh
+    251bb5e9de2aa2954ff425a244ccfb3924e59e8e84d8f6759d76df6f3fb32cd5  scripts/vm_run_v7b.sh
+    6336a5c91679c24a0777bced6e7deb379c59e6f342c4b41ae4fcb90ae8ae5af1  docs/registered/2026-11-17-v7-gate-gh200.json
+    16557b8165ebff50021b24de7d1e3974f225a0d5d0c66326e1108e5f2885646f  docs/registered/2026-11-17-v7-gate-gh200.txt
+    ee67e173d3c962377bef19d510c980e9913ce6c78196d8d177e931627897fe63  docs/registered/2026-11-17-v7-decode-blind-gh200.json
+    f9a65c60caf7d98b7883628ff33e4a46fb4e9fdab7d992f11d6070fdef894f0e  docs/registered/2026-11-17-v7-decode-blind-gh200.txt
