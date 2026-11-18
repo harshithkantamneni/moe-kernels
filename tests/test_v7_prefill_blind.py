@@ -576,7 +576,7 @@ def _score(standin, fin, monkeypatch, e=None, out_pages=(), clean_out=(), keep=N
     monkeypatch.setattr(TC, "valid_cells", valid_cells)
     if g3 is not None:
         monkeypatch.setattr(TC.C5, "g3_rule", lambda rows: dict(g3, rows=rows))
-    return S.score(standin, reg)
+    return S.score(standin, reg, check_commit=False)
 
 
 def test_the_scorer_certifies_every_model_v7_prices(standin, fin, monkeypatch):
@@ -625,6 +625,8 @@ def test_g3s_homogeneous_fail_voids_every_histogram_cell(standin, fin, monkeypat
     s = _score(standin, fin, monkeypatch, g3={"verdict": "FAIL (voids every histogram cell of the board)",
                                               "void_strata": "ALL"})
     assert s["BARS (registered: ALL and CLEAN, rule 3)"]["verdict"].startswith("NOT SCORED: G3 FAILS (homogeneous)")
+    assert s["verdict"] == "NOT SCORED" and s["why"].startswith("NOT SCORED: G3 FAILS (homogeneous)")
+    assert S.lines(s)[-1].startswith("certified")
     assert all(v.startswith("NOT CERTIFIED (NOT SCORED: G3") for v in s["certified"].values())
 
 
@@ -639,3 +641,52 @@ def test_a_failed_power_check_reads_not_scored(standin, fin, monkeypatch, tmp_pa
     (bad / "session" / "gh200-driver" / V.GATE_RECORDS["census"]).unlink()
     s = _score(bad, fin, monkeypatch)
     assert s["verdict"] == "NOT SCORED" and "gate census reads None" in s["why"]
+
+
+def test_g3s_heterogeneous_fail_voids_the_failing_strata_non_balanced_cells(standin, fin, monkeypatch):
+    s = _score(standin, fin, monkeypatch, g3={"verdict": "FAIL in strata ['0'] (heterogeneous: only those strata's "
+                                                         "histogram cells void)", "void_strata": ["0"]})
+    assert s["verdict"] == "SCORED"
+    for view in (s["views"], s["views"]["addendum"]["CLEAN"]):
+        voided = view["voided_cells"]
+        assert len(voided) == 30 and not any(c.endswith("/balanced") for c in voided)
+        smallest = {name: min(ns) for _m, _G, ns, name in V.page_specs()}
+        assert all(int(c.split("/")[2]) == smallest[c.split("/")[1]] for c in voided)   # stratum 0: each page's smallest n
+        assert view["DESCRIPTIVE"]["the bars without G3's per-stratum voids"]["pooled"]["stats"]["cells"] == 54
+    assert s["BARS (registered: ALL and CLEAN, rule 3)"]["pooled"]["stats"]["cells"] == 24
+    assert s["cells scored in CLEAN"] == {m: 8 for m in V.MODELS}
+    assert all(v.startswith("NOT CERTIFIED: BELOW THE MINIMUM (8 cells") for v in s["certified"].values())
+
+
+def _ledger(root: Path, sha: str | None, commit_txt: str | None = None) -> Path:
+    d = root / "session" / "gh200-driver"
+    d.mkdir(parents=True, exist_ok=True)
+    if sha is not None:
+        (d / "status").write_text(f"2026-11-19T00:00:00Z driver start: commit {sha}, steps of the plan\n")
+    if commit_txt is not None:
+        (root / "session" / "commit.txt").write_text(commit_txt + "\n")
+    return root
+
+
+def test_the_scorer_refuses_a_session_whose_commit_does_not_hold_the_freeze(tmp_path):
+    reg = _reg()
+    assert S.commit_refusals(_ledger(tmp_path / "a", None), reg)[0].startswith("the rental's commit is not on its ledger")
+    got = S.commit_refusals(_ledger(tmp_path / "b", "0" * 40), reg)
+    assert got[0].startswith("the working tree is not the rental's commit 000000000000") and "absent at" in got[0]
+    head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    got = S.commit_refusals(_ledger(tmp_path / "c", head, commit_txt="1" * 40), reg)
+    assert "commit.txt reads" in got[0]
+    first = subprocess.run(["git", "-C", str(REPO), "rev-list", "--max-parents=0", "HEAD"], capture_output=True,
+                           text=True).stdout.split()[0]
+    got = S.commit_refusals(_ledger(tmp_path / "d", first), reg)
+    assert got and got[0].startswith(f"the working tree is not the rental's commit {first[:12]}")
+    files = {V.REG_JSON, V.REG_TXT, V.PLAN, *reg["freeze"]["own"]}
+    dirty = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain", "--", *sorted(files)], capture_output=True,
+                           text=True).stdout.strip()
+    if not dirty:   # the committed kit: HEAD holds its own freeze
+        assert S.commit_refusals(_ledger(tmp_path / "e", head), reg) == []
+    with pytest.raises(S.Refused, match="not on its ledger"):
+        S.score(_ledger(tmp_path / "f", None), dict(reg, draft=False))
+    assert S.dirty_refusals("") == []
+    assert S.dirty_refusals(" M scripts/x.py\n")[0].startswith("the checkout is dirty (git_dirty true)")
+    assert S.dirty_refusals(None)[0].startswith("git status could not be read")

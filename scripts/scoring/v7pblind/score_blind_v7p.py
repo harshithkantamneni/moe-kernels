@@ -8,7 +8,9 @@ It reads the registration at its committed path only (no option names another fi
 and the checkout's commit. It REFUSES (exit 2) a registration that is not this one, a DRAFT, a malformed registration,
 one whose freeze does not hold (v7 as the gate froze it, round 5's vendored files, this blind's pages and code, B3's
 driver and rules), or whose fingerprint (every cell's v7 prediction at the four reference pars) the registered pricer
-does not reproduce now; and it refuses a finalisation that does not hold (the sag par below).
+does not reproduce now; a checkout that is dirty; a session whose ledger names no single run commit
+(driver start: commit <sha>, checked against commit.txt) or whose commit is not the working copy for the registration,
+its plan and every frozen file (B3's read_b3.check_tree rule); and a finalisation that does not hold (the sag par below).
 
 THE POWER CHECK FIRST (the decode blinds' order, B3's board validity): c2-power.env C2_POWER_W=700, locks.env
 LOCK_PROBE_1410=held, G-BAND PASS, and the census (v7pcensus) and sag (b3sag) gate records PASS; else NOT SCORED
@@ -25,7 +27,8 @@ cell voided and NOT SCORED; heterogeneous, the failing strata's non-balanced cel
 rms 3%, worst 8%, |mean| 1.5%, the two views combined by rental 2's rule 3. A model CERTIFIED when its combined bar
 HOLDS, the combined pooled bar HOLDS and at least 10 of its cells are scored in CLEAN (the minimum); else NOT
 CERTIFIED, BELOW THE MINIMUM named. DESCRIPTIVE beside: B3's E1-TILE conjunction, B2's bar, round 5 (every switch
-off), the G 1 / G 16 splits, the bar without G3's voids. Writes prefill_blind.score.json and .txt. Exit: 0 scored;
+off), the G 1 / G 16 splits, the bar without G3's voids. G3's homogeneous fail voids every histogram cell: the test reads NOT SCORED
+(exit 1). Writes prefill_blind.score.json and .txt. Exit: 0 scored;
 1 NOT SCORED; 2 REFUSED."""
 from __future__ import annotations
 
@@ -258,9 +261,41 @@ def b3_e1(res: dict, clean: dict, cert: dict) -> dict:
                                                        for m in V.MODELS}}
 
 
-def score(sess: Path, reg: dict) -> dict:
+def commit_refusals(sess: Path, reg: dict, repo: Path | None = None) -> list[str]:
+    """B3's freeze-to-commit rule (read_b3.check_tree; read_c2.run_commit and check_commit): the commit the rental ran
+    is on its ledger ('driver start: commit <sha>', checked against commit.txt), and the working copy equals that
+    commit for the registration, its plan and every file of the freeze (the gate registration's and this blind's)."""
+    repo = V.REPO if repo is None else Path(repo)
+    sha, why = RC.run_commit(Path(sess) / "session")
+    if sha is None:
+        return [f"the rental's commit is not on its ledger: {why}"]
+    try:
+        paths = sorted({V.REG_JSON, V.REG_TXT, V.PLAN, f"docs/registered/{V.GATE_NAME}.json"}
+                       | set(reg["freeze"]["own"]) | set(V.gate_registration()["freeze"]["files"]))
+    except (KeyError, TypeError) as ex:
+        return [f"the registration's freeze block is malformed ({type(ex).__name__}: {ex})"]
+    bad = RC.check_commit(repo, sha, paths)
+    if bad:
+        return [f"the working tree is not the rental's commit {sha[:12]}: " + "; ".join(f"{p} {w}" for p, w in bad[:5])]
+    return []
+
+
+def dirty_refusals(porcelain: str | None) -> list[str]:
+    """The checkout scoring the rental must be clean (git status --porcelain empty); unknown is a refusal too."""
+    if porcelain is None:
+        return ["git status could not be read: the checkout's state is unknown"]
+    if porcelain.strip():
+        return [f"the checkout is dirty (git_dirty true): {porcelain.strip().splitlines()[:3]}"]
+    return []
+
+
+def score(sess: Path, reg: dict, check_commit: bool = True) -> dict:
     sess = Path(sess)
     results, session = sess / "results", sess / "session"
+    if check_commit:
+        why = commit_refusals(sess, reg)
+        if why:
+            raise Refused("; ".join(why))
     out = {"what": "model v7's prefill blind score (the working-model bar per model and pooled)", "registration": V.NAME,
            "session": str(sess), "bars": dict(V.BARS), "minimum": V.MIN_RULE, "verdict rule": V.CERT_RULE}
     val = validity(session)
@@ -283,7 +318,12 @@ def score(sess: Path, reg: dict) -> dict:
         res = TC.C3.two_views(lambda fv, tv: timed_view(TC, results, preds, tv, files), repo=V.REPO)
     clean = (res.get("addendum") or {}).get("CLEAN") or {}
     cert = certify(res, clean, True)
-    out["verdict"] = "SCORED"
+    bars = res.get("BARS") or {}
+    if "per_model" not in bars and str(bars.get("verdict")).startswith("NOT SCORED"):
+        out["verdict"] = "NOT SCORED"           # the registered voids: G3's homogeneous fail, every histogram cell voided
+        out["why"] = str(bars.get("verdict"))
+    else:
+        out["verdict"] = "SCORED"
     out["BARS (registered: ALL and CLEAN, rule 3)"] = res.get("BARS")
     out["cells scored in CLEAN"] = (clean.get("BARS") or {}).get("cells scored")
     out["certified"] = cert
@@ -332,6 +372,8 @@ def main(argv=None) -> int:
         print(f"REFUSED: the registration cannot be read ({type(ex).__name__}: {ex})")
         return 2
     why = refusals(reg)
+    st = subprocess.run(["git", "-C", str(V.REPO), "status", "--porcelain"], capture_output=True, text=True)
+    why += dirty_refusals(st.stdout if st.returncode == 0 else None)
     if why:
         print("REFUSED: " + "; ".join(why))
         return 2

@@ -18,8 +18,8 @@ THE RULES THIS FILE OWNS:
              0.27.1 runs there at G 1 (n < 6, M4's Hopper G-1 rule) and one G 16 page at the smallest G-16 tread (n <= 9,
              the declared copies); per tread PT, PW, PT2, PW2 (OLMoE's fitted shapes, top_k 8), uniform and balanced;
              arms NATIVE and SHARED, 9 declared copies, B3's instrument
-  predict    v7 with every switch on (RR at G 1), the prefill branch exactly (V7.price_prefill), at the K1 knee (round 5's
-             SEEN constants) and the board's 128x128 sag par; frozen before any page at four reference pars (A2, C2, C4,
+  predict    v7 with every switch on (RR at G 1), the prefill branch exactly (V7.price_prefill), at the K1 knee (round 4's
+             SEEN constants, knee4.json) and the board's 128x128 sag par; frozen before any page at four reference pars (A2, C2, C4,
              B3's board); the rental's own par finalises mechanically (finalise_pars) before any blind page is read
   fix        round 5's r7._rc lazily re-imports refit4, which round5_chain.chain() has popped (the v7 gate's PREFILL
              REFUSED); apply_fix makes r7._rc return the refit4 module the chain imported, in memory, outside every
@@ -93,7 +93,7 @@ HOPPER_G1_N = 6
 LOCK = 1410
 POWER_W = 700
 LIST_RATE = 2.59
-#: the K1 knee at round 5's SEEN constants (B3's), the 64x128 par the price call is handed (no 64x128 cell here)
+#: the K1 knee at round 4's SEEN constants (knee4.json K1 SEEN, B3's), the 64x128 par the price call is handed (no 64x128 cell here)
 KNEE = R5.K1_SEEN
 A2_PAR_64 = (30.365, 300.0)
 #: the four boards' 128x128 sag pars the predictions are frozen at before any page (A2's, C2's, C4's: B3's reference
@@ -342,7 +342,7 @@ def rows(root: Path = REPO) -> list[dict]:
 
 def price(r: dict, sag128, switches=None) -> dict:
     """v7's price of one cell (the registered pricer): V7.price_prefill at the board's 128x128 par, the K1 knee at round
-    5's SEEN constants, with every switch on unless told otherwise."""
+    4's SEEN constants (knee4.json), with every switch on unless told otherwise."""
     return V7.price_prefill(r, sag128=tuple(sag128), sag64=A2_PAR_64, knee=None,
                             switches=V7.V7 if switches is None else switches)
 

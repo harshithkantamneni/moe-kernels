@@ -173,7 +173,9 @@ def model_block(fp: dict, rep: dict, rerun: dict) -> dict:
                            "b3common.page_fit = the chain's r4.sag_page_fit; gate b3sag's registered range); no other "
                            "constant is read from the rental"),
         "finalisation (mechanical, after the rental, before any blind page)": (
-            "score_blind_v7p.py: the board's validity and the gate records first; then the par from the two f128 "
+            "score_blind_v7p.py: a clean checkout, and the run commit on the session's ledger equal to the "
+            "working copy for the registration, the plan and every frozen file (B3's check_tree rule), else REFUSED; "
+            "the board's validity and the gate records first; then the par from the two f128 "
             "pages by the repo's estimator and the frozen chain's, equal to each other and to the b3sag record (each "
             "page's sha256, b3common.PAR_RTOL); every cell priced by v7pcommon.price at that par; an audit hook refuses "
             "the run if finalisation opens a gaps-* path or a path naming a blind model (the census aside)"),
@@ -231,7 +233,7 @@ def disclosures(r: dict, fp: dict, cen: dict) -> list[str]:
          + "; ".join(f"{k} {v['mean']:+.3f}% ({v['min']:+.3f} to {v['max']:+.3f})" for k, v in st.items())
          + " at A2's par (COMPUTED)"),
         ("the per-call risk B3 disclosed applies unchanged (one per-call constant, 36.16 us, at every numel; the "
-         "block-scan align not priced by numel): every cell here is block-scan (R3's dry run), at numel 4,096 to "
+         "block-scan align not priced by numel): every cell here is block-scan (R3's dry run), at numel 5,120 to "
          "73,728 (k 8 x M), mostly past the 11,520 the align fit was measured to; the Granite cells are short calls "
          "(0.12 to 0.71 ms at A2's par), so a per-call error weighs more on them than on B3's (0.5 to 3 ms)"),
         ("these three models were priced offline while this kit was built (their v7 predictions, no measurement); "
