@@ -1,0 +1,26 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-map-a-e128k8-h2048i512-GRR-map-a-e128k8-h2048i512-main-c5887d34
+model       map-a-e128k8-h2048i512 E=128 k=8 bf16; W_e 6.0 MiB
+page        docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json (sha256 d4338aba4d5ec6ca...), map-a-e128k8-h2048i512-main, 7 cells, 7 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 10 calls, call j on copy j mod 5 (R x A_min 8 x W_e 6.0 MiB >= 240 MiB); per call = replay / 10; no flush
+copies      5 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::5]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    3.9 min
+session     gh200-20261118T094411Z-dece-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-a-e128k8-h2048i512-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-a-e128k8-h2048i512-GRR-map-a-e128k8-h2048i512-main-c5887d34
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A8               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     7edbefde8fa9
+  T=8   MIN-T8                native      block-scan  16x64x128w4s4  A=8   L=8   P=64   dead=896/1792  ef7e4999b9eb
+  T=16  MIN-T16               native      block-scan  16x64x128w4s4  A=8   L=8   P=0    dead=1920/3840  c7fb80f5f71c
+  T=32  L-T32-A128            native      block-scan  16x64x128w4s4  A=128 L=128 P=1792 dead=128/256   349113d787eb
+  T=64  L-T64-A128            native      block-scan  32x64x128w4s3  A=128 L=128 P=3584 dead=192/384   4f142dfb2dec
+  T=96  L-T96-A128            native      block-scan  32x128x64w4s3  A=128 L=128 P=3328 dead=160/320   5eb88a5d5355
+  T=128 L-T128-A128           native      block-scan  64x128x64w4s3  A=128 L=128 P=7168 dead=112/224   eae4cd31ea32
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

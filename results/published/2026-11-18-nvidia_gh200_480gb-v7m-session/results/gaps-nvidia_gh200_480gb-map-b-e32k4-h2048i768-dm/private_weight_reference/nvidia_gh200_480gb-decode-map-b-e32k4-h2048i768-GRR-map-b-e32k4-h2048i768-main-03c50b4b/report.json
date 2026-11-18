@@ -1,0 +1,1383 @@
+{
+  "experiment": "r3_decode",
+  "kind": "decode-page",
+  "run_id": "nvidia_gh200_480gb-decode-map-b-e32k4-h2048i768-GRR-map-b-e32k4-h2048i768-main-03c50b4b",
+  "session_tag": "gh200-20261118T094411Z-deci-lock1710",
+  "card": "nvidia_gh200_480gb",
+  "model": "map-b-e32k4-h2048i768",
+  "dtype": "bf16",
+  "inst": "GRR",
+  "duty": 0.25,
+  "repeats": 9,
+  "group_m": 1,
+  "rotation": 7,
+  "calls_per_graph": 14,
+  "copies_allocated": 7,
+  "decl_copies": null,
+  "seed": 0,
+  "pinned": {
+    "tile": "vLLM default_config per T (GD5)",
+    "num_warps": null
+  },
+  "histogram": {
+    "schema": "moe-kernels/decode-page/1",
+    "file_sha256": "c9bea339385a8599cf6ad77b9b5b0ff62583790dcdcfdfd3468ed0e453105e2f",
+    "page": "map-b-e32k4-h2048i768-main",
+    "shuffle_seed": 20261014,
+    "cells": [
+      {
+        "label": "L-T1-A4",
+        "n": 1,
+        "counts_sha256": "89bf0ca57f80ae5fe5055a72225b225d07b6ef3f8682dabbcebbefdce030dd82",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "MIN-T4",
+        "n": 4,
+        "counts_sha256": "04ed9be3d09b4d56797a393b8978d8940334753cb8a57ae3148fc04260306c2c",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T8-A7",
+        "n": 8,
+        "counts_sha256": "4ca96ea38aa5d0b316707e37bca575fc300b2bb55966d95ccb3a0d62a8830669",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T8-A15",
+        "n": 8,
+        "counts_sha256": "cc1f345fdafde012a2b1a1166f554ac97b862dbe919dee55146cbdaf18cc9d3e",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T8-A30",
+        "n": 8,
+        "counts_sha256": "c89ffe11edeeff4a7f3b4ba153f4038a6637167098f8bd59587781c294ab3d7c",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "MIN-T16",
+        "n": 16,
+        "counts_sha256": "c598916210b8a965f15807340d6663834f151b4878e9586ace8f2dc59cf08f6e",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T64-A32",
+        "n": 64,
+        "counts_sha256": "02b4b6c2ab115233d9fa4a0f8ebdf50267ebc3e0ff14e2577aa7b7733d21f349",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T96-A32",
+        "n": 96,
+        "counts_sha256": "06cf811a66dbd0c2461e50e8d2221585116d0c18845ba830b503f8c3b8f1bb4b",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      },
+      {
+        "label": "L-T128-A32",
+        "n": 128,
+        "counts_sha256": "d68e1200665b6baaa88ab1531b8a2763b4f43d9a963ca5936cd760339e0afc85",
+        "arms": [
+          "native"
+        ],
+        "shuffle": true,
+        "role": "LADDER"
+      }
+    ]
+  },
+  "histogram_gates": {
+    "G1_lock_thermal": {
+      "verdict": "PASS",
+      "clock_unread": [],
+      "drift": [],
+      "below_top_by_a_step": [],
+      "top_mhz": 1710.0,
+      "lock_slips": {
+        "slipped_repeats": 0,
+        "repeat_rows": 81,
+        "lost_cells": [],
+        "rule": "a lost cell (under --min-clean-repeats clean repeats) is listed, not a FAIL here: the rental-6 scorer's G1 takes the page's slipped-repeat share"
+      }
+    },
+    "G2_host_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "a cell the timer called host-bound is excluded, not voided"
+    },
+    "G3_uniform_control": {
+      "verdict": "SCORED OFFLINE",
+      "rule": "the rental-5 scorer's TOST over the page pair"
+    },
+    "G4_worst_cell_clock": {
+      "verdict": "RECORDED",
+      "worst_mhz": 1710.0,
+      "rule": "the scorer holds the worst cell to the 1710 lock"
+    },
+    "G5_provenance": {
+      "verdict": "PASS",
+      "missing": []
+    },
+    "V_ALIGN": {
+      "verdict": "PASS",
+      "refused_cells": [],
+      "rule": "a readback mismatch (V-ALIGN or GD5) refuses the cell; the page stands"
+    },
+    "GD1_gpu_bound": {
+      "verdict": "PASS",
+      "excluded": [],
+      "rule": "GPU per replay >= 3 x host per replay; a cell failing it is excluded"
+    },
+    "GD4_graph_fidelity": {
+      "verdict": "PASS",
+      "failed": [],
+      "rule": "every captured call equals the eager output bit for bit; a failure voids the page"
+    }
+  },
+  "treads_table": [
+    {
+      "arm": "native",
+      "tiles": 1,
+      "histogram": "L-T1-A4",
+      "role": "LADDER",
+      "counts_sha256": "89bf0ca57f80ae5fe5055a72225b225d07b6ef3f8682dabbcebbefdce030dd82",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.024098285606929233,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 1.3299320000896842,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "naive",
+        "post_padded": 64,
+        "padded_rows": 60,
+        "live_tiles": 4,
+        "sorted_len": null,
+        "grid": [
+          96,
+          128
+        ],
+        "dead_ctas": [
+          0,
+          0
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 4
+      },
+      "geometry": {
+        "path": "naive",
+        "T": 1,
+        "numel": 4,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 4,
+        "L": 4,
+        "P": 60,
+        "multi_tile_experts": 0,
+        "sorted_len": null,
+        "post_padded": 64,
+        "em": [
+          64,
+          64
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          96,
+          128
+        ],
+        "live_ctas": [
+          96,
+          128
+        ],
+        "dead_ctas": [
+          0,
+          0
+        ]
+      },
+      "A": 4,
+      "path": "naive",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 0.3373759984970093,
+        "host_ms": 0.0107365,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "naive"
+    },
+    {
+      "arm": "native",
+      "tiles": 4,
+      "histogram": "MIN-T4",
+      "role": "LADDER",
+      "counts_sha256": "04ed9be3d09b4d56797a393b8978d8940334753cb8a57ae3148fc04260306c2c",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        4,
+        4,
+        4,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.03227200039795467,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 1.0108249999802865,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 64,
+        "padded_rows": 48,
+        "live_tiles": 4,
+        "sorted_len": 256,
+        "grid": [
+          384,
+          512
+        ],
+        "dead_ctas": [
+          288,
+          384
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 16
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 4,
+        "numel": 16,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 4,
+        "L": 4,
+        "P": 48,
+        "multi_tile_experts": 0,
+        "sorted_len": 256,
+        "post_padded": 64,
+        "em": [
+          256,
+          256
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          384,
+          512
+        ],
+        "live_ctas": [
+          96,
+          128
+        ],
+        "dead_ctas": [
+          288,
+          384
+        ]
+      },
+      "A": 4,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 0.4518080055713654,
+        "host_ms": 0.010656,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 8,
+      "histogram": "L-T8-A7",
+      "role": "LADDER",
+      "counts_sha256": "4ca96ea38aa5d0b316707e37bca575fc300b2bb55966d95ccb3a0d62a8830669",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        5,
+        5,
+        5,
+        5,
+        4,
+        4,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.03857371636799404,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.8637519999865617,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 112,
+        "padded_rows": 80,
+        "live_tiles": 7,
+        "sorted_len": 512,
+        "grid": [
+          768,
+          1024
+        ],
+        "dead_ctas": [
+          600,
+          800
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 32
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 8,
+        "numel": 32,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 7,
+        "L": 7,
+        "P": 80,
+        "multi_tile_experts": 0,
+        "sorted_len": 512,
+        "post_padded": 112,
+        "em": [
+          512,
+          512
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          768,
+          1024
+        ],
+        "live_ctas": [
+          168,
+          224
+        ],
+        "dead_ctas": [
+          600,
+          800
+        ]
+      },
+      "A": 7,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 0.5400320291519165,
+        "host_ms": 0.010576,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 8,
+      "histogram": "L-T8-A15",
+      "role": "LADDER",
+      "counts_sha256": "cc1f345fdafde012a2b1a1166f554ac97b862dbe919dee55146cbdaf18cc9d3e",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.061025142669677734,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.5815095000798465,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 240,
+        "padded_rows": 208,
+        "live_tiles": 15,
+        "sorted_len": 512,
+        "grid": [
+          768,
+          1024
+        ],
+        "dead_ctas": [
+          408,
+          544
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 32
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 8,
+        "numel": 32,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 15,
+        "L": 15,
+        "P": 208,
+        "multi_tile_experts": 0,
+        "sorted_len": 512,
+        "post_padded": 240,
+        "em": [
+          512,
+          512
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          768,
+          1024
+        ],
+        "live_ctas": [
+          360,
+          480
+        ],
+        "dead_ctas": [
+          408,
+          544
+        ]
+      },
+      "A": 15,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 0.8543519973754883,
+        "host_ms": 0.010528,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 8,
+      "histogram": "L-T8-A30",
+      "role": "LADDER",
+      "counts_sha256": "c89ffe11edeeff4a7f3b4ba153f4038a6637167098f8bd59587781c294ab3d7c",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.09914971249444145,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.366707499892982,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 480,
+        "padded_rows": 448,
+        "live_tiles": 30,
+        "sorted_len": 512,
+        "grid": [
+          768,
+          1024
+        ],
+        "dead_ctas": [
+          48,
+          64
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 32
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 8,
+        "numel": 32,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 30,
+        "L": 30,
+        "P": 448,
+        "multi_tile_experts": 0,
+        "sorted_len": 512,
+        "post_padded": 480,
+        "em": [
+          512,
+          512
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          768,
+          1024
+        ],
+        "live_ctas": [
+          720,
+          960
+        ],
+        "dead_ctas": [
+          48,
+          64
+        ]
+      },
+      "A": 30,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.3880959749221802,
+        "host_ms": 0.010576,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 16,
+      "histogram": "MIN-T16",
+      "role": "LADDER",
+      "counts_sha256": "c598916210b8a965f15807340d6663834f151b4878e9586ace8f2dc59cf08f6e",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.032644572002547126,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.9994649999498506,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 64,
+        "padded_rows": 0,
+        "live_tiles": 4,
+        "sorted_len": 544,
+        "grid": [
+          816,
+          1088
+        ],
+        "dead_ctas": [
+          720,
+          960
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 16,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 4
+        },
+        "numel": 64
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 16,
+        "numel": 64,
+        "declared": 32,
+        "tile": "16x64x128w4s4",
+        "bm": 16,
+        "bn": 64,
+        "A": 4,
+        "L": 4,
+        "P": 0,
+        "multi_tile_experts": 0,
+        "sorted_len": 544,
+        "post_padded": 64,
+        "em": [
+          544,
+          544
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          816,
+          1088
+        ],
+        "live_ctas": [
+          96,
+          128
+        ],
+        "dead_ctas": [
+          720,
+          960
+        ]
+      },
+      "A": 4,
+      "path": "small-batch",
+      "tile": "16x64x128w4s4",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 0.4570240080356598,
+        "host_ms": 0.010656,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 64,
+      "histogram": "L-T64-A32",
+      "role": "LADDER",
+      "counts_sha256": "02b4b6c2ab115233d9fa4a0f8ebdf50267ebc3e0ff14e2577aa7b7733d21f349",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.11319543208394732,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.34229100003813073,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 1024,
+        "padded_rows": 768,
+        "live_tiles": 32,
+        "sorted_len": 1248,
+        "grid": [
+          936,
+          1248
+        ],
+        "dead_ctas": [
+          168,
+          224
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 32,
+          "BLOCK_SIZE_N": 64,
+          "BLOCK_SIZE_K": 128,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 3
+        },
+        "numel": 256
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 64,
+        "numel": 256,
+        "declared": 32,
+        "tile": "32x64x128w4s3",
+        "bm": 32,
+        "bn": 64,
+        "A": 32,
+        "L": 32,
+        "P": 768,
+        "multi_tile_experts": 0,
+        "sorted_len": 1248,
+        "post_padded": 1024,
+        "em": [
+          1248,
+          1248
+        ],
+        "npn": [
+          24,
+          32
+        ],
+        "grid": [
+          936,
+          1248
+        ],
+        "live_ctas": [
+          768,
+          1024
+        ],
+        "dead_ctas": [
+          168,
+          224
+        ]
+      },
+      "A": 32,
+      "path": "small-batch",
+      "tile": "32x64x128w4s3",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.5847360491752625,
+        "host_ms": 0.01064,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 96,
+      "histogram": "L-T96-A32",
+      "role": "LADDER",
+      "counts_sha256": "06cf811a66dbd0c2461e50e8d2221585116d0c18845ba830b503f8c3b8f1bb4b",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.11244113956178937,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.3273789999411747,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 1024,
+        "padded_rows": 640,
+        "live_tiles": 32,
+        "sorted_len": 1376,
+        "grid": [
+          516,
+          688
+        ],
+        "dead_ctas": [
+          132,
+          176
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 32,
+          "BLOCK_SIZE_N": 128,
+          "BLOCK_SIZE_K": 64,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 3
+        },
+        "numel": 384
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 96,
+        "numel": 384,
+        "declared": 32,
+        "tile": "32x128x64w4s3",
+        "bm": 32,
+        "bn": 128,
+        "A": 32,
+        "L": 32,
+        "P": 640,
+        "multi_tile_experts": 0,
+        "sorted_len": 1376,
+        "post_padded": 1024,
+        "em": [
+          1376,
+          1376
+        ],
+        "npn": [
+          12,
+          16
+        ],
+        "grid": [
+          516,
+          688
+        ],
+        "live_ctas": [
+          384,
+          512
+        ],
+        "dead_ctas": [
+          132,
+          176
+        ]
+      },
+      "A": 32,
+      "path": "small-batch",
+      "tile": "32x128x64w4s3",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.5741759538650513,
+        "host_ms": 0.010784,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    },
+    {
+      "arm": "native",
+      "tiles": 128,
+      "histogram": "L-T128-A32",
+      "role": "LADDER",
+      "counts_sha256": "d68e1200665b6baaa88ab1531b8a2763b4f43d9a963ca5936cd760339e0afc85",
+      "shuffle_seed": 20261014,
+      "shuffled": true,
+      "bincount": [
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16
+      ],
+      "bincount_ok": true,
+      "ms_p50": 0.12024114387375968,
+      "sm_clock_load_mhz": 1710.0,
+      "repeats": 9,
+      "host_bound": false,
+      "host_enqueue_ms": 0.3171549999478884,
+      "repeat_rows": 9,
+      "lock_slip_repeats": 0,
+      "clean_repeats": 9,
+      "worst_repeat_mhz": 1710.0,
+      "lost": false,
+      "refused": false,
+      "readback_bad": [],
+      "readback": {
+        "path": "small-batch",
+        "post_padded": 2048,
+        "padded_rows": 1536,
+        "live_tiles": 32,
+        "sorted_len": 2528,
+        "grid": [
+          480,
+          640
+        ],
+        "dead_ctas": [
+          96,
+          128
+        ],
+        "config": {
+          "BLOCK_SIZE_M": 64,
+          "BLOCK_SIZE_N": 128,
+          "BLOCK_SIZE_K": 64,
+          "GROUP_SIZE_M": 1,
+          "num_warps": 4,
+          "num_stages": 3
+        },
+        "numel": 512
+      },
+      "geometry": {
+        "path": "small-batch",
+        "T": 128,
+        "numel": 512,
+        "declared": 32,
+        "tile": "64x128x64w4s3",
+        "bm": 64,
+        "bn": 128,
+        "A": 32,
+        "L": 32,
+        "P": 1536,
+        "multi_tile_experts": 0,
+        "sorted_len": 2528,
+        "post_padded": 2048,
+        "em": [
+          2528,
+          2528
+        ],
+        "npn": [
+          12,
+          16
+        ],
+        "grid": [
+          480,
+          640
+        ],
+        "live_ctas": [
+          384,
+          512
+        ],
+        "dead_ctas": [
+          96,
+          128
+        ]
+      },
+      "A": 32,
+      "path": "small-batch",
+      "tile": "64x128x64w4s3",
+      "gd4": true,
+      "gd4_detail": "14 captured calls equal the eager output bit for bit",
+      "gd1": {
+        "verdict": "PASS",
+        "gpu_ms": 1.6833760142326355,
+        "host_ms": 0.010752,
+        "factor": 3.0,
+        "why": ""
+      },
+      "experts_declared": 32,
+      "align_path": "small-batch"
+    }
+  ],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "tag": "G1_lock_thermal",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G2_host_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "G5_provenance",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "V_ALIGN",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "GD1_gpu_bound",
+      "verdict": "PASS"
+    },
+    {
+      "kind": "VALIDITY",
+      "tag": "GD4_graph_fidelity",
+      "verdict": "PASS"
+    }
+  ],
+  "upstream": {
+    "fused_moe.py": "d5955a3460746b66740b024f470aeca79bbebd10872c327f765f2d7fcb805f28",
+    "moe_align_block_size.py": "c3f7fc2087836f0160a32ab99ceb1d8f6e87c793679da34dd672e225cb7fa31b",
+    "moe_align_sum_kernels.cu": "72d1f17f7a5e3e3bdfce8ae8e62b97bd330c3d272973f3915b46e32984c6798d",
+    "utils.py": "09856c1e68a9069caaa5942e9e3d3effff847e8d213b877b7b5d8db981c30f64"
+  },
+  "versions": {
+    "python": "3.12.16",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1"
+  },
+  "seconds": 140.4,
+  "slip_policy": "cell",
+  "lock_mhz": 1710,
+  "min_clean_repeats": 0,
+  "repeat_rows": 81,
+  "lock_slip_rows": 0,
+  "lost_cells": {},
+  "early_stop": null
+}
