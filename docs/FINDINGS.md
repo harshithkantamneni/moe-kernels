@@ -4541,8 +4541,9 @@ its blind, not a test the model passed; the blind is the test.
 
 Decode's D6FIX constants, read by the gate from the second CAL2 fit (v4d' on every naive cell): rho scaled, T0 -1.87 us,
 s_naive +9.55 us, s_block -0.72 us. Per seen-blind model under v7 (rms): Phi-3.5 2.85%, Qwen1.5 1.92%, JetMoE 2.28%,
-deepseek-v2-lite 1.17%, Granite-3.0-3B 5.85%. Off (v6d) Qwen1.5 reads 6.70% and deepseek-v2-lite 1.39%; the other
-three are unchanged, as D6FIX moves only the v4d'-branch cells.
+deepseek-v2-lite 1.17%, Granite-3.0-3B 5.85%. Off (v6d) Phi-3.5 reads 3.18%, Qwen1.5 6.70% and deepseek-v2-lite
+1.39%; JetMoE and Granite-3.0-3B are unchanged, as D6FIX moves only the 13 v4d'-branch cells (Phi-3.5 2, Qwen1.5 7,
+deepseek-v2-lite 4).
 
 **DECODE's GO is not evidence on the re-score.** D6FIX is the D6-24 fix, and D6-24 was found on SEEN pages after
 addendum 6's gate. Addendum 6 said of it: "Any fix would be chosen on the seen re-score, so none is made and the
@@ -4554,7 +4555,7 @@ applied to a SEEN floor. It entitles decode to one blind and nothing more. Adden
 `r7.pass_estimates5`, which calls `r7._rc()` (`scripts/round5_frozen/2026-10-28/round5/work/r7.py:203-208`):
 `os.chdir(r5.REFIT4); import refit4`. That import resolves only while REFIT4's folder (or `''`, the current
 directory) is on sys.path. In the original work-folder runs it was, because r5 puts REFIT4 on sys.path at import
-(`r5.py:23-24`) and nothing removed it. `round5_chain.chain()` imports refit4 once (`RF = r7._rc()`, while r5's entry
+(`scripts/round5_frozen/2026-10-27/round3/work/r5.py:23-24`) and nothing removed it. `round5_chain.chain()` imports refit4 once (`RF = r7._rc()`, while r5's entry
 is live), then pops the chain's module names from sys.modules and restores sys.path, as `read_b3.chain` does; the
 later call from `pass_estimates5` finds no refit4. Reproduced on this tree: a script that calls
 `round5_chain.pass_estimate` after `chain()` fails with this error, and so does the same call under `python -m
