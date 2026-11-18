@@ -156,8 +156,9 @@ def test_the_pages_recompute_and_their_seeds_repeat_no_earlier_draw():
 
 def test_the_plan_is_the_registrations_and_the_rental_numbers():
     reg = _reg()
-    assert reg["draft"] is True and "# DRAFT: NOT LAUNCHABLE" in PLAN.read_text()
-    assert PLAN.read_text() == V.plan_text(True)
+    # state-independent: holds for the committed DRAFT and for the committed final registration alike
+    assert ("# DRAFT: NOT LAUNCHABLE" in PLAN.read_text()) is (reg["draft"] is True)
+    assert PLAN.read_text() == V.plan_text(reg["draft"])
     assert reg["rental"]["plan_sha256"] == hashlib.sha256(PLAN.read_bytes()).hexdigest()
     r = V.rental()
     assert (r["units_min"], r["wall_min"], r["deadline_after_launch_min"], r["hard_cap_after_launch_min"]) == \
@@ -356,7 +357,7 @@ def test_the_freeze_holds_and_a_moved_or_missing_file_breaks_it():
 
 def test_the_scorer_refuses_a_draft_a_foreign_or_malformed_registration_and_a_broken_freeze():
     reg = _reg()
-    assert S.refusals(reg) == ["the registration is a DRAFT (the owner's go is not recorded): nothing may be scored "
+    assert S.refusals(dict(reg, draft=True)) == ["the registration is a DRAFT (the owner's go is not recorded): nothing may be scored "
                                "against it"]
     assert S.refusals([1, 2])[0].startswith("the registration is malformed")
     assert S.refusals(dict(reg, name="x"))[0].startswith("the registration is not")
@@ -367,11 +368,13 @@ def test_the_scorer_refuses_a_draft_a_foreign_or_malformed_registration_and_a_br
     got = subprocess.run([PY, "-B", str(REPO / "scripts/scoring/v7pblind/score_blind_v7p.py"), "/nonexistent",
                           "/tmp/never-written"], capture_output=True, text=True, timeout=600,
                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
-    assert got.returncode == 2 and "DRAFT" in got.stdout
+    assert got.returncode == 2 and (("DRAFT" in got.stdout) or reg["draft"] is False)
 
 
 def test_final_refuses_without_the_owners_go_or_with_a_moved_draft():
-    reg = _reg()
+    # the DRAFT as committed before --final: the committed registration with its DRAFT marks, whichever state HEAD is in
+    reg = {k: v for k, v in _reg().items() if k != "owner's go"}
+    reg["draft"] = True  # status, freeze and the owner's go are outside the comparison (RG.FINAL_MAY_CHANGE)
     doc = copy.deepcopy(reg)
     doc.update(draft=False, status="REGISTERED", **{"owner's go": "2026-11-19: go, one blind"})
     go = "2026-11-19: go, one blind"
@@ -477,8 +480,8 @@ def test_the_registration_recomputes_to_its_committed_files(built):
     reg = _reg()
     wb = reg["pass estimate"]["at the working-model bar (B3's method, b3common.pass_estimates, the same cells and means; DESCRIPTIVE)"]
     sessions = reg["models"]["census (COMPUTED)"]["sessions scanned"]
-    doc = json.loads(json.dumps(RG.build(reg["draft"], sessions=sessions, fp=built["fp"], rep=built["rep"], wb=wb),
-                                default=str))
+    doc = json.loads(json.dumps(RG.build(reg["draft"], sessions=sessions, fp=built["fp"], rep=built["rep"], wb=wb,
+                                         owner_go=reg.get("owner's go")), default=str))
     assert RG.close(doc, reg) == []
     assert (REPO / V.REG_TXT).read_text() == "\n".join(RG.text(doc)) + "\n"
     assert S.fingerprint_refusals(reg, built["fp"]) == []
