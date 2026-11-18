@@ -2205,3 +2205,20 @@ verdict) reads G1 FAILS (+0.37, -1.50, +1.42, -0.01, -1.99, C2 +1.66) and G2 P(A
 decode may go to ONE blind, registered separately (docs/FINDINGS.md, Model v7 gate). Rule from this defect: a gate's
 every clause is run end to end as the registered script on a fixture shaped like the real pages before its
 registration is public.
+
+`2026-11-17-v7-decode-blind-gh200` (`scripts/scoring/v7blind/register_v7_blind.py --write` / `--check`; built
+2026-11-17; committed for real with `--write --final` on 2026-11-18, after the v7 gate registration was public and
+`scripts/scoring/v7/gate_v7.out.txt` read DECODE: GO, before any page of the three models) registers model v7's one decode blind: v7 with every switch on (D6FIX at
+decode) at its CAL2 refit (GO, 1.60% rms in sample; v6d's fit, fixed rho, T0 -1.87, s_naive -2.14, s_block -0.72 us;
+D6FIX's fit scaled, s_naive +9.55 us), its 143 predictions frozen before any page, on the decode stage's three reserved
+models (Mixtral-8x22B, Qwen2-57B-A14B, Granite-3.0-1B-A400M; no decode page timed, the census in the file) with
+addendum 5's pages and units unchanged (the old decode blind's T grid, routing classes, GRR main and GR1 control pages,
+18 second-tile cells DESCRIPTIVE) and the bars registered for these cells verbatim (owner, D4-1, addendum 5, carried by addendum 6: rms 3%, worst 8%,
+|mean| 1.5%, per model and pooled, not tightened; decodeB-blind's rule, a model CERTIFIED when its own bar and the
+pooled bar hold). D6FIX moves none of the 143 cells, so v7 prices
+them as v6d did. The plan `scripts/plans/rentalV7B-decode-blind-2026-11.plan` (the pinned decode driver) no longer carries
+the DRAFT line that the launcher `scripts/vm_run_v7b.sh` (RR's, apt-lock fix included, lines marked V7B) refuses. 72 unit-min,
+about 111 min wall, $4.24 at $2.29/h; deadline launch + 125 min, hard cap + 140 min ($5.34; at Lambda's
+list price of 2026-11-18, $2.59/h, about $4.79 planned and $6.04 at the cap). The freeze holds the v7
+gate registration's freeze and this blind's own files; `score_blind_v7.py` refuses on any difference. Tests
+`tests/test_v7_decode_blind.py` (synthetic trees and a stub VM only).
