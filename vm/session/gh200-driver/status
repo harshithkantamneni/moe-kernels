@@ -107,3 +107,12 @@
 2026-11-18T23:19:36Z timed: 2026-11-18T23:19:31Z G=16 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 440 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist0b360eb6-face09ac
 2026-11-18T23:19:36Z timed END: exit 0 after 7 min [unit 13/14 granite-3.0-3b-a800m t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-3b-a800m-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3]
 2026-11-18T23:19:37Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T23:19:39Z timed START: 3c.3 timed R3 histogram page at 1410: G=16, docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 14/14 qwen2-57b-a14b-tp8 t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3] (estimate 7 min, cap 21 min, 55 min left)
+2026-11-18T23:19:39Z timed: declared-copies 9 on every page of this unit
+2026-11-18T23:19:39Z timed: histogram page docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json, arms native,shared, deepest tread 9, knobs --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, scorer G1 rule r7-median-run3 (locked_r3 --min-clean-repeats 0)
+2026-11-18T23:19:40Z timed: G = 16 at treads 9, no G=3 page (timed-groups / timed-treads)
+2026-11-18T23:27:08Z timed: P2 locked_r3 exit 0
+2026-11-18T23:27:08Z timed: P5 not run: this unit names its own groups (timed-groups / timed-treads)
+2026-11-18T23:27:08Z timed: 2026-11-18T23:27:02Z G=16 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 440 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist7b6cd540-cda0da83
+2026-11-18T23:27:08Z timed END: exit 0 after 7 min [unit 14/14 qwen2-57b-a14b-tp8 t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T23:27:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
