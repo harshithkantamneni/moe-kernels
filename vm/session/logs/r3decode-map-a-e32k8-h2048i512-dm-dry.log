@@ -1,0 +1,28 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf
+model       map-a-e32k8-h2048i512 E=32 k=8 bf16; W_e 6.0 MiB
+page        docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json (sha256 3f96e595413ac352...), map-a-e32k8-h2048i512-main, 9 cells, 9 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 10 calls, call j on copy j mod 5 (R x A_min 8 x W_e 6.0 MiB >= 240 MiB); per call = replay / 10; no flush
+copies      5 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::5]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.5 min
+session     gh200-20261118T094411Z-decc-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-a-e32k8-h2048i512-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A8               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     8c25f246e38b
+  T=2   MIN-T2                native      small-batch 16x64x128w4s4  A=8   L=8   P=112  dead=128/256   b344ec80259f
+  T=4   MIN-T4                native      small-batch 16x64x128w4s4  A=8   L=8   P=96   dead=384/768   81a031e135fa
+  T=8   MIN-T8                native      small-batch 16x64x128w4s4  A=8   L=8   P=64   dead=416/832   8b38ce6f598d
+  T=16  MIN-T16               native      small-batch 16x64x128w4s4  A=8   L=8   P=0    dead=480/960   1a998bee927d
+  T=32  L-T32-A32             native      small-batch 16x64x128w4s4  A=32  L=32  P=256  dead=224/448   02b4b6c2ab11
+  T=64  L-T64-A32             native      small-batch 32x64x128w4s3  A=32  L=32  P=512  dead=240/480   d68e1200665b
+  T=96  L-T96-A32             native      small-batch 32x128x64w4s3  A=32  L=32  P=256  dead=184/368   c1e7af05fe7a
+  T=128 L-T128-A32            native      block-scan  64x128x64w4s3  A=32  L=32  P=1024 dead=128/256   70899a26b83c
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

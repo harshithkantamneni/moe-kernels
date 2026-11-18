@@ -1,0 +1,117 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf
+model       map-a-e32k8-h2048i512 E=32 k=8 bf16; W_e 6.0 MiB
+page        docs/registered/2026-11-18-v7-domain-map-pages/map-a-e32k8-h2048i512-main.json (sha256 3f96e595413ac352...), map-a-e32k8-h2048i512-main, 9 cells, 9 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 10 calls, call j on copy j mod 5 (R x A_min 8 x W_e 6.0 MiB >= 240 MiB); per call = replay / 10; no flush
+copies      5 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::5]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.5 min
+session     gh200-20261118T094411Z-decc-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-a-e32k8-h2048i512-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A8               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     8c25f246e38b
+  T=2   MIN-T2                native      small-batch 16x64x128w4s4  A=8   L=8   P=112  dead=128/256   b344ec80259f
+  T=4   MIN-T4                native      small-batch 16x64x128w4s4  A=8   L=8   P=96   dead=384/768   81a031e135fa
+  T=8   MIN-T8                native      small-batch 16x64x128w4s4  A=8   L=8   P=64   dead=416/832   8b38ce6f598d
+  T=16  MIN-T16               native      small-batch 16x64x128w4s4  A=8   L=8   P=0    dead=480/960   1a998bee927d
+  T=32  L-T32-A32             native      small-batch 16x64x128w4s4  A=32  L=32  P=256  dead=224/448   02b4b6c2ab11
+  T=64  L-T64-A32             native      small-batch 32x64x128w4s3  A=32  L=32  P=512  dead=240/480   d68e1200665b
+  T=96  L-T96-A32             native      small-batch 32x128x64w4s3  A=32  L=32  P=256  dead=184/368   c1e7af05fe7a
+  T=128 L-T128-A32            native      block-scan  64x128x64w4s3  A=32  L=32  P=1024 dead=128/256   70899a26b83c
+WARNING 11-18 09:50:04 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=32,N=512,device_name=NVIDIA_GH200_480GB.json
+  rep 0 L-T1-A8          native T=  1     27.34 us ok
+  rep 0 MIN-T2           native T=  2     33.95 us ok
+  rep 0 MIN-T4           native T=  4     35.01 us ok
+  rep 0 MIN-T8           native T=  8     35.82 us ok
+  rep 0 MIN-T16          native T= 16     37.20 us ok
+  rep 0 L-T32-A32        native T= 32     86.16 us ok
+  rep 0 L-T64-A32        native T= 64     87.86 us ok
+  rep 0 L-T96-A32        native T= 96     91.70 us ok
+  rep 0 L-T128-A32       native T=128     83.60 us ok
+  rep 1 L-T128-A32       native T=128     83.55 us ok
+  rep 1 L-T96-A32        native T= 96     92.50 us ok
+  rep 1 L-T64-A32        native T= 64     87.90 us ok
+  rep 1 L-T32-A32        native T= 32     86.15 us ok
+  rep 1 MIN-T16          native T= 16     37.20 us ok
+  rep 1 MIN-T8           native T=  8     35.82 us ok
+  rep 1 MIN-T4           native T=  4     35.14 us ok
+  rep 1 MIN-T2           native T=  2     33.87 us ok
+  rep 1 L-T1-A8          native T=  1     27.28 us ok
+  rep 2 L-T1-A8          native T=  1     27.31 us ok
+  rep 2 MIN-T2           native T=  2     33.90 us ok
+  rep 2 MIN-T4           native T=  4     35.11 us ok
+  rep 2 MIN-T8           native T=  8     35.86 us ok
+  rep 2 MIN-T16          native T= 16     37.24 us ok
+  rep 2 L-T32-A32        native T= 32     86.02 us ok
+  rep 2 L-T64-A32        native T= 64     87.87 us ok
+  rep 2 L-T96-A32        native T= 96     92.45 us ok
+  rep 2 L-T128-A32       native T=128     83.57 us ok
+  rep 3 L-T128-A32       native T=128     83.63 us ok
+  rep 3 L-T96-A32        native T= 96     92.39 us ok
+  rep 3 L-T64-A32        native T= 64     88.08 us ok
+  rep 3 L-T32-A32        native T= 32     86.06 us ok
+  rep 3 MIN-T16          native T= 16     37.23 us ok
+  rep 3 MIN-T8           native T=  8     35.83 us ok
+  rep 3 MIN-T4           native T=  4     35.08 us ok
+  rep 3 MIN-T2           native T=  2     33.97 us ok
+  rep 3 L-T1-A8          native T=  1     27.40 us ok
+  rep 4 L-T1-A8          native T=  1     27.36 us ok
+  rep 4 MIN-T2           native T=  2     33.97 us ok
+  rep 4 MIN-T4           native T=  4     35.06 us ok
+  rep 4 MIN-T8           native T=  8     35.83 us ok
+  rep 4 MIN-T16          native T= 16     37.19 us ok
+  rep 4 L-T32-A32        native T= 32     86.06 us ok
+  rep 4 L-T64-A32        native T= 64     87.86 us ok
+  rep 4 L-T96-A32        native T= 96     92.40 us ok
+  rep 4 L-T128-A32       native T=128     83.59 us ok
+  rep 5 L-T128-A32       native T=128     83.61 us ok
+  rep 5 L-T96-A32        native T= 96     91.48 us ok
+  rep 5 L-T64-A32        native T= 64     87.90 us ok
+  rep 5 L-T32-A32        native T= 32     85.97 us ok
+  rep 5 MIN-T16          native T= 16     37.26 us ok
+  rep 5 MIN-T8           native T=  8     35.81 us ok
+  rep 5 MIN-T4           native T=  4     35.09 us ok
+  rep 5 MIN-T2           native T=  2     34.03 us ok
+  rep 5 L-T1-A8          native T=  1     27.42 us ok
+  rep 6 L-T1-A8          native T=  1     27.39 us ok
+  rep 6 MIN-T2           native T=  2     34.06 us ok
+  rep 6 MIN-T4           native T=  4     35.09 us ok
+  rep 6 MIN-T8           native T=  8     35.83 us ok
+  rep 6 MIN-T16          native T= 16     37.24 us ok
+  rep 6 L-T32-A32        native T= 32     86.04 us ok
+  rep 6 L-T64-A32        native T= 64     87.78 us ok
+  rep 6 L-T96-A32        native T= 96     92.57 us ok
+  rep 6 L-T128-A32       native T=128     83.57 us ok
+  rep 7 L-T128-A32       native T=128     83.54 us ok
+  rep 7 L-T96-A32        native T= 96     91.70 us ok
+  rep 7 L-T64-A32        native T= 64     88.06 us ok
+  rep 7 L-T32-A32        native T= 32     86.07 us ok
+  rep 7 MIN-T16          native T= 16     37.21 us ok
+  rep 7 MIN-T8           native T=  8     35.78 us ok
+  rep 7 MIN-T4           native T=  4     35.10 us ok
+  rep 7 MIN-T2           native T=  2     33.92 us ok
+  rep 7 L-T1-A8          native T=  1     27.33 us ok
+  rep 8 L-T1-A8          native T=  1     27.34 us ok
+  rep 8 MIN-T2           native T=  2     33.91 us ok
+  rep 8 MIN-T4           native T=  4     35.12 us ok
+  rep 8 MIN-T8           native T=  8     35.79 us ok
+  rep 8 MIN-T16          native T= 16     37.22 us ok
+  rep 8 L-T32-A32        native T= 32     85.98 us ok
+  rep 8 L-T64-A32        native T= 64     87.82 us ok
+  rep 8 L-T96-A32        native T= 96     92.40 us ok
+  rep 8 L-T128-A32       native T=128     83.61 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-a-e32k8-h2048i512-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-a-e32k8-h2048i512-GRR-map-a-e32k8-h2048i512-main-90bc91cf/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED
