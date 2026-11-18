@@ -1,0 +1,32 @@
+experiment  r3_decode / nvidia_gh200_480gb-decode-map-a-e16k4-h2048i512-GRR-map-a-e16k4-h2048i512-main-fe5e0d5c
+model       map-a-e16k4-h2048i512 E=16 k=4 bf16; W_e 6.0 MiB
+page        docs/registered/2026-11-18-v7-domain-map-pages/map-a-e16k4-h2048i512-main.json (sha256 01add7fd7994ecd9...), map-a-e16k4-h2048i512-main, 9 cells, 9 (cell, arm), token-row shuffle seed 20261014
+instrument  GRR: one graph of 10 calls, call j on copy j mod 10 (R x A_min 4 x W_e 6.0 MiB >= 240 MiB); per call = replay / 10; no flush
+copies      10 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::10]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.5 min
+session     gh200-20261118T094411Z-decb-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-map-a-e16k4-h2048i512-dm/private_weight_reference/nvidia_gh200_480gb-decode-map-a-e16k4-h2048i512-GRR-map-a-e16k4-h2048i512-main-fe5e0d5c
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A4               native      naive       16x64x128w4s4  A=4   L=4   P=60   dead=0/0     35d719225edb
+  T=2   MIN-T2                native      small-batch 16x64x128w4s4  A=4   L=4   P=56   dead=64/128   8964bb3d1d42
+  T=4   MIN-T4                native      small-batch 16x64x128w4s4  A=4   L=4   P=48   dead=192/384   219aa71f9ce9
+  T=8   MIN-T8                native      small-batch 16x64x128w4s4  A=4   L=4   P=32   dead=208/416   254db877e97a
+  T=16  MIN-T16               native      small-batch 16x64x128w4s4  A=4   L=4   P=0    dead=240/480   003b5d673e89
+  T=32  L-T32-A16             native      small-batch 16x64x128w4s4  A=16  L=16  P=128  dead=112/224   fe6b101a2a63
+  T=64  L-T64-A16             native      small-batch 32x64x128w4s3  A=16  L=16  P=256  dead=128/256   3a550bc22d31
+  T=96  L-T96-A16             native      small-batch 32x128x64w4s3  A=16  L=16  P=128  dead=96/192   1cbff2bfe646
+  T=128 L-T128-A16            native      small-batch 64x128x64w4s3  A=16  L=16  P=512  dead=64/128   de64fd89522f
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
