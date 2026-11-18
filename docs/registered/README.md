@@ -2333,3 +2333,35 @@ here with no blind: decode stays registered FAIL at the v7 blind, no validity do
 prefill NO-GO stand. `--check` reads same (it rebuilds over the sessions the DRAFT records). Tests: the committed
 readout verifies and `--final` refuses it for the empty D alone (`tests/test_v7_domain_blind.py`) (docs/FINDINGS.md,
 Model v7 decode domain map).
+
+`2026-11-18-v7-prefill-blind-gh200` (`scripts/scoring/v7pblind/register_v7p_blind.py --write` / `--check`; DRAFT,
+written 2026-11-18 before any page of its three models; finalised by `--write --final --owner-go '<date>: <words>'`
+only, which refuses unless the committed DRAFT verifies its freeze and equals the final document outside the DRAFT
+marks, the census and the freeze) registers model v7's ONE PREFILL blind: the THIRD reopening of prefill, chosen by the
+owner on 2026-11-18 AGAINST the v7 gate's registered PREFILL NO-GO (REFUSED on refit4; the DESCRIPTIVE re-run reads G1
+FAILS, held-out means -1.99 to +1.66%, and G2 FAILS, the gate's own P(A) 0.2067, B 0.284, D 0.1885), stated at the top
+of the registration with every earlier verdict standing (round 5's gate FAIL, B3 FAIL, the v7 gate's PREFILL NO-GO,
+decode FAIL). v7 frozen and unchanged (every switch on, RR at G 1; round 5's prefill branch at the K1 knee and the
+board's 128x128 sag par), plus the refit4 fix applied in memory outside every frozen file exactly as
+`prefill_rerun_v7.py` applies it (registered verbatim; it changes no price); the registered pricer reproduces the
+re-run's every-switch-on numbers on the gate's pages (six held-out means, P(A), B3's 84 cells). Census over every
+registered page list and every JSON record of every published session (by name and by (E, H, I, k)): no prefill-tile
+page of Granite-3.0-1B-A400M, Granite-3.0-3B-A800M, Qwen2-57B-A14B-tp8, Mixtral-8x7B-tp4, -tp8 or DeepSeek-V3's
+shards; DeepSeek-V3 has H200 and A100 fused_experts rows at prefill sizes, and E 256 cannot run B3's instrument (R3
+refuses a SHARED declaration of E x 9 >= 1024). Chosen: the two Granite models and Qwen2-57B-A14B-tp8 (a TP shard of a
+CAL model, disclosed), B3's recipe and instrument at 128x128x64 w8 s3 (G 1 at the two smallest vLLM-consistent treads,
+G 16 at n 9; PT, PW, PT2, PW2 from OLMoE's fitted shapes, uniform, balanced; NATIVE and SHARED, 9 copies): 54 cells,
+18 a model; GD5 offline on vLLM 0.27.1's vendored listing (no GH200 file); predictions frozen at A2's, C2's, C4's and
+B3's board pars, finalised at the rental's own par before any blind page. Read by `score_blind_v7p.py`: the power check
+and the gates first, B3's page and cell rules (G5, rebuild, row_drop, G3's voids), the working-model bar (rms 3%,
+worst 8%, |mean| 1.5%) per model and pooled in ALL and CLEAN by rule 3, a model CERTIFIED when its own bar and the
+pooled bar hold (decodeB-blind's rule, as v7's decode blinds) with at least 10 cells scored in CLEAN; B3's E1-TILE
+conjunction DESCRIPTIVE beside. Driver `scripts/gh200_v7p_session.sh` (B3's plus lines marked V7P: the census gate
+`scripts/v7p_gate.py`, each model's compiled facts equal OLMoE's in A2's merged census), launcher
+`scripts/vm_run_v7p.sh` (vm_run_v7b.sh plus lines marked V7P; refuses the DRAFT plan). Plan
+`scripts/plans/rentalV7P-prefill-blind-2026-11.plan`: 84 unit-min, about 125 min wall, $4.77 at d2common.RATE $2.29/h,
+$5.40 at $2.59/h; deadline launch + 140 min, hard cap + 155 min ($5.92 / $6.69). Not in the recipe here: B3's
+64x128 page and its sag pages, the byte pages and the sag repeat (the 64x128 tile is not tested). Disclosed: the third
+reopening and the gate override, the POST-HOC origin, v7 unchanged, RR's SEEN-chosen constants, B3's per-call risk on
+these short calls, the offline pricing done while building. Tests `tests/test_v7_prefill_blind.py` (stand-in boards,
+synthetic cells and a stub VM only).
