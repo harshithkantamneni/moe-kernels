@@ -248,13 +248,13 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 7973 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 7977 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Forty-one further directories
+arms carrying 26 `*.report.json` files and no CSV. Forty-two further directories
 there are whole sessions (five on the H200, the Lambda A100-SXM4-40GB counter
-run, the Lambda H100 session and thirty-four Lambda GH200 sessions, 2026-09-25, the
+run, the Lambda H100 session and thirty-five Lambda GH200 sessions, 2026-09-25, the
 unattended model test of 2026-09-27, the Mixtral 8x22B cross-model test and the
 Qwen2-57B 64-expert test of 2026-09-28, the OLMoE small-K test of 2026-09-29,
 and the held-out queue of 2026-09-29/30: Qwen1.5-MoE-A2.7B, Phi-3.5-MoE,
@@ -315,10 +315,10 @@ domain map rental of 2026-11-18: one GRR main page on each of 14 synthetic decod
 and the 1710 MHz lock),
 kept so every verdict they printed can be
 re-derived and marked with a `KIND` file so the provenance census reads them as
-sessions rather than arms. The 34 GH200 sessions ran on twenty-six distinct boards (counted by
+sessions rather than arms. The 35 GH200 sessions ran on twenty-seven distinct boards (counted by
 board hash; Granite's board is the 2026-09-25 card; C3 ran on rental 7's board; C4's board 183300 is new, and the
 decode CAL rental ran on it again; the decode CAL2 rental's board ae5fc5 is new, and the decode blind rental ran on
-it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new; the v7 decode blind's board e165c7 is new; the v7 domain map's board 1e520d is new). Of the GH200 call-time results, three
+it again; the DS rental's board cce89f is new; B3's board ebedab is new; PC's board c9f689 is new; PC2's board 588570 is new; RR's board 73996e is new; the v7 decode blind's board e165c7 is new; the v7 domain map's board 1e520d is new; the v7 prefill blind's board 8d8469 is new). Of the GH200 call-time results, three
 were tested end to end, from predicted bytes to predicted time, and one held: Mixtral 8x22B
 (1.71% rms); Qwen2-57B (2.71%) and rental 3's Qwen2-57B at TP=8 (3.50%, docs/FINDINGS.md,
 Rental 3) failed. (Note 2026-11-12: that count dates from rental 3. Rental 6's and rental 7's skew tests
@@ -470,6 +470,19 @@ no blind. Decode stays registered FAIL at the v7 blind, with no validity domain 
 prefill NO-GO at the gate stand. DESCRIPTIVE beside it, read after D was known: v7 reads 4.61% rms on the map (worst
 -19.39%, a short naive call priced fast), over-prices the aligned step by a median 1.7 to 4.2 us by E, and Phase 0's
 "naive twins within 0.33 us" holds only on some of the new shapes (docs/FINDINGS.md, Model v7 decode domain map).
+
+Model v7's prefill blind (registration `2026-11-18-v7-prefill-blind-gh200`, public at the push of 43a8802b; run
+2026-11-18 on one GH200, board 8d8469, about 86 min and $3.70) certifies no model: pooled rms 3.13% over 24 cells
+(worst -4.72%, mean -2.99%; every scored cell under-priced) against the working-model bar (rms 3%, worst 8%, |mean|
+1.5%, per model and pooled, a model certified when its own bar and the pooled bar hold with at least 10 cells in
+CLEAN), on 54 cells at 128x128x64 w8 s3, G 1 and G 16, of three models no prefill-tile page had timed:
+Granite-3.0-1B-A400M (6 cells scored, rms 4.25%, below the minimum), Granite-3.0-3B-A800M (6, 3.07%, below the
+minimum) and Qwen2-57B-A14B-tp8 (12, 2.43%, mean -2.37%); the registered host-bound rule dropped the other 30 cells.
+It was the third reopening of prefill, registered by the owner against the v7 gate's PREFILL NO-GO with the gate's
+own pass estimate beside it (P(A) 0.2067 at B2's bar), a forking path disclosed in the registration; it reverses no
+earlier verdict. Its registered verdict stands and the blind is spent; by the registration, prefill stops here. v7's
+status: R3 CERTIFIED (v3), decode registered FAIL (no validity domain: the map read D EMPTY), prefill registered FAIL
+at this blind (docs/FINDINGS.md, Model v7 prefill blind).
 
 **What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
 clocked cells. Three results need no fitted model: the cost of one extra M-tile

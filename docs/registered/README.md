@@ -2365,3 +2365,24 @@ $5.40 at $2.59/h; deadline launch + 140 min, hard cap + 155 min ($5.92 / $6.69).
 reopening and the gate override, the POST-HOC origin, v7 unchanged, RR's SEEN-chosen constants, B3's per-call risk on
 these short calls, the offline pricing done while building. Tests `tests/test_v7_prefill_blind.py` (stand-in boards,
 synthetic cells and a stub VM only).
+
+RESULT 2026-11-18: public at the push of 43a8802b (the `--final` registration); run commit 8c9e29a2 (a test-only
+commit on top); one GH200 (Lambda instance 365b52c0, region not recorded for the launch that ran; three earlier
+attempts in us-east-3 refused for capacity), board 8d8469, new to the study, launched 22:02:55Z, termination confirmed
+23:28:45Z, about 86 min and $3.70 at $2.59/h (registered: 84 unit-min, about 125 min, $4.77 at $2.29/h, $5.40 at
+$2.59/h); 14 units, every one exit 0, none dropped, 700 W read back, the 1410 MHz lock held on every timed page (worst
+1410.0 MHz). Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session`. Scored by
+`score_blind_v7p.py` from a clean checkout: first on the fetched tree's `vm/` at the run commit, then on the published
+copy at 148dbfc1 (git_dirty false), the same reading; the JSON differing only in the session path and the recorded
+checkout. Committed as `scripts/scoring/v7pblind/prefill_blind.score.{json,txt}`; `scripts/scoring/rescore.py
+v7pblind` re-scores it. Since publication the v7 decode blind's `--check` reads DIFFERS on its computed unseen scan
+alone (9 lines against 6); this registration's `--check` reads same (its census runs over the sessions it records).
+Valid: C2_POWER_W=700, LOCK_PROBE_1410 held, G-BAND PASS (registered fallback band), v7pcensus PASS (2 CTAs/SM), b3sag
+PASS (par 64.325 / 612.5 us), G3 PASS (EQUIVALENT, no stratum voided). The host-bound rule dropped 30 of 54 cells (every
+Granite G 1 cell, Qwen2-57B-tp8's tread-1 G 1 cells). **Pooled bar FAILS** (24 cells, rms 3.13%, worst -4.72%, mean
+-2.99%); Granite-3.0-1B-A400M FAILS (6 cells, rms 4.25%, worst -4.72%, mean -4.24%) -> NOT CERTIFIED: below the
+minimum; Granite-3.0-3B-A800M FAILS (6, 3.07%, -3.80%, -3.00%) -> NOT CERTIFIED: below the minimum;
+Qwen2-57B-A14B-tp8 FAILS (12, 2.43%, -3.02%, -2.37%) -> NOT CERTIFIED; **no model CERTIFIED**. B3's E1-TILE
+(DESCRIPTIVE) FAILS. This was the one blind of the third reopening of prefill (owner, 2026-11-18, against the gate's
+NO-GO, P(A) 0.2067); its registered verdict stands, the blind is spent, and by the registration prefill stops here
+(docs/FINDINGS.md, Model v7 prefill blind).

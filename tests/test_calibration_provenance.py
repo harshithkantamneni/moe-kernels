@@ -489,6 +489,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-11-18-nvidia_gh200_480gb-v7b-session": SESSION,
         # Model v7's decode domain map rental of 2026-11-18: one GH200, 16 units of the registered plan (calibrate's ruler, then vLLM's decode MoE call at the 1710 MHz lock on one GRR main page per synthetic map shape, 14 shapes, families A, B and C; none dropped), read by read_map.py, DESCRIPTIVE.
         "2026-11-18-nvidia_gh200_480gb-v7m-session": SESSION,
+        # Model v7's prefill blind rental of 2026-11-18: one GH200, 14 units of the registered plan (C2's prelude at 1410 MHz and 700 W, calibrate's ruler, the CAL census and its gate, OLMoE-1B-7B's and Mixtral-8x7B's f128 byte pages, the band and sag gates, then B3's timed pages at 128x128x64 w8 s3, G 1 and G 16, on Granite-3.0-1B-A400M, Granite-3.0-3B-A800M and Qwen2-57B-A14B-tp8), scored by score_blind_v7p.py.
+        "2026-11-18-nvidia_gh200_480gb-v7p-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

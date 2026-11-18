@@ -1,0 +1,10 @@
+MODEL v7 PREFILL BLIND (Granite-3.0-1B-A400M, Granite-3.0-3B-A800M, Qwen2-57B-A14B-tp8): the working-model bar {'rms_max': 0.03, 'max_abs': 0.08, 'mean_max': 0.015}
+validity: {"board": {"c2_power_env": "C2_POWER_W=700", "g_band": "PASS", "g_band_which": "fallback (registered: the primary band left joint_cF None)", "lock_probe": "LOCK_PROBE_1410=held", "valid": true, "why": ""}, "gates": {"census": {"verdict": "PASS", "why": ""}, "sag": {"verdict": "PASS", "why": ""}}, "valid": true, "why": ""}
+par (on-board F1): [64.325, 612.5]; unpriced []
+pooled: FAILS {"cells": 24, "mean": -0.029945, "rms": 0.031338, "worst": -0.04716}
+  granite-3.0-1b-a400m: FAILS {"cells": 6, "mean": -0.042406, "rms": 0.042492, "worst": -0.04716} -> NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)
+  granite-3.0-3b-a800m: FAILS {"cells": 6, "mean": -0.029986, "rms": 0.030688, "worst": -0.037995} -> NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)
+  qwen2-57b-a14b-tp8: FAILS {"cells": 12, "mean": -0.023694, "rms": 0.024301, "worst": -0.030192} -> NOT CERTIFIED (own bar FAILS; pooled bar FAILS)
+cells scored in CLEAN: {"granite-3.0-1b-a400m": 6, "granite-3.0-3b-a800m": 6, "qwen2-57b-a14b-tp8": 12}
+B3's E1-TILE (DESCRIPTIVE): {"reading": "FAILS", "certification (B3's, 2 pages in CLEAN)": {"granite-3.0-1b-a400m": "NOT CERTIFIED", "granite-3.0-3b-a800m": "NOT CERTIFIED", "qwen2-57b-a14b-tp8": "NOT CERTIFIED"}}
+registration sha256 998a8c101c8b8a2a13fb0f002d281153b2bdaf10a54d7a8bebd0a9ab50665879, commit 148dbfc172c042a7f1bf0745d5fd44d020cbfc9d

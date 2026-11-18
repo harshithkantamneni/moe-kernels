@@ -29,7 +29,10 @@ scorer records), and the committed v7 blind score reads E1-DEC pooled FAILS with
 decode domain map reader its published session (the session root) to the committed
 scripts/scoring/v7domain/map.domain files (read from a clean checkout of the published tree, so equal but for the
 checkout the reader records), and the committed map readout reads D EMPTY, no path with an X_p, the slab guard not
-triggered.
+triggered, and model v7's prefill blind scorer its published session (the session root) to the committed
+scripts/scoring/v7pblind/prefill_blind.score files (scored from a clean checkout of the published tree, so equal but
+for the checkout the scorer records), and the committed prefill score's certifications are the registered rule applied
+to its own bars and CLEAN counts, read from the file, not assumed.
 
 Since 2026-11-17 the cal3, decode CAL, CAL2 and DS, PC, PC2 and RR re-reads are held to their committed files by
 tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's theta
@@ -581,6 +584,78 @@ def test_the_committed_v7_domain_map_readout_reads_d_empty_from_a_clean_checkout
     assert "  D is EMPTY: no path has an X_p" in txt
     assert sum("OUTSIDE THE DOMAIN (no X_p)" in t for t in txt) == 3
     assert txt[-1] == f"registration sha256 {V7M_REG_SHA}, commit {V7M_READ_AT}"
+
+
+V7P_SESSION = "results/published/2026-11-18-nvidia_gh200_480gb-v7p-session"
+V7P_SCORES = REPO / "scripts/scoring/v7pblind"
+V7P_REG_SHA = "998a8c101c8b8a2a13fb0f002d281153b2bdaf10a54d7a8bebd0a9ab50665879"
+V7P_MODELS = ("granite-3.0-1b-a400m", "granite-3.0-3b-a800m", "qwen2-57b-a14b-tp8")
+
+
+def _v7p_committed() -> dict:
+    return json.loads((V7P_SCORES / "prefill_blind.score.json").read_text())
+
+
+def test_the_published_v7_prefill_blind_session_rescores_to_the_committed_files(tmp_path):
+    """Scored on the published session root from a clean checkout of the commit that published it: the re-score's
+    exit is the committed reading's (0 SCORED, 1 NOT SCORED, both files written), and the files are held to the
+    committed ones by tests/_reproduce.py and by RS.compare's text equality, the checkout the scorer records aside."""
+    assert RS.tree_of("v7pblind") == V7P_SESSION
+    want_rc = 1 if _v7p_committed()["verdict"] == "NOT SCORED" else 0
+    ran = RS.rescore("v7pblind", tmp_path)
+    assert ran == [("scripts/scoring/v7pblind/score_blind_v7p.py", want_rc)], ran
+    assert _reproduces("v7pblind", tmp_path) == ["prefill_blind.score.json", "prefill_blind.score.txt"]
+    assert dict(RS.compare("v7pblind", tmp_path)) == {"prefill_blind.score.json": "EQUAL",
+                                                       "prefill_blind.score.txt": "EQUAL"}
+    got = json.loads((tmp_path / "prefill_blind.score.json").read_text())
+    want = _v7p_committed()
+    assert not RT.compare_json(got, want, skip={("provenance", "git_head"), ("provenance", "git_dirty")})
+    assert got["session"] == want["session"] == V7P_SESSION
+    assert got["provenance"]["registration_sha256"] == want["provenance"]["registration_sha256"] == V7P_REG_SHA
+
+
+def test_the_committed_v7_prefill_blind_score_is_from_a_clean_checkout_and_reads_by_the_registered_rule():
+    """Provenance: the registration at its committed path and sha256, scored from a clean checkout (git_dirty false)
+    of a commit in this history that holds the published session. The reading, whatever it is: SCORED or NOT SCORED;
+    when SCORED, each model's certification is the registered rule on the committed bars (CERTIFIED iff its combined
+    bar HOLDS, the combined pooled bar HOLDS and at least 10 of its cells are scored in CLEAN); the .txt states the
+    same verdicts and closes on the recorded commit."""
+    d = _v7p_committed()
+    assert d["registration"] == "2026-11-18-v7-prefill-blind-gh200"
+    p = d["provenance"]
+    assert {k: p[k] for k in ("registration_path", "registration_sha256", "git_dirty")} == {
+        "registration_path": "docs/registered/2026-11-18-v7-prefill-blind-gh200.json",
+        "registration_sha256": V7P_REG_SHA, "git_dirty": False}
+    assert re.fullmatch(r"[0-9a-f]{40}", p["git_head"])
+    held = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{p['git_head']}:{V7P_SESSION}/KIND"])
+    assert held.returncode == 0, "the scoring commit does not hold the published session"
+    assert d["verdict"] in ("SCORED", "NOT SCORED") and set(d["certified"]) == set(V7P_MODELS)
+    txt = (V7P_SCORES / "prefill_blind.score.txt").read_text().splitlines()
+    assert txt[0].startswith("MODEL v7 PREFILL BLIND (Granite-3.0-1B-A400M, Granite-3.0-3B-A800M, Qwen2-57B-A14B-tp8)")
+    assert txt[-1] == f"registration sha256 {V7P_REG_SHA}, commit {p['git_head']}"
+    if d["verdict"] == "NOT SCORED":
+        assert all(v.startswith("NOT CERTIFIED") for v in d["certified"].values())
+        assert f"NOT SCORED: {d['why']}" in txt
+        return
+    bars = d["BARS (registered: ALL and CLEAN, rule 3)"]
+    n = d["cells scored in CLEAN"]
+    for m in V7P_MODELS:
+        own, pooled, k = bars["per_model"][m]["verdict"], bars["pooled"]["verdict"], int(n[m])
+        if k < 10:
+            assert d["certified"][m].startswith("NOT CERTIFIED: BELOW THE MINIMUM"), m
+        elif own == "HOLDS" and pooled == "HOLDS":
+            assert d["certified"][m] == "CERTIFIED", m
+        else:
+            assert d["certified"][m] == f"NOT CERTIFIED (own bar {own}; pooled bar {pooled})", m
+        assert any(t.startswith(f"  {m}: {own} ") and t.endswith(f"-> {d['certified'][m]}") for t in txt), m
+    assert f"pooled: {bars['pooled']['verdict']} {json.dumps(bars['pooled']['stats'])}" in txt
+
+
+def test_a_v7p_not_scored_exit_is_a_scored_exit_for_rescore_only():
+    """score_blind_v7p exits 1 on its registered NOT SCORED reading with both files written; rescore.py holds that
+    exit to the committed files (OK_EXITS); every other stage still asks exit 0."""
+    assert RS.OK_EXITS == {"v7pblind": (0, 1)} and "v7pblind" in RS.CHECKOUT
+    assert RS.OUTPUTS.get("v7pblind", "*.score.*") == "*.score.*" and "v7pblind" not in RS.COMMITTED_AS
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):

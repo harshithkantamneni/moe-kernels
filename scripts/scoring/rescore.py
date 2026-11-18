@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2, rr, v7blind or v7domain. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2, rr, v7blind, v7domain or v7pblind. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -94,6 +94,15 @@ scripts/scoring/v7domain/ as map.domain.json and map.domain.txt (the readout pat
 names), read from a clean checkout of the published tree. It records the checkout it ran in as score_blind_v7 does,
 compared as present (checkout_free); the registration's sha256 is compared exactly.
 
+v7pblind is model v7's prefill blind rental (2026-11-18-v7-prefill-blind-gh200): its registered scorer
+(scripts/scoring/v7pblind/score_blind_v7p.py, which reads the registration at its committed path only, refuses a dirty
+checkout, and finalises and scores in one step) takes the published session directory itself (the session root, as
+v7blind) and an output directory, and writes prefill_blind.score.json and prefill_blind.score.txt, committed in
+scripts/scoring/v7pblind/ under those names, scored from a clean checkout of the published tree. It records the
+checkout it ran in as score_blind_v7 does, compared as present (checkout_free); the registration's sha256 is compared
+exactly. Its exit 1 is the registered NOT SCORED reading (the power check, a gate, or G3's homogeneous void), which
+still writes both files, so a re-score exiting 1 is held to the committed files like an exit 0 (OK_EXITS).
+
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
 is replaced by the committed one (the tileA2 census score records the merged census under its output
@@ -145,10 +154,12 @@ STAGES = {
                 ["scripts/scoring/v7blind/score_blind_v7.py"]),
     "v7domain": ("2026-11-18-nvidia_gh200_480gb-v7m-session", "scripts/scoring/v7domain",
                  ["scripts/scoring/v7domain/read_map.py"]),
+    "v7pblind": ("2026-11-18-nvidia_gh200_480gb-v7p-session", "scripts/scoring/v7pblind",
+                 ["scripts/scoring/v7pblind/score_blind_v7p.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
 TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": "", "tileB3": "", "pc": "", "pc2": "", "rr": "",
-        "v7blind": "", "v7domain": ""}
+        "v7blind": "", "v7domain": "", "v7pblind": ""}
 #: the files each stage's scorers write (default: *.score.*)
 OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.read.*", "cal4": "cal4.read.*",
            "decodeDS": "ds.readings.*", "pc": "pc.read.*", "pc2": "pc2.read.*",
@@ -166,7 +177,8 @@ ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "pc2": lambda tree, out: ["--pc2", tree, "--out-dir", out],
         "rr": lambda tree, out: ["--rr", tree, "--out-dir", out],
         "v7blind": lambda tree, out: [tree, out],
-        "v7domain": lambda tree, out: [tree, out]}
+        "v7domain": lambda tree, out: [tree, out],
+        "v7pblind": lambda tree, out: [tree, out]}
 #: the committed name of a scratch score file, where the stage committed it under another name
 COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"},
                 "v7domain": {"domain.json": "map.domain.json", "domain.txt": "map.domain.txt"}}
@@ -174,8 +186,12 @@ COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.t
 #: run-relative tail (the part before it is whichever machine fetched it); it reads as the published session (the
 #: fetched tree's vm/ is the session's top level)
 FETCHED = {"decodeCAL2": "/runs/gh200-tile2-20261103T2203Z/tree/vm"}
-#: stages whose scorer records the checkout it ran in (score_blind_v7.provenance, read_map.provenance)
-CHECKOUT = {"v7blind", "v7domain"}
+#: stages whose scorer records the checkout it ran in (score_blind_v7.provenance, read_map.provenance,
+#: score_blind_v7p.provenance)
+CHECKOUT = {"v7blind", "v7domain", "v7pblind"}
+#: the exit codes a stage's scorer gives with both score files written (default: 0 only); score_blind_v7p exits 1 on
+#: its registered NOT SCORED reading
+OK_EXITS = {"v7pblind": (0, 1)}
 _CHECKOUT = ((re.compile(r'("git_head": )"[0-9a-f]{40}"'), r'\1"<checkout>"'),
              (re.compile(r'("git_dirty": )(?:true|false)'), r'\1"<checkout>"'),
              (re.compile(r'(, commit )[0-9a-f]{40}$', re.M), r'\1<checkout>'))
@@ -251,7 +267,7 @@ def main(argv=None) -> int:
         rows = compare(a.stage, out)
         for name, state in rows:
             print(f"  {name}: {state}")
-        ok = all(rc == 0 for _s, rc in ran) and rows and all(state == "EQUAL" for _n, state in rows)
+        ok = all(rc in OK_EXITS.get(a.stage, (0,)) for _s, rc in ran) and rows and all(state == "EQUAL" for _n, state in rows)
         print("RESCORE", a.stage, "EQUAL" if ok else "NOT EQUAL")
         return 0 if ok else 1
     finally:

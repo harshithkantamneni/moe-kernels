@@ -7,7 +7,9 @@ plan and every page byte for byte on a stub VM, and refuses a DRAFT plan; the sc
 not one it misprices. The registration's unseen scan is computed over the live tree, so since the blind's own session
 was published (2026-11-18) it is recomputed over the sessions published before it (_build), and the live scan is held
 to the registered one plus exactly that session's line and, since the v7 domain map's session was published
-(2026-11-18), that session's line, which names no reserved model in a file name."""
+(2026-11-18), that session's line, which names no reserved model in a file name, and, since v7's prefill blind's
+session was published (2026-11-18), that session's line, whose page names carry Granite-3.0-1B-A400M and
+Qwen2-57B-A14B-tp8 (prefill pages, not decode pages)."""
 from __future__ import annotations
 
 import hashlib
@@ -112,8 +114,10 @@ BLIND_SESSION = "2026-11-18-nvidia_gh200_480gb-v7b-session"
 #: the v7 domain map's published session (2026-11-18-v7-domain-map-gh200; synthetic shapes only), dated after the
 #: 2026-11-04 cut, so the scan reads it too
 MAP_SESSION = "2026-11-18-nvidia_gh200_480gb-v7m-session"
+#: v7's prefill blind's published session (2026-11-18-v7-prefill-blind-gh200), dated after the cut too
+PREFILL_SESSION = "2026-11-18-nvidia_gh200_480gb-v7p-session"
 #: the sessions published after the registration, which its scan therefore does not hold
-LATER = (BLIND_SESSION, MAP_SESSION)
+LATER = (BLIND_SESSION, MAP_SESSION, PREFILL_SESSION)
 
 
 def _before(lines: list[str]) -> list[str]:
@@ -167,11 +171,28 @@ def test_the_live_unseen_scan_adds_only_the_blinds_and_the_maps_sessions_and_the
     key = "unseen scan (COMPUTED: published sessions dated 2026-11-04 or later, check_unseen's pattern)"
     registered = _reg()["models"][key]
     live = V.unseen_scan()
-    extra = [ln for ln in live if ln not in registered]
-    assert len(live) == len(registered) + 2 and [ln.split(":")[0] for ln in extra] == list(LATER)
+    extra = [ln for ln in live if ln not in registered and not ln.startswith(PREFILL_SESSION + ":")]
+    assert [ln.split(":")[0] for ln in extra] == [BLIND_SESSION, MAP_SESSION]
     assert int(re.search(r"file names naming a reserved model: (\d+);", extra[1]).group(1)) == 0
     pages = sorted(p.name for p in (REPO / "results/published" / MAP_SESSION / "results").glob("gaps-*"))
     assert len(pages) == 14 and all(p.startswith("gaps-nvidia_gh200_480gb-map-") and p.endswith("-dm") for p in pages)
+
+
+def test_the_live_unseen_scan_adds_the_prefill_blinds_session_last_and_its_pages_are_prefill_pages():
+    """Since v7's prefill blind's session was published the live scan is the registered one plus exactly three lines,
+    the decode blind's, the map's and the prefill blind's, in that order. The prefill session's file names carry
+    Granite-3.0-1B-A400M (a reserved model here) and Qwen2-57B-A14B-tp8 (the pattern's qwen2-57b): its timed pages are
+    B3's prefill pages at 128x128x64 w8 s3, G 1 and G 16, no decode page. register_v7_blind.py --check reads DIFFERS
+    on this field alone (length 9 against 6)."""
+    key = "unseen scan (COMPUTED: published sessions dated 2026-11-04 or later, check_unseen's pattern)"
+    registered = _reg()["models"][key]
+    live = V.unseen_scan()
+    extra = [ln for ln in live if ln not in registered]
+    assert len(live) == len(registered) + 3 and [ln.split(":")[0] for ln in extra] == list(LATER)
+    assert int(re.search(r"file names naming a reserved model: (\d+);", extra[2]).group(1)) > 0
+    pages = sorted(p.name for p in (REPO / "results/published" / PREFILL_SESSION / "results").glob("gaps-*"))
+    assert pages == sorted(f"gaps-nvidia_gh200_480gb-{m}-t128g{g}" for m in (
+        "granite-3.0-1b-a400m", "granite-3.0-3b-a800m", "qwen2-57b-a14b-tp8") for g in (1, 16))
 
 
 def test_the_committed_registration_and_plan_are_final_and_the_committed_gate_reads_decode_go():

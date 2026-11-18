@@ -4854,6 +4854,103 @@ name), and `register_v7_blind.py --check` reads DIFFERS on that field alone (8 s
 pinned builder is not edited). The map's and the domain blind's `--check` read same. No earlier registered verdict, bar
 or pinned file changes.
 
+## Model v7 prefill blind (2026-11-18): the pooled bar FAILS (3.13% rms over 24 cells, mean -2.99%); no model CERTIFIED; the third reopening of prefill, against the gate's NO-GO, is spent and the stage stops
+
+**Registered, then run.** Registration `2026-11-18-v7-prefill-blind-gh200` (docs/registered/README.md; sha256
+998a8c10...; DRAFT first, REGISTERED by `--write --final` with the owner's go recorded) became public at the push of
+43a8802b, before the 22:02:55Z launch and before any page of its three models. It is
+the THIRD reopening of prefill, chosen by the owner on 2026-11-18 AGAINST the v7 gate's registered PREFILL NO-GO
+(REFUSED on `No module named 'refit4'`; the DESCRIPTIVE re-run with the fix reads G1 FAILS, held-out means -1.99 to
++1.66% against 1.0%, and G2 FAILS, the gate's own pass estimate P(A) 0.2067 against 0.5, B 0.284, D 0.1885 at B2's
+bar), a forking path disclosed at the top of the registration; it reverses nothing (round 5's gate FAIL, B3's FAIL,
+the v7 gate's PREFILL NO-GO and the decode FAILs stand). It froze model v7 unchanged (every switch on, RR at G 1;
+round 5's prefill branch at its SEEN constants; at G 16 v7 is round 5 exactly), plus the refit4 fix applied in memory
+outside every frozen file, registered verbatim, which changes no price; 54 predictions at four reference pars,
+finalised mechanically at the rental's own 128x128 sag par before any blind page. Models (census over every registered
+page list and every published session: no prefill-tile page): Granite-3.0-1B-A400M (E 32, H 1024), Granite-3.0-3B-A800M
+(E 40, H 1536) and Qwen2-57B-A14B-tp8 (E 64, H 3584, a TP shard of a CAL model, disclosed); B3's recipe and instrument
+at 128x128x64 w8 s3, G 1 at the two smallest vLLM-consistent treads and G 16 at n 9, 18 NATIVE cells a model. Bars
+(the working-model bar, owner 2026-11-04, unchanged): rms 3%, every cell within 8%, |mean| 1.5%, per model and pooled,
+each read in B3's ALL and CLEAN views and combined by rental 2's rule 3; a model CERTIFIED when its own bar and the
+pooled bar hold (decodeB-blind's rule, as v7's decode blinds) and at least 10 of its cells are scored in CLEAN. B3's
+E1-TILE conjunction is DESCRIPTIVE beside, never the verdict. Expected at registration (ESTIMATE, judgment): about 0.3
+to 0.5 that the pooled bar and at least one model hold, under 0.25 that all three certify.
+
+The rental ran at 8c9e29a2 (43a8802b plus a test-only commit) on one GH200 (Lambda instance 365b52c0, board 8d8469,
+new to the study), launched 22:02:55Z after three launch attempts refused for capacity, termination confirmed
+23:28:45Z, about 86 min: about $3.70 at Lambda's $2.59/h, $3.28 at the registration's $2.29/h (registered: 84
+unit-min, about 125 min wall, $4.77 at $2.29/h, $5.40 at $2.59/h; deadline launch + 140 min, hard cap + 155 min,
+$5.92 / $6.69). 14 units in about 76 min, every unit and the driver exit 0, none dropped, 700 W read back, every
+timed page held the 1410 MHz lock (worst 1410.0 MHz on all six). The 335 run-branch files verified against
+SHA256SUMS; published at `results/published/2026-11-18-nvidia_gh200_480gb-v7p-session` (325 files, the 10
+`cuda_utils` .so files left out as before). The registered scorer ran on the published session root from a clean
+checkout of the commit that published it (148dbfc1), exit 0:
+
+```
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/scoring/v7pblind/score_blind_v7p.py results/published/2026-11-18-nvidia_gh200_480gb-v7p-session <out>
+```
+
+Its `prefill_blind.score.{json,txt}` are committed in `scripts/scoring/v7pblind/` (provenance: registration sha256
+998a8c10..., git_head 148dbfc1, git_dirty false). Scored first on the fetched tree's `vm/` from a clean checkout of
+the run commit, the verdicts, bars and cells were the same; only the session path and the recorded checkout differ.
+`scripts/scoring/rescore.py v7pblind` re-scores the published session to the committed files. This is the reading:
+
+```
+MODEL v7 PREFILL BLIND (Granite-3.0-1B-A400M, Granite-3.0-3B-A800M, Qwen2-57B-A14B-tp8): the working-model bar {'rms_max': 0.03, 'max_abs': 0.08, 'mean_max': 0.015}
+validity: {"board": {"c2_power_env": "C2_POWER_W=700", "g_band": "PASS", "g_band_which": "fallback (registered: the primary band left joint_cF None)", "lock_probe": "LOCK_PROBE_1410=held", "valid": true, "why": ""}, "gates": {"census": {"verdict": "PASS", "why": ""}, "sag": {"verdict": "PASS", "why": ""}}, "valid": true, "why": ""}
+par (on-board F1): [64.325, 612.5]; unpriced []
+pooled: FAILS {"cells": 24, "mean": -0.029945, "rms": 0.031338, "worst": -0.04716}
+  granite-3.0-1b-a400m: FAILS {"cells": 6, "mean": -0.042406, "rms": 0.042492, "worst": -0.04716} -> NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)
+  granite-3.0-3b-a800m: FAILS {"cells": 6, "mean": -0.029986, "rms": 0.030688, "worst": -0.037995} -> NOT CERTIFIED: BELOW THE MINIMUM (6 cells scored in CLEAN, under 10; bar FAILS)
+  qwen2-57b-a14b-tp8: FAILS {"cells": 12, "mean": -0.023694, "rms": 0.024301, "worst": -0.030192} -> NOT CERTIFIED (own bar FAILS; pooled bar FAILS)
+cells scored in CLEAN: {"granite-3.0-1b-a400m": 6, "granite-3.0-3b-a800m": 6, "qwen2-57b-a14b-tp8": 12}
+B3's E1-TILE (DESCRIPTIVE): {"reading": "FAILS", "certification (B3's, 2 pages in CLEAN)": {"granite-3.0-1b-a400m": "NOT CERTIFIED", "granite-3.0-3b-a800m": "NOT CERTIFIED", "qwen2-57b-a14b-tp8": "NOT CERTIFIED"}}
+registration sha256 998a8c101c8b8a2a13fb0f002d281153b2bdaf10a54d7a8bebd0a9ab50665879, commit 148dbfc172c042a7f1bf0745d5fd44d020cbfc9d
+```
+
+| | cells (ALL / CLEAN) | rms | worst | mean | bar (rule 3) | certification |
+|---|---:|---:|---:|---:|---|---|
+| pooled | 24 / 24 | 3.13% | -4.72% | -2.99% | FAILS (rms, mean) | |
+| Granite-3.0-1B-A400M | 6 / 6 | 4.25% | -4.72% | -4.24% | FAILS (rms, mean) | NOT CERTIFIED: below the minimum (6 in CLEAN, under 10) |
+| Granite-3.0-3B-A800M | 6 / 6 | 3.07% | -3.80% | -3.00% | FAILS (rms, mean) | NOT CERTIFIED: below the minimum (6 in CLEAN, under 10) |
+| Qwen2-57B-A14B-tp8 | 12 / 12 | 2.43% | -3.02% | -2.37% | FAILS (mean) | NOT CERTIFIED (own bar and pooled bar FAIL) |
+
+e is (predicted - measured) / measured. Validity: the power check reads 700 W, LOCK_PROBE_1410 held, G-BAND PASS on
+its registered fallback band (the primary band left OLMoE's byte page without a cell in band), v7pcensus PASS (2 CTAs
+per SM on all six model-and-tread entries, no MMA path mismatch), b3sag PASS at par 64.325 / 612.5 us. G3 PASS,
+EQUIVALENT (4 cells, pooled mean -0.05%, inside the 0.36% margin); no stratum voided. Every page counted in ALL and
+CLEAN; the G 1 pages read 0 of 216 repeat rows non-clean. The registered host-bound rule (G2: v3 + F240 under 0.40 ms)
+dropped 30 of the 54 NATIVE cells: all 12 G 1 cells of each Granite and Qwen2-57B-tp8's 6 tread-1 G 1 cells. So the
+scored set is each model's 6 G 16 cells plus Qwen2-57B-tp8's 6 tread-2 G 1 cells, and both Granites fall under the
+10-cell minimum whatever their bars read.
+
+**What it means, by the registered rule.** No model is CERTIFIED: as registered, "a fail closes prefill"; v7's
+prefill branch is not certified on any unseen model. The failure is a bias, not a spread: all 24 scored cells are
+under-priced, e from -1.57% to -4.72%, and each model's rms sits within 0.1 point of its |mean|; the |mean| bar fails
+for every model and the pool, the rms bar for both Granites and the pool, the 8% worst-cell bar for none. The gate's
+own estimate put a pass near one in five at B2's bar; the reading above is the registered one and is not re-weighed
+by that estimate. This was the one blind of the third reopening; its verdict stands and the blind is spent: by the
+registration's design ("ONE prefill blind of model v7 ... pass or fail; then the stage stops and is reported either
+way") prefill stops here. v7's status: R3 CERTIFIED (v3, unchanged), decode registered FAIL (v7 blind; the map read D
+EMPTY, no validity domain), prefill registered FAIL at this blind; the v7 gate's PREFILL NO-GO (REFUSED) stands as the
+gate's reading.
+
+DESCRIPTIVE beside (no verdict): B3's E1-TILE conjunction FAILS on these models; B2's bar (2%, 5%, 1%) on the same
+cells FAILS; round 5 (every switch off) on the same cells reads rms 3.12%, worst -4.72%, mean -2.97% against v7's
+3.13% / -4.72% / -2.99% (RR's rung acts only at G 1, and the only G 1 cells scored are Qwen2-57B-tp8's six; at G 16
+the two are equal), so v7's switches move nothing measurable here; splits: 128 G 1, 6 cells, rms 2.33%, mean -2.24%;
+128 G 16, 18 cells, rms 3.36%, mean -3.25%; per model and class, Granite-1B G 16 4.25% / -4.24%, Granite-3B G 16
+3.07% / -3.00%, Qwen2-57B-tp8 G 1 2.33% / -2.24% and G 16 2.52% / -2.50%; no stratum was voided, so the bars without
+G3's voids are the bars.
+
+**Publication moves one earlier registration's computed field.** The v7 decode blind registration's unseen scan
+(every published session dated 2026-11-04 or later) now reads this session too (9 lines against the registered 6: the
+decode blind's, the map's and this one, whose page names carry Granite-3.0-1B-A400M and Qwen2-57B-A14B-tp8 at a
+prefill tile), so `register_v7_blind.py --check` reads DIFFERS on that field alone; the pinned builder is not edited,
+and tests/test_v7_decode_blind.py holds the live scan to the registered one plus exactly those three lines.
+`register_v7p_blind.py --check`, `register_v7d_blind.py --check` and `register_v7_domain.py --check` read same (their
+censuses run over the sessions they record).
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are
