@@ -14,3 +14,7 @@
 2026-11-18T22:12:09Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on granite-3.0-1b-a400m granite-3.0-3b-a800m qwen2-57b-a14b-tp8; refused on an MMA path mismatch [unit 3/14 - tp tiles=128x128x64w8s3 models=granite-3.0-1b-a400m,granite-3.0-3b-a800m,qwen2-57b-a14b-tp8] (estimate 4 min, cap 15 min, 122 min left)
 2026-11-18T22:12:18Z tilecensus END: exit 0 after 0 min [unit 3/14 - tp tiles=128x128x64w8s3 models=granite-3.0-1b-a400m,granite-3.0-3b-a800m,qwen2-57b-a14b-tp8]
 2026-11-18T22:12:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 2d91414 to run-gh200-v7p-20261118t2202: tilecensus (unit 3/14 - tp tiles=128x128x64w8s3 models=granite-3.0-1b-a400m,granite-3.0-3b-a800m,qwen2-57b-a14b-tp8): exit 0 (0 min)
+2026-11-18T22:12:20Z gate START: gate v7pcensus: scripts/v7p_gate.py census at the 1410 lock; FAIL ends the rental before any timed unit (v7 prefill blind) [unit 4/14 - gcen gate=v7pcensus] (estimate 1 min, cap 5 min, 122 min left)
+2026-11-18T22:12:21Z gate END: exit 0 after 0 min [unit 4/14 - gcen gate=v7pcensus]
+2026-11-18T22:12:22Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
