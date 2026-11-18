@@ -103,3 +103,4 @@
 2026-11-18T10:26:06Z r3decode: locked_r3 exit 0
 2026-11-18T10:26:06Z r3decode END: exit 0 after 6 min [unit 16/16 map-c-e256k8-h4096i1024 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 2026-11-18T10:26:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T10:26:12Z driver end: exit 0

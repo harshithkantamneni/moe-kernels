@@ -16,3 +16,4 @@
 2026-11-18T10:15:33Z r3decode (unit 14/16 map-b-e32k4-h4096i1536 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h4096i1536-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (3 min)
 2026-11-18T10:20:32Z r3decode (unit 15/16 map-c-e256k8-h7168i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h7168i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (5 min)
 2026-11-18T10:26:11Z r3decode (unit 16/16 map-c-e256k8-h4096i1024 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-c-e256k8-h4096i1024-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (6 min)
+2026-11-18T10:26:16Z the session ended: driver exit 0
