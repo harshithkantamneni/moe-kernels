@@ -1,0 +1,23 @@
+{
+ "compared": 6,
+ "ctas_per_sm": {
+  "granite-3.0-1b-a400m|128x128x64w8s3|w1": 2,
+  "granite-3.0-1b-a400m|128x128x64w8s3|w2": 2,
+  "granite-3.0-3b-a800m|128x128x64w8s3|w1": 2,
+  "granite-3.0-3b-a800m|128x128x64w8s3|w2": 2,
+  "qwen2-57b-a14b-tp8|128x128x64w8s3|w1": 2,
+  "qwen2-57b-a14b-tp8|128x128x64w8s3|w2": 2
+ },
+ "drift": {
+  "granite-3.0-1b-a400m": [],
+  "granite-3.0-3b-a800m": [],
+  "qwen2-57b-a14b-tp8": []
+ },
+ "file": "/home/ubuntu/moe/results/2026-11-18-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tp/tile-census.json",
+ "gate": "census",
+ "path_mismatch": [],
+ "reference": "olmoe-1b-7b",
+ "sha256": "daf2599d1a1ccc55d2051ce2d62fe33db0ff1aa5683182c713f408ada7977f64",
+ "verdict": "PASS",
+ "why": ""
+}

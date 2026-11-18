@@ -1,0 +1,28 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist8e5bcae6-a694457e
+model       granite-3.0-1b-a400m E=32 k=8  bf16 (2 bytes)
+tile        BLOCK_M=128, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 128, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 16, 'num_warps': 8, 'num_stages': 3}
+histogram   docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g16.json (sha256 8e5bcae6684f1b61...), page granite-3.0-1b-a400m-128g16, 6 cells x arms = 12 timed cells, token-row shuffle seed 20281118; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       175.89 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 655.4 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-11-18 at 8c9e29a2
+experts     native declares E=32; shared declares E x n_decl = 288 at every cell
+            n_decl = 9 against n_max = 9 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 9 against the 9 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261118T221137Z-p2d-lock1410
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-granite-3.0-1b-a400m-t128g16/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist8e5bcae6-a694457e
+slips       --slip-policy cell at the 1410 MHz lock: a repeat under 1395 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 1 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=9   PT               native,shared  block-scan   e04e247623085c1a
+  n=9   PW               native,shared  block-scan   a7e661ec92782efd
+  n=9   PT2              native,shared  block-scan   7238841ecb47efb4
+  n=9   PW2              native,shared  block-scan   c09828cbf693dffd
+  n=9   uniform          native,shared  block-scan   584d57004dcfa8f5
+  n=9   balanced         native,shared  block-scan   74234e98afe7498f
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================

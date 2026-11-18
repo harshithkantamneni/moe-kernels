@@ -1,0 +1,12 @@
+2026-11-18T23:04:49Z locked_r3 start: tag gh200-20261118T221137Z-p2d, locks [1410], G [16], R3 args --model granite-3.0-1b-a400m --block-m 128 --repeats 9 --duty 0.25 --seed 0 --declared-copies 9 --histogram docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g16.json --arms native,shared --num-stages 3 --block-k 64 --block-n 128 --num-warps 8, results /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-granite-3.0-1b-a400m-t128g16/private_weight_reference
+2026-11-18T23:04:49Z card: NVIDIA GH200 480GB, GPU-ae772dbb-f871-557f-c835-30f493719709, Enabled, 700.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-11-18T23:04:49Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-11-18T23:04:49Z locked at 1410 MHz: GPU clocks set to "(gpuClkMin 1410, gpuClkMax 1410)" for GPU 00000000:DD:00.0 All done.
+2026-11-18T23:04:49Z read back after the lock (an idle reading, not the lock's evidence): 1410 MHz, 1980 MHz, 0x0000000000000000, 137.63 W, 700.00 W
+2026-11-18T23:04:49Z G=16 start at lock 1410: pid 26877, tag gh200-20261118T221137Z-p2d-lock1410, log r3-g16-lock1410.log
+2026-11-18T23:04:59Z G=16 at lock 1410: R3 named its run directory nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist8e5bcae6-a694457e
+2026-11-18T23:12:00Z G=16 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 430 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist8e5bcae6-a694457e
+2026-11-18T23:12:00Z all G held at lock 1410 MHz
+2026-11-18T23:12:00Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1410 MHz lock is released
+2026-11-18T23:12:00Z read back after the reset: 1830 MHz, 1980 MHz, 0x0000000000000000, 112.59 W, 700.00 W
+2026-11-18T23:12:00Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
