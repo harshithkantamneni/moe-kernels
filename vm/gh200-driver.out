@@ -10,3 +10,7 @@
 2026-11-18T03:41:21Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/7 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 112 min left)
 2026-11-18T03:41:46Z calibrate END: exit 0 after 0 min [unit 2/7 mixtral-8x7b dcal]
 2026-11-18T03:41:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a9e7393 to run-gh200-v7b-20261118t0336: calibrate (unit 2/7 mixtral-8x7b dcal): exit 0 (0 min)
+2026-11-18T03:41:48Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 15 min, cap 45 min, 112 min left)
+2026-11-18T04:00:13Z r3decode END: exit 0 after 18 min [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:00:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
