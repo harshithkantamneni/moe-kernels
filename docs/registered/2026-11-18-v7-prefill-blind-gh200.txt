@@ -1,5 +1,5 @@
-DRAFT (not registered) 2026-11-18, before any page of Granite-3.0-1B-A400M, Granite-3.0-3B-A800M or Qwen2-57B-A14B-tp8: model v7's prefill blind, 2026-11-18-v7-prefill-blind-gh200
-status: DRAFT, NOT REGISTERED: the owner's go is not recorded; the plan carries a DRAFT line and scripts/vm_run_v7p.sh refuses it
+REGISTERED 2026-11-18, before any page of Granite-3.0-1B-A400M, Granite-3.0-3B-A800M or Qwen2-57B-A14B-tp8: model v7's prefill blind, 2026-11-18-v7-prefill-blind-gh200
+status: REGISTERED BEFORE ANY PAGE of the three models, the owner's go recorded
 
 THE THIRD REOPENING OF PREFILL, AGAINST A REGISTERED GATE NO-GO (owner, 2026-11-18). Prefill closed when round 5's gate FAILED (2026-10-28) and B3's blind FAILED (2026-11-05: E1-TILE FAILS, Phi-3.5-MoE rms 3.50%); it was reopened for model v7 (2026-11-17, the second reopening), whose registered gate (docs/registered/2026-11-17-v7-gate-gh200) read PREFILL: NO-GO: REFUSED: ModuleNotFoundError: No module named 'refit4' (scripts/scoring/v7/gate_v7.out.txt). The DESCRIPTIVE re-run with the fix (scripts/scoring/v7/prefill_rerun_v7.txt) reads NO-GO too: G1 FAILS (held-out means -1.99 to +1.66% against 1.0%: Qwen2-57B -1.50, Mixtral-8x7B +1.42, tp2 -1.99, Mixtral-8x7B C2 +1.66) and G2 FAILS (the gate's own pass estimate P(A) 0.2067 under 0.5; B 0.284, D 0.1885). The owner has nonetheless chosen ONE prefill blind of v7, every switch on, RR included, on unseen models: this registration OVERRIDES the gate's registered PREFILL NO-GO, knowingly, with the gate's own estimate printed beside it. It is a forking path the paper must disclose. It reverses nothing: B3's FAIL, round 5's gate FAIL, the v7 gate's PREFILL NO-GO (REFUSED) and the decode FAILs stand
 
@@ -13,6 +13,8 @@ EVERY EARLIER REGISTERED VERDICT STANDS:
 
 design: the owner's decision of 2026-11-18: ONE prefill blind of model v7, every switch on, RR included, on unseen models, B3's recipe and instrument, the working-model bar, pass or fail; then the stage stops and is reported either way
 tool: scripts/scoring/v7pblind/register_v7p_blind.py --write [--final] / --check (this file, the pages and the plan), scripts/scoring/v7pblind/score_blind_v7p.py <session dir> <out dir> (finalise and score), scripts/vm_run_v7p.sh (the launcher), scripts/gh200_v7p_session.sh (B3's driver plus V7P), scripts/v7p_gate.py (the census gate), scripts/tileB3_gate.py sag (B3's sag gate, unchanged)
+
+owner's go: 2026-11-18: chose "One prefill blind on v7" (third reopening, overriding the registered gate NO-GO); "yep you have permission to run everything until the final paper is done"
 
 MODELS
   chosen: granite-3.0-1b-a400m, granite-3.0-3b-a800m, qwen2-57b-a14b-tp8
@@ -142,7 +144,7 @@ rental:
   minutes: B3's per-unit minutes (its ledger, 2026-11-05: 7 min a tread of 6 cells on every timed page at 0.5 to 3 ms a cell; the f128 pages 3 and 7, the census 4, the gates 1 each); this blind's cells are 0.12 to 1.7 ms (A2's par)
   drop order: none: every unit is nodrop (no DESCRIPTIVE unit is planned)
   plan: scripts/plans/rentalV7P-prefill-blind-2026-11.plan
-  plan_sha256: 87d507bdbb21768df3bea9a7f04e53799a5b33f521412bf32a3e755696699e29
+  plan_sha256: 8b066bf77386d912f2e566dda79cca56c5432b2c30cb3e3941755df997b96796
   units:
     - {"line": "- prelude lock-mhz=1410 power-limit-w=700 est=2 cap=15", "est": 2}
     - {"line": "mixtral-8x7b calibrate label=tp nodrop=1 est=2 cap=30", "est": 2}

@@ -2334,8 +2334,8 @@ prefill NO-GO stand. `--check` reads same (it rebuilds over the sessions the DRA
 readout verifies and `--final` refuses it for the empty D alone (`tests/test_v7_domain_blind.py`) (docs/FINDINGS.md,
 Model v7 decode domain map).
 
-`2026-11-18-v7-prefill-blind-gh200` (`scripts/scoring/v7pblind/register_v7p_blind.py --write` / `--check`; DRAFT,
-written 2026-11-18 before any page of its three models; finalised by `--write --final --owner-go '<date>: <words>'`
+`2026-11-18-v7-prefill-blind-gh200` (`scripts/scoring/v7pblind/register_v7p_blind.py --write` / `--check`; REGISTERED
+2026-11-18 by `--write --final` with the owner's go recorded, before any page of its three models; DRAFT written first; finalised by `--write --final --owner-go '<date>: <words>'`
 only, which refuses unless the committed DRAFT verifies its freeze and equals the final document outside the DRAFT
 marks, the census and the freeze) registers model v7's ONE PREFILL blind: the THIRD reopening of prefill, chosen by the
 owner on 2026-11-18 AGAINST the v7 gate's registered PREFILL NO-GO (REFUSED on refit4; the DESCRIPTIVE re-run reads G1
