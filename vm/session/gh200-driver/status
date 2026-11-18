@@ -1,2 +1,11 @@
 2026-11-18T03:38:42Z setup_vm.sh start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-18T05:41:57Z
 2026-11-18T03:41:18Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-11-18T03:41:19Z driver start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4, steps of the plan scripts/plans/rentalV7B-decode-blind-2026-11.plan, deadline 2026-11-18T05:41:57Z (112 min of work left)
+2026-11-18T03:41:19Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalV7B-decode-blind-2026-11.plan (sha256 74ded4bc06b40dde38e3d19ba15b244555ccf7e6223cdf808b8032ad2d7c908e), 7 units
+2026-11-18T03:41:19Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/7 -] (estimate 3 min, cap 15 min, 112 min left)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-11-18T03:41:19Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261118T034119Z
+2026-11-18T03:41:19Z prelude END: exit 0 after 0 min [unit 1/7 -]
+2026-11-18T03:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
