@@ -7,3 +7,4 @@ r3decode   exit 0 after 2 min [unit 6/16 map-a-e64k8-h2048i512 dm histogram=docs
 r3decode   exit 0 after 2 min [unit 7/16 map-a-e128k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e128k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 r3decode   exit 0 after 2 min [unit 8/16 map-a-e256k8-h2048i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-a-e256k8-h2048i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
 r3decode   exit 0 after 2 min [unit 9/16 map-b-e32k4-h1024i384 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1024i384-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+r3decode   exit 0 after 2 min [unit 10/16 map-b-e32k4-h1536i512 dm histogram=docs/registered/2026-11-18-v7-domain-map-pages/map-b-e32k4-h1536i512-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
