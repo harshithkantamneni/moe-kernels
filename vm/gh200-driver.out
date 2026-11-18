@@ -1,2 +1,8 @@
 2026-11-18T09:41:59Z setup_vm.sh start: commit 556029e1a7e655bc73a9a6e951ccd773f760c48d from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-18T11:50:04Z
 2026-11-18T09:44:09Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed b869465 to run-gh200-v7m-20261118t0940: setup_vm.sh: READY
+2026-11-18T09:44:11Z driver start: commit 556029e1a7e655bc73a9a6e951ccd773f760c48d, steps of the plan scripts/plans/rentalV7M-domain-map-2026-11.plan, deadline 2026-11-18T11:50:04Z (117 min of work left)
+2026-11-18T09:44:11Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalV7M-domain-map-2026-11.plan (sha256 4d0f423de268aba54b6ba13963a3149e414e5bad7e9d700b4a7ebcd28dcd81bd), 16 units
+2026-11-18T09:44:11Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/16 -] (estimate 3 min, cap 15 min, 117 min left)
+2026-11-18T09:44:11Z prelude END: exit 0 after 0 min [unit 1/16 -]
+2026-11-18T09:44:12Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
