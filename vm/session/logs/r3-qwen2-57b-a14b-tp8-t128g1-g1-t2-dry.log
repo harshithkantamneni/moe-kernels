@@ -1,0 +1,34 @@
+experiment  private_weight_reference / nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-hista273b439c-24651935
+model       qwen2-57b-a14b-tp8 E=64 k=8  bf16 (2 bytes)
+tile        BLOCK_M=128, one tile per run and in the run id
+pinned      {'BLOCK_SIZE_N': 128, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 3}
+histogram   docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g1.json (sha256 a273b439c7102a34...), page qwen2-57b-a14b-tp8-128g1, 12 cells x arms = 24 timed cells, token-row shuffle seed 20281118; R3's balanced ladder is NOT run (--treads ignored)
+arms        native, shared; PRIVATE cannot run skewed
+  ridge       175.89 Op/B, measured on this device: NVIDIA GH200 480GB (measured), 655.4 TFLOP/s bf16 over 3726.2 GB/s (triad pattern); calibrated 2026-11-18 at 8c9e29a2
+experts     native declares E=64; shared declares E x n_decl = 576 at every cell
+            n_decl = 9 against n_max = 2 read: --declared-copies 9; S4: no PRIVATE arm, so SHARED reads copy 0 only and the copies rule is lifted
+depth       retracted tread 2 against the 2 planned (a histogram page has no depth table: its deepest cell's tread)
+repeats     9, repeats OUTER, the page's cells REVERSED on odd repeats, arms rotated within a cell
+duty        0.25
+session     gh200-20261118T221137Z-p2c-lock1410
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-tp8-t128g1/private_weight_reference/nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g1-hista273b439c-24651935
+slips       --slip-policy cell at the 1410 MHz lock: a repeat under 1395 MHz is a lock slip, out of its cell median; no minimum clean count
+probe       the alignment op alone at each tread's numel, arms native,shared, 3 repeats, about 2 s (report.json align_probe; rental 6 S3)
+cells (n, label, arms, path, counts sha256):
+  n=1   PT               native,shared  block-scan   80f746fe946978dc
+  n=1   PW               native,shared  block-scan   a271d985a50af0f6
+  n=1   PT2              native,shared  block-scan   d9500e5a2b1c93e2
+  n=1   PW2              native,shared  block-scan   4514fec959275e0b
+  n=1   uniform          native,shared  block-scan   23b7c3e32dbde7b8
+  n=1   balanced         native,shared  block-scan   74234e98afe7498f
+  n=2   PT               native,shared  block-scan   8980c66690baabf3
+  n=2   PW               native,shared  block-scan   63fe677d07af750d
+  n=2   PT2              native,shared  block-scan   6e53b5c6e5f13240
+  n=2   PW2              native,shared  block-scan   4dcb48551c200de1
+  n=2   uniform          native,shared  block-scan   da2d965498793493
+  n=2   balanced         native,shared  block-scan   74234e98afe7498f
+
+========================================================================
+REFUSED. Nothing was measured and nothing was written.
+  reason: --dry-run was given
+========================================================================
