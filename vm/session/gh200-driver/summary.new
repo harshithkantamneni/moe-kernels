@@ -6,3 +6,4 @@ bytes      exit 0 after 3 min [unit 5/14 olmoe-1b-7b f128 block-m=128 block-n=12
 bytes      exit 0 after 7 min [unit 6/14 mixtral-8x7b f128 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 byte-groups=64]
 gate       exit 0 after 0 min [unit 7/14 - gband gate=band]
 gate       exit 0 after 0 min [unit 8/14 - gsag gate=b3sag]
+timed      exit 0 after 14 min [unit 9/14 granite-3.0-1b-a400m t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]

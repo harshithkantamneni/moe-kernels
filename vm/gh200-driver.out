@@ -34,3 +34,7 @@
 2026-11-18T22:22:40Z gate START: gate b3sag: scripts/tileB3_gate.py sag at the 1410 lock; FAIL ends the rental before any timed unit (tileB3) [unit 8/14 - gsag gate=b3sag] (estimate 1 min, cap 5 min, 112 min left)
 2026-11-18T22:22:40Z gate END: exit 0 after 0 min [unit 8/14 - gsag gate=b3sag]
 2026-11-18T22:22:41Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 6b864c8 to run-gh200-v7p-20261118t2202: gate (unit 8/14 - gsag gate=b3sag): exit 0 (0 min)
+2026-11-18T22:22:42Z timed START: 3c.3 timed R3 histogram page at 1410: G=1, docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g1.json, arms native,shared, 9 copies; knobs --num-stages 3 --block-k 64, slip-policy cell, g1-rule r7-median-run3; tile 128x128x64 w8 s3 [unit 9/14 granite-3.0-1b-a400m t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3] (estimate 14 min, cap 42 min, 112 min left)
+2026-11-18T22:36:41Z timed END: exit 0 after 14 min [unit 9/14 granite-3.0-1b-a400m t128g1 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/granite-3.0-1b-a400m-128g1.json arms=native,shared declared-copies=9 timed-groups=1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T22:36:42Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
