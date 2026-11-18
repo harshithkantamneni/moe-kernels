@@ -3197,6 +3197,42 @@
   "rule (the map registration's, verbatim)": "For each decode path p (naive, small-batch, block-scan):\n- Take the valid map cells on p in the certified scope (every active expert in one M-tile).\n- For each cell, e = dcommon.e_dec(T_v7, T_meas).\n- e_ub = max(|T_v7/T_lo - 1|, |T_v7/T_hi - 1|), where T_lo, T_hi = T_meas \u2213 2.306 \u00d7 1.2533 \u00d7 s/\u221an, and s is the sd of the cell's n clean repeats.\n- The candidates are the cells' predicted times. X_p is the smallest candidate X such that every candidate X' \u2265 X whose set {T_v7 \u2265 X'} holds at least 10 cells has:\n  - (i) every e_ub \u2264 6%;\n  - (ii) rms e \u2264 2.5%;\n  - (iii) |mean e| \u2264 1.0%;\n  - and (iv) X_p is the largest of the values this rule gives with each synthetic shape's cells removed in turn.\n- A path with no such X is outside the domain.\n- D = {decode calls whose path has an X_p, whose T_v7 \u2265 X_p, and whose every active expert fits one M-tile}.\n\nSlab guard: over family B's cells under a wave, fit resid_us = a + b\u00b7W_e_MB + c\u00b71[T=2]. If b's 95% interval excludes 0 and |b|\u00b735 MB \u2265 1 us, D adds W_e \u2265 S, with S chosen by the same rule; otherwise D has no slab condition.",
   "labelling": "a cell is IN-DOMAIN when its frozen geometry (path by r3_decode.geometry, T_v7 the registered prediction in us at 6 decimals as the map's, W_e in MB at 6 decimals, the second-tile test by d2common.second_tile) satisfies D: its path has an X_p (verdict IN THE DOMAIN), T_v7 >= X_p, W_e >= S_p when the slab guard set S_p, and every active expert fits one M-tile; else OUT, DESCRIPTIVE (v7dcommon.label)",
   "verification at --final": "the readout is committed; it names the map registration at its registered sha256; the map registration's freeze and plan verify (read_map.refusals); its verdict is READ; read_map.domain on the readout's own valid rows gives the same X_p, S_p, verdicts, slab guard and D; D is not empty; the map's session is published and in the census",
+  "map ranges (COMPUTED, the map registration's in-scope cells)": {
+   "naive": {
+    "cells": 16,
+    "T_v7_us": [
+     13.563877,
+     444.952048
+    ],
+    "W_e_MB": [
+     2.359296,
+     37.748736
+    ]
+   },
+   "small-batch": {
+    "cells": 75,
+    "T_v7_us": [
+     22.677868,
+     377.370091
+    ],
+    "W_e_MB": [
+     2.359296,
+     37.748736
+    ]
+   },
+   "block-scan": {
+    "cells": 39,
+    "T_v7_us": [
+     37.648599,
+     1823.709532
+    ],
+    "W_e_MB": [
+     6.291456,
+     25.165824
+    ]
+   }
+  },
+  "extrapolation": "D has no upper bound: a cell past the map's measured range on its path (T_v7 or W_e above the largest the map timed) is IN-DOMAIN by extrapolation if it meets D. The map measured naive T_v7 <= 445 us, block-scan T_v7 <= 1824 us (small-batch <= 377 us), W_e <= 37.7 MB (block-scan <= 25.2 MB); DeepSeek-V3 has W_e 88 MB and T_v7 207 to 6293 us, so its in-domain cells are extrapolated. The scorer reports each model's in-domain results split into within the map's range and extrapolated, DESCRIPTIVE; the split changes no verdict",
   "status": "NOT KNOWN: the map rental is running; its readout does not exist. Every cell is PENDING; register_v7d_blind.py --write --final labels them from the committed readout and refuses without it"
  },
  "bars": {
@@ -3208,6 +3244,8 @@
  "statistic": "e_dec = (T_v7 - T_meas) / T_meas per valid NATIVE main cell labelled IN-DOMAIN, 0 at or under 1 us absolute (dcommon.e_dec); OUT cells are scored the same way and reported DESCRIPTIVE",
  "certification": "addenda 5 and 6 set the bars and inherit the rule: addendum 6 line 158 'rules (frozen otherwise): addendum 5's: the power check first; E1-DEC pooled and per model without the second-tile DESCRIPTIVE cells; GD2 voids a model's GRR page; G3-D shuffle voids; G3-D label DESCRIPTIVE; SIGMA-D and the knee rows DESCRIPTIVE; the rivals by rental 7's rule; the scope line d3common.SCOPE'; addendum 5 line 102 'rules (frozen otherwise): decodeB-blind's and addenda 2 and 3's'; the certification itself is docs/registered/2026-10-14-decodeB-blind-gh200.txt's rule line: 'a model is CERTIFIED when its own bar and the pooled bar hold' (score_blind.score); here on the IN-DOMAIN cells only, with the minimum below",
  "minimum": "MINIMUM (registered 2026-11-18 with this DRAFT, before D is known): a model is certifiable only when at least 10 of its cells are scored IN-DOMAIN (valid NATIVE main cells after the power check, the page checks, row_drop, GD2's and G3-D shuffle's voids, second-tile cells excluded, and labelled IN-DOMAIN). A model with fewer is reported with its in-domain statistics, labelled BELOW THE MINIMUM and NOT CERTIFIED whatever they read; its in-domain cells still count in the pooled bar. The pooled bar is over every scored in-domain cell of every model not voided. --final refuses when D is empty (the map registration: if D is empty, no domain blind runs) or when no model has 10 registered in-domain cells (nothing could be certified)",
+ "minimum in-domain cells": 10,
+ "inherited blocks": "the frozen blind scorer's rivals (rental 7's rule), RIVALS_ALL_CELLS, KNEE_D, SIGMA_D, G3-D label, its all-cell pooled_over and its all-cell E1-DEC are reported DESCRIPTIVE over every scored cell, in and out of D, under names saying so; no verdict reads them (the certification is the rule above, unchanged); GD2's and G3-D shuffle's voids apply as registered",
  "claim if certified": "v7 predicts vLLM's fused MoE decode call on GH200 within 3% rms / 8% worst on unseen models, inside D (per certified model); a fail closes decode",
  "scope line": "Certified domain: decode calls in which every active expert fits in one M-tile (at most BLOCK_M rows). Calls where an expert needs a second M-tile (the most concentrated routing at T >= 32) are not certified; they are reported as the descriptive SIGMA-D row. Certification covers time as a function of the expert counts only: it does not cover a dependence on which experts are active (Mixtral's published expert-set effect, up to about 2.5 us at R 1). G3-D label, the test of that dependence, is DESCRIPTIVE (addendum 3, owner 2026-10-29 and 2026-11-03): it is reported per model and neither stops the CAL2 reading nor voids a blind model's certification; G3-D shuffle and GD2 void as registered.",
  "model v7 (frozen)": {
@@ -9822,6 +9860,7 @@
   "DeepSeek-V3's decode-size calls were timed before, on other cards: vLLM and SGLang fused_experts and torch grouped GEMMs on H200 at T 1 to 128 (2026-08-22 to 2026-09-01) and vLLM fused_experts on A100 (2026-08-28 a100-cross-card); none on a GH200, none under this apparatus, no decode constant fitted on them; Qwen2-57B-A14B-tp8 has GH200 pages at the R3 tile (rentals 3 to 5), none at a decode tile (census)",
   "the map's shapes are near these models' E and k by design (family C at E 256, k 8, H 7168; family A at E 64, k 8) and equal to none of their (E, H, I, k) (models, the map's synthetic shapes)",
   "cost: 89 unit-min, about 131 min wall: $5.0 at the inherited d2common.RATE $2.29/h, $5.65 at Lambda's list price of 2026-11-18 ($2.59/h); deadline launch + 145 min, hard cap + 160 min ($6.11 / $6.91); over the plan's ~1 h / ~$3: DeepSeek-V3's three pages are full pages of 48 cells; the gr1 control pages are dropped first when time runs short (without them about 107 min)",
+  "D has no upper bound: a cell past the map's measured range on its path (T_v7 or W_e above the largest the map timed) is IN-DOMAIN by extrapolation if it meets D. The map measured naive T_v7 <= 445 us, block-scan T_v7 <= 1824 us (small-batch <= 377 us), W_e <= 37.7 MB (block-scan <= 25.2 MB); DeepSeek-V3 has W_e 88 MB and T_v7 207 to 6293 us, so its in-domain cells are extrapolated. The scorer reports each model's in-domain results split into within the map's range and extrapolated, DESCRIPTIVE; the split changes no verdict",
   "the bars are the ones registered for decode blinds before any page (owner, D4-1: addendum 5 line 9, carried by addendum 6 line 159): rms 3%, worst 8%, |mean| 1.5%, per model and pooled, not tightened"
  ],
  "expected (ESTIMATE, judgment, not computed)": "Phase 0 put every DeepSeek-V3 cell (207 to 6293 us) and nearly every -tp4 and -tp8 cell past a 44 us call-time cut, on the naive and block-scan paths; block-scan has 15 out-of-sample cells on record (3.15% rms), so whether D admits block-scan at all is the map's to say; if D excludes block-scan, the three DeepSeek-V3 models keep at most their 19 naive cells each and Qwen2-57B-tp8 its in-domain small-batch and naive cells",
@@ -9847,9 +9886,9 @@
    "scripts/locked_r3.py": "6e44670538fa3d2e6a158295909f71a41fdb5eeac507798294bea6d436cb5aa6",
    "scripts/vm_run_v7d.sh": "d3d3b59a1c1ca6fe63805fdbaa7d64dd50166bc42d30f2190f02e3f6df091637",
    "scripts/vm_run_v7b.sh": "251bb5e9de2aa2954ff425a244ccfb3924e59e8e84d8f6759d76df6f3fb32cd5",
-   "scripts/scoring/v7dblind/v7dcommon.py": "ae223aba6f91d6af3d2060f0c4b6ac489cabeb397b2cb1adae8eafd2fb062be0",
-   "scripts/scoring/v7dblind/register_v7d_blind.py": "f4475937ce611f88fc6e4fce51db04bd92ae199765e603964b829504796b3bcb",
-   "scripts/scoring/v7dblind/score_blind_v7d.py": "e79fefe29726006b13ffecb9092f4e1cf52ad20b48c2f5eed5949cdc19bdbea3",
+   "scripts/scoring/v7dblind/v7dcommon.py": "d1c29f94e1745cc3a0210b747b9ec3c175c7508eae1dd664465ac60c1727a2df",
+   "scripts/scoring/v7dblind/register_v7d_blind.py": "908bd87a8bfebfc06a86f4afe9656bce8bafbcf3d2d9a820774430f3352a28d1",
+   "scripts/scoring/v7dblind/score_blind_v7d.py": "0f4b9c75191cdb8cf13d592eb3af638986d14172689b3f9a170e00a1591357bc",
    "scripts/scoring/v7blind/v7bcommon.py": "55462f94bf859afa868e02a23b91f5123f32e84d909a78d139922ac7a6eeddca",
    "scripts/scoring/v7domain/v7mcommon.py": "0ee110289da4d174a379e824806f97928a3d44dcc572312c5efc8ac1de215fab",
    "scripts/scoring/v7domain/read_map.py": "0f8e562e8ef717de516098208f1b4822486954fb1e3df4c884760bbbb93237fa",

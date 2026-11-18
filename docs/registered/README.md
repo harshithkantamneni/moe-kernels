@@ -2286,4 +2286,12 @@ THE MINIMUM, not certified. Plan `scripts/plans/rentalV7D-domain-blind-2026-11.p
 $2.29/h, $5.65 at $2.59/h; deadline launch + 145 min, hard cap + 160 min ($6.11 / $6.91); without the gr1 pages,
 which the driver drops first, about 107 min. Disclosed: the second reopening of decode, the POST-HOC origin of the
 domain idea, D computed by the rule registered before the map's pages (556029e1), Phase 0's offline pricing of these
-four models. Tests `tests/test_v7_domain_blind.py` (synthetic trees, synthetic map readouts and a stub VM only).
+four models, and that D has no upper bound: cells past the map's measured range (naive T_v7 445 us, block-scan
+1824 us, W_e 37.7 MB, block-scan 25.2 MB; DeepSeek-V3 at 88 MB and 207 to 6293 us) are in by extrapolation, the
+scorer splitting each model's in-domain cells into within range and extrapolated, DESCRIPTIVE. After review,
+`--final` also re-reads the published map session with `read_map.read` and requires the readout's rows and D, refuses
+a readout with git_dirty not false or of another shape (a clean REFUSED), and requires the committed DRAFT at HEAD to
+verify its freeze and agree with the final document outside the domain labels (label rule, minimum, cells,
+predictions, bars); the scorer recomputes the labels from the frozen readout and names the inherited all-cell blocks
+(rivals, KNEE_D, SIGMA_D, G3-D label, pooled_over) DESCRIPTIVE. Tests `tests/test_v7_domain_blind.py` (synthetic
+trees, synthetic map readouts and a stub VM only).
