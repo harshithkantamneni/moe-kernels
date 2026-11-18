@@ -1,0 +1,287 @@
+DECODE PAGE
+experiment  r3_decode / nvidia_gh200_480gb-decode-qwen2-57b-a14b-GR1-qwen2-57b-a14b-ctl-95c002b4
+model       qwen2-57b-a14b E=64 k=8 bf16; W_e 52.5 MiB
+page        docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json (sha256 5d64b061becff9ac...), qwen2-57b-a14b-ctl, 26 cells, 26 (cell, arm), token-row shuffle seed 20261014
+instrument  GR1: a one-call graph, the 240 MiB flush outside it
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    9.1 min
+session     gh200-20261118T034119Z-decd-lock1710
+WRITES TO   /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-dc/private_weight_reference/nvidia_gh200_480gb-decode-qwen2-57b-a14b-GR1-qwen2-57b-a14b-ctl-95c002b4
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   L-T1-A8               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     e0a20d7d0d71
+  T=1   U-T1                  native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     fd0951b11581
+  T=2   L-T2-A16              native      naive       16x64x128w4s4  A=16  L=16  P=240  dead=0/0     d6d56c9c2eb6
+  T=2   L-T2-A8               native      naive       16x64x128w4s4  A=8   L=16  P=240  dead=0/0     6cf9ebbc9f5a
+  T=2   U-T2                  native      naive       16x64x128w4s4  A=15  L=16  P=240  dead=0/0     9b2997d4cf63
+  T=4   L-T4-A32              native      small-batch 16x64x128w4s4  A=32  L=32  P=480  dead=0/0     6b4cc76cf489
+  T=4   L-T4-A8               native      small-batch 16x64x128w4s4  A=8   L=8   P=96   dead=1920/1344  b988701c4291
+  T=4   U-T4                  native      small-batch 16x64x128w4s4  A=27  L=27  P=400  dead=400/280   8e83af620a43
+  T=8   L-T8-A64              native      small-batch 16x64x128w4s4  A=64  L=64  P=960  dead=0/0     ba1e52e365a6
+  T=8   L-T8-A8               native      small-batch 16x64x128w4s4  A=8   L=8   P=64   dead=4480/3136  78966576c2bf
+  T=8   U-T8                  native      small-batch 16x64x128w4s4  A=41  L=41  P=592  dead=1840/1288  e5c9db5cbfac
+  T=16  L-T16-A64             native      small-batch 16x64x128w4s4  A=64  L=64  P=896  dead=320/224   e87f401f581f
+  T=16  L-T16-A8              native      small-batch 16x64x128w4s4  A=8   L=8   P=0    dead=4800/3360  d0017cd68496
+  T=16  U-T16                 native      small-batch 16x64x128w4s4  A=57  L=57  P=784  dead=880/616   ac1de53d3a55
+  T=32  L-T32-A64             native      small-batch 16x64x128w4s4  A=64  L=64  P=768  dead=960/672   6380508c1144
+  T=32  L-T32-A8              native      small-batch 16x64x128w4s4  A=8   L=16  P=0    dead=4800/3360  50e50f135983
+  T=32  U-T32                 native      small-batch 16x64x128w4s4  A=63  L=63  P=752  dead=1040/728   f0e30e4d545e
+  T=64  L-T64-A64             native      small-batch 32x64x128w4s3  A=64  L=64  P=1536 dead=1120/784   ae1eeef26c1a
+  T=64  L-T64-A8              native      small-batch 32x64x128w4s3  A=8   L=16  P=0    dead=4960/3472  829eea76732c
+  T=64  U-T64                 native      small-batch 32x64x128w4s3  A=64  L=64  P=1536 dead=1120/784   dab014c3ffe6
+  T=96  L-T96-A64             native      small-batch 32x128x64w4s3  A=64  L=64  P=1280 dead=880/616   68f5d9290a06
+  T=96  L-T96-A8              native      small-batch 32x128x64w4s3  A=8   L=24  P=0    dead=2480/1736  ec538cc8dd0d
+  T=96  U-T96                 native      small-batch 32x128x64w4s3  A=64  L=64  P=1280 dead=880/616   529f72191d1e
+  T=128 L-T128-A64            native      block-scan  64x128x64w4s3  A=64  L=64  P=3072 dead=600/420   eb520d9e4e04
+  T=128 L-T128-A8             native      block-scan  64x128x64w4s3  A=8   L=16  P=0    dead=2520/1764  a779b623c48d
+  T=128 U-T128                native      block-scan  64x128x64w4s3  A=64  L=64  P=3072 dead=600/420   20e3473c19f4
+WARNING 11-18 04:28:02 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=2560,device_name=NVIDIA_GH200_480GB.json
+  rep 0 L-T1-A8          native T=  1    145.14 us ok
+  rep 0 U-T1             native T=  1    146.21 us ok
+  rep 0 L-T2-A16         native T=  2    261.65 us ok
+  rep 0 L-T2-A8          native T=  2    262.38 us ok
+  rep 0 U-T2             native T=  2    261.84 us ok
+  rep 0 L-T4-A32         native T=  4    496.83 us ok
+  rep 0 L-T4-A8          native T=  4    156.64 us ok
+  rep 0 U-T4             native T=  4    424.06 us ok
+  rep 0 L-T8-A64         native T=  8    951.23 us ok
+  rep 0 L-T8-A8          native T=  8    156.74 us ok
+  rep 0 U-T8             native T=  8    622.88 us ok
+  rep 0 L-T16-A64        native T= 16    955.82 us ok
+  rep 0 L-T16-A8         native T= 16    158.91 us ok
+  rep 0 U-T16            native T= 16    856.74 us ok
+  rep 0 L-T32-A64        native T= 32    963.63 us ok
+  rep 0 L-T32-A8         native T= 32    202.53 us ok
+  rep 0 U-T32            native T= 32    951.04 us ok
+  rep 0 L-T64-A64        native T= 64    980.86 us ok
+  rep 0 L-T64-A8         native T= 64    218.18 us ok
+  rep 0 U-T64            native T= 64    980.86 us ok
+  rep 0 L-T96-A64        native T= 96   1026.13 us ok
+  rep 0 L-T96-A8         native T= 96    258.05 us ok
+  rep 0 U-T96            native T= 96   1026.80 us ok
+  rep 0 L-T128-A64       native T=128   1006.40 us ok
+  rep 0 L-T128-A8        native T=128    211.17 us ok
+  rep 0 U-T128           native T=128   1006.77 us ok
+  rep 1 U-T128           native T=128   1006.48 us ok
+  rep 1 L-T128-A8        native T=128    210.34 us ok
+  rep 1 L-T128-A64       native T=128   1005.79 us ok
+  rep 1 U-T96            native T= 96   1026.53 us ok
+  rep 1 L-T96-A8         native T= 96    257.12 us ok
+  rep 1 L-T96-A64        native T= 96   1025.76 us ok
+  rep 1 U-T64            native T= 64    981.10 us ok
+  rep 1 L-T64-A8         native T= 64    218.50 us ok
+  rep 1 L-T64-A64        native T= 64    980.90 us ok
+  rep 1 U-T32            native T= 32    950.54 us ok
+  rep 1 L-T32-A8         native T= 32    202.46 us ok
+  rep 1 L-T32-A64        native T= 32    963.47 us ok
+  rep 1 U-T16            native T= 16    857.06 us ok
+  rep 1 L-T16-A8         native T= 16    158.88 us ok
+  rep 1 L-T16-A64        native T= 16    955.90 us ok
+  rep 1 U-T8             native T=  8    623.17 us ok
+  rep 1 L-T8-A8          native T=  8    157.09 us ok
+  rep 1 L-T8-A64         native T=  8    951.49 us ok
+  rep 1 U-T4             native T=  4    424.13 us ok
+  rep 1 L-T4-A8          native T=  4    156.42 us ok
+  rep 1 L-T4-A32         native T=  4    496.77 us ok
+  rep 1 U-T2             native T=  2    262.32 us ok
+  rep 1 L-T2-A8          native T=  2    262.96 us ok
+  rep 1 L-T2-A16         native T=  2    262.27 us ok
+  rep 1 U-T1             native T=  1    146.27 us ok
+  rep 1 L-T1-A8          native T=  1    145.34 us ok
+  rep 2 L-T1-A8          native T=  1    145.26 us ok
+  rep 2 U-T1             native T=  1    146.05 us ok
+  rep 2 L-T2-A16         native T=  2    262.27 us ok
+  rep 2 L-T2-A8          native T=  2    263.14 us ok
+  rep 2 U-T2             native T=  2    262.38 us ok
+  rep 2 L-T4-A32         native T=  4    496.11 us ok
+  rep 2 L-T4-A8          native T=  4    156.13 us ok
+  rep 2 U-T4             native T=  4    424.18 us ok
+  rep 2 L-T8-A64         native T=  8    951.65 us ok
+  rep 2 L-T8-A8          native T=  8    156.70 us ok
+  rep 2 U-T8             native T=  8    622.62 us ok
+  rep 2 L-T16-A64        native T= 16    955.76 us ok
+  rep 2 L-T16-A8         native T= 16    158.75 us ok
+  rep 2 U-T16            native T= 16    856.83 us ok
+  rep 2 L-T32-A64        native T= 32    962.37 us ok
+  rep 2 L-T32-A8         native T= 32    201.95 us ok
+  rep 2 U-T32            native T= 32    949.81 us ok
+  rep 2 L-T64-A64        native T= 64    980.80 us ok
+  rep 2 L-T64-A8         native T= 64    218.08 us ok
+  rep 2 U-T64            native T= 64    980.61 us ok
+  rep 2 L-T96-A64        native T= 96   1025.31 us ok
+  rep 2 L-T96-A8         native T= 96    257.09 us ok
+  rep 2 U-T96            native T= 96   1025.63 us ok
+  rep 2 L-T128-A64       native T=128   1006.02 us ok
+  rep 2 L-T128-A8        native T=128    210.02 us ok
+  rep 2 U-T128           native T=128   1006.72 us ok
+  rep 3 U-T128           native T=128   1006.16 us ok
+  rep 3 L-T128-A8        native T=128    210.58 us ok
+  rep 3 L-T128-A64       native T=128   1005.50 us ok
+  rep 3 U-T96            native T= 96   1027.34 us ok
+  rep 3 L-T96-A8         native T= 96    257.02 us ok
+  rep 3 L-T96-A64        native T= 96   1025.74 us ok
+  rep 3 U-T64            native T= 64    980.62 us ok
+  rep 3 L-T64-A8         native T= 64    218.40 us ok
+  rep 3 L-T64-A64        native T= 64    981.34 us ok
+  rep 3 U-T32            native T= 32    950.50 us ok
+  rep 3 L-T32-A8         native T= 32    201.94 us ok
+  rep 3 L-T32-A64        native T= 32    963.26 us ok
+  rep 3 U-T16            native T= 16    856.86 us ok
+  rep 3 L-T16-A8         native T= 16    158.72 us ok
+  rep 3 L-T16-A64        native T= 16    956.16 us ok
+  rep 3 U-T8             native T=  8    623.02 us ok
+  rep 3 L-T8-A8          native T=  8    156.74 us ok
+  rep 3 L-T8-A64         native T=  8    951.26 us ok
+  rep 3 U-T4             native T=  4    424.13 us ok
+  rep 3 L-T4-A8          native T=  4    156.10 us ok
+  rep 3 L-T4-A32         native T=  4    496.58 us ok
+  rep 3 U-T2             native T=  2    262.29 us ok
+  rep 3 L-T2-A8          native T=  2    262.75 us ok
+  rep 3 L-T2-A16         native T=  2    261.60 us ok
+  rep 3 U-T1             native T=  1    145.63 us ok
+  rep 3 L-T1-A8          native T=  1    145.22 us ok
+  rep 4 L-T1-A8          native T=  1    145.38 us ok
+  rep 4 U-T1             native T=  1    146.02 us ok
+  rep 4 L-T2-A16         native T=  2    261.73 us ok
+  rep 4 L-T2-A8          native T=  2    262.59 us ok
+  rep 4 U-T2             native T=  2    261.92 us ok
+  rep 4 L-T4-A32         native T=  4    496.48 us ok
+  rep 4 L-T4-A8          native T=  4    156.16 us ok
+  rep 4 U-T4             native T=  4    424.29 us ok
+  rep 4 L-T8-A64         native T=  8    951.38 us ok
+  rep 4 L-T8-A8          native T=  8    156.70 us ok
+  rep 4 U-T8             native T=  8    622.78 us ok
+  rep 4 L-T16-A64        native T= 16    955.42 us ok
+  rep 4 L-T16-A8         native T= 16    158.43 us ok
+  rep 4 U-T16            native T= 16    856.96 us ok
+  rep 4 L-T32-A64        native T= 32    963.52 us ok
+  rep 4 L-T32-A8         native T= 32    201.98 us ok
+  rep 4 U-T32            native T= 32    950.19 us ok
+  rep 4 L-T64-A64        native T= 64    980.86 us ok
+  rep 4 L-T64-A8         native T= 64    218.21 us ok
+  rep 4 U-T64            native T= 64    980.59 us ok
+  rep 4 L-T96-A64        native T= 96   1025.46 us ok
+  rep 4 L-T96-A8         native T= 96    257.50 us ok
+  rep 4 U-T96            native T= 96   1026.75 us ok
+  rep 4 L-T128-A64       native T=128   1006.05 us ok
+  rep 4 L-T128-A8        native T=128    210.72 us ok
+  rep 4 U-T128           native T=128   1006.45 us ok
+  rep 5 U-T128           native T=128   1006.30 us ok
+  rep 5 L-T128-A8        native T=128    210.16 us ok
+  rep 5 L-T128-A64       native T=128   1005.97 us ok
+  rep 5 U-T96            native T= 96   1026.46 us ok
+  rep 5 L-T96-A8         native T= 96    257.62 us ok
+  rep 5 L-T96-A64        native T= 96   1025.57 us ok
+  rep 5 U-T64            native T= 64    980.26 us ok
+  rep 5 L-T64-A8         native T= 64    218.18 us ok
+  rep 5 L-T64-A64        native T= 64    980.62 us ok
+  rep 5 U-T32            native T= 32    950.46 us ok
+  rep 5 L-T32-A8         native T= 32    202.08 us ok
+  rep 5 L-T32-A64        native T= 32    962.98 us ok
+  rep 5 U-T16            native T= 16    857.17 us ok
+  rep 5 L-T16-A8         native T= 16    158.56 us ok
+  rep 5 L-T16-A64        native T= 16    955.44 us ok
+  rep 5 U-T8             native T=  8    622.82 us ok
+  rep 5 L-T8-A8          native T=  8    156.93 us ok
+  rep 5 L-T8-A64         native T=  8    951.38 us ok
+  rep 5 U-T4             native T=  4    423.94 us ok
+  rep 5 L-T4-A8          native T=  4    156.16 us ok
+  rep 5 L-T4-A32         native T=  4    496.42 us ok
+  rep 5 U-T2             native T=  2    262.05 us ok
+  rep 5 L-T2-A8          native T=  2    262.50 us ok
+  rep 5 L-T2-A16         native T=  2    261.86 us ok
+  rep 5 U-T1             native T=  1    146.08 us ok
+  rep 5 L-T1-A8          native T=  1    145.34 us ok
+  rep 6 L-T1-A8          native T=  1    145.07 us ok
+  rep 6 U-T1             native T=  1    145.70 us ok
+  rep 6 L-T2-A16         native T=  2    261.82 us ok
+  rep 6 L-T2-A8          native T=  2    262.85 us ok
+  rep 6 U-T2             native T=  2    262.18 us ok
+  rep 6 L-T4-A32         native T=  4    496.29 us ok
+  rep 6 L-T4-A8          native T=  4    156.32 us ok
+  rep 6 U-T4             native T=  4    424.16 us ok
+  rep 6 L-T8-A64         native T=  8    951.26 us ok
+  rep 6 L-T8-A8          native T=  8    156.42 us ok
+  rep 6 U-T8             native T=  8    622.91 us ok
+  rep 6 L-T16-A64        native T= 16    956.38 us ok
+  rep 6 L-T16-A8         native T= 16    159.01 us ok
+  rep 6 U-T16            native T= 16    856.83 us ok
+  rep 6 L-T32-A64        native T= 32    962.40 us ok
+  rep 6 L-T32-A8         native T= 32    201.98 us ok
+  rep 6 U-T32            native T= 32    950.16 us ok
+  rep 6 L-T64-A64        native T= 64    980.45 us ok
+  rep 6 L-T64-A8         native T= 64    217.92 us ok
+  rep 6 U-T64            native T= 64    980.86 us ok
+  rep 6 L-T96-A64        native T= 96   1025.10 us ok
+  rep 6 L-T96-A8         native T= 96    256.61 us ok
+  rep 6 U-T96            native T= 96   1025.52 us ok
+  rep 6 L-T128-A64       native T=128   1006.35 us ok
+  rep 6 L-T128-A8        native T=128    210.54 us ok
+  rep 6 U-T128           native T=128   1007.17 us ok
+  rep 7 U-T128           native T=128   1006.11 us ok
+  rep 7 L-T128-A8        native T=128    210.02 us ok
+  rep 7 L-T128-A64       native T=128   1005.49 us ok
+  rep 7 U-T96            native T= 96   1026.93 us ok
+  rep 7 L-T96-A8         native T= 96    257.18 us ok
+  rep 7 L-T96-A64        native T= 96   1025.76 us ok
+  rep 7 U-T64            native T= 64    980.53 us ok
+  rep 7 L-T64-A8         native T= 64    218.27 us ok
+  rep 7 L-T64-A64        native T= 64    981.46 us ok
+  rep 7 U-T32            native T= 32    950.82 us ok
+  rep 7 L-T32-A8         native T= 32    201.98 us ok
+  rep 7 L-T32-A64        native T= 32    962.77 us ok
+  rep 7 U-T16            native T= 16    856.96 us ok
+  rep 7 L-T16-A8         native T= 16    158.72 us ok
+  rep 7 L-T16-A64        native T= 16    955.86 us ok
+  rep 7 U-T8             native T=  8    622.72 us ok
+  rep 7 L-T8-A8          native T=  8    156.90 us ok
+  rep 7 L-T8-A64         native T=  8    951.58 us ok
+  rep 7 U-T4             native T=  4    424.16 us ok
+  rep 7 L-T4-A8          native T=  4    156.26 us ok
+  rep 7 L-T4-A32         native T=  4    496.26 us ok
+  rep 7 U-T2             native T=  2    262.19 us ok
+  rep 7 L-T2-A8          native T=  2    262.72 us ok
+  rep 7 L-T2-A16         native T=  2    261.98 us ok
+  rep 7 U-T1             native T=  1    146.13 us ok
+  rep 7 L-T1-A8          native T=  1    145.50 us ok
+  rep 8 L-T1-A8          native T=  1    145.25 us ok
+  rep 8 U-T1             native T=  1    145.66 us ok
+  rep 8 L-T2-A16         native T=  2    261.76 us ok
+  rep 8 L-T2-A8          native T=  2    262.80 us ok
+  rep 8 U-T2             native T=  2    262.27 us ok
+  rep 8 L-T4-A32         native T=  4    496.22 us ok
+  rep 8 L-T4-A8          native T=  4    156.29 us ok
+  rep 8 U-T4             native T=  4    424.54 us ok
+  rep 8 L-T8-A64         native T=  8    951.39 us ok
+  rep 8 L-T8-A8          native T=  8    156.40 us ok
+  rep 8 U-T8             native T=  8    622.62 us ok
+  rep 8 L-T16-A64        native T= 16    955.84 us ok
+  rep 8 L-T16-A8         native T= 16    158.82 us ok
+  rep 8 U-T16            native T= 16    856.85 us ok
+  rep 8 L-T32-A64        native T= 32    962.99 us ok
+  rep 8 L-T32-A8         native T= 32    201.89 us ok
+  rep 8 U-T32            native T= 32    950.43 us ok
+  rep 8 L-T64-A64        native T= 64    980.77 us ok
+  rep 8 L-T64-A8         native T= 64    218.34 us ok
+  rep 8 U-T64            native T= 64    980.77 us ok
+  rep 8 L-T96-A64        native T= 96   1025.94 us ok
+  rep 8 L-T96-A8         native T= 96    257.25 us ok
+  rep 8 U-T96            native T= 96   1026.75 us ok
+  rep 8 L-T128-A64       native T=128   1006.43 us ok
+  rep 8 L-T128-A8        native T=128    211.07 us ok
+  rep 8 U-T128           native T=128   1006.34 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/gaps-nvidia_gh200_480gb-qwen2-57b-a14b-dc/private_weight_reference/nvidia_gh200_480gb-decode-qwen2-57b-a14b-GR1-qwen2-57b-a14b-ctl-95c002b4/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED
