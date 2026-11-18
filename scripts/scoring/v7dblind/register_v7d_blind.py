@@ -38,7 +38,8 @@ REL = 1e-9
 
 def domain_input(sessions: list[str]) -> tuple[dict | None, str | None, list[str]]:
     """(readout, its sha256, why it may not be used) for --final. Reads the committed readout and the map
-    registration from the checkout."""
+    registration from the checkout, and re-reads the published map session with read_map.read: its rows and domain
+    must equal the readout's (a stale or partial readout is refused). A malformed readout is a refusal."""
     p = REPO / V.DOMAIN
     if not p.is_file():
         return None, None, [f"{V.DOMAIN} does not exist (the map's readout is not committed yet): the registration stays DRAFT"]
@@ -46,14 +47,29 @@ def domain_input(sessions: list[str]) -> tuple[dict | None, str | None, list[str
     if not V.is_committed(V.DOMAIN):
         why.append(f"{V.DOMAIN} is not committed (untracked, or differs from HEAD)")
     mp = REPO / VMREG
-    dom = json.loads(p.read_text())
-    why += V.domain_refusals(dom, V.sha256(p), json.loads(mp.read_text()), V.sha256(mp))
-    if not V.map_sessions(sessions):
-        why.append("no published session holds a map page: the census must read the map's session")
-    return dom, V.sha256(p), why
+    map_reg = json.loads(mp.read_text())
+    try:
+        dom = json.loads(p.read_text())
+    except ValueError as ex:
+        return None, None, why + [f"{V.DOMAIN} is malformed (not JSON: {str(ex)[:80]})"]
+    bad = V.domain_refusals(dom, V.sha256(p), map_reg, V.sha256(mp))
+    why += bad
+    ms = V.map_sessions(sessions)
+    if len(ms) != 1:
+        why.append(f"{len(ms)} published sessions hold a map page, not one: the census must read the map's session "
+                   "and the readout is re-read from it")
+    elif not bad:
+        again = V.reread(ms[0], map_reg)
+        for k in ("rows", "domain"):
+            diff = close(again.get(k), dom.get(k), f"/{k}")
+            if diff:
+                why.append(f"read_map.read on {ms[0]} gives other {k} than the readout (stale or partial readout): "
+                           + "; ".join(diff[:3]))
+    return (dom if not bad else None), V.sha256(p), why
 
 
 VMREG = f"docs/registered/{V.MAP_NAME}.json"
+MAP_RANGES = "map ranges (COMPUTED, the map registration's in-scope cells)"
 
 
 # ================================================================== the document
@@ -137,7 +153,7 @@ def cells_block(pred: dict) -> dict:
 
 def domain_block(draft: bool, pred: dict, dom: dict | None, dom_sha: str | None) -> dict:
     base = {
-        "input": (f"{V.DOMAIN}: read_map.py's domain.json on the published map session (registration {V.MAP_NAME}, "
+        "input": (f"{V.DOMAIN_REGISTERED}: read_map.py's domain.json on the published map session (registration {V.MAP_NAME}, "
                   f"sha256 {V.MAP_REG_SHA256}, public at {V.MAP_REG_COMMIT} before any map page), committed; a "
                   "REQUIRED INPUT, read mechanically"),
         "rule (the map registration's, verbatim)": V.VM.RULE_TEXT,
@@ -152,6 +168,8 @@ def domain_block(draft: bool, pred: dict, dom: dict | None, dom_sha: str | None)
                                     "X_p, S_p, verdicts, slab guard and D; D is not empty; the map's session is "
                                     "published and in the census"),
     }
+    base[MAP_RANGES] = V.map_ranges()
+    base["extrapolation"] = EXTRAPOLATION
     if draft:
         return dict(base, status=("NOT KNOWN: the map rental is running; its readout does not exist. Every cell is "
                                   "PENDING; register_v7d_blind.py --write --final labels them from the committed "
@@ -164,6 +182,14 @@ def domain_block(draft: bool, pred: dict, dom: dict | None, dom_sha: str | None)
                 D=D, labels=lab)
 
 
+EXTRAPOLATION = (
+    "D has no upper bound: a cell past the map's measured range on its path (T_v7 or W_e above the largest the map "
+    "timed) is IN-DOMAIN by extrapolation if it meets D. The map measured naive T_v7 <= 445 us, block-scan T_v7 <= "
+    "1824 us (small-batch <= 377 us), W_e <= 37.7 MB (block-scan <= 25.2 MB); DeepSeek-V3 has W_e 88 MB and T_v7 207 "
+    "to 6293 us, so its in-domain cells are extrapolated. The scorer reports each model's in-domain results split into "
+    "within the map's range and extrapolated, DESCRIPTIVE; the split changes no verdict")
+
+
 def build(draft: bool = True, pred: dict | None = None, sessions: list[str] | None = None,
           dom: dict | None = None, dom_sha: str | None = None) -> dict:
     pred = V.predictions() if pred is None else pred
@@ -173,9 +199,9 @@ def build(draft: bool = True, pred: dict | None = None, sessions: list[str] | No
     gate = V.VB.gate_registration()
     r = V.rental()
     status = ("DRAFT, NOT REGISTERED: D is unknown (the map rental is running); may be committed for real only when "
-              f"the map's readout ({V.DOMAIN}) is committed and verifies; until then every cell is PENDING, the plan "
+              f"the map's readout ({V.DOMAIN_REGISTERED}) is committed and verifies; until then every cell is PENDING, the plan "
               f"carries a DRAFT line and {V.LAUNCHER} refuses it" if draft else
-              f"REGISTERED BEFORE ANY PAGE of the four models, after the map's readout was committed and verified ({V.DOMAIN})")
+              f"REGISTERED BEFORE ANY PAGE of the four models, after the map's readout was committed and verified ({V.DOMAIN_REGISTERED})")
     return {
         "registered": V.DATE,
         "name": V.NAME,
@@ -198,6 +224,12 @@ def build(draft: bool = True, pred: dict | None = None, sessions: list[str] | No
                       "1 us absolute (dcommon.e_dec); OUT cells are scored the same way and reported DESCRIPTIVE"),
         "certification": V.CERT_RULE + "; here on the IN-DOMAIN cells only, with the minimum below",
         "minimum": V.MIN_RULE,
+        "minimum in-domain cells": V.MIN_IN_DOMAIN,
+        "inherited blocks": ("the frozen blind scorer's rivals (rental 7's rule), RIVALS_ALL_CELLS, KNEE_D, SIGMA_D, "
+                             "G3-D label, its all-cell pooled_over and its all-cell E1-DEC are reported DESCRIPTIVE "
+                             "over every scored cell, in and out of D, under names saying so; no verdict reads them "
+                             "(the certification is the rule above, unchanged); GD2's and G3-D shuffle's voids apply "
+                             "as registered"),
         "claim if certified": ("v7 predicts vLLM's fused MoE decode call on GH200 within 3% rms / 8% worst on unseen "
                                "models, inside D (per certified model); a fail closes decode"),
         "scope line": V.D3.SCOPE,
@@ -258,6 +290,7 @@ def build(draft: bool = True, pred: dict | None = None, sessions: list[str] | No
              f"(${r['cost_at_hard_cap_usd']} / ${r['cost_at_hard_cap_usd_at_list']}); over the plan's ~1 h / ~$3: "
              "DeepSeek-V3's three pages are full pages of 48 cells; the gr1 control pages are dropped first when time "
              f"runs short (without them about {r['without the gr1 pages (DESCRIPTIVE)']['wall_min']} min)"),
+            EXTRAPOLATION,
             ("the bars are the ones registered for decode blinds before any page (owner, D4-1: addendum 5 line 9, "
              "carried by addendum 6 line 159): rms 3%, worst 8%, |mean| 1.5%, per model and pooled, not tightened"),
         ],
@@ -300,7 +333,8 @@ def text(d: dict) -> list[str]:
         _flat("", {k: v}, L)
     dm = d["domain"]
     L += ["", f"DOMAIN: {dm['status']}", f"  input: {dm['input']}", f"  labelling: {dm['labelling']}",
-          f"  verification at --final: {dm['verification at --final']}"]
+          f"  verification at --final: {dm['verification at --final']}", f"  extrapolation: {dm['extrapolation']}",
+          f"  map ranges: {json.dumps(dm[MAP_RANGES])}"]
     if "D" in dm:
         L.append(f"  readout sha256 {dm['readout']['sha256']}")
         L.append(f"  {dm['D']['statement']}")
@@ -361,6 +395,43 @@ def final_refusals(doc_sessions: list[str], pred: dict) -> tuple[dict | None, st
     return dom, sha, why
 
 
+#: blocks a --final may change against the committed DRAFT: the DRAFT marks and the freeze (the readout joins it);
+#: within domain only its status and what --final adds (the readout, D, the labels; the label rule, the input, the
+#: verification text, the map ranges and the extrapolation note must agree); within models only the census (it reads
+#: the sessions published since, the map's among them); within rental only plan_sha256 (the plan loses its DRAFT line)
+FINAL_MAY_CHANGE = ("draft", "status", "freeze")
+DOMAIN_MAY_CHANGE = ("status", "readout", "D", "labels")
+
+
+def against_draft(doc: dict, draft: dict | None) -> list[str]:
+    """Why a --final document may not be written over the committed DRAFT (empty: it may): the DRAFT must exist at
+    HEAD, still verify its freeze, and agree with the final document on every block but FINAL_MAY_CHANGE (the label
+    rule, the minimum, the cells, the predictions, the bars, the rules, the disclosures)."""
+    if draft is None:
+        return [f"no committed DRAFT of {V.REG_JSON} at HEAD"]
+    why = []
+    if draft.get("draft") is not True:
+        why.append("the registration committed at HEAD is not a DRAFT")
+    bad = V.verify_freeze(draft)
+    if bad:
+        why.append("the committed DRAFT's freeze does not hold: " + "; ".join(bad[:5]))
+    new = json.loads(json.dumps(doc, default=str))
+
+    def strip(d):
+        out = {k: v for k, v in d.items() if k not in FINAL_MAY_CHANGE}
+        if isinstance(out.get("domain"), dict):
+            out["domain"] = {k: v for k, v in out["domain"].items() if k not in DOMAIN_MAY_CHANGE}
+        if isinstance(out.get("models"), dict):
+            out["models"] = {k: v for k, v in out["models"].items() if k != "census (COMPUTED)"}
+        if isinstance(out.get("rental"), dict):
+            out["rental"] = {k: v for k, v in out["rental"].items() if k != "plan_sha256"}
+        return out
+    diff = close(strip(new), strip(draft))
+    if diff:
+        why.append("the final document differs from the committed DRAFT outside the domain: " + "; ".join(diff[:5]))
+    return why
+
+
 def write(root: Path, doc: dict) -> None:
     jpath, tpath, ppath = root / V.REG_JSON, root / V.REG_TXT, root / V.PLAN
     for p in (jpath, ppath):
@@ -388,9 +459,14 @@ def main(argv=None) -> int:
             if why:
                 print("REFUSED: " + "; ".join(why))
                 return 2
-        if a.root == REPO:
+        if a.root == REPO and not a.final:
             V.write_pages(a.root)
         doc = build(draft=not a.final, pred=pred, sessions=sessions, dom=dom, dom_sha=sha)
+        if a.final:
+            why = against_draft(doc, V.committed_draft())
+            if why:
+                print("REFUSED: " + "; ".join(why))
+                return 2
         write(a.root, doc)
         print(f"wrote {jpath.name}, {tpath.name}, {ppath.name} ({'DRAFT' if doc['draft'] else 'final'})")
         return 0
@@ -403,7 +479,10 @@ def main(argv=None) -> int:
     dom = sha = None
     if not draft:
         p = REPO / V.DOMAIN
-        dom, sha = (json.loads(p.read_text()), V.sha256(p)) if p.is_file() else (None, None)
+        try:
+            dom, sha = (json.loads(p.read_text()), V.sha256(p)) if p.is_file() else (None, None)
+        except ValueError:
+            dom = sha = None
         if dom is None:
             print(f"{V.DOMAIN}: missing")
             return 1

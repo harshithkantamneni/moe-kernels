@@ -236,21 +236,29 @@ def _readout(kind: str = "good") -> dict:
             rows.append(_row(s, "small-batch", ps, 0.001 if kind not in ("empty", "high") else 0.07))
         rows.append(_row(s, "block-scan", 30.0 + 20 * i, 0.07))
     dom = {"what": "synthetic", "registration": V.MAP_NAME, "verdict": "READ",
-           "provenance": {"registration_sha256": V.MAP_REG_SHA256, "registration_path": V.VM.REG_JSON},
+           "provenance": {"registration_sha256": V.MAP_REG_SHA256, "registration_path": V.VM.REG_JSON,
+                          "git_head": "0" * 40, "git_dirty": False},
            "cells": {"registered": len(rows), "valid": len(rows)}, "domain": RM.domain(rows), "rows": rows}
     return json.loads(json.dumps(dom))
 
 
 @pytest.fixture()
 def readout(tmp_path, monkeypatch):
-    """Points --final at a synthetic readout file held committed, the map session held published."""
+    """Points --final at a synthetic readout file held committed, the map session held published, its re-read the
+    readout itself (put(dom, reread=...) plants another re-read), the committed DRAFT the registration's file and
+    the published sessions the registration's."""
     f = tmp_path / "map.domain.json"
+    again = {}
     monkeypatch.setattr(V, "DOMAIN", str(f))
     monkeypatch.setattr(V, "is_committed", lambda rel, root=V.REPO: True)
     monkeypatch.setattr(V, "map_sessions", lambda sessions: ["synthetic-map-session"])
+    monkeypatch.setattr(V, "reread", lambda session, map_reg: copy.deepcopy(again["dom"]))
+    monkeypatch.setattr(V, "committed_draft", _reg)
+    monkeypatch.setattr(V, "published_sessions", _sessions)
 
-    def put(dom):
-        f.write_text(json.dumps(dom, indent=1) + "\n")
+    def put(dom, reread=None):
+        f.write_text(dom if isinstance(dom, str) else json.dumps(dom, indent=1) + "\n")
+        again["dom"] = dom if reread is None else reread
         return f
     return put
 
@@ -323,12 +331,51 @@ def test_final_refuses_a_tampered_foreign_or_unread_readout_an_empty_d_and_a_d_n
     assert any("is not committed" in w for w in RG.final_refusals(_sessions(), pred)[2])
     monkeypatch.setattr(V, "is_committed", lambda rel, root=V.REPO: True)
     monkeypatch.setattr(V, "map_sessions", lambda sessions: [])
-    assert any("no published session holds a map page" in w for w in RG.final_refusals(_sessions(), pred)[2])
+    assert any("0 published sessions hold a map page, not one" in w for w in RG.final_refusals(_sessions(), pred)[2])
     # the map registration at other bytes
     mreg = json.loads((REPO / f"docs/registered/{V.MAP_NAME}.json").read_text())
     assert any("not the bytes registered" in w for w in V.domain_refusals(good, "x", mreg, "0" * 64))
     mreg["rental"]["plan_sha256"] = "0" * 64
     assert any("does not verify" in w for w in V.domain_refusals(good, "x", mreg, V.MAP_REG_SHA256))
+
+
+def test_final_refuses_a_stale_or_partial_readout_and_a_dirty_one(readout, pred):
+    good = _readout("good")
+    part = copy.deepcopy(good)
+    part["rows"] = part["rows"][:-3]                                         # the re-read has three cells more
+    part["domain"] = RM.domain([c for c in part["rows"] if c["valid"]])
+    readout(part, reread=good)
+    assert any("stale or partial readout" in w for w in RG.final_refusals(_sessions(), pred)[2])
+    readout(good)
+    assert RG.final_refusals(_sessions(), pred)[2] == []
+    for dirty in (True, None):
+        d = copy.deepcopy(good)
+        d["provenance"]["git_dirty"] = dirty
+        readout(d)
+        assert any("git_dirty" in w for w in RG.final_refusals(_sessions(), pred)[2])
+
+
+def test_a_malformed_readout_is_a_clean_refusal(readout, pred, tmp_path, capsys):
+    for bad in ("{not json", json.dumps([1, 2]), json.dumps({"registration": V.MAP_NAME, "verdict": "READ"})):
+        readout(bad, reread={})
+        why = RG.final_refusals(_sessions(), pred)[2]
+        assert any("malformed" in w for w in why), why
+        assert RG.main(["--write", "--final", "--root", str(tmp_path)]) == 2
+        assert "REFUSED" in capsys.readouterr().out and not (tmp_path / V.REG_JSON).exists()
+
+
+def test_final_must_agree_with_the_committed_draft_outside_the_domain(readout, pred, monkeypatch):
+    readout(_readout("good"))
+    dom, sha, why = RG.final_refusals(_sessions(), pred)
+    assert why == []
+    assert RG.against_draft(RG.build(False, pred, _sessions(), dom, sha), _reg()) == []
+    monkeypatch.setattr(V, "MIN_IN_DOMAIN", 5)                               # the minimum edited after the DRAFT
+    why = RG.against_draft(RG.build(False, pred, _sessions(), dom, sha), _reg())
+    assert any("differs from the committed DRAFT" in w and "minimum in-domain cells" in w for w in why), why
+    assert RG.against_draft({}, None)[0].startswith("no committed DRAFT")
+    d = copy.deepcopy(_reg())
+    d["freeze"]["own"][next(iter(d["freeze"]["own"]))] = "0" * 64
+    assert any("freeze does not hold" in w for w in RG.against_draft({}, d))
 
 
 # ---------------------------------------------------------------- the scorer, on synthetic trees
@@ -461,6 +508,30 @@ def test_off_lock_cells_a_voided_page_and_a_missing_page(scored):
     assert s["units"]["qwen2-57b-a14b-tp8-dm"]["state"].startswith("G1 FAIL")
     assert not any(m == "qwen2-57b-a14b-tp8" for m, _ in rows)
     assert "deepseek-v3" not in s["E1_DEC_IN_DOMAIN"]["pooled_over"]
+
+
+def test_the_scorer_labels_extrapolated_cells_and_all_cell_blocks_descriptive(scored, final_reg):
+    s = scored["good"]
+    r = s["E1_DEC_IN_DOMAIN"]
+    sp = r["within the map's range or extrapolated (DESCRIPTIVE)"]["per_model"]
+    for m in V.MODELS:
+        assert sp[m]["within the map's range"]["stats"]["cells"] + sp[m]["extrapolated"]["stats"]["cells"] == \
+            r["in-domain cells scored"][m]
+    # DeepSeek-V3's 88 MB slab is past every map shape's: every in-domain cell of it is extrapolated
+    assert sp["deepseek-v3"]["within the map's range"]["stats"]["cells"] == 0
+    assert sp["deepseek-v3"]["extrapolated"]["stats"]["cells"] == r["in-domain cells scored"]["deepseek-v3"] > 0
+    for k in ("rivals", "RIVALS_ALL_CELLS", "KNEE_D", "SIGMA_D", "G3D_LABEL"):
+        assert k not in s and f"{k} (DESCRIPTIVE, all cells)" in s, k
+    assert s["pooled_over"] == r["pooled_over"] and "pooled_over (DESCRIPTIVE, all cells)" in s
+    assert any("extrapolated" in ln for ln in SV.lines(s))
+
+
+def test_the_scorer_refuses_labels_that_are_not_the_frozen_readouts(final_reg):
+    assert SV.label_refusals(final_reg) == []
+    t = copy.deepcopy(final_reg)
+    k = next(k for k, v in t["domain"]["labels"]["cells"].items() if not v["in"])
+    t["domain"]["labels"]["cells"][k]["in"] = True
+    assert SV.label_refusals(t)[0].startswith("the registered labels differ from the frozen readout's (1 cells")
 
 
 def test_a_failed_power_check_scores_nothing(scored):
