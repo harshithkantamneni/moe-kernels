@@ -22,3 +22,9 @@
 2026-11-18T22:12:07Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
 2026-11-18T22:12:07Z calibrate END: exit 0 after 0 min [unit 2/14 mixtral-8x7b tp]
 2026-11-18T22:12:07Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T22:12:09Z tilecensus START: tile census, compile only (no lock, nothing timed): tiles 128x128x64w8s3 on granite-3.0-1b-a400m granite-3.0-3b-a800m qwen2-57b-a14b-tp8; refused on an MMA path mismatch [unit 3/14 - tp tiles=128x128x64w8s3 models=granite-3.0-1b-a400m,granite-3.0-3b-a800m,qwen2-57b-a14b-tp8] (estimate 4 min, cap 15 min, 122 min left)
+2026-11-18T22:12:18Z tilecensus: RESULT: VALIDITY census_path PASS 6 configs, 0 path mismatches, 0 errors
+2026-11-18T22:12:18Z tilecensus: RESULT: DESCRIPTIVE olmoe_n1_n3 DIFFERS NOT RUN (no OLMoE entries at n 1 and n 3): deepseek-v2-lite's entries are NOT SCORED
+2026-11-18T22:12:18Z tilecensus: exit 0 (/home/ubuntu/moe/results/2026-11-18-nvidia_gh200_480gb-tile-census-mixtral-8x7b-tp/tile-census.json)
+2026-11-18T22:12:18Z tilecensus END: exit 0 after 0 min [unit 3/14 - tp tiles=128x128x64w8s3 models=granite-3.0-1b-a400m,granite-3.0-3b-a800m,qwen2-57b-a14b-tp8]
+2026-11-18T22:12:19Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
