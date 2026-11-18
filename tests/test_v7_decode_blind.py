@@ -4,7 +4,9 @@ from the frozen v7 at the CAL2 refit (no blind page exists); the freeze holds an
 bars are the ones registered for these cells (owner, D4-1), verbatim; the plan covers exactly the registered cells in the old blind's structure and
 the pinned decode driver's dry run lists every unit; the launcher is RR's plus lines marked V7B, delivers the driver, the
 plan and every page byte for byte on a stub VM, and refuses a DRAFT plan; the scorer certifies a model v7 prices and
-not one it misprices."""
+not one it misprices. The registration's unseen scan is computed over the live tree, so since the blind's own session
+was published (2026-11-18) it is recomputed over the sessions published before it (_build), and the live scan is held
+to the registered one plus exactly that session's line."""
 from __future__ import annotations
 
 import hashlib
@@ -54,7 +56,7 @@ def pred():
 
 def test_the_registration_recomputes_to_its_committed_files(pred):
     reg = _reg()
-    doc = json.loads(json.dumps(RG.build(draft=reg["draft"], pred=pred), default=str))
+    doc = json.loads(json.dumps(_build(reg["draft"], pred), default=str))
     assert RG.close(doc, reg) == []
     assert (REPO / V.REG_TXT).read_text() == "\n".join(RG.text(doc)) + "\n"
     assert PLAN.read_text() == V.plan_text(doc["predictions"]["frozen"], doc["draft"])
@@ -103,10 +105,47 @@ def test_the_bars_are_the_owners_d4_1_registered_for_these_cells_verbatim():
     assert "tightened bars" not in json.dumps(reg["disclosures"])
 
 
+#: the blind's own published session: the unseen scan (V.unseen_scan, every published session dated 2026-11-04 or
+#: later) reads it since its publication, so the registration's scan is the live one without this line
+BLIND_SESSION = "2026-11-18-nvidia_gh200_480gb-v7b-session"
+
+
+def _registered_scan() -> list[str]:
+    return [ln for ln in V.unseen_scan() if not ln.startswith(BLIND_SESSION + ":")]
+
+
+def _build(draft: bool, pred) -> dict:
+    """RG.build on the tree the registration was computed on: the unseen scan without the blind's own session (the
+    pinned builder and v7bcommon are not edited)."""
+    live = V.unseen_scan
+    V.unseen_scan = lambda: [ln for ln in live() if not ln.startswith(BLIND_SESSION + ":")]
+    try:
+        return RG.build(draft=draft, pred=pred)
+    finally:
+        V.unseen_scan = live
+
+
 @pytest.fixture(scope="module")
 def draft_doc(pred):
     """The DRAFT the builder writes (--write without --final), generated here, never committed."""
-    return json.loads(json.dumps(RG.build(draft=True, pred=pred), default=str))
+    return json.loads(json.dumps(_build(True, pred), default=str))
+
+
+def test_the_live_unseen_scan_is_the_registered_one_plus_the_blinds_own_session():
+    """The pages the blind timed are the reserved models' first decode pages; once published they are SEEN, and the
+    scan's only new line is their session, naming all three. register_v7_blind.py --check reads DIFFERS on this field
+    alone (docs/FINDINGS.md, Model v7 decode blind)."""
+    key = "unseen scan (COMPUTED: published sessions dated 2026-11-04 or later, check_unseen's pattern)"
+    registered = _reg()["models"][key]
+    live = V.unseen_scan()
+    assert _registered_scan() == registered
+    extra = [ln for ln in live if ln not in registered]
+    assert len(live) == len(registered) + 1 and len(extra) == 1 and extra[0].startswith(BLIND_SESSION + ": ")
+    assert int(re.search(r"file names naming a reserved model: (\d+);", extra[0]).group(1)) > 0
+    pages = sorted(p.name for p in (REPO / "results/published" / BLIND_SESSION / "results").glob("gaps-*"))
+    assert pages == [f"gaps-nvidia_gh200_480gb-{m}-{u}" for m, u in (
+        ("granite-3.0-1b-a400m", "dc"), ("granite-3.0-1b-a400m", "dm"), ("mixtral-8x22b", "dm"),
+        ("qwen2-57b-a14b", "dc"), ("qwen2-57b-a14b", "dm"))]
 
 
 def test_the_committed_registration_and_plan_are_final_and_the_committed_gate_reads_decode_go():

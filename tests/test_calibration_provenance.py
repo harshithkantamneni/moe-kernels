@@ -485,6 +485,8 @@ def test_every_published_arm_has_a_declared_verdict():
         "2026-11-10-nvidia_gh200_480gb-pc2-session": SESSION,
         # Rental RR of 2026-11-12: one GH200, 10 units of the RR plan, a measurement (per-CTA start and end stamps and the plain kernel's counted w1 DRAM bytes on the same synthetic cells at 128x128x64 and 64x128x64 w8 s3, Mixtral-8x7B's shape as the P 224 anchor, Phi-3.5-MoE's 128g1 replicate stamps, all at the 1410 MHz lock; the br bytes unit refused), descriptive.
         "2026-11-12-nvidia_gh200_480gb-rr-session": SESSION,
+        # Model v7's decode blind rental of 2026-11-18: one GH200, 7 units of the registered plan (calibrate's ruler, then vLLM's decode MoE call at T 1 to 128 at the 1710 MHz lock: GRR main pages on Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M, GR1 control pages on Qwen2-57B and Granite-1B; none dropped), scored by score_blind_v7.py.
+        "2026-11-18-nvidia_gh200_480gb-v7b-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in tracked_children(PUBLISHED)}

@@ -4597,6 +4597,145 @@ next, registered before any blind page. R3's GO is by construction: v7 at R3's t
 v3's registered predictions and certifies nothing beyond v3's certification (Mixtral-8x7B and Phi-3.5). No earlier
 registered verdict, bar or file changes.
 
+## Model v7 decode blind (2026-11-18): E1-DEC FAILS pooled (4.17% rms over 125 cells) and no model is certified; Mixtral-8x22B and Qwen2-57B-A14B hold their own bars blind, Granite-3.0-1B-A400M fails; the blind is spent, and decode is reopened a second time for a validity domain
+
+**Registered, then run.** Registration `2026-11-17-v7-decode-blind-gh200` (docs/registered/README.md; sha256
+ee67e173...) was committed FINAL in dd1dff28, after the v7 gate's output read DECODE: GO and before any page of the
+three models, and became public when e58c1531 was pushed, 2026-11-18T03:30:24Z. It freezes model v7 (every switch on;
+D6FIX at decode) at its CAL2 refit, its 143 predictions on the decode stage's three reserved models (no decode page
+timed), addendum 5's pages and units unchanged (18 second-tile cells DESCRIPTIVE), and the bars registered for these
+cells, verbatim and not tightened: rms 3%, worst 8%, |mean| 1.5%, per model and pooled (owner, D4-1). A model is
+CERTIFIED only when its own bar and the pooled bar hold (decodeB-blind's rule, inherited). The rental ran at e58c1531,
+and the registered scorer then ran once on the fetched tree, at e58c1531 in the canonical checkout (macOS 27.2.1, no
+GPU), exit 0:
+
+```
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/scoring/v7blind/score_blind_v7.py <fetched tree>/vm <work folder>/2026-11-18/score-v7b
+```
+
+Disclosure: the first scorer run was pointed at the fetched tree's root instead of its `vm/` and read `NOT SCORED:
+power: 0 session power-set.txt files`. The power check comes first and looks for `session/power-set.txt` under the
+tree or its parent (`d2common.py:258`); the branch root holds it one level down, at `vm/session/`, so nothing was
+scored. It was rerun on `vm/`, the session root, which is the layout of every published session; no code, registration
+or file changed between the two runs. The committed `scripts/scoring/v7blind/blind.score.{json,txt}` are the same
+scorer on the published copy, `results/published/2026-11-18-nvidia_gh200_480gb-v7b-session`: the `.txt` is
+byte-identical to the fetched-tree score, and the JSON differs only in the power file's path (now repo-relative) and
+`git_dirty` (true: the published copy was untracked in the publication checkout, at the same e58c1531).
+`scripts/scoring/rescore.py v7blind` re-scores the published session to the committed files, the recorded checkout
+aside. Publication moves one computed field of the registration: its unseen scan reads every published session dated
+2026-11-04 or later, so it now also reads this session, and `register_v7_blind.py --check` reads DIFFERS on that field
+alone, in the .json and on the .txt's one scan line (7 sessions against the registered 6; the predictions, bars, freeze and plan read same, and the pinned builder is
+not edited). `tests/test_v7_decode_blind.py` rebuilds the registration over the sessions published before the blind
+and holds the live scan to the registered one plus exactly this session's line. `d4common.no_decode_page` (addenda 4
+to 6) looks only at published directories named `*decode*`, so it does not see this session and their `--check`
+outputs are unchanged by it; the three models nonetheless have decode pages from here on. This is the reading:
+
+```
+pooled over granite-3.0-1b-a400m, mixtral-8x22b, qwen2-57b-a14b: FAILS {'cells': 125, 'rms': 0.041702, 'worst': 0.172028, 'mean': 0.016127}
+  mixtral-8x22b: HOLDS {'cells': 41, 'rms': 0.017945, 'worst': 0.029842, 'mean': 0.014936} -> NOT CERTIFIED
+  qwen2-57b-a14b: HOLDS {'cells': 43, 'rms': 0.020493, 'worst': -0.042775, 'mean': -0.003415} -> NOT CERTIFIED
+  granite-3.0-1b-a400m: FAILS {'cells': 41, 'rms': 0.067376, 'worst': 0.172028, 'mean': 0.037814} -> NOT CERTIFIED
+```
+
+| model | cells | rms | worst | mean | own bar | registered verdict |
+|---|---:|---:|---:|---:|---|---|
+| Mixtral-8x22B | 41 | 1.79% | +2.98% (US-T128) | +1.49% | HOLDS | NOT CERTIFIED |
+| Qwen2-57B-A14B | 43 | 2.05% | -4.28% (L-T96-A45) | -0.34% | HOLDS | NOT CERTIFIED |
+| Granite-3.0-1B-A400M | 41 | 6.74% | +17.20% (L-T2-A8) | +3.78% | FAILS (rms, worst, mean) | NOT CERTIFIED |
+| **pooled (E1-DEC)** | **125** | **4.17%** | **+17.20%** | **+1.61%** | **FAILS (rms, worst, mean)** | |
+
+A positive error means v7 prices the call slower than it ran; a cell priced within E1-DEC's 1 us floor of its
+measured time scores 0 (12 cells, 8 of them Granite-1B's). Power READ (700.0 W); no GRR page voided (GD2 PASS: Qwen2-57B
+26 matched cells, 0 outside the band; Granite-1B 0 matched cells); G3-D shuffle EQUIVALENT on all three. Rivals: eager,
+roofline, line and OLS EXCLUDED; rho other and NAIVE-NODEDUP NOT SEPARATED (0 lever cells, under 6: on every cell those
+two rivals price as v7 does). DESCRIPTIVE beside the verdict: G3-D label NOT EQUIVALENT on
+all three (mean -1.12 us against a 1.27 us margin on Mixtral-8x22B, -0.59 against 0.56 on Qwen2-57B, -0.297 against 0.300
+on Granite-1B); SIGMA-D NOT READ on all three; both knee rows 4.17%; every cell as registered (the 18 second-tile cells
+at sigma 1) 143 cells, 10.91% rms.
+
+**What it means.** Blind, on models whose decode calls no page had timed, v7 priced the two large reserved models inside
+their own bars: Mixtral-8x22B at 1.79% rms (its mean, +1.49%, just inside the 1.5% bar) and Qwen2-57B-A14B at 2.05%. The
+1B model failed, at 6.74% rms and +17.20% worst. design-v7 had flagged exactly that cell of the plan as the likely
+failure ("A per-model 3% decode bar on Granite-1B is likely to fail (judgment: well under one in two that it passes)",
+design-v7's What v7 probably cannot fix, item 1, in the owner's work folder, moe-kernels-work 2026-11-17
+design-v7/DESIGN.md): Granite-1B's slabs are the smallest of the three, "tiny slabs (c0-dominated), where v6d reads
+worst" in design-v7's words, the regime of the seen re-score's worst cell (Granite-3.0-3B, +15.58% under v7 in the
+gate's re-score). Under the registered rule nothing certifies: the pooled bar fails, and certification needs both. The
+two models that hold are a DESCRIPTIVE statement about this score, not a certification, and they are not re-scored,
+re-pooled or re-registered without Granite-1B.
+
+**Where Granite-1B's error lives (DESCRIPTIVE, from `blind.score.json`'s rows and the registration's cell table; no new
+model, no refit).** 13 of its 41 cells carry 75% of its squared error: the small-batch path at the 16x64x128 w4 s4 tile
+with at most 16 of 32 experts active (all sub-wave grids), at T 2 to 16. There v7 prices every call slower than it ran,
+rms 10.35%, mean +9.78%, about 2.9 us on calls of about 26 to 37 us: all five T 2 cells +11.2% to +17.2% (L-T2-A8, 25.7
+us measured against 30.2 us priced), and every small-batch cell with 8 active experts (the LADDER-BOTTOM and MINCOVER
+classes) +8.9% to +17.2%. The sign turns on the same tile once the grid fills: the nine full-wave cells (28 to 32
+experts active, T 4 to 32; the UNIFORM, UNIFORM-UNSHUFFLED and BALANCED classes) run slower than priced, mean -3.6%,
+-2.3% to -5.2%. The block-scan cells at 64x128x64 (T 128) read +5.3% to +7.0% on four cells; the 32x64x128 and 32x128x64
+cells (T 64, 96) and both naive T 1 cells sit within the 1 us floor or under 4%. Without the 13 cells the other 28 read
+rms 4.09%, mean +1.00%, still over the 3% bar. By batch: T <= 16 8.09% (25 cells), T >= 32 3.76% (16). On the two large
+models the same tile reads 1.67% (Mixtral-8x22B, 29 cells) and 2.10% (Qwen2-57B, 30 cells); Mixtral-8x22B's sub-wave and
+full-wave cells there both read about +1.4% to +1.7% in mean, and Qwen2-57B has no sub-wave cell. The error sits in the
+regime design-v7 named as the risk, tiny c0-dominated slabs; the score does not say which term carries it, and this note
+names none.
+
+**The slip.** The Mixtral-8x22B main page ended HELD_WITH_SLIPS: one repeat, row 52 (L-T128-A2, repeat 1 of 9), ran at
+1680 MHz under the 1710 lock, recorded under `--slip-policy cell` and kept out of that cell's median by R3 (R3 exit 0,
+C1 PASS). L-T128-A2 is one of the 18 DESCRIPTIVE second-tile cells, so no E1-DEC cell carries a slipped repeat. The
+other four pages read worst 1710.0 MHz. No cell was dropped: 125 scored and 18 DESCRIPTIVE, the registration's 143.
+
+**What ran.** One Lambda GH200 480GB (instance 28a23f07, us-east-3, board `e165c7`, new to the study), launched
+03:36:57Z on 2026-11-18, termination confirmed 04:44:46Z: about 67.8 min, about $2.93 at Lambda's list price of
+$2.59/h (an estimate; the registration planned about 111 min of wall, $4.79 at that price, and capped it at launch +
+140 min, $6.04). It ran `scripts/plans/rentalV7B-decode-blind-2026-11.plan` (sha256 74ded4bc..., as registered) at
+e58c1531: setup 03:38:42Z to 03:41:18Z, 7 units 03:41:19Z to 04:41:43Z in about 60 min against 72 estimated, none
+dropped, every unit and the driver exit 0, 700 W read back. The last push was verified at 04:43:28Z (567 of 567 files
+match the branch's SHA256SUMS), termination was requested then, and the run's deploy key was deleted after it was
+confirmed. Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7b-session` (561 files; the 6
+`cuda_utils*.so` files of the Triton caches left out as before); branch `run-gh200-v7b-20261118t0336`.
+
+**What it does not show.**
+- **One board.** Every number is from board `e165c7` at 700 W and the 1710 MHz lock; v7's decode constants were fitted
+  on CAL2's board (`ae5fc5`) and this is their first test on another board. A board effect and a model error are not
+  separated here.
+- **Not a certification of the two holding models.** They hold their own bars inside a blind that FAILS; the
+  registered rule certifies neither.
+- **The second-tile cells.** The 18 cells where an expert needs a second M-tile are outside E1-DEC (RR at decode was
+  never built); at sigma 1 they read 26.9% rms on Mixtral-8x22B, 40.4% on Qwen2-57B and 18.4% on Granite-1B
+  (SIGMA-D NOT READ on all three). v7 does not price that regime.
+- **No mechanism.** The Granite-1B note above is a description of where the residual sits, read after the score. It
+  chooses no term and fits nothing, and nothing is registered from it.
+
+**Seen and unseen.** These are the first decode pages of Mixtral-8x22B, Qwen2-57B-A14B and Granite-3.0-1B-A400M. Once
+published they are SEEN, and the study holds no unseen decode model.
+
+**The blind is spent.** This was the ONE blind of the owner's 2026-11-17 reopening (Decode closes after v6d, NOTE
+2026-11-17: "one blind, pass or fail, after which the stage stops and is reported either way"). Its registered verdict
+stands: FAIL, none certified. It is not re-scored, re-pooled or re-run, and no fix to v7 follows from it.
+
+**Owner decision 2026-11-18: decode reopened a second time, for a validity domain (a forking path, disclosed).** After
+this blind was scored (about 05:40Z), the owner decided to test a validity DOMAIN for v7 at decode instead of refitting
+it. This is a second reopening, chosen with every decode page and this score in view, as the 2026-11-04 and 2026-11-17
+reopenings were. What motivates it is a POST-HOC, DESCRIPTIVE reading of the scored pages (moe-kernels-work 2026-11-18
+v7-domain REPORT.md and domain-phase0 REPORT.md): every out-of-sample cell over 8% is a short call on an aligned path;
+v7 over-prices the small-batch and block-scan fixed step by about 2 to 4.6 us; and the naive twins of those cells (the
+same GEMMs on the naive path) read within 0.33 us. The plan: Phase 0, offline diagnosis (done, domain-phase0); Phase 1,
+one DESCRIPTIVE mapping rental, with a mechanical per-path threshold rule registered before its pages; Phase 2, one
+domain blind on models with no decode page (DeepSeek-V3, DeepSeek-V3-tp4, DeepSeek-V3-tp8, Qwen2-57B-A14B-tp8). v7 is
+unchanged: no refit, no new term. One mapping rental and one blind, then the stage stops. State at this commit: no map
+and no domain registration exists, and nothing is rented for either. Nothing in this section, and no registered
+verdict, changes.
+
+Model v7's status at this commit, by regime:
+
+| regime | status | where |
+|---|---|---|
+| R3 tile | CERTIFIED (v3, unchanged: v7 re-prices v3's 300 registered predictions bit for bit; Mixtral-8x7B and Phi-3.5) | Rental 7; Model v7 gate |
+| prefill | NO-GO at the gate: REFUSED as registered (a loader defect of record); the DESCRIPTIVE re-run fails G1 and G2; no blind | Model v7 gate |
+| decode | GO at the gate on a SEEN floor; registered FAIL at the blind (E1-DEC pooled 4.17%; none certified); a validity domain to be mapped and tested (owner, 2026-11-18), nothing registered yet | this section |
+
+No earlier registered verdict, bar or file changes.
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

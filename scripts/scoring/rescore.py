@@ -3,7 +3,7 @@
 
     python scripts/scoring/rescore.py <stage> [--only NAME ...] [--keep DIR]
 
-<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2 or rr. Each registered scorer runs in a subprocess, in the stage's
+<stage> is tileA, tileA2, settleS1, cal2, cal3, cal4, decodeCAL, decodeCAL2, decodeBlind, decodeDS, tileB3, pc, pc2, rr or v7blind. Each registered scorer runs in a subprocess, in the stage's
 registered order, from the repo root, with PYTHONHASHSEED=0: scripts/scoring/tileA/score_census.py builds its occupancy dict
 from a set, so its key order (and the floor score's, which reads it) follows the hash seed. That scorer is
 pinned by the tileA2 registration (scripts/scoring/tileA2/register_a2.py PINNED), so the seed is fixed here
@@ -77,6 +77,15 @@ rr is rental RR, a measurement rental (2026-11-11-rr-gh200), descriptive: its on
 the pages, the shapes, the plan and every code_pins path, and writes rr.read.json and rr.read.txt, committed in
 scripts/scoring/rr/ as read from the published tree.
 
+v7blind is model v7's decode blind rental (2026-11-17-v7-decode-blind-gh200): its registered scorer
+(scripts/scoring/v7blind/score_blind_v7.py, which reads the registration at its committed path only and runs the
+addendum-3 blind wrapper under v7) takes the published session directory itself (the session root, results/ and
+session/, as the fetched tree's vm/ it was first scored on) and an output directory, and writes blind.score.json and
+blind.score.txt, committed in scripts/scoring/v7blind/ as scored on the published tree. The scorer records the
+checkout it ran in (the JSON's provenance git_head and git_dirty, the .txt's closing "commit <sha>"); those three
+values are compared as present, not as equal (checkout_free), since a re-score runs at a later commit by design. The
+registration's sha256 beside them is compared exactly.
+
 The scorers write into a scratch directory; every score file there (*.score.json and *.score.txt, or the
 stage's own pattern) is compared with the committed file of the same name after the scratch directory's path
 is replaced by the committed one (the tileA2 census score records the merged census under its output
@@ -124,9 +133,12 @@ STAGES = {
     "pc": ("2026-11-06-nvidia_gh200_480gb-pc-session", "scripts/scoring/pc", ["scripts/scoring/pc/read_pc.py"]),
     "pc2": ("2026-11-10-nvidia_gh200_480gb-pc2-session", "scripts/scoring/pc2", ["scripts/scoring/pc2/read_pc2.py"]),
     "rr": ("2026-11-12-nvidia_gh200_480gb-rr-session", "scripts/scoring/rr", ["scripts/scoring/rr/read_rr.py"]),
+    "v7blind": ("2026-11-18-nvidia_gh200_480gb-v7b-session", "scripts/scoring/v7blind",
+                ["scripts/scoring/v7blind/score_blind_v7.py"]),
 }
 #: the tree each stage's scorers read, under the published session (default: results)
-TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": "", "tileB3": "", "pc": "", "pc2": "", "rr": ""}
+TREE = {"settleS1": "", "cal2": "", "cal3": "", "cal4": "", "tileB3": "", "pc": "", "pc2": "", "rr": "",
+        "v7blind": ""}
 #: the files each stage's scorers write (default: *.score.*)
 OUTPUTS = {"settleS1": "settleS1.read.*", "cal2": "cal2.read.*", "cal3": "cal3.read.*", "cal4": "cal4.read.*",
            "decodeDS": "ds.readings.*", "pc": "pc.read.*", "pc2": "pc2.read.*",
@@ -142,13 +154,27 @@ ARGV = {"cal2": lambda tree, out: ["--c2", tree, "--out-dir", out],
         "tileB3": lambda tree, out: ["score", "--b3", tree, "--out-dir", out],
         "pc": lambda tree, out: ["--pc", tree, "--out-dir", out],
         "pc2": lambda tree, out: ["--pc2", tree, "--out-dir", out],
-        "rr": lambda tree, out: ["--rr", tree, "--out-dir", out]}
+        "rr": lambda tree, out: ["--rr", tree, "--out-dir", out],
+        "v7blind": lambda tree, out: [tree, out]}
 #: the committed name of a scratch score file, where the stage committed it under another name
 COMMITTED_AS = {"decodeCAL2": {"cal.score.json": "cal2.score.json", "cal.score.txt": "cal2.score.txt"}}
 #: the run-tree root a committed score file records, scored on the fetched tree before publication, matched on its
 #: run-relative tail (the part before it is whichever machine fetched it); it reads as the published session (the
 #: fetched tree's vm/ is the session's top level)
 FETCHED = {"decodeCAL2": "/runs/gh200-tile2-20261103T2203Z/tree/vm"}
+#: stages whose scorer records the checkout it ran in (score_blind_v7.provenance)
+CHECKOUT = {"v7blind"}
+_CHECKOUT = ((re.compile(r'("git_head": )"[0-9a-f]{40}"'), r'\1"<checkout>"'),
+             (re.compile(r'("git_dirty": )(?:true|false)'), r'\1"<checkout>"'),
+             (re.compile(r'(, commit )[0-9a-f]{40}$', re.M), r'\1<checkout>'))
+
+
+def checkout_free(text: str) -> str:
+    """The text with the checkout a scorer recorded (git_head, git_dirty, the .txt's closing commit) replaced by a
+    placeholder; each must be present in its recorded form to be replaced, so a missing or malformed one still differs."""
+    for pat, sub in _CHECKOUT:
+        text = pat.sub(sub, text)
+    return text
 
 
 def tree_of(stage: str) -> str:
@@ -192,6 +218,8 @@ def compare(stage: str, out: Path) -> list[tuple[str, str]]:
         want = c.read_text()
         if stage in FETCHED:
             want = re.sub(r'(?<=")[^"]*' + re.escape(FETCHED[stage]), f"{PUB}/{STAGES[stage][0]}", want)
+        if stage in CHECKOUT:
+            got, want = checkout_free(got), checkout_free(want)
         rows.append((p.name, "EQUAL" if got == want else "DIFFERS"))
     return rows
 

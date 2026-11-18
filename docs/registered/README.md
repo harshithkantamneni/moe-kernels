@@ -2222,3 +2222,25 @@ about 111 min wall, $4.24 at $2.29/h; deadline launch + 125 min, hard cap + 140 
 list price of 2026-11-18, $2.59/h, about $4.79 planned and $6.04 at the cap). The freeze holds the v7
 gate registration's freeze and this blind's own files; `score_blind_v7.py` refuses on any difference. Tests
 `tests/test_v7_decode_blind.py` (synthetic trees and a stub VM only).
+
+RESULT 2026-11-18: public at the push of e58c1531 (03:30:24Z), which is also the run commit; one GH200 (Lambda
+instance 28a23f07, us-east-3, board e165c7, new), launched 03:36:57Z, termination confirmed 04:44:46Z, about 67.8 min
+and $2.93 at $2.59/h; 7 units, every one exit 0, none dropped, 700 W read back; one slipped repeat (1680 MHz at the
+1710 lock) on Mixtral-8x22B's main page, kept out of its cell's median by R3, on a DESCRIPTIVE second-tile cell
+(L-T128-A2). Published at `results/published/2026-11-18-nvidia_gh200_480gb-v7b-session`. Scored once by
+`score_blind_v7.py` at e58c1531 on the fetched tree's `vm/` (exit 0); a first run pointed at the tree's root instead
+read `NOT SCORED: power: 0 session power-set.txt files` and scored nothing (disclosed; no code, registration or file
+changed). Committed as `scripts/scoring/v7blind/blind.score.{json,txt}`, scored on the published copy (the `.txt`
+byte-identical, the JSON differing only in the power file's path and `git_dirty`); `scripts/scoring/rescore.py
+v7blind` re-scores it. Since publication `--check` reads DIFFERS on the computed unseen scan alone (it now reads this
+session too, 7 lines against 6); every other field reads same. **E1-DEC pooled FAILS** (125 cells, rms 4.17%, worst +17.20%, mean +1.61%); Mixtral-8x22B HOLDS
+(41 cells, 1.79%, worst +2.98%, mean +1.49%), Qwen2-57B-A14B HOLDS (43, 2.05%, worst -4.28%, mean -0.34%),
+Granite-3.0-1B-A400M FAILS (41, 6.74%, worst +17.20%, mean +3.78%); **no model CERTIFIED** (own bar and pooled bar).
+Power READ; no GRR page voided (GD2 PASS); G3-D shuffle EQUIVALENT on all three; rivals EXCLUDED (eager, roofline, line,
+OLS) or NOT SEPARATED (rho other, NAIVE-NODEDUP, 0 lever cells); G3-D label NOT EQUIVALENT on all three and SIGMA-D NOT
+READ, both DESCRIPTIVE. This was the one blind of the owner's 2026-11-17 reopening; the registered verdict stands (FAIL,
+none certified) and the blind is spent. Owner decision 2026-11-18, after the score, a forking path: decode is reopened a
+second time to certify a validity domain for v7 (no refit): a DESCRIPTIVE mapping rental with a mechanical per-path
+threshold rule registered before its pages, then one domain blind on models with no decode page (DeepSeek-V3, -tp4,
+-tp8, Qwen2-57B-tp8), then the stage stops. No map or domain registration exists at this entry (docs/FINDINGS.md,
+Model v7 decode blind).

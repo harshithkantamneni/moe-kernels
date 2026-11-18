@@ -1,0 +1,52 @@
+2026-11-18T03:38:42Z setup_vm.sh start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-18T05:41:57Z
+2026-11-18T03:41:18Z setup_vm.sh exit 0 (7 preflight checks passed)
+2026-11-18T03:41:19Z driver start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4, steps of the plan scripts/plans/rentalV7B-decode-blind-2026-11.plan, deadline 2026-11-18T05:41:57Z (112 min of work left)
+2026-11-18T03:41:19Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalV7B-decode-blind-2026-11.plan (sha256 74ded4bc06b40dde38e3d19ba15b244555ccf7e6223cdf808b8032ad2d7c908e), 7 units
+2026-11-18T03:41:19Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/7 -] (estimate 3 min, cap 15 min, 112 min left)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_A 1410 (registered)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_B 1500 (registered)
+2026-11-18T03:41:19Z lock plan: LOCK_ETA_C 1605 (registered)
+2026-11-18T03:41:19Z prelude: persistence Enabled, power.limit 700.00 W, base tag gh200-20261118T034119Z
+2026-11-18T03:41:19Z prelude END: exit 0 after 0 min [unit 1/7 -]
+2026-11-18T03:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T03:41:21Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/7 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 112 min left)
+2026-11-18T03:41:46Z calibrate: RESULT: VALIDITY clock_established PASS the samples agree with each other and with the settle plateau
+2026-11-18T03:41:46Z calibrate: RESULT: VALIDITY ceiling_pattern_measured PASS triad = 3726.3 GB/s
+2026-11-18T03:41:46Z calibrate: RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS fastest pattern write 3949.1 GB/s against a derived pin rate of 4022.8 GB/s
+2026-11-18T03:41:46Z calibrate: RESULT: CLAIM write_rate_is_a_store_rate PASS write 3949.1 GB/s is 98.2% of the pin rate; a read-for-ownership would make it 2N and impossible
+2026-11-18T03:41:46Z calibrate: RESULT: CLAIM clock_steady_across_patterns PASS every pattern was measured in the same clock state
+2026-11-18T03:41:46Z calibrate: RESULT: CLAIM not_throttled PASS from gemm_clock.{clock_level_ok,clock_drift_ok}: FLOOR PASS (1440 MHz median under load against a floor of 660 MHz, 0.3333 of t
+2026-11-18T03:41:46Z calibrate: the ruler stands (calibrate exit 0): moe/bench/hardware/measured_nvidia_gh200_480gb.yaml
+2026-11-18T03:41:46Z calibrate END: exit 0 after 0 min [unit 2/7 mixtral-8x7b dcal]
+2026-11-18T03:41:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T03:41:48Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 15 min, cap 45 min, 112 min left)
+2026-11-18T03:41:49Z r3decode: docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst GRR rot auto, session tag gh200-20261118T034119Z-dec
+2026-11-18T04:00:13Z r3decode: 2026-11-18T04:00:11Z G=1 held-with-slips at lock 1710: R3 exit 0 DONE, cells=423 worst=1680.0 MHz, 1101 s, dir nvidia_gh200_480gb-decode-mixtral-8x22b-GRR-mixtral-8x22b-main-50320abe; 1 slipped rows; 1 slipped rows, lowest 1680 MHz, recorded and kept out of their cell medians by R3
+2026-11-18T04:00:13Z r3decode: locked_r3 exit 0
+2026-11-18T04:00:13Z r3decode END: exit 0 after 18 min [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:00:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T04:00:16Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 4/7 qwen2-57b-a14b dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 93 min left)
+2026-11-18T04:00:17Z r3decode: docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst GRR rot auto, session tag gh200-20261118T034119Z-decb
+2026-11-18T04:15:40Z r3decode: 2026-11-18T04:15:39Z G=1 held at lock 1710: R3 exit 0 DONE, cells=432 worst=1710.0 MHz, 921 s, dir nvidia_gh200_480gb-decode-qwen2-57b-a14b-GRR-qwen2-57b-a14b-main-ec5f8138
+2026-11-18T04:15:40Z r3decode: locked_r3 exit 0
+2026-11-18T04:15:40Z r3decode END: exit 0 after 15 min [unit 4/7 qwen2-57b-a14b dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:15:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T04:15:42Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 5/7 granite-3.0-1b-a400m dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 78 min left)
+2026-11-18T04:15:44Z r3decode: docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst GRR rot auto, session tag gh200-20261118T034119Z-decc
+2026-11-18T04:27:46Z r3decode: 2026-11-18T04:27:46Z G=1 held at lock 1710: R3 exit 0 DONE, cells=432 worst=1710.0 MHz, 721 s, dir nvidia_gh200_480gb-decode-granite-3.0-1b-a400m-GRR-granite-3.0-1b-a400m-main-5fc37def
+2026-11-18T04:27:46Z r3decode: locked_r3 exit 0
+2026-11-18T04:27:46Z r3decode END: exit 0 after 12 min [unit 5/7 granite-3.0-1b-a400m dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:27:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T04:27:49Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 6/7 qwen2-57b-a14b dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 66 min left)
+2026-11-18T04:27:51Z r3decode: docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst GR1 rot auto, session tag gh200-20261118T034119Z-decd
+2026-11-18T04:34:42Z r3decode: 2026-11-18T04:34:42Z G=1 held at lock 1710: R3 exit 0 DONE, cells=234 worst=1710.0 MHz, 410 s, dir nvidia_gh200_480gb-decode-qwen2-57b-a14b-GR1-qwen2-57b-a14b-ctl-95c002b4
+2026-11-18T04:34:42Z r3decode: locked_r3 exit 0
+2026-11-18T04:34:42Z r3decode END: exit 0 after 7 min [unit 6/7 qwen2-57b-a14b dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:34:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T04:34:45Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 7/7 granite-3.0-1b-a400m dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 59 min left)
+2026-11-18T04:34:47Z r3decode: docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst GR1 rot auto, session tag gh200-20261118T034119Z-dece
+2026-11-18T04:41:39Z r3decode: 2026-11-18T04:41:38Z G=1 held at lock 1710: R3 exit 0 DONE, cells=234 worst=1710.0 MHz, 410 s, dir nvidia_gh200_480gb-decode-granite-3.0-1b-a400m-GR1-granite-3.0-1b-a400m-ctl-002a285e
+2026-11-18T04:41:39Z r3decode: locked_r3 exit 0
+2026-11-18T04:41:39Z r3decode END: exit 0 after 7 min [unit 7/7 granite-3.0-1b-a400m dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:41:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T04:41:43Z driver end: exit 0

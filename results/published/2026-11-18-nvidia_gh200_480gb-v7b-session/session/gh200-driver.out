@@ -1,0 +1,34 @@
+2026-11-18T03:38:42Z setup_vm.sh start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4 from https://github.com/harshithkantamneni/moe-kernels, deadline 2026-11-18T05:41:57Z
+2026-11-18T03:41:18Z setup_vm.sh exit 0 (7 preflight checks passed)
+[push] pushed 39ab83b to run-gh200-v7b-20261118t0336: setup_vm.sh: READY
+2026-11-18T03:41:19Z driver start: commit e58c1531adea4bc3ae9ae0f232ae222c47c82ef4, steps of the plan scripts/plans/rentalV7B-decode-blind-2026-11.plan, deadline 2026-11-18T05:41:57Z (112 min of work left)
+2026-11-18T03:41:19Z plan: /home/ubuntu/moe/repo/scripts/plans/rentalV7B-decode-blind-2026-11.plan (sha256 74ded4bc06b40dde38e3d19ba15b244555ccf7e6223cdf808b8032ad2d7c908e), 7 units
+2026-11-18T03:41:19Z prelude START: 3c.1 supported clocks, persistence, 700 W [unit 1/7 -] (estimate 3 min, cap 15 min, 112 min left)
+2026-11-18T03:41:19Z prelude END: exit 0 after 0 min [unit 1/7 -]
+2026-11-18T03:41:20Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a1974a7 to run-gh200-v7b-20261118t0336: prelude (unit 1/7 -): exit 0 (0 min)
+2026-11-18T03:41:21Z calibrate START: 3c.3 calibrate (the ruler), no lock in force [unit 2/7 mixtral-8x7b dcal] (estimate 2 min, cap 30 min, 112 min left)
+2026-11-18T03:41:46Z calibrate END: exit 0 after 0 min [unit 2/7 mixtral-8x7b dcal]
+2026-11-18T03:41:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a9e7393 to run-gh200-v7b-20261118t0336: calibrate (unit 2/7 mixtral-8x7b dcal): exit 0 (0 min)
+2026-11-18T03:41:48Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 15 min, cap 45 min, 112 min left)
+2026-11-18T04:00:13Z r3decode END: exit 0 after 18 min [unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:00:14Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed b548d5d to run-gh200-v7b-20261118t0336: r3decode (unit 3/7 mixtral-8x22b dm histogram=docs/registered/2026-11-04-blind5-pages/mixtral-8x22b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (18 min)
+2026-11-18T04:00:16Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 4/7 qwen2-57b-a14b dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 93 min left)
+2026-11-18T04:15:40Z r3decode END: exit 0 after 15 min [unit 4/7 qwen2-57b-a14b dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:15:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed a8db255 to run-gh200-v7b-20261118t0336: r3decode (unit 4/7 qwen2-57b-a14b dm histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (15 min)
+2026-11-18T04:15:42Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json, inst GRR, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 5/7 granite-3.0-1b-a400m dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3] (estimate 16 min, cap 48 min, 78 min left)
+2026-11-18T04:27:46Z r3decode END: exit 0 after 12 min [unit 5/7 granite-3.0-1b-a400m dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:27:47Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 254ec8a to run-gh200-v7b-20261118t0336: r3decode (unit 5/7 granite-3.0-1b-a400m dm histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-main.json inst=GRR slip-policy=cell g1-rule=r7-median-run3): exit 0 (12 min)
+2026-11-18T04:27:49Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 6/7 qwen2-57b-a14b dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 66 min left)
+2026-11-18T04:34:42Z r3decode END: exit 0 after 7 min [unit 6/7 qwen2-57b-a14b dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:34:43Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed 1d53dfd to run-gh200-v7b-20261118t0336: r3decode (unit 6/7 qwen2-57b-a14b dc histogram=docs/registered/2026-11-04-blind5-pages/qwen2-57b-a14b-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
+2026-11-18T04:34:45Z r3decode START: decode page at the 1710 lock (locked_r3 --r3-script scripts/r3_decode.py, G=1): docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json, inst GR1, rot auto, slip-policy cell, g1-rule r7-median-run3 [unit 7/7 granite-3.0-1b-a400m dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3] (estimate 10 min, cap 30 min, 59 min left)
+2026-11-18T04:41:39Z r3decode END: exit 0 after 7 min [unit 7/7 granite-3.0-1b-a400m dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3]
+2026-11-18T04:41:40Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+[push] pushed f721b12 to run-gh200-v7b-20261118t0336: r3decode (unit 7/7 granite-3.0-1b-a400m dc histogram=docs/registered/2026-11-04-blind5-pages/granite-3.0-1b-a400m-ctl.json inst=GR1 slip-policy=cell g1-rule=r7-median-run3): exit 0 (7 min)
+2026-11-18T04:41:43Z driver end: exit 0

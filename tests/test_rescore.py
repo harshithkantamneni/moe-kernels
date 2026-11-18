@@ -22,7 +22,10 @@ committed pc2.read files (where PC2's run commit is in this clone's history; rea
 byte for byte), and the committed PC2 reading is DESCRIPTIVE with v6d's term 3 DOES NOT HOLD on both 4-per-SM tiles, and
 rental RR's registered reader its published session to the committed rr.read files (where RR's run commit is in
 this clone's history; read from the published tree, so equal byte for byte), and the committed RR reading is
-DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page.
+DESCRIPTIVE with RR-R4 NOT IDENTIFIED, and RR's br unit refused on its plan line's arms against the registered page,
+and model v7's decode blind scorer its published session (the session root, as first scored on the fetched tree's vm/)
+to the committed scripts/scoring/v7blind/blind.score files (equal but for the power file's path and the checkout the
+scorer records), and the committed v7 blind score reads E1-DEC pooled FAILS with no model certified.
 
 Since 2026-11-17 the cal3, decode CAL, CAL2 and DS, PC, PC2 and RR re-reads are held to their committed files by
 tests/_reproduce.py (every label, key, list length and integer exact; floats within REL_TOL 1e-12, DS 1e-6, cal3's theta
@@ -65,6 +68,8 @@ def _reproduces(stage: str, out: Path) -> list[str]:
         want = c.read_text()
         if stage in RS.FETCHED:
             want = re.sub(r'(?<=")[^"]*' + re.escape(RS.FETCHED[stage]), f"{RS.PUB}/{RS.STAGES[stage][0]}", want)
+        if stage in RS.CHECKOUT:
+            got, want = RS.checkout_free(got), RS.checkout_free(want)
         RT.assert_reproduces(got, want, p.suffix[1:], RT.profile_for(c.name), what=f"{stage} {p.name}")
         names.append(p.name)
     return names
@@ -452,6 +457,69 @@ def test_rr_br_refused_on_its_plan_lines_arms_against_the_registered_page(monkey
     assert (REPO / RR_SESSION / "session/logs/lock1410-pages-phi-3.5-moe-br.status").read_text().startswith(
         "G=1 exit 2 ")
     assert not list((REPO / RR_SESSION / "results").glob("*-phi-3.5-moe-br-r3-counters"))
+
+
+V7B_SESSION = "results/published/2026-11-18-nvidia_gh200_480gb-v7b-session"
+V7B_SCORES = REPO / "scripts/scoring/v7blind"
+V7B_REG_SHA = "ee67e173d3c962377bef19d510c980e9913ce6c78196d8d177e931627897fe63"
+V7B_SCORED_AT = "e58c1531adea4bc3ae9ae0f232ae222c47c82ef4"
+
+
+def test_the_published_v7_blind_session_rescores_to_the_committed_files(tmp_path):
+    """Scored on the published session root: the committed files are this directory's (the power file's path
+    repo-relative), held to the re-score by tests/_reproduce.py (labels exact, floats within REL_TOL) and by
+    RS.compare's text equality, the checkout the scorer records aside (checkout_free)."""
+    assert RS.tree_of("v7blind") == V7B_SESSION
+    ran = RS.rescore("v7blind", tmp_path)
+    assert ran == [("scripts/scoring/v7blind/score_blind_v7.py", 0)], ran
+    assert _reproduces("v7blind", tmp_path) == ["blind.score.json", "blind.score.txt"]
+    assert dict(RS.compare("v7blind", tmp_path)) == {"blind.score.json": "EQUAL", "blind.score.txt": "EQUAL"}
+    got = json.loads((tmp_path / "blind.score.json").read_text())
+    want = json.loads((V7B_SCORES / "blind.score.json").read_text())
+    assert not RT.compare_json(got, want, skip={("provenance", "git_head"), ("provenance", "git_dirty")})
+    assert got["POWER"]["file"] == want["POWER"]["file"] == f"{V7B_SESSION}/session/power-set.txt"
+    assert got["provenance"]["registration_sha256"] == want["provenance"]["registration_sha256"] == V7B_REG_SHA
+
+
+def test_the_committed_v7_blind_score_fails_and_certifies_no_model():
+    """The registered reading: power READ; 18 DESCRIPTIVE second-tile cells out of E1-DEC; E1-DEC pooled FAILS over 125
+    cells (rms 4.17%); Mixtral-8x22B and Qwen2-57B-A14B HOLD their own bar, Granite-3.0-1B-A400M FAILS it; under
+    decodeB-blind's rule (own bar and pooled bar) no model is CERTIFIED; no GRR page voided. Scored at e58c1531 on the
+    publication tree (git_dirty: the published copy, untracked until its commit)."""
+    d = json.loads((V7B_SCORES / "blind.score.json").read_text())
+    assert d["registration"] == "2026-11-17-v7-decode-blind-gh200" and d["draft"] is False
+    assert d["provenance"] == {"registration_path": "docs/registered/2026-11-17-v7-decode-blind-gh200.json",
+                               "registration_sha256": V7B_REG_SHA, "git_head": V7B_SCORED_AT, "git_dirty": True}
+    assert d["POWER"]["verdict"].startswith("READ")
+    assert len(d["excluded_cells"]) == 18 and len(d["rows"]) == 125
+    pooled = d["E1_DEC"]["pooled"]
+    assert pooled["verdict"] == "FAILS" and pooled["stats"] == {"cells": 125, "rms": 0.041702, "worst": 0.172028,
+                                                                "mean": 0.016127}
+    per = {m: (v["verdict"], v["stats"]["cells"], v["stats"]["rms"]) for m, v in d["E1_DEC"]["per_model"].items()}
+    assert per == {"mixtral-8x22b": ("HOLDS", 41, 0.017945), "qwen2-57b-a14b": ("HOLDS", 43, 0.020493),
+                   "granite-3.0-1b-a400m": ("FAILS", 41, 0.067376)}
+    assert d["certified"] == dict.fromkeys(per, "NOT CERTIFIED") and d["voided"] == {}
+    assert {m: g["shuffle"]["verdict"] for m, g in d["G3D"].items()} == dict.fromkeys(per, "EQUIVALENT")
+    assert {m: g["verdict"] for m, g in d["GD2"].items()} == {"qwen2-57b-a14b": "PASS", "granite-3.0-1b-a400m": "PASS"}
+    txt = (V7B_SCORES / "blind.score.txt").read_text().splitlines()
+    assert txt[0] == "DECODE STAGE, BLIND RENTAL (model v7, three reserved models): E1-DEC"
+    assert "power: READ (700.0 W); 18 descriptive cells out of E1-DEC" in txt
+    assert sum(" -> NOT CERTIFIED" in t for t in txt) == 3 and not any(" -> CERTIFIED" in t for t in txt)
+    assert txt[-1] == f"registration sha256 {V7B_REG_SHA}, commit {V7B_SCORED_AT}"
+
+
+def test_checkout_free_frees_the_recorded_checkout_only():
+    """A re-score at another commit reads EQUAL; a changed registration hash, verdict or number does not."""
+    j = '{"E": "FAILS", "rms": 0.041702, "provenance": {"registration_sha256": "ab", "git_head": "%s", "git_dirty": %s}}'
+    a, b = j % ("0" * 40, "false"), j % ("f" * 40, "true")
+    assert a != b and RS.checkout_free(a) == RS.checkout_free(b)
+    assert RS.checkout_free(a) != RS.checkout_free(b.replace('"ab"', '"cd"'))
+    assert RS.checkout_free(a) != RS.checkout_free(b.replace("FAILS", "HOLDS"))
+    assert RS.checkout_free(a) != RS.checkout_free(b.replace("0.041702", "0.041703"))
+    assert RS.checkout_free(a) != RS.checkout_free(a.replace("0" * 40, "0" * 39))
+    t = "registration sha256 ab, commit %s\n"
+    assert RS.checkout_free(t % ("1" * 40)) == RS.checkout_free(t % ("2" * 40))
+    assert RS.checkout_free(t % ("1" * 40)) != RS.checkout_free((t % ("1" * 40)).replace("ab", "cd"))
 
 
 def test_a_changed_score_file_reads_differs(tmp_path):
