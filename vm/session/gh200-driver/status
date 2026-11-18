@@ -116,3 +116,4 @@
 2026-11-18T23:27:08Z timed: 2026-11-18T23:27:02Z G=16 held at lock 1410: R3 exit 0 DONE, cells=108 worst=1410.0 MHz, 440 s, dir nvidia_gh200_480gb-armsnative_shared-bm128-budget200.0-decl9-dtypebf16-duty0.25-g16-hist7b6cd540-cda0da83
 2026-11-18T23:27:08Z timed END: exit 0 after 7 min [unit 14/14 qwen2-57b-a14b-tp8 t128g16 block-m=128 block-n=128 block-k=64 num-warps=8 num-stages=3 histogram=docs/registered/2026-11-18-v7-prefill-blind-hist/qwen2-57b-a14b-tp8-128g16.json arms=native,shared declared-copies=9 timed-groups=16 slip-policy=cell g1-rule=r7-median-run3]
 2026-11-18T23:27:09Z clocks: 1980 MHz, 1980 MHz, 700.00 W, 0x0000000000000000
+2026-11-18T23:27:11Z driver end: exit 0
