@@ -24,6 +24,7 @@ STREAM = 7
 NAMES = {
     "router": "void vllm::moe::topkGatingSoftmax<float, 8, 64>(float const*, bool const*, float*, int, int*, int)",
     "marker": MC.MARKER_KERNEL,
+    "stepmark": MC.STEP_MARKER_KERNEL,
     "convert": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda>",
     "fill": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, std::array<char*, 1ul> >",
     "small": "void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, int, int, int, int)",
@@ -142,9 +143,13 @@ def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bo
     return ev, t, {"kernel_sum_ns": ksum, "span_ns": e_end - s0, "align_ns": sum(d for _r, _n, d, _m in parts)}
 
 
-def timeline(cfg, calls, *, t0: int = 10_000_000, warmup_markers: int = 3, mutate=None, clk_every: int = 4):
+def timeline(cfg, calls, *, t0: int = 10_000_000, warmup_markers: int = 3, mutate=None, clk_every: int = 4,
+             step_ids=None, drop_step_marks=()):
     """Events and NVTX marks for a run: warmup markers + GEMMs before the reset mark, the reset mark, then every
-    call; a 'clk i' mark every clk_every calls. mutate(i) -> dict of call_events flags for call i."""
+    call; a 'clk i' mark every clk_every calls. mutate(i) -> dict of call_events flags for call i. Before each step's
+    first call, the step marker moe_capture launches from the step log (grid (1, step % STEP_MOD + 1)): step_ids is
+    the list of step ids the markers carry, in order (default: the calls' own steps, as Capture.step_marks records
+    them); drop_step_marks: positions whose marker is missing from the trace."""
     ev, marks, expect = [], [], []
     t = 1_000_000
     for _ in range(warmup_markers):
@@ -154,7 +159,19 @@ def timeline(cfg, calls, *, t0: int = 10_000_000, warmup_markers: int = 3, mutat
     marks.append((t0 - 1000, MC_RESET))
     t = t0
     ci = 0
+    order = []
+    for c in calls:
+        if not order or order[-1] != c["step"]:
+            order.append(c["step"])
+    ids = list(step_ids) if step_ids is not None else order
+    pos = -1
     for i, c in enumerate(calls):
+        if i == 0 or calls[i - 1]["step"] != c["step"]:
+            pos += 1
+            if pos not in drop_step_marks:
+                ev.append({"start": t, "end": t + 1000, "stream": STREAM, "name": NAMES["stepmark"], "gx": 1,
+                           "gy": MC.step_grid(ids[pos])[1], "kind": "kernel", "role": "stepmark"})
+            t += 1000 + GAP
         if i % clk_every == 0:
             marks.append((t - 100, f"clk {ci}"))
             ci += 1

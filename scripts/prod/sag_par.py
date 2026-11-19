@@ -4,7 +4,10 @@ gate record that scripts/prod/sag1410.sh's driver run (scripts/gh200_v7p_session
 left on the VM.
 
     python scripts/prod/sag_par.py --results $RESULTS_ROOT --record $SESSION_ROOT/gh200-driver/gate-b3sag-1410.json \\
-        --driver-exit 0 --out <results>/sag/par.json
+        --driver-exit 0 --started <epoch s the sag1410 step began> --out <results>/sag/par.json
+
+A PASS needs the driver's exit 0 AND a gate record written after the step began (review 2, MINOR 4: a record left by
+an earlier run of the driver, or a driver that stopped after its gate, is a FAIL, never a par).
 
 finalise_pars holds the repo's sag estimator (b3common.page_fit) and the frozen chain's (r4.sag_page_fit) equal to
 each other and to the gate's record (its par and both pages' sha256), and returns r4.par of the two fits: (A us,
@@ -30,14 +33,23 @@ for _p in (str(HERE), str(REPO), str(REPO / "scripts"), str(REPO / "scripts" / "
 import prodlib as PL  # noqa: E402
 
 
-def finalise(results: Path, record_path: Path, driver_exit: int) -> dict:
+def finalise(results: Path, record_path: Path, driver_exit: int, started: float) -> dict:
     """par.json's document; never raises on a bad board (verdict FAIL with the reason)."""
     doc = {"schema": PL.PAR_SCHEMA, "verdict": "FAIL", "par": None, "driver_exit": int(driver_exit),
-           "results": str(results), "record": str(record_path),
+           "started": float(started), "results": str(results), "record": str(record_path),
            "finaliser": "scripts/scoring/v7pblind/v7pcommon.py finalise_pars (unchanged)",
            "plan": "scripts/prod/sag1410.plan"}
     if not record_path.is_file():
         doc["why"] = f"no sag gate record {record_path} (the driver exited {driver_exit} before the gate)"
+        return doc
+    if int(driver_exit) != 0:
+        doc["why"] = f"the driver exited {driver_exit} (a par needs its exit 0)"
+        return doc
+    mtime = record_path.stat().st_mtime
+    doc["record_mtime"] = mtime
+    if mtime < float(started):
+        doc["why"] = (f"the gate record {record_path} was written at {mtime:.0f}, before this step began at "
+                      f"{float(started):.0f} (a stale record of an earlier run)")
         return doc
     raw = record_path.read_bytes()
     doc["record_sha256"] = hashlib.sha256(raw).hexdigest()
@@ -58,10 +70,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--results", required=True, type=Path)
     ap.add_argument("--record", required=True, type=Path)
-    ap.add_argument("--driver-exit", type=int, default=0)
+    ap.add_argument("--driver-exit", type=int, required=True)
+    ap.add_argument("--started", type=float, required=True, help="epoch seconds the sag1410 step began")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
-    doc = finalise(a.results, a.record, a.driver_exit)
+    doc = finalise(a.results, a.record, a.driver_exit, a.started)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(doc, indent=1, default=str) + "\n")
     if doc["verdict"] != "PASS":

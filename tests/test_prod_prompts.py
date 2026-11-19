@@ -182,3 +182,40 @@ def test_the_tokenizer_revision_is_the_served_models_pin(monkeypatch):
     assert PR.tokenizer_revision("allenai/OLMoE-1B-7B-0924") == "a" * 40
     assert PR.tokenizer_revision("someone/else") is None
     assert set(PL.HF_REVISIONS) == set(PL.MODELS)
+
+
+def test_g_rev_fails_a_pinned_run_whose_snapshot_cannot_be_resolved():
+    """review 2, MINOR 2: pinned + unresolved is a FAIL (nothing shows the pin was loaded)."""
+    pin = "b" * 40
+    assert S.rev_gate("olmoe-1b-7b", pin, pin)["verdict"] == "PASS"
+    assert S.rev_gate("olmoe-1b-7b", pin, None)["verdict"] == "FAIL"
+    assert S.rev_gate("olmoe-1b-7b", pin, "c" * 40)["verdict"] == "FAIL"
+    unp = S.rev_gate("olmoe-1b-7b", None, "c" * 40)
+    assert unp["verdict"] == "PASS" and "UNPINNED" in unp["why"]
+
+
+def test_both_models_and_their_tokenizers_are_pinned_by_the_laptop_resolver(monkeypatch):
+    """review 2, MINOR 3: scripts/prod/hf_revisions.py resolves every model repo and every TOK= repo of smoke.sh and
+    main.sh; HF_REVISIONS holds a 40-hex commit for both models; a stray tokenizer repo and a non-commit answer are
+    refused; --check reports a stale pin."""
+    import re
+
+    import hf_revisions as HR
+    for key in PL.MODELS:
+        assert re.fullmatch(r"[0-9a-f]{40}", PL.HF_REVISIONS[key] or ""), key
+    toks = HR.tokenizer_repos()
+    assert sorted(set(toks)) == sorted(m.hf_repo for m in PL.MODELS.values())
+    asked = []
+
+    def fetch(repo):
+        asked.append(repo)
+        return {m.hf_repo: PL.HF_REVISIONS[m.key] for m in PL.MODELS.values()}[repo]
+    got = HR.resolve(fetch)
+    assert got["models"] == PL.HF_REVISIONS and sorted(asked) == sorted(m.hf_repo for m in PL.MODELS.values())
+    assert HR.check(got, PL.HF_REVISIONS) == []
+    assert HR.check(got, dict(PL.HF_REVISIONS, **{"olmoe-1b-7b": "0" * 40}))
+    with pytest.raises(PL.KitError, match="40-hex"):
+        HR.resolve(lambda repo: "main")
+    monkeypatch.setattr(HR, "tokenizer_repos", lambda: ["someone/else"])
+    with pytest.raises(PL.KitError, match="no served model"):
+        HR.resolve(fetch)

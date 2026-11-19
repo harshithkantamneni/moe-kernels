@@ -12,10 +12,11 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `moe_capture.py` | The hook inside the vLLM process. One Triton kernel per routed call writes topk_ids (int16) and a record (layer, padded n, offset, seq) into a device ring; it launches grid (1, layer + 1), so every marker carries its layer in gridY. The host drains the ring between steps into npz shards. A step log records (step, T, padded T, cudagraph mode). |
 | `serve_capture.py` | One offline serving run: closed-loop concurrency levels, graphs or eager, shared-experts stream on/off, optional torch-profiler window. Writes the manifest, the gates and a 10 Hz NVML clock log. Also holds the T-histogram estimator. |
 | `prompts.py` | The deterministic prompt set: ShareGPT, with a Gutenberg text as fallback. Each source is pinned by URL and sha256. The set file is tamper-evident (it carries the sha256 of its own body). |
-| `nsys_extract.py` | Reads the nsys sqlite export (mode A) or the torch-profiler trace (mode B). Splits the timeline into calls (align..moe_sum, router excluded), by stream and by sequence, and reports kernel-sum and span per call. Runs the gates G-REC, G-GEMM, G-PAIR, G-STEP, G-IDS, G-GRID and G-CLASS. `check-sequences` and `replay-check` are the smoke's kernel-sequence gates. |
+| `nsys_extract.py` | Reads the nsys sqlite export (mode A) or the torch-profiler trace (mode B). Splits the timeline into calls (align..moe_sum, router excluded), by stream and by sequence, and reports kernel-sum and span per call. Runs the gates G-REC, G-GEMM, G-PAIR, G-STEPMARK, G-STEP, G-IDS, G-GRID and G-CLASS. `check-sequences` and `replay-check` are the smoke's kernel-sequence gates. |
 | `replay.py` | Picks the registered stratified sample, scaled to a fixed time budget by the smoke's wall times. Re-times each sampled call with r3_decode's GRR instrument on its real ids. Runs under locked_r3. Writes each cell's wall time. |
 | `sag1410.sh`, `sag1410.plan`, `sag_par.py` | The board's 128x128 sag par at 1410 MHz. The v7 prefill blind's own driver units and finaliser, unchanged (see "The prefill constants"). |
-| `offline.sh` | After the main rental, on the laptop: Frontier's predictions and the score. |
+| `offline.sh` | After the main rental, on the laptop: decompress and check the fetched tree, then Frontier's predictions and the score. |
+| `hf_revisions.py` | On the laptop: the Hub's current commit of every model and tokenizer repo (public API, no auth), to pin in `prodlib.HF_REVISIONS`; `--check` holds the pins to the Hub. |
 | `frontier_setup.sh`, `frontier_op.py` | Frontier at db5a85b in its own venvs: primary (vLLM 0.27.1) and fidelity (its pinned stack). Profile, train, predict and hold-out, run as Frontier's docs run them. |
 | `score_prod.py` | Joins the calls with the v8 prices (at the board's par, and DESCRIPTIVE at the reference pars' median), the registered roofline and Frontier. Reports MAPE, wMAPE, p50/p95 \|e\| and bias, each with step-bootstrap CIs, per tile, branch and stratum, plus per-step totals and the run deltas. |
 | `smoke.sh`, `main.sh` | The VM sequences, fail-fast. Each step prints PASS/FAIL with its reason. `--dry-run` prints the steps (a soft one marked `[soft]`) and runs nothing. |
@@ -135,6 +136,41 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
    score run on the laptop (`offline.sh`). Tests assert the order, the soft and hard steps, and that main.sh
    has no score or predict step.
 
+## Review 2 (2026-11-19): what changed
+
+- **Nothing the laptop needs is held back by the push** (MAJOR A). `scripts/vm_results_push.sh` is registered and
+  pinned, so it is not edited: it still compresses or holds back any file over 95 MB. The kit writes its per-call
+  outputs in shards of at most `prodlib.SHARD_MAX_BYTES` (64 MB): `calls.jsonl` / `counts.npy` become
+  `calls.00000.jsonl` ... and `counts.00000.npy` ... with `calls.shards.json` (rows and sha256 per shard) when a
+  run is big. `prodlib.read_calls` / `load_counts` read them back (and any `.xz` form), and refuse a missing or
+  changed shard. The ring's own shards stay under 76 MB by construction. main.sh's last step,
+  `held-back-check` (hard), fails when the push's `SHA256SUMS` holds no file of the run, or when `HELD-BACK.txt`
+  lists any file of the run but the rental's intermediates (`*.nsys-rep`, `*.sqlite`, `data/`, Triton caches). The EXIT trap pushes once more with `--final <exit code>`
+  whatever stopped the sequence. offline.sh first writes every `.xz` out (`decompress`) and then refuses a tree
+  that lacks a run, a model set, the par or a replay that the rental's own `SUMMARY.txt` says it produced
+  (`expected-outputs`, hard).
+- **The replay budget is the target model's** (MAJOR B). `replay_wall.json` names its model (`wall-merge
+  --model`). A wall from another model is scaled by `prodlib.expert_bytes` (one expert's w13 + w2 bf16 bytes:
+  OLMoE 12.6 MB, ERNIE 23.6 MB), and a wall without a model is refused. main.sh replays a probe first, per branch:
+  `replay.PROBE_PER_TILE` (2) cells per tile. The probe's own ERNIE walls size the rest (`sample --probe-wall`),
+  which gets `REPLAY_BUDGET_S` minus the probe's total wall, so the branch stays inside its fixed 2400 s.
+- **Every step has a registered wall cap** (MAJOR C). `step NAME [--soft] --cap SECONDS [--needs PRE] -- CMD`
+  runs CMD under `timeout --kill-after=60 SECONDS`. A step past its cap FAILS (or is dropped, if soft), so a hung
+  soft step cannot hold the rental. A step without `--cap` is refused. A step whose `--needs` prerequisite failed
+  is recorded `SKIPPED` and not run: no capture runs after a failed lock (MINOR 6).
+- **A whole-step pairing shift fails** (the shift-by-one-step blind spot). The step-log wrapper launches a step
+  marker kernel before each step's forward, with grid (1, step % 65535 + 1). G-STEPMARK holds the markers to the
+  step log, and each call to the step its ring record joins, n_layers calls per step. A trace shifted by a whole
+  step keeps every layer in place, so G-PAIR passes, but G-STEPMARK fails.
+- MINOR 1: `v8.DECLARED_REFUSALS` lists each Refused of v8's price path by its own message pattern; the
+  `Refused: ` catch-all is gone, so an undeclared refusal fails the sweep (a test fabricates one).
+  MINOR 2: G-REV fails a pinned run whose snapshot cannot be resolved. MINOR 3: `hf_revisions.py` resolved both
+  repos (the tokenizers are the models' repos), and the shas are in `prodlib.HF_REVISIONS`. MINOR 4: the sag par
+  needs the driver's exit 0 and a gate record written after the step began (`sag_par.py --started`). MINOR 5:
+  sag1410.sh fails before the driver without `$SESSION_ROOT/census.json` (PF6). MINOR 7: offline.sh writes its
+  summary and logs under `<results>/offline-logs/` and creates them itself. MINOR 8: the compiled-variant counts
+  are read again at `close()`, and G-VARIANTS-END fails the run if they changed after warm.
+
 ## The prefill constants (v8 has no defaults)
 
 v8's prefill branch needs three constants per call: the 128x128 sag par (`sag128`), the 64x128 par
@@ -204,10 +240,11 @@ bit for bit.
 
 - Paste the ShareGPT sha256 that smoke prints into `prompts.py SOURCES["sharegpt"]["sha256"]`. Until then main.sh
   stops at `prompts-fetch`.
-- Paste the HF commits that smoke's G-REV prints (serve_capture `manifest.json hf_revision.resolved`) into
-  `prodlib.HF_REVISIONS`, for both models. Until then, main.sh stops at `revision-pinned`. The pinned commit is
-  passed as the model and tokenizer revision to the engine (`LLM(revision=, tokenizer_revision=)`) and to the
-  prompt builder's tokenizer.
+- The HF commits are pinned in `prodlib.HF_REVISIONS` (resolved 2026-11-19 by `python scripts/prod/hf_revisions.py`
+  on the laptop: the Hub's public model API, no token, nothing about the user sent). Re-run it with `--check`
+  just before the freeze; it exits 3 if a repo moved. The pinned commit is passed as the model and tokenizer
+  revision to the engine (`LLM(revision=, tokenizer_revision=)`) and to the prompt builder's tokenizer; G-REV fails
+  a run whose loaded snapshot differs or cannot be resolved.
 - Copy the smoke's `$R/replay_wall.json` to `scripts/prod/replay_wall.json`. main.sh's replay budget reads it,
   and main.sh stops at `replay-wall-present` without it.
 - v8 is bound: `price_v8` calls `r3_timing_model_v8.price` with v8's own interface, and `price-check` (smoke
@@ -228,6 +265,7 @@ bit for bit.
 | A5 | The per-call kernel sequence is align (small-batch / align+sort ± memset / naive fill), fused_moe_kernel, act_and_mul, fused_moe_kernel, moe_sum, with no chunking (envs.py v0.27.1 has no VLLM_FUSED_MOE_CHUNK_SIZE). | G-CLASS, G-GEMM (2 × records); `sequences.json` lists the 12 most common name sequences, for a human check. |
 | A6 | nsys `--cuda-graph-trace=node` works on aarch64 GH200 with driver 580 and reports graph-node kernels with their gridX and gridY on the launch stream. | G-REC/G-PAIR/G-GRID on run A; `gates.json marker_streams`. If it fails, mode B (eager, torch profiler) is the fallback. |
 | A20 | Triton compiles the marker's `if tl.program_id(1) == 0:` body, and a grid of (1, layer + 1) reuses the one compiled variant. | G-VARIANTS after warm (warm launches gridY 1, serving up to 28), and G-PAIR. |
+| A21 | The step marker launched from the step-log wrapper (host side, before the step's forward, on the current stream) lands in the trace before that step's MoE calls, one per logged step, with gridY = step % 65535 + 1 (review 2). | G-STEPMARK on run A (`extract-gate-A`) and on the torch window (`extract-gate-B`). |
 | A7 | The reset NVTX mark and the kernel timestamps share one nsys timeline. | G-REC: warmup markers before the mark are excluded, and the counts match. |
 | A8 | `batch_descriptor.num_tokens` is the T the MoE layers see (padded rows are routed). | G-STEP (record n == logged T_pad); G-GRID uses the padded T. |
 | A9 | Capture sizes are 1, 2, 4, 8..248 step 8, 256..512 step 16 at max_num_seqs 1024. | serve_capture's G-SIZES compares them with the engine's `cudagraph_capture_sizes`. |
@@ -246,15 +284,15 @@ bit for bit.
 
 Everything goes under one results directory (`$RESULTS_ROOT/prod-{smoke,main}-<utc>`):
 
-- `SUMMARY.txt`: one PASS/FAIL line per step;
-- `logs/<step>.log`;
+- `SUMMARY.txt`: one PASS/FAIL/SKIPPED line per step;
+- `logs/<step>.log` (`offline-logs/{SUMMARY.txt,logs/}` for offline.sh);
 - per run:
   - `ring/shard_*.npz`, `steps.jsonl`, `clocks.jsonl`;
   - `capture_manifest.json`, `manifest.json`, `gates.json`, `expected_histogram.json`, `sequences_by_path.json`;
   - `serve.nsys-rep`/`.sqlite`;
-  - `calls.jsonl`, `counts.npy`, `sequences.json`;
+  - `calls.jsonl`, `counts.npy` (or their shards with `calls.shards.json`), `sequences.json`;
 - `sag/par.json` (the board's 128x128 par);
-- `sample-*/`;
+- `sample-*/`, `sample-probe-*/`, `replay-probe-*/` (the re-measure's probe and its `replay_wall.json`);
 - `replay-*/private_weight_reference/<run id>/{cells.csv,report.json,cell_wall.json}` (smoke: `replay_wall.json`);
 - `frontier/<arm>/{profile,models (+ versions.json),holdout}`; after `offline.sh`, `frontier/predictions.jsonl`;
 - `score/prod.score.{json,txt}` (smoke on the VM; main after `offline.sh` on the laptop).

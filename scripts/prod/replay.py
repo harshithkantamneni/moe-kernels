@@ -35,6 +35,14 @@ main's sample: a tile's cost per cell is WALL_SAFETY x the median smoke wall of 
 (smoke's repeats + 1) (a tile the smoke did not time takes its branch's dearest timed tile); when the registered
 quotas cost more than the branch's REPLAY_BUDGET_S, every tile's quota is scaled by budget / cost, floored, at least
 1. The sample records the rule's inputs and the scaled quotas.
+THE MODEL SCALE (review 2, MAJOR B): replay_wall.json names the model it was timed on (wall-merge --model). A wall
+timed on another model prices a cell at its wall x expert_bytes(target) / expert_bytes(wall model) (prodlib.
+expert_bytes, one expert's w13 + w2 bf16 bytes: OLMoE 12.6 MB -> ERNIE 23.6 MB, x 1.875); a wall that names no model
+is refused. THE RE-MEASURE (main.sh, per branch, inside the same fixed REPLAY_BUDGET_S): a PROBE of PROBE_PER_TILE
+cells per tile (`sample --per-tile`, priced by the scaled smoke walls) is replayed first on the target model; its
+walls (wall-merge --model ERNIE, with their total) re-price the rest: `sample --probe-wall` prices every tile from
+the probe's own walls and spends REPLAY_BUDGET_S minus the probe's total wall, so probe + rest stay within the
+branch's fixed budget. The probe's cells are timing only (their own run directory; the scorer reads replay-<branch>).
 
 THE BIG CELL (smoke, `--min-big-T 8256`): the prefill sample always holds one cell at T >= 8256 (the G-16 tile and the
 replay's worst memory): the run's largest such call when there is one, else a SYNTHETIC cell at T 16384 (seeded uniform
@@ -72,6 +80,8 @@ DEFAULT_N = 1500
 REPLAY_BUDGET_S = {"decode": 2400, "prefill": 2400}
 WALL_SAFETY = 1.5
 WALL_SCHEMA = "moe-kernels/prod-replay-wall/1"
+#: the re-measure's probe: cells per tile replayed on the target model before the rest is sized (review 2, MAJOR B)
+PROBE_PER_TILE = 2
 #: the GRR graph's live outputs may not pass this (calls x T_max x H x 2 bytes)
 GRR_OUT_CAP_BYTES = 8 * 2 ** 30
 BIG_T_SYNTHETIC = 16384
@@ -104,22 +114,39 @@ def select_sample(rows: list[dict], n: int = DEFAULT_N, seed: int = SAMPLE_SEED)
     return out
 
 
-def budget_quota(quota: dict, wall: dict, branch: str, *, repeats: int, budget_s: float | None = None) -> dict:
+def model_scale(wall: dict, target: str) -> float:
+    """The registered bytes scale of a wall timed on wall["model"] to the target model (module doc, MAJOR B)."""
+    src = wall.get("model")
+    if src not in PL.MODELS:
+        raise PL.KitError(f"the replay wall names no known model ({src!r}): it cannot price {target}")
+    if target not in PL.MODELS:
+        raise PL.KitError(f"unknown target model {target!r}")
+    return PL.expert_bytes(PL.MODELS[target].cfg) / PL.expert_bytes(PL.MODELS[src].cfg)
+
+
+def budget_quota(quota: dict, wall: dict, branch: str, *, repeats: int, target: str,
+                 budget_s: float | None = None) -> dict:
     """The registered time-budget rule (module doc). quota: tile -> registered cells; wall: replay_wall.json's
-    {"repeats": smoke repeats, "tiles": {tile: {"median_wall_s", "cells"}}}. Returns {"quota", "cost_s", "scale",
-    "per_cell_s", "budget_s"}; raises KitError when the branch has no timed tile."""
+    {"model", "repeats": its repeats, "tiles": {tile: {"median_wall_s", "cells"}}}; target: the model replayed (a wall
+    of another model is scaled by expert bytes). Returns {"quota", "cost_s", "scale", "per_cell_s", "budget_s",
+    "model_scale"}; raises KitError when the branch has no timed tile, the wall names no model or the budget is spent."""
     budget = float(REPLAY_BUDGET_S[branch] if budget_s is None else budget_s)
+    if budget <= 0:
+        raise PL.KitError(f"the {branch} replay budget is spent ({budget:.0f} s left)")
+    ms = model_scale(wall, target)
     timed = {t: float(v["median_wall_s"]) for t, v in (wall.get("tiles") or {}).items()
              if PL.branch(next(lo for lab, lo, _hi in PL.TILE_BINS if lab == t)) == branch}
     if not timed:
         raise PL.KitError(f"the smoke wall times no {branch} tile: the replay budget cannot be priced")
     r_smoke = int(wall["repeats"])
-    per = {t: WALL_SAFETY * timed.get(t, max(timed.values())) * (int(repeats) + 1) / (r_smoke + 1) for t in quota}
+    per = {t: WALL_SAFETY * ms * timed.get(t, max(timed.values())) * (int(repeats) + 1) / (r_smoke + 1)
+           for t in quota}
     cost = sum(quota[t] * per[t] for t in quota)
     scale = min(1.0, budget / cost) if cost > 0 else 1.0
     q = {t: (quota[t] if scale >= 1.0 else max(1, int(quota[t] * scale))) for t in quota}
     return {"quota": q, "registered_quota": dict(quota), "per_cell_s": per, "cost_s": cost, "scale": scale,
             "budget_s": budget, "safety": WALL_SAFETY, "repeats": int(repeats), "smoke_repeats": r_smoke,
+            "wall_model": wall.get("model"), "target": target, "model_scale": ms,
             "cost_after_s": sum(q[t] * per[t] for t in q)}
 
 
@@ -313,28 +340,47 @@ def sample_main(argv) -> int:
     ap.add_argument("--wall", default=None, help="the smoke's replay_wall.json: scale the quotas to the time budget")
     ap.add_argument("--repeats", type=int, default=9, help="the replay's repeats (prices the budget)")
     ap.add_argument("--budget-s", type=float, default=None, help="override REPLAY_BUDGET_S[branch] (tests)")
+    ap.add_argument("--per-tile", type=int, default=None,
+                    help="the re-measure's PROBE: this many cells per tile (main.sh: PROBE_PER_TILE), priced by --wall")
+    ap.add_argument("--probe-wall", default=None,
+                    help="the probe's wall-merge (target model): prices every tile and spends the budget minus its total")
     ap.add_argument("--min-big-T", type=int, default=None,
                     help="the sample holds a cell at T >= this (the run's largest, else a synthetic T 16384)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     model = PL.MODELS[a.model]
-    rows = PL.read_jsonl(a.calls or Path(a.run) / "calls.jsonl")
+    rows = PL.read_jsonl(a.calls) if a.calls else PL.read_calls(a.run)
     if a.branch:
         rows = [r for r in rows if r.get("branch") == a.branch]
     budget = None
-    if a.wall:
+    if a.per_tile is not None and a.probe_wall:
+        print("FAIL replay sample: --per-tile (the probe) and --probe-wall (the rest) are two steps")
+        return 3
+    if a.wall or a.probe_wall:
         if not a.branch:
-            print("FAIL replay sample: --wall prices one branch (--branch)")
+            print("FAIL replay sample: --wall / --probe-wall price one branch (--branch)")
             return 3
         try:
-            wall = json.loads(Path(a.wall).read_text())
+            wall = json.loads(Path(a.probe_wall or a.wall).read_text())
             if wall.get("schema") != WALL_SCHEMA:
-                raise PL.KitError(f"{a.wall}: schema {wall.get('schema')!r}")
-            budget = budget_quota(tile_quota(rows, a.n), wall, a.branch, repeats=a.repeats, budget_s=a.budget_s)
+                raise PL.KitError(f"{a.probe_wall or a.wall}: schema {wall.get('schema')!r}")
+            spent = 0.0
+            if a.probe_wall:
+                if wall.get("model") != model.key:
+                    raise PL.KitError(f"the probe wall was timed on {wall.get('model')!r}, not {model.key}")
+                spent = float(wall["total_wall_s"])
+            base = float(REPLAY_BUDGET_S[a.branch] if a.budget_s is None else a.budget_s)
+            quota = tile_quota(rows, a.n)
+            if a.per_tile is not None:
+                quota = {t: int(a.per_tile) for t in quota}
+            budget = budget_quota(quota, wall, a.branch, repeats=a.repeats, target=model.key, budget_s=base - spent)
+            budget.update(probe_spent_s=spent, branch_budget_s=base)
         except (PL.KitError, OSError, ValueError, KeyError) as exc:
             print(f"FAIL replay sample: the budget: {exc}")
             return 3
         picked = select_budgeted(rows, budget["quota"])
+    elif a.per_tile is not None:
+        picked = select_budgeted(rows, {t: int(a.per_tile) for t in tile_quota(rows, a.n)})
     else:
         picked = select_sample(rows, a.n)
     if not picked:
@@ -365,21 +411,24 @@ def wall_merge(argv) -> int:
     """replay_wall.json from replay runs' cell_wall.json files: per tile the median wall per cell (smoke)."""
     ap = argparse.ArgumentParser(prog="replay.py wall-merge")
     ap.add_argument("--from", dest="src", action="append", required=True, help="a directory holding cell_wall.json")
+    ap.add_argument("--model", required=True, choices=sorted(PL.MODELS), help="the model the walls were timed on")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     per: dict = defaultdict(list)
     reps = set()
+    total = 0.0
     for d in a.src:
         for f in sorted(Path(d).rglob("cell_wall.json")):
             doc = json.loads(f.read_text())
             reps.add(int(doc["repeats"]))
             for c in doc["cells"]:
+                total += float(c["wall_s"])
                 if not c.get("synthetic") or c["tile"].endswith("g16"):
                     per[c["tile"]].append(float(c["wall_s"]))
     if not per or len(reps) != 1:
         print(f"FAIL replay wall-merge: {sum(len(v) for v in per.values())} cells, repeats {sorted(reps)}")
         return 3
-    doc = {"schema": WALL_SCHEMA, "repeats": reps.pop(),
+    doc = {"schema": WALL_SCHEMA, "model": a.model, "repeats": reps.pop(), "total_wall_s": total,
            "tiles": {t: {"median_wall_s": float(np.median(v)), "cells": len(v)} for t, v in sorted(per.items())}}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     print(f"PASS replay wall-merge: {len(doc['tiles'])} tiles -> {a.out}")

@@ -279,14 +279,32 @@ def test_sag_par_finalises_the_v7_prefill_blinds_own_pages_to_its_registered_par
     import subprocess
     out = tmp_path / "par.json"
     r = subprocess.run([sys.executable, str(REPO / "scripts/prod/sag_par.py"), "--results", str(V7P / "results"),
-                        "--record", str(V7P / "session/gh200-driver/gate-b3sag-1410.json"), "--out", str(out)],
+                        "--record", str(V7P / "session/gh200-driver/gate-b3sag-1410.json"), "--driver-exit", "0",
+                        "--started", "0", "--out", str(out)],
                        capture_output=True, text=True, cwd=str(REPO), timeout=900)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
     want = json.loads((REPO / "scripts/scoring/v7pblind/prefill_blind.score.json").read_text())["finalised"]["par"]
     assert PL.load_board_par(out) == tuple(want) == BOARD_PAR
     r2 = subprocess.run([sys.executable, str(REPO / "scripts/prod/sag_par.py"), "--results", str(tmp_path),
-                         "--record", str(tmp_path / "none.json"), "--driver-exit", "3", "--out", str(tmp_path / "f.json")],
+                         "--record", str(tmp_path / "none.json"), "--driver-exit", "3", "--started", "0",
+                         "--out", str(tmp_path / "f.json")],
                         capture_output=True, text=True, cwd=str(REPO), timeout=300)
     assert r2.returncode == 3 and "no sag gate record" in r2.stdout
     with pytest.raises(PL.KitError):
         PL.load_board_par(tmp_path / "f.json")
+
+
+def test_sag_par_needs_the_drivers_exit_0_and_a_record_newer_than_the_step(tmp_path):
+    """review 2, MINOR 4: a non-zero driver exit, or a gate record older than the sag1410 step, is a FAIL par."""
+    import time
+
+    import sag_par
+    rec = tmp_path / "gate-b3sag-1410.json"
+    rec.write_text(json.dumps({"verdict": "PASS"}))
+    bad = sag_par.finalise(tmp_path, rec, 4, started=0)
+    assert bad["verdict"] == "FAIL" and "exited 4" in bad["why"]
+    stale = sag_par.finalise(tmp_path, rec, 0, started=time.time() + 3600)
+    assert stale["verdict"] == "FAIL" and "stale" in stale["why"]
+    # a fresh record with exit 0 reaches the finaliser (here it refuses the empty page tree, but not for staleness)
+    fresh = sag_par.finalise(tmp_path, rec, 0, started=time.time() - 3600)
+    assert "stale" not in fresh.get("why", "") and "exited" not in fresh.get("why", "")

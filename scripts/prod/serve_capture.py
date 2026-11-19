@@ -221,6 +221,21 @@ def resolve_revision(repo: str, rev: str | None) -> str | None:
         return None
 
 
+def rev_gate(model_key: str, rev: str | None, resolved: str | None) -> dict:
+    """G-REV. Pinned: the loaded snapshot must resolve AND equal the pin (review 2, MINOR 2: a pinned run whose
+    snapshot cannot be resolved FAILS: nothing shows it loaded the pin). Unpinned (the smoke only; main.sh passes
+    --require-pinned): PASS with the resolved sha to pin."""
+    if rev:
+        if not resolved:
+            return {"verdict": "FAIL", "why": f"{model_key} is pinned at {rev} but the loaded snapshot could not be "
+                                              "resolved from the local HF cache (unverified: not the pin)"}
+        if resolved != rev:
+            return {"verdict": "FAIL", "why": f"loaded snapshot {resolved}, pinned {rev}"}
+        return {"verdict": "PASS", "why": ""}
+    return {"verdict": "PASS", "why": f"UNPINNED: resolved {resolved} (pin it in prodlib.HF_REVISIONS before the kit "
+                                      "freezes)"}
+
+
 def write_gates(out: Path, gates: dict) -> int:
     (out / "gates.json").write_text(json.dumps(gates, indent=2, default=str))
     bad = [k for k, v in gates.items() if v.get("verdict") == "FAIL"]
@@ -278,11 +293,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     cap = MC.current()
     resolved = resolve_revision(model.hf_repo, rev)
     manifest["hf_revision"] = {"pinned": rev, "resolved": resolved}
-    if rev and resolved and resolved != rev:
-        gates["G-REV"] = {"verdict": "FAIL", "why": f"loaded snapshot {resolved}, pinned {rev}"}
-    else:
-        gates["G-REV"] = {"verdict": "PASS", "why": "" if rev else f"UNPINNED: resolved {resolved} (pin it in "
-                                                                   "prodlib.HF_REVISIONS before the kit freezes)"}
+    gates["G-REV"] = rev_gate(model.key, rev, resolved)
     hf = llm.llm_engine.model_config.hf_config.to_dict()
     bad_cfg = PL.check_hf_config(model, hf)
     backends = sorted({r["backend"] for r in cap.bound_layers})
@@ -369,6 +380,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     sampler.stop_ev.set()
     sampler.join(timeout=2)
     cap.close()
+    gates["G-VARIANTS-END"] = MC.variants_end_gate(cap.manifest)
     manifest["gpu_end"] = nvml_snapshot()
     manifest["seconds"] = round(time.time() - t0, 1)
     steps = PL.read_jsonl(out / "steps.jsonl")

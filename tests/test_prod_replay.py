@@ -142,25 +142,28 @@ def test_dry_run_plan_is_what_locked_r3_reads(tmp_path, capsys, monkeypatch):
 
 # ---------------------------------------------------------------- review 1, MAJOR 6: budget, big cell, wall, memory
 
-def _wall(tiles=None, repeats=3):
+def _wall(tiles=None, repeats=3, model=MODEL.key, total=None):
     tiles = tiles or {lab: {"median_wall_s": 10.0 * (i + 1), "cells": 3} for i, (lab, _lo, _hi) in enumerate(PL.TILE_BINS)}
-    return {"schema": RP.WALL_SCHEMA, "repeats": repeats, "tiles": tiles}
+    d = {"schema": RP.WALL_SCHEMA, "model": model, "repeats": repeats, "tiles": tiles}
+    if total is not None:
+        d["total_wall_s"] = total
+    return d
 
 
 def test_the_budget_rule_scales_every_quota_to_fit_and_keeps_one_per_tile():
     rows = [dict(r, branch=PL.branch(r["T_pad"])) for r in _rows()]
     q = RP.tile_quota([r for r in rows if r["branch"] == "prefill"], 643)
     assert sum(q.values()) == 643 and set(q) == {"64x128x64w8s3", "128x128x64w8s3", "128x128x64w8s3 g16"}
-    b = RP.budget_quota(q, _wall(), "prefill", repeats=9, budget_s=3000)
+    b = RP.budget_quota(q, _wall(), "prefill", repeats=9, target=MODEL.key, budget_s=3000)
     per = b["per_cell_s"]
     assert per["64x128x64w8s3"] == pytest.approx(1.5 * 50.0 * 10 / 4)       # safety x wall x (9 + 1) / (3 + 1)
     assert b["scale"] < 1 and b["cost_after_s"] <= 3000 and all(v >= 1 for v in b["quota"].values())
-    assert RP.budget_quota(q, _wall(), "prefill", repeats=9, budget_s=1e9)["quota"] == q      # fits: unchanged
+    assert RP.budget_quota(q, _wall(), "prefill", repeats=9, target=MODEL.key, budget_s=1e9)["quota"] == q      # fits: unchanged
     # a tile the smoke did not time takes its branch's dearest timed tile
     w = _wall({"64x128x64w8s3": {"median_wall_s": 20.0, "cells": 1}, "128x128x64w8s3": {"median_wall_s": 40.0, "cells": 1}})
-    assert RP.budget_quota(q, w, "prefill", repeats=3)["per_cell_s"]["128x128x64w8s3 g16"] == pytest.approx(60.0)
+    assert RP.budget_quota(q, w, "prefill", repeats=3, target=MODEL.key)["per_cell_s"]["128x128x64w8s3 g16"] == pytest.approx(60.0)
     with pytest.raises(PL.KitError, match="no decode tile"):
-        RP.budget_quota({"16x64x128w4s4": 3}, w, "decode", repeats=3)
+        RP.budget_quota({"16x64x128w4s4": 3}, w, "decode", repeats=3, target=MODEL.key)
 
 
 def test_sample_cli_budgets_and_adds_a_big_cell(tmp_path):
@@ -198,8 +201,69 @@ def test_the_adapter_clocks_each_cells_wall_and_writes_it(tmp_path):
     f = RP.write_wall(tmp_path, page, w, 2, p)
     doc = json.loads(f.read_text())
     assert doc["repeats"] == 2 and len(doc["cells"]) == len(page.cells)
-    rc = RP.wall_merge(["--from", str(tmp_path), "--out", str(tmp_path / "replay_wall.json")])
-    assert rc == 0 and json.loads((tmp_path / "replay_wall.json").read_text())["schema"] == RP.WALL_SCHEMA
+    rc = RP.wall_merge(["--from", str(tmp_path), "--model", MODEL.key, "--out", str(tmp_path / "replay_wall.json")])
+    merged = json.loads((tmp_path / "replay_wall.json").read_text())
+    assert rc == 0 and merged["schema"] == RP.WALL_SCHEMA
+    # review 2, MAJOR B: the wall names its model and carries its total (the re-measure's spent time)
+    assert merged["model"] == MODEL.key and merged["total_wall_s"] == pytest.approx(sum(w.values()))
+
+
+# ---------------------------------------------------------------- review 2, MAJOR B: the wall's model and the re-measure
+
+ERNIE = PL.MODELS["ernie-4.5-21b-a3b"]
+
+
+def test_a_wall_of_another_model_is_scaled_by_expert_bytes_and_one_without_a_model_is_refused():
+    q = {"64x128x64w8s3": 10}
+    same = RP.budget_quota(q, _wall(), "prefill", repeats=3, target=MODEL.key, budget_s=1e9)
+    cross = RP.budget_quota(q, _wall(), "prefill", repeats=3, target=ERNIE.key, budget_s=1e9)
+    ratio = PL.expert_bytes(ERNIE.cfg) / PL.expert_bytes(MODEL.cfg)
+    assert ratio == pytest.approx(23.59296 / 12.582912)
+    assert cross["per_cell_s"]["64x128x64w8s3"] == pytest.approx(ratio * same["per_cell_s"]["64x128x64w8s3"])
+    assert cross["model_scale"] == pytest.approx(ratio) and same["model_scale"] == 1.0
+    w = _wall()
+    del w["model"]
+    with pytest.raises(PL.KitError, match="names no known model"):
+        RP.budget_quota(q, w, "prefill", repeats=3, target=ERNIE.key)
+
+
+def _sample_rows(tmp_path):
+    run, calls = F.make_run(tmp_path / "run", steps=((5, 8), (300, 304), (600, 600)))
+    rows = [{"g": i, "step": c["step"], "layer": c["layer"], "T_pad": c["n"], "T": c["n"], "tile": PL.tile_bin(c["n"]),
+             "branch": PL.branch(c["n"]), "status": "ok", "warmup": False} for i, c in enumerate(calls)]
+    with open(tmp_path / "calls.jsonl", "w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    return run
+
+
+def test_the_probe_takes_k_cells_per_tile_and_the_rest_spends_the_budget_left_after_it(tmp_path):
+    run = _sample_rows(tmp_path)
+    smoke = tmp_path / "smoke_wall.json"
+    smoke.write_text(json.dumps(_wall(model="olmoe-1b-7b")))
+    base = ["sample", "--run", str(run), "--calls", str(tmp_path / "calls.jsonl"), "--model", MODEL.key,
+            "--branch", "prefill", "--n", "40", "--repeats", "9"]
+    assert RP.main(base + ["--wall", str(smoke), "--per-tile", "2", "--out", str(tmp_path / "probe")]) == 0
+    probe = json.loads((tmp_path / "probe" / "sample.json").read_text())
+    per = {}
+    for c in probe["cells"]:
+        per[c["tile"]] = per.get(c["tile"], 0) + 1
+    assert per and set(per.values()) == {2}
+    # the probe's measured walls (the target model's own) re-price the rest within the same fixed budget
+    pw = tmp_path / "probe_wall.json"
+    pw.write_text(json.dumps(_wall({"64x128x64w8s3": {"median_wall_s": 30.0, "cells": 2},
+                                    "128x128x64w8s3": {"median_wall_s": 50.0, "cells": 2}},
+                                   repeats=9, total=700.0)))
+    assert RP.main(base + ["--probe-wall", str(pw), "--budget-s", "1000", "--out", str(tmp_path / "rest")]) == 0
+    b = json.loads((tmp_path / "rest" / "sample.json").read_text())["budget"]
+    assert b["budget_s"] == pytest.approx(300.0) and b["probe_spent_s"] == 700.0 and b["model_scale"] == 1.0
+    assert b["cost_after_s"] <= 300.0 and b["per_cell_s"]["64x128x64w8s3"] == pytest.approx(1.5 * 30.0)
+    # a probe wall timed on another model is refused (the re-measure is the target's own)
+    pw.write_text(json.dumps(_wall(model="ernie-4.5-21b-a3b", total=10.0)))
+    assert RP.main(base + ["--probe-wall", str(pw), "--out", str(tmp_path / "x")]) == 3
+    # a probe that spent the whole budget leaves nothing: refused, never an over-budget run
+    pw.write_text(json.dumps(_wall(total=1200.0)))
+    assert RP.main(base + ["--probe-wall", str(pw), "--budget-s", "1000", "--out", str(tmp_path / "y")]) == 3
 
 
 def test_the_grr_graphs_outputs_are_bounded():

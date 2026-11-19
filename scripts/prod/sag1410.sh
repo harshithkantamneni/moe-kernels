@@ -10,6 +10,11 @@
 # The driver writes its pages under $RESULTS_ROOT and its ledger and gate record under $SESSION_ROOT/gh200-driver
 # (env.sh); it runs with --no-push (main.sh pushes after its measurement blocks). Exit: sag_par.py's (0 PASS, 3 FAIL);
 # a FAIL is a hard stop in main.sh (the prefill branch has no par without it).
+#
+# PRECONDITION (review 2, MINOR 5): the bytes pages read the preflight's census, $SESSION_ROOT/census.json (setup_vm's
+# preflight PF6, the driver's census_for for the study's default model). No census: FAIL here, before the driver runs
+# (the driver would refuse each bytes unit one by one). The par needs the driver's exit 0 and a gate record written
+# after this step began (sag_par.py --started; MINOR 4).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -25,7 +30,13 @@ done
 DRV="$REPO/scripts/gh200_v7p_session.sh"
 PLAN="scripts/prod/sag1410.plan"
 cd "$REPO"
+census_check() {   # census_check SESSION_ROOT: the preflight's census (PF6) is there and non-empty
+  [[ -s "$1/census.json" ]] || { echo "FAIL sag1410: no census at $1/census.json (setup_vm's preflight PF6 writes it)"; return 3; }
+  echo "PASS sag1410 precondition: census $1/census.json"
+}
 if [[ $DRY -eq 1 ]]; then
+  echo "precondition: \$SESSION_ROOT/census.json (PF6) non-empty, else FAIL before the driver"
+  if [[ -n "${SESSION_ROOT:-}" ]]; then census_check "$SESSION_ROOT" || exit 3; fi
   set +e; bash "$DRV" --dry-run --plan "$PLAN"; rc=$?; set -e
   [[ $rc -eq 2 ]] || { echo "FAIL sag1410: the driver's dry run exited $rc"; exit 3; }
   echo "PASS sag1410 plan (the driver's dry run)"
@@ -33,10 +44,12 @@ if [[ $DRY -eq 1 ]]; then
 fi
 : "${RESULTS_ROOT:?FAIL sag1410: RESULTS_ROOT unset (source ~/moe/env.sh)}"
 : "${SESSION_ROOT:?FAIL sag1410: SESSION_ROOT unset (source ~/moe/env.sh)}"
-deadline=$(( $(date +%s) + 60 * ${SAG_DEADLINE_MIN:-75} ))
+census_check "$SESSION_ROOT" || exit 3
+started=$(date +%s)
+deadline=$(( started + 60 * ${SAG_DEADLINE_MIN:-75} ))
 rc=0
 bash "$DRV" --plan "$PLAN" --deadline "$deadline" --no-push || rc=$?
 echo "sag1410: driver exit $rc"
 mkdir -p "$OUT"
 "${PY_BASE:-${PY_VLLM:-python3}}" "$HERE/sag_par.py" --results "$RESULTS_ROOT" \
-  --record "$SESSION_ROOT/gh200-driver/gate-b3sag-1410.json" --driver-exit "$rc" --out "$OUT/par.json"
+  --record "$SESSION_ROOT/gh200-driver/gate-b3sag-1410.json" --driver-exit "$rc" --started "$started" --out "$OUT/par.json"

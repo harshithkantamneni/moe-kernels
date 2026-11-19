@@ -140,6 +140,16 @@ def main() -> dict:
         skew.append({"routing": "padded", "T": Tp, "T_real": T, "tile": p["tile"], "G": p["G"], "ms": p["ms"],
                      "why": p.get("why"), "active": sum(1 for c in counts if c), "max_count": max(counts)})
     every = [dict(r, routing="uniform") for r in rows] + skew
+    classes, undeclared = classify_refusals(every)
+    return {"calls": len(rows), "priced": sum(1 for r in rows if r["ms"] is not None), "refused": refused,
+            "skew": skew, "refusal_classes": classes, "undeclared_refusals": undeclared,
+            "jumps": jumps, "order": order,
+            "order_max_abs_rel": max(abs(o["rel"]) for o in order if o["rel"] is not None),
+            "speed": speed, "rows": rows}
+
+
+def classify_refusals(every: list[dict]) -> tuple[dict, list]:
+    """Each refused row's DECLARED_REFUSALS class counted per routing, and the rows whose why no class declares."""
     classes: dict = {}
     undeclared = []
     for r in every:
@@ -149,11 +159,7 @@ def main() -> dict:
                 undeclared.append({k: r[k] for k in ("routing", "T", "tile", "G", "why")})
             classes.setdefault(r["routing"], {}).setdefault(str(c), 0)
             classes[r["routing"]][str(c)] += 1
-    return {"calls": len(rows), "priced": sum(1 for r in rows if r["ms"] is not None), "refused": refused,
-            "skew": skew, "refusal_classes": classes, "undeclared_refusals": undeclared,
-            "jumps": jumps, "order": order,
-            "order_max_abs_rel": max(abs(o["rel"]) for o in order if o["rel"] is not None),
-            "speed": speed, "rows": rows}
+    return classes, undeclared
 
 
 if __name__ == "__main__":

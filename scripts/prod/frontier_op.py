@@ -253,8 +253,8 @@ def _predict(a) -> int:
     jobs = []
     for spec in a.calls or []:
         label, _, d = spec.partition("=")
-        rows = PL.read_jsonl(Path(d) / "calls.jsonl")
-        counts = np.load(Path(d) / "counts.npy")
+        rows = PL.read_calls(d)
+        counts = PL.load_counts(d)
         jobs += [(label, r["g"], r["T_pad"], [int(x) for x in c]) for r, c in zip(rows, counts, strict=True)
                  if r.get("status") == "ok"]
     if a.sample:

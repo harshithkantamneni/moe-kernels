@@ -53,6 +53,7 @@ import contextlib
 import dataclasses
 import hashlib
 import json
+import re
 import sys
 import types
 from collections import Counter
@@ -1155,25 +1156,36 @@ def default_tile(T: int, E: int) -> tuple[str, int]:
     return tile_key(d), int(d["GROUP_SIZE_M"])
 
 
-#: EVERY reason v8 may give for a refusal (ms None), as (class, the why's prefix): the declared domain edges, the frozen
-#: guards and the refusals the frozen code raises as a Refused (review 1, MAJOR 11: a sweep asserts every refusal it
-#: meets is one of these). Any other exception is raised, never a refusal.
+#: EVERY reason v8 may give for a refusal (ms None), as (class, a pattern the why must match from its start): the
+#: declared domain edges, the frozen guards, and each Refused that v8's own price path raises, ENUMERATED one by one
+#: (review 2, MINOR 1: no catch-all "Refused: "; a Refused raised anywhere else, the round-5 chain's frozen-hash
+#: checks included, is UNDECLARED and a sweep that meets it fails). Any other exception is raised, never a refusal.
 DECLARED_REFUSALS = (
-    ("HOPPER_G1_N", "HOPPER_G1_N:"),                         # w2 at G 1, n_eff >= 6 (M4's Hopper rule, read at n_eff)
-    ("STAG_CUT_GUARD", "the STAG-CUT guard refuses the cell"),  # 128x128: M4's kappa or root-gap guard
-    ("M4_GUARD", "M4's guard refuses the cell"),              # 64x128: the same guard (k5.cell_ms None)
-    ("NUMEL_0", "numel 0: no routed row"),
-    ("GEOM_OFF", "GEOM off: v7 prices whole page treads only"),
-    ("V6D_NOT_PRICED", "NOT PRICED (v6d:"),                   # decode: no constants for the tile or path
-    ("V6D_OTHER_TILE", "v6d prices this cell at "),           # decode: v6d's own tile differs from the call's
-    ("REFUSED", "Refused: "),                                 # a frozen or v8 Refused (r3 tile, arm, ids/counts)
+    ("HOPPER_G1_N", r"HOPPER_G1_N:"),                         # w2 at G 1, n_eff >= 6 (M4's Hopper rule, read at n_eff)
+    ("STAG_CUT_GUARD", r"the STAG-CUT guard refuses the cell"),  # 128x128: M4's kappa or root-gap guard
+    ("M4_GUARD", r"M4's guard refuses the cell"),             # 64x128: the same guard (k5.cell_ms None)
+    ("NUMEL_0", r"numel 0: no routed row$"),
+    ("GEOM_OFF", r"GEOM off: v7 prices whole page treads only$"),
+    ("V6D_NOT_PRICED", r"NOT PRICED \(v6d:"),                  # decode: no constants for the tile or path
+    ("V6D_OTHER_TILE", r"v6d prices this cell at \S+, not the call's \S+$"),  # decode: v6d's own tile differs
+    # the Refused v8's price path raises (why = "Refused: <message>"), each by its own message:
+    ("NUMEL_0_TREAD", r"Refused: numel 0: no routed row \(v8's guard numel >= 1\)$"),            # Tread
+    ("NON_NATIVE_ARM", r"Refused: v8 prices the native arm only on a call \("),                   # WV4.price, make_cell
+    ("NO_PREFILL_TILE", r"Refused: prefill cell at BLOCK_M \d+: no prefill tile$"),               # price_prefill (v8, v7)
+    ("R3_TILE_NOT_A_CALL", r"Refused: tile \S+: the r3 tile is priced only from a v7 r3 cell$"),  # price
+    ("V7_NO_BRANCH", r"Refused: tile \S+: v7 has no branch for it"),                             # V7.regime_of
+    ("PRIVATE_NO_WALK", r"Refused: PRIVATE has no per-expert walk"),                             # walk
+    ("HISTOGRAM_NOT_THE_CALL", r"Refused: a histogram of \d+ rows: the call holds numel \d+$"),   # cell_events
+    ("IDS_NOT_THE_COUNTS_T", r"Refused: \S+: ids of T \d+ k \d+ on counts of \d+ tokens$"),        # RealIds order
+    ("IDS_NOT_THE_COUNTS_E", r"Refused: \S+: expert \d+ holds \d+ rows in the ids, not \d+$"),     # RealIds order
 )
+_DECLARED_RE = tuple((cls, re.compile(pat)) for cls, pat in DECLARED_REFUSALS)
 
 
 def refusal_class(why: str | None) -> str | None:
     """The DECLARED_REFUSALS class of a refusal's why, else None (an undeclared refusal)."""
-    for cls, pre in DECLARED_REFUSALS:
-        if why and why.startswith(pre):
+    for cls, rx in _DECLARED_RE:
+        if why and rx.match(why):
             return cls
     return None
 

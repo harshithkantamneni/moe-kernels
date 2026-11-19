@@ -113,8 +113,34 @@ def test_a_non_native_arm_on_a_tread_is_refused():
 def test_every_refusal_reason_has_a_declared_class():
     import r3_timing_model_v8 as V8
     assert V8.refusal_class("HOPPER_G1_N: w2 at G 1 with n_eff 6 >= 6 is ILL-POSED") == "HOPPER_G1_N"
-    assert V8.refusal_class("Refused: v8 prices the native arm only") == "REFUSED"
     assert V8.refusal_class("KeyError: 'reads'") is None and V8.refusal_class(None) is None
+    # review 2, MINOR 1: every Refused of v8's price path by its own message, exactly as v8 formats the why
+    whys = {
+        "NON_NATIVE_ARM": "Refused: v8 prices the native arm only on a call (arm 'shared': r6model's A proxy keys by str(n))",
+        "NO_PREFILL_TILE": "Refused: prefill cell at BLOCK_M 32: no prefill tile",
+        "R3_TILE_NOT_A_CALL": "Refused: tile 16x64x128w4s4: the r3 tile is priced only from a v7 r3 cell",
+        "NUMEL_0_TREAD": "Refused: numel 0: no routed row (v8's guard numel >= 1)",
+        "IDS_NOT_THE_COUNTS_E": "Refused: ernie-4.5-21b-a3b: expert 3 holds 7 rows in the ids, not 8",
+        "IDS_NOT_THE_COUNTS_T": "Refused: ernie-4.5-21b-a3b: ids of T 8 k 6 on counts of 9 tokens",
+        "HISTOGRAM_NOT_THE_CALL": "Refused: a histogram of 48 rows: the call holds numel 40",
+        "V6D_OTHER_TILE": "v6d prices this cell at 16x64x128w4s4, not the call's 32x64x128w4s3",
+    }
+    for cls, why in whys.items():
+        assert V8.refusal_class(why) == cls, why
+    # the catch-all is gone: a Refused nobody declared (the round-5 chain's frozen-hash check, or anything new) is
+    # UNDECLARED, and the sweep's classifier reports it (the SKEW test fails on it)
+    for undeclared in ("Refused: vendored round-5 files differ from B3's frozen hashes: ['k5.py']",
+                       "Refused: something nobody declared", "Refused: ", "NUMEL 0"):
+        assert V8.refusal_class(undeclared) is None, undeclared
+    assert not any(pat.startswith("Refused: ") and len(pat) <= len("Refused: ") + 2 for _c, pat in V8.DECLARED_REFUSALS)
+    sys.path.insert(0, str(REPO / "tests"))
+    import v8_extension_job as EJ
+    rows = [{"routing": "zipf", "T": 64, "tile": "t", "G": 1, "ms": None, "why": "Refused: a fabricated new refusal"},
+            {"routing": "zipf", "T": 65, "tile": "t", "G": 1, "ms": None, "why": whys["NO_PREFILL_TILE"]},
+            {"routing": "zipf", "T": 66, "tile": "t", "G": 1, "ms": 1.0, "why": None}]
+    classes, undeclared = EJ.classify_refusals(rows)
+    assert [u["why"] for u in undeclared] == ["Refused: a fabricated new refusal"]
+    assert classes == {"zipf": {"None": 1, "NO_PREFILL_TILE": 1}}
 
 
 def test_register_model_refuses_a_different_config_under_a_known_name():

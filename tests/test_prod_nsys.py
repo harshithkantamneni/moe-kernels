@@ -250,3 +250,65 @@ def test_replay_check_matches_the_replays_kernels_to_servings_per_tile(tmp_path)
     db3 = F.write_sqlite(tmp_path / "replay3.sqlite", ev3, [])
     bad = NX.replay_check(rows, sample, NX.segment_unmarked(NX.read_sqlite(db3)["events"]), MODEL)
     assert bad["verdict"] == "FAIL" and "not in the replay trace" in bad["why"]
+
+
+# ---------------------------------------------------------------- review 2: a pairing shifted by a WHOLE step
+
+SAME = ((8, 8), (8, 8), (8, 8), (8, 8))
+
+
+def test_a_whole_step_shift_passes_g_pair_and_fails_g_stepmark(tmp_path):
+    """Every step at the same T_pad: the trace's calls are the ring's, layer for layer (G-REC, G-PAIR and G-STEP
+    hold), but the trace places them one step later than the step log and the ring join do."""
+    run, calls = F.make_run(tmp_path / "run", steps=SAME)
+    ev, marks, _x = F.timeline(CFG, calls, step_ids=[1, 2, 3, 4])
+    db = F.write_sqlite(tmp_path / "s.sqlite", ev, marks)
+    F.write_clocks(run, len(calls) // 4 + 2)
+    g = NX.extract(run, NX.read_sqlite(db), MODEL)["gates"]
+    assert g["G-REC"]["verdict"] == g["G-PAIR"]["verdict"] == g["G-STEP"]["verdict"] == "PASS"
+    assert g["G-STEPMARK"]["verdict"] == "FAIL" and g["G-STEPMARK"]["misplaced_calls"] == len(calls)
+    # the same run with the trace's own steps passes
+    ev, marks, _x = F.timeline(CFG, calls)
+    g = NX.extract(run, NX.read_sqlite(F.write_sqlite(tmp_path / "ok.sqlite", ev, marks)), MODEL)["gates"]
+    assert g["G-STEPMARK"]["verdict"] == "PASS" and g["G-STEPMARK"]["step_markers"] == len(SAME)
+
+
+def test_a_missing_step_marker_fails_g_stepmark_by_count(tmp_path):
+    run, calls = F.make_run(tmp_path / "run", steps=SAME)
+    ev, marks, _x = F.timeline(CFG, calls, drop_step_marks=(2,))
+    F.write_clocks(run, len(calls) // 4 + 2)
+    g = NX.extract(run, NX.read_sqlite(F.write_sqlite(tmp_path / "s.sqlite", ev, marks)), MODEL)["gates"]
+    assert g["G-PAIR"]["verdict"] == "PASS"
+    assert g["G-STEPMARK"]["verdict"] == "FAIL" and "call count" in g["G-STEPMARK"]["why"]
+    assert NX.classify(F.NAMES["stepmark"]) == "stepmark"
+
+
+def test_the_extract_writes_calls_in_shards_below_the_cap_and_reads_them_back(tmp_path):
+    """review 2, MAJOR A: calls.jsonl and counts.npy are sharded at write time below SHARD_MAX_BYTES (each shard a
+    plain file the push carries); every reader gets the whole run back; a missing or edited shard is refused."""
+    run, calls, db, _x, _e = _run(tmp_path)
+    res = NX.extract(run, NX.read_sqlite(db), MODEL)
+    out = tmp_path / "out"
+    man = PL.write_calls(out, res["rows"], res["counts"], max_bytes=4096)
+    assert len(man["calls"]) > 1 and len(man["counts"]) > 1
+    assert all((out / e["file"]).stat().st_size <= 4096 for e in man["calls"] + man["counts"])
+    rows = PL.read_calls(out)
+    assert [r["g"] for r in rows] == [r["g"] for r in res["rows"]]
+    assert np.array_equal(PL.load_counts(out), res["counts"])
+    # the default cap leaves the ERNIE-sized outputs under the push's 95 MB
+    assert PL.SHARD_MAX_BYTES < 95_000_000
+    # vm_results_push.sh's compressed form reads back too
+    import lzma
+    f = out / man["calls"][0]["file"]
+    f.with_name(f.name + ".xz").write_bytes(lzma.compress(f.read_bytes()))
+    f.unlink()
+    assert len(PL.read_calls(out)) == len(rows)
+    (out / man["calls"][1]["file"]).unlink()
+    with pytest.raises(PL.KitError, match="missing"):
+        PL.read_calls(out)
+    cf = out / man["counts"][0]["file"]
+    raw = bytearray(cf.read_bytes())
+    raw[-1] ^= 1
+    cf.write_bytes(bytes(raw))
+    with pytest.raises(PL.KitError, match="sha256"):
+        PL.load_counts(out)

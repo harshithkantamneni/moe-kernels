@@ -44,6 +44,15 @@ GRAPH SAFETY (CRITIQUE M8):
     marker, graph replays included; nsys_extract's G-PAIR holds every call's gridY to its ring record's layer + 1.
     The grid is a launch parameter, not a specialisation key: no new compile. No NVTX range is pushed per call
     (graph replays would carry the capture-time range only; the secondary NVTX alignment claim is withdrawn).
+  - THE STEP IS IN A STEP MARKER (review 2: a pairing shifted by one WHOLE step keeps every layer in place, so G-PAIR
+    alone cannot see it). The step-log wrapper (`on_step`, host side, between steps, never inside a capture) launches
+    a second tiny kernel, STEP_MARKER_KERNEL, on the current stream before the step's forward, with grid
+    (1, step % STEP_MOD + 1) (the step id in gridY; program (0, 0) writes the step id into a one-int device buffer,
+    every other program exits). nsys_extract's G-STEPMARK holds the step markers to the step log (one per logged
+    step, gridY == step % STEP_MOD + 1) and every call to the step its ring record joins (the step marker that
+    precedes it in the trace), n_layers calls per step: a whole-step shift fails there.
+  - G-VARIANTS is read twice: after warm() (one variant per ids dtype; one step-marker variant) and again at
+    close(); serve_capture's G-VARIANTS-END fails the run if any compile happened in between (review 2, MINOR 8).
 """
 from __future__ import annotations
 
@@ -68,6 +77,9 @@ DRAIN_FILL = 0.5
 #: or at most every this many steps (bounded host memory per shard)
 DRAIN_EVERY = 256
 MARKER_KERNEL = "_moe_prod_capture_kernel"
+STEP_MARKER_KERNEL = "_moe_prod_step_kernel"
+#: CUDA's gridY limit: the step marker carries step % STEP_MOD + 1
+STEP_MOD = 65535
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -112,6 +124,34 @@ def kernel():
     if _KERNEL is None:
         _KERNEL = _build_kernel()
     return _KERNEL
+
+
+_STEP_KERNEL = None
+
+
+def _build_step_kernel():
+    import triton
+    import triton.language as tl
+
+    @triton.jit(do_not_specialize=["step"])
+    def _moe_prod_step_kernel(buf_ptr, step):
+        # the grid's Y extent carries the step (gridY = step % STEP_MOD + 1); program (0, 0) records the step id
+        if tl.program_id(1) == 0:
+            tl.store(buf_ptr, step)
+
+    return _moe_prod_step_kernel
+
+
+def step_kernel():
+    global _STEP_KERNEL
+    if _STEP_KERNEL is None:
+        _STEP_KERNEL = _build_step_kernel()
+    return _STEP_KERNEL
+
+
+def step_grid(step: int) -> tuple[int, int]:
+    """The step marker's launch grid: (1, step % STEP_MOD + 1)."""
+    return (1, int(step) % STEP_MOD + 1)
 
 
 def marker_grid(layer: int) -> tuple[int, int]:
@@ -175,6 +215,8 @@ class Capture:
     #: the tag a scheduled (mid-run) drain gives its shard; serve_capture sets "profiler-window" while vLLM's
     #: torch profiler runs, so every record of the window is in a shard with that tag
     drain_tag: str = "periodic"
+    #: the step ids the step markers carried, in launch order (numpy backend: the CPU tests' record of the launches)
+    step_marks: list = field(default_factory=list)
 
     def __post_init__(self):
         self.out_dir = Path(self.out_dir)
@@ -187,11 +229,13 @@ class Capture:
             self.ctr = torch.zeros(2, dtype=torch.int32, device=dev)
             self.ring = torch.zeros(self.ids_cap, dtype=torch.int16, device=dev)
             self.recs = torch.zeros((self.rec_cap, 4), dtype=torch.int32, device=dev)
+            self.step_buf = torch.zeros(1, dtype=torch.int32, device=dev)
         else:
             self.torch = None
             self.ctr = np.zeros(2, dtype=np.int64)
             self.ring = np.zeros(self.ids_cap, dtype=np.int16)
             self.recs = np.zeros((self.rec_cap, 4), dtype=np.int64)
+            self.step_buf = np.zeros(1, dtype=np.int64)
 
     # -- the per-call launch (inside the forward; graph-safe) -------------------------------------------------
     def launch(self, layer: int, topk_ids) -> None:
@@ -205,6 +249,16 @@ class Capture:
         if n:
             kernel()[marker_grid(layer)](topk_ids, self.ctr, self.ring, self.recs, n, int(layer), topk_ids.stride(0),
                                          topk_ids.stride(1), self.ids_cap, self.rec_cap, K=self.top_k, BLOCK=1024)
+
+    def launch_step(self, step: int) -> None:
+        """The step marker (host side, between steps: never inside a stream capture)."""
+        if self._capturing():
+            raise PL.KitError("the step marker inside a stream capture")
+        if self.backend != "torch":
+            self.step_buf[0] = int(step)
+            self.step_marks.append(int(step))
+            return
+        step_kernel()[step_grid(step)](self.step_buf, int(step))
 
     def capture_fn(self, layer: int):
         def _fn(topk_ids, _layer=int(layer), _cap=self):
@@ -289,6 +343,7 @@ class Capture:
                 or (self.steps_since_drain + 1) * self.n_moe_layers > DRAIN_FILL * self.rec_cap):
             if not self._capturing():
                 self.drain(tag=self.drain_tag)
+        self.launch_step(self.step_id)
         row = {"step": self.step_id, "T": int(num_tokens), "T_pad": int(num_tokens_padded),
                "cg_mode": str(cudagraph_mode), "dummy": bool(dummy), "shard_next": self.shard_idx,
                "t_ns": time.monotonic_ns(), **self.context}
@@ -301,6 +356,10 @@ class Capture:
         if self.enabled:
             self.drain(tag="final")
         self.steps.close()
+        if self.backend == "torch":
+            # G-VARIANTS re-read at the end (review 2, MINOR 8): serve_capture gates it against the post-warm read
+            self.manifest["kernel_variants_end"] = kernel_variants(kernel())
+            self.manifest["step_kernel_variants_end"] = kernel_variants(step_kernel())
         self.manifest.update({"bound_layers": self.bound_layers, "shards": self.shard_idx,
                               "total_records": self.total_records, "top_k": self.top_k,
                               "n_moe_layers": self.n_moe_layers, "ids_cap": self.ids_cap, "rec_cap": self.rec_cap,
@@ -356,6 +415,7 @@ def warm(cap: Capture, sizes, dtypes=("int32", "int64")) -> None:
         for n in sorted(set(int(s) for s in sizes)):
             x = torch.zeros((n, cap.top_k), dtype=getattr(torch, dt), device=cap.ctr.device)
             cap.launch(-1, x)
+    cap.launch_step(0)
     torch.cuda.synchronize()
     cap.ctr.zero_()
     torch.cuda.synchronize()
@@ -363,6 +423,9 @@ def warm(cap: Capture, sizes, dtypes=("int32", "int64")) -> None:
     cap.manifest["kernel_variants"] = got
     cap.manifest["kernel_variants_expected"] = len(dtypes)
     check_variants(got, len(dtypes))
+    sgot = kernel_variants(step_kernel())
+    cap.manifest["step_kernel_variants"] = sgot
+    check_variants(sgot, 1, what="the step marker kernel")
 
 
 def kernel_variants(jit_fn) -> int | None:
@@ -380,12 +443,23 @@ def kernel_variants(jit_fn) -> int | None:
     return None
 
 
-def check_variants(got: int | None, expected: int) -> None:
+def check_variants(got: int | None, expected: int, what: str = "the capture kernel") -> None:
     """The A3 gate (review 1, MINOR): after warm(), exactly one compiled variant per topk_ids dtype; any other count
     (or an unreadable cache) means a JIT compile could fall inside a graph capture: stop before capture."""
     if got != expected:
-        raise PL.KitError(f"G-VARIANTS FAIL: the capture kernel has {got} compiled variants after warm(), want "
+        raise PL.KitError(f"G-VARIANTS FAIL: {what} has {got} compiled variants after warm(), want "
                           f"{expected} (one per topk_ids dtype): do_not_specialize did not hold")
+
+
+def variants_end_gate(manifest: dict) -> dict:
+    """G-VARIANTS-END (review 2, MINOR 8): the compiled-variant counts re-read at close() equal the post-warm ones (a
+    compile during serving could have fallen inside a graph capture); an unread count is a FAIL, never a pass."""
+    bad = []
+    for post, end in (("kernel_variants", "kernel_variants_end"), ("step_kernel_variants", "step_kernel_variants_end")):
+        a, b = manifest.get(post), manifest.get(end)
+        if a is None or b is None or a != b:
+            bad.append(f"{post} after warm {a}, at the end {b}")
+    return {"verdict": "PASS" if not bad else "FAIL", "why": "; ".join(bad)}
 
 
 # ------------------------------------------------------------------------------------------------------------

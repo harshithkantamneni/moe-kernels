@@ -72,6 +72,12 @@ MODELS = {
 }
 
 
+def expert_bytes(cfg: MoEConfig) -> int:
+    """One expert's bf16 weight bytes, w13 (2 I x H) and w2 (H x I): the replay budget's scale between models (review 2,
+    MAJOR B): OLMoE-1B-7B 12.6 MB, ERNIE-4.5-21B-A3B 23.6 MB."""
+    return 3 * int(cfg.hidden_size) * int(cfg.intermediate_size) * 2
+
+
 def check_hf_config(model: ServedModel, hf: dict) -> list[str]:
     """G-CFG: every listed config.json number equals the kit's MoEConfig. ERNIE's moe_num_experts may be a list
     (one entry per modality); its first entry is the text experts."""
@@ -276,6 +282,199 @@ def read_jsonl(path) -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------------------------------
+# the per-call outputs, sharded below the push cap (review 2, MAJOR A)
+# --------------------------------------------------------------------------------------------------------------
+
+#: scripts/vm_results_push.sh (registered, pinned: not edited) xz-compresses or HOLDS BACK on the VM any file over
+#: 95 MB. Every per-call output the laptop needs is written in shards of at most SHARD_MAX_BYTES (a third below the
+#: cap), so a push carries all of it as plain files; main.sh's last hard step (held-back-check) fails if the push
+#: still held back a needed path.
+SHARD_MAX_BYTES = 64_000_000
+SHARDS_SCHEMA = "moe-kernels/prod-call-shards/1"
+
+
+def _shard_name(stem: str, ext: str, i: int, n: int) -> str:
+    return f"{stem}{ext}" if n == 1 else f"{stem}.{i:05d}{ext}"
+
+
+def write_calls(out_dir, rows: list[dict], counts: np.ndarray, *, prefix: str = "",
+                max_bytes: int = SHARD_MAX_BYTES) -> dict:
+    """<prefix>calls.jsonl and <prefix>counts.npy, each split into shards of at most max_bytes (one shard keeps the
+    plain name; more are <stem>.00000<ext>, ...), and <prefix>calls.shards.json listing every shard with its row count
+    and sha256 (read_calls / load_counts refuse a missing or changed shard). Returns the manifest."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    counts = np.asarray(counts)
+    if len(rows) != len(counts):
+        raise KitError(f"{len(rows)} calls, {len(counts)} count rows")
+    for old in list(out.glob(f"{prefix}calls.[0-9]*.jsonl")) + list(out.glob(f"{prefix}counts.[0-9]*.npy")):
+        old.unlink()
+    chunks: list[list[bytes]] = [[]]
+    size = 0
+    for r in rows:
+        line = (json.dumps(r, default=str) + "\n").encode()
+        if chunks[-1] and size + len(line) > max_bytes:
+            chunks.append([])
+            size = 0
+        chunks[-1].append(line)
+        size += len(line)
+    man: dict = {"schema": SHARDS_SCHEMA, "n": len(rows), "max_bytes": int(max_bytes), "calls": [], "counts": []}
+    for i, ch in enumerate(chunks):
+        name = _shard_name(f"{prefix}calls", ".jsonl", i, len(chunks))
+        data = b"".join(ch)
+        (out / name).write_bytes(data)
+        man["calls"].append({"file": name, "rows": len(ch), "sha256": hashlib.sha256(data).hexdigest()})
+    row_bytes = max(1, int(counts.shape[1]) * counts.dtype.itemsize) if counts.ndim == 2 else 1
+    per = max(1, (max_bytes - 1024) // row_bytes)
+    bounds = list(range(0, len(counts), per)) or [0]
+    for i, lo in enumerate(bounds):
+        name = _shard_name(f"{prefix}counts", ".npy", i, len(bounds))
+        part = counts[lo:lo + per]
+        np.save(out / name, part)
+        man["counts"].append({"file": name, "rows": int(len(part)),
+                              "sha256": hashlib.sha256((out / name).read_bytes()).hexdigest()})
+    (out / f"{prefix}calls.shards.json").write_text(json.dumps(man, indent=1) + "\n")
+    return man
+
+
+def _read_bytes(p: Path) -> bytes:
+    """A file's bytes, or its .xz twin's decompressed bytes (vm_results_push.sh's compressed form)."""
+    if p.exists():
+        return p.read_bytes()
+    xz = p.with_name(p.name + ".xz")
+    if xz.exists():
+        import lzma
+        return lzma.decompress(xz.read_bytes())
+    raise KitError(f"{p}: missing (and no {xz.name})")
+
+
+def _shards(d: Path, prefix: str, kind: str) -> list[tuple[bytes, int | None]]:
+    man_p = d / f"{prefix}calls.shards.json"
+    if not man_p.exists():
+        plain = d / (f"{prefix}calls.jsonl" if kind == "calls" else f"{prefix}counts.npy")
+        if not plain.exists() and not plain.with_name(plain.name + ".xz").exists():
+            if kind == "calls" and list(d.glob(f"{prefix}calls.[0-9]*.jsonl*")):
+                raise KitError(f"{d}: call shards without their manifest {man_p.name}")
+            return []
+        return [(_read_bytes(plain), None)]
+    man = json.loads(man_p.read_text())
+    if man.get("schema") != SHARDS_SCHEMA:
+        raise KitError(f"{man_p}: schema {man.get('schema')!r}")
+    out = []
+    for ent in man[kind]:
+        data = _read_bytes(d / ent["file"])
+        if hashlib.sha256(data).hexdigest() != ent["sha256"]:
+            raise KitError(f"{d / ent['file']}: sha256 differs from {man_p.name}")
+        out.append((data, int(ent["rows"])))
+    return out
+
+
+def read_calls(run_dir, prefix: str = "") -> list[dict]:
+    """Every call row of a run, across its shards (or the plain / .xz single file). [] when the run has none."""
+    rows: list[dict] = []
+    for data, n in _shards(Path(run_dir), prefix, "calls"):
+        part = [json.loads(line) for line in data.decode().splitlines() if line.strip()]
+        if n is not None and len(part) != n:
+            raise KitError(f"{run_dir}: a calls shard holds {len(part)} rows, the manifest says {n}")
+        rows += part
+    return rows
+
+
+def load_counts(run_dir, prefix: str = "") -> np.ndarray:
+    """The [calls, E] counts of a run, across its shards (or the plain / .xz single file)."""
+    import io
+    parts = []
+    for data, n in _shards(Path(run_dir), prefix, "counts"):
+        a = np.load(io.BytesIO(data), allow_pickle=False)
+        if n is not None and len(a) != n:
+            raise KitError(f"{run_dir}: a counts shard holds {len(a)} rows, the manifest says {n}")
+        parts.append(a)
+    if not parts:
+        raise KitError(f"{run_dir}: no counts.npy (or shards)")
+    return np.concatenate(parts) if len(parts) > 1 else parts[0]
+
+
+def has_calls(run_dir, prefix: str = "") -> bool:
+    d = Path(run_dir)
+    return any((d / n).exists() for n in (f"{prefix}calls.shards.json", f"{prefix}calls.jsonl",
+                                          f"{prefix}calls.jsonl.xz"))
+
+
+#: what a push may hold back without losing anything the laptop needs (the rental's own intermediates): the nsys
+#: reports and their sqlite exports (extracted on the VM), the downloaded dataset (pinned by sha256, re-fetchable),
+#: the replay's Triton caches
+PUSH_EXPENDABLE = ("*.nsys-rep", "*.qdstrm", "*.sqlite", "data/*", "*triton-cache/*")
+
+
+def held_back_needed(held_text: str, run_name: str) -> list[str]:
+    """The lines of vm_results_push.sh's HELD-BACK.txt (path TAB size TAB sha TAB fate) that hold back a NEEDED file
+    of the run directory `run_name` (anything under it but PUSH_EXPENDABLE), compressed or left on the VM."""
+    import fnmatch
+    bad = []
+    key = f"/{run_name}/"
+    for line in held_text.splitlines():
+        rel = line.split("\t", 1)[0].strip()
+        if not rel or key not in f"/{rel}":
+            continue
+        sub = f"/{rel}".split(key, 1)[1]
+        if not any(fnmatch.fnmatch(sub, pat) for pat in PUSH_EXPENDABLE):
+            bad.append(line.strip())
+    return bad
+
+
+#: the runs main.sh measures; the primaries are hard steps there, so the laptop always expects them
+PRIMARY_RUNS = ("A1710", "A1410")
+SECONDARY_RUNS = ("Adefault", "Aon", "Beager")
+FRONTIER_LABELS = ("primary-uniform", "variant-all4")
+
+
+def expected_outputs(results) -> dict:
+    """What offline.sh must find in a fetched results tree, from the rental's own SUMMARY.txt: the primary runs,
+    every secondary run whose extract step PASSED, the board par, both replays, and every Frontier model set whose
+    train (or simpath) step PASSED. {"runs": [labels], "frontier": [(label, models dir name)], "missing": [why]}."""
+    R = Path(results)
+    summ = R / "SUMMARY.txt"
+    if not summ.exists():
+        return {"runs": [], "frontier": [], "missing": [f"{summ}: no SUMMARY.txt (cannot tell what the rental measured)"]}
+    passed = {ln.split()[1] for ln in summ.read_text().splitlines() if ln.startswith("PASS ") and len(ln.split()) > 1}
+    runs = list(PRIMARY_RUNS) + [lab for lab in SECONDARY_RUNS if f"{lab}-extract" in passed]
+    missing = [f"run {lab}: no calls under {R / lab}" for lab in runs if not has_calls(R / lab)]
+    fr = []
+    for lab in FRONTIER_LABELS:
+        for stepname, sub in ((f"frontier-train-{lab}", "models"), (f"frontier-simpath-{lab}", "models-simpath")):
+            if stepname in passed:
+                fr.append((lab, sub))
+                if not (R / "frontier" / lab / sub).is_dir():
+                    missing.append(f"frontier {lab}/{sub}: {stepname} PASSED on the rental, the directory is missing")
+    if not (R / "sag" / "par.json").exists() and not (R / "sag" / "par.json.xz").exists():
+        missing.append(f"{R / 'sag' / 'par.json'}: missing")
+    for b in ("decode", "prefill"):
+        if not any((R / f"replay-{b}").rglob("cells.csv*")):
+            missing.append(f"replay-{b}: no cells.csv under {R / f'replay-{b}'}")
+    return {"runs": runs, "frontier": fr, "missing": missing}
+
+
+def decompress_tree(root) -> list[str]:
+    """Every <f>.xz under root (vm_results_push.sh's compressed form) written out as <f> beside it when <f> is absent."""
+    import lzma
+    done = []
+    for xz in sorted(Path(root).rglob("*.xz")):
+        plain = xz.with_name(xz.name[:-3])
+        if plain.exists():
+            continue
+        tmp = plain.with_name(plain.name + ".part")
+        with lzma.open(xz, "rb") as src, open(tmp, "wb") as dst:
+            while True:
+                buf = src.read(1 << 24)
+                if not buf:
+                    break
+                dst.write(buf)
+        tmp.rename(plain)
+        done.append(str(plain))
+    return done
+
+
+# --------------------------------------------------------------------------------------------------------------
 # the prefill branch's constants (review 1, BLOCKER 2: v8 has no defaults; every one is named here or measured)
 # --------------------------------------------------------------------------------------------------------------
 
@@ -354,11 +553,13 @@ def roofline_ms(cfg: MoEConfig, counts, c: dict | None = None) -> float:
 # pinned Hugging Face revisions (review 1, MINOR): the model and tokenizer commit each run loads
 # --------------------------------------------------------------------------------------------------------------
 
-#: {model key: commit sha of the HF repo}. None = NOT PINNED: smoke.sh runs unpinned and prints the resolved sha
-#: (serve_capture's manifest "hf_revision"), which is pasted here before the kit freezes; main.sh refuses an unpinned
-#: model at its first step (revision-pinned). The same sha pins the tokenizer (prompts.py) and the engine's
+#: {model key: commit sha of the HF repo}. None = NOT PINNED (main.sh refuses an unpinned model at its first step,
+#: revision-pinned; serve_capture's G-REV FAILS a pinned run whose loaded snapshot differs or cannot be resolved). The same sha pins the tokenizer (prompts.py) and the engine's
 #: model and tokenizer (serve_capture.py: LLM(revision=, tokenizer_revision=)).
-HF_REVISIONS: dict = {"ernie-4.5-21b-a3b": None, "olmoe-1b-7b": None}
+#: Resolved on the laptop 2026-11-19 by scripts/prod/hf_revisions.py (the Hub's public model API, no auth; review 2,
+#: MINOR 3) and pasted here; `hf_revisions.py --check` holds them to the Hub before the kit freezes.
+HF_REVISIONS: dict = {"ernie-4.5-21b-a3b": "87db95487941cb39592ee0abca3b9155a6d19c5c",
+                      "olmoe-1b-7b": "6d84c48581ece794365f2b8e9cfb043c68ade9c5"}
 
 
 def hf_revision(model_key: str) -> str | None:
@@ -415,7 +616,46 @@ def main(argv=None) -> int:
     pc.add_argument("--model", required=True, choices=sorted(MODELS))
     pc.add_argument("--pricer", default=None)
     pc.add_argument("--sag", default=None, help="the board's par.json (default: the registered reference median)")
+    hb = sub.add_parser("held-back-check", help="FAIL if the push held back a needed file of this run (main.sh)")
+    hb.add_argument("--held", required=True, help="vm_results_push.sh's HELD-BACK.txt ($MOE_PUSH_HOME/push/)")
+    hb.add_argument("--results", required=True, help="the run's results directory")
+    ex = sub.add_parser("expected-outputs", help="FAIL if a fetched tree lacks what the rental measured (offline.sh)")
+    ex.add_argument("--results", required=True)
+    ex.add_argument("--runs-out", required=True, help="writes the labels of the runs to score, one per line")
+    dz = sub.add_parser("decompress", help="write every <f>.xz under a tree out as <f> (offline.sh)")
+    dz.add_argument("--root", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "held-back-check":
+        held = Path(a.held)
+        if not held.exists():
+            print(f"FAIL held-back-check: no {held} (the results were never pushed)")
+            return 3
+        run_name = Path(a.results).resolve().name
+        sums = held.with_name("SHA256SUMS")
+        if not sums.exists() or f"/{run_name}/" not in sums.read_text():
+            print(f"FAIL held-back-check: the push's manifest {sums} holds no file of {run_name} (is the results "
+                  "directory under the pushed ~/moe/results?)")
+            return 3
+        bad = held_back_needed(held.read_text(), run_name)
+        if bad:
+            print(f"FAIL held-back-check: the push held back {len(bad)} needed file(s) of {a.results} "
+                  f"(copy them off the VM before the terminate): " + " | ".join(bad[:6]))
+            return 3
+        print(f"PASS held-back-check: no needed file of {Path(a.results).name} held back")
+        return 0
+    if a.cmd == "expected-outputs":
+        got = expected_outputs(a.results)
+        if got["missing"]:
+            print("FAIL expected-outputs: " + "; ".join(got["missing"]))
+            return 3
+        Path(a.runs_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.runs_out).write_text("".join(f"{r}\n" for r in got["runs"]))
+        print(f"PASS expected-outputs: runs {got['runs']}, Frontier {got['frontier']}")
+        return 0
+    if a.cmd == "decompress":
+        done = decompress_tree(a.root)
+        print(f"PASS decompress: {len(done)} file(s) written from .xz" + (f": {done[:6]}" if done else ""))
+        return 0
     try:
         got = price_check(a.model, sag128=load_board_par(a.sag) if a.sag else None, module=a.pricer)
     except (KitError, ValueError, KeyError, ImportError) as exc:

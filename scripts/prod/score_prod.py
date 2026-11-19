@@ -159,8 +159,10 @@ def price_all(model_key: str, jobs: dict, *, module: str | None, workers: int) -
 
 def load_run(label: str, d, model: PL.ServedModel, *, want_ids: bool) -> list[dict]:
     d = Path(d)
-    rows = PL.read_jsonl(d / "calls.jsonl")
-    counts = np.load(d / "counts.npy")
+    rows = PL.read_calls(d)
+    if not rows:
+        raise PL.KitError(f"{d}: no calls (calls.jsonl, its shards or its .xz)")
+    counts = PL.load_counts(d)
     if len(rows) != len(counts):
         raise PL.KitError(f"{d}: {len(rows)} calls, {len(counts)} count rows")
     ids = {}

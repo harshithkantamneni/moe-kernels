@@ -230,3 +230,29 @@ def test_warm_gates_one_compiled_variant_per_ids_dtype():
     for got in (1, 3, None):
         with pytest.raises(PL.KitError, match="G-VARIANTS"):
             MC.check_variants(got, 2)
+
+
+# ---------------------------------------------------------------- review 2: the step marker, G-VARIANTS at the end
+
+def test_every_logged_step_launches_a_step_marker_carrying_its_id(tmp_path):
+    run, calls = F.make_run(tmp_path / "run", steps=((5, 8), (40, 40), (600, 600), (8, 8)))
+    steps = PL.read_jsonl(run / "steps.jsonl")
+    cap = MC.Capture(tmp_path / "c", top_k=8, n_moe_layers=2, backend="numpy")
+    cap.reset()
+    for _ in range(3):
+        cap.on_step(num_tokens=4, num_tokens_padded=4, cudagraph_mode="m", dummy=False)
+    assert cap.step_marks == [0, 1, 2] and len(steps) == 4
+    assert MC.step_grid(0) == (1, 1) and MC.step_grid(70000) == (1, 70000 % MC.STEP_MOD + 1)
+    src = inspect.getsource(MC._build_step_kernel)
+    assert 'do_not_specialize=["step"]' in src and "if tl.program_id(1) == 0:" in src
+    assert "step_kernel()[step_grid(step)]" in inspect.getsource(MC.Capture.launch_step)
+    assert "self.launch_step(self.step_id)" in inspect.getsource(MC.Capture.on_step)
+
+
+def test_the_variant_counts_reread_at_the_end_must_equal_the_post_warm_ones():
+    ok = {"kernel_variants": 2, "kernel_variants_end": 2, "step_kernel_variants": 1, "step_kernel_variants_end": 1}
+    assert MC.variants_end_gate(ok)["verdict"] == "PASS"
+    for bad in ({**ok, "kernel_variants_end": 3}, {**ok, "step_kernel_variants_end": 2},
+                {**ok, "kernel_variants_end": None}, {k: v for k, v in ok.items() if k != "step_kernel_variants"}):
+        g = MC.variants_end_gate(bad)
+        assert g["verdict"] == "FAIL" and "at the end" in g["why"]

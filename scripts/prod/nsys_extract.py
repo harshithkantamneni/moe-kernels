@@ -32,6 +32,11 @@ GATES (gates.json; any FAIL makes the exit 3 and is printed with its reason):
   G-REC   ring records == marker kernels after the reset
   G-GEMM  fused_moe_kernel launches after the reset == 2 x records
   G-PAIR  every paired call's marker gridY == its ring record's layer + 1 (a shifted pairing fails here)
+  G-STEPMARK (review 2) the step markers moe_capture launches before each step's forward (grid
+          (1, step % STEP_MOD + 1)) after the reset are one per logged step, in order, gridY == step % STEP_MOD + 1;
+          every call lies after the step marker of the step its ring record joins (G-STEP's join) and before the
+          next one, n_layers calls per step. A pairing shifted by a WHOLE step (every layer in place, so G-PAIR
+          passes) fails here. In a torch-profiler window (mode B) the window's steps are the window shard's
   G-STEP  records of every shard tile the shard's steps: n_layers records per step, layers ascending, n == T_pad
   G-IDS   every record's ids in [0, E) with k distinct experts per row (log integrity; sum(counts) == T_pad k)
   G-GRID  gridX of both GEMMs == the launch grid r3_decode.geometry gives for the logged padded T and the call's
@@ -60,8 +65,12 @@ if str(HERE) not in sys.path:
 import prodlib as PL  # noqa: E402
 
 MARKER = "_moe_prod_capture_kernel"
+STEP_MARKER = "_moe_prod_step_kernel"
+#: moe_capture.STEP_MOD (CUDA's gridY limit)
+STEP_MOD = 65535
 RESET_MARK = "moe_capture:reset"
 CLASSES = (
+    ("stepmark", re.compile(re.escape(STEP_MARKER))),
     ("marker", re.compile(re.escape(MARKER))),
     # Triton names the kernel after the function; older Triton appended a signature suffix (_0d1d2d...)
     ("gemm", re.compile(r"(^|\W)fused_moe_kernel(_[0-9][0-9a-z]*)?($|\W)")),
@@ -177,12 +186,15 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
     """One dict per marker (in start order) with the call's kernels classified; plus counts for the gates."""
     by_stream: dict = defaultdict(list)
     n_gemm = 0
+    step_marks = []
     for e in events:
         if cut_ns is not None and e[0] < cut_ns:
             continue
         cls = "memset" if e[8] == "memset" else classify(e[3])
         if cls == "gemm":
             n_gemm += 1
+        elif cls == "stepmark":
+            step_marks.append((int(e[0]), int(e[5])))
         by_stream[e[2]].append((e, cls))
     markers = []
     for st, lst in by_stream.items():
@@ -246,7 +258,8 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
                     w1_ns=int(win[j1][0][1] - win[j1][0][0]), w2_ns=int(win[j2][0][1] - win[j2][0][0]))
         calls.append(call)
     streams = Counter(st for _s, st, _i in markers)
-    return calls, {"markers": len(markers), "gemms": n_gemm, "marker_streams": dict(streams)}
+    return calls, {"markers": len(markers), "gemms": n_gemm, "marker_streams": dict(streams),
+                   "step_marks": sorted(step_marks)}
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -282,6 +295,40 @@ def join_steps(records: list[dict], steps: list[dict], n_layers: int, layer_orde
             for p in where:
                 out[p] = st
     return out, bad
+
+
+def step_mark_gate(step_marks: list, steps: list[dict], calls: list[dict], step_of: list, n_layers: int,
+                   paired: int) -> dict:
+    """G-STEPMARK (module doc): the step markers against the step log, and each call's step on the trace (the last
+    step marker before its capture marker) against its ring record's step (G-STEP's join)."""
+    bad = []
+    got = [gy for _s, gy in step_marks]
+    want = [int(s["step"]) % STEP_MOD + 1 for s in steps]
+    if got != want:
+        i = next((j for j, (a, b) in enumerate(zip(got, want, strict=False)) if a != b), min(len(got), len(want)))
+        bad.append(f"{len(got)} step markers, {len(want)} logged steps; first difference at step position {i}: "
+                   f"marker gridY {got[i] if i < len(got) else None}, step log {want[i] if i < len(want) else None}")
+    starts = [s for s, _gy in step_marks]
+    per = Counter()
+    wrong = 0
+    for k in range(paired):
+        i = bisect.bisect_right(starts, int(calls[k]["marker_start"])) - 1
+        trace_step = int(got[i]) - 1 if i >= 0 else None
+        st = step_of[k] if k < len(step_of) else None
+        ring_step = None if st is None else int(st["step"]) % STEP_MOD
+        if trace_step != ring_step:
+            wrong += 1
+            if wrong <= 3:
+                bad.append(f"call {k}: after step marker {trace_step} on the trace, its ring record joins step "
+                           f"{ring_step}")
+        per[i] += 1
+    off = [(i, n) for i, n in sorted(per.items()) if n != n_layers]
+    if off:
+        bad.append(f"{len(off)} step(s) on the trace hold a call count other than {n_layers}: {off[:3]}")
+    if wrong > 3:
+        bad.append(f"{wrong} calls in all sit after another step's marker")
+    return {"verdict": "PASS" if not bad else "FAIL", "why": "; ".join(bad[:5]), "step_markers": len(got),
+            "steps": len(want), "misplaced_calls": wrong}
 
 
 def check_ids(rec: dict, E: int, k: int) -> str:
@@ -352,6 +399,7 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
                 if calls[k]["marker_gridY"] != records[k]["layer"] + 1]
     gates["G-PAIR"] = {"verdict": "PASS" if not bad_pair else "FAIL", "why": "; ".join(bad_pair[:5]),
                        "problems": len(bad_pair), "paired": paired}
+    gates["G-STEPMARK"] = step_mark_gate(cnt["step_marks"], sel_steps, calls, step_of, model.moe_layers, paired)
     for k in range(paired):
         rec, call = records[k], calls[k]
         counts = PL.counts_from_ids(rec["ids"], cfg.num_experts) if not check_ids(rec, cfg.num_experts, cfg.top_k) \
@@ -398,16 +446,14 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
 def write(res: dict, out_dir, prefix: str) -> int:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    with open(out / f"{prefix}calls.jsonl", "w") as fh:
-        for r in res["rows"]:
-            fh.write(json.dumps(r, default=str) + "\n")
-    np.save(out / f"{prefix}counts.npy", res["counts"])
+    # sharded below the push cap (review 2, MAJOR A): PL.read_calls / PL.load_counts read them back
+    man = PL.write_calls(out, res["rows"], res["counts"], prefix=prefix)
     (out / f"{prefix}sequences.json").write_text(json.dumps(res["sequences"], indent=2))
     (out / f"{prefix}gates.json").write_text(json.dumps(res["gates"], indent=2, default=str))
     bad = [k for k, v in res["gates"].items() if v["verdict"] == "FAIL"]
     for k, v in res["gates"].items():
         print(f"{v['verdict']:5s} {k}" + (f": {v['why']}" if v.get("why") else ""))
-    print(f"{len(res['rows'])} calls -> {out / (prefix + 'calls.jsonl')}")
+    print(f"{len(res['rows'])} calls -> {out} ({len(man['calls'])} calls shard(s), {len(man['counts'])} counts shard(s))")
     return 3 if bad else 0
 
 
@@ -517,10 +563,10 @@ def _sub_main(cmd: str, argv) -> int:
     a = ap.parse_args(argv)
     try:
         if cmd == "check-sequences":
-            res = check_sequences(PL.read_jsonl(Path(a.run) / "calls.jsonl"))
+            res = check_sequences(PL.read_calls(a.run))
             out = Path(a.out or Path(a.run) / "sequences_by_path.json")
         else:
-            res = replay_check(PL.read_jsonl(Path(a.serving) / "calls.jsonl"), json.loads(Path(a.sample).read_text()),
+            res = replay_check(PL.read_calls(a.serving), json.loads(Path(a.sample).read_text()),
                                segment_unmarked(read_sqlite(a.replay_sqlite)["events"]), PL.MODELS[a.model])
             out = Path(a.out or Path(a.replay_sqlite).with_suffix(".replay_check.json"))
     except (PL.KitError, OSError, sqlite3.Error, KeyError, ValueError) as exc:
