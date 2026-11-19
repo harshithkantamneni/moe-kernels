@@ -214,15 +214,26 @@ def load(path) -> dict:
     return {"header": header, "rows": rows}
 
 
-def hf_encoder(repo: str):
+def hf_encoder(repo: str, revision: str | None = None):
     """The tokenizer vLLM itself loads for the model (so prompt token ids are the ones the engine would make),
-    through vLLM's own loader; the module moved between releases, so both homes are tried (VM only)."""
+    through vLLM's own loader, at the pinned revision (prodlib.HF_REVISIONS; review 1, MINOR); the module moved
+    between releases, so both homes are tried (VM only)."""
     try:
         from vllm.tokenizers import get_tokenizer
     except ImportError:
         from vllm.transformers_utils.tokenizer import get_tokenizer
-    tok = get_tokenizer(repo, trust_remote_code=True)
+    kw = {"revision": revision} if revision else {}
+    tok = get_tokenizer(repo, trust_remote_code=True, **kw)
     return lambda text: tok.encode(text, add_special_tokens=False)
+
+
+def tokenizer_revision(repo: str) -> str | None:
+    """The pinned revision of the served model whose hf_repo is `repo` (prodlib.HF_REVISIONS), else None."""
+    import prodlib as PL
+    for key, m in PL.MODELS.items():
+        if m.hf_repo == repo:
+            return PL.hf_revision(key)
+    return None
 
 
 def main(argv=None) -> int:
@@ -236,6 +247,8 @@ def main(argv=None) -> int:
     b.add_argument("--source", choices=sorted(SOURCES), default="sharegpt")
     b.add_argument("--data", required=True)
     b.add_argument("--tokenizer", required=True)
+    b.add_argument("--revision", default=None, help="the tokenizer's HF commit (default: prodlib.HF_REVISIONS of the "
+                   "model whose hf_repo is --tokenizer); unpinned only with --allow-unpinned")
     b.add_argument("--n", type=int, default=4096)
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--max-input", type=int, default=2048)
@@ -252,9 +265,13 @@ def main(argv=None) -> int:
                                                                "  (UNPINNED: pin this sha256 before freeze)"))
             return 0
         sha = check_pin(a.source, a.data, a.allow_unpinned)
-        ps = build(kind=SOURCES[a.source]["kind"], data_path=a.data, encode=hf_encoder(a.tokenizer), n=a.n,
+        rev = a.revision or tokenizer_revision(a.tokenizer)
+        if rev is None and not a.allow_unpinned:
+            raise PromptError(f"the tokenizer {a.tokenizer} has no pinned revision (prodlib.HF_REVISIONS): pin it "
+                              "before the kit freezes, or pass --allow-unpinned (smoke only)")
+        ps = build(kind=SOURCES[a.source]["kind"], data_path=a.data, encode=hf_encoder(a.tokenizer, rev), n=a.n,
                    seed=a.seed, max_input=a.max_input, out_dist=a.out_dist, min_out=a.min_out, max_out=a.max_out,
-                   source_sha256=sha, tokenizer_name=a.tokenizer)
+                   source_sha256=sha, tokenizer_name=a.tokenizer + (f"@{rev}" if rev else "@UNPINNED"))
         write(ps, a.out)
         h = ps["header"]
         print(f"PASS build: {a.out} n={h['n']} input {h['input_tokens']} output {h['output_tokens']} tokens, "

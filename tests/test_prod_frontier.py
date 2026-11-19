@@ -83,3 +83,80 @@ def test_dry_run_prints_commands_and_needs_no_frontier(tmp_path, capsys):
                     "--calls", "A1710=/r", "--out", str(tmp_path / "p.jsonl"), "--dry-run"]) == 0
     assert "_predict" in capsys.readouterr().out
     assert FO.main(["train", "--model", "olmoe-1b-7b", "--csv", "x.csv", "--out", str(tmp_path / "t")]) == 3
+
+
+FAKE_FRONTIER = '''
+class MoELoadImbalanceInput:
+    def __init__(self, num_tokens, num_experts_per_device, hidden_dim, expert_hidden_dim, router_topk,
+                 expert_token_counts):
+        self.n, self.c = num_tokens, expert_token_counts
+
+    def to_features_dict(self):
+        return {"num_tokens": self.n, "active": sum(1 for x in self.c if x), "max_c": max(self.c),
+                "load_distribution": "real", "seed": 0}
+
+
+def block_size_m_for_tokens(ranges, T):
+    return 64
+'''
+FAKE_EST = '''
+CALLS = []
+
+
+class Est:
+    feature_names_in_ = ["num_tokens", "active", "max_c"]
+
+    def predict(self, X):
+        import json, os
+        with open(os.environ["FAKE_EST_LOG"], "a") as fh:
+            fh.write(json.dumps(len(X)) + "\\n")
+        return [0.001 * r["num_tokens"] + r["active"] for _i, r in X.iterrows()]
+'''
+
+
+def test_predict_batches_every_distinct_call_into_one_dataframe_and_checks_versions(tmp_path):
+    """MAJOR 7: Frontier's estimator is called ONCE, on one DataFrame of the distinct (T, counts) keys (run on the
+    laptop after the rental), and a scikit-learn other than the trainer's refuses."""
+    import pickle
+    import subprocess
+
+    import numpy as np
+    lib = tmp_path / "lib"
+    (lib / "frontier").mkdir(parents=True)
+    (lib / "frontier" / "__init__.py").write_text("")
+    (lib / "frontier" / "moe_load_imbalance.py").write_text(FAKE_FRONTIER)
+    (lib / "sklearn").mkdir()
+    (lib / "sklearn" / "__init__.py").write_text("__version__ = '1.5.2'\n")
+    (lib / "fake_est.py").write_text(FAKE_EST)
+    sys.path.insert(0, str(lib))
+    try:
+        import fake_est
+        models = tmp_path / "models"
+        models.mkdir()
+        with open(models / "moe_grouped_gemm_x.pkl", "wb") as fh:
+            pickle.dump(fake_est.Est(), fh)
+    finally:
+        sys.path.remove(str(lib))
+        sys.modules.pop("fake_est", None)
+    run = tmp_path / "run"
+    run.mkdir()
+    rows = [{"g": i, "T_pad": T, "status": "ok"} for i, T in enumerate([8, 8, 600, 600, 8])]
+    counts = np.zeros((5, 64), dtype=np.int32)
+    counts[:, :8] = 8
+    counts[2:4, :8] = 600
+    (run / "calls.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    np.save(run / "counts.npy", counts)
+    log = tmp_path / "predict_calls.log"
+    env = dict(__import__("os").environ, PYTHONPATH=f"{lib}:{REPO}:{REPO / 'scripts'}", FAKE_EST_LOG=str(log))
+    cmd = [sys.executable, str(REPO / "scripts/prod/frontier_op.py"), "_predict", "--model", "olmoe-1b-7b", "--models",
+           str(models), "--calls", f"A1710={run}", "--arm-label", "primary-uniform", "--out", str(tmp_path / "p.jsonl")]
+    (models / "versions.json").write_text(json.dumps({"sklearn": "1.4.0"}))
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    assert r.returncode == 3 and "scikit-learn 1.5.2 here, 1.4.0 at training" in r.stdout
+    (models / "versions.json").write_text(json.dumps({"sklearn": "1.5.2"}))
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert log.read_text().split() == ["2"]                   # one predict call, two distinct keys
+    preds = [json.loads(x) for x in (tmp_path / "p.jsonl").read_text().splitlines()]
+    assert [p["g"] for p in preds] == [0, 1, 2, 3, 4] and preds[0]["pred_ms"] == preds[4]["pred_ms"]
+    assert "one batch" in r.stdout

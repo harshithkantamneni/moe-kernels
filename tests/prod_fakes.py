@@ -53,7 +53,7 @@ def make_run(root: Path, model_key: str = "olmoe-1b-7b", steps=((5, 8), (200, 20
     cfg = model.cfg
     rng = np.random.default_rng(seed)
     cap = MC.Capture(root, top_k=cfg.top_k, n_moe_layers=model.moe_layers, ids_cap=1 << 22, rec_cap=4096,
-                     drain_every=drain_every, backend="numpy", nvtx=False)
+                     drain_every=drain_every, backend="numpy")
     layers = list(range(cfg.first_moe_layer, cfg.first_moe_layer + model.moe_layers))
     cap.bound_layers = [{"layer": layer, "backend": "TRITON", "experts_cls": "TritonExperts"} for layer in layers]
     for _ in range(warmup_calls):                           # warmup/capture calls: dropped by reset()
@@ -75,23 +75,36 @@ def make_run(root: Path, model_key: str = "olmoe-1b-7b", steps=((5, 8), (200, 20
     return Path(root), calls
 
 
+SHARED_STREAM = 9
+SHARED_ACT = "void vllm::act_and_mul_kernel<c10::BFloat16, &(c10::BFloat16 vllm::silu_kernel<c10::BFloat16>(c10::BFloat16 const&)), true>"
+
+
 def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bool = False, extra_gemm: bool = False,
-                drop_marker: bool = False) -> tuple[list[dict], int, dict]:
+                drop_marker: bool = False, shared_stream: bool = False, shared_same_stream: bool = False,
+                extra_fill: bool = False) -> tuple[list[dict], int, dict]:
     """One call's kernels from time t: (events, next t, expected {kernel_sum, span, align}). Router first
-    (excluded), the marker, a dtype conversion (excluded), the align path for (n, k, E), w1, act, w2, moe_sum,
-    then an attention kernel of the next layer (outside)."""
+    (excluded), the marker (gridY = layer + 1, as moe_capture launches it), a dtype conversion (excluded), the align
+    path for (n, k, E), w1, act, w2, moe_sum, then an attention kernel of the next layer (outside).
+    shared_stream: the shared experts' MLP (GEMM, SiluAndMul, GEMM) on ANOTHER stream, overlapping w1..w2 in time
+    (the shared-experts stream on); shared_same_stream: that MLP on the marker's stream BEFORE the marker (stream
+    off: it runs as its own op, never inside the routed call); extra_fill: a second fill kernel before w1."""
     n, k, E = call["n"], cfg.top_k, cfg.num_experts
     counts = PL.counts_from_ids(call["ids"], E)
     g1, g2 = PL.expected_grids(cfg, n, counts)
     ev = []
 
-    def add(kind, name, dur, gx=1, mkind="kernel"):
+    def add(kind, name, dur, gx=1, mkind="kernel", gy=1):
         nonlocal t
-        ev.append({"start": t, "end": t + dur, "stream": STREAM, "name": name, "gx": gx, "kind": mkind, "role": kind})
+        ev.append({"start": t, "end": t + dur, "stream": STREAM, "name": name, "gx": gx, "gy": gy, "kind": mkind,
+                   "role": kind})
         t += dur + GAP
+    if shared_same_stream:
+        add("shared", NAMES["shared"], DUR["shared"])
+        add("shared_act", SHARED_ACT, DUR["act"])
+        add("shared", NAMES["shared"], DUR["shared"])
     add("router", NAMES["router"], DUR["router"])
     if not drop_marker:
-        add("marker", NAMES["marker"], DUR["marker"])
+        add("marker", NAMES["marker"], DUR["marker"], gy=int(call["layer"]) + 1)
     add("convert", NAMES["convert"], DUR["convert"])
     numel = n * k
     if numel * 4 <= E:
@@ -101,10 +114,21 @@ def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bo
     else:
         parts = [("memset", "[memset]", DUR["memset"], "memset"), ("align", NAMES["align"], DUR["align"], "kernel"),
                  ("sort", NAMES["sort"], DUR["sort"], "kernel")]
+    if extra_fill and numel * 4 <= E:
+        add("fill", NAMES["fill"], DUR["fill"])
     s0 = t
     for role, name, d, mk in parts:
         add(role, name, d, mkind=mk)
+    w1_start = t
     add("w1", NAMES["gemm"], DUR["w1"], gx=g1 + (1 if bad_grid else 0))
+    if shared_stream:
+        # another stream, in time beside w1 .. w2 (the act lands between the routed GEMMs in time order)
+        ts = w1_start + 100
+        for role, name, d in (("shared", NAMES["shared"], DUR["shared"]), ("shared_act", SHARED_ACT, DUR["act"]),
+                              ("shared", NAMES["shared"], DUR["shared"])):
+            ev.append({"start": ts, "end": ts + d, "stream": SHARED_STREAM, "name": name, "gx": 1, "gy": 1,
+                       "kind": "kernel", "role": role})
+            ts += d + GAP
     if intruder:
         add("shared", NAMES["shared"], DUR["shared"])
     add("act", NAMES["act"], DUR["act"])
@@ -185,8 +209,8 @@ def write_sqlite(path: Path, events, marks) -> Path:
             continue
         n = sid(e["name"])
         conn.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (" + ",".join(["?"] * 28) + ")",
-                     (e["start"], e["end"], 0, 1, None, e["stream"], i, 1, n, n, n, 0, 0, 32, e["gx"], 1, 1, 128, 1, 1,
-                      0, 0, 0, 0, i, 0, 1000 + i, 0))
+                     (e["start"], e["end"], 0, 1, None, e["stream"], i, 1, n, n, n, 0, 0, 32, e["gx"], e.get("gy", 1), 1,
+                      128, 1, 1, 0, 0, 0, 0, i, 0, 1000 + i, 0))
     for j, (s, txt) in enumerate(marks):
         # nsys writes registered strings via textId and ad-hoc ones in text: exercise both
         if j % 2:
@@ -209,7 +233,7 @@ def write_torch_trace(d: Path, events, *, gz: bool = False) -> Path:
         else:
             tev.append({"ph": "X", "cat": "kernel", "name": e["name"], "ts": e["start"] / 1000.0,
                         "dur": (e["end"] - e["start"]) / 1000.0,
-                        "args": {"stream": e["stream"], "grid": [e["gx"], 1, 1], "block": [128, 1, 1],
+                        "args": {"stream": e["stream"], "grid": [e["gx"], e.get("gy", 1), 1], "block": [128, 1, 1],
                                  "correlation": i, "device": 0}})
         tev.append({"ph": "X", "cat": "cuda_runtime", "name": "cudaLaunchKernel", "ts": e["start"] / 1000.0 - 5,
                     "dur": 3, "args": {}})

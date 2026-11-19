@@ -2,8 +2,11 @@
 
     python scripts/prod/score_prod.py \\
         --run A1710=RUN_A1710 --run A1410=RUN_A1410 --run Adefault=RUN_ADEF --run Aon=RUN_AON --run Beager=RUN_B \\
-        --replay decode=REPLAY_DECODE_DIR --replay prefill=REPLAY_PREFILL_DIR --sample SAMPLE_DIR/sample.json \\
-        --frontier FRONTIER_DIR/predictions.jsonl --roofline ROOF.json --model ernie-4.5-21b-a3b --out SCORE_DIR
+        --replay decode=REPLAY_DECODE_DIR --replay prefill=REPLAY_PREFILL_DIR \\
+        --frontier FRONTIER_DIR/predictions.jsonl --sag RESULTS/sag/par.json --model ernie-4.5-21b-a3b --out SCORE_DIR
+
+RUNS ON THE LAPTOP after the rental (review 1, MAJOR 7): scripts/prod/offline.sh fetches nothing itself; it runs
+Frontier's predict and this scorer on the pushed results branch. --workers defaults to 4 (an 18 GB laptop).
 
 INPUTS. Each --run LABEL=DIR is a serve_capture directory after nsys_extract (calls.jsonl, counts.npy, ring/).
 The locked runs are labelled by their lock (A1710: score T <= 128 calls, the decode branch; A1410: T > 128, the
@@ -12,9 +15,12 @@ BRANCH=DIR is replay.py's run directory (cells.csv), keyed by the sample's label
 was drawn from (--sample-run, default A1710 for decode and A1410 for prefill as main.sh draws them).
 
 PREDICTORS. v8 (prodlib.price_v8, the one binding; priced in a process pool, cached by (T, counts digest, ids
-digest)); the roofline T0 + A W_e / bw at the branch's frozen constants (--roofline JSON {"decode": {"T0_ms",
-"bw_gbps"}, "prefill": {...}}, or v8's ROOFLINE attribute; absent -> NOT SCORED, said so); Frontier's
-predictions (frontier_op.py), each arm its own predictor.
+digest, par)) at the BOARD's 128x128 sag par (--sag: main.sh's sag1410 step, par.json; required) and the
+registered 64x128 par and knee (prodlib.PREFILL_REGISTERED): `v8_ms`. Beside it, DESCRIPTIVE, v8 with no on-board
+calibration: the prefill calls at the registered reference pars' median (prodlib.REF_PAR_MEDIAN): `v8_refpar_ms`
+(decode calls do not read the par: the same number). The ROOFLINE (required, never NOT SCORED): the v7 decode
+blind's registered rival T0_GR + A W_e / bw at its frozen constants (prodlib.roofline_ms), every call: `roof_ms`.
+Frontier's predictions (frontier_op.py), each arm its own predictor.
 
 TRUTHS. kernel-sum (align..moe_sum durations) and span (first start to last end), in serving; the replay's
 per-call median (clean repeats) for the sample. Off-lock calls (per-call SM clock more than 15 MHz from the run's
@@ -112,12 +118,6 @@ def step_totals(rows: list[dict], pred_key: str, truth_key: str) -> tuple[list, 
     return [acc[k][0] for k in keys], [acc[k][1] for k in keys], keys
 
 
-def roofline_ms(cfg, counts, T0_ms: float, bw_gbps: float) -> float:
-    A = sum(1 for c in counts if c)
-    W_e = 3 * cfg.hidden_size * cfg.intermediate_size * 2
-    return T0_ms + A * W_e / (bw_gbps * 1e6)
-
-
 def off_lock(sm_mhz, lock) -> bool:
     return lock is not None and sm_mhz is not None and abs(float(sm_mhz) - float(lock)) > OFF_LOCK_MHZ
 
@@ -127,18 +127,24 @@ def off_lock(sm_mhz, lock) -> bool:
 # ------------------------------------------------------------------------------------------------------------
 
 def _price_one(job):
-    model_key, T, counts, ids, module = job
+    """One pricing job in a worker. EVERY exception is caught and recorded as the job's error, BaseException
+    included (v8's PoisonedTread is a BaseException by design, so no `except Exception` in the frozen code can
+    swallow it: review 1, MINOR); only a KeyboardInterrupt propagates."""
+    model_key, T, counts, ids, sag128, module = job
     try:
-        ans = PL.price_v8(PL.MODELS[model_key].cfg, T, counts, ids, module=module)
+        ans = PL.price_v8(PL.MODELS[model_key].cfg, T, counts, ids, sag128=sag128, module=module)
         return {"ms": ans["ms"], "tile": ans.get("tile"), "regime": ans.get("regime"), "why": ans.get("why", "")}
-    except Exception as exc:                                        # noqa: BLE001
+    except KeyboardInterrupt:
+        raise
+    except BaseException as exc:                                    # noqa: BLE001
         return {"ms": None, "error": f"{type(exc).__name__}: {exc}"}
 
 
 def price_all(model_key: str, jobs: dict, *, module: str | None, workers: int) -> dict:
-    """jobs: cache key -> (T, counts, ids). Returns key -> answer. An error (not a refusal) is kept as error."""
+    """jobs: cache key -> (T, counts, ids, sag128). Returns key -> answer. An error (not a refusal) is kept as
+    error."""
     keys = list(jobs)
-    args = [(model_key, jobs[k][0], jobs[k][1], jobs[k][2], module) for k in keys]
+    args = [(model_key, jobs[k][0], jobs[k][1], jobs[k][2], jobs[k][3], module) for k in keys]
     if workers <= 1:
         res = [_price_one(a) for a in args]
     else:
@@ -210,22 +216,6 @@ def load_frontier(path) -> dict:
     return out
 
 
-def roofline_constants(args_path, module: str | None) -> dict | None:
-    if args_path:
-        doc = json.loads(Path(args_path).read_text())
-        return {b: {"T0_ms": float(doc[b]["T0_ms"]), "bw_gbps": float(doc[b]["bw_gbps"])} for b in ("decode", "prefill")}
-    try:
-        import importlib
-        V8 = importlib.import_module(module or PL.PRICER_MODULE)
-        roof = getattr(V8, "ROOFLINE", None)
-        if roof:
-            return {b: {"T0_ms": float(roof[b]["T0_ms"]), "bw_gbps": float(roof[b]["bw_gbps"])}
-                    for b in ("decode", "prefill")}
-    except ImportError:
-        pass
-    return None
-
-
 # ------------------------------------------------------------------------------------------------------------
 # the score
 # ------------------------------------------------------------------------------------------------------------
@@ -246,7 +236,7 @@ def table(rows: list[dict], pred_key: str, truth_key: str, *, with_ci: bool = Tr
             out["tile"][lab] = m
     for b in ("decode", "prefill"):
         out["branch"][b] = sel(lambda r, b=b: r["branch"] == b)
-    for s in ("band_64x128", "small_batch_align_on_prefill_tile", "refused_window_8192_8255"):
+    for s in ("band_64x128", "small_batch_align_on_prefill_tile", PL.REFUSED_STRATUM):
         m = sel(lambda r, s=s: s in (r.get("strata") or []))
         if m.get("n"):
             out["stratum"][s] = m
@@ -269,13 +259,18 @@ def delta(a: dict, b: dict) -> dict:
             for k in a if k in b and b[k]["median_ms"] > 0}
 
 
-def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, frontier: dict, roof: dict | None,
-          prices: dict) -> dict:
+def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, frontier: dict, roof: dict,
+          prices: dict, sag128=None) -> dict:
     """runs: label -> rows (load_run, priced: r['v8_ms'] etc. filled by the caller); replay: branch -> {label: ms}."""
-    out: dict = {"model": model.key, "descriptive": True, "runs": {}, "deltas": {}, "notes": []}
-    if roof is None:
-        out["notes"].append("roofline NOT SCORED: no frozen constants (--roofline or v8 ROOFLINE)")
-    preds = ["v8_ms"] + (["roof_ms"] if roof else []) + sorted({f"frontier:{a}" for (_r, _g, a) in frontier})
+    out: dict = {"model": model.key, "descriptive": True, "runs": {}, "deltas": {}, "notes": [],
+                 "constants": {"sag128 (board, measured at 1410)": None if sag128 is None else list(sag128),
+                               "sag64, knee (registered)": {k: PL.PREFILL_REGISTERED[k] for k in ("sag64", "knee")},
+                               "sources": PL.PREFILL_REGISTERED["source"],
+                               "v8_refpar_ms (DESCRIPTIVE, no on-board calibration)": list(PL.REF_PAR_MEDIAN),
+                               "roofline": roof}}
+    out["notes"].append("v8_refpar_ms is DESCRIPTIVE: v8 with no on-board calibration (the registered reference "
+                        "pars' median for sag128); v8_ms at the board's par is the model's number")
+    preds = (["v8_ms", "v8_refpar_ms", "roof_ms"] + sorted({f"frontier:{a}" for (_r, _g, a) in frontier}))
     for label, rows in runs.items():
         lk = lock_of(label)
         dropped = sum(1 for r in rows if off_lock(r.get("sm_mhz"), lk))
@@ -326,24 +321,30 @@ def _count(xs) -> dict:
     return d
 
 
-def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: dict | None, *, module: str | None,
-                       workers: int) -> dict:
+def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: dict, *, sag128,
+                       module: str | None, workers: int) -> dict:
+    """v8 at the board's par (v8_ms), v8 at the reference median (v8_refpar_ms, prefill only; decode reads no par),
+    the roofline (roof_ms) and Frontier's predictions, onto every row."""
+    if sag128 is None:
+        raise PL.KitError("no board par (--sag): v8's prefill branch has no default 128x128 sag par")
     jobs = {}
     for rows in runs.values():
         for r in rows:
-            key = (r["T_pad"], r["counts_digest"], r["ids_digest"])
-            r["_pkey"] = key
-            if key not in jobs:
-                jobs[key] = (r["T_pad"], r["counts"], r["ids"])
+            base = (r["T_pad"], r["counts_digest"], r["ids_digest"])
+            pre = r["T_pad"] > PL.DECODE_MAX_T
+            r["_pkey"] = base + ((tuple(sag128),) if pre else (None,))
+            r["_rkey"] = base + ((PL.REF_PAR_MEDIAN,) if pre else (None,))
+            for k, par in ((r["_pkey"], sag128), (r["_rkey"], PL.REF_PAR_MEDIAN)):
+                if k not in jobs:
+                    jobs[k] = (r["T_pad"], r["counts"], r["ids"], tuple(par) if pre else None)
     prices = price_all(model.key, jobs, module=module, workers=workers)
     for label, rows in runs.items():
         for r in rows:
             a = prices[r["_pkey"]]
             r["v8_ms"] = a.get("ms")
             r["v8_why"] = a.get("why") or a.get("error")
-            if roof:
-                c = roof[r["branch"]]
-                r["roof_ms"] = roofline_ms(model.cfg, r["counts"], c["T0_ms"], c["bw_gbps"])
+            r["v8_refpar_ms"] = prices[r["_rkey"]].get("ms")
+            r["roof_ms"] = PL.roofline_ms(model.cfg, r["counts"], roof)
         fr: dict = defaultdict(dict)
         for (run, g, arm), v in frontier.items():
             if run in (label, None):
@@ -403,9 +404,9 @@ def main(argv=None) -> int:
     ap.add_argument("--replay", action="append", default=[], help="BRANCH=DIR (replay.py's run dir)")
     ap.add_argument("--sample-run", action="append", default=[], help="BRANCH=RUNLABEL the sample was drawn from")
     ap.add_argument("--frontier", default=None, help="frontier_op.py predictions.jsonl")
-    ap.add_argument("--roofline", default=None)
+    ap.add_argument("--sag", required=True, help="the board's 128x128 par (main.sh's sag1410 step: RESULTS/sag/par.json)")
     ap.add_argument("--pricer", default=None, help=f"pricer module (default {PL.PRICER_MODULE})")
-    ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     model = PL.MODELS[a.model]
@@ -414,10 +415,11 @@ def main(argv=None) -> int:
         replay = {b: load_replay(d, b) for b, d in _kv(a.replay).items()}
         sample_run = {"decode": "A1710", "prefill": "A1410", **_kv(a.sample_run)}
         frontier = load_frontier(a.frontier) if a.frontier else {}
-        roof = roofline_constants(a.roofline, a.pricer)
-        prices = attach_predictions(model, runs, frontier, roof, module=a.pricer, workers=a.workers)
+        sag128 = PL.load_board_par(a.sag)
+        roof = PL.roofline_constants()
+        prices = attach_predictions(model, runs, frontier, roof, sag128=sag128, module=a.pricer, workers=a.workers)
         sc = score(model=model, runs=runs, replay=replay, sample_run=sample_run, frontier=frontier, roof=roof,
-                   prices=prices)
+                   prices=prices, sag128=sag128)
     except (PL.KitError, PL.RingError, OSError, ValueError, KeyError) as exc:
         print(f"FAIL score_prod: {type(exc).__name__}: {exc}")
         return 3

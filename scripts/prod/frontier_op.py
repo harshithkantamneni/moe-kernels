@@ -5,7 +5,7 @@
     python scripts/prod/frontier_op.py profile --arm primary --model ernie-4.5-21b-a3b --dists uniform --out OUT
     python scripts/prod/frontier_op.py train   --arm primary --model ... --csv OUT/.../moe_kernel_only.csv --out MODELS
     python scripts/prod/frontier_op.py predict --arm primary --model ... --models MODELS --csv CSV \\
-        --calls A1710=RUN_A1710 ... --sample SAMPLE_DIR/sample.json --out PRED.jsonl
+        --calls A1710=RUN_A1710 ... --sample SAMPLE_DIR/sample.json --out PRED.jsonl     # on the LAPTOP (offline.sh)
     python scripts/prod/frontier_op.py holdout --arm fidelity --model ... --csv CSV --out DIR
     python scripts/prod/frontier_op.py profile ... --dry-run            # every command, nothing run
 
@@ -227,12 +227,28 @@ def _simpath(a) -> int:
     return 0
 
 
+def _check_versions(models_dir) -> dict:
+    """The estimator is unpickled under the library versions it was trained with (train writes versions.json on the
+    rental; predict runs on the laptop after it, review 1 MAJOR 7): a different scikit-learn refuses."""
+    import sklearn
+    f = Path(models_dir) / "versions.json"
+    if not f.is_file():
+        raise PL.KitError(f"{f}: missing (frontier_op.py train records the trainer's library versions)")
+    want = json.loads(f.read_text())
+    if want.get("sklearn") != sklearn.__version__:
+        raise PL.KitError(f"scikit-learn {sklearn.__version__} here, {want.get('sklearn')} at training: install the "
+                          "trainer's version before predicting")
+    return want
+
+
 def _predict(a) -> int:
+    """Every call's prediction from ONE DataFrame and ONE est.predict over the distinct (T, counts) keys (review 1,
+    MAJOR 7: a batch, not a row at a time), on the laptop after the rental."""
     import numpy as np
     import pandas as pd
+    _check_versions(a.models)
     est, fname = _load_estimator(a.models)
     ranges = _ranges(a.csv) if a.csv else None
-    out = open(a.out, "w")
     n = 0
     jobs = []
     for spec in a.calls or []:
@@ -244,20 +260,28 @@ def _predict(a) -> int:
     if a.sample:
         doc = json.loads(Path(a.sample).read_text())
         jobs += [("sample", c["g"], c["T"], c["counts"]) for c in doc["cells"]]
-    cache: dict = {}
-    for label, g, T, counts in jobs:
-        key = (T, tuple(counts))
-        if key not in cache:
+    keys: dict = {}
+    feats, bms = [], []
+    for _label, _g, T, counts in jobs:
+        key = (int(T), tuple(int(c) for c in counts))
+        if key not in keys:
+            keys[key] = len(feats)
             f = _features(est, a.model, T, counts, ranges)
-            X = pd.DataFrame([{k: v for k, v in f.items() if not k.startswith("_")}])
-            cols = list(getattr(est, "feature_names_in_", X.columns))
-            cache[key] = (float(est.predict(X[cols])[0]), f.get("_bm"))
-        pred, bm = cache[key]
-        out.write(json.dumps({"run": label, "g": g, "T_pad": T, "arm": a.arm_label, "pred_ms": pred,
-                              "bm": bm, "model_file": fname}) + "\n")
-        n += 1
-    out.close()
-    print(f"PASS frontier predict ({a.arm_label}): {n} calls, {len(cache)} distinct, estimator {fname}")
+            feats.append({k: v for k, v in f.items() if not k.startswith("_")})
+            bms.append(f.get("_bm"))
+    cache: dict = {}
+    if feats:
+        X = pd.DataFrame(feats)
+        cols = list(getattr(est, "feature_names_in_", X.columns))
+        y = np.asarray(est.predict(X[cols]), dtype=float)
+        cache = {k: (float(y[i]), bms[i]) for k, i in keys.items()}
+    with open(a.out, "w") as out:
+        for label, g, T, counts in jobs:
+            pred, bm = cache[(int(T), tuple(int(c) for c in counts))]
+            out.write(json.dumps({"run": label, "g": g, "T_pad": T, "arm": a.arm_label, "pred_ms": pred,
+                                  "bm": bm, "model_file": fname}) + "\n")
+            n += 1
+    print(f"PASS frontier predict ({a.arm_label}): {n} calls, {len(cache)} distinct in one batch, estimator {fname}")
     return 0
 
 
@@ -296,6 +320,20 @@ def _holdout(a) -> int:
 # ------------------------------------------------------------------------------------------------------------
 # CLI (runs under our interpreter; the profiler/trainer under Frontier's, from frontier.env)
 # ------------------------------------------------------------------------------------------------------------
+
+VERSIONS_PY = ("import json, sklearn, pandas, numpy, sys; print(json.dumps({'sklearn': sklearn.__version__, "
+               "'pandas': pandas.__version__, 'numpy': numpy.__version__, 'python': sys.version.split()[0]}))")
+
+
+def record_versions(py, out) -> int:
+    """versions.json beside the trained models: the libraries the pickles need to load (predict checks them)."""
+    p = subprocess.run([str(py), "-c", VERSIONS_PY], capture_output=True, text=True)
+    if p.returncode:
+        print(f"FAIL frontier train: the trainer's library versions could not be read: {p.stderr[-300:]}")
+        return 3
+    (Path(out) / "versions.json").write_text(p.stdout.strip().splitlines()[-1] + "\n")
+    return 0
+
 
 def _fr_python(arm: str) -> str:
     var = {"primary": "FR_PY_PRIMARY", "fidelity": "FR_PY_FIDELITY"}[arm]
@@ -362,6 +400,8 @@ def main(argv=None) -> int:
         if a.cmd == "train":
             rc = run_logged(train_cmd(py, a.model, a.csv, out), cwd=src, env=env_for(src), log=out / "train.log",
                             dry=a.dry_run)
+            if rc == 0 and not a.dry_run:
+                rc = record_versions(py, out)
             print(f"{'PASS' if rc == 0 else 'FAIL'} frontier train ({a.arm}): exit {rc}")
             return 0 if rc == 0 else 3
         inner = {"simpath": "_simpath", "predict": "_predict", "holdout": "_holdout"}[a.cmd]
@@ -374,6 +414,8 @@ def main(argv=None) -> int:
             cmd += ["--calls", c]
         rc = run_logged(cmd, cwd=src, env=env_for(src), log=Path(str(a.out) + f".{a.cmd}.log") if a.cmd == "predict"
                         else out / f"{a.cmd}.log", dry=a.dry_run)
+        if rc == 0 and a.cmd == "simpath" and not a.dry_run:
+            rc = record_versions(py, out)
         if not a.dry_run:
             print(f"{'PASS' if rc == 0 else 'FAIL'} frontier {a.cmd} ({a.arm_label}): exit {rc}")
         return 0 if rc == 0 else 3

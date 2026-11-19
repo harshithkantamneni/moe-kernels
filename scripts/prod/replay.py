@@ -27,6 +27,22 @@ THE SAMPLE (pre-registered rule, `select_sample`): calls with status ok, not war
 an equal quota of n // tiles (the remainder to the tiles in TILE_BINS order); inside a tile the calls ordered by
 (step, layer) and taken systematically from a seeded start (seed 20261119). Branch clock: decode tiles (T <= 128)
 at the 1710 MHz lock, prefill tiles at 1410 (CRITIQUE B1): two locked_r3 runs, --branch decode / prefill.
+
+THE TIME BUDGET (registered rule, review 1 MAJOR 6; `budget_quota`): every replay writes cell_wall.json, the wall time
+each cell took (checks, graph captures and every repeat: the interval from its build to the next cell's). The smoke
+rental's walls (merged by `replay.py wall-merge` into scripts/prod/replay_wall.json before the kit freezes) price
+main's sample: a tile's cost per cell is WALL_SAFETY x the median smoke wall of that tile x (main's repeats + 1) /
+(smoke's repeats + 1) (a tile the smoke did not time takes its branch's dearest timed tile); when the registered
+quotas cost more than the branch's REPLAY_BUDGET_S, every tile's quota is scaled by budget / cost, floored, at least
+1. The sample records the rule's inputs and the scaled quotas.
+
+THE BIG CELL (smoke, `--min-big-T 8256`): the prefill sample always holds one cell at T >= 8256 (the G-16 tile and the
+replay's worst memory): the run's largest such call when there is one, else a SYNTHETIC cell at T 16384 (seeded uniform
+routing, label s16384, `synthetic: true`, never scored: the scorer reads g<index> labels only).
+
+GRR MEMORY (bounded, review 1 MAJOR 6): a GRR graph keeps every call's output live (`holder`), so the plan adds
+calls x T_max x H x 2 bytes to r3_decode's single-call memory plan and refuses a page over the device's free memory or
+over GRR_OUT_CAP_BYTES of graph outputs.
 """
 from __future__ import annotations
 
@@ -52,6 +68,13 @@ import r3_decode as RD  # noqa: E402
 SAMPLE_SCHEMA = "moe-kernels/prod-replay-sample/1"
 SAMPLE_SEED = 20261119
 DEFAULT_N = 1500
+#: the registered time budget per branch replay on the main rental (seconds) and the smoke wall's safety factor
+REPLAY_BUDGET_S = {"decode": 2400, "prefill": 2400}
+WALL_SAFETY = 1.5
+WALL_SCHEMA = "moe-kernels/prod-replay-wall/1"
+#: the GRR graph's live outputs may not pass this (calls x T_max x H x 2 bytes)
+GRR_OUT_CAP_BYTES = 8 * 2 ** 30
+BIG_T_SYNTHETIC = 16384
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -81,8 +104,68 @@ def select_sample(rows: list[dict], n: int = DEFAULT_N, seed: int = SAMPLE_SEED)
     return out
 
 
-def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *, calls_file: str = "calls.jsonl") -> Path:
-    """sample.json (cells) + sample_ids.npz (each cell's ids, [T_pad, k] int16) from the run's ring."""
+def budget_quota(quota: dict, wall: dict, branch: str, *, repeats: int, budget_s: float | None = None) -> dict:
+    """The registered time-budget rule (module doc). quota: tile -> registered cells; wall: replay_wall.json's
+    {"repeats": smoke repeats, "tiles": {tile: {"median_wall_s", "cells"}}}. Returns {"quota", "cost_s", "scale",
+    "per_cell_s", "budget_s"}; raises KitError when the branch has no timed tile."""
+    budget = float(REPLAY_BUDGET_S[branch] if budget_s is None else budget_s)
+    timed = {t: float(v["median_wall_s"]) for t, v in (wall.get("tiles") or {}).items()
+             if PL.branch(next(lo for lab, lo, _hi in PL.TILE_BINS if lab == t)) == branch}
+    if not timed:
+        raise PL.KitError(f"the smoke wall times no {branch} tile: the replay budget cannot be priced")
+    r_smoke = int(wall["repeats"])
+    per = {t: WALL_SAFETY * timed.get(t, max(timed.values())) * (int(repeats) + 1) / (r_smoke + 1) for t in quota}
+    cost = sum(quota[t] * per[t] for t in quota)
+    scale = min(1.0, budget / cost) if cost > 0 else 1.0
+    q = {t: (quota[t] if scale >= 1.0 else max(1, int(quota[t] * scale))) for t in quota}
+    return {"quota": q, "registered_quota": dict(quota), "per_cell_s": per, "cost_s": cost, "scale": scale,
+            "budget_s": budget, "safety": WALL_SAFETY, "repeats": int(repeats), "smoke_repeats": r_smoke,
+            "cost_after_s": sum(q[t] * per[t] for t in q)}
+
+
+def tile_quota(rows: list[dict], n: int) -> dict:
+    """The registered equal quota per tile present (select_sample's split)."""
+    ok = [r for r in rows if r.get("status") == "ok" and not r.get("warmup") and r.get("step") is not None]
+    have = {r["tile"] for r in ok}
+    tiles = [lab for lab, _lo, _hi in PL.TILE_BINS if lab in have]
+    if not tiles:
+        return {}
+    base, extra = divmod(int(n), len(tiles))
+    return {lab: base + (1 if i < extra else 0) for i, lab in enumerate(tiles)}
+
+
+def select_budgeted(rows: list[dict], quota: dict, seed: int = SAMPLE_SEED) -> list[dict]:
+    """select_sample's systematic rule at per-tile quotas (the budget's)."""
+    ok = [r for r in rows if r.get("status") == "ok" and not r.get("warmup") and r.get("step") is not None]
+    by_tile: dict = defaultdict(list)
+    for r in ok:
+        by_tile[r["tile"]].append(r)
+    rng = random.Random(int(seed))
+    out = []
+    for lab, _lo, _hi in PL.TILE_BINS:
+        if lab not in quota or not by_tile.get(lab):
+            continue
+        pool = sorted(by_tile[lab], key=lambda r: (r["step"], r["layer"]))
+        q = min(len(pool), quota[lab])
+        stride = len(pool) / q
+        start = rng.random() * stride
+        out += [pool[min(len(pool) - 1, int(start + j * stride))] for j in range(q)]
+    return out
+
+
+def synthetic_cell(model: PL.ServedModel, T: int = BIG_T_SYNTHETIC, seed: int = SAMPLE_SEED) -> tuple[dict, np.ndarray]:
+    cfg = model.cfg
+    rng = np.random.default_rng(int(seed) + int(T))
+    ids = np.argsort(rng.random((int(T), cfg.num_experts)), axis=1)[:, :cfg.top_k]
+    return ({"label": f"s{int(T)}", "g": None, "T": int(T), "T_unpadded": int(T), "layer": None,
+             "tile": PL.tile_bin(T), "branch": PL.branch(T), "counts": PL.counts_from_ids(ids, cfg.num_experts),
+             "ids_digest": PL.digest(ids), "step": None, "synthetic": True}, ids)
+
+
+def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *, calls_file: str = "calls.jsonl",
+                 synthetic: list | None = None, budget: dict | None = None) -> Path:
+    """sample.json (cells) + sample_ids.npz (each cell's ids, [T_pad, k] int16) from the run's ring; `synthetic`:
+    extra (cell, ids) pairs (the smoke's big cell when the run has none)."""
     cfg = model.cfg
     shards = sorted((Path(run_dir) / "ring").glob("shard_*.npz"))
     recs = {r["g"]: r for r in PL.decode_shards(shards, cfg.top_k)}
@@ -97,9 +180,12 @@ def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *,
                       "tile": PL.tile_bin(rec["n"]), "branch": PL.branch(rec["n"]), "counts": counts,
                       "ids_digest": PL.digest(rec["ids"]), "step": r.get("step")})
         ids[lab] = np.asarray(rec["ids"], dtype=np.int16)
+    for c, a in synthetic or []:
+        cells.append(c)
+        ids[c["label"]] = np.asarray(a, dtype=np.int16)
     np.savez_compressed(out / "sample_ids.npz", **ids)
     doc = {"schema": SAMPLE_SCHEMA, "model": model.key, "seed": SAMPLE_SEED, "n_cells": len(cells),
-           "run": str(run_dir), "ids_file": "sample_ids.npz",
+           "run": str(run_dir), "ids_file": "sample_ids.npz", "budget": budget,
            "ids_sha256": hashlib.sha256((out / "sample_ids.npz").read_bytes()).hexdigest(), "cells": cells}
     (out / "sample.json").write_text(json.dumps(doc, indent=1))
     return out / "sample.json"
@@ -145,10 +231,26 @@ def load_sample(path, model: PL.ServedModel, branch: str | None) -> tuple[RD.Dec
 # ------------------------------------------------------------------------------------------------------------
 
 class RealIdsMixin:
-    """Overrides `build(cell, arm)` to return the call's logged ids instead of realize_counts' (the only change)."""
+    """Overrides `build(cell, arm)` to return the call's logged ids instead of realize_counts' (the only change), and
+    clocks each cell's wall time: the interval from a cell's build to the next build is that cell's (its checks,
+    graph captures and repeats), summed per label (`wall()`)."""
     real_ids: dict = {}
 
+    def _wall_mark(self, label) -> None:
+        now = time.perf_counter()
+        if not hasattr(self, "_wall"):
+            self._wall = {}
+        cur = getattr(self, "_wall_cur", None)
+        if cur is not None and cur[0] is not None:
+            self._wall[cur[0]] = self._wall.get(cur[0], 0.0) + (now - cur[1])
+        self._wall_cur = (label, now)
+
+    def wall(self) -> dict:
+        self._wall_mark(None)
+        return dict(getattr(self, "_wall", {}))
+
     def build(self, cell, arm):
+        self._wall_mark(cell.label)
         if arm != RD.NATIVE:
             raise RD.DecodeRefused("the replay times the native arm only")
         a = self.real_ids[cell.label]
@@ -208,20 +310,79 @@ def sample_main(argv) -> int:
     ap.add_argument("--n", type=int, default=DEFAULT_N)
     ap.add_argument("--branch", choices=("decode", "prefill"), default=None,
                     help="only this branch's tiles (the decode sample from the 1710 run, prefill from 1410)")
+    ap.add_argument("--wall", default=None, help="the smoke's replay_wall.json: scale the quotas to the time budget")
+    ap.add_argument("--repeats", type=int, default=9, help="the replay's repeats (prices the budget)")
+    ap.add_argument("--budget-s", type=float, default=None, help="override REPLAY_BUDGET_S[branch] (tests)")
+    ap.add_argument("--min-big-T", type=int, default=None,
+                    help="the sample holds a cell at T >= this (the run's largest, else a synthetic T 16384)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    model = PL.MODELS[a.model]
     rows = PL.read_jsonl(a.calls or Path(a.run) / "calls.jsonl")
     if a.branch:
         rows = [r for r in rows if r.get("branch") == a.branch]
-    picked = select_sample(rows, a.n)
+    budget = None
+    if a.wall:
+        if not a.branch:
+            print("FAIL replay sample: --wall prices one branch (--branch)")
+            return 3
+        try:
+            wall = json.loads(Path(a.wall).read_text())
+            if wall.get("schema") != WALL_SCHEMA:
+                raise PL.KitError(f"{a.wall}: schema {wall.get('schema')!r}")
+            budget = budget_quota(tile_quota(rows, a.n), wall, a.branch, repeats=a.repeats, budget_s=a.budget_s)
+        except (PL.KitError, OSError, ValueError, KeyError) as exc:
+            print(f"FAIL replay sample: the budget: {exc}")
+            return 3
+        picked = select_budgeted(rows, budget["quota"])
+    else:
+        picked = select_sample(rows, a.n)
     if not picked:
         print("FAIL replay sample: no eligible calls")
         return 3
-    p = write_sample(a.run, PL.MODELS[a.model], picked, a.out)
+    synth = []
+    if a.min_big_T:
+        if not any(int(r["T_pad"]) >= a.min_big_T for r in picked):
+            big = [r for r in rows if r.get("status") == "ok" and r.get("step") is not None
+                   and int(r["T_pad"]) >= a.min_big_T]
+            if big:
+                picked.append(max(big, key=lambda r: (int(r["T_pad"]), -int(r["g"]))))
+            else:
+                synth.append(synthetic_cell(model))
+    p = write_sample(a.run, model, picked, a.out, synthetic=synth, budget=budget)
     tiles = defaultdict(int)
     for r in picked:
         tiles[r["tile"]] += 1
-    print(f"PASS replay sample: {len(picked)} calls -> {p}; per tile {dict(tiles)}")
+    for c, _i in synth:
+        tiles[c["tile"] + " (synthetic)"] += 1
+    print(f"PASS replay sample: {len(picked) + len(synth)} cells -> {p}; per tile {dict(tiles)}"
+          + (f"; budget scale {budget['scale']:.3f} ({budget['cost_after_s']:.0f} s of {budget['budget_s']:.0f})"
+             if budget else ""))
+    return 0
+
+
+def wall_merge(argv) -> int:
+    """replay_wall.json from replay runs' cell_wall.json files: per tile the median wall per cell (smoke)."""
+    ap = argparse.ArgumentParser(prog="replay.py wall-merge")
+    ap.add_argument("--from", dest="src", action="append", required=True, help="a directory holding cell_wall.json")
+    ap.add_argument("--out", required=True)
+    a = ap.parse_args(argv)
+    per: dict = defaultdict(list)
+    reps = set()
+    for d in a.src:
+        for f in sorted(Path(d).rglob("cell_wall.json")):
+            doc = json.loads(f.read_text())
+            reps.add(int(doc["repeats"]))
+            for c in doc["cells"]:
+                if not c.get("synthetic") or c["tile"].endswith("g16"):
+                    per[c["tile"]].append(float(c["wall_s"]))
+    if not per or len(reps) != 1:
+        print(f"FAIL replay wall-merge: {sum(len(v) for v in per.values())} cells, repeats {sorted(reps)}")
+        return 3
+    doc = {"schema": WALL_SCHEMA, "repeats": reps.pop(),
+           "tiles": {t: {"median_wall_s": float(np.median(v)), "cells": len(v)} for t, v in sorted(per.items())}}
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"PASS replay wall-merge: {len(doc['tiles'])} tiles -> {a.out}")
     return 0
 
 
@@ -229,6 +390,8 @@ def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "sample":
         return sample_main(argv[1:])
+    if argv and argv[0] == "wall-merge":
+        return wall_merge(argv[1:])
     from moe.bench import exit_codes
     PWR, SWEEP = RD.PWR, RD.SWEEP
     args = build_parser().parse_args(argv)
@@ -273,6 +436,10 @@ def main(argv=None) -> int:
     if mem.fits is False:
         print(f"\nREFUSED: the weight copies do not fit: {mem.predicted_peak_bytes / 1e9:.2f} GB predicted")
         return exit_codes.REFUSED
+    bad_mem = grr_memory_refusal(cfg, page, args.inst, calls, mem.predicted_peak_bytes, free)
+    if bad_mem:
+        print(f"\nREFUSED (GRR memory): {bad_mem}")
+        return exit_codes.REFUSED
     if args.dry_run:
         print("\nREFUSED. Nothing was measured and nothing was written.\n  reason: --dry-run was given")
         return exit_codes.REFUSED
@@ -304,8 +471,34 @@ def main(argv=None) -> int:
                          min_clean=args.min_clean_repeats if slip_lock is not None else 0,
                          say=lambda m: print(m, flush=True))
     store.close()
+    write_wall(out_dir, page, backend.wall(), args.repeats, args.histogram)
     return RD.write_report(ns, cfg, page, result, out_dir=out_dir, run_id=run_id, card=card, R=R, calls=calls,
                            copies=copies, slip_lock=slip_lock, header=header, seconds=time.time() - t0)
+
+
+def grr_memory_refusal(cfg, page, inst: str, calls: int, single_peak_bytes: int, free_bytes) -> str:
+    """'' when the GRR graph fits, else why: the graph holds every call's output (calls x T_max x H x 2 bytes) on
+    top of r3_decode's single-call plan."""
+    if inst != "GRR":
+        return ""
+    out_b = int(calls) * max(page.Ts) * cfg.hidden_size * 2
+    if out_b > GRR_OUT_CAP_BYTES:
+        return f"{calls} calls x T {max(page.Ts)} outputs = {out_b / 2 ** 30:.2f} GiB, over {GRR_OUT_CAP_BYTES / 2 ** 30:.0f} GiB"
+    if free_bytes and single_peak_bytes + out_b > free_bytes:
+        return (f"{(single_peak_bytes + out_b) / 1e9:.2f} GB predicted (outputs {out_b / 1e9:.2f} GB) over "
+                f"{free_bytes / 1e9:.2f} GB free")
+    return ""
+
+
+def write_wall(out_dir, page, wall: dict, repeats: int, sample_path) -> Path:
+    """cell_wall.json: each cell's wall seconds (build to the next build: checks, captures, every repeat)."""
+    doc = json.loads(Path(sample_path).read_text())
+    syn = {c["label"] for c in doc["cells"] if c.get("synthetic")}
+    cells = [{"label": c.label, "T": c.T, "tile": c.role, "wall_s": float(wall.get(c.label, 0.0)),
+              "synthetic": c.label in syn} for c in page.cells]
+    p = Path(out_dir) / "cell_wall.json"
+    p.write_text(json.dumps({"schema": WALL_SCHEMA + "/cells", "repeats": int(repeats), "cells": cells}, indent=1))
+    return p
 
 
 if __name__ == "__main__":

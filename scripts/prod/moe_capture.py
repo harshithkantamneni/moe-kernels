@@ -39,8 +39,11 @@ GRAPH SAFETY (CRITIQUE M8):
     fit writes NOTHING but still advances the counters, so the host sees counter > capacity at the next drain and
     the run FAILS (G-OVF). The drain is also scheduled from the step log's padded T so the ring never fills.
   - counters are reset after LLM() returns (`reset()`): warmup, profile and capture calls are excluded.
-  - an NVTX range "moeL{layer}T{n}" is pushed around the launch (secondary alignment; under graphs nsys sees the
-    capture-time range only, CAPTURE.md).
+  - THE LAYER IS IN THE LAUNCH GRID (review 1, MAJOR 8): the kernel launches grid (1, layer + 1) and every program
+    with program_id(1) > 0 returns at once, so nsys (and the torch profiler) record gridY = layer + 1 on every
+    marker, graph replays included; nsys_extract's G-PAIR holds every call's gridY to its ring record's layer + 1.
+    The grid is a launch parameter, not a specialisation key: no new compile. No NVTX range is pushed per call
+    (graph replays would carry the capture-time range only; the secondary NVTX alignment claim is withdrawn).
 """
 from __future__ import annotations
 
@@ -81,23 +84,25 @@ def _build_kernel():
     @triton.jit(do_not_specialize=["n_tok", "layer", "stride0", "stride1", "ids_cap", "rec_cap"])
     def _moe_prod_capture_kernel(topk_ptr, ctr_ptr, ring_ptr, rec_ptr, n_tok, layer, stride0, stride1,
                                  ids_cap, rec_cap, K: tl.constexpr, BLOCK: tl.constexpr):
-        numel = n_tok * K
-        rec = tl.atomic_add(ctr_ptr, 1)              # counter[0]: records reserved since the last drain
-        off = tl.atomic_add(ctr_ptr + 1, numel)      # counter[1]: ids reserved since the last drain
-        ok = ((off + numel) <= ids_cap) & (rec < rec_cap)
-        for start in range(0, numel, BLOCK):
-            offs = start + tl.arange(0, BLOCK)
-            m = (offs < numel) & ok
-            row = offs // K
-            col = offs % K
-            v = tl.load(topk_ptr + row * stride0 + col * stride1, mask=m, other=0)
-            tl.store(ring_ptr + off + offs, v.to(tl.int16), mask=m)
-        if ok:
-            base = rec_ptr + rec * 4
-            tl.store(base + 0, layer)
-            tl.store(base + 1, n_tok)
-            tl.store(base + 2, off)
-            tl.store(base + 3, rec)
+        # the grid's Y extent carries the layer (gridY = layer + 1): only program (0, 0) works, every other exits
+        if tl.program_id(1) == 0:
+            numel = n_tok * K
+            rec = tl.atomic_add(ctr_ptr, 1)              # counter[0]: records reserved since the last drain
+            off = tl.atomic_add(ctr_ptr + 1, numel)      # counter[1]: ids reserved since the last drain
+            ok = ((off + numel) <= ids_cap) & (rec < rec_cap)
+            for start in range(0, numel, BLOCK):
+                offs = start + tl.arange(0, BLOCK)
+                m = (offs < numel) & ok
+                row = offs // K
+                col = offs % K
+                v = tl.load(topk_ptr + row * stride0 + col * stride1, mask=m, other=0)
+                tl.store(ring_ptr + off + offs, v.to(tl.int16), mask=m)
+            if ok:
+                base = rec_ptr + rec * 4
+                tl.store(base + 0, layer)
+                tl.store(base + 1, n_tok)
+                tl.store(base + 2, off)
+                tl.store(base + 3, rec)
 
     return _moe_prod_capture_kernel
 
@@ -107,6 +112,11 @@ def kernel():
     if _KERNEL is None:
         _KERNEL = _build_kernel()
     return _KERNEL
+
+
+def marker_grid(layer: int) -> tuple[int, int]:
+    """The marker's launch grid: (1, layer + 1); the warm launches (layer -1) use (1, 1)."""
+    return (1, max(int(layer), 0) + 1)
 
 
 def reference_capture(topk, ctr, ring, recs, n_tok: int, layer: int, ids_cap: int, rec_cap: int, K: int) -> None:
@@ -152,7 +162,6 @@ class Capture:
     rec_cap: int = REC_CAP
     drain_every: int = DRAIN_EVERY
     backend: str = "torch"
-    nvtx: bool = True
     enabled: bool = False             # True after reset(): steps are logged, drains happen
     shard_idx: int = 0
     step_id: int = 0
@@ -191,16 +200,11 @@ class Capture:
             reference_capture(topk_ids, self.ctr, self.ring, self.recs, n, layer, self.ids_cap, self.rec_cap,
                               self.top_k)
             return
-        torch = self.torch
         if topk_ids.dim() != 2 or topk_ids.shape[1] != self.top_k:
             raise PL.KitError(f"capture: topk_ids shape {tuple(topk_ids.shape)}, top_k {self.top_k}")
-        if self.nvtx:
-            torch.cuda.nvtx.range_push(f"moeL{layer}T{n}")
         if n:
-            kernel()[(1,)](topk_ids, self.ctr, self.ring, self.recs, n, int(layer), topk_ids.stride(0),
-                           topk_ids.stride(1), self.ids_cap, self.rec_cap, K=self.top_k, BLOCK=1024)
-        if self.nvtx:
-            torch.cuda.nvtx.range_pop()
+            kernel()[marker_grid(layer)](topk_ids, self.ctr, self.ring, self.recs, n, int(layer), topk_ids.stride(0),
+                                         topk_ids.stride(1), self.ids_cap, self.rec_cap, K=self.top_k, BLOCK=1024)
 
     def capture_fn(self, layer: int):
         def _fn(topk_ids, _layer=int(layer), _cap=self):
@@ -355,11 +359,33 @@ def warm(cap: Capture, sizes, dtypes=("int32", "int64")) -> None:
     torch.cuda.synchronize()
     cap.ctr.zero_()
     torch.cuda.synchronize()
+    got = kernel_variants(kernel())
+    cap.manifest["kernel_variants"] = got
+    cap.manifest["kernel_variants_expected"] = len(dtypes)
+    check_variants(got, len(dtypes))
+
+
+def kernel_variants(jit_fn) -> int | None:
+    """Compiled variants of a Triton JITFunction across devices: Triton <= 3.1 keeps `cache` {device: {key: kernel}};
+    later Triton keeps `device_caches` {device: (kernel_cache, ...)}. None when neither reads."""
     try:
-        cache = kernel().cache
-        cap.manifest["kernel_variants"] = int(sum(len(v) for v in cache.values()))
-    except Exception:                                               # noqa: BLE001
-        cap.manifest["kernel_variants"] = None
+        dc = getattr(jit_fn, "device_caches", None)
+        if dc:
+            return int(sum(len(v[0]) for v in dc.values()))
+        c = getattr(jit_fn, "cache", None)
+        if c is not None:
+            return int(sum(len(v) for v in c.values()))
+    except (TypeError, IndexError, AttributeError):
+        return None
+    return None
+
+
+def check_variants(got: int | None, expected: int) -> None:
+    """The A3 gate (review 1, MINOR): after warm(), exactly one compiled variant per topk_ids dtype; any other count
+    (or an unreadable cache) means a JIT compile could fall inside a graph capture: stop before capture."""
+    if got != expected:
+        raise PL.KitError(f"G-VARIANTS FAIL: the capture kernel has {got} compiled variants after warm(), want "
+                          f"{expected} (one per topk_ids dtype): do_not_specialize did not hold")
 
 
 # ------------------------------------------------------------------------------------------------------------

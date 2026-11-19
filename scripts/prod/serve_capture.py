@@ -211,6 +211,16 @@ class ClockSampler(threading.Thread):
                 self.stop_ev.wait(self.period)
 
 
+def resolve_revision(repo: str, rev: str | None) -> str | None:
+    """The commit sha of the snapshot the engine loaded, read from the local HF cache only (no network): the
+    snapshot directory's name."""
+    try:
+        from huggingface_hub import snapshot_download
+        return Path(snapshot_download(repo, revision=rev, local_files_only=True)).name
+    except Exception:                                                # noqa: BLE001
+        return None
+
+
 def write_gates(out: Path, gates: dict) -> int:
     (out / "gates.json").write_text(json.dumps(gates, indent=2, default=str))
     bad = [k for k, v in gates.items() if v.get("verdict") == "FAIL"]
@@ -246,6 +256,10 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     if vllm.__version__ != "0.27.1":
         gates["G-VLLM"] = {"verdict": "FAIL", "why": f"vLLM {vllm.__version__}, the kit is for 0.27.1"}
         return write_gates(out, gates)
+    rev = a.revision or PL.hf_revision(model.key)
+    if rev is None and a.require_pinned:
+        gates["G-REV"] = {"verdict": "FAIL", "why": f"{model.key} has no pinned HF revision (prodlib.HF_REVISIONS)"}
+        return write_gates(out, gates)
     MC.install(out, top_k=model.cfg.top_k, n_moe_layers=model.moe_layers, warm_sizes=PL.capture_sizes())
     kw = dict(model=model.hf_repo, dtype="bfloat16", seed=a.seed, max_num_batched_tokens=a.max_num_batched_tokens,
               max_num_seqs=MAX_SEQS, enable_chunked_prefill=True, enforce_eager=(a.mode == "eager"),
@@ -258,8 +272,17 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
         kw["profiler_config"] = {"profiler": "torch", "torch_profiler_dir": str((out / "torch_trace").resolve()),
                                  "torch_profiler_with_stack": False, "torch_profiler_use_gzip": False,
                                  "torch_profiler_record_shapes": False}
+    if rev:
+        kw.update(revision=rev, tokenizer_revision=rev)
     llm = LLM(**kw)
     cap = MC.current()
+    resolved = resolve_revision(model.hf_repo, rev)
+    manifest["hf_revision"] = {"pinned": rev, "resolved": resolved}
+    if rev and resolved and resolved != rev:
+        gates["G-REV"] = {"verdict": "FAIL", "why": f"loaded snapshot {resolved}, pinned {rev}"}
+    else:
+        gates["G-REV"] = {"verdict": "PASS", "why": "" if rev else f"UNPINNED: resolved {resolved} (pin it in "
+                                                                   "prodlib.HF_REVISIONS before the kit freezes)"}
     hf = llm.llm_engine.model_config.hf_config.to_dict()
     bad_cfg = PL.check_hf_config(model, hf)
     backends = sorted({r["backend"] for r in cap.bound_layers})
@@ -377,6 +400,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-seconds", type=float, default=0.0,
                     help="stop feeding requests after this long (the 60 s gate runs); 0: no limit")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--revision", default=None,
+                    help="the model's HF commit (default prodlib.HF_REVISIONS); pins the model and the tokenizer")
+    ap.add_argument("--require-pinned", action="store_true",
+                    help="refuse a model with no pinned revision (main.sh); the smoke runs unpinned and prints the sha")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dry-run", action="store_true")
     return ap

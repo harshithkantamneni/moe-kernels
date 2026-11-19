@@ -113,7 +113,7 @@ def ernie_call(T, *, tile=None, G=None, ids=True, seed=0):
     rng = np.random.default_rng(seed + T)
     ids_ = np.argsort(rng.random((T, 64)), axis=1)[:, :6]
     c = {"model": V8.ERNIE, "T": T, "counts": np.bincount(ids_.ravel(), minlength=64).tolist(),
-         "ids": ids_ if ids else None}
+         "ids": ids_ if ids else None, "sag128": J.SAG128, "sag64": J.SAG64, "knee": J.KNEE}
     if tile:
         c["tile"] = tile
     if G:
@@ -133,7 +133,7 @@ def frac_and_refusals() -> dict:
            "c": {"n": 6, "counts": c["counts"], "label": "x"},
            "doc": {"block_m": 64, "group_m": 1, "shuffle_seed": None}}
     try:
-        V7.price_prefill(row, sag128=V8.DEFAULT_SAG128, sag64=V8.DEFAULT_SAG64)
+        V7.price_prefill(row, sag128=J.SAG128, sag64=J.SAG64)
         v7 = "priced"
     except KeyError as ex:
         v7 = f"KeyError({ex})"
@@ -173,6 +173,7 @@ def ids_check() -> dict:
     X = V7.decode_modules()
     RD, V4DP = X["RD"], X["V4DP"]
     dec = []
+    perm = []
     with D5.blind5():
         for m in VB.MODELS:
             for c in DC.page_doc(m, "main")["cells"]:
@@ -180,30 +181,59 @@ def ids_check() -> dict:
                         "page": {"label": c["label"], "shuffle": bool(c.get("shuffle", True))}}
                 a = V8.price(call)
                 cell = {"T": int(c["T"]), "counts": list(c["counts"]), "shuffle": bool(c.get("shuffle", True))}
-                b = V8.price(dict(call, ids=V4DP.ids_of(m, cell)))
+                gen = np.asarray(V4DP.ids_of(m, cell), dtype=np.int64)
+                before = V8.STATS["decode.naive_ids"]
+                b = V8.price(dict(call, ids=gen))
+                used = V8.STATS["decode.naive_ids"] - before
                 naive = RD.geometry(MODEL_CONFIGS[m], int(c["T"]), c["counts"], None).path == RD.NAIVE
-                dec.append({"equal": a["ms"] == b["ms"], "naive": naive})
+                dec.append({"equal": a["ms"] == b["ms"], "naive": naive, "ids_path_calls": used})
+                if naive:
+                    # review 1 MAJOR 10: the same counts in another token order (the token rows reversed, then each
+                    # token's k ids rotated by one) must reach the price: a naive cell whose price ignored the ids
+                    # would read equal here on every cell
+                    k = MODEL_CONFIGS[m].top_k
+                    q = np.roll(gen.reshape(-1, k)[::-1], 1, axis=1).reshape(-1)
+                    assert np.array_equal(np.bincount(q, minlength=len(c["counts"])),
+                                          np.bincount(gen, minlength=len(c["counts"])))
+                    pz = V8.price(dict(call, ids=q))
+                    perm.append({"model": m, "label": c["label"], "T": int(c["T"]), "generated": b["ms"],
+                                 "permuted": pz["ms"], "differ": pz["ms"] != b["ms"]})
     real = V8.price(ernie_call(12288))
     gen = V8.price(ernie_call(12288, ids=False))
-    return {"prefill": pre, "decode": dec,
+    return {"prefill": pre, "decode": dec, "decode_permuted": perm,
             "ERNIE T 12288 G 16, real ids against the generated ids (same counts)": {
                 "real": real["ms"], "generated": gen["ms"], "rel": real["ms"] / gen["ms"] - 1}}
 
 
 def binding_check() -> dict:
     """bindings() over every loaded module equals SWAP_BINDINGS, and after all the pricing above every binding holds
-    its frozen original again."""
+    its frozen original again. The plan is re-scanned when the loaded modules change, and only then."""
     got = V8.bindings()
     plan = V8._plan()
     restored = all((h.get(a) if isinstance(h, dict) else vars(h).get(a)) is f for h, a, f, _c in plan)
+    s0 = V8._PLAN_INFO.get("scans", 0)
+    V8._plan()
+    same = V8._PLAN_INFO.get("scans", 0) == s0
+    import xml.dom.minidom  # noqa: F401  (a module not loaded before: the fingerprint moves)
+    V8._plan()
     return {"bindings": got, "declared": {k: sorted(v) for k, v in V8.SWAP_BINDINGS.items()},
             "equal": got == {k: sorted(v) for k, v in V8.SWAP_BINDINGS.items()}, "plan_entries": len(plan),
-            "restored": restored}
+            "restored": restored, "rescan_unchanged_skipped": same,
+            "rescan_on_new_module": V8._PLAN_INFO.get("scans", 0) == s0 + 1}
+
+
+def cache_check() -> dict:
+    """clear_caches drops the per-call memo entries and a call priced again after it is the same bits."""
+    calls = [ernie_call(T) for T in (1024, 300, 12288)]
+    a = [V8.price(c)["ms"] for c in calls]
+    dropped = V8.clear_caches()
+    b = [V8.price(c)["ms"] for c in calls]
+    return {"equal": a == b, "dropped": dropped, "cache_every": V8.CACHE_EVERY}
 
 
 def main() -> dict:
     return {"sentinel": sentinel(), "missed": missed(), "pages": pages(), "frac": frac_and_refusals(),
-            "ids": ids_check(), "bindings": binding_check(), "stats": dict(V8.STATS)}
+            "ids": ids_check(), "bindings": binding_check(), "caches": cache_check(), "stats": dict(V8.STATS)}
 
 
 if __name__ == "__main__":

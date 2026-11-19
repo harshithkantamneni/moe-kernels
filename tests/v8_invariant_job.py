@@ -15,6 +15,8 @@ prints one JSON document (last line): every number as float.hex, so the test com
            reference pars to the registration's fingerprint and the finalised par to the score's finalised cells
   decode   the v7 decode blind's 143 cells at its frozen constants (finalise_decode.params_of on the frozen block,
            terms, law, v7bcommon.prm_fix_of); the v7 side holds them to the registered ms['v4d']
+  cal2     CAL2's decode rows (dcommon.CAL_MODELS' main pages, the cells the CAL2 refit read) at the same frozen
+           constants: v7 == v8 (in-sample rows carry no registered prediction to hold them to)
   ernie    ERNIE-4.5-21B-A3B whole-tread anchors T 4096 (G 1), 12288 and 16384 (G 16) at 128x128, counts from fixed-
            seed random topk ids, no ids passed (the generated ids): v7's price_prefill at the integer tread and v8's
            price; the v8 side also prices them with the real ids (reported, not compared)
@@ -41,6 +43,14 @@ ERNIE_FIELDS = dict(name="ernie-4.5-21b-a3b", hidden_size=2560, intermediate_siz
 ERNIE_T = (4096, 12288, 16384)
 ERNIE_SEED = 20261119
 SAG128, SAG64 = (64.325, 612.5), (30.365, 300.0)
+#: v7's price_prefill reads knee None as round 4's SEEN K1 (round5_chain.K1_SEEN); v8 has no default, so the v8 side
+#: passes the same constant explicitly (review 1, BLOCKER 2)
+KNEE = (6.0, 2.75)
+
+
+def _knee_check():
+    import round5_chain as R5
+    assert tuple(R5.K1_SEEN) == KNEE, (R5.K1_SEEN, KNEE)
 
 
 def h(x):
@@ -84,7 +94,7 @@ def prefill_call(r, par, par64):
     counts = r["c"]["counts"] if r["c"]["counts"] is not None else [n * bm] * cfg.num_experts
     return {"model": r["model"], "T": sum(int(v) for v in counts) // cfg.top_k, "counts": counts,
             "tile": V7.PREFILL_TILES[0] if bm == 128 else V7.PREFILL_TILES[1], "G": int(r["doc"]["group_m"]),
-            "sag128": tuple(par), "sag64": tuple(par64),
+            "sag128": tuple(par), "sag64": tuple(par64), "knee": KNEE,
             "page": {"n": n, "label": r["label"], "page": r.get("page"),
                      "shuffle_seed": None if r["c"]["counts"] is None else r["doc"]["shuffle_seed"]}}
 
@@ -103,6 +113,7 @@ def main(side: str) -> dict:
         def pre(r, par, par64, sw):
             return V7.price_prefill(r, sag128=tuple(par), sag64=tuple(par64), switches=sw)
         SW_ON, SW_OFF = V7.V7, V7.OFF
+    _knee_check()
     out: dict = {"side": side}
 
     # ---- r3: the 300 registered v3 predictions (V7.check_r3's cells)
@@ -197,6 +208,26 @@ def main(side: str) -> dict:
     out["decode"] = dec
     out["decode_unequal_registered"] = d_bad if side == "v7" else None
 
+    # ---- cal2: CAL2's decode rows (the decode stage's CAL pages, dcommon.CAL_MODELS' main pages: the rows the CAL2
+    # refit read) at the v7 decode blind's frozen constants; no registered number per row (in-sample), v7 == v8 only
+    if dc is None:
+        dc = decode_constants_v7() if side == "v7" else None
+    cal, n_naive = [], 0
+    X = V7.decode_modules()
+    for m in DC.CAL_MODELS:
+        for c in DC.page_doc(m, "main")["cells"]:
+            if side == "v8":
+                p = V8.price({"model": m, "T": int(c["T"]), "counts": c["counts"],
+                              "page": {"label": c["label"], "shuffle": bool(c.get("shuffle", True))}})
+                ms = p["ms"]
+            else:
+                p = V7.price_decode_cell(m, c, dc["prm"], terms=dc["terms"], law=dc["law"], prm_fix=dc["prm_fix"])
+                ms = None if p is None else p["ms"]
+            n_naive += X["RD"].geometry(MODEL_CONFIGS[m], int(c["T"]), c["counts"], None).path == X["RD"].NAIVE
+            cal.append(h(ms))
+    out["cal2"] = cal
+    out["cal2_naive"] = n_naive
+
     # ---- ernie: whole-tread anchors, the same counts, no ids
     cfg = MoEConfig(**ERNIE_FIELDS)
     if side == "v8":
@@ -210,8 +241,9 @@ def main(side: str) -> dict:
         counts = np.bincount(ids.ravel(), minlength=cfg.num_experts).tolist()
         G = 16 if T // cfg.num_experts > 128 else 1
         if side == "v8":
-            p = V8.price({"model": cfg.name, "T": T, "counts": counts})
-            q = V8.price({"model": cfg.name, "T": T, "counts": counts, "ids": ids})
+            k = {"sag128": SAG128, "sag64": SAG64, "knee": KNEE}
+            p = V8.price({"model": cfg.name, "T": T, "counts": counts, **k})
+            q = V8.price({"model": cfg.name, "T": T, "counts": counts, "ids": ids, **k})
             er_ids.append(h(q["ms"]))
             assert (p["tile"], p["G"]) == ("128x128x64w8s3", G), (p["tile"], p["G"])
         else:

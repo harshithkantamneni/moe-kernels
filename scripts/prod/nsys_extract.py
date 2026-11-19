@@ -3,29 +3,41 @@
 
     python scripts/prod/nsys_extract.py --run RUN_DIR --sqlite RUN_DIR/serve.sqlite --model ernie-4.5-21b-a3b
     python scripts/prod/nsys_extract.py --run RUN_DIR --torch-trace RUN_DIR/torch_trace --model ... --shard-tag profiler-window
+    python scripts/prod/nsys_extract.py check-sequences --run RUN_DIR --model ...         # smoke: per-path sequences
+    python scripts/prod/nsys_extract.py replay-check --serving RUN_DIR --sample SAMPLE/sample.json \\
+        --replay-sqlite REPLAY.sqlite --model ...                                         # smoke: replay == serving
 
-THE MEASURED CALL (CAPTURE.md; v7's call): align .. moe_sum, the router EXCLUDED. On the marker's stream, between
-the k-th capture-marker kernel and the next one:
-  align   moe_align_block_size* / count_and_sort_expert_tokens* kernels and memsets before the first GEMM; on the
-          naive path (T k 4 <= E) the torch.full fill kernel just before the first GEMM (fused_moe.py:1566-1576)
+THE MEASURED CALL (CAPTURE.md; v7's call): align .. moe_sum, the router EXCLUDED. Classified BY STREAM AND BY
+SEQUENCE, never by a name regex alone: only kernels on the marker's own stream, between the k-th capture-marker
+kernel and the next marker on that stream, are candidates, and each part is taken by its position in that stream:
+  align   moe_align_block_size* / count_and_sort_expert_tokens* kernels and the memsets just before them, before the
+          first GEMM; on the naive path (T k 4 <= E) the ONE torch.full fill kernel before the first GEMM
+          (fused_moe.py:1566-1576); more than one fill candidate is a G-CLASS failure, never a silent pick
   gemm    the two fused_moe_kernel launches (w13, then w2)
-  act     the activation kernel between them (act_and_mul / silu_and_mul)
+  act     the ONE activation kernel between them in the stream (act_and_mul / silu_and_mul); a shared-expert
+          SiluAndMul on another stream (shared-experts stream on) is outside the window by construction, and on the
+          same stream (stream off) it runs before the marker or after moe_sum, never between the two GEMMs
   reduce  the first moe_sum kernel after the w2 GEMM (fused_moe.py:1848)
 kernel-sum = the sum of those kernels' durations; span = first start to last end (CRITIQUE M7). Any other kernel
-on the same stream inside the span is an INTRUDER (counted, named, excluded from kernel-sum, inside span): with
-the shared-experts stream off, shared-expert GEMMs would show here. Kernels after the marker and before the
-first align kernel (the topk_ids dtype conversion, EPLB) are router-side and excluded.
+on the same stream inside the span is an INTRUDER (counted, named, excluded from kernel-sum, inside span).
+Kernels after the marker and before the first align kernel (the topk_ids dtype conversion, EPLB) are router-side
+and excluded.
 
-ALIGNMENT (primary): the k-th marker kernel (moe_capture.MARKER_KERNEL) after the reset mark is the k-th ring
-record. NVTX "moeL{l}T{n}" ranges are secondary (graph replays carry the capture-time range only).
+ALIGNMENT: the k-th marker kernel (moe_capture.MARKER_KERNEL) after the reset mark is the k-th ring record, and the
+marker ENCODES ITS LAYER in its launch grid (gridY = layer + 1; moe_capture launches grid (1, layer + 1) and every
+program with program_id(1) > 0 returns at once), so the pairing is checked call by call (G-PAIR). There is no NVTX
+secondary alignment (graph replays carry no per-call range; review 1 removed the claim).
 
 GATES (gates.json; any FAIL makes the exit 3 and is printed with its reason):
   G-REC   ring records == marker kernels after the reset
   G-GEMM  fused_moe_kernel launches after the reset == 2 x records
+  G-PAIR  every paired call's marker gridY == its ring record's layer + 1 (a shifted pairing fails here)
   G-STEP  records of every shard tile the shard's steps: n_layers records per step, layers ascending, n == T_pad
   G-IDS   every record's ids in [0, E) with k distinct experts per row (log integrity; sum(counts) == T_pad k)
-  G-GRID  gridX of both GEMMs == cdiv(EM, BM) x cdiv(N, BN) for the logged padded T and the call's counts
-  G-CLASS every call found its align, two GEMMs, activation and reduce
+  G-GRID  gridX of both GEMMs == the launch grid r3_decode.geometry gives for the logged padded T and the call's
+          counts (prodlib.expected_grids: cdiv(EM, BM) cdiv(N, BN) with vLLM's EM cut / MAXPAD cap at small numel,
+          and the naive path's rows)
+  G-CLASS every call found its align, two GEMMs, one activation and reduce
 """
 from __future__ import annotations
 
@@ -58,6 +70,22 @@ CLASSES = (
     ("reduce", re.compile(r"moe_sum")),
     ("fill", re.compile(r"FillFunctor|fill_kernel|\bfill\b", re.I)),
 )
+
+
+def short_name(name: str) -> str:
+    """A kernel's bare function name: no return type, namespaces, template arguments or parameter list."""
+    n = name
+    depth, out = 0, []
+    for ch in n:                                   # drop <...> (nested)
+        if ch == "<":
+            depth += 1
+        elif ch == ">":
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            out.append(ch)
+    n = "".join(out).split("(", 1)[0].strip()
+    n = n.split()[-1] if n.split() else n
+    return n.split("::")[-1] or name[:40]
 
 
 def classify(name: str) -> str:
@@ -175,7 +203,8 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
         hi = nxt[(st, i)]
         win = lst[i + 1:hi]
         gem = [j for j, (_e, c) in enumerate(win) if c == "gemm"]
-        call = {"stream": st, "marker_start": lst[i][0][0], "status": "ok", "names": []}
+        call = {"stream": st, "marker_start": lst[i][0][0], "marker_gridY": int(lst[i][0][5]), "status": "ok",
+                "names": []}
         if len(gem) < 2:
             call["status"] = f"{len(gem)} fused_moe_kernel in the window"
             calls.append(call)
@@ -191,9 +220,11 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
             align = [j for j in range(s0, j1) if win[j][1] in ("align", "memset")]
         else:
             fills = [j for j in range(j1) if win[j][1] == "fill"]
-            align = [fills[-1]] if fills else []
-            if not align:
+            align = list(fills)
+            if not fills:
                 call["status"] = "no align kernel before w1"
+            elif len(fills) > 1:
+                call["status"] = f"{len(fills)} fill kernels before w1 on the naive path (ambiguous: none picked)"
         acts = [j for j in range(j1 + 1, j2) if win[j][1] == "act"]
         if len(acts) != 1:
             call["status"] = f"{len(acts)} activation kernels between the GEMMs"
@@ -210,6 +241,7 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
                     gridX_w1=int(win[j1][0][4]), gridX_w2=int(win[j2][0][4]),
                     grid_yz=[int(win[j1][0][5]), int(win[j1][0][6])], graph_node=win[j1][0][7],
                     names=[win[j][0][3][:60] for j in parts],
+                    sig="|".join(f"{win[j][1]}:{short_name(win[j][0][3])}" for j in parts),
                     align_ns=int(sum(win[j][0][1] - win[j][0][0] for j in align)),
                     w1_ns=int(win[j1][0][1] - win[j1][0][0]), w2_ns=int(win[j2][0][1] - win[j2][0][0]))
         calls.append(call)
@@ -315,6 +347,11 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
     rows, counts_all = [], []
     bad_ids, bad_grid, bad_cls = [], [], []
     paired = min(len(calls), nrec)
+    bad_pair = [f"call {k}: marker gridY {calls[k]['marker_gridY']} != record {records[k]['g']} layer "
+                f"{records[k]['layer']} + 1" for k in range(paired)
+                if calls[k]["marker_gridY"] != records[k]["layer"] + 1]
+    gates["G-PAIR"] = {"verdict": "PASS" if not bad_pair else "FAIL", "why": "; ".join(bad_pair[:5]),
+                       "problems": len(bad_pair), "paired": paired}
     for k in range(paired):
         rec, call = records[k], calls[k]
         counts = PL.counts_from_ids(rec["ids"], cfg.num_experts) if not check_ids(rec, cfg.num_experts, cfg.top_k) \
@@ -331,11 +368,14 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
                "counts_digest": PL.digest(counts), "ids_digest": PL.digest(rec["ids"]), **{
                    kk: call.get(kk) for kk in ("status", "kernel_sum_ns", "span_ns", "start_ns", "intruders",
                                                "intruder_names", "gridX_w1", "gridX_w2", "align_ns", "w1_ns", "w2_ns",
-                                               "n_parts", "stream", "graph_node")}}
+                                               "n_parts", "stream", "graph_node", "sig", "marker_gridY")}}
+        if not why:
+            geo = PL.call_geometry(cfg, rec["n"], counts)
+            row["path"] = geo["path"]
         if call["status"] != "ok":
             bad_cls.append(f"call {rec['g']}: {call['status']}")
         elif not why:
-            want = PL.expected_grids(cfg, rec["n"], counts)
+            want = geo["grid"]
             row["grid_expected"] = list(want)
             if (call["gridX_w1"], call["gridX_w2"]) != want:
                 bad_grid.append(f"call {rec['g']} T_pad {rec['n']}: gridX {call['gridX_w1']}/{call['gridX_w2']} "
@@ -371,7 +411,130 @@ def write(res: dict, out_dir, prefix: str) -> int:
     return 3 if bad else 0
 
 
+# ------------------------------------------------------------------------------------------------------------
+# smoke checks: the per-path sequences, and the replay's kernels against serving's (review 1, MINOR)
+# ------------------------------------------------------------------------------------------------------------
+
+def check_sequences(rows: list[dict]) -> dict:
+    """Per assignment path, the distinct kernel signatures (classes and bare names) and their counts, with the gate:
+    every ok call has exactly one act, two gemm and one reduce part; a naive-path call's align is ONE fill kernel
+    and nothing else, and no non-naive call has a fill."""
+    by: dict = defaultdict(Counter)
+    bad = []
+    for r in rows:
+        sig = r.get("sig")
+        if r.get("status") != "ok" or not sig:
+            continue
+        by[r.get("path") or "?"][sig] += 1
+        cls = [x.split(":", 1)[0] for x in sig.split("|")]
+        if cls.count("gemm") != 2 or cls.count("act") != 1 or cls.count("reduce") != 1:
+            bad.append(f"call {r['g']}: {sig}")
+        if r.get("path") == "naive":
+            pre = cls[:cls.index("gemm")]
+            if pre != ["fill"]:
+                bad.append(f"call {r['g']} (naive): align part {pre}, want exactly one fill")
+        elif "fill" in cls:
+            bad.append(f"call {r['g']} ({r.get('path')}): a fill kernel off the naive path")
+    return {"verdict": "PASS" if not bad and by else "FAIL", "why": "; ".join(bad[:5]) or ("" if by else "no calls"),
+            "problems": len(bad),
+            "paths": {k: [{"sig": sg, "calls": n} for sg, n in v.most_common(12)] for k, v in sorted(by.items())}}
+
+
+def segment_unmarked(events) -> list[dict]:
+    """The calls of a trace WITHOUT capture markers (the replay's graphs): per stream, each pair of consecutive
+    fused_moe_kernel launches with exactly one activation between them, its align run (fill / align / memset kernels
+    right before w1) and the first moe_sum after w2. {"sig", "grid": (gridX w1, gridX w2), "start_ns"}."""
+    by_stream: dict = defaultdict(list)
+    for e in events:
+        by_stream[e[2]].append((e, "memset" if e[8] == "memset" else classify(e[3])))
+    out = []
+    for lst in by_stream.values():
+        gem = [j for j, (_e, c) in enumerate(lst) if c == "gemm"]
+        used = -1
+        for a, b in zip(gem, gem[1:], strict=False):
+            if a <= used:
+                continue
+            acts = [j for j in range(a + 1, b) if lst[j][1] == "act"]
+            if len(acts) != 1:
+                continue
+            al = []
+            j = a - 1
+            while j > used and lst[j][1] in ("align", "memset", "fill"):
+                al.insert(0, j)
+                j -= 1
+            red = next((j for j in range(b + 1, min(len(lst), b + 17)) if lst[j][1] == "reduce"), None)
+            if red is None:
+                continue
+            parts = al + [a, acts[0], b, red]
+            out.append({"sig": "|".join(f"{lst[j][1]}:{short_name(lst[j][0][3])}" for j in parts),
+                        "grid": (int(lst[a][0][4]), int(lst[b][0][4])), "start_ns": int(lst[parts[0]][0][0])})
+            used = red
+    return out
+
+
+def replay_check(serving_rows: list[dict], sample: dict, replay_calls: list[dict], model: PL.ServedModel) -> dict:
+    """Per sampled cell: its expected launch grids must appear among the replay's calls, and every replay call with
+    those grids must carry a kernel signature serving shows on the same tile (synthetic cells: grids only)."""
+    cfg = model.cfg
+    serving: dict = defaultdict(set)
+    for r in serving_rows:
+        if r.get("status") == "ok" and r.get("sig"):
+            serving[r["tile"]].add(r["sig"])
+    by_grid: dict = defaultdict(list)
+    for c in replay_calls:
+        by_grid[c["grid"]].append(c)
+    bad, per_tile = [], defaultdict(lambda: {"cells": 0, "seen": 0, "sig_ok": 0})
+    for cell in sample["cells"]:
+        want = PL.expected_grids(cfg, int(cell["T"]), cell["counts"])
+        t = per_tile[cell["tile"]]
+        t["cells"] += 1
+        got = by_grid.get(want, [])
+        if not got:
+            bad.append(f"{cell['label']} ({cell['tile']}): grid {want} not in the replay trace")
+            continue
+        t["seen"] += 1
+        if cell.get("synthetic"):
+            continue
+        off = sorted({c["sig"] for c in got} - serving.get(cell["tile"], set()))
+        if off:
+            bad.append(f"{cell['label']} ({cell['tile']}): replay sequence {off[0]} not among serving's on the tile")
+        else:
+            t["sig_ok"] += 1
+    return {"verdict": "PASS" if not bad else "FAIL", "why": "; ".join(bad[:5]), "problems": len(bad),
+            "per_tile": dict(per_tile), "replay_calls": len(replay_calls)}
+
+
+def _sub_main(cmd: str, argv) -> int:
+    ap = argparse.ArgumentParser(prog=f"nsys_extract.py {cmd}")
+    ap.add_argument("--model", required=True, choices=sorted(PL.MODELS))
+    if cmd == "check-sequences":
+        ap.add_argument("--run", required=True)
+    else:
+        ap.add_argument("--serving", required=True, help="the serving run (calls.jsonl, after extraction)")
+        ap.add_argument("--sample", required=True)
+        ap.add_argument("--replay-sqlite", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    try:
+        if cmd == "check-sequences":
+            res = check_sequences(PL.read_jsonl(Path(a.run) / "calls.jsonl"))
+            out = Path(a.out or Path(a.run) / "sequences_by_path.json")
+        else:
+            res = replay_check(PL.read_jsonl(Path(a.serving) / "calls.jsonl"), json.loads(Path(a.sample).read_text()),
+                               segment_unmarked(read_sqlite(a.replay_sqlite)["events"]), PL.MODELS[a.model])
+            out = Path(a.out or Path(a.replay_sqlite).with_suffix(".replay_check.json"))
+    except (PL.KitError, OSError, sqlite3.Error, KeyError, ValueError) as exc:
+        print(f"FAIL nsys_extract {cmd}: {type(exc).__name__}: {exc}")
+        return 3
+    out.write_text(json.dumps(res, indent=2, default=str))
+    print(f"{res['verdict']} {cmd}" + (f": {res['why']}" if res.get("why") else "") + f" -> {out}")
+    return 0 if res["verdict"] == "PASS" else 3
+
+
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in ("check-sequences", "replay-check"):
+        return _sub_main(argv[0], argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True, help="serve_capture's output directory")
     g = ap.add_mutually_exclusive_group(required=True)

@@ -26,7 +26,7 @@ step() {
   if [[ "${1:-}" == "--soft" ]]; then soft=1; shift; fi
   [[ "${1:-}" == "--" ]] && shift
   if [[ $KIT_DRY -eq 1 ]]; then
-    printf 'STEP %-26s %s\n' "$name" "$(printf '%q ' "$@")"
+    printf 'STEP %-26s %s%s\n' "$name" "$([[ $soft -eq 1 ]] && echo '[soft] ')" "$(printf '%q ' "$@")"
     return 0
   fi
   local log="$R/logs/$name.log" t0 rc
@@ -94,6 +94,20 @@ kit_dry_plan() {   # a tool's own --dry-run exits 2 (REFUSED: "nothing measured"
   set +e; "$@"; local rc=$?; set -e
   [[ $rc -eq 0 || $rc -eq 2 ]] || { echo "FAIL plan: exit $rc"; return $rc; }
   echo "PASS plan (the tool's dry run, exit $rc)"
+}
+
+# kit_push MESSAGE: the VM pushes its results to the run's branch (scripts/vm_results_push.sh, initialised by the
+# launcher); main.sh calls it as a SOFT step after each measurement block, so a lost rental keeps what it measured
+kit_push() {
+  local p="$REPO/scripts/vm_results_push.sh"
+  [[ -f "$p" ]] || { echo "FAIL push: no $p"; return 3; }
+  bash "$p" push --message "$1"
+}
+
+# the card is left unlocked whatever stops the sequence (review 1, MAJOR 5): set by kit_trap_unlock
+kit_trap_unlock() {
+  [[ $KIT_DRY -eq 1 ]] && return 0
+  trap 'sudo -n nvidia-smi -rgc >/dev/null 2>&1 || true' EXIT
 }
 
 kit_summary() {

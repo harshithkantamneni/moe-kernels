@@ -138,3 +138,74 @@ def test_dry_run_plan_is_what_locked_r3_reads(tmp_path, capsys, monkeypatch):
     assert RP.main(["--model", MODEL.key, "--histogram", str(p), "--branch", "prefill", "--slip-policy", "cell",
                     "--lock-mhz", "1710", "--dry-run"]) == 2
     assert "branch clock 1410" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- review 1, MAJOR 6: budget, big cell, wall, memory
+
+def _wall(tiles=None, repeats=3):
+    tiles = tiles or {lab: {"median_wall_s": 10.0 * (i + 1), "cells": 3} for i, (lab, _lo, _hi) in enumerate(PL.TILE_BINS)}
+    return {"schema": RP.WALL_SCHEMA, "repeats": repeats, "tiles": tiles}
+
+
+def test_the_budget_rule_scales_every_quota_to_fit_and_keeps_one_per_tile():
+    rows = [dict(r, branch=PL.branch(r["T_pad"])) for r in _rows()]
+    q = RP.tile_quota([r for r in rows if r["branch"] == "prefill"], 643)
+    assert sum(q.values()) == 643 and set(q) == {"64x128x64w8s3", "128x128x64w8s3", "128x128x64w8s3 g16"}
+    b = RP.budget_quota(q, _wall(), "prefill", repeats=9, budget_s=3000)
+    per = b["per_cell_s"]
+    assert per["64x128x64w8s3"] == pytest.approx(1.5 * 50.0 * 10 / 4)       # safety x wall x (9 + 1) / (3 + 1)
+    assert b["scale"] < 1 and b["cost_after_s"] <= 3000 and all(v >= 1 for v in b["quota"].values())
+    assert RP.budget_quota(q, _wall(), "prefill", repeats=9, budget_s=1e9)["quota"] == q      # fits: unchanged
+    # a tile the smoke did not time takes its branch's dearest timed tile
+    w = _wall({"64x128x64w8s3": {"median_wall_s": 20.0, "cells": 1}, "128x128x64w8s3": {"median_wall_s": 40.0, "cells": 1}})
+    assert RP.budget_quota(q, w, "prefill", repeats=3)["per_cell_s"]["128x128x64w8s3 g16"] == pytest.approx(60.0)
+    with pytest.raises(PL.KitError, match="no decode tile"):
+        RP.budget_quota({"16x64x128w4s4": 3}, w, "decode", repeats=3)
+
+
+def test_sample_cli_budgets_and_adds_a_big_cell(tmp_path):
+    run, calls = F.make_run(tmp_path / "run", steps=((5, 8), (300, 304), (600, 600)))
+    rows = [{"g": i, "step": c["step"], "layer": c["layer"], "T_pad": c["n"], "T": c["n"], "tile": PL.tile_bin(c["n"]),
+             "branch": PL.branch(c["n"]), "status": "ok", "warmup": False} for i, c in enumerate(calls)]
+    with open(tmp_path / "calls.jsonl", "w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    wall = tmp_path / "wall.json"
+    wall.write_text(json.dumps(_wall()))
+    out = tmp_path / "s"
+    rc = RP.main(["sample", "--run", str(run), "--calls", str(tmp_path / "calls.jsonl"), "--model", MODEL.key,
+                  "--branch", "prefill", "--n", "20", "--wall", str(wall), "--repeats", "9", "--budget-s", "1000",
+                  "--min-big-T", "8256", "--out", str(out)])
+    assert rc == 0
+    doc = json.loads((out / "sample.json").read_text())
+    assert doc["budget"]["scale"] < 1 and doc["budget"]["cost_after_s"] <= 1000
+    big = [c for c in doc["cells"] if c["T"] >= 8256]
+    assert len(big) == 1 and big[0]["synthetic"] and big[0]["label"] == "s16384"
+    page, ids = RP.load_sample(out / "sample.json", MODEL, "prefill")       # V-BIN holds on the synthetic cell
+    assert ids["s16384"].shape == (16384, MODEL.cfg.top_k)
+
+
+def test_the_adapter_clocks_each_cells_wall_and_writes_it(tmp_path):
+    p, calls, _picked = _sample(tmp_path)
+    page, real = RP.load_sample(p, MODEL, "decode")
+    be = FakeProd(MODEL.cfg, page, truth=lambda c, a: 0.02)
+    be.real_ids = real
+    store = RD.Store(tmp_path / "cells.csv")
+    RD.run_page(MODEL.cfg, page, be, inst="GRR", repeats=2, store=store, lock_mhz=1710, min_clean=0, say=lambda m: None)
+    store.close()
+    w = be.wall()
+    assert set(w) == {c.label for c in page.cells} and all(v > 0 for v in w.values())
+    f = RP.write_wall(tmp_path, page, w, 2, p)
+    doc = json.loads(f.read_text())
+    assert doc["repeats"] == 2 and len(doc["cells"]) == len(page.cells)
+    rc = RP.wall_merge(["--from", str(tmp_path), "--out", str(tmp_path / "replay_wall.json")])
+    assert rc == 0 and json.loads((tmp_path / "replay_wall.json").read_text())["schema"] == RP.WALL_SCHEMA
+
+
+def test_the_grr_graphs_outputs_are_bounded():
+    cfg = MODEL.cfg
+    page = type("P", (), {"Ts": (16384,)})()
+    assert RP.grr_memory_refusal(cfg, page, "GRR", 8, 10 ** 9, 90 * 10 ** 9) == ""
+    assert "GiB" in RP.grr_memory_refusal(cfg, page, "GRR", 200, 10 ** 9, 900 * 10 ** 9)
+    assert "free" in RP.grr_memory_refusal(cfg, page, "GRR", 8, 10 ** 9, 10 ** 9)
+    assert RP.grr_memory_refusal(cfg, page, "E240", 200, 10 ** 9, 10 ** 9) == ""

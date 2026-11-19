@@ -25,7 +25,7 @@ import prodlib as PL  # noqa: E402
 def _cap(tmp_path, **kw):
     kw.setdefault("ids_cap", 4096)
     kw.setdefault("rec_cap", 64)
-    return MC.Capture(tmp_path, top_k=4, n_moe_layers=2, backend="numpy", nvtx=False, **kw)
+    return MC.Capture(tmp_path, top_k=4, n_moe_layers=2, backend="numpy", **kw)
 
 
 def test_ring_round_trip_across_shards(tmp_path):
@@ -211,3 +211,22 @@ def test_the_capture_fn_never_syncs_the_host():
             assert bad not in src.split("if self.backend != \"torch\":")[-1], (fn.__name__, bad)
     drain = inspect.getsource(MC.Capture.drain)
     assert "_capturing()" in drain and "raise PL.KitError(\"drain() inside a stream capture\")" in drain
+
+
+def test_the_marker_encodes_its_layer_in_grid_y_and_only_program_zero_works():
+    src = inspect.getsource(MC._build_kernel)
+    assert "if tl.program_id(1) == 0:" in src
+    assert "kernel()[marker_grid(layer)]" in inspect.getsource(MC.Capture.launch)
+
+
+def test_warm_gates_one_compiled_variant_per_ids_dtype():
+    class Old:
+        cache = {0: {"a": 1, "b": 2}}
+
+    class New:
+        device_caches = {0: ({"a": 1, "b": 2}, "target", "backend", "binder")}
+    assert MC.kernel_variants(Old()) == 2 and MC.kernel_variants(New()) == 2 and MC.kernel_variants(object()) is None
+    MC.check_variants(2, 2)
+    for got in (1, 3, None):
+        with pytest.raises(PL.KitError, match="G-VARIANTS"):
+            MC.check_variants(got, 2)

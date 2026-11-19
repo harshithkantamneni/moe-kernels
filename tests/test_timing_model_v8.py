@@ -15,6 +15,10 @@ that prices a cell runs in its own interpreter (tests/v8_invariant_job.py, v8_ch
   EXTENSION (slow)  ERNIE T 1..16384 on the default tile: every call prices or is refused with a reason; refusals
                     listed; adjacent-T jumps and the within-expert order sensitivity reported, never a condition
   SPEED (slow)      per-tile wall time per call (median, p90), reported
+  CAL2 (slow)       CAL2's decode rows (dcommon.CAL_MODELS' main pages) at the frozen constants: v8 == v7 bit for bit
+  V7-SUITE (slow)   tests/test_timing_model_v7.py run with v8 imported and its swaps installed around every test
+  SKEW (slow)       Zipf and CUDA-graph-padded routing on ERNIE's ladder: every refusal a DECLARED_REFUSALS class
+  NO DEFAULTS       a prefill call without sag128, sag64 or knee is a ValueError (review 1, BLOCKER 2)
 """
 from __future__ import annotations
 
@@ -84,6 +88,35 @@ def test_a_call_whose_counts_are_not_T_times_k_is_refused_before_any_pricing():
         V8.price({"model": V8.ERNIE, "T": 10, "counts": [1] * 64})
 
 
+def test_a_prefill_call_without_its_constants_is_a_value_error_not_a_default():
+    import r3_timing_model_v8 as V8
+    counts = [96] * 64                                   # ERNIE T 1024: the 128x128 prefill tile
+    full = {"model": V8.ERNIE, "T": 1024, "counts": counts, "sag128": (59.815, 612.5), "sag64": (30.365, 300.0),
+            "knee": (6.0, 2.75)}
+    for k in ("sag128", "sag64", "knee"):
+        with pytest.raises(ValueError, match=k):
+            V8.price({kk: v for kk, v in full.items() if kk != k})
+    with pytest.raises(ValueError, match="a pair"):
+        V8.price(dict(full, knee=(6.0,)))
+    assert not hasattr(V8, "DEFAULT_SAG128") and not hasattr(V8, "DEFAULT_KNEE")
+
+
+def test_a_non_native_arm_on_a_tread_is_refused():
+    import r3_timing_model_v8 as V8
+    n = V8.Tread([128] * 8, 8, 128, label=1)
+    with pytest.raises(V8.Refused, match="native arm only"):
+        V8.wv4_price(None, "mixtral-8x7b", "shared", n, None, 9, None, None, 1, None)
+    with pytest.raises(V8.Refused, match="native arm only"):
+        V8.make_cell(None, "mixtral-8x7b", "shared", n, None, 9, 1, None, None, None, None, None)
+
+
+def test_every_refusal_reason_has_a_declared_class():
+    import r3_timing_model_v8 as V8
+    assert V8.refusal_class("HOPPER_G1_N: w2 at G 1 with n_eff 6 >= 6 is ILL-POSED") == "HOPPER_G1_N"
+    assert V8.refusal_class("Refused: v8 prices the native arm only") == "REFUSED"
+    assert V8.refusal_class("KeyError: 'reads'") is None and V8.refusal_class(None) is None
+
+
 def test_register_model_refuses_a_different_config_under_a_known_name():
     import dataclasses
 
@@ -118,7 +151,8 @@ def test_invariant_v8_is_v7_bit_for_bit_on_every_registered_set(inv):
     assert len(a["b3"]["off"]) == len(a["b3"]["on"]) == 84
     assert a["pblind_cells"] == 54 and set(a["pblind"]) == {"A2", "C2", "C4", "B3", "finalised"}
     assert len(a["decode"]) == 143 and len(a["ernie"]) == 3
-    for k in ("r3", "b3", "pblind", "decode", "ernie"):
+    assert len(a["cal2"]) == len(b["cal2"]) > 0 and a["cal2_naive"] > 0 and None not in a["cal2"]
+    for k in ("r3", "b3", "pblind", "decode", "cal2", "ernie"):
         assert a[k] == b[k], k
     # the v7 side reproduces every registered number (so the equality above is to the registrations)
     for k in ("r3_unequal_registered", "b3_unequal_registered", "pblind_unequal_registered",
@@ -191,6 +225,12 @@ def test_a_page_cells_own_generated_ids_passed_explicitly_equal_ids_none_on_both
     assert any(x["balanced"] for x in i["prefill"])
     assert len(i["decode"]) == 143 and all(x["equal"] for x in i["decode"])
     assert any(x["naive"] for x in i["decode"])          # the cells whose launch order reads the ids
+    # NOT VACUOUS (review 1, MAJOR 10): on every naive cell the call's ids reached the naive path (counted), on no
+    # other cell; and the same counts in another token order move at least one naive cell's price
+    assert all(x["ids_path_calls"] == (1 if x["naive"] else 0) for x in i["decode"]), i["decode"]
+    perm = i["decode_permuted"]
+    print("decode naive cells whose price moved under permuted ids:", sum(p["differ"] for p in perm), "of", len(perm))
+    assert len(perm) == sum(x["naive"] for x in i["decode"]) and any(p["differ"] for p in perm), perm
     assert chk["stats"].get("WV3.tile_content_ids_counts", 0) > 0
 
 
@@ -201,6 +241,15 @@ def test_every_binding_of_every_swapped_function_is_declared_and_restored(chk):
     assert b["restored"] and b["plan_entries"] == sum(len(v) for v in b["declared"].values())
     assert set(b["declared"]["price_parts"]) == {"common.price_parts", "v5price.price_parts", "kneefit.price_parts",
                                                  "d5.price_parts", "bw.price_parts"}
+    # review 1 MINOR: re-scanned per install when the loaded modules change (and not otherwise)
+    assert b["rescan_unchanged_skipped"] and b["rescan_on_new_module"]
+
+
+@need
+def test_cleared_caches_reprice_to_the_same_bits(chk):
+    c = chk["caches"]
+    assert c["equal"] and c["cache_every"] > 0
+    assert c["dropped"]["_CONTENT_REAL"] > 0, c["dropped"]
 
 
 # ---------------------------------------------------------------- EXTENSION and SPEED (ERNIE, no measurement)
@@ -227,6 +276,39 @@ def test_extension_every_ernie_call_prices_or_is_refused_with_a_reason(ext):
     # the only declared refusal on ERNIE's default ladder: HOPPER_G1_N at 128x128 G 1, 8192 <= T <= 8255
     assert all(r["tile"] == "128x128x64w8s3" and r["G"] == 1 and 8192 <= r["T"] <= 8255
                and r["why"].startswith("HOPPER_G1_N") for r in refused), refused
+
+
+@need
+@pytest.mark.slow
+def test_skewed_and_padded_routing_price_or_refuse_with_a_declared_reason(ext):
+    skew = ext["skew"]
+    assert {r["routing"] for r in skew} == {"zipf", "padded"}
+    assert all((r["ms"] is not None) != bool(r["why"]) for r in skew)
+    # padding concentrates: the padded rows all sit on the same k experts
+    assert any(r["routing"] == "padded" and r["T"] - r["T_real"] >= 2 and r["max_count"] >= r["T"] - r["T_real"]
+               for r in skew)
+    print("refusal classes:", json.dumps(ext["refusal_classes"]))
+    assert ext["undeclared_refusals"] == [], ext["undeclared_refusals"][:5]
+    assert sum(1 for r in skew if r["ms"] is not None) > 0.9 * len(skew)
+
+
+@need
+@pytest.mark.slow
+def test_v7s_own_suite_passes_with_v8s_swaps_installed_around_every_test(tmp_path):
+    import os
+    rep = tmp_path / "v7suite.json"
+    env = dict(os.environ, V8_V7SUITE_REPORT=str(rep),
+               PYTHONPATH=os.pathsep.join([str(REPO / "tests"), str(REPO / "scripts"), str(REPO),
+                                           os.environ.get("PYTHONPATH", "")]))
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "v8_v7suite_plugin",
+                        str(REPO / "tests" / "test_timing_model_v7.py")], capture_output=True, text=True,
+                       cwd=str(REPO), env=env, timeout=1800)
+    tail = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-500:]
+    print("v7 suite under v8:", tail)
+    assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]
+    got = json.loads(rep.read_text())
+    assert got["wrapped"] > 0 and got["depth_ok"] == got["wrapped"] and got["restored"] is True, got
+    assert got["plan_entries"] > 0 and sum(got["tread_calls"].values()) == 0, got     # v7 never hands a Tread
 
 
 @need

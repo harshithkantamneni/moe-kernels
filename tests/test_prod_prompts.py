@@ -174,3 +174,11 @@ def test_hf_config_check_reads_ernie_and_olmoe_keys():
     olmoe = {"hidden_size": 2048, "intermediate_size": 1024, "num_experts": 64, "num_experts_per_tok": 8,
              "num_hidden_layers": 16}
     assert PL.check_hf_config(PL.MODELS["olmoe-1b-7b"], olmoe) == []
+
+
+def test_the_tokenizer_revision_is_the_served_models_pin(monkeypatch):
+    import prompts as PR
+    monkeypatch.setitem(PL.HF_REVISIONS, "olmoe-1b-7b", "a" * 40)
+    assert PR.tokenizer_revision("allenai/OLMoE-1B-7B-0924") == "a" * 40
+    assert PR.tokenizer_revision("someone/else") is None
+    assert set(PL.HF_REVISIONS) == set(PL.MODELS)

@@ -7,7 +7,9 @@ ONE ENTRY POINT, `price(call)`. A call is what one fused_experts launch on GH200
     {model: a MODEL_CONFIGS key or a moe.spec.MoEConfig (registered in-process by `register_model`),
      T: the padded token count, counts: per-expert routed rows (len E, sum == T k),
      ids: token-major topk ids (len T k) or None,
-     tile / G: optional; default vLLM 0.27.1's default ladder, moe.bench.tile_resolve.default_config(T, E)}
+     tile / G: optional; default vLLM 0.27.1's default ladder, moe.bench.tile_resolve.default_config(T, E),
+     sag128, sag64, knee: REQUIRED on a prefill tile (no default; a missing one is a ValueError): the board's 128x128
+           sag par at 1410 MHz, the 64x128 par and the K1 knee, each a pair (review 1, BLOCKER 2)}
 
 priced on the six default tiles: the four decode tiles by v7's decode branch (v6d + D6FIX at the v7 decode blind's
 frozen constants: finalise_decode.params_of on the frozen block of
@@ -494,6 +496,11 @@ def wv4_price(pr, model, arm, n, counts, copies, seed, t, G, prm, *, key="CLAMP"
         return _orig("WV4.price")(pr, model, arm, n, counts, copies, seed, t, G, prm, key=key, A_us=A_us, reads=reads,
                                   rowkey_w1=rowkey_w1, proxy_n=proxy_n)
     STATS["WV4.price"] += 1
+    if arm != "native":
+        # wave_split_bytes_v4.py:171-172 hands n32 to r6model.proxy_A_us, which formats str(n) into its table key on a
+        # non-native arm (scoring/rental6/r6model.py:88-95): a Tread's label there would price another tread's A.
+        # v8 prices real calls, which are NATIVE: any other arm on a Tread is refused (review 1, MINOR)
+        raise Refused(f"v8 prices the native arm only on a call (arm {arm!r}: r6model's A proxy keys by str(n))")
     WV4 = _NS(_orig("WV4.price"))
     TM, V4 = WV4.TM, WV4.V4
     import r3_timing_model_v3 as TV3
@@ -547,6 +554,8 @@ def make_cell(eng, model, arm, n, counts, copies, G, t, reads, occ, k_w, sms):
     if not isinstance(n, Tread):
         return _orig("V4.make_cell")(eng, model, arm, n, counts, copies, G, t, reads, occ, k_w, sms)
     STATS["V4.make_cell"] += 1
+    if arm != "native":
+        raise Refused(f"v8 prices the native arm only on a call (make_cell, arm {arm!r})")
     import private_weight_reference as PWR
     import r3_timing_model as TM
     cfg = MODEL_CONFIGS[model]
@@ -896,11 +905,29 @@ def bindings() -> dict:
 
 
 _PLAN: list = []
+_PLAN_KEY: list = [None]
+
+
+def _modules_key():
+    """A cheap fingerprint of the loaded module set (sys.modules' ids plus round 5's work modules): the plan is
+    re-scanned whenever it changes, so a module imported after the first install that binds an original is caught."""
+    C = R5.chain()
+    return hash((tuple(id(m) for m in list(sys.modules.values())),
+                 tuple(id(v) for v in C.values() if isinstance(v, types.ModuleType))))
 
 
 def _plan() -> list:
-    """[(holder, attribute, original, copy)] for every binding; refuses a binding SWAP_BINDINGS does not declare."""
-    if _PLAN:
+    """[(holder, attribute, original, copy)] for every binding; refuses a binding SWAP_BINDINGS does not declare.
+
+    RE-SCANNED PER INSTALL (review 1, MINOR): the scan is repeated at every outermost `installed()` whose loaded-module
+    fingerprint (`_modules_key`) differs from the last scan's, so a module loaded later cannot keep an unswapped
+    binding. SCAN BLIND SPOTS (what `_scan` cannot see, stated rather than hidden): an original held inside a
+    container (a list, tuple, dict value or set), a closure cell, a default argument, a functools.partial, an instance
+    attribute of an object that is not a module or a class defined in one, or a C-level reference. The grep of
+    scripts/ behind SWAP_BINDINGS found none of these forms for any swapped name; the canary and the Tread poison
+    (a missed site raises PoisonedTread) are the run-time backstop."""
+    key = _modules_key()
+    if _PLAN and _PLAN_KEY[0] == key:
         return _PLAN
     orig = _originals()
     found = _scan()
@@ -910,8 +937,10 @@ def _plan() -> list:
     missing = {k: sorted(SWAP_BINDINGS[k] - set(v)) for k, v in found.items() if SWAP_BINDINGS[k] - set(v)}
     if missing:
         raise Refused(f"v8: declared bindings not found (the chain changed?): {missing}")
+    _PLAN.clear()
     _PLAN.extend((holder, attr, orig[k], SWAPS[k][1]) for k, v in found.items() for holder, attr in v.values())
-    _PLAN_INFO.update(bindings={k: sorted(v) for k, v in found.items()})
+    _PLAN_INFO.update(bindings={k: sorted(v) for k, v in found.items()}, scans=_PLAN_INFO.get("scans", 0) + 1)
+    _PLAN_KEY[0] = key
     return _PLAN
 
 
@@ -929,7 +958,6 @@ def _set(holder, attr, value):
 @contextlib.contextmanager
 def installed():
     """Inside this block every binding of every inventoried function is v8's copy; restored on exit (re-entrant)."""
-    plan = _plan()
     if _DEPTH[0]:
         _DEPTH[0] += 1
         try:
@@ -937,6 +965,7 @@ def installed():
         finally:
             _DEPTH[0] -= 1
         return
+    plan = _plan()          # outside any install: re-scanned when the loaded modules changed
     done = []
     try:
         for holder, attr, f, copy in plan:
@@ -956,20 +985,18 @@ def installed():
 # ================================================================== the prefill branch (v7's, at a Tread)
 
 PREFILL_TILES, DECODE_TILES = V7.PREFILL_TILES, V7.DECODE_TILES
-#: the production default constants of the prefill branch (a call may override them): the v7 prefill blind's
-#: finalised 128x128 par (prefill_blind.score.json finalised.par), its registered 64x128 par (v7pcommon.A2_PAR_64)
-#: and the K1 knee at round 4's SEEN constants (round5_chain.K1_SEEN). A judgment for the offline checks; the
-#: serving registration names its own (critique B1: the prefill branch is a 1410 MHz model)
-DEFAULT_SAG128 = (64.325, 612.5)
-DEFAULT_SAG64 = (30.365, 300.0)
-DEFAULT_KNEE = R5.K1_SEEN
+#: The prefill branch's three on-board / registered inputs have NO default (review 1, BLOCKER 2): every prefill call
+#: names its 128x128 sag par (`sag128`, (A us, tau us), measured on the board at 1410 MHz), its 64x128 par (`sag64`)
+#: and its K1 knee (`knee`, (p, S0)); a call without them is a ValueError, never a silent constant from another
+#: board. The production kit passes them from scripts/prod/prodlib.py (PREFILL_REGISTERED + the board's par).
+PREFILL_KEYS = ("sag128", "sag64", "knee")
 
 
 def hopper_refused(n: Tread, G: int) -> bool:
     return int(G) == 1 and n.hopper_g1(n.E, n.bm)
 
 
-def price_prefill(row: dict, *, sag128, sag64=None, knee=None, switches: Switches = V8) -> dict:
+def price_prefill(row: dict, *, sag128, sag64, knee, switches: Switches = V8) -> dict:
     """V7.price_prefill (r3_timing_model_v7.py:353) on a row whose n is a Tread, inside `installed()`. The two changed
     lines are marked; a None from the guard (128: STAG-CUT; 64: k5.cell_ms) is a refusal with its reason."""
     C = R5.chain()
@@ -979,7 +1006,9 @@ def price_prefill(row: dict, *, sag128, sag64=None, knee=None, switches: Switche
         raise Refused(f"prefill cell at BLOCK_M {bm}: no prefill tile")
     n = row["n"]
     assert isinstance(n, Tread), n
-    p, s0 = tuple(knee) if knee is not None else R5.K1_SEEN
+    if sag128 is None or sag64 is None or knee is None:
+        raise ValueError(f"price_prefill needs sag128, sag64 and knee (got {sag128!r}, {sag64!r}, {knee!r})")
+    p, s0 = tuple(knee)
     rr = switches.RR and V7.rr_applies(tile, G)
     dom = (f"HOPPER_G1_N: w2 at G 1 with n_eff {n.n_eff:.4g} >= {_W().HOPPER_G1_N} is ILL-POSED (M4's Hopper rule, "
            "read at n_eff)") if hopper_refused(n, G) else None
@@ -1083,8 +1112,11 @@ def price_decode_cell(model: str, cell: dict, prm, *, ids=None, arm: str = "nati
     # r3_timing_model_v7.py:430  ids = V4DP.ids_of(model, cell) if fixes.naive_order and naive else None
     #                       ->  the call's ids (token-major, T k) when given, else V4DP.ids_of
     if fixes.naive_order and naive:
-        ids = (tuple(int(x) for x in np.asarray(ids).reshape(-1)) if ids is not None and switches.IDS
-               else V4DP.ids_of(model, cell))
+        if ids is not None and switches.IDS:
+            STATS["decode.naive_ids"] += 1        # the call's ids reached the naive path's launch order
+            ids = tuple(int(x) for x in np.asarray(ids).reshape(-1))
+        else:
+            ids = V4DP.ids_of(model, cell)
     else:
         ids = None
 
@@ -1123,6 +1155,29 @@ def default_tile(T: int, E: int) -> tuple[str, int]:
     return tile_key(d), int(d["GROUP_SIZE_M"])
 
 
+#: EVERY reason v8 may give for a refusal (ms None), as (class, the why's prefix): the declared domain edges, the frozen
+#: guards and the refusals the frozen code raises as a Refused (review 1, MAJOR 11: a sweep asserts every refusal it
+#: meets is one of these). Any other exception is raised, never a refusal.
+DECLARED_REFUSALS = (
+    ("HOPPER_G1_N", "HOPPER_G1_N:"),                         # w2 at G 1, n_eff >= 6 (M4's Hopper rule, read at n_eff)
+    ("STAG_CUT_GUARD", "the STAG-CUT guard refuses the cell"),  # 128x128: M4's kappa or root-gap guard
+    ("M4_GUARD", "M4's guard refuses the cell"),              # 64x128: the same guard (k5.cell_ms None)
+    ("NUMEL_0", "numel 0: no routed row"),
+    ("GEOM_OFF", "GEOM off: v7 prices whole page treads only"),
+    ("V6D_NOT_PRICED", "NOT PRICED (v6d:"),                   # decode: no constants for the tile or path
+    ("V6D_OTHER_TILE", "v6d prices this cell at "),           # decode: v6d's own tile differs from the call's
+    ("REFUSED", "Refused: "),                                 # a frozen or v8 Refused (r3 tile, arm, ids/counts)
+)
+
+
+def refusal_class(why: str | None) -> str | None:
+    """The DECLARED_REFUSALS class of a refusal's why, else None (an undeclared refusal)."""
+    for cls, pre in DECLARED_REFUSALS:
+        if why and why.startswith(pre):
+            return cls
+    return None
+
+
 #: what a refusal may be (a declared domain edge); anything else is raised
 def _refusals():
     import cross_model_predict as CMP
@@ -1137,6 +1192,68 @@ def _model_of(call: dict) -> str:
     if m not in MODEL_CONFIGS:
         raise Refused(f"model {m!r} is not in MODEL_CONFIGS; pass its MoEConfig")
     return m
+
+
+#: a long pricing worker clears the per-call caches every this many prefill calls (review 1, MINOR: bounded memory)
+CACHE_EVERY = 256
+_CALLS = [0]
+
+
+def clear_caches() -> dict:
+    """Drop the per-call memo entries a stream of distinct real calls would grow without bound: v8's real-ids tile
+    contents (_CONTENT_REAL: each key holds the call's ids, 0.8 MB at T 16384; measured 2026-11-19 as the one cache
+    that grows per distinct call), round 3's launch-start draws (r5._STARTS, keyed by live CTAs), and, should a path
+    leave them, k5._READS entries keyed by a Tread digest (v8's 7-element keys; v7's 6-element page keys stay), WV4
+    model event entries keyed by a Tread, and r3_timing_model's functools caches of schedule() and window() (round 5's
+    reads5 context already clears k5._READS and WV4._MODELS per call). Every entry is a pure function of its key
+    (seeded draws included), so a cleared entry recomputes to the same bits. Returns how many entries each dropped."""
+    out = {"_CONTENT_REAL": len(_CONTENT_REAL)}
+    _CONTENT_REAL.clear()
+    C = R5.chain() if R5._CHAIN else {}
+    r5 = C.get("r5")
+    if r5 is not None and isinstance(getattr(r5, "_STARTS", None), dict):
+        out["r5._STARTS"] = len(r5._STARTS)
+        r5._STARTS.clear()
+    k5 = C.get("k5")
+    if k5 is not None:
+        drop = [k for k in k5._READS if isinstance(k, tuple) and len(k) == 7]
+        for k in drop:
+            del k5._READS[k]
+        out["k5._READS"] = len(drop)
+    WV4 = sys.modules.get("wave_split_bytes_v4")
+    n_ev = 0
+    if WV4 is not None:
+        for m in list(WV4._MODELS.values()):
+            ev = getattr(m, "_events", None)
+            if ev:
+                drop = [k for k in ev if any(isinstance(x, (Tread, RealIds)) for x in k)]
+                for k in drop:
+                    del ev[k]
+                n_ev += len(drop)
+    out["events"] = n_ev
+    TM = sys.modules.get("r3_timing_model")
+    if TM is not None:
+        for f in ("schedule", "window"):
+            fn = getattr(TM, f, None)
+            if hasattr(fn, "cache_clear"):
+                out[f"TM.{f}"] = fn.cache_info().currsize
+                fn.cache_clear()
+    return out
+
+
+def prefill_constants(call: dict) -> tuple:
+    """(sag128, sag64, knee) of a prefill call, each a pair; a missing one is a ValueError (no default)."""
+    miss = [k for k in PREFILL_KEYS if call.get(k) is None]
+    if miss:
+        raise ValueError(f"a prefill call needs {', '.join(PREFILL_KEYS)}: {', '.join(miss)} missing (v8 has no "
+                         "default constants; the production kit passes the board's par and the registered pair)")
+    out = []
+    for k in PREFILL_KEYS:
+        v = tuple(call[k])          # as given (no float(): the frozen code sees the caller's numbers unchanged)
+        if len(v) != 2:
+            raise ValueError(f"{k} {call[k]!r}: a pair")
+        out.append(v)
+    return tuple(out)
 
 
 def price(call: dict, switches: Switches = V8) -> dict:
@@ -1172,9 +1289,10 @@ def price(call: dict, switches: Switches = V8) -> dict:
                               order_seed=call.get("order_seed"))
             n = row["n"]
             base.update(n_eff=n.n_eff)
-            sag128 = tuple(call.get("sag128", DEFAULT_SAG128))
-            sag64 = tuple(call.get("sag64", DEFAULT_SAG64))
-            knee = call.get("knee", DEFAULT_KNEE)
+            sag128, sag64, knee = prefill_constants(call)
+            _CALLS[0] += 1
+            if CACHE_EVERY and _CALLS[0] % CACHE_EVERY == 0:
+                clear_caches()
             if not switches.GEOM:
                 if not n.whole() or ids is not None:
                     return dict(base, ms=None, regime="prefill", why="GEOM off: v7 prices whole page treads only")
