@@ -20,7 +20,11 @@ registered 64x128 par and knee (prodlib.PREFILL_REGISTERED): `v8_ms`. Beside it,
 calibration: the prefill calls at the registered reference pars' median (prodlib.REF_PAR_MEDIAN): `v8_refpar_ms`
 (decode calls do not read the par: the same number). The ROOFLINE (required, never NOT SCORED): the v7 decode
 blind's registered rival T0_GR + A W_e / bw at its frozen constants (prodlib.roofline_ms), every call: `roof_ms`.
-Frontier's predictions (frontier_op.py), each arm its own predictor.
+Frontier's predictions (frontier_op.py), each arm its own predictor (`frontier:<arm>`), every one scored against
+the SAME serving kernel-sum, labelled by FRONTIER_ARMS: `cli` (complete grid, trained on the kernel-sum WITHOUT the
+functional API's fills: the like-for-like truth), `simpath`, `cli-fills` (trained on Frontier's NATIVE definition,
+every kernel of the functional call, the fills included: what Frontier itself would train on), `cli-partial` (only
+when grid points were missing), `cli-balanced` (opt-in round-robin routing).
 
 TRUTHS. kernel-sum (align..moe_sum durations) is the PRIMARY truth; span (first start to last end) is SECONDARY: a
 call with T > 512 runs outside CUDA graphs (the capture sizes stop at 512), so its span includes the host's launch
@@ -239,6 +243,19 @@ def span_ratio(rows: list[dict]) -> dict:
     return {k: {"n": len(v), "median": float(np.median(v))} for k, v in sorted(acc.items())}
 
 
+#: what each Frontier arm is (frontier_op.py module doc "TWO TRUTH DEFINITIONS", "ARMS"); the report prints these
+FRONTIER_ARMS = {
+    "cli": "Frontier's CLI trainer on the complete grid, uniform routing x 3 samples; trained on the kernel-sum WITHOUT "
+           "the functional API's fills: the like-for-like truth (serving's kernel-sum has no such fills)",
+    "simpath": "as cli, the simulator's features (total_routed_tokens, num_tokens_post_padded)",
+    "cli-fills": "as cli, trained on Frontier's NATIVE definition (record_function: every kernel of the functional "
+                 "call, its ~9 fills included); scored against the fills-free serving kernel-sum, so it carries the "
+                 "fills as error by construction",
+    "cli-partial": "as cli on an INCOMPLETE grid (csv_meta.json lists the missing points): secondary, never the primary",
+    "cli-balanced": "as cli, Frontier's round-robin (balanced) routing: the opt-in second arm",
+}
+
+
 def load_frontier(path) -> dict:
     """{(run, g, arm): pred_ms} from frontier_op.py predict's directory (index.json + npy), or a predictions.jsonl."""
     if Path(path).is_dir():
@@ -309,7 +326,12 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
                         "graphs and their span includes host launch gaps: the smoke's 128x128 span was ~2x kernel-sum; "
                         "span / kernel-sum per cudagraph mode under each run)")
     fills = fills or {}
-    preds = (["v8_ms", "v8_refpar_ms", "roof_ms"] + sorted({f"frontier:{a}" for (_r, _g, a) in frontier}))
+    arms = sorted({a for (_r, _g, a) in frontier})
+    if arms:
+        out["frontier_arms"] = {a: FRONTIER_ARMS.get(a, "unlabelled arm") for a in arms}
+        out["notes"].append("Frontier arms, all scored against serving's kernel-sum (fills-free): "
+                            + "; ".join(f"frontier:{a} = {FRONTIER_ARMS.get(a, 'unlabelled arm')}" for a in arms))
+    preds = (["v8_ms", "v8_refpar_ms", "roof_ms"] + [f"frontier:{a}" for a in arms])
     for label, rows in runs.items():
         lk = lock_of(label)
         dropped = sum(1 for r in rows if off_lock(r.get("sm_mhz"), lk))

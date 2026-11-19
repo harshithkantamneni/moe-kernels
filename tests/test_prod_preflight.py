@@ -75,6 +75,8 @@ def box(tmp_path):
     ses = tmp_path / "session"
     ses.mkdir()
     (ses / "PREFLIGHT.txt").write_text("THE VM PREFLIGHT\nPF1 PASS\nverdict READY (exit 0: done)\n")
+    blob = tmp_path / "shard.bin"                                       # P12 times a local "download"
+    blob.write_bytes(b"\0" * (4 << 20))
     gitdir = str(Path(shutil.which("git")).parent)
     env = dict(os.environ, PATH=f"{b}:{gitdir}:/usr/bin:/bin", FAKE_LOG=str(tmp_path / "calls.log"),
                HF_HUB_CACHE=str(tmp_path / "hf"), HF_HUB_OFFLINE="1", HOME=str(tmp_path / "home"),
@@ -83,7 +85,7 @@ def box(tmp_path):
     args = ["--repo", str(repo), "--model", "olmoe-1b-7b", "--expect-commit", head, "--nsys", str(b / "nsys"),
             "--tmpdir", str(tmp_path / "moe" / "tmp"), "--session", str(ses), "--frontier-url", str(fr),
             "--frontier-commit", fsha, "--frontier-src", str(tmp_path / "moe" / "frontier" / "src"),
-            "--disk", str(tmp_path), "--min-free-gb", "0", "--out", str(tmp_path / "pf.json")]
+            "--disk", str(tmp_path), "--min-free-gb", "0", "--rate-url", blob.as_uri(), "--out", str(tmp_path / "pf.json")]
     return {"tmp": tmp_path, "env": env, "args": args, "repo": repo, "ses": ses, "head": head}
 
 
@@ -100,6 +102,7 @@ def test_every_check_passes_on_a_ready_box_and_the_card_is_left_unlocked(box):
     assert p.returncode == 0, p.stdout + p.stderr
     assert all(v["verdict"] == "PASS" for v in c.values()), c
     assert "PASS env-preflight" in p.stdout and "resolves to the pin" in c["P8"]["detail"]
+    assert "MB/s" in c["P12"]["detail"] and "measured" in c["P12"]["detail"]
     log = (box["tmp"] / "calls.log").read_text().splitlines()
     # P3 read the ENFORCED limit; P4 set each lock and restored the default clocks after each one
     assert any("enforced.power.limit" in x for x in log)
@@ -122,6 +125,8 @@ def test_every_check_passes_on_a_ready_box_and_the_card_is_left_unlocked(box):
     ("frontier", "P9", "has no commit"),
     ("disk", "P10", "need >"),
     ("setup", "P11", "NOT READY"),
+    ("rate", "P12", "under the 1e+12 MB/s floor"),
+    ("rate-url", "P12", "URLError"),
 ])
 def test_each_fault_fails_its_own_check_with_its_reason(box, mutate, cid, why):
     env, extra = {}, []
@@ -146,6 +151,10 @@ def test_each_fault_fails_its_own_check_with_its_reason(box, mutate, cid, why):
         extra = ["--frontier-commit", "0" * 40]
     elif mutate == "disk":
         extra = ["--min-free-gb", "1e12"]
+    elif mutate == "rate":                         # a slow link: the measured rate is reported with the floor
+        extra = ["--min-mbps", "1e12"]
+    elif mutate == "rate-url":
+        extra = ["--rate-url", (box["tmp"] / "nope.bin").as_uri()]
     elif mutate == "setup":
         (box["ses"] / "PREFLIGHT.txt").write_text("verdict NOT READY (exit 1: claim failed)\n")
     p, c = _run(box, *extra, **env)

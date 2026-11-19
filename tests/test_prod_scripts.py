@@ -2,6 +2,7 @@
 created, the ERNIE 60 s gate before any long run, the locks per branch)."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -14,7 +15,8 @@ REPO = Path(__file__).resolve().parents[1]
 PROD = REPO / "scripts" / "prod"
 
 
-@pytest.mark.parametrize("name", ["smoke.sh", "main.sh", "kitlib.sh", "frontier_setup.sh", "sag1410.sh", "offline.sh"])
+@pytest.mark.parametrize("name", ["smoke.sh", "main.sh", "kitlib.sh", "frontier_setup.sh", "sag1410.sh", "offline.sh",
+                                  "pull_traces.sh"])
 def test_shell_syntax(name):
     assert subprocess.run(["bash", "-n", str(PROD / name)]).returncode == 0
 
@@ -62,6 +64,17 @@ def test_smoke_dry_run_lists_the_smoke_sequence(tmp_path):
     assert "--allow-unpinned" in next(s for s in steps if s.split()[1] == "prompts-fetch")
     assert all(_cap(s) > 0 for s in steps)                      # review 2, MAJOR C: every step has its cap
     assert "--model olmoe-1b-7b" in by["replay-wall"]           # MAJOR B: the wall names its model
+    # review 2026-11-19: the early probe (hard) right after the gate; every locked_r3 call names its run cap
+    for n in ("frontier-setup", "frontier-grid-check", "frontier-timer-probe"):
+        assert not _soft(by[n]), n
+    assert names.index("sequences-A") < names.index("frontier-timer-probe") < names.index("sag1410")
+    assert 'PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-64,192,256}"' in (PROD / "smoke.sh").read_text()
+    for n, st in by.items():
+        if "locked_r3.py" in st:
+            m = re.search(r"--run-cap-s (\d+) ", st)
+            assert m and int(m.group(1)) < _cap(st), n
+    assert "--truth with_fills " in by["frontier-csv-fills"] and "--models cli-fills=" in by["frontier-predict"]
+    assert _cap(by["env-preflight"]) == 600
 
 
 def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
@@ -112,10 +125,13 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
             names.index(f"frontier-timer-export-{b}") < names.index("frontier-points")
     fr = (PROD / "main.sh").read_text().split("fr_timer() {", 1)[1].split("\n}", 1)[0]
     assert "frontier_op.py\" timer" in fr and "--cuda-graph-trace" not in fr and "--max-tokens 16384" in fr
-    assert f"fpoints --model ernie-4.5-21b-a3b --timer {tmp_path}/res/frontier/timer-decode --timer " \
-        f"{tmp_path}/res/frontier/timer-prefill --max-tokens 16384 " in by["frontier-points"]
-    for n in ("frontier-csv", "frontier-train", "frontier-holdout", "frontier-simpath"):
-        assert f"--src {tmp_path}/moe/frontier/src" in by[n], n
+    tr = f"{tmp_path}/moe/traces/res"                    # review m6: raw traces outside the pushed results tree
+    assert f"fpoints --model ernie-4.5-21b-a3b --timer {tmp_path}/res/frontier/timer-decode --timer-sqlite " \
+        f"{tr}/frontier/timer-decode/timer.sqlite --timer {tmp_path}/res/frontier/timer-prefill --timer-sqlite " \
+        f"{tr}/frontier/timer-prefill/timer.sqlite --max-tokens 16384 " in by["frontier-points"]
+    for n in ("frontier-csv", "frontier-train", "frontier-holdout", "frontier-simpath", "frontier-csv-fills",
+              "frontier-train-fills", "frontier-csv-partial", "frontier-train-partial"):
+        assert f"--src {tmp_path}/moe/frontier/src" in by[n] and _soft(by[n]), n
     assert "fpoints" in by["frontier-points"] and "csv" in by["frontier-csv"].split("frontier_op.py")[1]
     opt = _dry("main.sh", tmp_path / "x", "--graphmode-overhead")
     onames = [x.split()[1] for x in opt]
@@ -155,6 +171,55 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
         assert "--model ernie-4.5-21b-a3b" in by[f"replay-probe-wall-{b}"]
         assert f"--probe-wall {tmp_path}/res/replay-probe-{b}/replay_wall.json" in by[f"replay-sample-{b}"]
         assert "--wall " not in by[f"replay-sample-{b}"]
+    # review 2026-11-19 M1: Frontier's default routing; m4: the two truths; M3: the partial arm (no needs on the
+    # failed points step), trained only when csv --partial wrote one; every arm predicted when its trainer passed
+    assert "--truth kernel_sum " in by["frontier-csv"] and "--truth with_fills " in by["frontier-csv-fills"]
+    assert "--partial " in by["frontier-csv-partial"] and "needs=" not in by["frontier-csv-partial"]
+    assert f"--only-if-partial {tmp_path}/res/frontier/profile-partial/csv_meta.json" in by["frontier-train-partial"]
+    assert "--arm-label cli-partial " in by["frontier-train-partial"] and "--arm-label cli-fills " in by["frontier-train-fills"]
+    for arm in ("cli", "simpath", "cli-fills", "cli-partial"):
+        assert f"--models {arm}=" in by["frontier-predict"], arm
+    assert "needs=" not in by["frontier-predict"] and "cli-balanced" not in by["frontier-predict"]
+    assert 'FR_ROUTING="${PROD_FRONTIER_ROUTING:-uniform}"' in (PROD / "main.sh").read_text()
+    assert not any("balanced" in n for n in names)
+    # the EARLY PROBE (hard) right after the gate, before every expensive block: Frontier's venv, its grid-check
+    for n in ("frontier-setup", "frontier-grid-check", "frontier-timer-probe"):
+        assert not _soft(by[n]), n
+    assert names.index("gate60-sequences") < names.index("frontier-setup") < names.index("frontier-grid-check") \
+        < names.index("frontier-timer-probe") < names.index("sag1410") < names.index("A1710-capture")
+    assert by["frontier-timer-probe"].rstrip().endswith("fr_probe") and _cap(by["frontier-timer-probe"]) <= 900
+    pr = (PROD / "main.sh").read_text().split("fr_probe() {", 1)[1].split("\n}", 1)[0]
+    for want in ('--grid-points "$PROBE_POINTS"', "fpoints", " csv ", "train --narrow", "predict", "--points",
+                 "kit_lock", "$PT/timer-$b/timer.sqlite"):
+        assert want in pr, want
+    assert 'PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-64,1024,8192}"' in (PROD / "main.sh").read_text()
+    # review M2: every locked_r3 call names its run cap, below its step's cap
+    runcaps = {}
+    for n, st in by.items():
+        if "locked_r3.py" in st:
+            m = re.search(r"--run-cap-s (\d+) ", st)
+            assert m, n
+            runcaps[n] = int(m.group(1))
+            assert runcaps[n] < _cap(st), n
+    assert runcaps == {"replay-probe-decode": 1700, "replay-decode": 5000, "replay-probe-prefill": 1700,
+                       "replay-prefill": 5000, "replay-offset-nsys-decode": 1700, "replay-offset-nsys-prefill": 1700}
+    # review m6: no step writes a raw trace into the results tree
+    for n, st in by.items():
+        for tok in st.split():
+            for path in tok.removeprefix("out=").replace("|", ",").split(","):
+                if path.endswith((".nsys-rep", ".sqlite")):
+                    assert path.startswith(f"{tr}/"), (n, path)
+    for n in ("gate60-export", "A1710-export", "replay-offset-export-decode", "frontier-timer-export-prefill"):
+        assert f"out={tr}/" in by[n], n
+    # the opt-in balanced arm: its own passes, CSV and trainer, predicted as cli-balanced
+    bal = _dry("main.sh", tmp_path / "bal", "--frontier-balanced-arm")
+    bnames = [x.split()[1] for x in bal]
+    bby = dict(zip(bnames, bal, strict=True))
+    for n in ("frontier-balanced-lock-decode", "frontier-balanced-decode", "frontier-balanced-export-prefill",
+              "frontier-balanced-points", "frontier-balanced-csv", "frontier-balanced-train"):
+        assert n in bnames and (_soft(bby[n]) or n.endswith("unlock")), n
+    assert "fr_timer prefill 1410 balanced balanced-prefill" in bby["frontier-balanced-prefill"]
+    assert "--models cli-balanced=" in bby["frontier-predict"] and "--arm-label cli-balanced " in bby["frontier-balanced-train"]
     # MAJOR A: the last step is the hard held-back check, after the final push
     assert names[-1] == "held-back-check" and not _soft(by["held-back-check"])
     assert names.index("push-final") < names.index("held-back-check")
@@ -347,11 +412,14 @@ def test_every_main_step_has_a_cap_at_least_twice_its_expected_time_and_the_plan
         assert caps[st] >= 2 * sec, (st, caps[st], sec)
     assert plan["total_h"] <= 4.0 and min(plan["serving"]["per_tile"].values()) >= 30
     assert plan["frontier"]["points"] == plan["frontier"]["grid_points"] == 387          # the full grid
+    assert plan["frontier"]["samples"] == 3 * 387                                       # uniform x 3 seeds
+    assert plan["worst_download_total_s"] > plan["total_s"] and caps["env-preflight"] == 600
     env = dict(os.environ, PY_VLLM=sys.executable, HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
     p = subprocess.run(["bash", str(PROD / "main.sh"), "--dry-run", "--results", str(tmp_path / "res2")],
                        capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
     tot = [x for x in p.stdout.splitlines() if x.startswith("PLAN EXPECTED TOTAL")]
     assert tot and f"{plan['total_s']:.0f} s" in tot[0], p.stdout[-2000:]
+    assert any(x.startswith("PLAN WORST CASE at the 50 MB/s download floor") for x in p.stdout.splitlines())
 
 
 def test_held_back_check_fails_on_a_needed_file_and_passes_on_the_rentals_intermediates(tmp_path):
@@ -418,6 +486,18 @@ def test_expected_outputs_follow_the_rentals_own_summary(tmp_path):
     (R / "replay-offset-decode").mkdir()
     (R / "replay-offset-decode" / "replay_check.json.xz").write_bytes(b"x")
     assert PL.expected_outputs(R)["missing"] == []
+    # review m8: frontier-csv is tied to the CSV it really writes (not points.json)
+    with open(R / "SUMMARY.txt", "a") as fh:
+        fh.write("PASS frontier-points (1s)\nPASS frontier-csv (1s)\n")
+    (R / "frontier" / "points.json").write_text("{}")
+    miss = PL.expected_outputs(R)["missing"]
+    assert len(miss) == 1 and "frontier/profile/compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv" in miss[0]
+    import frontier_op as FO
+    assert PL.FRONTIER_CSV_REL == str(FO.csv_relpath("ernie-4.5-21b-a3b"))
+    csv = R / "frontier" / "profile" / PL.FRONTIER_CSV_REL
+    csv.parent.mkdir(parents=True)
+    csv.write_text("x\n")
+    assert PL.expected_outputs(R)["missing"] == []
 
 
 # ---- smoke rental 2026-11-19 (SMOKE-FIXES.md 1-5): env, resume, preflight -------------------------------------
@@ -439,7 +519,7 @@ def test_the_first_step_is_the_hard_env_preflight_and_every_step_sees_tmpdir_and
     assert not (tmp_path / "moe").exists()
     steps = [x for x in lines if x.startswith("STEP ")]
     first = steps[0]
-    assert first.split()[1] == "env-preflight" and not _soft(first) and _cap(first) == 300 and " always " in first
+    assert first.split()[1] == "env-preflight" and not _soft(first) and _cap(first) == 600 and " always " in first
     for want in ("--model ", f"--tmpdir {tmp_path}/moe/tmp", "--locks 1710\\,1410", "--power-w 700",
                  "--min-free-gb 200", "env_preflight.py"):
         assert want in first, want
@@ -495,7 +575,8 @@ def test_smoke_resume_skips_the_done_steps_and_refuses_a_missing_output(tmp_path
     assert p.returncode == 2 and "RESUME REFUSED" in p.stderr and "prompts-fetch" in p.stderr
     _make([res / "data" / "ShareGPT_V3_unfiltered_cleaned_split.json", res / "prompts.jsonl",
            res / "A" / "serve.nsys-rep", res / "A" / "manifest.json", res / "A" / "serve.sqlite",
-           res / "A" / "calls.shards.json", res / "B" / "torch_trace", res / "B" / "calls.jsonl"])
+           res / "A" / "calls.shards.json", res / "B" / "torch_trace", res / "B" / "calls.jsonl",
+           tmp_path / "moe" / "frontier" / "frontier.env", res / "frontier-probe" / "predictions" / "index.json"])
     p = _dry_raw("smoke.sh", tmp_path, "--from", "sag1410")
     assert p.returncode == 0, p.stderr
     lines = p.stdout.splitlines()
@@ -522,9 +603,11 @@ def test_main_resume_relocks_before_the_capture_it_resumes(tmp_path):
     res = tmp_path / "res"
     p = _dry_raw("main.sh", tmp_path, "--from", "A1410-capture")
     assert p.returncode == 2 and "RESUME REFUSED" in p.stderr
-    _make([res / "data" / "ShareGPT_V3_unfiltered_cleaned_split.json", res / "prompts.jsonl", res / "sag" / "par.json"]
-          + [res / lab / f for lab in ("gate60", "A1710") for f in ("serve.nsys-rep", "manifest.json", "serve.sqlite",
-                                                                     "calls.jsonl")])
+    tr = tmp_path / "moe" / "traces" / "res"            # the raw traces live outside the results tree (m6)
+    _make([res / "data" / "ShareGPT_V3_unfiltered_cleaned_split.json", res / "prompts.jsonl", res / "sag" / "par.json",
+           tmp_path / "moe" / "frontier" / "frontier.env", res / "frontier-probe" / "predictions" / "index.json"]
+          + [res / lab / f for lab in ("gate60", "A1710") for f in ("manifest.json", "calls.jsonl")]
+          + [tr / lab / f for lab in ("gate60", "A1710") for f in ("serve.nsys-rep", "serve.sqlite")])
     p = _dry_raw("main.sh", tmp_path, "--from", "A1410-capture")
     assert p.returncode == 0, p.stderr
     lines = p.stdout.splitlines()
@@ -552,3 +635,48 @@ def test_a_real_resume_never_reruns_a_done_step_and_records_it(tmp_path):
     c.unlink()
     p, summ = _kit(tmp_path, "KIT_FROM=c; KIT_RESUMING=1\n" + body)
     assert p.returncode == 2 and "RESUME REFUSED" in p.stderr and not c.exists()
+
+
+# ---- review 2026-11-19 m6: the raw traces outside the pushed tree ----------------------------------------------
+
+def test_kit_push_records_the_traces_sha256_in_the_results_tree_and_rehashes_only_new_files(tmp_path):
+    import hashlib
+    sys.path.insert(0, str(PROD))
+    import prodlib as PL
+    tr, res = tmp_path / "moe" / "traces" / "run1", tmp_path / "moe" / "results" / "run1"
+    (tr / "A1710").mkdir(parents=True)
+    res.mkdir(parents=True)
+    (tr / "A1710" / "serve.nsys-rep").write_bytes(b"rep" * 1000)
+    stub = tmp_path / "push_stub.sh"
+    stub.write_text(f'printf "%s\\n" "$@" > {tmp_path / "pushed.txt"}\n')
+    p, summ = _kit(tmp_path / "k", "step push-x --soft --cap 30 -- kit_push 'msg'", KIT_PUSH_SCRIPT=str(stub),
+                   KIT_TRACES=str(tr), KIT_RESULTS=str(res), REPO=str(REPO), PY_VLLM=sys.executable)
+    assert p.returncode == 0 and summ[0].startswith("PASS push-x"), (summ, p.stderr)
+    man = json.loads((res / PL.TRACES_MANIFEST).read_text())
+    assert man["files"]["A1710/serve.nsys-rep"]["sha256"] == hashlib.sha256(b"rep" * 1000).hexdigest()
+    assert (tmp_path / "pushed.txt").read_text().startswith("push")
+    # a second manifest keeps an unchanged file's hash (no re-read) and hashes a new one
+    man["files"]["A1710/serve.nsys-rep"]["sha256"] = "kept"
+    (res / PL.TRACES_MANIFEST).write_text(json.dumps(man))
+    (tr / "A1710" / "serve.sqlite").write_bytes(b"sq")
+    doc = PL.trace_manifest(tr, res / PL.TRACES_MANIFEST)
+    assert doc["files"]["A1710/serve.nsys-rep"]["sha256"] == "kept" and len(doc["files"]) == 2
+    assert doc["total_bytes"] == 3002
+
+
+def test_pull_traces_plans_an_rsync_with_the_runs_known_hosts_and_refuses_an_unknown_host(tmp_path):
+    env = dict(os.environ, MOE_VM_STATE_ROOT=str(tmp_path / "runs"), HOME=str(tmp_path / "home"))
+    p = subprocess.run(["bash", str(PROD / "pull_traces.sh"), "10.0.0.7", "prod-main-x", "--dest", str(tmp_path / "d"),
+                        "--dry-run"], capture_output=True, text=True, env=env, timeout=60)
+    assert p.returncode == 0, p.stderr
+    assert "ubuntu@10.0.0.7:moe/traces/prod-main-x/" in p.stdout and "StrictHostKeyChecking=yes" in p.stdout
+    assert f"UserKnownHostsFile={tmp_path}/runs/known_hosts" in p.stdout and "moe/results/prod-main-x/traces.sha256.json" in p.stdout
+    assert not (tmp_path / "d").exists()
+    (tmp_path / "runs").mkdir()
+    (tmp_path / "runs" / "known_hosts").write_text("")
+    p = subprocess.run(["bash", str(PROD / "pull_traces.sh"), "10.0.0.7", "prod-main-x", "--dest", str(tmp_path / "d")],
+                       capture_output=True, text=True, env=env, timeout=60)
+    assert p.returncode == 2 and "not in" in p.stderr and not (tmp_path / "d").exists()
+    p = subprocess.run(["bash", str(PROD / "pull_traces.sh"), "10.0.0.7"], capture_output=True, text=True, env=env,
+                       timeout=60)
+    assert p.returncode == 2

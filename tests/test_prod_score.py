@@ -175,6 +175,8 @@ def test_the_scorer_end_to_end(tmp_path, stub):
     with open(fr, "w") as fh:
         for r in PL.read_jsonl(a / "calls.jsonl"):
             fh.write(json.dumps({"run": "A1710", "g": r["g"], "arm": "primary-uniform", "pred_ms": 0.04}) + "\n")
+            for arm, ms in (("cli", 0.05), ("cli-fills", 0.07)):         # review m4: the two truth definitions
+                fh.write(json.dumps({"run": "A1710", "g": r["g"], "arm": arm, "pred_ms": ms}) + "\n")
     out = tmp_path / "score"
     rc = SP.main(["--model", MODEL.key, "--run", f"A1710={a}", "--run", f"Adefault={b}", "--replay", f"decode={rep}",
                   "--frontier", str(fr), "--pricer", stub, "--workers", "1", "--sag", _par(tmp_path), "--out", str(out)])
@@ -187,6 +189,12 @@ def test_the_scorer_end_to_end(tmp_path, stub):
     assert t["all"]["n"] == n_dec and set(t["branch"]) == {"decode", "prefill"} and t["branch"]["prefill"]["n"] == 0
     assert "MAPE_ci95" in t["all"] and t["per_step_total"]["n"] == 3
     assert "roof_ms vs span_ms" in r1["tables"] and "frontier:primary-uniform vs kernel_sum_ms" in r1["tables"]
+    # both Frontier truth definitions are scored against the same serving kernel-sum, each labelled
+    for arm in ("cli", "cli-fills"):
+        assert f"frontier:{arm} vs kernel_sum_ms" in r1["tables"]
+    assert "WITHOUT" in sc["frontier_arms"]["cli"] and "NATIVE" in sc["frontier_arms"]["cli-fills"]
+    assert sc["frontier_arms"]["primary-uniform"] == "unlabelled arm"
+    assert any("frontier:cli-fills = " in n and "fills-free" in n for n in sc["notes"])
     assert "v8_refpar_ms vs kernel_sum_ms" in r1["tables"] and sc["constants"]["sag128 (board, measured at 1410)"] == list(BOARD_PAR)
     assert not any("NOT SCORED" in n for n in sc["notes"])
     assert sc["runs"]["Adefault"]["role"].startswith("production delta only")

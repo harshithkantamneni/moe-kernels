@@ -668,7 +668,10 @@ def replay_cells(sample: dict, marked: dict, model: PL.ServedModel, *, branch: s
     expected grids, the CORE kernel-sum (align..moe_sum, durations summed, the API fills stripped: the kit's
     kernel-sum truth) of the timed graph calls (GRR replays; the eager calls when the cell has no graph call: the
     Frontier timer's), and its fills.
-    {"cells": [{label, T, n, kernel_sum_ms {median, mean, min, max, std}, fills_n, fills_ms, kernel_count}],
+    with_fills_ms: the same statistics of each call's core kernel-sum PLUS its fills (every kernel the call launched:
+    Frontier's record_function definition; frontier_op.py's with_fills truth).
+    {"cells": [{label, T, n, kernel_sum_ms {median, mean, min, max, std}, with_fills_ms {...}, fills_n, fills_ms,
+    kernel_count}],
     "missing": [labels]}."""
     cfg = model.cfg
     out, missing = [], []
@@ -680,10 +683,13 @@ def replay_cells(sample: dict, marked: dict, model: PL.ServedModel, *, branch: s
             missing.append(cell["label"])
             continue
         ks = np.asarray([c["kernel_sum_ns"] for c in timed], dtype=float) / 1e6
+        wf = ks + np.asarray([c.get("fills_ns") or 0 for c in timed], dtype=float) / 1e6
         out.append({"label": cell["label"], "T": int(cell["T"]), "tile": cell["tile"], "n": int(len(ks)),
                     "source": "graph" if any(c.get("graph") for c in got) else "eager",
                     "kernel_sum_ms": {"median": float(np.median(ks)), "mean": float(ks.mean()),
                                       "min": float(ks.min()), "max": float(ks.max()), "std": float(ks.std())},
+                    "with_fills_ms": {"median": float(np.median(wf)), "mean": float(wf.mean()),
+                                      "min": float(wf.min()), "max": float(wf.max()), "std": float(wf.std())},
                     "kernel_count": int(Counter(c["n_core"] for c in timed).most_common(1)[0][0]),
                     "fills_n": _med([c["fills_n"] for c in timed]),
                     "fills_ms": (_med([c["fills_ns"] for c in timed]) or 0.0) / 1e6,

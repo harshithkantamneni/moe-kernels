@@ -424,12 +424,59 @@ def held_back_needed(held_text: str, run_name: str) -> list[str]:
     return bad
 
 
+#: main.sh writes every raw trace (*.nsys-rep, *.sqlite) under $MOE_HOME/traces/<run>/, OUTSIDE the pushed results
+#: tree (review 2026-11-19 m6: vm_results_push.sh, pinned, would xz-compress multi-GB traces on every push); kit_push
+#: records their sha256 here, in the results tree, and scripts/prod/pull_traces.sh copies and checks them
+TRACES_MANIFEST = "traces.sha256.json"
+TRACES_SCHEMA = "moe-kernels/prod-traces/1"
+
+
+def trace_manifest(traces, out) -> dict:
+    """sha256 of every file under `traces` written to `out` (JSON); a file whose size and mtime are unchanged since
+    the last manifest keeps its hash (a push re-hashes only the new traces)."""
+    root, out = Path(traces), Path(out)
+    old = {}
+    if out.is_file():
+        try:
+            old = json.loads(out.read_text()).get("files", {})
+        except (ValueError, OSError):
+            old = {}
+    files = {}
+    if root.is_dir():
+        for f in sorted(x for x in root.rglob("*") if x.is_file()):
+            rel = str(f.relative_to(root))
+            st = f.stat()
+            prev = old.get(rel)
+            if prev and prev.get("bytes") == st.st_size and prev.get("mtime_ns") == st.st_mtime_ns:
+                files[rel] = prev
+                continue
+            h = hashlib.sha256()
+            with open(f, "rb") as fh:
+                for buf in iter(lambda: fh.read(1 << 24), b""):
+                    h.update(buf)
+            files[rel] = {"bytes": st.st_size, "mtime_ns": st.st_mtime_ns, "sha256": h.hexdigest()}
+    doc = {"schema": TRACES_SCHEMA, "traces_root": str(root), "run": root.name, "files": files,
+           "total_bytes": sum(v["bytes"] for v in files.values())}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.name + ".part")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    tmp.rename(out)
+    return doc
+
+
 #: the runs main.sh measures; the primaries are hard steps there, so the laptop always expects them
 PRIMARY_RUNS = ("A1710", "A1410")
 SECONDARY_RUNS = ("Adefault", "Aon", "Beager")
 #: main.sh's Frontier steps whose PASS means a file the laptop reads (frontier_op.py: its predictor, our profiles)
-FRONTIER_OUTPUTS = (("frontier-predict", "frontier/predictions/index.json"), ("frontier-csv", "frontier/points.json"),
-                    ("frontier-holdout", "frontier/holdout/holdout.json"))
+#: (each step tied to the file it really writes: review m8; main.sh is ERNIE's, frontier_op.csv_relpath)
+FRONTIER_CSV_REL = "compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv"
+FRONTIER_OUTPUTS = (("frontier-predict", "frontier/predictions/index.json"),
+                    ("frontier-points", "frontier/points.json"),
+                    ("frontier-csv", f"frontier/profile/{FRONTIER_CSV_REL}"),
+                    ("frontier-csv-fills", f"frontier/profile-fills/{FRONTIER_CSV_REL}"),
+                    ("frontier-csv-partial", "frontier/profile-partial/csv_meta.json"),
+                    ("frontier-holdout", "frontier/holdout/holdout.json"),
+                    ("frontier-timer-probe", "frontier-probe/predictions/index.json"))
 
 
 def expected_outputs(results) -> dict:
@@ -632,7 +679,15 @@ def main(argv=None) -> int:
     ex.add_argument("--runs-out", required=True, help="writes the labels of the runs to score, one per line")
     dz = sub.add_parser("decompress", help="write every <f>.xz under a tree out as <f> (offline.sh)")
     dz.add_argument("--root", required=True)
+    tm = sub.add_parser("trace-manifest", help="sha256 of the run's raw traces into the results tree (kit_push)")
+    tm.add_argument("--traces", required=True, help="$MOE_HOME/traces/<run>")
+    tm.add_argument("--out", required=True, help=f"<results>/{TRACES_MANIFEST}")
     a = ap.parse_args(argv)
+    if a.cmd == "trace-manifest":
+        doc = trace_manifest(a.traces, a.out)
+        print(f"PASS trace-manifest: {len(doc['files'])} file(s), {doc['total_bytes'] / 1e9:.2f} GB under {a.traces} "
+              f"-> {a.out}")
+        return 0
     if a.cmd == "held-back-check":
         held = Path(a.held)
         if not held.exists():

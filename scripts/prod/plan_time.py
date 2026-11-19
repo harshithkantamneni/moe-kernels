@@ -16,11 +16,18 @@ THE SCALING RULES (each line of the plan names its basis):
   replay C         the registered budget (replay.py budget_quota): per branch the probe (PROBE_PER_TILE cells per tile
                    at the scaled smoke walls) plus the rest, which spends (REPLAY_BUDGET_S - probe) / WALL_SAFETY when
                    the walls are right.
-  Frontier timer   every grid point (387, no budget), per branch pass: the process start, the weight build and the
-                   Triton compiles (ASSUMED once per pass) + per point (warm-up + timed calls) x the call's wall
+  Frontier timer   every grid point (387, no budget) x its samples (Frontier's default "uniform" routing: 3 seeds
+                   per point, 1161 timed samples; the opt-in balanced arm is not in the default plan), per branch
+                   pass: the process start, the weight build and the Triton compiles (ASSUMED once per pass) + per
+                   sample (warm-up + timed calls) x the call's wall
                    (the larger of the eager host time per call, ASSUMED, and the call's GPU time: the smoke's replay C
-                   per-call medians, OLMoE at the branch clock, x 1.875) + a per-point overhead (ASSUMED); the nsys
-                   export by the kernel count against the smoke's; the extraction (fpoints) ASSUMED.
+                   per-call medians, OLMoE at the branch clock, x 1.875) + a per-sample overhead (ASSUMED: Frontier's
+                   generator on the card, the synchronizes, two NVML reads); the nsys export by the kernel count
+                   against the smoke's; the extraction (fpoints) ASSUMED. The early probe (M2, frontier-timer-probe):
+                   the same pricing on its 3 points x 3 samples, two passes, plus fpoints, the CSV, the narrow
+                   trainer and the predictions (ASSUMED).
+  ERNIE download   ASSUMED 200 MB/s in the expected total; env-preflight's P12 MEASURES the rate and fails under
+                   50 MB/s, so the worst case the run can meet is the floor's (printed beside the total).
   ASSUMED          steps the smoke did not time (env-preflight, pushes, the ERNIE weight download, Frontier's venv
                    build and trainer): stated as assumptions.
 """
@@ -69,10 +76,16 @@ CALL_MS_PREFILL = (0.17, 2.43e-4, 0.26)
 #: the step); the timer's calls carry ~15 kernels each (the functional API's ~9 fills): priced per kernel, floor 10 s
 SMOKE_EXPORT_KERNELS = SMOKE_STEPS * SMOKE_LAYERS * 12
 #: assumptions (not timed by the smoke)
-ASSUMED = {"env-preflight": 120, "revision-pinned": 5, "push-small": 60, "push-big": 120,
-           "ernie-download": 220,        # 43.7 GB of bf16 weights at an assumed 200 MB/s
+#: ERNIE's bf16 weights (GB) and the assumed / floor download rates (MB/s; the floor is env-preflight P12's)
+ERNIE_WEIGHTS_GB, DOWNLOAD_MBPS, DOWNLOAD_FLOOR_MBPS = 43.7, 200.0, 50.0
+ASSUMED = {"env-preflight": 150,         # P1..P11 + P12's timed download (<= 20 s)
+           "revision-pinned": 5, "push-small": 60, "push-big": 120,
+           "ernie-download": ERNIE_WEIGHTS_GB * 1e3 / DOWNLOAD_MBPS,
            "frontier-setup": 300, "frontier-train": 180, "frontier-predict": 600, "frontier-points": 60,
-           "frontier-csv": 20, "grid-check": 20,
+           "frontier-csv": 20, "grid-check": 20, "frontier-csv-partial": 5, "frontier-train-partial": 5,
+           # the probe's Frontier side: fpoints + csv + the narrow trainer (9 rows, 1 x 3 folds) + predict, each a
+           # process start in Frontier's venv
+           "frontier-probe-frontier": 90,
            # the timer: interpreter + vLLM import + weights built once + Triton's compiles, per pass; the eager host
            # time of one functional fused_experts call under nsys CUDA tracing (~15 launches) plus its synchronize;
            # per point: the routing build, the synchronizes and two NVML reads
@@ -143,17 +156,28 @@ def call_ms(T: int) -> float:
 
 
 def frontier_timer(max_tokens: int = FO.MAX_TOKENS, warmup: int = FO.WARMUP_STEPS,
-                   repeats: int = FO.ACTIVE_STEPS) -> dict:
-    """Per branch pass: {"points", "timer_s", "export_s", "calls"} for every grid point (no budget)."""
+                   repeats: int = FO.ACTIVE_STEPS, routing: str = FO.DEFAULT_ROUTING,
+                   points: list[int] | None = None) -> dict:
+    """Per branch pass: {"points", "samples", "timer_s", "export_s", "calls"} for every grid point (no budget; or
+    the given `points`: the probe's) x its samples (uniform: 3)."""
     out = {}
+    ns = len(FO.samples_for(routing))
     for b in ("decode", "prefill"):
-        Ts = FO.branch_points(b, max_tokens)
-        per = sum((warmup + repeats) * max(ASSUMED["frontier-timer-host-call-ms"], call_ms(T))
-                  + ASSUMED["frontier-timer-point-ms"] for T in Ts) / 1e3
-        calls = len(Ts) * (warmup + repeats)
-        out[b] = {"points": len(Ts), "calls": calls, "timer_s": ASSUMED["frontier-timer-start"] + per,
+        Ts = FO.branch_points(b, max_tokens) if points is None else [T for T in points if PL.branch(T) == b]
+        per = ns * sum((warmup + repeats) * max(ASSUMED["frontier-timer-host-call-ms"], call_ms(T))
+                       + ASSUMED["frontier-timer-point-ms"] for T in Ts) / 1e3
+        calls = ns * len(Ts) * (warmup + repeats)
+        out[b] = {"points": len(Ts), "samples": ns * len(Ts), "calls": calls,
+                  "timer_s": ASSUMED["frontier-timer-start"] + per,
                   "export_s": max(10.0, SMOKE_S["nsys-export"] * calls * 15 / SMOKE_EXPORT_KERNELS)}
     return out
+
+
+def frontier_probe_s(model: str = "ernie-4.5-21b-a3b") -> float:
+    """The early probe: two timer passes on PROBE_POINTS (3 samples each) with their exports and locks, then
+    Frontier's fpoints / csv / narrow train / predict."""
+    pr = frontier_timer(points=list(FO.PROBE_POINTS[model]))
+    return sum(v["timer_s"] + v["export_s"] + 2 for v in pr.values()) + ASSUMED["frontier-probe-frontier"]
 
 
 def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "ernie-4.5-21b-a3b") -> dict:
@@ -178,10 +202,16 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
     add("M1", "prompts-build", SMOKE_S["prompts-build"] * 4096 / SMOKE_PROMPTS, "smoke x 4096/1024 prompts")
     add("M1", "serve-plan", 1, "smoke")
     add("M2", "gate60-capture", engine + 60 + ASSUMED["ernie-download"],
-        "smoke engine start x 3.16 + 60 s + the weight download (assumed 200 MB/s)")
+        f"smoke engine start x 3.16 + 60 s + the weight download ({ERNIE_WEIGHTS_GB} GB at an assumed "
+        f"{DOWNLOAD_MBPS:.0f} MB/s; env-preflight P12 measures it, floor {DOWNLOAD_FLOOR_MBPS:.0f})")
     add("M2", "gate60-export", SMOKE_S["nsys-export"] * 60 / SMOKE_SERVE_S, "smoke x 60/44 s")
     add("M2", "gate60-extract", SMOKE_S["extract-gate-A"] * 60 / SMOKE_SERVE_S, "smoke x 60/44 s")
     add("M2", "gate60-sequences", SMOKE_S["sequences-A"], "smoke")
+    add("M2", "frontier-setup", ASSUMED["frontier-setup"], "assumed (uv, the vLLM closure cached by setup_vm)")
+    add("M2", "frontier-grid-check", ASSUMED["grid-check"], "assumed")
+    add("M2", "frontier-timer-probe", frontier_probe_s(model),
+        f"{len(FO.PROBE_POINTS[model])} points x 3 samples: two timer passes priced as M7's + "
+        f"{ASSUMED['frontier-probe-frontier']} s of Frontier's fpoints/csv/narrow train/predict (assumed)")
     add("M2", "push-gate60", ASSUMED["push-small"], "assumed")
     add("M3", "sag1410", SMOKE_S["sag1410"], "smoke (the same OLMoE/Mixtral pages)")
     add("M3", "unlock-after-sag", 1, "smoke")
@@ -206,12 +236,10 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
     add("M6", "unlock-after-replay", 1, "trivial")
     add("M6", "push-replay", ASSUMED["push-small"], "assumed")
     ft = frontier_timer()
-    add("M7", "frontier-setup", ASSUMED["frontier-setup"], "assumed (uv, the vLLM closure cached by setup_vm)")
-    add("M7", "frontier-grid-check", ASSUMED["grid-check"], "assumed")
     for b in ("decode", "prefill"):
         add("M7", f"frontier-timer-lock-{b}", 1, "trivial")
         add("M7", f"frontier-timer-{b}", ft[b]["timer_s"],
-            f"start {ASSUMED['frontier-timer-start']} s (assumed) + {ft[b]['points']} points x "
+            f"start {ASSUMED['frontier-timer-start']} s (assumed) + {ft[b]['points']} points x 3 samples x "
             f"{FO.WARMUP_STEPS}+{FO.ACTIVE_STEPS} calls x max(host {ASSUMED['frontier-timer-host-call-ms']} ms "
             "(assumed), smoke call ms x 1.875)")
         add("M7", f"frontier-timer-export-{b}", ft[b]["export_s"], f"smoke export x kernels ({ft[b]['calls']} calls)")
@@ -220,6 +248,10 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
     add("M7", "frontier-csv", ASSUMED["frontier-csv"], "assumed")
     for s in ("frontier-train", "frontier-holdout", "frontier-simpath"):
         add("M7", s, ASSUMED["frontier-train"], "assumed (RF grid search, 27 fits x 10 folds, all cores)")
+    add("M7", "frontier-csv-fills", ASSUMED["frontier-csv"], "assumed")
+    add("M7", "frontier-train-fills", ASSUMED["frontier-train"], "assumed (as frontier-train)")
+    add("M7", "frontier-csv-partial", ASSUMED["frontier-csv-partial"], "assumed (complete grid: no partial CSV)")
+    add("M7", "frontier-train-partial", ASSUMED["frontier-train-partial"], "assumed (complete grid: nothing trained)")
     add("M7", "push-frontier", ASSUMED["push-small"], "assumed")
     add("M8", "Adefault-unlock", 1, "trivial")
     add("M8", "Adefault-capture", engine + sv["serve_s_default"], "engine start + serving at default clocks")
@@ -255,8 +287,11 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
     for blk, _s, sec, _b in out:
         blocks[blk] = blocks.get(blk, 0.0) + sec
     total = sum(blocks.values())
+    slow = ERNIE_WEIGHTS_GB * 1e3 * (1 / DOWNLOAD_FLOOR_MBPS - 1 / DOWNLOAD_MBPS)
     return {"steps": out, "blocks": blocks, "total_s": total, "total_h": total / 3600, "serving": sv,
+            "worst_download_total_s": total + slow, "worst_download_total_h": (total + slow) / 3600,
             "frontier": {"points": sum(v["points"] for v in ft.values()), "grid_points": len(FO.token_grid()),
+                         "samples": sum(v["samples"] for v in ft.values()),
                          "timer_s": sum(v["timer_s"] + v["export_s"] for v in ft.values())},
             "levels": levels, "n": n}
 
@@ -276,9 +311,11 @@ def main(argv=None) -> int:
     print("PLAN per tile (estimator): " + ", ".join(f"{k} {v}" for k, v in p["serving"]["per_tile"].items()))
     print("PLAN blocks: " + ", ".join(f"{k} {v / 60:.1f} min" for k, v in p["blocks"].items()))
     fr = p["frontier"]
-    print(f"PLAN Frontier: {fr['points']} of {fr['grid_points']} grid points (the full grid), timer + export "
-          f"{fr['timer_s']:.0f} s")
+    print(f"PLAN Frontier: {fr['points']} of {fr['grid_points']} grid points (the full grid) x 3 samples = "
+          f"{fr['samples']} timed samples, timer + export {fr['timer_s']:.0f} s")
     print(f"PLAN EXPECTED TOTAL {p['total_s']:.0f} s = {p['total_h']:.2f} h (levels {p['levels']}, N {p['n']})")
+    print(f"PLAN WORST CASE at the {DOWNLOAD_FLOOR_MBPS:.0f} MB/s download floor (env-preflight P12): "
+          f"{p['worst_download_total_s']:.0f} s = {p['worst_download_total_h']:.2f} h")
     return 0
 
 

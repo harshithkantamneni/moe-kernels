@@ -235,9 +235,16 @@ kit_dry_plan() {   # a tool's own --dry-run exits 2 (REFUSED: "nothing measured"
 # kit_push MESSAGE [--final RC]: the VM pushes its results to the run's branch (scripts/vm_results_push.sh,
 # registered and pinned, initialised by the launcher; KIT_PUSH_SCRIPT overrides it in the tests). main.sh calls it
 # as a SOFT step after each measurement block, so a lost rental keeps what it measured
+# TRACES (review m6): with KIT_TRACES (the run's raw traces, outside the pushed tree) and KIT_RESULTS set, each push
+# first records the traces' sha256 in $KIT_RESULTS/traces.sha256.json (prodlib.py trace-manifest; soft: a failed
+# manifest is reported and the push goes on)
 kit_push() {
   local p="${KIT_PUSH_SCRIPT:-$REPO/scripts/vm_results_push.sh}"
   [[ -f "$p" ]] || { echo "FAIL push: no $p"; return 3; }
+  if [[ -n "${KIT_TRACES:-}" && -n "${KIT_RESULTS:-}" ]]; then
+    "${PY_VLLM:-python3}" "$REPO/scripts/prod/prodlib.py" trace-manifest --traces "$KIT_TRACES" \
+      --out "$KIT_RESULTS/traces.sha256.json" || echo "WARN push: the trace manifest failed (the push goes on)"
+  fi
   bash "$p" push --message "$@"
 }
 

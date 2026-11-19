@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""THE KIT'S ENVIRONMENT PREFLIGHT: smoke.sh's and main.sh's first hard step (`env-preflight`, cap 300 s). Every
+"""THE KIT'S ENVIRONMENT PREFLIGHT: smoke.sh's and main.sh's first hard step (`env-preflight`, cap 600 s). Every
 environment fault the smoke rental of 2026-11-19 met one at a time, deep into the sequence, is checked here in the
 first minutes, each with its reason (SMOKE-FIXES.md items 1-5):
 
@@ -20,6 +20,10 @@ first minutes, each with its reason (SMOKE-FIXES.md items 1-5):
   P9  frontier the Frontier repo is reachable and holds its pinned commit (frontier_setup.sh's URL and COMMIT)
   P10 disk     free space under --disk > --min-free-gb (200)
   P11 setup    setup_vm.sh's own preflight said READY ($SESSION_ROOT/PREFLIGHT.txt: `verdict READY`)
+  P12 hf-rate  the model's weight download PRICED by a measured throughput (review 2026-11-19 m6): up to
+               --rate-bytes (1 GB) or --rate-seconds (20 s) of the first weight shard at the pinned revision
+               (the index's weight_map; --rate-url overrides) streamed and discarded; FAILS under --min-mbps
+               (50 MB/s), reporting the rate and the whole download's expected time (the index's total_size)
 
 Writes --out (JSON, one record per check) and prints one PASS/FAIL line per check. Exit 0 all PASS, 3 any FAIL.
 Commands are found on PATH (nvidia-smi, sudo, git, ninja, ncu) or given (--nsys): the tests put fakes there.
@@ -182,6 +186,57 @@ def p8_hf(model_key: str) -> tuple[bool, str]:
     return got is not None, f"{m.hf_repo} UNPINNED, resolves to {got}"
 
 
+def weight_source(model_key: str) -> tuple[str | None, float | None, str]:
+    """(URL of the model's first weight shard at its pin, the weights' total bytes or None, why-not)."""
+    sys.path[:0] = [str(HERE)]
+    import prodlib as PL
+    m = PL.MODELS.get(model_key)
+    if m is None:
+        return None, None, f"unknown model {model_key}"
+    rev = PL.hf_revision(model_key)
+    try:
+        from huggingface_hub import hf_hub_download, hf_hub_url
+    except ImportError as exc:
+        return None, None, f"huggingface_hub not importable: {exc}"
+    try:
+        idx = json.loads(Path(hf_hub_download(m.hf_repo, "model.safetensors.index.json", revision=rev)).read_text())
+        shard = sorted(set(idx["weight_map"].values()))[0]
+        total = (idx.get("metadata") or {}).get("total_size")
+    except Exception:                                                 # noqa: BLE001
+        shard, total = "model.safetensors", None
+    return hf_hub_url(m.hf_repo, shard, revision=rev), (float(total) if total else None), ""
+
+
+def p12_rate(model_key: str, url: str | None, max_bytes: float, max_s: float, min_mbps: float) -> tuple[bool, str]:
+    import time
+    import urllib.request
+    total = None
+    if not url:
+        url, total, why = weight_source(model_key)
+        if not url:
+            return False, why
+    got, t0 = 0, time.monotonic()
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "moe-kernels-preflight"})
+        with urllib.request.urlopen(req, timeout=30) as r:            # noqa: S310 (https, or file:// in the tests)
+            while got < max_bytes and time.monotonic() - t0 < max_s:
+                buf = r.read(1 << 23)
+                if not buf:
+                    break
+                got += len(buf)
+    except Exception as exc:                                          # noqa: BLE001
+        return False, f"{url}: {type(exc).__name__}: {str(exc)[:200]}"
+    dt = max(time.monotonic() - t0, 1e-6)
+    mbps = got / dt / 1e6
+    if got == 0:
+        return False, f"{url}: nothing downloaded in {dt:.1f} s"
+    price = f"; the weights ({total / 1e9:.1f} GB) would take ~{total / 1e6 / mbps:.0f} s" if total else ""
+    msg = f"measured {mbps:.0f} MB/s ({got / 1e6:.0f} MB in {dt:.1f} s){price}"
+    if mbps < min_mbps:
+        return False, f"{msg}: under the {min_mbps:g} MB/s floor (the ERNIE download would eat the rental)"
+    return True, msg
+
+
 def frontier_pin(setup_sh: Path) -> tuple[str | None, str | None]:
     t = setup_sh.read_text()
     c = re.search(r'^COMMIT="([0-9a-f]+)"', t, re.M)
@@ -244,6 +299,10 @@ def main(argv=None) -> int:
     ap.add_argument("--frontier-src", default=str(moe / "frontier" / "src"))
     ap.add_argument("--disk", default=str(moe))
     ap.add_argument("--min-free-gb", type=float, default=200.0)
+    ap.add_argument("--rate-url", default=None, help="P12: the URL to time (default: the first weight shard at the pin)")
+    ap.add_argument("--rate-bytes", type=float, default=1e9)
+    ap.add_argument("--rate-seconds", type=float, default=20.0)
+    ap.add_argument("--min-mbps", type=float, default=50.0)
     ap.add_argument("--skip", default="", help="comma list of check ids not run (tests only)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
@@ -265,6 +324,7 @@ def main(argv=None) -> int:
          if furl and fcommit else (False, f"no URL/COMMIT in {a.frontier_setup}")),
         ("P10", "disk", lambda: p10_disk(Path(a.disk), a.min_free_gb)),
         ("P11", "setup", lambda: p11_setup(Path(a.session))),
+        ("P12", "hf-rate", lambda: p12_rate(a.model, a.rate_url, a.rate_bytes, a.rate_seconds, a.min_mbps)),
     ]
     res = []
     for cid, what, fn in checks:

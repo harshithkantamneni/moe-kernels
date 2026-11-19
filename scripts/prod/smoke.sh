@@ -42,7 +42,7 @@ cd "$REPO"
 
 echo "smoke: model $MODEL, results $R, nsys $NSYS, pricer $PRICER"
 # the environment, all of it, before anything long (smoke rental 2026-11-19: SMOKE-FIXES.md 1-5)
-step env-preflight --always --cap 300 -- "$PY" "$SC/env_preflight.py" --repo "$REPO" --model $MODEL --nsys "$NSYS" \
+step env-preflight --always --cap 600 -- "$PY" "$SC/env_preflight.py" --repo "$REPO" --model $MODEL --nsys "$NSYS" \
   --power-w "${PROD_POWER_W:-700}" --locks 1710,1410 --tmpdir "$KIT_TMP" --frontier-src "$FR/src" \
   --disk "${MOE_HOME:-$HOME/moe}" --min-free-gb "${PROD_MIN_FREE_GB:-200}" --out "$R/env-preflight.json"
 step env --always --cap 300 -- kit_env_check
@@ -69,6 +69,42 @@ step extract-gate-A --cap 1800 --out "$R/A/calls.jsonl|$R/A/calls.shards.json" -
 # the per-path kernel sequences (the naive path's one fill kernel, two GEMMs, one act, one moe_sum): a gate here
 step sequences-A --cap 600 -- "$PY" "$SC/nsys_extract.py" check-sequences --run "$R/A" --model $MODEL
 
+# THE EARLY FRONTIER PROBE (hard, as main.sh's): Frontier's venv and grid-check, then the timer on 3 grid points (one
+# decode T, two prefill T: frontier_op.PROBE_POINTS) at their branch clocks and Frontier's own csv / trainer (narrow)
+# / predict on them
+step frontier-setup --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
+if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
+FSRC="${FRONTIER_SRC:-$FR/src}"
+FD="$R/frontier"
+CSVREL=compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv
+CSV="$FD/profile/$CSVREL"
+PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-64,192,256}"
+export R MODEL SC PY NSYS FD FSRC CSVREL PROBE_POINTS FR_PY_PRIMARY 2>/dev/null || true
+step frontier-grid-check --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" --max-tokens 256
+fr_probe() {   # per branch lock, timer (under nsys), export; then fpoints, csv, train (narrow), predict
+  local P="$R/frontier-probe" b lock
+  for b in decode prefill; do
+    lock=1710; [[ $b == prefill ]] && lock=1410
+    mkdir -p "$P/timer-$b"
+    kit_lock "$lock" || return 3
+    "$NSYS" profile -t cuda --force-overwrite true -o "$P/timer-$b/timer" "$PY" "$SC/frontier_op.py" timer \
+      --model "$MODEL" --branch "$b" --lock "$lock" --max-tokens 256 --grid-points "$PROBE_POINTS" \
+      --out "$P/timer-$b" || { kit_unlock; return 3; }
+    kit_unlock
+    "$NSYS" export --type sqlite --force-overwrite true -o "$P/timer-$b/timer.sqlite" "$P/timer-$b/timer.nsys-rep" \
+      || return 3
+  done
+  "$PY" "$SC/frontier_op.py" fpoints --model "$MODEL" --timer "$P/timer-decode" --timer "$P/timer-prefill" \
+    --grid-points "$PROBE_POINTS" --max-tokens 256 --out "$P/points.json" || return 3
+  "$PY" "$SC/frontier_op.py" csv --model "$MODEL" --points "$P/points.json" --src "$FSRC" --out "$P/profile" || return 3
+  "$PY" "$SC/frontier_op.py" train --narrow --model "$MODEL" --csv "$P/profile/$CSVREL" --src "$FSRC" \
+    --out "$P/models" || return 3
+  "$PY" "$SC/frontier_op.py" predict --model "$MODEL" --models "cli=$P/models" --csv "$P/profile/$CSVREL" \
+    --points "$P/points.json" --src "$FSRC" --out "$P/predictions" || return 3
+  echo "PASS frontier-timer-probe: points $PROBE_POINTS, timer + Frontier's csv/train/predict"
+}
+step frontier-timer-probe --cap 900 --needs frontier-grid-check --out "$R/frontier-probe/predictions/index.json" -- fr_probe
+
 # the node-tracing overhead: same load, --cuda-graph-trace=graph (step intervals compared in the summary)
 step capture-graphmode-overhead --soft --cap 2400 --out "$R/A_graphmode/serve.nsys-rep" -- "$NSYS" profile -t cuda,nvtx --cuda-graph-trace=graph --force-overwrite true \
   -o "$R/A_graphmode/serve" "$PY" "$SC/serve_capture.py" --model $MODEL --prompts "$R/prompts.jsonl" \
@@ -93,7 +129,7 @@ step replay-plan --cap 600 -- kit_dry_plan "$PY" "$SC/replay.py" --model $MODEL 
 for b in decode prefill; do
   lock=1710; [[ $b == prefill ]] && lock=1410
   step "replay-$b" --cap 3600 --out "$R/replay-$b" -- env MOE_RESULTS_DIR="$R/replay-$b" python3 scripts/locked_r3.py --session-tag "smoke-replay-$b" \
-    --locks $lock --groups 1 --slip-policy cell --min-clean-repeats 0 --out-dir "$R/locked-replay-$b" \
+    --locks $lock --groups 1 --slip-policy cell --min-clean-repeats 0 --run-cap-s 3300 --out-dir "$R/locked-replay-$b" \
     --r3-script "$SC/replay.py" -- --model $MODEL --histogram "$R/sample-$b/sample.json" --branch $b --inst GRR \
     --repeats 3 --duty 0.25 --seed 0
 done
@@ -108,7 +144,7 @@ for b in decode prefill; do
   lock=1710; [[ $b == prefill ]] && lock=1410
   step "replay-nsys-$b" --cap 3600 --out "$R/replay-nsys-$b/replay.nsys-rep" -- "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true -o "$R/replay-nsys-$b/replay" \
     env MOE_RESULTS_DIR="$R/replay-nsys-$b" python3 scripts/locked_r3.py --session-tag "smoke-replay-nsys-$b" --locks $lock --groups 1 \
-    --slip-policy cell --min-clean-repeats 0 --out-dir "$R/locked-replay-nsys-$b" --r3-script "$SC/replay.py" -- --model $MODEL \
+    --slip-policy cell --min-clean-repeats 0 --run-cap-s 1700 --out-dir "$R/locked-replay-nsys-$b" --r3-script "$SC/replay.py" -- --model $MODEL \
     --histogram "$R/sample-$b/sample.json" --branch $b --inst GRR --repeats 1 --duty 0.25 --seed 0 --cell-marks
   step "replay-nsys-export-$b" --cap 1800 --out "$R/replay-nsys-$b/replay.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true -o "$R/replay-nsys-$b/replay.sqlite" \
     "$R/replay-nsys-$b/replay.nsys-rep"
@@ -117,14 +153,8 @@ for b in decode prefill; do
 done
 
 # Frontier, its predictor on our profiles (frontier_op.py; owner decision 2026-11-19), small: its grid to 256 tokens,
-# the timer's two branch passes (every point), its trainer, hold-out and batch predictions on the VM
-step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
-if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
-FSRC="${FRONTIER_SRC:-$FR/src}"
-FD="$R/frontier"
-CSV="$FD/profile/compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv"
-step frontier-grid-check --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" --max-tokens 256
-export R MODEL SC PY NSYS FD
+# Frontier's default routing (uniform, 3 seeds per point), the timer's two branch passes (every point), its trainer,
+# hold-out and batch predictions on the VM (its venv and grid-check ran before the probe)
 fr_timer() {   # fr_timer BRANCH LOCK: every grid point of the branch (to 256), one process, eager, under nsys
   local d="$FD/timer-$1"
   mkdir -p "$d"
@@ -150,8 +180,16 @@ step frontier-holdout --soft --cap 1800 --needs frontier-csv --out "$FD/holdout"
   --out "$FD/holdout"
 step frontier-simpath --soft --cap 1800 --needs frontier-csv --out "$FD/models-simpath" -- "$PY" "$SC/frontier_op.py" simpath --model $MODEL --arm-label simpath \
   --csv "$CSV" --src "$FSRC" --out "$FD/models-simpath"
+step frontier-csv-fills --soft --cap 300 --needs frontier-points --out "$FD/profile-fills/$CSVREL" -- "$PY" "$SC/frontier_op.py" csv --model $MODEL \
+  --points "$FD/points.json" --src "$FSRC" --truth with_fills --out "$FD/profile-fills"
+step frontier-train-fills --soft --cap 1800 --needs frontier-csv-fills --out "$FD/models-fills" -- "$PY" "$SC/frontier_op.py" train --model $MODEL \
+  --arm-label cli-fills --csv "$FD/profile-fills/$CSVREL" --src "$FSRC" --out "$FD/models-fills"
+FMODELS=()
+for m in cli=models simpath=models-simpath cli-fills=models-fills; do   # a model set counts once its trainer PASSED
+  if [[ $KIT_DRY -eq 1 || -f "$FD/${m#*=}/versions.json" ]]; then FMODELS+=(--models "${m%%=*}=$FD/${m#*=}"); fi
+done
 step frontier-predict --soft --cap 1800 --needs frontier-train --out "$FD/predictions/index.json" -- "$PY" "$SC/frontier_op.py" predict --model $MODEL \
-  --models cli="$FD/models" --models simpath="$FD/models-simpath" --csv "$CSV" --calls Adefault="$R/A" --sample "$R/sample-decode/sample.json" \
+  ${FMODELS[@]+"${FMODELS[@]}"} --csv "$CSV" --calls Adefault="$R/A" --sample "$R/sample-decode/sample.json" \
   --src "$FSRC" --out "$FD/predictions"
 
 # score end to end (the smoke's run A is at default clocks: labelled Adefault, a production delta, never model error);
