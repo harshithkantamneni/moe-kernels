@@ -14,12 +14,24 @@
 # that is handed the kit's functions.
 # NEEDS (review 2, MINOR 6): a step whose named prerequisite FAILED or was SKIPPED is not run: it is recorded
 # "SKIPPED NAME: needs PRE (failed)" (a capture after a failed lock never runs at the wrong clock).
+# OUT (smoke rental 2026-11-19, RESUME): `--out PATH[,PATH]` declares what the step writes that a later step reads
+# (`a|b`: either one). ALWAYS: `--always` marks a cheap state-setting or state-checking step (preflight, env, power,
+# lock, unlock) that runs again on a resume.
+# RESUME: `--from STEP --results DIR` (kit_resume_init) re-enters a sequence at STEP in an existing results dir:
+# every step before STEP that is not --always is recorded "SKIPPED-RESUME NAME" and not run. A skipped HARD step
+# whose declared output is missing REFUSES the resume (exit 2, before anything runs past it); a skipped SOFT step
+# whose output is missing stays dropped (its --needs dependents are SKIPPED). A --from naming no step is refused.
+# ENV (smoke rental 2026-11-19): kit_env PY exports TMPDIR=$MOE_HOME/tmp (created; nsys cannot use the VM's
+# root-owned /tmp/nvidia) and puts PY's bin dir first on PATH (FlashInfer's JIT shells out to `ninja`), for every
+# step the sequence runs; --dry-run prints both as ENV lines.
 
 KIT_DRY=${KIT_DRY:-0}
 KIT_STEPS=()
 KIT_BAD=" "
 KIT_TIMEOUT="${KIT_TIMEOUT:-timeout}"
 KIT_KILL_AFTER="${KIT_KILL_AFTER:-60}"
+KIT_FROM=""
+KIT_RESUMING=0
 
 kit_init() {   # kit_init DIR: the summary is DIR/SUMMARY.txt, the step logs DIR/logs/ (created); $R is the caller's
   KIT_DIR="$1"
@@ -34,14 +46,30 @@ kit_record() {
   if [[ $KIT_DRY -eq 0 ]]; then echo "$1" >> "$SUMMARY"; fi
 }
 
+# kit_missing_outputs "a,b|c": prints the declared outputs that are absent (an `x|y` item is present if either is)
+kit_missing_outputs() {
+  local item alt ok miss=() alts=() items=()
+  IFS=',' read -r -a items <<< "$1"
+  for item in ${items[@]+"${items[@]}"}; do
+    [[ -z "$item" ]] && continue
+    ok=0
+    IFS='|' read -r -a alts <<< "$item"
+    for alt in "${alts[@]}"; do [[ -e "$alt" ]] && { ok=1; break; }; done
+    [[ $ok -eq 1 ]] || miss+=("$item")
+  done
+  echo "${miss[*]+"${miss[*]}"}"
+}
+
 step() {
   local name="$1"; shift
-  local soft=0 cap="" needs="" pre
+  local soft=0 cap="" needs="" outs="" always=0 pre
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --soft) soft=1; shift ;;
+      --always) always=1; shift ;;
       --cap) cap="${2:-}"; shift 2 ;;
       --needs) needs="${2:-}"; shift 2 ;;
+      --out) outs="${2:-}"; shift 2 ;;
       --) shift; break ;;
       *) break ;;
     esac
@@ -50,9 +78,29 @@ step() {
     echo "FAIL $name: no registered --cap SECONDS (every step runs under a timeout)" >&2
     exit 2
   fi
+  if [[ $KIT_RESUMING -eq 1 ]]; then
+    if [[ "$name" == "$KIT_FROM" ]]; then
+      KIT_RESUMING=0
+    elif [[ $always -eq 0 ]]; then
+      local missing
+      missing="$(kit_missing_outputs "$outs")"
+      if [[ -n "$missing" ]]; then
+        if [[ $soft -eq 1 ]]; then
+          KIT_BAD+="$name "
+          kit_record "SKIPPED-RESUME $name: output absent ($missing), stays dropped"
+          return 0
+        fi
+        echo "RESUME REFUSED: --from $KIT_FROM skips $name, but its output is missing: $missing" >&2
+        exit 2
+      fi
+      kit_record "SKIPPED-RESUME $name"
+      return 0
+    fi
+  fi
   if [[ $KIT_DRY -eq 1 ]]; then
-    printf 'STEP %-26s %scap=%s %s%s\n' "$name" "$([[ $soft -eq 1 ]] && echo '[soft] ')" "$cap" \
-      "$([[ -n "$needs" ]] && echo "needs=$needs ")" "$(printf '%q ' "$@")"
+    printf 'STEP %-26s %scap=%s %s%s%s%s\n' "$name" "$([[ $soft -eq 1 ]] && echo '[soft] ')" "$cap" \
+      "$([[ $always -eq 1 ]] && echo 'always ')" "$([[ -n "$needs" ]] && echo "needs=$needs ")" \
+      "$([[ -n "$outs" ]] && echo "out=$outs ")" "$(printf '%q ' "$@")"
     return 0
   fi
   for pre in ${needs//,/ }; do
@@ -97,6 +145,47 @@ step() {
   exit "$rc"
 }
 
+# kit_resume_init FROM SCRIPT_ARGS...: enter the sequence at step FROM (empty: a fresh run). The step must exist in
+# the script's own plan for these arguments (its --dry-run without --from), and --results must name the run's dir
+kit_resume_init() {
+  local from="$1"; shift
+  [[ -n "$from" ]] || return 0
+  [[ -n "${KIT_RESULTS_GIVEN:-}" ]] || { echo "RESUME REFUSED: --from needs --results DIR (the run to resume)" >&2; exit 2; }
+  local args=() plan
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --from) shift 2 ;;
+      --dry-run) shift ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  plan="$(bash "$0" --dry-run ${args[@]+"${args[@]}"} 2>/dev/null | awk '$1 == "STEP" {print $2}')"
+  if ! grep -qxF -- "$from" <<< "$plan"; then
+    echo "RESUME REFUSED: --from $from: no such step in $(basename "$0")'s plan" >&2
+    exit 2
+  fi
+  KIT_FROM="$from"
+  KIT_RESUMING=1
+  local line
+  line="RESUME from $from at $(date -u +%Y-%m-%dT%H:%M:%SZ) in $KIT_DIR"
+  echo "$line"
+  if [[ $KIT_DRY -eq 0 ]]; then echo "$line" >> "$SUMMARY"; fi
+}
+
+# kit_env PY: every step runs with TMPDIR=$KIT_TMP (created) and PY's bin dir first on PATH (smoke 2026-11-19)
+kit_env() {
+  local py="$1" bin=""
+  KIT_TMP="${KIT_TMPDIR:-${MOE_HOME:-$HOME/moe}/tmp}"
+  if [[ $KIT_DRY -eq 0 ]]; then mkdir -p "$KIT_TMP"; fi
+  export TMPDIR="$KIT_TMP"
+  if [[ "$py" == */* ]]; then
+    bin="$(dirname "$py")"
+    export PATH="$bin:$PATH"
+  fi
+  echo "ENV TMPDIR=$TMPDIR"
+  echo "ENV PATH first=${bin:-(PY has no dir: PATH unchanged)}"
+}
+
 kit_locate_nsys() {
   NSYS="$(command -v nsys 2>/dev/null || true)"
   if [[ -z "$NSYS" ]]; then
@@ -116,9 +205,11 @@ kit_lock() {
 }
 kit_unlock() { sudo -n nvidia-smi -rgc >/dev/null && echo "PASS unlock (default clocks)"; }
 
-kit_power_check() {   # kit_power_check WATTS: the enforced power limit must read back WATTS (CRITIQUE MINOR)
+# kit_power_check WATTS: the ENFORCED power limit must read back WATTS (CRITIQUE MINOR). Not power.limit: the GH200
+# reports power.limit 900 (the default setting) while it enforces 700 (smoke rental 2026-11-19)
+kit_power_check() {
   local want="$1" got
-  got="$(nvidia-smi --query-gpu=power.limit --format=csv,noheader,nounits | head -1 | cut -d. -f1 | tr -d ' ')"
+  got="$(nvidia-smi --query-gpu=enforced.power.limit --format=csv,noheader,nounits | head -1 | cut -d. -f1 | tr -d ' ')"
   if [[ "$got" != "$want" ]]; then echo "FAIL power: enforced limit $got W, want $want W"; return 3; fi
   echo "PASS power limit $got W"
 }
@@ -129,7 +220,7 @@ kit_env_check() {   # the VM: vLLM 0.27.1 in $PY_VLLM, a GH200, nsys
   v="$("$PY_VLLM" -c 'import vllm; print(vllm.__version__)' 2>/dev/null | tail -1)"
   [[ "$v" == "0.27.1" ]] || { echo "FAIL env: vLLM in \$PY_VLLM is '$v', not 0.27.1"; return 3; }
   "$PY_VLLM" -c 'import triton, torch; assert torch.cuda.is_available(); print("torch", torch.__version__, "triton", triton.__version__, torch.cuda.get_device_name(0))'
-  nvidia-smi --query-gpu=name,driver_version,clocks.max.sm,power.limit --format=csv
+  nvidia-smi --query-gpu=name,driver_version,clocks.max.sm,power.limit,enforced.power.limit --format=csv
   nvidia-smi --query-gpu=name --format=csv,noheader | grep -q GH200 || { echo "FAIL env: not a GH200"; return 3; }
   "$NSYS" --version || { echo "FAIL env: no nsys"; return 3; }
   echo "PASS env: vLLM 0.27.1, GH200, $("$NSYS" --version | head -1)"
@@ -176,6 +267,7 @@ kit_on_exit() {
 }
 
 kit_summary() {
+  if [[ $KIT_RESUMING -eq 1 ]]; then echo "RESUME REFUSED: --from $KIT_FROM was never reached" >&2; exit 2; fi
   echo "==== $(basename "$0") summary ($KIT_DIR)"
   printf '%s\n' "${KIT_STEPS[@]+"${KIT_STEPS[@]}"}"
 }

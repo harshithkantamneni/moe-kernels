@@ -6,8 +6,10 @@
 #   git fetch origin <run branch> && git worktree add ../run <run branch>      # the VM pushed vm/results/...
 #   FR_PY_OFFLINE=<a python with Frontier db5a85b on its path, pandas and the trainer's scikit-learn> \
 #   FRONTIER_SRC=<Frontier db5a85b checkout> \
-#   bash scripts/prod/offline.sh --results ../run/vm/results/prod-main-<utc> [--workers 4] [--dry-run]
+#   bash scripts/prod/offline.sh --results ../run/vm/results/prod-main-<utc> [--from STEP] [--workers 4] [--dry-run]
 #
+# RESUME: `--from STEP` re-enters at STEP; the steps before it are SKIPPED-RESUME (a hard one's declared output, such
+# as expected-outputs' runs.txt, must be present; kitlib.sh).
 # Memory-bounded for an 18 GB laptop: --workers defaults to 4 (each worker clears v8's per-call caches every
 # r3_timing_model_v8.CACHE_EVERY prefill calls). The predict step refuses a scikit-learn other than the trainer's
 # (versions.json beside each model). Writes <results>/frontier/predictions.jsonl and <results>/score/; its own
@@ -23,10 +25,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 . "$HERE/kitlib.sh"
 
-RES=""; WORKERS="${PROD_WORKERS:-4}"; MODEL=ernie-4.5-21b-a3b
+RES=""; FROM=""; WORKERS="${PROD_WORKERS:-4}"; MODEL=ernie-4.5-21b-a3b
+ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --results) RES="$2"; shift 2 ;;
+    --results) RES="$2"; KIT_RESULTS_GIVEN=1; shift 2 ;;
+    --from) FROM="$2"; shift 2 ;;
     --workers) WORKERS="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --dry-run) KIT_DRY=1; shift ;;
@@ -42,9 +46,10 @@ FSRC="${FRONTIER_SRC:-}"
 export PYTHONPATH="$REPO:$REPO/scripts:$SC${PYTHONPATH:+:$PYTHONPATH}"
 # the step runner's summary and logs go to <results>/offline-logs/{SUMMARY.txt,logs/} (kit_init creates them)
 kit_init "$R/offline-logs"
+kit_resume_init "$FROM" ${ARGS[@]+"${ARGS[@]}"}
 cd "$REPO"
 step decompress --cap 3600 -- "$PY" "$SC/prodlib.py" decompress --root "$R"
-step expected-outputs --cap 600 -- "$PY" "$SC/prodlib.py" expected-outputs --results "$R" --runs-out "$R/offline-logs/runs.txt"
+step expected-outputs --cap 600 --out "$R/offline-logs/runs.txt" -- "$PY" "$SC/prodlib.py" expected-outputs --results "$R" --runs-out "$R/offline-logs/runs.txt"
 LABELS=(A1710 A1410 Adefault Aon Beager)
 if [[ $KIT_DRY -eq 0 ]]; then
   LABELS=()
@@ -60,7 +65,7 @@ CSVNAME="compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv"
 predict() {   # predict LABEL MODELS_DIR ARM_LABEL (a model set the rental dropped is absent: expected-outputs vouched)
   local lab="$1" models="$2" arm="$3" d="$R/frontier/$1"
   [[ $KIT_DRY -eq 1 || -d "$models" ]] || { echo "SKIP $arm: no $models (the rental dropped it)"; return 0; }
-  step "frontier-predict-$arm" --soft --cap 7200 -- env PYTHONPATH="$FSRC:$PYTHONPATH" "$FPY" "$SC/frontier_op.py" _predict \
+  step "frontier-predict-$arm" --soft --cap 7200 --out "$d/predictions-$arm.jsonl" -- env PYTHONPATH="$FSRC:$PYTHONPATH" "$FPY" "$SC/frontier_op.py" _predict \
     --model "$MODEL" --arm-label "$arm" --models "$models" --csv "$d/profile/$CSVNAME" ${CALLS[@]+"${CALLS[@]}"} \
     --out "$d/predictions-$arm.jsonl"
 }
@@ -68,7 +73,7 @@ for lab in primary-uniform variant-all4; do
   predict "$lab" "$R/frontier/$lab/models" "$lab"
   predict "$lab" "$R/frontier/$lab/models-simpath" "$lab-simpath"
 done
-step frontier-collect --cap 600 -- bash -c "cat '$R'/frontier/*/predictions-*.jsonl > '$R/frontier/predictions.jsonl' 2>/dev/null || : > '$R/frontier/predictions.jsonl'"
+step frontier-collect --cap 600 --out "$R/frontier/predictions.jsonl" -- bash -c "cat '$R'/frontier/*/predictions-*.jsonl > '$R/frontier/predictions.jsonl' 2>/dev/null || : > '$R/frontier/predictions.jsonl'"
 step score --cap 21600 -- "$PY" "$SC/score_prod.py" --model "$MODEL" --sag "$R/sag/par.json" ${RUNS[@]+"${RUNS[@]}"} \
   --replay decode="$R/replay-decode/private_weight_reference" --replay prefill="$R/replay-prefill/private_weight_reference" \
   --frontier "$R/frontier/predictions.jsonl" --workers "$WORKERS" --out "$R/score"

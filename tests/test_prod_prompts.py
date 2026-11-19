@@ -194,6 +194,48 @@ def test_g_rev_fails_a_pinned_run_whose_snapshot_cannot_be_resolved():
     assert unp["verdict"] == "PASS" and "UNPINNED" in unp["why"]
 
 
+def _fake_hf_cache(root, repo, sha, files):
+    """A huggingface_hub cache holding only FILES of REPO at snapshot SHA (refs/main -> SHA), as vLLM leaves it."""
+    d = root / ("models--" + repo.replace("/", "--"))
+    (d / "refs").mkdir(parents=True, exist_ok=True)
+    (d / "refs" / "main").write_text(sha)
+    snap = d / "snapshots" / sha
+    snap.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        (snap / f).write_text("{}")
+    return snap
+
+
+def test_resolve_revision_reads_a_partial_snapshot_through_config_and_weights(tmp_path, monkeypatch):
+    """smoke rental 2026-11-19: vLLM downloads only the files it needs, so snapshot_download(local_files_only=True)
+    raised IncompleteSnapshotError and a run that loaded the pin read as unresolved. The resolver reads config.json's
+    snapshot dir (try_to_load_from_cache) and requires the weights' to be the same."""
+    repo, sha = "allenai/OLMoE-1B-7B-0924", "6" * 40
+    _fake_hf_cache(tmp_path, repo, sha, ["config.json", "model.safetensors.index.json"])   # no README, .gitattributes
+    assert S.resolve_revision(repo, sha, cache_dir=str(tmp_path)) == sha
+    assert S.resolve_revision(repo, None, cache_dir=str(tmp_path)) == sha                 # unpinned: refs/main
+    assert S.resolve_revision(repo, "7" * 40, cache_dir=str(tmp_path)) is None            # another snapshot
+    assert S.resolve_revision("someone/else", sha, cache_dir=str(tmp_path)) is None
+    # a single-file model resolves through its one weight file
+    _fake_hf_cache(tmp_path, "a/single", sha, ["config.json", "model.safetensors"])
+    assert S.resolve_revision("a/single", sha, cache_dir=str(tmp_path)) == sha
+    # a sharded checkpoint whose index the cache lacks resolves through its first shard
+    _fake_hf_cache(tmp_path, "a/shards", sha, ["config.json", "model-00001-of-00009.safetensors"])
+    assert S.resolve_revision("a/shards", sha, cache_dir=str(tmp_path)) == sha
+    # config without any weight file in the cache: unresolved (nothing shows the weights came from it)
+    _fake_hf_cache(tmp_path, "a/noweights", sha, ["config.json"])
+    assert S.resolve_revision("a/noweights", sha, cache_dir=str(tmp_path)) is None
+    # weights in a different snapshot dir than config.json: unresolved
+    import huggingface_hub as H
+    real = H.try_to_load_from_cache
+
+    def split(repo_id, filename, cache_dir=None, revision=None, **kw):
+        p = real(repo_id, filename, cache_dir=cache_dir, revision=revision, **kw)
+        return p.replace(sha, "8" * 40) if isinstance(p, str) and filename != "config.json" else p
+    monkeypatch.setattr(H, "try_to_load_from_cache", split)
+    assert S.resolve_revision(repo, sha, cache_dir=str(tmp_path)) is None
+
+
 def test_both_models_and_their_tokenizers_are_pinned_by_the_laptop_resolver(monkeypatch):
     """review 2, MINOR 3: scripts/prod/hf_revisions.py resolves every model repo and every TOK= repo of smoke.sh and
     main.sh; HF_REVISIONS holds a 40-hex commit for both models; a stray tokenizer repo and a non-commit answer are

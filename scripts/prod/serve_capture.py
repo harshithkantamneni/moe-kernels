@@ -211,14 +211,50 @@ class ClockSampler(threading.Thread):
                 self.stop_ev.wait(self.period)
 
 
-def resolve_revision(repo: str, rev: str | None) -> str | None:
-    """The commit sha of the snapshot the engine loaded, read from the local HF cache only (no network): the
-    snapshot directory's name."""
+#: the weight file whose snapshot must match config.json's (the first one the cache holds is checked)
+WEIGHT_FILES = ("model.safetensors.index.json", "model.safetensors", "pytorch_model.bin.index.json",
+                "pytorch_model.bin")
+
+
+def resolve_revision(repo: str, rev: str | None, cache_dir: str | None = None) -> str | None:
+    """The commit sha of the snapshot the engine loaded, read from the local HF cache only (no network): the name of
+    the snapshot directory config.json resolves to (huggingface_hub.try_to_load_from_cache). The weights must
+    resolve to the SAME snapshot (the safetensors index, else the single weight file); a weight file absent from
+    the cache, or in another snapshot, is unresolved (None).
+    Smoke rental 2026-11-19: snapshot_download(local_files_only=True) raised IncompleteSnapshotError, because vLLM
+    downloads only the files it needs (no .gitattributes, README, ...), so a run that loaded the pin read as
+    unresolved."""
     try:
-        from huggingface_hub import snapshot_download
-        return Path(snapshot_download(repo, revision=rev, local_files_only=True)).name
+        from huggingface_hub import try_to_load_from_cache
     except Exception:                                                # noqa: BLE001
         return None
+
+    def snap(fname: str) -> str | None:
+        try:
+            p = try_to_load_from_cache(repo, fname, cache_dir=cache_dir, revision=rev)
+        except Exception:                                            # noqa: BLE001
+            return None
+        return Path(p).parent.name if isinstance(p, str) else None
+
+    cfg = snap("config.json")
+    if not cfg:
+        return None
+    try:     # the first shard of a sharded checkpoint (model-00001-of-0000N.safetensors), by its name in config's dir
+        from huggingface_hub import try_to_load_from_cache as _t
+        cdir = Path(_t(repo, "config.json", cache_dir=cache_dir, revision=rev)).parent
+        shards = sorted(x.name for x in cdir.glob("model-00001-of-*.safetensors"))
+    except Exception:                                                # noqa: BLE001
+        shards = []
+    for w in (*WEIGHT_FILES, *shards):
+        ws = snap(w)
+        if ws:
+            if ws != cfg:
+                print(f"G-REV: {repo} config.json is in snapshot {cfg} but {w} in {ws}", file=sys.stderr)
+                return None
+            return cfg
+    print(f"G-REV: {repo} snapshot {cfg} holds no weight file the engine loaded ({', '.join(WEIGHT_FILES)})",
+          file=sys.stderr)
+    return None
 
 
 def rev_gate(model_key: str, rev: str | None, resolved: str | None) -> dict:

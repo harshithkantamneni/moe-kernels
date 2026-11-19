@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -86,7 +87,20 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert "--shared-stream on" in aon
     assert re.search(r"--shared-stream off", steps[names.index("A1710-capture")])
     assert "--torch-profiler" in steps[names.index("Beager-capture")]
-    assert not any("variant-all4" in n for n in _dry("main.sh", tmp_path / "x", "--skip-frontier-variant"))
+    # smoke rental 2026-11-19 (efficiency): the Frontier variant, the fidelity arm and the graph-mode overhead are
+    # opt-in on main; the registered primary measurements do not move with the flags
+    assert not any("variant-all4" in n or "fidelity" in n or n.startswith("graphmode") for n in names)
+    assert "--arms primary " in by["frontier-setup"] and "--dists uniform " in by["frontier-profile-primary-uniform"]
+    opt = _dry("main.sh", tmp_path / "x", "--frontier-fidelity", "--frontier-all-dists", "--graphmode-overhead")
+    onames = [x.split()[1] for x in opt]
+    oby = dict(zip(onames, opt, strict=True))
+    assert {"frontier-profile-variant-all4", "frontier-holdout-fidelity-uniform", "graphmode-capture"} <= set(onames)
+    assert r"--arms primary\,fidelity " in oby["frontier-setup"]
+    assert "uniform balanced skewed extremely_skewed" in oby["frontier-profile-variant-all4"]
+    assert "--cuda-graph-trace=graph" in oby["graphmode-capture"] and _soft(oby["graphmode-capture"])
+    for n in names:
+        if not n.startswith(("frontier-", "push-")):
+            assert oby[n] == by[n].replace(str(tmp_path), str(tmp_path / "x")), n
     # review 2, MAJOR C: every step carries its registered cap; the long ones above their own budgets
     caps = {n: _cap(by[n]) for n in names}
     assert all(c > 0 for c in caps.values())
@@ -301,3 +315,137 @@ def test_expected_outputs_follow_the_rentals_own_summary(tmp_path):
     (R / "Aon" / "calls.shards.json").write_text("{}")
     (R / "frontier" / "primary-uniform" / "models").mkdir(parents=True)
     assert PL.expected_outputs(R)["missing"] == []
+
+
+# ---- smoke rental 2026-11-19 (SMOKE-FIXES.md 1-5): env, resume, preflight -------------------------------------
+
+def _dry_raw(name, tmp_path, *extra, py="python3"):
+    env = dict(os.environ, PY_VLLM=py, HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
+    return subprocess.run(["bash", str(PROD / name), "--dry-run", "--results", str(tmp_path / "res"), *extra],
+                          capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+
+
+@pytest.mark.parametrize("name", ["smoke.sh", "main.sh"])
+def test_the_first_step_is_the_hard_env_preflight_and_every_step_sees_tmpdir_and_the_venv_bin(name, tmp_path):
+    p = _dry_raw(name, tmp_path, py="/opt/venvs/vllm/bin/python")
+    assert p.returncode == 0, p.stderr
+    lines = p.stdout.splitlines()
+    # items 2 and 3: TMPDIR under $MOE_HOME (nsys: the VM's /tmp/nvidia is root-owned) and the venv's bin first on
+    # PATH (FlashInfer's JIT runs `ninja`), exported once for every step; the dry run creates neither
+    assert f"ENV TMPDIR={tmp_path}/moe/tmp" in lines and "ENV PATH first=/opt/venvs/vllm/bin" in lines
+    assert not (tmp_path / "moe").exists()
+    steps = [x for x in lines if x.startswith("STEP ")]
+    first = steps[0]
+    assert first.split()[1] == "env-preflight" and not _soft(first) and _cap(first) == 300 and " always " in first
+    for want in ("--model ", f"--tmpdir {tmp_path}/moe/tmp", "--locks 1710\\,1410", "--power-w 700",
+                 "--min-free-gb 200", "env_preflight.py"):
+        assert want in first, want
+    # the lock / unlock / env steps are re-run on a resume; the captures are not
+    by = {x.split()[1]: x for x in steps}
+    for n in ("env", "power-readback", "unlock-start", "unlock-after-sag", "unlock-after-replay"):
+        assert " always " in by[n], n
+    assert " always " not in by["sag1410"] and "out=" in by["sag1410"]
+
+
+def test_power_check_reads_the_enforced_limit_not_the_default_setting(tmp_path):
+    """item 1: the GH200 reports power.limit 900 (the default setting) and enforced.power.limit 700."""
+    b = tmp_path / "bin"
+    b.mkdir()
+    (b / "nvidia-smi").write_text('#!/bin/bash\ncase "$*" in *enforced.power.limit*) echo "700.00";; '
+                                  '*power.limit*) echo "900.00";; esac\n')
+    (b / "nvidia-smi").chmod(0o755)
+    path = f"{b}:{os.environ['PATH']}"
+    p, summ = _kit(tmp_path / "a", "step pw --cap 10 -- kit_power_check 700", PATH=path)
+    assert p.returncode == 0 and summ[0].startswith("PASS pw"), p.stdout + p.stderr
+    p, summ = _kit(tmp_path / "b", "step pw --cap 10 -- kit_power_check 900", PATH=path)
+    assert summ[0].startswith("FAIL pw") and "enforced limit 700 W, want 900 W" in summ[0]
+
+
+def test_kit_env_exports_tmpdir_and_puts_the_venv_bin_first_for_every_step(tmp_path):
+    """items 2 and 3: a python step finds the venv's ninja; an nsys step sees the kit's TMPDIR (created)."""
+    venv = tmp_path / "venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "ninja").write_text("#!/bin/bash\necho ninja-of-the-venv\n")
+    (venv / "ninja").chmod(0o755)
+    py = venv / "python"
+    py.symlink_to(sys.executable)
+    p, summ = _kit(tmp_path, f"kit_env {py}\n"
+                             f"step pyjit --cap 30 -- {py} -c 'import subprocess; print(subprocess.check_output([\"ninja\"]).decode())'\n"
+                             "step tmp --cap 10 -- bash -c 'echo TMP=$TMPDIR; test -d \"$TMPDIR\" && test -w \"$TMPDIR\"'",
+                   MOE_HOME=str(tmp_path / "moe"))
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "ninja-of-the-venv" in (tmp_path / "r" / "logs" / "pyjit.log").read_text()
+    assert f"TMP={tmp_path}/moe/tmp" in (tmp_path / "r" / "logs" / "tmp.log").read_text()
+
+
+def _make(paths):
+    for p in paths:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+
+
+def test_smoke_resume_skips_the_done_steps_and_refuses_a_missing_output(tmp_path):
+    """item 5: --from STEP --results DIR: the steps before STEP are SKIPPED-RESUME (never re-run) when their
+    declared outputs are present; a missing one refuses the resume; the --always steps run again."""
+    res = tmp_path / "res"
+    p = _dry_raw("smoke.sh", tmp_path, "--from", "sag1410")
+    assert p.returncode == 2 and "RESUME REFUSED" in p.stderr and "prompts-fetch" in p.stderr
+    _make([res / "data" / "ShareGPT_V3_unfiltered_cleaned_split.json", res / "prompts.jsonl",
+           res / "A" / "serve.nsys-rep", res / "A" / "manifest.json", res / "A" / "serve.sqlite",
+           res / "A" / "calls.shards.json", res / "B" / "torch_trace", res / "B" / "calls.jsonl"])
+    p = _dry_raw("smoke.sh", tmp_path, "--from", "sag1410")
+    assert p.returncode == 0, p.stderr
+    lines = p.stdout.splitlines()
+    skipped = [x.split()[1] for x in lines if x.startswith("SKIPPED-RESUME ")]
+    run = [x.split()[1] for x in lines if x.startswith("STEP ")]
+    assert {"price-check", "prompts-fetch", "capture-graphs-nsys", "extract-gate-A", "capture-eager-torchprof",
+            "extract-gate-B"} <= set(skipped)
+    # the soft graph-mode overhead run had no output: it stays dropped, not re-run
+    assert any(x.startswith("SKIPPED-RESUME capture-graphmode-overhead: output absent") for x in lines)
+    assert run[:4] == ["env-preflight", "env", "power-readback", "unlock-start"] and run[4] == "sag1410"
+    assert "capture-graphs-nsys" not in run and "score" in run
+    assert any(x.startswith("RESUME from sag1410 ") for x in lines)
+    # --from without --results, and a step the plan does not have, are refused
+    env = dict(os.environ, PY_VLLM="python3", HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
+    q = subprocess.run(["bash", str(PROD / "smoke.sh"), "--dry-run", "--from", "sag1410"], capture_output=True,
+                       text=True, env=env, cwd=str(REPO), timeout=60)
+    assert q.returncode == 2 and "needs --results" in q.stderr
+    q = _dry_raw("smoke.sh", tmp_path, "--from", "no-such-step")
+    assert q.returncode == 2 and "no such step" in q.stderr
+
+
+def test_main_resume_relocks_before_the_capture_it_resumes(tmp_path):
+    """item 5: resuming main at A1410-capture re-runs the locks and unlocks (always) and skips A1710's work."""
+    res = tmp_path / "res"
+    p = _dry_raw("main.sh", tmp_path, "--from", "A1410-capture")
+    assert p.returncode == 2 and "RESUME REFUSED" in p.stderr
+    _make([res / "data" / "ShareGPT_V3_unfiltered_cleaned_split.json", res / "prompts.jsonl", res / "sag" / "par.json"]
+          + [res / lab / f for lab in ("gate60", "A1710") for f in ("serve.nsys-rep", "manifest.json", "serve.sqlite",
+                                                                     "calls.jsonl")])
+    p = _dry_raw("main.sh", tmp_path, "--from", "A1410-capture")
+    assert p.returncode == 0, p.stderr
+    lines = p.stdout.splitlines()
+    run = [x.split()[1] for x in lines if x.startswith("STEP ")]
+    skipped = [x.split()[1] for x in lines if x.startswith("SKIPPED-RESUME ")]
+    assert {"A1710-capture", "A1710-export", "A1710-extract", "sag1410", "gate60-capture", "price-check"} <= set(skipped)
+    assert run.index("A1710-lock") < run.index("A1410-lock") < run.index("A1410-capture")
+    assert "A1710-capture" not in run and run[-1] == "held-back-check"
+
+
+def test_a_real_resume_never_reruns_a_done_step_and_records_it(tmp_path):
+    """item 5, the step runner itself (KIT_DRY 0): a done step is recorded SKIPPED-RESUME and not run; an --always
+    step runs; a hard step whose output is gone refuses before anything after it runs."""
+    a, c = tmp_path / "a.out", tmp_path / "c.ran"
+    body = (f"step a --cap 10 --out {a} -- bash -c 'echo run >> {tmp_path}/a.count; touch {a}'\n"
+            f"step lk --always --cap 10 -- bash -c 'echo lk >> {tmp_path}/lk.count'\n"
+            f"step c --cap 10 -- touch {c}")
+    p, summ = _kit(tmp_path, body)
+    assert p.returncode == 0 and (tmp_path / "a.count").read_text() == "run\n"
+    p, summ = _kit(tmp_path, "KIT_FROM=c; KIT_RESUMING=1\n" + body)
+    assert p.returncode == 0, p.stderr
+    assert (tmp_path / "a.count").read_text() == "run\n" and (tmp_path / "lk.count").read_text() == "lk\nlk\n"
+    assert "SKIPPED-RESUME a" in summ and summ[-1].startswith("PASS c")
+    a.unlink()
+    c.unlink()
+    p, summ = _kit(tmp_path, "KIT_FROM=c; KIT_RESUMING=1\n" + body)
+    assert p.returncode == 2 and "RESUME REFUSED" in p.stderr and not c.exists()

@@ -21,7 +21,8 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `score_prod.py` | Joins the calls with the v8 prices (at the board's par, and DESCRIPTIVE at the reference pars' median), the registered roofline and Frontier. Reports MAPE, wMAPE, p50/p95 \|e\| and bias, each with step-bootstrap CIs, per tile, branch and stratum, plus per-step totals and the run deltas. |
 | `smoke.sh`, `main.sh` | The VM sequences, fail-fast. Each step prints PASS/FAIL with its reason. `--dry-run` prints the steps (a soft one marked `[soft]`) and runs nothing. |
 | `prodlib.py` *(extra)* | Code several scripts share: the models (ERNIE is v8's own `ERNIE`), tiles, branches and strata, the capture sizes, the ring format and decoder, the prefill constants, the registered roofline, the pinned HF revisions, and **`price_v8`, the one v8 binding** (`PRICER_MODULE`, or `--pricer` / `$PROD_PRICER`). `prodlib.py price-check` prices one real decode and one real prefill call through v8. |
-| `kitlib.sh` *(extra)* | The step runner, the lock and unlock helpers, nsys location, and the env and power checks that both sequences use. |
+| `kitlib.sh` *(extra)* | The step runner (caps, `--needs`, `--out`, `--always`, resume), the kit's TMPDIR and PATH (`kit_env`), the lock and unlock helpers, nsys location, and the env and power checks that both sequences use. |
+| `env_preflight.py` *(extra)* | The first hard step of smoke.sh and main.sh (`env-preflight`, cap 300 s): every environment fault the smoke rental met, checked before anything long. See "Smoke rental fixes". |
 | `tests/prod_fakes.py`, `tests/test_prod_*.py` | CPU tests on synthetic inputs. |
 
 ## How each KIT-SPEC item is met
@@ -130,7 +131,8 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
    calls (more than 15 MHz from the lock) are dropped and counted. The refused-call share of MoE time is
    reported. The refused window is per model: T from ⌈6·E·128/k⌉ to 129·E − 1 (ERNIE 8192..8255).
 8–9. **smoke.sh and main.sh.** They follow CRITIQUE-DISPOSITION RENTALS (1) and (2). main.sh runs, in order: the
-   ERNIE 60 s gate, the sag par, A1710, A1410, replay C, Frontier (profile, train and hold-out only), and then
+   env-preflight, the ERNIE 60 s gate, the sag par, A1710, A1410, replay C, Frontier (primary, uniform: profile,
+   train and hold-out only; the variant and fidelity arms are opt-in), and then
    the secondary runs (Adefault, Aon, Beager, the replay offset). Every secondary step is soft. A trap unlocks
    the card on any exit, and a soft push to the run's branch follows each block. Frontier's predict and the
    score run on the laptop (`offline.sh`). Tests assert the order, the soft and hard steps, and that main.sh
@@ -170,6 +172,92 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
   sag1410.sh fails before the driver without `$SESSION_ROOT/census.json` (PF6). MINOR 7: offline.sh writes its
   summary and logs under `<results>/offline-logs/` and creates them itself. MINOR 8: the compiled-variant counts
   are read again at `close()`, and G-VARIANTS-END fails the run if they changed after warm.
+
+## Smoke rental fixes (2026-11-19)
+
+The smoke rental on a GH200 met five environment faults (SMOKE-FIXES.md). Each is fixed in the kit, and each now
+fails the first step instead of a step deep in the sequence.
+
+1. **Power.** `kit_power_check` reads `enforced.power.limit`. The board reports `power.limit` 900 W (the default
+   setting) and enforces 700 W.
+2. **nsys temp dir.** After setup_vm's ncu, `/tmp/nvidia` is root-owned, so nsys could not create
+   `/tmp/nvidia/nsight_systems`. `kit_env` creates `$MOE_HOME/tmp` (`$KIT_TMPDIR` overrides it) and exports it as
+   `TMPDIR` for every step, so every `nsys profile` and `nsys export` uses it. `--dry-run` prints it (`ENV TMPDIR=`).
+3. **PATH.** The kit runs the venv's python by absolute path, and FlashInfer's JIT (vLLM's sampler) runs `ninja`.
+   `kit_env` puts the venv's bin dir (`dirname $PY_VLLM`) first on PATH for every step (`ENV PATH first=`). A bare
+   `python3` in a step (locked_r3.py) therefore runs the venv's python3; locked_r3 imports only exit_codes.
+4. **G-REV resolver.** vLLM downloads only the files it needs, so `snapshot_download(local_files_only=True)` raised
+   IncompleteSnapshotError. `serve_capture.resolve_revision` now takes the snapshot directory that config.json
+   resolves to (`huggingface_hub.try_to_load_from_cache`), and requires the weights (the safetensors index, else
+   the single weight file) to resolve to the same one.
+5. **Dirty tree.** The pinned v7p driver refuses a dirty checkout. `env-preflight` P1 fails a dirty tree, or a HEAD
+   other than the expected commit, before anything runs. No kit file is patched on a rental.
+
+**`env-preflight`** (`scripts/prod/env_preflight.py`, hard, cap 300 s, the first step of smoke.sh and main.sh)
+runs every check and prints one PASS or FAIL line per check, with its reason. It writes `$R/env-preflight.json`.
+- P1: clean checkout at the expected commit (`--expect-commit`, else `$PROD_EXPECT_COMMIT`, else the commit in
+  `$MOE_HOME/env.sh`'s header).
+- P2: no compute process on the GPU.
+- P3: the enforced power limit is 700 W.
+- P4: 1710 and 1410 are each set by `-lgc` and restored by `-rgc` (skipped when P2 fails).
+- P5: TMPDIR is writable.
+- P6: ninja, nsys and ncu are on PATH.
+- P7: `nsys profile --cuda-graph-trace=node /bin/true` runs under that TMPDIR.
+- P8: the model's pinned config.json and weight index download, and the fixed resolver returns the pin.
+- P9: Frontier's repo is reachable at frontier_setup.sh's pinned commit.
+- P10: more than 200 GB free (`$PROD_MIN_FREE_GB`).
+- P11: setup_vm's `$SESSION_ROOT/PREFLIGHT.txt` says `verdict READY`.
+
+**Resume.** `smoke.sh`, `main.sh` and `offline.sh` take `--results DIR --from STEP`. The run re-enters at STEP in
+the existing DIR, appending to its SUMMARY.txt.
+- Every step before STEP is recorded `SKIPPED-RESUME <step>` and is not run.
+- A step declares the outputs a later step reads (`--out`). A skipped hard step whose output is missing refuses
+  the resume (exit 2, before anything runs past it). A skipped soft step whose output is missing stays dropped,
+  and the steps that `--needs` it are SKIPPED.
+- The `--always` steps run again: env-preflight, env, power, revision and replay-wall checks, and every lock and
+  unlock. So a resumed capture runs at its own clock.
+- A STEP that is not in the script's plan, or `--from` without `--results`, is refused.
+- `--dry-run` with `--from` checks the outputs and prints the resume plan.
+
+## main.sh: every step, its cap, its expected time
+
+The expected times are planning estimates for ERNIE on one GH200 (not measured yet). The smoke's SUMMARY.txt
+gives each step's wall time in seconds; replace the estimates with those, scaled to ERNIE, before the main
+rental. A cap is the step's registered kill time. The opt-in steps are not in the default plan.
+
+| block | step | hard/soft | cap | expected |
+|---|---|---|---|---|
+| M0 | env-preflight | hard, always | 300 s | 2-4 min (the HF config and index download, the Frontier clone) |
+| M0 | env, power-readback, unlock-start, revision-pinned, replay-wall-present | hard, always | 300 / 60 / 60 / 120 / 30 s | < 1 min |
+| M0 | price-check | hard | 900 s | 2-5 min |
+| M1 | prompts-fetch, prompts-build, serve-plan | hard | 1800 / 1800 / 300 s | 2 + 3 + 1 min |
+| M2 | gate60-capture | hard | 3600 s | 15 min (ERNIE's weights download, load, compile, 60 s serving) |
+| M2 | gate60-export, gate60-extract, gate60-sequences | hard | 1800 / 1800 / 600 s | 3 + 3 + 1 min |
+| M2 | push-gate60 | soft | 3600 s | 2 min |
+| M3 | sag1410, unlock-after-sag | hard | 5400 / 60 s | 60 min (the driver's own deadline is 75 min) |
+| M4 | A1710-lock, A1710-capture | hard | 120 / 10800 s | 25 min (about 27k serving steps under nsys) |
+| M4 | A1710-unlock-after, A1710-export, A1710-extract | hard | 60 / 5400 / 3600 s | 15 + 10 min |
+| M5 | A1410-lock ... A1410-extract | hard | as M4 | 50 min |
+| M5 | push-primary | soft | 3600 s | 5 min |
+| M6 | replay-probe-sample, replay-probe, replay-probe-wall (per branch) | hard | 600 / 1800 / 120 s | 1 + 10 + 1 min |
+| M6 | replay-sample, replay (per branch) | hard | 600 / 5400 s | 1 + 30 min (inside the 2400 s budget, probe included) |
+| M6 | unlock-after-replay, push-replay | hard / soft | 60 / 3600 s | 3 min |
+| M7 | frontier-setup, frontier-config | soft | 3600 / 300 s | 15 min (the primary venv only) |
+| M7 | frontier-profile-primary-uniform | soft | 10800 s | 45 min (uniform only, to 16384 tokens) |
+| M7 | frontier-train, frontier-holdout, frontier-simpath (primary-uniform) | soft | 3600 / 1800 / 3600 s | 5 + 2 + 5 min |
+| M7 | push-frontier | soft | 3600 s | 2 min |
+| M8 | Adefault-unlock ... Adefault-extract | soft (unlocks hard) | as M4 | 50 min |
+| M8 | Aon-lock ... Aon-extract | soft (unlocks hard) | as M4 | 50 min |
+| M8 | Beager-capture, Beager-extract | soft | 5400 / 3600 s | 20 + 5 min |
+| M8 | replay-offset-lock, replay-offset-nsys, replay-offset-unlock | soft (unlock hard) | 120 / 3600 / 60 s | 10 min |
+| M8 | push-final, held-back-check | soft / hard | 3600 / 120 s | 5 min |
+| opt-in | `--frontier-all-dists`: frontier-*-variant-all4 | soft | 10800 / 3600 / 1800 / 3600 s | about 3 h (four load distributions) |
+| opt-in | `--frontier-fidelity`: the fidelity venv, frontier-*-fidelity-uniform | soft | 10800 / 3600 / 1800 s | 30 min install + 50 min |
+| opt-in | `--graphmode-overhead`: graphmode-unlock, graphmode-capture | soft | 60 / 3600 s | 10 min (the smoke already measures it) |
+
+The default plan is about 5 h through M6 (the primary measurements), 6.2 h through M7 and 8.5 h in all. The sum
+of the caps is 47 h, so the caps only bound a hung step. The primary measurements (M2 to M6) are unchanged by the
+flags (a test holds every non-Frontier step identical with and without them).
 
 ## The prefill constants (v8 has no defaults)
 
@@ -252,7 +340,8 @@ bit for bit.
 - **Launcher:** the `vm_run*.sh` `--driver` allow-lists do not name `scripts/prod/*.sh`. Either a `vm_run_prod.sh`
   copy is needed (not built here, because the existing launchers are not edited) or the sequences are started
   over ssh after `setup_vm.sh`. Lambda launch and terminate stay with `~/.lambda/status` / `~/.lambda/rent`.
-- `PROD_POWER_W` (default 700) is the power limit that main.sh's power-readback requires.
+- `PROD_POWER_W` (default 700) is the enforced power limit that env-preflight and main.sh's power-readback require.
+- `PROD_EXPECT_COMMIT` (or `$MOE_HOME/env.sh`'s header) is the commit env-preflight holds the checkout to.
 
 ## Assumptions that cannot be verified without the GPU (each is checked in the smoke rental)
 
@@ -277,7 +366,7 @@ bit for bit.
 | A13 | Frontier's pinned stack (py3.10, torch 2.8 cu128 aarch64, vLLM 0.10.2 aarch64 wheel) installs and runs. | `frontier-setup` / `frontier-profile-fidelity` (soft: reported and dropped if not). |
 | A14 | The study's lock prelude holds 1710 and 1410 during serving. | Per-call SM clock from the NVML marks; off-lock calls are dropped and counted (`off_lock_dropped`). |
 | A15 | The capture overhead (one small kernel per call plus a drain every ≤256 steps) does not distort serving. | The smoke's graph-mode versus node-mode runs (step intervals in `steps.jsonl`), and the marker share of step time in the sqlite. |
-| A16 | `nvidia-smi -lgc` takes, and power.limit reads back 700 W. | `kit_lock`'s "GPU clocks set to" read-back; `power-readback`. |
+| A16 | `nvidia-smi -lgc` takes, and enforced.power.limit reads back 700 W (power.limit reads the 900 W default setting). | `env-preflight` P3/P4; `kit_lock`'s "GPU clocks set to" read-back; `power-readback`. |
 | A17 | The estimator's T-histogram resembles the real one. | `expected_histogram.json` versus `manifest.json realized_per_tile` from the smoke run; the main run's G-COV is a hard gate. |
 
 ## Outputs
