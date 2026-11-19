@@ -195,6 +195,35 @@ def test_the_scorer_end_to_end(tmp_path, stub):
     assert "DESCRIPTIVE" in (out / "prod.score.txt").read_text()
 
 
+def test_replay_vs_serving_with_and_without_the_api_fills_and_truths_labelled(tmp_path, stub):
+    """SMOKE-FIXES 6: --replay-check carries each sampled cell's fills (the replay's functional API path); the score
+    reports kernel-sum vs replay with and without them, the fills' share per tile; kernel-sum is the PRIMARY truth,
+    span SECONDARY with span / kernel-sum per cudagraph mode."""
+    a, _calls = _extracted(tmp_path, "A1710", ((5, 8), (40, 40), (100, 104)))
+    rep = _replay(tmp_path, a)
+    rows = PL.read_jsonl(a / "calls.jsonl")[:6]
+    rc = tmp_path / "replay_check.json"
+    rc.write_text(json.dumps({"cells": [{"label": f"g{r['g']}", "replay": {"fills_n": 9, "fills_ns": 9000}}
+                                        for r in rows]}))
+    out = tmp_path / "score"
+    assert SP.main(["--model", MODEL.key, "--run", f"A1710={a}", "--replay", f"decode={rep}", "--replay-check",
+                    f"decode={rc}", "--replay-check", f"prefill={tmp_path / 'absent.json'}", "--pricer", stub,
+                    "--workers", "1", "--sag", _par(tmp_path), "--out", str(out)]) == 0
+    sc = json.loads((out / "prod.score.json").read_text())
+    tabs = sc["runs"]["replay-decode"]["tables"]
+    w = tabs["kernel_sum_ms (in-serving) vs replay_ms"]["all"]
+    wo = tabs["kernel_sum_ms (in-serving) vs replay_ms minus the API fills"]["all"]
+    assert w["n"] == wo["n"] == 6 and wo["bias"] > w["bias"]           # the replay minus 9 us is closer to serving
+    assert "v8_ms vs replay_ms minus the API fills" in tabs
+    fills = sc["runs"]["replay-decode"]["fills"]
+    assert all(abs(v["fills_us_median"] - 9.0) < 1e-9 for v in fills.values())
+    assert any("PRIMARY" in n and "SECONDARY" in n for n in sc["notes"])
+    assert sc["runs"]["A1710"]["span_over_kernel_sum_by_cg_mode"]
+    txt = (out / "prod.score.txt").read_text()
+    assert "[primary]" in txt and "[secondary]" in txt and "API fills (replay)" in txt and "span / kernel-sum" in txt
+    assert SP.load_replay_check(tmp_path / "absent.json") == {}
+
+
 def test_refused_calls_are_counted_with_their_share_of_moe_time(tmp_path, stub):
     a, _ = _extracted(tmp_path, "A1410", ((8200, 8200), (600, 600)))
     out = tmp_path / "score"

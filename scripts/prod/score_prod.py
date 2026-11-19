@@ -3,7 +3,7 @@
     python scripts/prod/score_prod.py \\
         --run A1710=RUN_A1710 --run A1410=RUN_A1410 --run Adefault=RUN_ADEF --run Aon=RUN_AON --run Beager=RUN_B \\
         --replay decode=REPLAY_DECODE_DIR --replay prefill=REPLAY_PREFILL_DIR \\
-        --frontier FRONTIER_DIR/predictions.jsonl --sag RESULTS/sag/par.json --model ernie-4.5-21b-a3b --out SCORE_DIR
+        --frontier RESULTS/frontier/predictions --sag RESULTS/sag/par.json --model ernie-4.5-21b-a3b --out SCORE_DIR
 
 RUNS ON THE LAPTOP after the rental (review 1, MAJOR 7): scripts/prod/offline.sh fetches nothing itself; it runs
 Frontier's predict and this scorer on the pushed results branch. --workers defaults to 4 (an 18 GB laptop).
@@ -22,9 +22,16 @@ calibration: the prefill calls at the registered reference pars' median (prodlib
 blind's registered rival T0_GR + A W_e / bw at its frozen constants (prodlib.roofline_ms), every call: `roof_ms`.
 Frontier's predictions (frontier_op.py), each arm its own predictor.
 
-TRUTHS. kernel-sum (align..moe_sum durations) and span (first start to last end), in serving; the replay's
-per-call median (clean repeats) for the sample. Off-lock calls (per-call SM clock more than 15 MHz from the run's
-lock) are dropped and counted.
+TRUTHS. kernel-sum (align..moe_sum durations) is the PRIMARY truth; span (first start to last end) is SECONDARY: a
+call with T > 512 runs outside CUDA graphs (the capture sizes stop at 512), so its span includes the host's launch
+gaps (the smoke: 128x128 span ~2x kernel-sum); the report gives span / kernel-sum per run by cudagraph mode. The
+replay's per-call median (clean repeats) for the sample. Off-lock calls (per-call SM clock more than 15 MHz from the
+run's lock) are dropped and counted.
+FILLS (SMOKE-FIXES 6): the replay times vLLM's functional fused_experts, which launches ~9 fill kernels per call that
+serving's modular TritonExperts does not; --replay-check BRANCH=replay_check.json (nsys_extract replay-check on the
+replay under nsys at the branch clock) gives each sampled cell's fills' GPU time, and the replay-vs-serving delta is
+reported with and without them (replay_ms minus the cell's fills). v7/v8's decode constants were calibrated on the
+functional API (fills inside T0 / align): expect v8 to over-predict in serving by about the fills' time.
 
 REPORTED per (predictor, truth, group): n, MAPE, wMAPE (time-weighted), p50 and p95 of |e|, bias (mean signed e),
 a 95% bootstrap CI of MAPE and wMAPE resampling STEPS (calls of one step move together); groups: all, per tile,
@@ -209,8 +216,34 @@ def load_replay(d, branch: str = "") -> dict:
     return {k: float(np.median(v)) for k, v in out.items() if v}
 
 
+def load_replay_check(path) -> dict:
+    """{label: fills ms per call (the replay's median)} from nsys_extract's replay_check.json; {} when absent."""
+    p = Path(path)
+    if not p.is_file():
+        return {}
+    doc = json.loads(p.read_text())
+    out = {}
+    for c in doc.get("cells", []):
+        f = (c.get("replay") or {}).get("fills_ns")
+        if f is not None:
+            out[c["label"]] = float(f) / 1e6
+    return out
+
+
+def span_ratio(rows: list[dict]) -> dict:
+    """median span / kernel-sum by cudagraph mode (eager calls carry the host's launch gaps in their span)."""
+    acc: dict = defaultdict(list)
+    for r in rows:
+        if r.get("kernel_sum_ms") and r.get("span_ms"):
+            acc[str(r.get("cg_mode"))].append(r["span_ms"] / r["kernel_sum_ms"])
+    return {k: {"n": len(v), "median": float(np.median(v))} for k, v in sorted(acc.items())}
+
+
 def load_frontier(path) -> dict:
-    """{(run, g, arm): pred_ms} from frontier_op.py's predictions.jsonl."""
+    """{(run, g, arm): pred_ms} from frontier_op.py predict's directory (index.json + npy), or a predictions.jsonl."""
+    if Path(path).is_dir():
+        import frontier_op as FO
+        return FO.load_predictions(path)
     out = {}
     for r in PL.read_jsonl(path):
         if r.get("pred_ms") is not None:
@@ -262,7 +295,7 @@ def delta(a: dict, b: dict) -> dict:
 
 
 def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, frontier: dict, roof: dict,
-          prices: dict, sag128=None) -> dict:
+          prices: dict, sag128=None, fills: dict | None = None) -> dict:
     """runs: label -> rows (load_run, priced: r['v8_ms'] etc. filled by the caller); replay: branch -> {label: ms}."""
     out: dict = {"model": model.key, "descriptive": True, "runs": {}, "deltas": {}, "notes": [],
                  "constants": {"sag128 (board, measured at 1410)": None if sag128 is None else list(sag128),
@@ -272,6 +305,10 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
                                "roofline": roof}}
     out["notes"].append("v8_refpar_ms is DESCRIPTIVE: v8 with no on-board calibration (the registered reference "
                         "pars' median for sag128); v8_ms at the board's par is the model's number")
+    out["notes"].append("truths: kernel_sum_ms is PRIMARY; span_ms is SECONDARY (calls with T > 512 run without CUDA "
+                        "graphs and their span includes host launch gaps: the smoke's 128x128 span was ~2x kernel-sum; "
+                        "span / kernel-sum per cudagraph mode under each run)")
+    fills = fills or {}
     preds = (["v8_ms", "v8_refpar_ms", "roof_ms"] + sorted({f"frontier:{a}" for (_r, _g, a) in frontier}))
     for label, rows in runs.items():
         lk = lock_of(label)
@@ -292,6 +329,7 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
             for truth in ("kernel_sum_ms", "span_ms"):
                 res["tables"][f"{p} vs {truth}"] = table(keep, p, truth)
         res["intruder_calls"] = sum(1 for r in keep if r.get("intruders"))
+        res["span_over_kernel_sum_by_cg_mode"] = span_ratio(keep)
         out["runs"][label] = res
     # the model error proper: v8 (and rivals) vs replay at the branch clock, same calls
     for b, rep in replay.items():
@@ -302,6 +340,26 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
                                       "tables": {f"{p} vs replay_ms": table(rows, p, "replay_ms") for p in preds}}
         out["runs"][f"replay-{b}"]["tables"]["kernel_sum_ms (in-serving) vs replay_ms"] = table(rows, "kernel_sum_ms",
                                                                                                "replay_ms")
+        fb = fills.get(b) or {}
+        if fb:
+            for r in rows:
+                f = fb.get(f"g{r['g']}")
+                r["replay_ms_nofills"] = None if f is None else r["replay_ms"] - f
+                r["fills_ms"] = f
+            tabs = out["runs"][f"replay-{b}"]["tables"]
+            tabs["kernel_sum_ms (in-serving) vs replay_ms minus the API fills"] = table(rows, "kernel_sum_ms",
+                                                                                      "replay_ms_nofills")
+            tabs["v8_ms vs replay_ms minus the API fills"] = table(rows, "v8_ms", "replay_ms_nofills")
+            per: dict = defaultdict(list)
+            for r in rows:
+                if r.get("fills_ms") is not None:
+                    per[r["tile"]].append((r["fills_ms"], r.get("kernel_sum_ms"), r.get("v8_ms")))
+            out["runs"][f"replay-{b}"]["fills"] = {
+                t: {"n": len(v), "fills_us_median": 1e3 * float(np.median([x[0] for x in v])),
+                    "share_of_in_serving_kernel_sum": float(np.median([x[0] / x[1] for x in v if x[1]])) if any(
+                        x[1] for x in v) else None,
+                    "share_of_v8": float(np.median([x[0] / x[2] for x in v if x[2]])) if any(x[2] for x in v) else None}
+                for t, v in per.items()}
     med = {lab: tile_medians(rows, "kernel_sum_ms") for lab, rows in runs.items()}
     pairs = [("Aon", "A1710", "shared-experts stream on vs off (overlap)"),
              ("Adefault", "A1710", "default clocks vs the 1710 lock (clock)"),
@@ -366,12 +424,22 @@ def render(sc: dict) -> str:
         for k in ("calls", "scored", "off_lock_dropped", "v8_refused_share_of_moe_time", "intruder_calls"):
             if k in res:
                 lines.append(f"   {k}: {res[k]}")
+        for mode, v in (res.get("span_over_kernel_sum_by_cg_mode") or {}).items():
+            lines.append(f"   span / kernel-sum, cudagraph {mode:<8s} n={v['n']:<7d} median {v['median']:.2f}")
+        for tile, v in (res.get("fills") or {}).items():
+            sh, sv = v.get("share_of_in_serving_kernel_sum"), v.get("share_of_v8")
+            lines.append(f"   API fills (replay) {tile:<22s} n={v['n']:<5d} {v['fills_us_median']:7.2f} us/call"
+                         + (f"  = {100 * sh:5.2f}% of in-serving kernel-sum" if sh is not None else "")
+                         + (f", {100 * sv:5.2f}% of v8" if sv is not None else ""))
         for tname, t in res["tables"].items():
             a = t["all"]
             if not a.get("n"):
                 continue
             ci = a.get("MAPE_ci95")
-            lines.append(f"   {tname:<40s} n={a['n']:<7d} MAPE {a['MAPE']:6.2f}%"
+            tag = " [primary]" if tname.endswith("vs kernel_sum_ms") else (
+                " [secondary]" if tname.endswith("vs span_ms") else "")
+            tname = tname + tag
+            lines.append(f"   {tname:<52s} n={a['n']:<7d} MAPE {a['MAPE']:6.2f}%"
                          + (f" [{ci[0]:.2f}, {ci[1]:.2f}]" if ci else "")
                          + f"  wMAPE {a['wMAPE']:6.2f}%  p50 {a['p50_abs_e']:5.2f}%  p95 {a['p95_abs_e']:6.2f}%"
                          f"  bias {a['bias']:+6.2f}%")
@@ -405,7 +473,9 @@ def main(argv=None) -> int:
     ap.add_argument("--run", action="append", default=[], help="LABEL=DIR (nsys_extract'd serve_capture dir)")
     ap.add_argument("--replay", action="append", default=[], help="BRANCH=DIR (replay.py's run dir)")
     ap.add_argument("--sample-run", action="append", default=[], help="BRANCH=RUNLABEL the sample was drawn from")
-    ap.add_argument("--frontier", default=None, help="frontier_op.py predictions.jsonl")
+    ap.add_argument("--replay-check", action="append", default=[],
+                    help="BRANCH=replay_check.json (nsys_extract replay-check: each cell's API fills); absent: skipped")
+    ap.add_argument("--frontier", default=None, help="frontier_op.py predict's directory (or a predictions.jsonl)")
     ap.add_argument("--sag", required=True, help="the board's 128x128 par (main.sh's sag1410 step: RESULTS/sag/par.json)")
     ap.add_argument("--pricer", default=None, help=f"pricer module (default {PL.PRICER_MODULE})")
     ap.add_argument("--workers", type=int, default=4)
@@ -420,8 +490,9 @@ def main(argv=None) -> int:
         sag128 = PL.load_board_par(a.sag)
         roof = PL.roofline_constants()
         prices = attach_predictions(model, runs, frontier, roof, sag128=sag128, module=a.pricer, workers=a.workers)
+        fills = {b: load_replay_check(p) for b, p in _kv(a.replay_check).items()}
         sc = score(model=model, runs=runs, replay=replay, sample_run=sample_run, frontier=frontier, roof=roof,
-                   prices=prices, sag128=sag128)
+                   prices=prices, sag128=sag128, fills=fills)
     except (PL.KitError, PL.RingError, OSError, ValueError, KeyError) as exc:
         print(f"FAIL score_prod: {type(exc).__name__}: {exc}")
         return 3

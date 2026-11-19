@@ -101,38 +101,62 @@ step unlock-after-replay --always --cap 60 -- kit_unlock
 # the wall time per cell per tile (main.sh's replay budget: copy $R/replay_wall.json to scripts/prod/ before freeze)
 step replay-wall --cap 120 --out "$R/replay_wall.json" -- "$PY" "$SC/replay.py" wall-merge --from "$R/replay-decode" --from "$R/replay-prefill" \
   --model $MODEL --out "$R/replay_wall.json"
-# the replay's kernels against serving's, per tile (names and grids), under nsys (review 1, MINOR)
+# the replay's kernels against serving's, per tile (the CORE sequence align..moe_sum and the grids; the API path's
+# fill kernels counted, not compared: SMOKE-FIXES 6), under nsys AT THE BRANCH CLOCK under locked_r3 like replay C
+# (SMOKE-FIXES 7: the instrument offset at replay C's clock), cell marks on (each cell's own calls)
 for b in decode prefill; do
+  lock=1710; [[ $b == prefill ]] && lock=1410
   step "replay-nsys-$b" --cap 3600 --out "$R/replay-nsys-$b/replay.nsys-rep" -- "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true -o "$R/replay-nsys-$b/replay" \
-    env MOE_RESULTS_DIR="$R/replay-nsys-$b" "$PY" "$SC/replay.py" --model $MODEL --histogram "$R/sample-$b/sample.json" \
-    --branch $b --inst GRR --repeats 1 --duty 0.25 --seed 0 --session-tag "smoke-replay-nsys-$b"
+    env MOE_RESULTS_DIR="$R/replay-nsys-$b" python3 scripts/locked_r3.py --session-tag "smoke-replay-nsys-$b" --locks $lock --groups 1 \
+    --slip-policy cell --min-clean-repeats 0 --out-dir "$R/locked-replay-nsys-$b" --r3-script "$SC/replay.py" -- --model $MODEL \
+    --histogram "$R/sample-$b/sample.json" --branch $b --inst GRR --repeats 1 --duty 0.25 --seed 0 --cell-marks
   step "replay-nsys-export-$b" --cap 1800 --out "$R/replay-nsys-$b/replay.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true -o "$R/replay-nsys-$b/replay.sqlite" \
     "$R/replay-nsys-$b/replay.nsys-rep"
-  step "replay-check-$b" --cap 1800 -- "$PY" "$SC/nsys_extract.py" replay-check --serving "$R/A" --sample "$R/sample-$b/sample.json" \
-    --replay-sqlite "$R/replay-nsys-$b/replay.sqlite" --model $MODEL
+  step "replay-check-$b" --cap 1800 --out "$R/replay-nsys-$b/replay_check.json" -- "$PY" "$SC/nsys_extract.py" replay-check --serving "$R/A" --sample "$R/sample-$b/sample.json" \
+    --replay-sqlite "$R/replay-nsys-$b/replay.sqlite" --model $MODEL --branch $b --out "$R/replay-nsys-$b/replay_check.json"
 done
 
-# Frontier: both stacks install, a tiny profile / train / predict / holdout on each
-step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary,fidelity
+# Frontier, its predictor on our profiles (frontier_op.py; owner decision 2026-11-19), small: its grid to 256 tokens,
+# the decode page and one prefill page, its trainer, hold-out and batch predictions on the VM
+step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
 if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
-for arm in primary fidelity; do
-  step "frontier-config-$arm" --soft --cap 300 -- "$PY" "$SC/frontier_op.py" write-config --model $MODEL --src "${FRONTIER_SRC:-$FR/src}"
-  CSV="$R/frontier/$arm/profile/compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv"
-  step "frontier-profile-$arm" --soft --cap 3600 --out "$CSV" -- "$PY" "$SC/frontier_op.py" profile --arm $arm --model $MODEL --dists uniform \
-    --max-tokens 256 --src "${FRONTIER_SRC:-$FR/src}" --out "$R/frontier/$arm/profile"
-  step "frontier-train-$arm" --soft --cap 1800 --out "$R/frontier/$arm/models" -- "$PY" "$SC/frontier_op.py" train --arm $arm --model $MODEL --csv "$CSV" \
-    --src "${FRONTIER_SRC:-$FR/src}" --out "$R/frontier/$arm/models"
-  step "frontier-holdout-$arm" --soft --cap 1800 --out "$R/frontier/$arm/holdout" -- "$PY" "$SC/frontier_op.py" holdout --arm $arm --model $MODEL --csv "$CSV" \
-    --src "${FRONTIER_SRC:-$FR/src}" --out "$R/frontier/$arm/holdout"
+FSRC="${FRONTIER_SRC:-$FR/src}"
+FD="$R/frontier"
+CSV="$FD/profile/compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv"
+step frontier-grid-check --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" --max-tokens 256
+for b in decode prefill; do
+  lock=1710; reps=3; [[ $b == prefill ]] && { lock=1410; reps=1; }
+  d="$FD/points/$b-00"
+  step "frontier-fsample-$b" --soft --cap 300 --needs frontier-setup --out "$d/sample.json" -- "$PY" "$SC/frontier_op.py" fsample --model $MODEL --branch $b \
+    --page 0 --pages 1 --max-tokens 256 --out "$d"
+  step "frontier-page-$b" --soft --cap 1800 --needs "frontier-fsample-$b" --out "$d/page.nsys-rep" -- "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true \
+    -o "$d/page" env MOE_RESULTS_DIR="$d" python3 scripts/locked_r3.py --session-tag "smoke-frontier-$b" --locks $lock --groups 1 \
+    --slip-policy cell --min-clean-repeats 0 --out-dir "$d/locked" --r3-script "$SC/replay.py" -- --model $MODEL \
+    --histogram "$d/sample.json" --branch $b --inst GRR --repeats $reps --duty 0.25 --seed 0 --cell-marks
+  step "frontier-page-export-$b" --soft --cap 900 --needs "frontier-page-$b" --out "$d/page.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true \
+    -o "$d/page.sqlite" "$d/page.nsys-rep"
+  step "frontier-cells-$b" --soft --cap 600 --needs "frontier-page-export-$b" --out "$d/cells.json" -- "$PY" "$SC/nsys_extract.py" replay-cells --sample "$d/sample.json" \
+    --replay-sqlite "$d/page.sqlite" --model $MODEL --branch $b --out "$d/cells.json"
 done
-step frontier-predict-primary --soft --cap 1800 --out "$R/frontier/predictions.jsonl" -- "$PY" "$SC/frontier_op.py" predict --arm primary --model $MODEL \
-  --models "$R/frontier/primary/models" --csv "$R/frontier/primary/profile/compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv" \
-  --calls Adefault="$R/A" --sample "$R/sample-decode/sample.json" --src "${FRONTIER_SRC:-$FR/src}" --out "$R/frontier/predictions.jsonl"
+step frontier-points --soft --cap 300 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --pages-root "$FD/points" --max-tokens 256 \
+  --out "$FD/points.json"
+step frontier-csv --soft --cap 300 --needs frontier-points --out "$CSV" -- "$PY" "$SC/frontier_op.py" csv --model $MODEL --points "$FD/points.json" --src "$FSRC" \
+  --out "$FD/profile"
+step frontier-train --soft --cap 1800 --needs frontier-csv --out "$FD/models" -- "$PY" "$SC/frontier_op.py" train --model $MODEL --csv "$CSV" --src "$FSRC" \
+  --out "$FD/models"
+step frontier-holdout --soft --cap 1800 --needs frontier-csv --out "$FD/holdout" -- "$PY" "$SC/frontier_op.py" holdout --model $MODEL --csv "$CSV" --src "$FSRC" \
+  --out "$FD/holdout"
+step frontier-simpath --soft --cap 1800 --needs frontier-csv --out "$FD/models-simpath" -- "$PY" "$SC/frontier_op.py" simpath --model $MODEL --arm-label simpath \
+  --csv "$CSV" --src "$FSRC" --out "$FD/models-simpath"
+step frontier-predict --soft --cap 1800 --needs frontier-train --out "$FD/predictions/index.json" -- "$PY" "$SC/frontier_op.py" predict --model $MODEL \
+  --models cli="$FD/models" --models simpath="$FD/models-simpath" --csv "$CSV" --calls Adefault="$R/A" --sample "$R/sample-decode/sample.json" \
+  --src "$FSRC" --out "$FD/predictions"
 
 # score end to end (the smoke's run A is at default clocks: labelled Adefault, a production delta, never model error);
 # small, so it runs here; main.sh's score runs on the laptop (offline.sh)
 step score --cap 3600 --out "$R/score" -- "$PY" "$SC/score_prod.py" --model $MODEL --pricer "$PRICER" --sag "$R/sag/par.json" \
   --run Adefault="$R/A" --run Beager="$R/B" --sample-run decode=Adefault --sample-run prefill=Adefault \
   --replay decode="$R/replay-decode" --replay prefill="$R/replay-prefill" \
-  --frontier "$R/frontier/predictions.jsonl" --workers 4 --out "$R/score"
+  --replay-check decode="$R/replay-nsys-decode/replay_check.json" --replay-check prefill="$R/replay-nsys-prefill/replay_check.json" \
+  --frontier "$R/frontier/predictions" --workers 4 --out "$R/score"
 kit_summary

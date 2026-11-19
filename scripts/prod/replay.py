@@ -218,6 +218,26 @@ def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *,
     return out / "sample.json"
 
 
+def write_synthetic_sample(model: PL.ServedModel, pairs: list, out_dir, *, extra: dict | None = None) -> Path:
+    """A sample of synthetic cells only ((cell, ids) pairs; frontier_op.py fsample: Frontier's grid points with
+    Frontier's routing), in write_sample's format, so the replay times them unchanged."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    cells, ids = [], {}
+    for c, a in pairs:
+        if c["label"] in ids:
+            raise PL.KitError(f"duplicate cell label {c['label']}")
+        cells.append(c)
+        ids[c["label"]] = np.asarray(a, dtype=np.int16)
+    np.savez_compressed(out / "sample_ids.npz", **ids)
+    doc = {"schema": SAMPLE_SCHEMA, "model": model.key, "seed": None, "n_cells": len(cells), "run": None,
+           "ids_file": "sample_ids.npz", "budget": None,
+           "ids_sha256": hashlib.sha256((out / "sample_ids.npz").read_bytes()).hexdigest(), "cells": cells,
+           **(extra or {})}
+    (out / "sample.json").write_text(json.dumps(doc, indent=1))
+    return out / "sample.json"
+
+
 def load_sample(path, model: PL.ServedModel, branch: str | None) -> tuple[RD.DecodePage, dict]:
     """The DecodePage of the sample's cells on one branch, and {label: ids [T, k] int32 np}. V-BIN on load: every
     cell's bincount equals its counts and no token repeats an expert."""
@@ -276,8 +296,25 @@ class RealIdsMixin:
         self._wall_mark(None)
         return dict(getattr(self, "_wall", {}))
 
+    #: --cell-marks (nsys passes only): {label: index in the page}; before every build of a cell the step-marker kernel
+    #: (moe_capture.STEP_MARKER_KERNEL) is launched with grid (1, index + 1), so nsys_extract (segment_marked) gives
+    #: each cell exactly its own calls. Outside every timed region (a build precedes the capture and the timing).
+    cell_marks: dict = {}
+
+    def _launch_mark(self, label) -> None:
+        idx = self.cell_marks.get(label)
+        if idx is None:
+            return
+        import moe_capture as MC
+        import torch
+        if getattr(self, "_mark_buf", None) is None:
+            self._mark_buf = torch.zeros(1, dtype=torch.int32, device="cuda")
+        MC.step_kernel()[MC.step_grid(idx)](self._mark_buf, int(idx))
+
     def build(self, cell, arm):
         self._wall_mark(cell.label)
+        if self.cell_marks and getattr(self, "fused_experts", None) is not None:
+            self._launch_mark(cell.label)
         if arm != RD.NATIVE:
             raise RD.DecodeRefused("the replay times the native arm only")
         a = self.real_ids[cell.label]
@@ -325,6 +362,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--slip-policy", choices=("page", "cell"), default="page")
     ap.add_argument("--lock-mhz", type=int, default=None)
     ap.add_argument("--min-clean-repeats", type=int, default=0)
+    ap.add_argument("--cell-marks", action="store_true",
+                    help="nsys passes: a marker kernel (gridY = cell index + 1) before each cell's builds")
     ap.add_argument("--dry-run", action="store_true")
     return ap
 
@@ -516,6 +555,11 @@ def main(argv=None) -> int:
     backend = Backend(cfg, page, inst=args.inst, R=R, calls=calls, copies=copies, seed=args.seed, dtype="bf16",
                       duty=args.duty, warmup_ms=args.warmup, cell_budget_ms=args.cell_budget_ms, trials=args.trials)
     backend.real_ids = real
+    if args.cell_marks:
+        if len(page.cells) >= PL.CELL_MARK_MAX:
+            print(f"\nREFUSED: --cell-marks carries the index in gridY: at most {PL.CELL_MARK_MAX - 1} cells")
+            return exit_codes.REFUSED
+        backend.cell_marks = {c.label: i for i, c in enumerate(page.cells)}
     result = RD.run_page(cfg, page, backend, inst=args.inst, repeats=args.repeats, store=store, lock_mhz=slip_lock,
                          min_clean=args.min_clean_repeats if slip_lock is not None else 0,
                          say=lambda m: print(m, flush=True))

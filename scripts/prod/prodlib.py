@@ -97,6 +97,8 @@ def check_hf_config(model: ServedModel, hf: dict) -> list[str]:
 # --------------------------------------------------------------------------------------------------------------
 
 DECODE_MAX_T = 128
+#: replay.py --cell-marks: the cell index rides in the step marker's gridY (moe_capture.STEP_MOD, CUDA's limit)
+CELL_MARK_MAX = 65535
 LOCKS = {"decode": 1710, "prefill": 1410}
 #: M4's Hopper G-1 rule: w2 at G 1 with n_eff = T k / (E BM) >= HOPPER_G1_N is ill-posed (v8 refuses it)
 HOPPER_G1_N = 6
@@ -425,13 +427,16 @@ def held_back_needed(held_text: str, run_name: str) -> list[str]:
 #: the runs main.sh measures; the primaries are hard steps there, so the laptop always expects them
 PRIMARY_RUNS = ("A1710", "A1410")
 SECONDARY_RUNS = ("Adefault", "Aon", "Beager")
-FRONTIER_LABELS = ("primary-uniform", "variant-all4")
+#: main.sh's Frontier steps whose PASS means a file the laptop reads (frontier_op.py: its predictor, our profiles)
+FRONTIER_OUTPUTS = (("frontier-predict", "frontier/predictions/index.json"), ("frontier-csv", "frontier/points.json"),
+                    ("frontier-holdout", "frontier/holdout/holdout.json"))
 
 
 def expected_outputs(results) -> dict:
     """What offline.sh must find in a fetched results tree, from the rental's own SUMMARY.txt: the primary runs,
-    every secondary run whose extract step PASSED, the board par, both replays, and every Frontier model set whose
-    train (or simpath) step PASSED. {"runs": [labels], "frontier": [(label, models dir name)], "missing": [why]}."""
+    every secondary run whose extract step PASSED, the board par, both replays, each replay_check.json whose check
+    PASSED, and each Frontier output whose step PASSED (FRONTIER_OUTPUTS). {"runs": [labels], "frontier": [paths],
+    "missing": [why]}."""
     R = Path(results)
     summ = R / "SUMMARY.txt"
     if not summ.exists():
@@ -440,12 +445,15 @@ def expected_outputs(results) -> dict:
     runs = list(PRIMARY_RUNS) + [lab for lab in SECONDARY_RUNS if f"{lab}-extract" in passed]
     missing = [f"run {lab}: no calls under {R / lab}" for lab in runs if not has_calls(R / lab)]
     fr = []
-    for lab in FRONTIER_LABELS:
-        for stepname, sub in ((f"frontier-train-{lab}", "models"), (f"frontier-simpath-{lab}", "models-simpath")):
-            if stepname in passed:
-                fr.append((lab, sub))
-                if not (R / "frontier" / lab / sub).is_dir():
-                    missing.append(f"frontier {lab}/{sub}: {stepname} PASSED on the rental, the directory is missing")
+    for stepname, rel in FRONTIER_OUTPUTS:
+        if stepname in passed:
+            fr.append(rel)
+            if not (R / rel).exists() and not (R / (rel + ".xz")).exists():
+                missing.append(f"{rel}: {stepname} PASSED on the rental, the file is missing")
+    for b in ("decode", "prefill"):
+        rel = f"replay-offset-{b}/replay_check.json"
+        if f"replay-offset-check-{b}" in passed and not (R / rel).exists() and not (R / (rel + ".xz")).exists():
+            missing.append(f"{rel}: replay-offset-check-{b} PASSED on the rental, the file is missing")
     if not (R / "sag" / "par.json").exists() and not (R / "sag" / "par.json.xz").exists():
         missing.append(f"{R / 'sag' / 'par.json'}: missing")
     for b in ("decode", "prefill"):

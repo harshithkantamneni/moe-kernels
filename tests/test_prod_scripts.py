@@ -44,9 +44,14 @@ def test_smoke_dry_run_lists_the_smoke_sequence(tmp_path):
     for want in ("env", "price-check", "capture-graphs-nsys", "nsys-export", "extract-gate-A", "sequences-A",
                  "capture-eager-torchprof", "extract-gate-B", "sag1410", "replay-decode", "replay-prefill",
                  "replay-wall", "replay-check-decode", "replay-check-prefill", "frontier-setup",
-                 "frontier-profile-fidelity", "score"):
+                 "frontier-page-prefill", "frontier-cells-decode", "frontier-train", "frontier-predict", "score"):
         assert want in names, want
     by = dict(zip(names, steps, strict=True))
+    # SMOKE-FIXES 7: the nsys replay passes run under locked_r3 at the branch clock, with cell marks
+    for b, lock in (("decode", 1710), ("prefill", 1410)):
+        assert "locked_r3.py" in by[f"replay-nsys-{b}"] and f"--locks {lock} " in by[f"replay-nsys-{b}"]
+        assert "--cell-marks" in by[f"replay-nsys-{b}"] and f"--branch {b}" in by[f"replay-check-{b}"]
+    assert "--replay-check decode=" in by["score"] and not any("fidelity" in n for n in names)
     # review 1: the prefill replay, the sag par, the sequences and the replay-vs-serving check are HARD in the smoke
     for hard in ("replay-prefill", "sag1410", "sequences-A", "replay-check-prefill", "price-check"):
         assert not _soft(by[hard]), hard
@@ -66,16 +71,22 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert names.index("gate60-extract") < names.index("A1710-capture") < names.index("A1410-capture")
     # review 1 MAJOR 5: gate60, (the sag par), A1710, A1410, replay C, Frontier, then the secondary runs, all soft
     order = ["gate60-extract", "sag1410", "A1710-capture", "A1410-capture", "replay-decode", "replay-prefill",
-             "frontier-profile-primary-uniform", "Adefault-capture", "Aon-capture", "Beager-capture"]
+             "frontier-page-decode-00", "frontier-train", "Adefault-capture", "Aon-capture", "Beager-capture",
+             "replay-offset-nsys-decode", "frontier-predict"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
     for n in ("Adefault-capture", "Adefault-extract", "Aon-lock", "Aon-capture", "Aon-extract", "Beager-capture",
-              "Beager-extract", "replay-offset-nsys"):
+              "Beager-extract", "replay-offset-nsys-decode", "replay-offset-check-prefill", "frontier-page-prefill-00",
+              "frontier-train", "frontier-predict"):
         assert _soft(by[n]), n
     for n in ("A1710-capture", "A1410-extract", "replay-prefill", "sag1410", "price-check", "gate60-sequences",
               "revision-pinned", "replay-wall-present"):
         assert not _soft(by[n]), n
-    # review 1 MAJOR 7: no CPU scoring or Frontier predict on the rental; the replay budget reads the smoke's walls
-    assert not any(n == "score" or n.startswith("frontier-predict") for n in names)
+    # review 1 MAJOR 7: no CPU scoring on the rental (owner 2026-11-19: Frontier's batch predict runs on the VM, last,
+    # after every run it predicts); the replay budget reads the smoke's walls
+    assert "score" not in names and names.index("frontier-predict") > names.index("Aon-extract")
+    for lab in ("A1710", "A1410", "Adefault", "Aon", "Beager"):
+        assert f"--calls {lab}=" in by["frontier-predict"], lab
+    assert "--models cli=" in by["frontier-predict"] and "--models simpath=" in by["frontier-predict"]
     assert "--wall " in by["replay-probe-sample-decode"] and "--wall " in by["replay-probe-sample-prefill"]
     assert all("--require-pinned" in by[n] for n in ("gate60-capture", "A1710-capture", "A1410-capture"))
     assert all("--allow-unpinned" not in s for s in steps)
@@ -87,20 +98,29 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert "--shared-stream on" in aon
     assert re.search(r"--shared-stream off", steps[names.index("A1710-capture")])
     assert "--torch-profiler" in steps[names.index("Beager-capture")]
-    # smoke rental 2026-11-19 (efficiency): the Frontier variant, the fidelity arm and the graph-mode overhead are
-    # opt-in on main; the registered primary measurements do not move with the flags
-    assert not any("variant-all4" in n or "fidelity" in n or n.startswith("graphmode") for n in names)
-    assert "--arms primary " in by["frontier-setup"] and "--dists uniform " in by["frontier-profile-primary-uniform"]
-    opt = _dry("main.sh", tmp_path / "x", "--frontier-fidelity", "--frontier-all-dists", "--graphmode-overhead")
+    # owner decision 2026-11-19: Frontier's profiler cannot run on the GH200; no fidelity / variant arm, no Frontier
+    # profiler; its grid timed by our replay harness in pages (decode one, prefill 16 bit-reversed), budget-gated
+    assert not any("variant" in n or "fidelity" in n or "profile-" in n or n.startswith("graphmode") for n in names)
+    assert "--arms primary " in by["frontier-setup"]
+    pages = [n for n in names if n.startswith("frontier-page-")]
+    assert pages[0] == "frontier-page-decode-00" and len(pages) == 17
+    assert [int(n.rsplit("-", 1)[1]) for n in pages[1:]] == [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
+    assert all("fr_page " in by[n] and _soft(by[n]) and "needs=frontier-setup " in by[n] for n in pages)
+    for n in ("frontier-csv", "frontier-train", "frontier-holdout", "frontier-simpath"):
+        assert f"--src {tmp_path}/moe/frontier/src" in by[n], n
+    assert "fpoints" in by["frontier-points"] and "csv" in by["frontier-csv"].split("frontier_op.py")[1]
+    opt = _dry("main.sh", tmp_path / "x", "--graphmode-overhead")
     onames = [x.split()[1] for x in opt]
     oby = dict(zip(onames, opt, strict=True))
-    assert {"frontier-profile-variant-all4", "frontier-holdout-fidelity-uniform", "graphmode-capture"} <= set(onames)
-    assert r"--arms primary\,fidelity " in oby["frontier-setup"]
-    assert "uniform balanced skewed extremely_skewed" in oby["frontier-profile-variant-all4"]
     assert "--cuda-graph-trace=graph" in oby["graphmode-capture"] and _soft(oby["graphmode-capture"])
     for n in names:
-        if not n.startswith(("frontier-", "push-")):
+        if not n.startswith("push-"):
             assert oby[n] == by[n].replace(str(tmp_path), str(tmp_path / "x")), n
+    for gone in ("--frontier-fidelity", "--frontier-all-dists"):
+        env = dict(os.environ, PY_VLLM="python3", HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
+        q = subprocess.run(["bash", str(PROD / "main.sh"), "--dry-run", gone], capture_output=True, text=True, env=env,
+                           cwd=str(REPO), timeout=60)
+        assert q.returncode == 2 and "unknown option" in q.stderr, gone
     # review 2, MAJOR C: every step carries its registered cap; the long ones above their own budgets
     caps = {n: _cap(by[n]) for n in names}
     assert all(c > 0 for c in caps.values())
@@ -110,7 +130,14 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     for lab, pre in (("A1710", "A1710-lock"), ("Aon", "Aon-lock"), ("Adefault", "Adefault-unlock")):
         assert f"needs={pre} " in by[f"{lab}-capture"]
         assert f"needs={lab}-capture " in by[f"{lab}-export"] and f"needs={lab}-export " in by[f"{lab}-extract"]
-    assert "needs=replay-offset-lock " in by["replay-offset-nsys"]
+    # SMOKE-FIXES 7: the replay under nsys per branch, at its branch clock under locked_r3 (no bare kit_lock)
+    for b, lock, src in (("decode", 1710, "A1710"), ("prefill", 1410, "A1410")):
+        nb = by[f"replay-offset-nsys-{b}"]
+        assert "locked_r3.py" in nb and f"--locks {lock} " in nb and f"--branch {b} " in nb and "--cell-marks" in nb
+        assert f"needs=replay-offset-nsys-{b} " in by[f"replay-offset-export-{b}"]
+        ck = by[f"replay-offset-check-{b}"]
+        assert f"needs=replay-offset-export-{b} " in ck and f"--serving {tmp_path}/res/{src} " in ck
+    assert "replay-offset-lock" not in names
     # MAJOR B: per branch a probe, its own ERNIE walls, then the rest sized by them inside the fixed budget
     for b in ("decode", "prefill"):
         seq = [f"replay-probe-sample-{b}", f"replay-probe-{b}", f"replay-probe-wall-{b}", f"replay-sample-{b}",
@@ -125,16 +152,19 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert names.index("push-final") < names.index("held-back-check")
 
 
-def test_offline_dry_run_predicts_and_scores_on_the_laptop(tmp_path):
+def test_offline_dry_run_scores_the_vms_predictions_on_the_laptop(tmp_path):
     env = dict(os.environ, HOME=str(tmp_path / "home"))
     p = subprocess.run(["bash", str(PROD / "offline.sh"), "--dry-run", "--results", str(tmp_path / "res")],
                        capture_output=True, text=True, env=env, cwd=str(REPO), timeout=60)
     assert p.returncode == 0, p.stderr
     steps = [x for x in p.stdout.splitlines() if x.startswith("STEP ")]
     names = [x.split()[1] for x in steps]
-    assert names[-1] == "score" and "frontier-predict-primary-uniform" in names and not (tmp_path / "res").exists()
+    assert names[-1] == "score" and not any(n.startswith("frontier-") for n in names)
+    assert not (tmp_path / "res").exists()
     sc = steps[-1]
     assert "--sag" in sc and "--workers 4" in sc and "ernie-4.5-21b-a3b" in sc
+    assert f"--frontier {tmp_path}/res/frontier/predictions " in sc
+    assert f"--replay-check decode={tmp_path}/res/replay-offset-decode/replay_check.json" in sc
     # review 2, MAJOR A: the fetched tree is decompressed and checked for every expected output before anything else
     assert names[:2] == ["decompress", "expected-outputs"] and not _soft(steps[0]) and not _soft(steps[1])
     assert all(_cap(x) > 0 for x in steps)
@@ -256,6 +286,66 @@ def test_frontier_setup_dry_run(tmp_path):
     assert "--no-deps -e" in p.stdout and not (tmp_path / "fr").exists()
 
 
+def _git_repo(d: Path) -> str:
+    d.mkdir(parents=True)
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+    for cmd in (["git", "init", "-q"], ["git", "commit", "-q", "--allow-empty", "-m", "x"]):
+        subprocess.run(cmd, cwd=d, check=True, env=env, capture_output=True)
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=d, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_frontier_setup_reuses_a_checkout_at_the_pin_and_refuses_another(tmp_path):
+    """SMOKE-FIXES 9: a second run found the source dir and `git clone` failed (128). A checkout already at the pinned
+    commit is reused (no clone, no fetch); one at another commit, or a non-git directory, is refused (exit 4)."""
+    src = tmp_path / "fr" / "src"
+    head = _git_repo(src)
+    kit = tmp_path / "kit" / "scripts" / "prod"
+    kit.mkdir(parents=True)
+    text = (PROD / "frontier_setup.sh").read_text()
+    assert 'COMMIT="db5a85b"' in text
+    (kit / "frontier_setup.sh").write_text(text.replace('COMMIT="db5a85b"', f'COMMIT="{head[:7]}"')
+                                           .replace('URL="https://github.com/NetX-lab/Frontier"', 'URL="file:///nonexistent"'))
+    run = lambda: subprocess.run(["bash", str(kit / "frontier_setup.sh"), "--dest", str(tmp_path / "fr"), "--arms", "none"],
+                                 capture_output=True, text=True, timeout=120)
+    p = run()
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "reusing" in p.stdout and "git clone" not in p.stdout and (tmp_path / "fr" / "frontier.env").exists()
+    p = run()                                                   # idempotent: a second run is the same
+    assert p.returncode == 0 and "reusing" in p.stdout
+    (kit / "frontier_setup.sh").write_text(text.replace('COMMIT="db5a85b"', 'COMMIT="0000000"'))
+    p = run()
+    assert p.returncode == 4 and "refused" in p.stdout and head[:7] in p.stdout
+    import shutil
+    shutil.rmtree(src)
+    src.mkdir()
+    (src / "junk").write_text("x")
+    p = run()
+    assert p.returncode == 4 and "not a git checkout" in p.stdout
+
+
+def test_every_main_step_has_a_cap_at_least_twice_its_expected_time_and_the_plan_fits_4h(tmp_path):
+    """README "main.sh: every step": the expected seconds come from the smoke's measured step times scaled to ERNIE
+    (plan_time.py); every step the plan expects to run has its cap >= 2x that; the default plan is <= 4.0 h with
+    >= 30 steps per tile (the estimator) and the dry run prints the expected total."""
+    sys.path.insert(0, str(PROD))
+    import plan_time as PT
+    steps = _dry("main.sh", tmp_path)
+    caps = {s.split()[1]: _cap(s) for s in steps}
+    plan = PT.plan()
+    names = [st for _b, st, _s, _x in plan["steps"]]
+    assert set(names) == set(caps), (set(names) ^ set(caps))
+    for _blk, st, sec, _basis in plan["steps"]:
+        assert caps[st] >= 2 * sec, (st, caps[st], sec)
+    assert plan["total_h"] <= 4.0 and min(plan["serving"]["per_tile"].values()) >= 30
+    assert plan["frontier"]["pages_run"] >= 5 and plan["frontier"]["points"] >= 100
+    env = dict(os.environ, PY_VLLM=sys.executable, HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
+    p = subprocess.run(["bash", str(PROD / "main.sh"), "--dry-run", "--results", str(tmp_path / "res2")],
+                       capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+    tot = [x for x in p.stdout.splitlines() if x.startswith("PLAN EXPECTED TOTAL")]
+    assert tot and f"{plan['total_s']:.0f} s" in tot[0], p.stdout[-2000:]
+
+
 def test_held_back_check_fails_on_a_needed_file_and_passes_on_the_rentals_intermediates(tmp_path):
     """review 2, MAJOR A: vm_results_push.sh (pinned) lists in HELD-BACK.txt what it compressed or left on the VM;
     main.sh's last hard step fails if any of it is a file the laptop needs."""
@@ -299,7 +389,8 @@ def test_expected_outputs_follow_the_rentals_own_summary(tmp_path):
     R = tmp_path
     assert PL.expected_outputs(R)["missing"]                                      # no SUMMARY.txt: refused
     (R / "SUMMARY.txt").write_text("PASS A1710-extract (1s)\nPASS A1410-extract (1s)\nPASS Aon-extract (1s)\n"
-                                   "FAIL (soft, dropped) Beager-extract: exit 3\nPASS frontier-train-primary-uniform (1s)\n")
+                                   "FAIL (soft, dropped) Beager-extract: exit 3\nPASS frontier-predict (1s)\n"
+                                   "PASS replay-offset-check-decode (1s)\n")
     for lab in ("A1710", "A1410"):
         (R / lab).mkdir()
         (R / lab / "calls.jsonl").write_text("{}\n")
@@ -310,10 +401,14 @@ def test_expected_outputs_follow_the_rentals_own_summary(tmp_path):
         (R / f"replay-{b}" / "x" / "cells.csv").write_text("")
     got = PL.expected_outputs(R)
     assert got["runs"] == ["A1710", "A1410", "Aon"]
-    assert any("run Aon" in m for m in got["missing"]) and any("primary-uniform/models" in m for m in got["missing"])
+    assert any("run Aon" in m for m in got["missing"]) and any("predictions/index.json" in m for m in got["missing"])
+    assert any("replay-offset-decode/replay_check.json" in m for m in got["missing"])
     (R / "Aon").mkdir()
     (R / "Aon" / "calls.shards.json").write_text("{}")
-    (R / "frontier" / "primary-uniform" / "models").mkdir(parents=True)
+    (R / "frontier" / "predictions").mkdir(parents=True)
+    (R / "frontier" / "predictions" / "index.json").write_text("{}")
+    (R / "replay-offset-decode").mkdir()
+    (R / "replay-offset-decode" / "replay_check.json.xz").write_bytes(b"x")
     assert PL.expected_outputs(R)["missing"] == []
 
 

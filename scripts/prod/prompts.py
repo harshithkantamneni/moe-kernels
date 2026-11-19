@@ -35,8 +35,8 @@ SOURCES = {
         "url": "https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/"
                "ShareGPT_V3_unfiltered_cleaned_split.json",
         "file": "ShareGPT_V3_unfiltered_cleaned_split.json",
-        #: PINNED AT THE SMOKE RENTAL (README "to pin before freeze"); None refuses without --allow-unpinned
-        "sha256": None,
+        #: pinned from the smoke rental's fetch (2026-11-19, prompts-fetch.log); None refuses without --allow-unpinned
+        "sha256": "35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4",
         "kind": "sharegpt",
     },
     "gutenberg-1342": {

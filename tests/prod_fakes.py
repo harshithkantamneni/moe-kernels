@@ -82,13 +82,15 @@ SHARED_ACT = "void vllm::act_and_mul_kernel<c10::BFloat16, &(c10::BFloat16 vllm:
 
 def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bool = False, extra_gemm: bool = False,
                 drop_marker: bool = False, shared_stream: bool = False, shared_same_stream: bool = False,
-                extra_fill: bool = False) -> tuple[list[dict], int, dict]:
+                extra_fill: bool = False, api_fills: int = 0) -> tuple[list[dict], int, dict]:
     """One call's kernels from time t: (events, next t, expected {kernel_sum, span, align}). Router first
     (excluded), the marker (gridY = layer + 1, as moe_capture launches it), a dtype conversion (excluded), the align
     path for (n, k, E), w1, act, w2, moe_sum, then an attention kernel of the next layer (outside).
     shared_stream: the shared experts' MLP (GEMM, SiluAndMul, GEMM) on ANOTHER stream, overlapping w1..w2 in time
     (the shared-experts stream on); shared_same_stream: that MLP on the marker's stream BEFORE the marker (stream
-    off: it runs as its own op, never inside the routed call); extra_fill: a second fill kernel before w1."""
+    off: it runs as its own op, never inside the routed call); extra_fill: a second fill kernel before w1;
+    api_fills: that many fill kernels before the align run (the functional fused_experts' buffer fills, SMOKE-FIXES
+    6: the replay's API path, which serving's modular path does not launch)."""
     n, k, E = call["n"], cfg.top_k, cfg.num_experts
     counts = PL.counts_from_ids(call["ids"], E)
     g1, g2 = PL.expected_grids(cfg, n, counts)
@@ -115,6 +117,8 @@ def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bo
     else:
         parts = [("memset", "[memset]", DUR["memset"], "memset"), ("align", NAMES["align"], DUR["align"], "kernel"),
                  ("sort", NAMES["sort"], DUR["sort"], "kernel")]
+    for _ in range(int(api_fills)):
+        add("api_fill", NAMES["fill"], DUR["fill"])
     if extra_fill and numel * 4 <= E:
         add("fill", NAMES["fill"], DUR["fill"])
     s0 = t
@@ -140,7 +144,8 @@ def call_events(cfg, call: dict, t: int, *, intruder: bool = False, bad_grid: bo
     add("reduce", NAMES["reduce"], DUR["reduce"])
     add("attn", NAMES["attn"], DUR["attn"])
     ksum = sum(d for _r, _n, d, _m in parts) + DUR["w1"] + DUR["act"] + DUR["w2"] + DUR["reduce"]
-    return ev, t, {"kernel_sum_ns": ksum, "span_ns": e_end - s0, "align_ns": sum(d for _r, _n, d, _m in parts)}
+    return ev, t, {"kernel_sum_ns": ksum, "span_ns": e_end - s0, "align_ns": sum(d for _r, _n, d, _m in parts),
+                   "fills_ns": int(api_fills) * DUR["fill"]}
 
 
 def timeline(cfg, calls, *, t0: int = 10_000_000, warmup_markers: int = 3, mutate=None, clk_every: int = 4,

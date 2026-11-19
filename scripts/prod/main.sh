@@ -1,69 +1,66 @@
 #!/usr/bin/env bash
-# THE MAIN RENTAL (CRITIQUE-DISPOSITION RENTALS (2)): ERNIE-4.5-21B-A3B on one GH200, staged fail-fast. MEASUREMENTS
-# ONLY: Frontier's predictions and every score run on the laptop afterwards (scripts/prod/offline.sh; review 1,
-# MAJOR 7). Run on the VM after setup_vm.sh, from the pushed, registered checkout:
+# THE MAIN RENTAL (CRITIQUE-DISPOSITION RENTALS (2)): ERNIE-4.5-21B-A3B on one GH200, staged fail-fast. Measurements,
+# Frontier's training and its batch predictions run here; the score runs on the laptop afterwards
+# (scripts/prod/offline.sh). Run on the VM after setup_vm.sh, from the pushed, registered checkout:
 #
-#   . ~/moe/env.sh && cd "$REPO" && bash scripts/prod/main.sh [--results DIR [--from STEP]] [--frontier-fidelity]
-#       [--frontier-all-dists] [--graphmode-overhead] [--dry-run]
+#   . ~/moe/env.sh && cd "$REPO" && bash scripts/prod/main.sh [--results DIR [--from STEP]] [--graphmode-overhead]
+#       [--dry-run]
 #
 # RESUME: `--results DIR --from STEP` re-enters the run in DIR at STEP: the steps before it are SKIPPED-RESUME and
 # never re-run (a hard one whose declared output is missing REFUSES the resume); the --always steps (env-preflight,
 # env, power, locks, unlocks) run again, so a capture is never resumed at the wrong clock (kitlib.sh).
-# OPT-IN (smoke rental 2026-11-19, efficiency; none is a registered primary measurement): --frontier-fidelity
-# (Frontier's own pinned stack, hold-out only), --frontier-all-dists (the variant: all four load distributions;
-# default uniform only), --graphmode-overhead (a 60 s capture under --cuda-graph-trace=graph: the node-tracing
-# overhead, which the smoke measures). Every step, its cap and its expected time: scripts/prod/README.md.
+# OPT-IN: --graphmode-overhead (a 60 s capture under --cuda-graph-trace=graph: the node-tracing overhead, which the
+# smoke measured). The Frontier fidelity and all-distributions arms are gone (owner decision 2026-11-19: Frontier's
+# profiler cannot run on the GH200; its predictor is trained on our profiles, scripts/prod/frontier_op.py).
+# DURATION: the dry run prints every step's expected seconds and the total (scripts/prod/plan_time.py: the smoke
+# rental's measured step seconds, scaled to ERNIE); the default plan is <= 4.0 h wall. README "main.sh: every step".
 #
 # ORDER (review 1, MAJOR 5: the primary measurements first, the secondary runs last and SOFT; each step PASS/FAIL with
 # its reason; a hard FAIL stops the rental's work; the card is unlocked on any exit, trap):
 #   M0  env-preflight (scripts/prod/env_preflight.py: clean checkout at the expected commit, GPU idle, 700 W
 #       enforced, 1710/1410 settable and restorable, TMPDIR, ninja/nsys/ncu, nsys temp dir, the HF pin resolvable,
-#       Frontier at its pin, disk, setup_vm READY); env (vLLM 0.27.1, GH200, nsys), power limit read back, default clocks; the model's HF revision pinned
-#       (prodlib.HF_REVISIONS); the smoke's replay wall times present (scripts/prod/replay_wall.json, the budget);
-#       price-check: the kit prices one real decode and one real prefill call through v8 (review 1, BLOCKER 1)
+#       Frontier at its pin, disk, setup_vm READY); env (vLLM 0.27.1, GH200, nsys), power limit read back, default
+#       clocks; the model's HF revision pinned (prodlib.HF_REVISIONS); the smoke's replay wall times present
+#       (scripts/prod/replay_wall.json, the budget); price-check: one real decode and one real prefill call through v8
 #   M1  prompts: the PINNED ShareGPT file and ERNIE's tokenizer at its pinned revision (no --allow-unpinned)
 #   M2  THE 60 s ERNIE GATE, before any long run: graphs + nsys node tracing at default clocks, then the gates
 #       G-REC, G-GEMM, G-PAIR (marker gridY == layer + 1), G-STEP, G-IDS, G-GRID, G-CLASS, G-BACKEND, G-CFG, G-REV,
 #       and check-sequences (the per-path kernel sequences, the naive path's one fill)
 #   M3  sag1410: the board's 128x128 sag par at 1410 MHz by the v7 prefill blind's own units and finaliser
-#       (scripts/prod/sag1410.sh -> $R/sag/par.json; review 1, BLOCKER 2): a FAIL stops (the prefill branch has no
-#       par without it)
-#   M4  A1710: run A (graphs, nsys node tracing, shared-experts stream OFF: VLLM_DISABLE_SHARED_EXPERTS_STREAM=1,
-#       CRITIQUE M6) under the 1710 MHz lock -> the decode branch (T <= 128)
+#       (scripts/prod/sag1410.sh -> $R/sag/par.json; review 1, BLOCKER 2): a FAIL stops
+#   M4  A1710: run A (graphs, nsys node tracing, shared-experts stream OFF) under the 1710 MHz lock -> decode branch
 #   M5  A1410: the same under the 1410 MHz lock -> the prefill branch (T > 128)                 (CRITIQUE B1)
+#       THE SERVING WORKLOAD (smoke 2026-11-19, the 4.0 h plan): levels 1,8,24,48,80,112,256,1024x3 at N 8 per level
+#       (quota max(N, 2L)); the estimator gives every tile >= 30 steps (G16: the three 1024 bursts)
 #   M6  replay C: the registered stratified subsample, scaled to REPLAY_BUDGET_S: per branch a probe priced by the
-#       smoke's walls x ERNIE's expert-bytes ratio, then the rest priced by the probe's own ERNIE walls (replay.py
-#       budget rule), decode tiles from A1710 at 1710, prefill tiles from A1410 at 1410, under locked_r3
-#   M7  Frontier: PRIMARY on vLLM 0.27.1 (uniform, to 16384 tokens) profile + train + hold-out (+ the simpath
-#       model); opt-in: the VARIANT (all four load distributions, --frontier-all-dists) and FIDELITY on its pinned
-#       stack (hold-out only, --frontier-fidelity).
-#       Soft: a stack that cannot install or run is reported and dropped. NO predict here (offline.sh)
+#       smoke's walls x ERNIE's expert-bytes ratio, then the rest priced by the probe's own ERNIE walls, under
+#       locked_r3 at the branch clock
+#   M7  Frontier, ITS PREDICTOR ON OUR PROFILES (owner decision 2026-11-19; frontier_op.py module doc): Frontier's
+#       venv (primary arm only); its token grid (to 16384) with its round-robin routing timed by the replay harness
+#       under nsys at the branch clock in pages (decode: one page; prefill: 16 interleaved pages in bit-reversed
+#       order, run while the FRONTIER BUDGET lasts), the per-cell kernel-sum in Frontier's CSV schema, then
+#       Frontier's own trainer (its CLI) and hold-out, and the simulator-path model. All soft.
 #   M8  SECONDARY, every one SOFT: Adefault (default clocks: production delta), Aon (shared-experts stream on at
-#       1710: overlap delta), Beager (eager + torch profiler: independent tooling), the replay under nsys (the
-#       instrument offset)
+#       1710: overlap delta), Beager (eager + torch profiler, one level: independent tooling), the replay under
+#       nsys per branch at its branch clock under locked_r3 (SMOKE-FIXES 7: the instrument offset and the API
+#       path's fill kernels, nsys_extract replay-check), then Frontier's batch predictions of every run's calls
 # A push to the run's branch (soft) follows M2, M5, M6, M7 and M8; the last hard step (held-back-check) FAILS when the
-# push held back a file the laptop needs, and the EXIT trap pushes once more with the exit code (--final), whatever
-# stopped the sequence (review 2, MAJOR A).
-# CAPS (review 2, MAJOR C): every step carries its registered wall cap (--cap seconds, kitlib.sh `step`): a step past
-# its cap is killed and FAILS (soft: dropped), so no hung step holds the rental. A secondary step whose lock failed
-# is SKIPPED, not run at the wrong clock (--needs, MINOR 6).
-# REPLAY RE-MEASURE (review 2, MAJOR B): per branch a probe of replay.PROBE_PER_TILE cells per tile (priced by the
-# smoke's OLMoE walls scaled by ERNIE's expert bytes) is replayed first; its own ERNIE walls size the rest, inside the
-# same fixed REPLAY_BUDGET_S (2400 s) per branch.
+# push held back a file the laptop needs, and the EXIT trap pushes once more with the exit code (--final).
+# CAPS (review 2, MAJOR C): every step carries its registered wall cap (--cap seconds, kitlib.sh `step`), each at
+# least 2x its expected time (plan_time.py; a test holds it): a step past its cap is killed and FAILS (soft:
+# dropped). A secondary step whose lock failed is SKIPPED, not run at the wrong clock (--needs, MINOR 6).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 . "$HERE/kitlib.sh"
 
 RES=""; FROM=""
-VARIANT=0; FIDELITY=0; GRAPHMODE=0
+GRAPHMODE=0
 ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --results) RES="$2"; KIT_RESULTS_GIVEN=1; shift 2 ;;
     --from) FROM="$2"; shift 2 ;;
-    --frontier-all-dists) VARIANT=1; shift ;;
-    --frontier-fidelity) FIDELITY=1; shift ;;
     --graphmode-overhead) GRAPHMODE=1; shift ;;
     --dry-run) KIT_DRY=1; shift ;;
     *) echo "FAIL main: unknown option $1" >&2; exit 2 ;;
@@ -72,7 +69,11 @@ done
 MODEL=ernie-4.5-21b-a3b
 TOK=baidu/ERNIE-4.5-21B-A3B-PT
 LEVELS="${PROD_LEVELS:-1,8,24,48,80,112,256,1024x3}"
-NREQ="${PROD_REQUESTS_PER_LEVEL:-64}"
+NREQ="${PROD_REQUESTS_PER_LEVEL:-8}"
+#: Frontier's profile pages run while elapsed + the dearest page so far <= this (seconds; plan_time.py prices it)
+FR_BUDGET="${PROD_FRONTIER_BUDGET_S:-2700}"
+FR_PAGES=16
+FR_ROUTING="${PROD_FRONTIER_ROUTING:-balanced}"
 PY="${PY_VLLM:-python3}"
 PRICER="${PROD_PRICER:-r3_timing_model_v8}"
 WALL="${PROD_REPLAY_WALL:-$HERE/replay_wall.json}"
@@ -89,8 +90,16 @@ cd "$REPO"
 SERVE=("$PY" "$SC/serve_capture.py" --model $MODEL --prompts "$R/prompts.jsonl" --concurrency "$LEVELS"
        --requests-per-level "$NREQ" --require-pinned)
 NSYS_A=("$NSYS" profile -t cuda,nvtx --cuda-graph-trace=node --force-overwrite true)
+# Beager: the torch-profiler window is 40 steps of L 112; one level of eager serving holds it (the earlier levels were
+# eager warm-up only), stopped feeding after 60 s
+BEAGER=("$PY" "$SC/serve_capture.py" --model $MODEL --prompts "$R/prompts.jsonl" --concurrency 112
+        --requests-per-level "$NREQ" --require-pinned)
 
-echo "main: model $MODEL, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER"
+echo "main: model $MODEL, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER, Frontier budget ${FR_BUDGET}s"
+if [[ $KIT_DRY -eq 1 ]]; then   # the expected wall time of this plan (README "main.sh: every step")
+  "$PY" "$SC/plan_time.py" --levels "$LEVELS" --n "$NREQ" --frontier-budget "$FR_BUDGET" \
+    || echo "PLAN (plan_time.py could not run under $PY: needs numpy)"
+fi
 # M0: the whole environment first (smoke rental 2026-11-19: SMOKE-FIXES.md 1-5), fail-fast with its reasons
 step env-preflight --always --cap 300 -- "$PY" "$SC/env_preflight.py" --repo "$REPO" --model $MODEL --nsys "$NSYS" \
   --power-w "${PROD_POWER_W:-700}" --locks 1710,1410 --tmpdir "$KIT_TMP" --frontier-src "$FR/src" \
@@ -163,50 +172,108 @@ done
 step unlock-after-replay --always --cap 60 -- kit_unlock
 step push-replay --soft --cap 3600 -- kit_push "prod main: replay C"
 
-# M7: Frontier (profile, train, hold-out on the rental; predict on the laptop)
-FARMS=primary; [[ $FIDELITY -eq 1 ]] && FARMS=primary,fidelity
-step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms "$FARMS"
+# M7: Frontier, its predictor on our profiles (frontier_op.py module doc). Pages: the replay harness under nsys at
+# the branch clock (locked_r3), cell marks on, then the per-cell kernel-sum (nsys_extract replay-cells)
+step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
 if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
 FSRC="${FRONTIER_SRC:-$FR/src}"
-CSVNAME="compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv"
-step frontier-config --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" write-config --model $MODEL --src "$FSRC"
-fr_arm() {   # fr_arm ARM LABEL DISTS... : profile, train, hold-out, simpath (no predict: offline.sh)
-  local arm="$1" lab="$2"; shift 2
-  local d="$R/frontier/$lab"
-  step "frontier-profile-$lab" --soft --cap 10800 --needs frontier-config --out "$d/profile/$CSVNAME" -- "$PY" "$SC/frontier_op.py" profile --arm "$arm" \
-    --model $MODEL --dists "$@" --src "$FSRC" --out "$d/profile"
-  step "frontier-train-$lab" --soft --cap 3600 --needs "frontier-profile-$lab" --out "$d/models" -- "$PY" "$SC/frontier_op.py" train --arm "$arm" \
-    --model $MODEL --csv "$d/profile/$CSVNAME" --src "$FSRC" --out "$d/models"
-  step "frontier-holdout-$lab" --soft --cap 1800 --needs "frontier-profile-$lab" --out "$d/holdout" -- "$PY" "$SC/frontier_op.py" holdout \
-    --arm "$arm" --model $MODEL --csv "$d/profile/$CSVNAME" --arm-label "$lab" --src "$FSRC" --out "$d/holdout"
-  if [[ "$arm" == primary ]]; then
-    step "frontier-simpath-$lab" --soft --cap 3600 --needs "frontier-profile-$lab" --out "$d/models-simpath" -- "$PY" "$SC/frontier_op.py" simpath \
-      --arm "$arm" --model $MODEL --csv "$d/profile/$CSVNAME" --src "$FSRC" --out "$d/models-simpath"
-  fi
+FD="$R/frontier"
+CSV="$FD/profile/$("$PY" -c "import sys; sys.path[:0]=['$SC']; import frontier_op as F; print(F.csv_relpath('$MODEL'))" 2>/dev/null \
+      || echo compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv)"
+step frontier-grid-check --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" \
+  --max-tokens 16384
+export R MODEL SC PY NSYS FR_PAGES FR_ROUTING
+fr_page() {   # fr_page BRANCH PAGE: one page of Frontier's points, timed at the branch clock under nsys
+  local b="$1" pg="$2" lock=1710 reps=3 d
+  if [[ $b == prefill ]]; then lock=1410; reps=1; fi
+  d="$R/frontier/points/$b-$(printf %02d "$pg")"
+  mkdir -p "$d"
+  "$PY" "$SC/frontier_op.py" fsample --model "$MODEL" --branch "$b" --page "$pg" --pages "$FR_PAGES" \
+    --routing "$FR_ROUTING" --max-tokens 16384 --out "$d" || return 3
+  "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true -o "$d/page" \
+    env MOE_RESULTS_DIR="$d" python3 scripts/locked_r3.py --session-tag "prod-frontier-$b-$pg" --locks "$lock" \
+    --groups 1 --slip-policy cell --min-clean-repeats 0 --out-dir "$d/locked" --r3-script "$SC/replay.py" -- \
+    --model "$MODEL" --histogram "$d/sample.json" --branch "$b" --inst GRR --repeats "$reps" --duty 0.25 --seed 0 \
+    --cell-marks || return 3
+  "$NSYS" export --type sqlite --force-overwrite true -o "$d/page.sqlite" "$d/page.nsys-rep" || return 3
+  "$PY" "$SC/nsys_extract.py" replay-cells --sample "$d/sample.json" --replay-sqlite "$d/page.sqlite" \
+    --model "$MODEL" --branch "$b" --out "$d/cells.json"
 }
-fr_arm primary primary-uniform uniform
-if [[ $VARIANT -eq 1 ]]; then fr_arm primary variant-all4 uniform balanced skewed extremely_skewed; fi
-if [[ $FIDELITY -eq 1 ]]; then fr_arm fidelity fidelity-uniform uniform; fi
+FR_T0=""; FR_MAX=0
+fr_page_step() {   # fr_page_step BRANCH PAGE CAP: the page while the Frontier budget lasts (elapsed + dearest page)
+  local b="$1" pg="$2" cap="$3" name t dt
+  name="frontier-page-$b-$(printf %02d "$pg")"
+  if [[ $KIT_DRY -eq 0 && $KIT_RESUMING -eq 0 && -n "$FR_T0" ]] \
+     && (( $(date +%s) - FR_T0 + FR_MAX > FR_BUDGET )); then
+    KIT_BAD+="$name "
+    kit_record "SKIPPED $name: the Frontier profile budget (${FR_BUDGET}s): $(( $(date +%s) - FR_T0 ))s spent, dearest page ${FR_MAX}s"
+    return 0
+  fi
+  t=$(date +%s); [[ -n "$FR_T0" ]] || FR_T0=$t
+  step "$name" --soft --cap "$cap" --needs frontier-setup --out "$R/frontier/points/$b-$(printf %02d "$pg")/cells.json" -- fr_page "$b" "$pg"
+  dt=$(( $(date +%s) - t )); if (( dt > FR_MAX )); then FR_MAX=$dt; fi
+}
+fr_page_step decode 0 1200
+for pg in $("$PY" -c "import sys; sys.path[:0]=['$SC']; import frontier_op as F; print(*F.page_order($FR_PAGES))" 2>/dev/null \
+            || echo 0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15); do
+  fr_page_step prefill "$pg" 1800
+done
+step frontier-points --soft --cap 600 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --pages-root "$FD/points" \
+  --max-tokens 16384 --out "$FD/points.json"
+step frontier-csv --soft --cap 600 --needs frontier-points --out "$CSV" -- "$PY" "$SC/frontier_op.py" csv --model $MODEL --points "$FD/points.json" \
+  --src "$FSRC" --out "$FD/profile"
+step frontier-train --soft --cap 1800 --needs frontier-csv --out "$FD/models" -- "$PY" "$SC/frontier_op.py" train --model $MODEL --csv "$CSV" \
+  --src "$FSRC" --out "$FD/models"
+step frontier-holdout --soft --cap 1800 --needs frontier-csv --out "$FD/holdout" -- "$PY" "$SC/frontier_op.py" holdout --model $MODEL --csv "$CSV" \
+  --src "$FSRC" --out "$FD/holdout"
+step frontier-simpath --soft --cap 1800 --needs frontier-csv --out "$FD/models-simpath" -- "$PY" "$SC/frontier_op.py" simpath --model $MODEL \
+  --arm-label simpath --csv "$CSV" --src "$FSRC" --out "$FD/models-simpath"
 step push-frontier --soft --cap 3600 -- kit_push "prod main: Frontier profiles and models"
 
 # M8: the secondary runs (soft: a failure is reported and dropped, the primary data stands)
 serve_A Adefault 0 off --soft
 serve_A Aon 1710 on --soft
-step Beager-capture --soft --cap 5400 --out "$R/Beager/torch_trace" -- "${SERVE[@]}" --mode eager --torch-profiler 112:40 --shared-stream off --out "$R/Beager"
-step Beager-extract --soft --cap 3600 --needs Beager-capture --out "$R/Beager/calls.jsonl|$R/Beager/calls.shards.json" -- "$PY" "$SC/nsys_extract.py" --run "$R/Beager" \
+step Beager-capture --soft --cap 1800 --out "$R/Beager/torch_trace" -- "${BEAGER[@]}" --mode eager --torch-profiler 112:40 --shared-stream off \
+  --max-seconds 60 --out "$R/Beager"
+step Beager-extract --soft --cap 1800 --needs Beager-capture --out "$R/Beager/calls.jsonl|$R/Beager/calls.shards.json" -- "$PY" "$SC/nsys_extract.py" --run "$R/Beager" \
   --torch-trace "$R/Beager/torch_trace" --model $MODEL
-step replay-offset-lock --soft --always --cap 120 -- kit_lock 1710
-step replay-offset-nsys --soft --cap 3600 --needs replay-offset-lock --out "$R/replay-offset/replay.nsys-rep" -- "${NSYS_A[@]}" -o "$R/replay-offset/replay" \
-  env MOE_RESULTS_DIR="$R/replay-offset" "$PY" "$SC/replay.py" --model $MODEL --histogram "$R/sample-decode/sample.json" \
-  --branch decode --inst GRR --repeats 1 --duty 0.25 --seed 0 --session-tag prod-replay-offset
-if [[ $GRAPHMODE -eq 1 ]]; then   # opt-in: the node-tracing overhead (the smoke measures it), default clocks
+# the replay under nsys per branch, at its branch clock under locked_r3 like replay C (SMOKE-FIXES 7), cell marks on:
+# the instrument offset, and replay-check: the core sequence and grids against serving's, the API path's fills
+for b in decode prefill; do
+  lock=1710; src=A1710
+  if [[ $b == prefill ]]; then lock=1410; src=A1410; fi
+  step "replay-offset-nsys-$b" --soft --cap 2400 --out "$R/replay-offset-$b/replay.nsys-rep" -- "$NSYS" profile -t cuda --cuda-graph-trace=node \
+    --force-overwrite true -o "$R/replay-offset-$b/replay" env MOE_RESULTS_DIR="$R/replay-offset-$b" python3 scripts/locked_r3.py \
+    --session-tag "prod-replay-offset-$b" --locks $lock --groups 1 --slip-policy cell --min-clean-repeats 0 \
+    --out-dir "$R/locked-replay-offset-$b" --r3-script "$SC/replay.py" -- --model $MODEL --histogram "$R/sample-$b/sample.json" \
+    --branch $b --inst GRR --repeats 1 --duty 0.25 --seed 0 --cell-marks
+  step "replay-offset-export-$b" --soft --cap 1800 --needs "replay-offset-nsys-$b" --out "$R/replay-offset-$b/replay.sqlite" -- "$NSYS" export --type sqlite \
+    --force-overwrite true -o "$R/replay-offset-$b/replay.sqlite" "$R/replay-offset-$b/replay.nsys-rep"
+  step "replay-offset-check-$b" --soft --cap 1800 --needs "replay-offset-export-$b" --out "$R/replay-offset-$b/replay_check.json" -- "$PY" "$SC/nsys_extract.py" \
+    replay-check --serving "$R/$src" --sample "$R/sample-$b/sample.json" --replay-sqlite "$R/replay-offset-$b/replay.sqlite" \
+    --model $MODEL --branch $b --out "$R/replay-offset-$b/replay_check.json"
+done
+if [[ $GRAPHMODE -eq 1 ]]; then   # opt-in: the node-tracing overhead (the smoke measured it), default clocks
   step graphmode-unlock --soft --always --cap 60 -- kit_unlock
   step graphmode-capture --soft --cap 3600 --needs graphmode-unlock --out "$R/graphmode/serve.nsys-rep" -- "$NSYS" profile \
     -t cuda,nvtx --cuda-graph-trace=graph --force-overwrite true -o "$R/graphmode/serve" "${SERVE[@]}" --mode graphs \
     --shared-stream off --min-steps-per-tile 0 --max-seconds 60 --out "$R/graphmode"
 fi
 step replay-offset-unlock --always --cap 60 -- kit_unlock
-step push-final --soft --cap 3600 -- kit_push "prod main: measurements done (score on the laptop: scripts/prod/offline.sh)"
+# Frontier's batch predictions on the VM (owner decision 2026-11-19): every run whose calls were extracted, ONE
+# DataFrame per model (the CLI model and the simulator-path model), written compact to $R/frontier/predictions/ (index.json + npy)
+FCALLS=()
+for lab in A1710 A1410 Adefault Aon Beager; do
+  if [[ $KIT_DRY -eq 1 || -e "$R/$lab/calls.jsonl" || -e "$R/$lab/calls.shards.json" ]]; then FCALLS+=(--calls "$lab=$R/$lab"); fi
+done
+FMODELS=()
+for m in cli=models simpath=models-simpath; do
+  # a model set counts once its trainer PASSED (frontier_op.py writes versions.json only then)
+  if [[ $KIT_DRY -eq 1 || -f "$FD/${m#*=}/versions.json" ]]; then FMODELS+=(--models "${m%%=*}=$FD/${m#*=}"); fi
+done
+step frontier-predict --soft --cap 3600 --needs frontier-train --out "$FD/predictions/index.json" -- "$PY" "$SC/frontier_op.py" predict --model $MODEL \
+  ${FMODELS[@]+"${FMODELS[@]}"} --csv "$CSV" ${FCALLS[@]+"${FCALLS[@]}"} --src "$FSRC" --out "$FD/predictions"
+step push-final --soft --cap 3600 -- kit_push "prod main: measurements and Frontier predictions done (score on the laptop: scripts/prod/offline.sh)"
 # the push left every needed file of this run on the branch (else: copy the listed files off the VM before the
 # terminate); a FAIL here is the rental's last word, and the EXIT trap still pushes with the exit code
 step held-back-check --cap 120 -- "$PY" "$SC/prodlib.py" held-back-check \

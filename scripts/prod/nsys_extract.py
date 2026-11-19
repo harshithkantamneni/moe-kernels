@@ -5,7 +5,9 @@
     python scripts/prod/nsys_extract.py --run RUN_DIR --torch-trace RUN_DIR/torch_trace --model ... --shard-tag profiler-window
     python scripts/prod/nsys_extract.py check-sequences --run RUN_DIR --model ...         # smoke: per-path sequences
     python scripts/prod/nsys_extract.py replay-check --serving RUN_DIR --sample SAMPLE/sample.json \\
-        --replay-sqlite REPLAY.sqlite --model ...                                         # smoke: replay == serving
+        --replay-sqlite REPLAY.sqlite --model ... [--branch B]                            # replay == serving (core)
+    python scripts/prod/nsys_extract.py replay-cells --sample FSAMPLE/sample.json --replay-sqlite PAGE.sqlite \\
+        --model ... --branch B                                         # Frontier's points: per-cell core kernel-sum
 
 THE MEASURED CALL (CAPTURE.md; v7's call): align .. moe_sum, the router EXCLUDED. Classified BY STREAM AND BY
 SEQUENCE, never by a name regex alone: only kernels on the marker's own stream, between the k-th capture-marker
@@ -237,6 +239,7 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
                 call["status"] = "no align kernel before w1"
             elif len(fills) > 1:
                 call["status"] = f"{len(fills)} fill kernels before w1 on the naive path (ambiguous: none picked)"
+        fills = [j for j in pre_run(win, j1, -1) if win[j][1] == "fill" and j not in align]
         acts = [j for j in range(j1 + 1, j2) if win[j][1] == "act"]
         if len(acts) != 1:
             call["status"] = f"{len(acts)} activation kernels between the GEMMs"
@@ -255,6 +258,7 @@ def segment_calls(events, *, cut_ns: int | None = None, max_after_w2: int = 16) 
                     names=[win[j][0][3][:60] for j in parts],
                     sig="|".join(f"{win[j][1]}:{short_name(win[j][0][3])}" for j in parts),
                     align_ns=int(sum(win[j][0][1] - win[j][0][0] for j in align)),
+                    fills_n=len(fills), fills_ns=int(sum(win[j][0][1] - win[j][0][0] for j in fills)),
                     w1_ns=int(win[j1][0][1] - win[j1][0][0]), w2_ns=int(win[j2][0][1] - win[j2][0][0]))
         calls.append(call)
     streams = Counter(st for _s, st, _i in markers)
@@ -416,6 +420,7 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
                "counts_digest": PL.digest(counts), "ids_digest": PL.digest(rec["ids"]), **{
                    kk: call.get(kk) for kk in ("status", "kernel_sum_ns", "span_ns", "start_ns", "intruders",
                                                "intruder_names", "gridX_w1", "gridX_w2", "align_ns", "w1_ns", "w2_ns",
+                                               "fills_n", "fills_ns",
                                                "n_parts", "stream", "graph_node", "sig", "marker_gridY")}}
         if not why:
             geo = PL.call_geometry(cfg, rec["n"], counts)
@@ -486,10 +491,46 @@ def check_sequences(rows: list[dict]) -> dict:
             "paths": {k: [{"sig": sg, "calls": n} for sg, n in v.most_common(12)] for k, v in sorted(by.items())}}
 
 
+def pre_run(lst, j1: int, floor: int) -> list[int]:
+    """The contiguous run of align / memset / fill kernels right before position j1 (down to, not including, floor)."""
+    run = []
+    j = j1 - 1
+    while j > floor and lst[j][1] in ("align", "memset", "fill"):
+        run.insert(0, j)
+        j -= 1
+    return run
+
+
+def split_pre_run(lst, run: list[int]) -> tuple[list[int], list[int], list[int]]:
+    """(core align, API fills, other extras) of a pre-w1 run, by serving's own rule (segment_calls): with an align
+    kernel, the core is every align / memset from the memsets just before the first align kernel up to w1; on the
+    naive path (no align kernel) the core is the LAST fill (vLLM's torch.full right before the GEMM). Every other
+    fill is an API-path fill (SMOKE-FIXES 6: the functional fused_experts launches ~9 before align; the modular
+    TritonExperts serving runs, none); a memset before them is an extra."""
+    aligns = [j for j in run if lst[j][1] == "align"]
+    if aligns:
+        s0 = aligns[0]
+        while s0 - 1 in run and lst[s0 - 1][1] == "memset":
+            s0 -= 1
+        core = [j for j in run if j >= s0 and lst[j][1] in ("align", "memset")]
+    else:
+        core = [j for j in run if lst[j][1] == "fill"][-1:]
+    fills = [j for j in run if lst[j][1] == "fill" and j not in core]
+    extra = [j for j in run if j not in core and j not in fills]
+    return core, fills, extra
+
+
+def _dur(lst, idx) -> int:
+    return int(sum(lst[j][0][1] - lst[j][0][0] for j in idx))
+
+
 def segment_unmarked(events) -> list[dict]:
     """The calls of a trace WITHOUT capture markers (the replay's graphs): per stream, each pair of consecutive
-    fused_moe_kernel launches with exactly one activation between them, its align run (fill / align / memset kernels
-    right before w1) and the first moe_sum after w2. {"sig", "grid": (gridX w1, gridX w2), "start_ns"}."""
+    fused_moe_kernel launches with exactly one activation between them, the contiguous align / memset / fill run
+    right before w1 and the first moe_sum after w2. Per call: "sig" the CORE sequence (align..moe_sum, the API
+    path's extra fills stripped: split_pre_run), "sig_full" with them, "grid" (gridX w1, gridX w2), kernel_sum_ns
+    and span_ns of the core, fills_n / fills_ns (the extra fills' count and summed GPU time), extra_n / extra_ns,
+    and "graph" (w1 is a CUDA-graph node: a timed GRR replay, not an eager check call)."""
     by_stream: dict = defaultdict(list)
     for e in events:
         by_stream[e[2]].append((e, "memset" if e[8] == "memset" else classify(e[3])))
@@ -503,51 +544,151 @@ def segment_unmarked(events) -> list[dict]:
             acts = [j for j in range(a + 1, b) if lst[j][1] == "act"]
             if len(acts) != 1:
                 continue
-            al = []
-            j = a - 1
-            while j > used and lst[j][1] in ("align", "memset", "fill"):
-                al.insert(0, j)
-                j -= 1
+            run = pre_run(lst, a, used)
             red = next((j for j in range(b + 1, min(len(lst), b + 17)) if lst[j][1] == "reduce"), None)
             if red is None:
                 continue
-            parts = al + [a, acts[0], b, red]
+            core, fills, extra = split_pre_run(lst, run)
+            parts = core + [a, acts[0], b, red]
+            full = run + [a, acts[0], b, red]
             out.append({"sig": "|".join(f"{lst[j][1]}:{short_name(lst[j][0][3])}" for j in parts),
-                        "grid": (int(lst[a][0][4]), int(lst[b][0][4])), "start_ns": int(lst[parts[0]][0][0])})
+                        "sig_full": "|".join(f"{lst[j][1]}:{short_name(lst[j][0][3])}" for j in full),
+                        "grid": (int(lst[a][0][4]), int(lst[b][0][4])), "start_ns": int(lst[full[0]][0][0]),
+                        "kernel_sum_ns": _dur(lst, parts),
+                        "span_ns": int(max(lst[j][0][1] for j in parts) - min(lst[j][0][0] for j in parts)),
+                        "fills_n": len(fills), "fills_ns": _dur(lst, fills), "extra_n": len(extra),
+                        "extra_ns": _dur(lst, extra), "n_core": len(parts), "graph": lst[a][0][7] is not None})
             used = red
     return out
 
 
-def replay_check(serving_rows: list[dict], sample: dict, replay_calls: list[dict], model: PL.ServedModel) -> dict:
-    """Per sampled cell: its expected launch grids must appear among the replay's calls, and every replay call with
-    those grids must carry a kernel signature serving shows on the same tile (synthetic cells: grids only)."""
+def segment_marked(events) -> dict:
+    """{cell index: [calls]} of a replay run with cell marks (replay.py --cell-marks: before each build of a cell the
+    step-marker kernel is launched with gridY = the cell's index in the page + 1): every kernel after a mark and
+    before the next one (global start order) belongs to that mark's cell; each cell's kernels are then split into
+    calls by segment_unmarked. {} when the trace carries no cell marks."""
+    marks = [(e[0], int(e[5]) - 1) for e in events if e[8] != "memset" and classify(e[3]) == "stepmark"]
+    if not marks:
+        return {}
+    marks.sort()
+    starts = [m[0] for m in marks]
+    seg: dict = defaultdict(list)
+    for e in events:
+        if e[8] != "memset" and classify(e[3]) == "stepmark":
+            continue
+        k = bisect.bisect_right(starts, e[0]) - 1
+        if k >= 0:
+            seg[marks[k][1]].append(e)
+    return {idx: segment_unmarked(ev) for idx, ev in seg.items()}
+
+
+def sample_cells(sample: dict, branch: str | None = None) -> list[dict]:
+    """The sample's cells in replay.py's page order (load_sample: the doc's order, on one branch)."""
+    return [c for c in sample["cells"] if branch is None or c["branch"] == branch]
+
+
+def _med(xs):
+    xs = [x for x in xs if x is not None]
+    return float(np.median(xs)) if xs else None
+
+
+def replay_check(serving_rows: list[dict], sample: dict, replay_calls: list[dict], model: PL.ServedModel, *,
+                 marked: dict | None = None, branch: str | None = None) -> dict:
+    """Per sampled cell: its expected launch grids must appear among its replay calls, and every one of those calls
+    must carry a CORE kernel sequence (align..moe_sum, the API path's fills stripped) that serving shows on the same
+    tile (synthetic cells: grids only). The cell's calls are its own when the replay ran with cell marks (`marked`,
+    segment_marked), else every replay call with the cell's grids. Recorded per cell, for the replay and for the
+    serving call it was sampled from: the fill kernels' count and summed GPU time per call (SMOKE-FIXES 6, a
+    measured API-path difference: functional fused_experts vs serving's modular TritonExperts) and the core
+    kernel-sum; per tile the same as medians, serving's over every serving call of the tile."""
     cfg = model.cfg
     serving: dict = defaultdict(set)
+    s_fill: dict = defaultdict(list)
+    by_g = {}
     for r in serving_rows:
         if r.get("status") == "ok" and r.get("sig"):
             serving[r["tile"]].add(r["sig"])
+            s_fill[r["tile"]].append((r.get("fills_n"), r.get("fills_ns"), r.get("kernel_sum_ns")))
+        if r.get("g") is not None:
+            by_g[r["g"]] = r
     by_grid: dict = defaultdict(list)
     for c in replay_calls:
         by_grid[c["grid"]].append(c)
-    bad, per_tile = [], defaultdict(lambda: {"cells": 0, "seen": 0, "sig_ok": 0})
-    for cell in sample["cells"]:
+    bad, cells_out = [], []
+    per_tile = defaultdict(lambda: {"cells": 0, "seen": 0, "sig_ok": 0, "replay_fills_n": [], "replay_fills_ns": []})
+    for idx, cell in enumerate(sample_cells(sample, branch)):
         want = PL.expected_grids(cfg, int(cell["T"]), cell["counts"])
         t = per_tile[cell["tile"]]
         t["cells"] += 1
-        got = by_grid.get(want, [])
+        pool = marked.get(idx, []) if marked else by_grid.get(want, [])
+        got = [c for c in pool if c["grid"] == want]
+        rec = {"label": cell["label"], "tile": cell["tile"], "T": int(cell["T"]), "grid": list(want),
+               "matched": "cell marks" if marked else "grid", "replay_calls": len(got)}
         if not got:
-            bad.append(f"{cell['label']} ({cell['tile']}): grid {want} not in the replay trace")
+            bad.append(f"{cell['label']} ({cell['tile']}): grid {want} not in the replay trace"
+                       + (" (its own marked calls)" if marked else ""))
+            cells_out.append(rec)
             continue
         t["seen"] += 1
+        rec["replay"] = {"fills_n": _med([c["fills_n"] for c in got]), "fills_ns": _med([c["fills_ns"] for c in got]),
+                         "kernel_sum_ns": _med([c["kernel_sum_ns"] for c in got]),
+                         "kernel_sum_with_fills_ns": _med([c["kernel_sum_ns"] + c["fills_ns"] for c in got]),
+                         "graph_calls": sum(1 for c in got if c.get("graph"))}
+        t["replay_fills_n"].append(rec["replay"]["fills_n"])
+        t["replay_fills_ns"].append(rec["replay"]["fills_ns"])
+        srow = by_g.get(cell.get("g"))
+        if srow is not None:
+            rec["serving"] = {"g": srow["g"], "fills_n": srow.get("fills_n"), "fills_ns": srow.get("fills_ns"),
+                              "kernel_sum_ns": srow.get("kernel_sum_ns")}
+        cells_out.append(rec)
         if cell.get("synthetic"):
             continue
         off = sorted({c["sig"] for c in got} - serving.get(cell["tile"], set()))
         if off:
-            bad.append(f"{cell['label']} ({cell['tile']}): replay sequence {off[0]} not among serving's on the tile")
+            bad.append(f"{cell['label']} ({cell['tile']}): replay core sequence {off[0]} not among serving's on the tile")
         else:
             t["sig_ok"] += 1
+    tiles = {}
+    for lab, t in per_tile.items():
+        sf = s_fill.get(lab, [])
+        tiles[lab] = {"cells": t["cells"], "seen": t["seen"], "sig_ok": t["sig_ok"],
+                      "replay_fills_n_median": _med(t["replay_fills_n"]),
+                      "replay_fills_ns_median": _med(t["replay_fills_ns"]),
+                      "serving_calls": len(sf), "serving_fills_n_median": _med([x[0] for x in sf]),
+                      "serving_fills_ns_median": _med([x[1] for x in sf]),
+                      "serving_kernel_sum_ns_median": _med([x[2] for x in sf])}
     return {"verdict": "PASS" if not bad else "FAIL", "why": "; ".join(bad[:5]), "problems": len(bad),
-            "per_tile": dict(per_tile), "replay_calls": len(replay_calls)}
+            "compared": "core sequence (align..moe_sum, API fills stripped) and launch grids",
+            "per_tile": tiles, "cells": cells_out, "replay_calls": len(replay_calls),
+            "matched_by": "cell marks" if marked else "grid"}
+
+
+def replay_cells(sample: dict, marked: dict, model: PL.ServedModel, *, branch: str | None = None) -> dict:
+    """Frontier's profile points (frontier_op.py fsample): per cell its OWN calls (cell marks) on its expected grids,
+    the CORE kernel-sum (align..moe_sum, durations summed, the API fills stripped: the kit's kernel-sum truth) of
+    the timed graph calls (GRR replays; the eager check calls when the cell has no graph call), and its fills.
+    {"cells": [{label, T, n, kernel_sum_ms {median, mean, min, max, std}, fills_n, fills_ms, kernel_count}],
+    "missing": [labels]}."""
+    cfg = model.cfg
+    out, missing = [], []
+    for idx, cell in enumerate(sample_cells(sample, branch)):
+        want = PL.expected_grids(cfg, int(cell["T"]), cell["counts"])
+        got = [c for c in marked.get(idx, []) if c["grid"] == want]
+        timed = [c for c in got if c.get("graph")] or got
+        if not timed:
+            missing.append(cell["label"])
+            continue
+        ks = np.asarray([c["kernel_sum_ns"] for c in timed], dtype=float) / 1e6
+        out.append({"label": cell["label"], "T": int(cell["T"]), "tile": cell["tile"], "n": int(len(ks)),
+                    "source": "graph" if any(c.get("graph") for c in got) else "eager",
+                    "kernel_sum_ms": {"median": float(np.median(ks)), "mean": float(ks.mean()),
+                                      "min": float(ks.min()), "max": float(ks.max()), "std": float(ks.std())},
+                    "kernel_count": int(Counter(c["n_core"] for c in timed).most_common(1)[0][0]),
+                    "fills_n": _med([c["fills_n"] for c in timed]),
+                    "fills_ms": (_med([c["fills_ns"] for c in timed]) or 0.0) / 1e6,
+                    "sig": Counter(c["sig"] for c in timed).most_common(1)[0][0]})
+    return {"cells": out, "missing": missing, "verdict": "PASS" if out and not missing else "FAIL",
+            "why": "" if not missing else f"{len(missing)} cells without their own calls: {missing[:5]}"}
 
 
 def _sub_main(cmd: str, argv) -> int:
@@ -556,9 +697,12 @@ def _sub_main(cmd: str, argv) -> int:
     if cmd == "check-sequences":
         ap.add_argument("--run", required=True)
     else:
-        ap.add_argument("--serving", required=True, help="the serving run (calls.jsonl, after extraction)")
+        if cmd == "replay-check":
+            ap.add_argument("--serving", required=True, help="the serving run (calls.jsonl, after extraction)")
         ap.add_argument("--sample", required=True)
         ap.add_argument("--replay-sqlite", required=True)
+        ap.add_argument("--branch", choices=("decode", "prefill"), default=None,
+                        help="the replay's branch (its page holds this branch's cells of the sample)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     try:
@@ -566,9 +710,18 @@ def _sub_main(cmd: str, argv) -> int:
             res = check_sequences(PL.read_calls(a.run))
             out = Path(a.out or Path(a.run) / "sequences_by_path.json")
         else:
-            res = replay_check(PL.read_calls(a.serving), json.loads(Path(a.sample).read_text()),
-                               segment_unmarked(read_sqlite(a.replay_sqlite)["events"]), PL.MODELS[a.model])
-            out = Path(a.out or Path(a.replay_sqlite).with_suffix(".replay_check.json"))
+            ev = read_sqlite(a.replay_sqlite)["events"]
+            sample = json.loads(Path(a.sample).read_text())
+            marked = segment_marked(ev)
+            if cmd == "replay-check":
+                res = replay_check(PL.read_calls(a.serving), sample, segment_unmarked(ev), PL.MODELS[a.model],
+                                   marked=marked or None, branch=a.branch)
+                out = Path(a.out or Path(a.replay_sqlite).with_suffix(".replay_check.json"))
+            else:
+                if not marked:
+                    raise PL.KitError(f"{a.replay_sqlite}: no cell marks (replay.py --cell-marks)")
+                res = replay_cells(sample, marked, PL.MODELS[a.model], branch=a.branch)
+                out = Path(a.out or Path(a.replay_sqlite).with_suffix(".cells.json"))
     except (PL.KitError, OSError, sqlite3.Error, KeyError, ValueError) as exc:
         print(f"FAIL nsys_extract {cmd}: {type(exc).__name__}: {exc}")
         return 3
@@ -579,7 +732,7 @@ def _sub_main(cmd: str, argv) -> int:
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if argv and argv[0] in ("check-sequences", "replay-check"):
+    if argv and argv[0] in ("check-sequences", "replay-check", "replay-cells"):
         return _sub_main(argv[0], argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True, help="serve_capture's output directory")

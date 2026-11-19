@@ -252,6 +252,71 @@ def test_replay_check_matches_the_replays_kernels_to_servings_per_tile(tmp_path)
     assert bad["verdict"] == "FAIL" and "not in the replay trace" in bad["why"]
 
 
+def _replay_fixture(tmp_path, api_fills=9):
+    run, calls, db, _x, _e = _run(tmp_path)
+    res = NX.extract(run, NX.read_sqlite(db), MODEL)
+    rows = res["rows"]
+    pick = [rows[0], rows[MODEL.moe_layers * 3], rows[MODEL.moe_layers * 3 + 1], rows[-1]]
+    cells = [{"label": f"g{r['g']}", "g": r["g"], "T": r["T_pad"], "tile": r["tile"], "branch": PL.branch(r["T_pad"]),
+              "counts": [int(x) for x in res["counts"][rows.index(r)]]} for r in pick]
+    rcalls = []
+    for i, r in enumerate(pick):
+        c = dict(calls[rows.index(r)])
+        c["step"] = i                       # one cell per "step": the cell marks (gridY = cell index + 1)
+        rcalls.append(c)
+    return rows, {"cells": cells}, rcalls
+
+
+def test_replay_check_compares_the_core_sequence_and_counts_the_api_fills(tmp_path):
+    """SMOKE-FIXES 6: the replay's functional API launches ~9 fill kernels per call before align; serving's modular
+    path does not. The check compares the CORE sequence (align..moe_sum) and grids with the fills stripped, and records
+    per call the fills' count and GPU time for the replay and for the serving call; on the naive path the last fill
+    is the align (vLLM's torch.full), the others are API fills."""
+    rows, sample, rcalls = _replay_fixture(tmp_path)
+    ev, _m, x = F.timeline(CFG, rcalls, warmup_markers=0, mutate=lambda i: {"drop_marker": True, "api_fills": 9})
+    rcs = NX.segment_unmarked(NX.read_sqlite(F.write_sqlite(tmp_path / "r.sqlite", ev, []))["events"])
+    assert [c["fills_n"] for c in rcs] == [9] * 4 and all(c["fills_ns"] == 9 * F.DUR["fill"] for c in rcs)
+    assert [c["kernel_sum_ns"] for c in rcs] == [e["kernel_sum_ns"] for e in x]          # the core only
+    assert rcs[0]["sig"].startswith("fill:") and rcs[0]["sig_full"].count("fill:") == 10    # naive: core = last fill
+    assert all(c["sig"].count("fill:") <= 1 for c in rcs)
+    rc = NX.replay_check(rows, sample, rcs, MODEL)
+    assert rc["verdict"] == "PASS", rc["why"]
+    assert all(c["replay"]["fills_n"] == 9 and c["serving"]["fills_n"] == 0 for c in rc["cells"])
+    assert all(v["serving_fills_n_median"] == 0 and v["replay_fills_n_median"] == 9 for v in rc["per_tile"].values())
+    assert rc["compared"].startswith("core sequence")
+    # the old comparison (fills inside the sequence) is what failed the smoke: the full sequences differ from serving's
+    serving_sigs = {r["sig"] for r in rows if r.get("sig")}
+    assert any(c["sig_full"] not in serving_sigs for c in rcs)
+
+
+def test_replay_check_with_cell_marks_gives_each_cell_its_own_calls(tmp_path):
+    """replay.py --cell-marks: the step marker (gridY = cell index + 1) before each cell's builds; two cells on the
+    same grid are kept apart; a cell whose own calls miss its grid fails even if another cell has that grid."""
+    rows, sample, rcalls = _replay_fixture(tmp_path)
+    ev, _m, x = F.timeline(CFG, rcalls, warmup_markers=0, mutate=lambda i: {"drop_marker": True, "api_fills": 9},
+                           step_ids=list(range(len(rcalls))))
+    events = NX.read_sqlite(F.write_sqlite(tmp_path / "m.sqlite", ev, []))["events"]
+    marked = NX.segment_marked(events)
+    assert sorted(marked) == [0, 1, 2, 3] and all(len(v) == 1 for v in marked.values())
+    rc = NX.replay_check(rows, sample, NX.segment_unmarked(events), MODEL, marked=marked)
+    assert rc["verdict"] == "PASS" and rc["matched_by"] == "cell marks"
+    cells = NX.replay_cells(sample, marked, MODEL)
+    assert cells["verdict"] == "PASS" and [c["n"] for c in cells["cells"]] == [1, 1, 1, 1]
+    assert [round(c["kernel_sum_ms"]["median"] * 1e6) for c in cells["cells"]] == [e["kernel_sum_ns"] for e in x]
+    assert all(c["fills_n"] == 9 for c in cells["cells"])
+    swapped = {0: marked[1], 1: marked[0], 2: marked[2], 3: marked[3]}
+    if NX.PL.expected_grids(CFG, sample["cells"][0]["T"], sample["cells"][0]["counts"]) != \
+            NX.PL.expected_grids(CFG, sample["cells"][1]["T"], sample["cells"][1]["counts"]):
+        assert NX.replay_check(rows, sample, NX.segment_unmarked(events), MODEL, marked=swapped)["verdict"] == "FAIL"
+    assert NX.segment_marked([e for e in events if NX.classify(e[3]) != "stepmark"]) == {}
+
+
+def test_serving_extraction_records_zero_fills_on_the_modular_path(tmp_path):
+    run, calls, db, _x, _e = _run(tmp_path)
+    res = NX.extract(run, NX.read_sqlite(db), MODEL)
+    assert all(r["fills_n"] == 0 and r["fills_ns"] == 0 for r in res["rows"] if r["status"] == "ok")
+
+
 # ---------------------------------------------------------------- review 2: a pairing shifted by a WHOLE step
 
 SAME = ((8, 8), (8, 8), (8, 8), (8, 8))

@@ -39,9 +39,23 @@ say() { echo "[frontier_setup] $*"; }
 SRC="$DEST/src"
 say "dest $DEST, arms $ARMS, commit $COMMIT"
 if [[ $DRY -eq 0 ]]; then mkdir -p "$DEST"; fi
-if [[ ! -d "$SRC/.git" ]]; then run git clone --quiet "$URL" "$SRC"; fi
-run git -C "$SRC" fetch --quiet origin
-run git -C "$SRC" checkout --quiet --detach "$COMMIT"
+# IDEMPOTENT (SMOKE-FIXES 9): a checkout already at the pinned commit is reused as is (no fetch, no checkout); one at
+# another commit is REFUSED (never moved: it may be someone's work); a non-git directory in the way is refused.
+if [[ -d "$SRC/.git" ]]; then
+  have="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo none)"
+  if [[ "$have" == "$COMMIT"* ]]; then
+    say "reusing $SRC: already at $have"
+  else
+    echo "FAIL frontier_setup: $SRC is a checkout at $have, not $COMMIT (refused: move it away or point --dest elsewhere)"
+    exit 4
+  fi
+elif [[ -e "$SRC" && -n "$(ls -A "$SRC" 2>/dev/null)" ]]; then
+  echo "FAIL frontier_setup: $SRC exists and is not a git checkout (refused)"
+  exit 4
+else
+  run git clone --quiet "$URL" "$SRC"
+  run git -C "$SRC" checkout --quiet --detach "$COMMIT"
+fi
 if [[ $DRY -eq 0 ]]; then
   head="$(git -C "$SRC" rev-parse HEAD)"
   [[ "$head" == "$COMMIT"* ]] || { echo "FAIL frontier_setup: HEAD $head is not $COMMIT"; exit 4; }

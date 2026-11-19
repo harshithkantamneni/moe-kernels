@@ -15,9 +15,11 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `nsys_extract.py` | Reads the nsys sqlite export (mode A) or the torch-profiler trace (mode B). Splits the timeline into calls (align..moe_sum, router excluded), by stream and by sequence, and reports kernel-sum and span per call. Runs the gates G-REC, G-GEMM, G-PAIR, G-STEPMARK, G-STEP, G-IDS, G-GRID and G-CLASS. `check-sequences` and `replay-check` are the smoke's kernel-sequence gates. |
 | `replay.py` | Picks the registered stratified sample, scaled to a fixed time budget by the smoke's wall times. Re-times each sampled call with r3_decode's GRR instrument on its real ids. Runs under locked_r3. Writes each cell's wall time. |
 | `sag1410.sh`, `sag1410.plan`, `sag_par.py` | The board's 128x128 sag par at 1410 MHz. The v7 prefill blind's own driver units and finaliser, unchanged (see "The prefill constants"). |
-| `offline.sh` | After the main rental, on the laptop: decompress and check the fetched tree, then Frontier's predictions and the score. |
+| `offline.sh` | After the main rental, on the laptop: decompress and check the fetched tree, then the score (Frontier's predictions come from the VM). |
 | `hf_revisions.py` | On the laptop: the Hub's current commit of every model and tokenizer repo (public API, no auth), to pin in `prodlib.HF_REVISIONS`; `--check` holds the pins to the Hub. |
-| `frontier_setup.sh`, `frontier_op.py` | Frontier at db5a85b in its own venvs: primary (vLLM 0.27.1) and fidelity (its pinned stack). Profile, train, predict and hold-out, run as Frontier's docs run them. |
+| `frontier_setup.sh`, `frontier_op.py` | Frontier at db5a85b in its own venv (vLLM 0.27.1's closure + Frontier, `-e --no-deps`). **Its predictor, our profiles** (owner decision 2026-11-19, see "Frontier"): Frontier's token grid and round-robin routing, timed by our replay harness; Frontier's CSV schema, its trainer (CLI), its hold-out and its batch predictions. |
+| `plan_time.py`, `plan_lengths.json` *(extra)* | main.sh's expected wall time per step and per block, from the smoke's measured step seconds scaled to ERNIE (main.sh's dry run prints it). `plan_lengths.json` is the smoke prompt set's (input, output) length mix the serving estimate uses. |
+| `replay_wall.json` | The smoke's replay wall times (OLMoE-1B-7B, repeats 3), copied from the smoke rental: main.sh's replay budget. |
 | `score_prod.py` | Joins the calls with the v8 prices (at the board's par, and DESCRIPTIVE at the reference pars' median), the registered roofline and Frontier. Reports MAPE, wMAPE, p50/p95 \|e\| and bias, each with step-bootstrap CIs, per tile, branch and stratum, plus per-step totals and the run deltas. |
 | `smoke.sh`, `main.sh` | The VM sequences, fail-fast. Each step prints PASS/FAIL with its reason. `--dry-run` prints the steps (a soft one marked `[soft]`) and runs nothing. |
 | `prodlib.py` *(extra)* | Code several scripts share: the models (ERNIE is v8's own `ERNIE`), tiles, branches and strata, the capture sizes, the ring format and decoder, the prefill constants, the registered roofline, the pinned HF revisions, and **`price_v8`, the one v8 binding** (`PRICER_MODULE`, or `--pricer` / `$PROD_PRICER`). `prodlib.py price-check` prices one real decode and one real prefill call through v8. |
@@ -57,19 +59,21 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
    stops (exit 2) if the backend is not TRITON (`unquantized_backend`, unquantized_fused_moe_method.py:53), if
    config.json disagrees with the kit's MoEConfig, or if the capture sizes differ.
 
-   Concurrency design: the default levels are `1,8,24,48,80,112,256,1024x3`, with N 64 per level and quota
-   max(N, 2L). The estimator (a model of V1's decode-first chunked-prefill scheduler) predicts, on a
-   ShareGPT-like length mix, these steps per tile:
+   Concurrency design: the default levels are `1,8,24,48,80,112,256,1024x3`, with N 8 per level and quota
+   max(N, 2L) (N was 64; the smoke rental's timings put the whole main run over 4 h with it, and N only moves the
+   T≤32 tile: the larger levels' quotas are 2L). The estimator (a model of V1's decode-first chunked-prefill
+   scheduler; on the smoke it predicted 11917 steps, the smoke logged 11922) predicts, on the smoke prompt set's
+   length mix (`plan_lengths.json`), these steps per tile:
 
    | tile | steps |
    |---|---|
-   | T≤32 | 21.7k |
-   | ≤64 | 1051 |
-   | ≤96 | 764 |
-   | ≤128 | 565 |
-   | ≤512 | 1722 |
-   | >512 | 1415 |
-   | G16 (≥8256) | 55, all from the three 1024 bursts |
+   | T≤32 | 8356 |
+   | ≤64 | 1346 |
+   | ≤96 | 911 |
+   | ≤128 | 588 |
+   | ≤512 | 1518 |
+   | >512 | 1920 |
+   | G16 (≥8256) | 41, all from the three 1024 bursts |
 
    Every tile is ≥30, which a test asserts. After the run, G-COV checks the realized histogram against the same
    minimum.
@@ -109,15 +113,59 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
    2 bytes is added to r3_decode's single-call plan, and a page over the free memory or over 8 GiB of outputs
    is refused.
 
-   One extra replay runs under nsys node tracing to measure the instrument offset (main, soft). In the smoke,
-   both branches' replays also run under nsys, and `nsys_extract.py replay-check` requires each sampled cell's
-   launch grids in the replay trace, with a kernel sequence serving showed on the same tile (hard).
-6. **Frontier.** It is driven as its docs drive it: `examples/profiling/profile_moe.sh` (record_function = KERNEL_ONLY,
-   `--max-tokens 16384`, `-- --enable_load_imbalance --load_distributions …`), `python -m
-   frontier.training.cli moe`, and the trained `moe_grouped_gemm` estimator, with features from Frontier's own
-   `MoELoadImbalanceInput(expert_token_counts=real counts)`. The API branch Frontier picks is read off its own
-   print line and recorded in `api.json`. The fidelity arm is scored only on its own held-out points.
-7. **score_prod.py.** Descriptive only, and run on the laptop after the rental (`offline.sh`). Pricing runs in
+   The replay also runs under nsys node tracing, per branch at its branch clock under locked_r3 like replay C
+   (SMOKE-FIXES 7; main: soft, `replay-offset-*`; smoke: hard), with `--cell-marks` (the step-marker kernel,
+   gridY = the cell's index + 1, before each build of a cell, outside every timed region), so each cell's calls are
+   its own. `nsys_extract.py replay-check` then requires each sampled cell's launch grids among its calls and a
+   CORE kernel sequence (align..moe_sum, the API path's fill kernels stripped: SMOKE-FIXES 6) that serving showed on
+   the same tile, and records per call, for the replay and for the serving call, the fill kernels' count and summed
+   GPU time (`replay_check.json`).
+6. **Frontier: its predictor, our profiles** (owner decision 2026-11-19). Frontier's MoE profiler cannot run on the
+   GH200 (smoke logs `frontier-profile-*`): on vLLM 0.27.1 it builds the gate with `ReplicatedLinear`, which needs
+   vLLM's tensor-parallel group and `set_current_vllm_config` ("tensor model parallel group is not initialized");
+   its own pinned stack (torch 2.8 + vLLM 0.10.2) has no CUDA torch for aarch64 (the cu128 index has no aarch64
+   wheel; PyPI's aarch64 torch 2.8 is CPU-only). So:
+   - **Profiler: ours.** The points are timed on the production kernel (vLLM 0.27.1's fused path, align..moe_sum,
+     called through the functional `fused_experts` as replay C calls it: the same functional-vs-modular caveat) by
+     the study's replay harness (r3_decode's GRR under locked_r3) at the branch clock (T≤128 at 1710 MHz, repeats
+     3; T>128 at 1410, repeats 1), under nsys with cell marks. The time is **the kit's kernel-sum**: the core
+     kernels' GPU durations summed (the API fills stripped), median over the cell's timed graph calls, in ms
+     (`nsys_extract.py replay-cells`).
+   - **Schema, grid, routing, trainer, predictor: Frontier's.** The grid is `get_num_tokens_to_profile(16384)`
+     (387 points; `grid-check` holds `frontier_op.token_grid` to Frontier's own function on the VM). The routing is
+     Frontier's `uniform_topk` round robin (token t takes experts (t·k + j) mod E), which Frontier's load
+     distributions call `balanced`; Frontier's `uniform` (seeded random top-k) is `--routing uniform`. The CSV is
+     the row Frontier's profiler writes for the grouped GEMM (`moe_kernel_only.csv`): num_tokens, the 14
+     load-imbalance features from Frontier's own `MoELoadImbalanceInput(expert_token_counts=...)`, the model and
+     routing columns, `measurement_type KERNEL_ONLY`, `profiling_precision BF16`, and
+     `time_stats.moe_grouped_gemm.{median, mean, min, max, std, count, kernel_count, num_tokens_post_padded,
+     block_size_m, block_size_m_ranges}`. The three operators we do not time (gating linear, routing top-k,
+     shuffling) have their target columns **empty**. The trainer is `python -m frontier.training.cli moe`
+     (explicit parameters, KERNEL_ONLY: its parser, MoETrainer, random-forest grid search, K-fold CV, pickled
+     estimator) in Frontier's venv, with **one shim**: `MoETrainer._get_model_names` is narrowed to
+     `["moe_grouped_gemm"]` (the CLI would stop on the empty targets). `simpath` is the same trainer with the
+     simulator's feature selection (total_routed_tokens, num_tokens_post_padded). The hold-out is Frontier's
+     fidelity on its own profiled points (every 5th num_tokens held out). The predictions run **on the VM**
+     (`frontier-predict`, last): every logged call of every run, one DataFrame per model, written compact
+     (`frontier/predictions/`: `index.json`, `<run>.g.npy`, `<arm>.<run>.npy`).
+   - One row per grid point: under round-robin routing Frontier's three samples per point would be three timings of
+     the same ids; the replay's repeats time it.
+   - **The budget.** The 387 points cost more than the main rental has. The 19 decode points are one page; the 368
+     prefill points are 16 interleaved pages (page j = every 16th point from j), run in bit-reversed order (0, 8,
+     4, 12, ...: any prefix is an even cover of the grid) while elapsed + the dearest page so far fits
+     `PROD_FRONTIER_BUDGET_S` (2700 s). The plan: the decode page and 4 prefill pages, 111 of the 387 points (every
+     4th prefill point). `frontier-points` records which pages were measured.
+   - Checked on the laptop against Frontier db5a85b's own code (a scratch copy of the clone, CPU only, synthetic
+     times): the CSV loads, the CLI trainer trains `moe_grouped_gemm` on the 14 features, simpath on the 2 padded
+     features, the hold-out and the batch predictions run, and the grid equals `get_num_tokens_to_profile(16384)`.
+     That check found and fixed a simpath bug (MoETrainer calls `_get_training_df_for_model` by keyword).
+7. **score_prod.py.** Descriptive only, and run on the laptop after the rental (`offline.sh`). Kernel-sum is the
+   primary truth and span the secondary one: calls with T>512 run without CUDA graphs, so their span includes the
+   host's launch gaps (the smoke's 128x128 span was ~2x kernel-sum); each run reports span / kernel-sum per
+   cudagraph mode. With `--replay-check BRANCH=replay_check.json` the replay-vs-serving delta is reported with and
+   without the API path's fills (replay_ms minus the cell's fills), with the fills' share of in-serving kernel-sum
+   and of v8 per tile. v7/v8's decode constants were calibrated on the functional API (fills inside T0 and align),
+   so v8 is expected to over-predict in serving by about the fills' time. Pricing runs in
    a process pool (4 workers by default), cached by (T, counts digest, ids digest, par). Every exception a
    worker meets is recorded as that job's error, `BaseException` included (v8's PoisonedTread), and fails the
    score. Predictors:
@@ -131,12 +179,12 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
    calls (more than 15 MHz from the lock) are dropped and counted. The refused-call share of MoE time is
    reported. The refused window is per model: T from ⌈6·E·128/k⌉ to 129·E − 1 (ERNIE 8192..8255).
 8–9. **smoke.sh and main.sh.** They follow CRITIQUE-DISPOSITION RENTALS (1) and (2). main.sh runs, in order: the
-   env-preflight, the ERNIE 60 s gate, the sag par, A1710, A1410, replay C, Frontier (primary, uniform: profile,
-   train and hold-out only; the variant and fidelity arms are opt-in), and then
-   the secondary runs (Adefault, Aon, Beager, the replay offset). Every secondary step is soft. A trap unlocks
-   the card on any exit, and a soft push to the run's branch follows each block. Frontier's predict and the
-   score run on the laptop (`offline.sh`). Tests assert the order, the soft and hard steps, and that main.sh
-   has no score or predict step.
+   env-preflight, the ERNIE 60 s gate, the sag par, A1710, A1410, replay C, Frontier (its venv, the grid-check, the
+   budget-gated pages, the points, the CSV, train, hold-out, simpath), the secondary runs (Adefault, Aon, Beager on
+   one level, the replay under nsys per branch with its replay-check), and Frontier's batch predictions of every
+   extracted run. Every secondary and Frontier step is soft. A trap unlocks the card on any exit, and a soft push
+   to the run's branch follows each block. The score runs on the laptop (`offline.sh`). Tests assert the order, the
+   soft and hard steps, that main.sh has no score step, and that every cap is ≥2x its expected time.
 
 ## Review 2 (2026-11-19): what changed
 
@@ -193,6 +241,25 @@ fails the first step instead of a step deep in the sequence.
 5. **Dirty tree.** The pinned v7p driver refuses a dirty checkout. `env-preflight` P1 fails a dirty tree, or a HEAD
    other than the expected commit, before anything runs. No kit file is patched on a rental.
 
+Round 2 (the rest of SMOKE-FIXES.md; item 8 was an operator error, not the kit):
+
+6. **Replay-check.** The replay (functional `fused_experts`) launches ~9 `fill:vectorized_elementwise_kernel` per
+   call before align; serving (modular `TritonExperts`) launches none, so the full sequences differed and the
+   smoke's replay-check failed though the core sequence align → GEMM → act → GEMM → moe_sum was identical.
+   `replay-check` now compares the core sequence (`nsys_extract.split_pre_run`: with an align kernel the core is
+   serving's own align rule; on the naive path the last fill is the align) and the grids, and records per call the
+   fills' count and summed GPU time for the replay and for serving (`replay_check.json`; serving's extraction
+   records `fills_n` / `fills_ns` per call too). score_prod reports the replay-vs-serving delta with and without
+   the fills (item 7 above).
+7. **The nsys replays at the branch clock.** `replay-nsys-{decode,prefill}` ran unlocked, and the prefill pass
+   failed G1_lock_thermal (exit 3). They now run under locked_r3 at 1710 / 1410, like replay C, so the instrument
+   offset is measured at replay C's clock (smoke `replay-nsys-*`, main `replay-offset-nsys-*`).
+9. **frontier_setup.sh is idempotent.** A checkout already at db5a85b is reused (no clone, no fetch); a checkout at
+   another commit, or a non-git directory in the way, is refused (exit 4). A test runs both.
+
+Pins from the smoke: the ShareGPT sha256 (`35f0e213...6479ba4`) is in `prompts.py`, and the smoke's
+`replay_wall.json` (olmoe-1b-7b, repeats 3; the ERNIE bytes scaling applies) is `scripts/prod/replay_wall.json`.
+
 **`env-preflight`** (`scripts/prod/env_preflight.py`, hard, cap 300 s, the first step of smoke.sh and main.sh)
 runs every check and prints one PASS or FAIL line per check, with its reason. It writes `$R/env-preflight.json`.
 - P1: clean checkout at the expected commit (`--expect-commit`, else `$PROD_EXPECT_COMMIT`, else the commit in
@@ -221,43 +288,49 @@ the existing DIR, appending to its SUMMARY.txt.
 
 ## main.sh: every step, its cap, its expected time
 
-The expected times are planning estimates for ERNIE on one GH200 (not measured yet). The smoke's SUMMARY.txt
-gives each step's wall time in seconds; replace the estimates with those, scaled to ERNIE, before the main
-rental. A cap is the step's registered kill time. The opt-in steps are not in the default plan.
+The expected seconds are the smoke rental's MEASURED step seconds (SUMMARY.txt, OLMoE-1B-7B on the GH200,
+2026-11-19) scaled to ERNIE where the work scales: expert bytes ×1.875, MoE layers 27/16 (serving work and engine
+start ×3.16; replay cells ×1.875, the replay budget's own rule; nsys export and extraction by the call count), a
+locked run's serving ×1980/lock. The serving time is serve_capture's estimator on the smoke's length mix, each step
+priced by the smoke's median step time in its T band (this prices the smoke's own run at its measured 44 s).
+`plan_time.py` computes every row; `main.sh --dry-run` prints them and the total. Steps the smoke did not time are
+marked *assumed*. A cap is the step's registered kill time, at least 2x its expected time (a test holds every step to
+it). Per block (expected / sum of caps):
 
-| block | step | hard/soft | cap | expected |
-|---|---|---|---|---|
-| M0 | env-preflight | hard, always | 300 s | 2-4 min (the HF config and index download, the Frontier clone) |
-| M0 | env, power-readback, unlock-start, revision-pinned, replay-wall-present | hard, always | 300 / 60 / 60 / 120 / 30 s | < 1 min |
-| M0 | price-check | hard | 900 s | 2-5 min |
-| M1 | prompts-fetch, prompts-build, serve-plan | hard | 1800 / 1800 / 300 s | 2 + 3 + 1 min |
-| M2 | gate60-capture | hard | 3600 s | 15 min (ERNIE's weights download, load, compile, 60 s serving) |
-| M2 | gate60-export, gate60-extract, gate60-sequences | hard | 1800 / 1800 / 600 s | 3 + 3 + 1 min |
-| M2 | push-gate60 | soft | 3600 s | 2 min |
-| M3 | sag1410, unlock-after-sag | hard | 5400 / 60 s | 60 min (the driver's own deadline is 75 min) |
-| M4 | A1710-lock, A1710-capture | hard | 120 / 10800 s | 25 min (about 27k serving steps under nsys) |
-| M4 | A1710-unlock-after, A1710-export, A1710-extract | hard | 60 / 5400 / 3600 s | 15 + 10 min |
-| M5 | A1410-lock ... A1410-extract | hard | as M4 | 50 min |
-| M5 | push-primary | soft | 3600 s | 5 min |
-| M6 | replay-probe-sample, replay-probe, replay-probe-wall (per branch) | hard | 600 / 1800 / 120 s | 1 + 10 + 1 min |
-| M6 | replay-sample, replay (per branch) | hard | 600 / 5400 s | 1 + 30 min (inside the 2400 s budget, probe included) |
-| M6 | unlock-after-replay, push-replay | hard / soft | 60 / 3600 s | 3 min |
-| M7 | frontier-setup, frontier-config | soft | 3600 / 300 s | 15 min (the primary venv only) |
-| M7 | frontier-profile-primary-uniform | soft | 10800 s | 45 min (uniform only, to 16384 tokens) |
-| M7 | frontier-train, frontier-holdout, frontier-simpath (primary-uniform) | soft | 3600 / 1800 / 3600 s | 5 + 2 + 5 min |
-| M7 | push-frontier | soft | 3600 s | 2 min |
-| M8 | Adefault-unlock ... Adefault-extract | soft (unlocks hard) | as M4 | 50 min |
-| M8 | Aon-lock ... Aon-extract | soft (unlocks hard) | as M4 | 50 min |
-| M8 | Beager-capture, Beager-extract | soft | 5400 / 3600 s | 20 + 5 min |
-| M8 | replay-offset-lock, replay-offset-nsys, replay-offset-unlock | soft (unlock hard) | 120 / 3600 / 60 s | 10 min |
-| M8 | push-final, held-back-check | soft / hard | 3600 / 120 s | 5 min |
-| opt-in | `--frontier-all-dists`: frontier-*-variant-all4 | soft | 10800 / 3600 / 1800 / 3600 s | about 3 h (four load distributions) |
-| opt-in | `--frontier-fidelity`: the fidelity venv, frontier-*-fidelity-uniform | soft | 10800 / 3600 / 1800 s | 30 min install + 50 min |
-| opt-in | `--graphmode-overhead`: graphmode-unlock, graphmode-capture | soft | 60 / 3600 s | 10 min (the smoke already measures it) |
+| block | what | expected | caps |
+|---|---|---|---|
+| M0 | env-preflight (*assumed* 120 s), env, power, unlock, revision, replay wall, price-check (81 s) | 3.5 min | 30 min |
+| M1 | prompts (fetch 3 s, build 9 s x 4) | 0.7 min | 65 min |
+| M2 | the 60 s gate: engine start 52 s x 3.16 + 60 s + the weight download (*assumed* 220 s at 200 MB/s), export, extract, sequences, push | 9.9 min | 190 min |
+| M3 | sag1410 (1048 s, the same pages as the smoke) | 17.5 min | 91 min |
+| M4 | A1710: capture 678 s (14680 steps), export 25 s, extract 106 s | 13.5 min | 333 min |
+| M5 | A1410: capture 788 s, export, extract, push (*assumed* 120 s) | 17.3 min | 393 min |
+| M6 | replay C: decode probe 277 s + rest 1440 s, prefill probe 643 s + rest 1196 s (the registered budget, walls right) | 60.5 min | 345 min |
+| M7 | Frontier: venv (*assumed* 300 s), grid-check, decode page 277 s, prefill pages 00/08/04/12 at 576-625 s each (the budget stops there), points, CSV, train / hold-out / simpath (*assumed* 180 s each), push | 60.6 min | 735 min |
+| M8 | Adefault 741 s, Aon 811 s, Beager 283 s, replay under nsys 217 + 413 s with export and check, Frontier predict (*assumed* 600 s), push, held-back check | 53.8 min | 1048 min |
+| | **total** | **14246 s = 3.96 h** | 53.8 h |
 
-The default plan is about 5 h through M6 (the primary measurements), 6.2 h through M7 and 8.5 h in all. The sum
-of the caps is 47 h, so the caps only bound a hung step. The primary measurements (M2 to M6) are unchanged by the
-flags (a test holds every non-Frontier step identical with and without them).
+The long steps:
+
+| block | step | hard/soft | cap | expected | basis |
+|---|---|---|---|---|---|
+| M2 | gate60-capture | hard | 3600 s | 445 s | smoke engine start x 3.16 + 60 s + download (*assumed*) |
+| M3 | sag1410 | hard | 5400 s | 1048 s | smoke |
+| M4 | A1710-capture, -export, -extract | hard | 10800 / 5400 / 3600 s | 678 / 25 / 106 s | estimator x smoke step times x 3.16 x 1.158; smoke x calls 2.08 |
+| M5 | A1410-capture, -export, -extract | hard | 10800 / 5400 / 3600 s | 788 / 25 / 106 s | as M4, x 1.404 |
+| M6 | replay-probe-{decode,prefill} | hard | 1800 s | 277 / 643 s | 2 cells/tile x smoke wall x 1.875 x (9+1)/(3+1) |
+| M6 | replay-{decode,prefill} | hard | 5400 s | 1440 / 1196 s | (2400 s − probe) / 1.5 |
+| M7 | frontier-page-decode-00 | soft | 1200 s | 277 s | 19 cells x 7.08 s (smoke, repeats 3) x 1.875 |
+| M7 | frontier-page-prefill-NN (4 of 16 run) | soft | 1800 s | 576-625 s | 23 cells x (4.16 s + 2.16 ms x T) (smoke nsys, repeats 1) x 1.875 |
+| M8 | Adefault-capture, Aon-capture | soft | 10800 s | 608 / 678 s | as M4 at default clocks / 1710 |
+| M8 | Beager-capture | soft | 1800 s | 278 s | smoke B (one window) x 3.16 |
+| M8 | replay-offset-nsys-{decode,prefill} | soft | 2400 s | 217 / 413 s | the sample's cells x the smoke's repeats-1 nsys walls x 1.875 |
+| M8 | frontier-predict | soft | 3600 s | 600 s | *assumed* |
+| opt-in | `--graphmode-overhead`: graphmode-unlock, graphmode-capture | soft | 60 / 3600 s | 10 min | (the smoke measured it) |
+
+The caps only bound a hung step. The primary measurements (M2 to M6) do not move with `--graphmode-overhead` (a
+test holds every other step identical with and without it). `PROD_REQUESTS_PER_LEVEL`, `PROD_LEVELS` and
+`PROD_FRONTIER_BUDGET_S` override the plan's N, levels and Frontier budget.
 
 ## The prefill constants (v8 has no defaults)
 
@@ -307,18 +380,20 @@ bit for bit.
 
 ## Disclosures (Frontier and the replay)
 
-- Frontier's code is not edited: frontier_setup.sh checks `git diff --quiet` before and after setup. One
-  **untracked data file** is added, `data/config/models/<name>.json`. It describes the served model's routed MoE
-  operator in the HF keys Frontier's loader reads. It sets `model_type qwen3_moe` so Frontier's architecture
-  registry resolves. Its attention fields are not used by the MoE profiler.
-- **The simpath shim** (`frontier_op.py _simpath`). Frontier's MoETrainer is used with its feature selection
-  swapped for the simulator's `select_moe_operator_features`: (total_routed_tokens, num_tokens_post_padded) when
-  the table records the padded count, which only the 0.10.x low-level branch does. At prediction time BM comes
-  from Frontier's own `block_size_m_for_tokens` over the table's ranges (CRITIQUE M1). The documented CLI model
-  is reported separately.
-- The primary venv is the study's vLLM closure (`requirements/resolved-vllm.txt`, with the editable line
-  dropped as setup_runpod.sh does) plus Frontier's dependencies, constrained by that closure. Frontier is
-  installed `-e --no-deps`.
+- Frontier's code is not edited: frontier_setup.sh checks `git diff --quiet` before and after setup. Frontier's
+  profiler is NOT used (it cannot run on the GH200, see "How each KIT-SPEC item is met" 6): the profiles are ours, in
+  Frontier's schema, on Frontier's grid with Frontier's routing; the trainer, the hold-out and the predictor are
+  Frontier's.
+- **The shims** (`frontier_op.py`): the CLI trainer runs with `MoETrainer._get_model_names` narrowed to
+  `["moe_grouped_gemm"]` (the other three MoE operators are not timed; their CSV targets are empty, never made up);
+  `simpath` swaps MoETrainer's feature selection for the simulator's `select_moe_operator_features`
+  (total_routed_tokens, num_tokens_post_padded), with BM from Frontier's own `block_size_m_for_tokens` over the
+  table's ranges at prediction time (CRITIQUE M1). The documented CLI model is reported separately (`cli`).
+- The Frontier venv is the study's vLLM closure (`requirements/resolved-vllm.txt`, with the editable line dropped
+  as setup_runpod.sh does) plus Frontier's dependencies, constrained by that closure. Frontier is installed
+  `-e --no-deps`. The fidelity venv (Frontier's pinned stack) stays in frontier_setup.sh but no sequence asks for it.
+- The points cover the grid only as far as the budget reaches (the plan: 111 of 387); points.json records the pages
+  measured.
 - Replay differences from serving: random hidden states, and private cold weight copies (serving's weights may
   be warm in L2 at small T). The ids are the real ones, including padded rows.
 - The capture marker kernel runs between the router and align. It is outside both truths, but it does add a
@@ -326,15 +401,14 @@ bit for bit.
 
 ## Before the kit freezes (after the smoke rental)
 
-- Paste the ShareGPT sha256 that smoke prints into `prompts.py SOURCES["sharegpt"]["sha256"]`. Until then main.sh
-  stops at `prompts-fetch`.
+- DONE (2026-11-19): the ShareGPT sha256 the smoke printed is pinned in `prompts.py SOURCES["sharegpt"]["sha256"]`.
 - The HF commits are pinned in `prodlib.HF_REVISIONS` (resolved 2026-11-19 by `python scripts/prod/hf_revisions.py`
   on the laptop: the Hub's public model API, no token, nothing about the user sent). Re-run it with `--check`
   just before the freeze; it exits 3 if a repo moved. The pinned commit is passed as the model and tokenizer
   revision to the engine (`LLM(revision=, tokenizer_revision=)`) and to the prompt builder's tokenizer; G-REV fails
   a run whose loaded snapshot differs or cannot be resolved.
-- Copy the smoke's `$R/replay_wall.json` to `scripts/prod/replay_wall.json`. main.sh's replay budget reads it,
-  and main.sh stops at `replay-wall-present` without it.
+- DONE (2026-11-19): the smoke's `replay_wall.json` is `scripts/prod/replay_wall.json`. main.sh's replay budget reads
+  it, and main.sh stops at `replay-wall-present` without it.
 - v8 is bound: `price_v8` calls `r3_timing_model_v8.price` with v8's own interface, and `price-check` (smoke
   and M0) prices a real decode call and a real prefill call through it.
 - **Launcher:** the `vm_run*.sh` `--driver` allow-lists do not name `scripts/prod/*.sh`. Either a `vm_run_prod.sh`
@@ -362,8 +436,8 @@ bit for bit.
 | A18 | vLLM 0.27.1 exposes its tokenizer loader (`vllm.tokenizers.get_tokenizer` or `vllm.transformers_utils.tokenizer.get_tokenizer`), which prompts.py uses so token ids match the engine's. | `prompts-build`. |
 | A19 | With async scheduling on (modes A), the step log's per-step context (level, warmup flag) can lag one step at a level boundary; T, T_pad and the record join do not depend on it. | G-STEP on run A. |
 | A11 | ERNIE's config.json keys (hidden_size 2560, moe_intermediate_size 1536, moe_num_experts 64, moe_k 6, 28 layers, MoE layers 1..27). | main.sh's gate60 runs G-CFG and the 27-layer bind count. Not checkable in smoke without un-blinding ERNIE, so it runs on the main rental before any long run. |
-| A12 | Frontier's primary venv imports vLLM 0.27.1 and takes the `functional_fused_experts` branch; Frontier's times are in ms. | `frontier-setup` (version and branch print) and `api.json`. The hold-out MAPE and the predict magnitudes are compared with the replay's ms in the smoke score. |
-| A13 | Frontier's pinned stack (py3.10, torch 2.8 cu128 aarch64, vLLM 0.10.2 aarch64 wheel) installs and runs. | `frontier-setup` / `frontier-profile-fidelity` (soft: reported and dropped if not). |
+| A12 | Frontier's venv imports vLLM 0.27.1 and its trainer runs there. | The smoke: `frontier-setup` PASSED (functional_fused_experts branch); Frontier's profiler failed (no TP group). The trainer, hold-out and predict ran on Frontier db5a85b's code on the laptop (CPU, synthetic times); main: `frontier-train`. |
+| A13 | Frontier's pinned stack (py3.10, torch 2.8 cu128 aarch64, vLLM 0.10.2 aarch64 wheel) installs and runs. | FALSE (smoke): no CUDA aarch64 torch 2.8. Dropped; Frontier is trained on our profiles. |
 | A14 | The study's lock prelude holds 1710 and 1410 during serving. | Per-call SM clock from the NVML marks; off-lock calls are dropped and counted (`off_lock_dropped`). |
 | A15 | The capture overhead (one small kernel per call plus a drain every ≤256 steps) does not distort serving. | The smoke's graph-mode versus node-mode runs (step intervals in `steps.jsonl`), and the marker share of step time in the sqlite. |
 | A16 | `nvidia-smi -lgc` takes, and enforced.power.limit reads back 700 W (power.limit reads the 900 W default setting). | `env-preflight` P3/P4; `kit_lock`'s "GPU clocks set to" read-back; `power-readback`. |
@@ -383,5 +457,8 @@ Everything goes under one results directory (`$RESULTS_ROOT/prod-{smoke,main}-<u
 - `sag/par.json` (the board's 128x128 par);
 - `sample-*/`, `sample-probe-*/`, `replay-probe-*/` (the re-measure's probe and its `replay_wall.json`);
 - `replay-*/private_weight_reference/<run id>/{cells.csv,report.json,cell_wall.json}` (smoke: `replay_wall.json`);
-- `frontier/<arm>/{profile,models (+ versions.json),holdout}`; after `offline.sh`, `frontier/predictions.jsonl`;
+- `frontier/points/<branch>-<page>/{sample.json,page.nsys-rep,page.sqlite,cells.json}`, `frontier/points.json`,
+  `frontier/profile/compute/gh200/<model>/moe_kernel_only.csv`, `frontier/{models,models-simpath} (+ versions.json)`,
+  `frontier/holdout/holdout.json`, `frontier/predictions/{index.json,*.npy}`;
+- `replay-offset-<branch>/{replay.nsys-rep,replay.sqlite,replay_check.json}` (smoke: `replay-nsys-<branch>/`);
 - `score/prod.score.{json,txt}` (smoke on the VM; main after `offline.sh` on the laptop).

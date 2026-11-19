@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
-# AFTER THE MAIN RENTAL, ON THE LAPTOP (review 1, MAJOR 7): the CPU work the rental does not pay for. Frontier's
-# trained estimators predict every call (one batch per model: frontier_op.py _predict) and score_prod.py scores
-# v8 (at the board's sag par), the roofline and Frontier against the in-serving and replay truths.
+# AFTER THE MAIN RENTAL, ON THE LAPTOP (review 1, MAJOR 7): the score. Frontier's trained estimators already predicted
+# every call on the VM (owner decision 2026-11-19: main.sh frontier-predict, one batch per model, written to
+# <results>/frontier/predictions/: index.json + npy); score_prod.py scores v8 (at the board's sag par), the roofline and Frontier
+# against the in-serving and replay truths, with the replay-vs-serving deltas with and without the API path's fills
+# (main.sh replay-offset-check-<branch>: replay_check.json).
 #
 #   git fetch origin <run branch> && git worktree add ../run <run branch>      # the VM pushed vm/results/...
-#   FR_PY_OFFLINE=<a python with Frontier db5a85b on its path, pandas and the trainer's scikit-learn> \
-#   FRONTIER_SRC=<Frontier db5a85b checkout> \
 #   bash scripts/prod/offline.sh --results ../run/vm/results/prod-main-<utc> [--from STEP] [--workers 4] [--dry-run]
 #
 # RESUME: `--from STEP` re-enters at STEP; the steps before it are SKIPPED-RESUME (a hard one's declared output, such
 # as expected-outputs' runs.txt, must be present; kitlib.sh).
 # Memory-bounded for an 18 GB laptop: --workers defaults to 4 (each worker clears v8's per-call caches every
-# r3_timing_model_v8.CACHE_EVERY prefill calls). The predict step refuses a scikit-learn other than the trainer's
-# (versions.json beside each model). Writes <results>/frontier/predictions.jsonl and <results>/score/; its own
-# SUMMARY.txt and step logs go to <results>/offline-logs/ (created; a fetched tree needs no logs/ of its own).
+# r3_timing_model_v8.CACHE_EVERY prefill calls). Writes <results>/score/; its own SUMMARY.txt and step logs go to
+# <results>/offline-logs/ (created; a fetched tree needs no logs/ of its own).
 #
 # THE FETCHED TREE IS CHECKED FIRST (review 2, MAJOR A): every <f>.xz the push compressed is written out as <f>
 # (decompress), and expected-outputs FAILS (hard) unless the tree holds everything the rental measured, by the
-# rental's own SUMMARY.txt: A1710 and A1410, every secondary run whose extract PASSED, the board par, both replays and
-# every Frontier model set whose train / simpath PASSED. A run expected but missing stops here, never scored around.
-# Calls are read across their shards (prodlib.read_calls / load_counts). Every step has its wall cap (MAJOR C).
+# rental's own SUMMARY.txt: A1710 and A1410, every secondary run whose extract PASSED, the board par, both replays,
+# Frontier's predictions when frontier-predict PASSED, and each replay_check.json whose check PASSED. A run expected
+# but missing stops here, never scored around. Calls are read across their shards (prodlib.read_calls / load_counts).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -41,8 +40,6 @@ done
 R="$RES"
 SC="$REPO/scripts/prod"
 PY="${PY_SCORE:-python3}"
-FPY="${FR_PY_OFFLINE:-python3}"
-FSRC="${FRONTIER_SRC:-}"
 export PYTHONPATH="$REPO:$REPO/scripts:$SC${PYTHONPATH:+:$PYTHONPATH}"
 # the step runner's summary and logs go to <results>/offline-logs/{SUMMARY.txt,logs/} (kit_init creates them)
 kit_init "$R/offline-logs"
@@ -55,26 +52,19 @@ if [[ $KIT_DRY -eq 0 ]]; then
   LABELS=()
   while IFS= read -r lab; do [[ -n "$lab" ]] && LABELS+=("$lab"); done < "$R/offline-logs/runs.txt"
 fi
-CALLS=()
 RUNS=()
 for lab in ${LABELS[@]+"${LABELS[@]}"}; do
-  CALLS+=(--calls "$lab=$R/$lab")
   RUNS+=(--run "$lab=$R/$lab")
 done
-CSVNAME="compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv"
-predict() {   # predict LABEL MODELS_DIR ARM_LABEL (a model set the rental dropped is absent: expected-outputs vouched)
-  local lab="$1" models="$2" arm="$3" d="$R/frontier/$1"
-  [[ $KIT_DRY -eq 1 || -d "$models" ]] || { echo "SKIP $arm: no $models (the rental dropped it)"; return 0; }
-  step "frontier-predict-$arm" --soft --cap 7200 --out "$d/predictions-$arm.jsonl" -- env PYTHONPATH="$FSRC:$PYTHONPATH" "$FPY" "$SC/frontier_op.py" _predict \
-    --model "$MODEL" --arm-label "$arm" --models "$models" --csv "$d/profile/$CSVNAME" ${CALLS[@]+"${CALLS[@]}"} \
-    --out "$d/predictions-$arm.jsonl"
-}
-for lab in primary-uniform variant-all4; do
-  predict "$lab" "$R/frontier/$lab/models" "$lab"
-  predict "$lab" "$R/frontier/$lab/models-simpath" "$lab-simpath"
+FRONT=()
+if [[ $KIT_DRY -eq 1 || -s "$R/frontier/predictions/index.json" ]]; then FRONT=(--frontier "$R/frontier/predictions"); fi
+RCHK=()
+for b in decode prefill; do
+  if [[ $KIT_DRY -eq 1 || -f "$R/replay-offset-$b/replay_check.json" ]]; then
+    RCHK+=(--replay-check "$b=$R/replay-offset-$b/replay_check.json")
+  fi
 done
-step frontier-collect --cap 600 --out "$R/frontier/predictions.jsonl" -- bash -c "cat '$R'/frontier/*/predictions-*.jsonl > '$R/frontier/predictions.jsonl' 2>/dev/null || : > '$R/frontier/predictions.jsonl'"
 step score --cap 21600 -- "$PY" "$SC/score_prod.py" --model "$MODEL" --sag "$R/sag/par.json" ${RUNS[@]+"${RUNS[@]}"} \
   --replay decode="$R/replay-decode/private_weight_reference" --replay prefill="$R/replay-prefill/private_weight_reference" \
-  --frontier "$R/frontier/predictions.jsonl" --workers "$WORKERS" --out "$R/score"
+  ${RCHK[@]+"${RCHK[@]}"} ${FRONT[@]+"${FRONT[@]}"} --workers "$WORKERS" --out "$R/score"
 kit_summary
