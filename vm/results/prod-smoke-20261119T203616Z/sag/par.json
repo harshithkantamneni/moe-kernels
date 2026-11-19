@@ -1,0 +1,12 @@
+{
+ "schema": "moe-kernels/prod-sag-par/1",
+ "verdict": "FAIL",
+ "par": null,
+ "driver_exit": 2,
+ "started": 1795121044.0,
+ "results": "/home/ubuntu/moe/results",
+ "record": "/home/ubuntu/moe/session/gh200-driver/gate-b3sag-1410.json",
+ "finaliser": "scripts/scoring/v7pblind/v7pcommon.py finalise_pars (unchanged)",
+ "plan": "scripts/prod/sag1410.plan",
+ "why": "no sag gate record /home/ubuntu/moe/session/gh200-driver/gate-b3sag-1410.json (the driver exited 2 before the gate)"
+}

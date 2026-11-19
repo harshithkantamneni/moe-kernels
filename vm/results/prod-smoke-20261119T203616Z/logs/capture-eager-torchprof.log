@@ -1,0 +1,171 @@
+serve_capture: olmoe-1b-7b (allenai/OLMoE-1B-7B-0924) mode=eager shared-stream=off levels=[8, 48] N/level=16 out=/home/ubuntu/moe/results/prod-smoke-20261119T203616Z/B
+expected steps 2471; per tile (padded T):
+  16x64x128w4s4             1966
+  32x64x128w4s3              470
+  32x128x64w4s3               18
+  64x128x64w4s3                4
+  64x128x64w8s3                5
+  128x128x64w8s3               7
+  128x128x64w8s3 g16           1
+INFO 11-19 20:42:04 [api_utils.py:273] non-default args: {'trust_remote_code': True, 'dtype': 'bfloat16', 'max_model_len': 4096, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.9, 'max_num_batched_tokens': 16384, 'max_num_seqs': 1024, 'disable_log_stats': True, 'revision': '6d84c48581ece794365f2b8e9cfb043c68ade9c5', 'tokenizer_revision': '6d84c48581ece794365f2b8e9cfb043c68ade9c5', 'enforce_eager': True, 'enable_chunked_prefill': True, 'profiler_config': ProfilerConfig(profiler='torch', torch_profiler_dir='/home/ubuntu/moe/results/prod-smoke-20261119T203616Z/B/torch_trace', torch_profiler_with_stack=False, torch_profiler_with_flops=False, torch_profiler_use_gzip=False, torch_profiler_dump_cuda_time_total=True, torch_profiler_record_shapes=False, torch_profiler_with_memory=False, capture_torch_profiler=False, detailed_trace_annotation=False, ignore_frontend=False, delay_iterations=0, max_iterations=0, warmup_iterations=0, active_iterations=5, wait_iterations=0), 'async_scheduling': False, 'model': 'allenai/OLMoE-1B-7B-0924'}
+WARNING 11-19 20:42:04 [arg_utils.py:1678] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 11-19 20:42:04 [model.py:645] Resolved architecture: OlmoeForCausalLM
+INFO 11-19 20:42:04 [model.py:1883] Using max model len 4096
+INFO 11-19 20:42:04 [scheduler.py:242] Chunked prefill is enabled with max_num_batched_tokens=16384.
+WARNING 11-19 20:42:04 [vllm.py:1194] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 11-19 20:42:04 [vllm.py:1247] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 11-19 20:42:04 [kernel.py:306] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+INFO 11-19 20:42:04 [vllm.py:1426] Cudagraph is disabled under eager mode
+INFO 11-19 20:42:04 [compilation.py:329] Enabled custom fusions: norm_quant, act_quant
+INFO 11-19 20:42:04 [core.py:121] Initializing a V1 LLM engine (v0.27.1) with config: model='allenai/OLMoE-1B-7B-0924', speculative_config=None, tokenizer='allenai/OLMoE-1B-7B-0924', skip_tokenizer_init=False, tokenizer_mode=auto, revision=6d84c48581ece794365f2b8e9cfb043c68ade9c5, tokenizer_revision=6d84c48581ece794365f2b8e9cfb043c68ade9c5, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False, jit_monitor_mode='warn', jit_monitor_verbose=False), seed=0, served_model_name=allenai/OLMoE-1B-7B-0924, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'enable_qk_norm_rope_fusion': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False, 'fuse_qk_norm_rope_kvcache': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, enable_cutedsl_warmup=True, enable_jit_warmup=True, enable_bf16x3_router_gemm=False, moe_backend='auto', linear_backend='auto')
+INFO 11-19 20:42:05 [parallel_state.py:1640] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.134.189:38215 backend=nccl
+INFO 11-19 20:42:05 [parallel_state.py:1977] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank 0, EPLB rank N/A
+INFO 11-19 20:42:06 [topk_topp_sampler.py:62] Using FlashInfer for top-p & top-k sampling.
+INFO 11-19 20:42:06 [gpu_model_runner.py:5308] Starting to load model allenai/OLMoE-1B-7B-0924...
+INFO 11-19 20:42:06 [cuda.py:482] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+INFO 11-19 20:42:06 [flash_attn.py:789] Using FlashAttention version 3
+INFO 11-19 20:42:06 [unquantized.py:304] Using TRITON Unquantized MoE backend out of potential backends: ['TRITON', 'BATCHED_TRITON', 'FlashInfer TRTLLM', 'FlashInfer CUTLASS'].
+INFO 11-19 20:42:07 [weight_utils.py:867] Filesystem type for checkpoints: EXT4. Checkpoint size: 12.89 GiB. Available RAM: 464.38 GiB.
+INFO 11-19 20:42:07 [weight_utils.py:890] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards:  33% Completed | 1/3 [00:00<00:01,  1.05it/s]
+Loading safetensors checkpoint shards:  67% Completed | 2/3 [00:01<00:00,  1.03it/s]
+Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:02<00:00,  1.16it/s]
+Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:02<00:00,  1.12it/s]
+
+INFO 11-19 20:42:10 [default_loader.py:430] Loading weights took 2.69 seconds
+INFO 11-19 20:42:10 [unquantized.py:383] Using MoEPrepareAndFinalizeNoDPEPModular
+INFO 11-19 20:42:10 [unquantized.py:384] Using TritonExperts MoE backend
+INFO 11-19 20:42:10 [gpu_model_runner.py:5405] Model loading took 12.89 GiB memory and 3.846448 seconds
+WARNING 11-19 20:42:11 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1024,device_name=NVIDIA_GH200_480GB.json
+INFO 11-19 20:42:12 [gpu_worker.py:563] Available KV cache memory: 70.07 GiB
+INFO 11-19 20:42:12 [kv_cache_utils.py:2235] GPU KV cache size: 574,000 tokens
+INFO 11-19 20:42:12 [kv_cache_utils.py:2236] Maximum concurrency for 4,096 tokens per request: 140.14x
+INFO 11-19 20:42:17 [kernel_warmup.py:256] Using FlashInfer autotune cache file: /home/ubuntu/.cache/vllm/flashinfer_autotune_cache/0.6.16.post3/90a/1f3621779de6cafa31a60216e2edad77efc837275efea31368a7a86bfe148515/autotune_configs.json
+2026-11-19 20:42:17,991 - INFO - autotuner.py:829 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-11-19 20:42:18,060 - INFO - autotuner.py:852 - flashinfer.jit: [Autotuner]: Autotuning process ends
+2026-11-19 20:42:18,081 - INFO - autotuner.py:2269 - flashinfer.jit: [Autotuner]: Saved 0 configs to /home/ubuntu/.cache/vllm/flashinfer_autotune_cache/0.6.16.post3/90a/1f3621779de6cafa31a60216e2edad77efc837275efea31368a7a86bfe148515/autotune_configs.json (0 new, 0 from previous config)
+INFO 11-19 20:42:18 [gpu_worker.py:789] Free memory on device (93.95/94.5 GiB) on startup. Desired GPU memory utilization is (0.9, 85.05 GiB). Actual usage is 14.24 GiB for consumed memory (weights + non-torch), 0.74 GiB for peak activation, and 0.0 GiB for CUDAGraph memory. Replace gpu_memory_utilization config with `--kv-cache-memory=75079054132` (69.92 GiB) to fit into requested memory, or `--kv-cache-memory=84631502848` (78.82 GiB) to fully utilize gpu memory. Current kv cache memory in use is 70.07 GiB.
+INFO 11-19 20:42:18 [jit_monitor.py:79] Kernel JIT monitor activated; monitored JIT compilations during inference will use mode=warn.
+INFO 11-19 20:42:18 [core.py:355] init engine (profile, create kv cache, warmup model) took 8.02 s
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 11-19 20:42:19 [hf.py:540] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+WARNING 11-19 20:42:19 [input_processor.py:291] Passing raw prompts to InputProcessor is deprecated and will be removed in v0.18. You should instead pass the outputs of Renderer.render_cmpl() or Renderer.render_chat().
+WARNING 11-19 20:42:19 [jit_monitor.py:135] Triton kernel JIT compilation during inference: fused_moe_kernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+INFO 11-19 20:42:19 [wrapper.py:174] Torch profiling enabled. Traces will be saved to: /home/ubuntu/moe/results/prod-smoke-20261119T203616Z/B/torch_trace
+USDT:2026-11-19 20:42:19 13643:13643 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-19 20:42:20 13643:13643 SyncActivityProfilerHandler.cpp:59] profiler_stop
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                   execute_context_0(0)_generation_8(8)         0.00%       0.000us         0.00%       0.000us       0.000us     597.788ms       896.53%     597.788ms      29.889ms            20  
+                                      vllm::moe_forward        26.29%     159.482ms        39.01%     236.630ms     739.468us      42.101ms        63.14%      47.271ms     147.721us           320  
+                                       fused_moe_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      41.334ms        61.99%      41.334ms      64.584us           640  
+                                               aten::mm         5.37%      32.571ms         7.41%      44.930ms      45.847us       7.910ms        11.86%       7.910ms       8.071us           980  
+                                       _vllm_fa3_C::fwd         1.40%       8.470ms         3.27%      19.807ms      61.898us       6.088ms         9.13%       6.088ms      19.024us           320  
+                 nvjet_sm90_tst_64x8_64x16_4x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       5.096ms         7.64%       5.096ms       7.963us           640  
+void cutlass::device_kernel<flash::enable_sm90_or_la...         0.00%       0.000us         0.00%       0.000us       0.000us       5.082ms         7.62%       5.082ms      15.882us           320  
+                           _moe_C::moe_align_block_size         0.86%       5.233ms         2.00%      12.147ms      37.960us       2.803ms         4.20%       2.803ms       8.759us           320  
+void vllm::moe::moe_align_block_size_small_batch_exp...         0.00%       0.000us         0.00%       0.000us       0.000us       2.803ms         4.20%       2.803ms       8.759us           320  
+                 nvjet_sm90_tst_64x8_64x16_1x1_h_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       1.576ms         2.36%       1.576ms       4.925us           320  
+                                 _C::fused_add_rms_norm         1.55%       9.394ms         2.84%      17.242ms      26.941us       1.405ms         2.11%       1.405ms       2.195us           640  
+std::enable_if<(((8)>(0)))&&vllm::_typeConvert<c10::...         0.00%       0.000us         0.00%       0.000us       0.000us       1.405ms         2.11%       1.405ms       2.195us           640  
+                 nvjet_sm90_tst_384x8_64x4_2x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       1.238ms         1.86%       1.238ms      61.887us            20  
+                                           _C::rms_norm         1.24%       7.520ms         2.51%      15.206ms      23.039us       1.224ms         1.84%       1.224ms       1.855us           660  
+void vllm::rms_norm_kernel<c10::BFloat16, 8, 2, true...         0.00%       0.000us         0.00%       0.000us       0.000us       1.224ms         1.84%       1.224ms       1.855us           660  
+                                   _moe_C::topk_softmax         0.95%       5.758ms         2.08%      12.610ms      39.405us       1.046ms         1.57%       1.046ms       3.268us           320  
+void vllm::moe::topkGating<8, 64, 4, 16, 32, int, __...         0.00%       0.000us         0.00%       0.000us       0.000us       1.046ms         1.57%       1.046ms       3.268us           320  
+void cutlass::device_kernel<flash::FlashAttnFwdCombi...         0.00%       0.000us         0.00%       0.000us       0.000us       1.005ms         1.51%       1.005ms       3.142us           320  
+                                   _C::rotary_embedding         0.59%       3.551ms         1.10%       6.667ms      20.835us     916.069us         1.37%     916.069us       2.863us           320  
+void vllm::rotary_embedding_kernel<c10::BFloat16, c1...         0.00%       0.000us         0.00%       0.000us       0.000us     916.069us         1.37%     916.069us       2.863us           320  
+                               _moe_prod_capture_kernel         0.00%       0.000us         0.00%       0.000us       0.000us     766.923us         1.15%     766.923us       2.397us           320  
+                  _C_cache_ops::reshape_and_cache_flash         0.77%       4.696ms         1.48%       9.000ms      28.125us     737.258us         1.11%     737.258us       2.304us           320  
+void vllm::reshape_and_cache_flash_kernel<__nv_bfloa...         0.00%       0.000us         0.00%       0.000us       0.000us     737.258us         1.11%     737.258us       2.304us           320  
+                                        _moe_C::moe_sum         0.60%       3.651ms         1.06%       6.421ms      20.066us     675.048us         1.01%     675.048us       2.110us           320  
+void vllm::moe::moe_sum_vec_kernel<c10::BFloat16, in...         0.00%       0.000us         0.00%       0.000us       0.000us     675.048us         1.01%     675.048us       2.110us           320  
+                                       _C::silu_and_mul         0.70%       4.264ms         1.23%       7.474ms      23.355us     646.660us         0.97%     646.660us       2.021us           320  
+void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bf...         0.00%       0.000us         0.00%       0.000us       0.000us     646.660us         0.97%     646.660us       2.021us           320  
+                                            aten::copy_         0.54%       3.260ms         1.34%       8.136ms      19.371us     445.125us         0.67%     502.405us       1.196us           420  
+                                           aten::argmax         0.06%     373.957us         0.09%     555.366us      27.768us     263.080us         0.39%     263.080us      13.154us            20  
+void at::native::reduce_kernel<512, 1, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us     263.080us         0.39%     263.080us      13.154us            20  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us     159.010us         0.24%     159.010us       1.325us           120  
+                         Memcpy HtoD (Pinned -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us     132.961us         0.20%     132.961us       0.831us           160  
+                                     aten::index_select         0.06%     342.692us         0.12%     728.202us      18.205us     121.152us         0.18%     121.152us       3.029us            40  
+void at::native::(anonymous namespace)::indexSelectS...         0.00%       0.000us         0.00%       0.000us       0.000us     121.152us         0.18%     121.152us       6.058us            20  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us      69.440us         0.10%      69.440us       3.472us            20  
+                           _compute_slot_mapping_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      57.344us         0.09%      57.344us       2.867us            20  
+                                            aten::index         0.14%     877.419us         0.37%       2.220ms      55.501us      56.192us         0.08%      85.536us       2.138us            40  
+                                              aten::add         0.08%     514.981us         0.13%     811.240us      13.521us      44.256us         0.07%      44.256us       0.738us            60  
+                                 aten::_index_put_impl_         0.07%     410.117us         0.25%       1.536ms      76.798us      40.096us         0.06%      94.209us       4.710us            20  
+void at::native::index_elementwise_kernel<128, 4, at...         0.00%       0.000us         0.00%       0.000us       0.000us      40.096us         0.06%      40.096us       2.005us            20  
+                    _vllm_fa3_C::get_scheduler_metadata         0.05%     324.837us         0.14%     836.075us      41.804us      35.394us         0.05%      35.394us       1.770us            20  
+void flash::prepare_varlen_num_blocks_kernel<1, fals...         0.00%       0.000us         0.00%       0.000us       0.000us      35.394us         0.05%      35.394us       1.770us            20  
+                                            aten::fill_         0.10%     613.442us         0.18%       1.062ms       8.848us      33.376us         0.05%      33.376us       0.278us           120  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us      33.376us         0.05%      33.376us       0.834us            40  
+void at::native::index_elementwise_kernel<128, 4, at...         0.00%       0.000us         0.00%       0.000us       0.000us      32.928us         0.05%      32.928us       1.646us            20  
+                         Memcpy DtoD (Device -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us      30.976us         0.05%      30.976us       0.774us            40  
+                         Memcpy DtoH (Device -> Pinned)         0.00%       0.000us         0.00%       0.000us       0.000us      30.336us         0.05%      30.336us       1.517us            20  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us      23.680us         0.04%      23.680us       1.184us            20  
+void at::native::vectorized_gather_kernel<16, long>(...         0.00%       0.000us         0.00%       0.000us       0.000us      23.264us         0.03%      23.264us       1.163us            20  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us      22.402us         0.03%      22.402us       1.120us            20  
+void at::native::vectorized_elementwise_kernel<2, at...         0.00%       0.000us         0.00%       0.000us       0.000us      20.576us         0.03%      20.576us       1.029us            20  
+                                              aten::sub         0.06%     353.894us         0.10%     578.824us      28.941us      16.928us         0.03%      16.928us       0.846us            20  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us      16.928us         0.03%      16.928us       0.846us            20  
+                                  _moe_prod_step_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      14.017us         0.02%      14.017us       0.701us            20  
+                                       cuLaunchKernelEx         3.55%      21.505ms         3.55%      21.505ms      10.861us       5.120us         0.01%       5.120us       0.003us          1980  
+                                  cudaStreamIsCapturing         0.03%     161.921us         0.03%     161.921us       0.810us       2.176us         0.00%       2.176us       0.011us           200  
+                                Activity Buffer Request         0.03%     201.378us         0.03%     201.378us     201.378us       1.088us         0.00%       1.088us       1.088us             1  
+                   execute_context_0(0)_generation_8(8)        24.33%     147.589ms        99.13%     601.289ms      30.064ms       0.000us         0.00%      66.110ms       3.305ms            20  
+                                            aten::slice         1.53%       9.276ms         2.10%      12.711ms       2.502us       0.000us         0.00%       0.000us       0.000us          5080  
+                                       aten::as_strided         1.21%       7.369ms         1.21%       7.369ms       0.843us       0.000us         0.00%       0.000us       0.000us          8740  
+                                        cudaMemcpyAsync         0.28%       1.721ms         0.28%       1.721ms       7.821us       0.000us         0.00%       0.000us       0.000us           220  
+                                       aten::lift_fresh         0.00%      20.736us         0.00%      20.736us       0.346us       0.000us         0.00%       0.000us       0.000us            60  
+                                          aten::flatten         0.36%       2.157ms         0.44%       2.696ms       1.664us       0.000us         0.00%       0.000us       0.000us          1620  
+                                             aten::view         1.00%       6.055ms         1.00%       6.055ms       0.929us       0.000us         0.00%       0.000us       0.000us          6520  
+                                           aten::detach         0.01%      75.936us         0.01%      75.936us       1.898us       0.000us         0.00%       0.000us       0.000us            40  
+                                               aten::to         0.05%     288.935us         0.87%       5.290ms      24.044us       0.000us         0.00%     250.852us       1.140us           220  
+                                     aten::resolve_conj         0.00%      18.048us         0.00%      18.048us       0.301us       0.000us         0.00%       0.000us       0.000us            60  
+                                      aten::resolve_neg         0.00%       9.184us         0.00%       9.184us       0.153us       0.000us         0.00%       0.000us       0.000us            60  
+                                       cudaLaunchKernel         7.54%      45.728ms         7.54%      45.728ms      11.665us       0.000us         0.00%       0.000us       0.000us          3920  
+                                          aten::reshape         0.16%     953.575us         0.24%       1.459ms       2.026us       0.000us         0.00%       0.000us       0.000us           720  
+                                         aten::_to_copy         0.10%     628.777us         0.82%       5.001ms      31.255us       0.000us         0.00%     250.852us       1.568us           160  
+                                    aten::empty_strided         1.28%       7.757ms         1.28%       7.757ms       9.697us       0.000us         0.00%       0.000us       0.000us           800  
+                                               aten::lt         0.02%     106.945us         0.02%     106.945us       5.347us       0.000us         0.00%       0.000us       0.000us            20  
+                                            aten::empty         5.60%      33.946ms         5.60%      33.946ms       6.985us       0.000us         0.00%       0.000us       0.000us          4860  
+                                        aten::embedding         0.01%      42.880us         0.12%     709.354us      35.468us       0.000us         0.00%     121.152us       6.058us            20  
+                                          aten::resize_         0.02%     111.809us         0.02%     111.809us       5.590us       0.000us         0.00%       0.000us       0.000us            20  
+                                           aten::linear         0.52%       3.159ms         9.48%      57.482ms      58.655us       0.000us         0.00%       7.910ms       8.071us           980  
+                                                aten::t         0.55%       3.315ms         1.15%       6.986ms       7.128us       0.000us         0.00%       0.000us       0.000us           980  
+                                        aten::transpose         0.76%       4.613ms         1.17%       7.125ms       4.398us       0.000us         0.00%       0.000us       0.000us          1620  
+                                           aten::matmul         0.40%       2.407ms         7.80%      47.337ms      48.303us       0.000us         0.00%       7.910ms       8.071us           980  
+                                 aten::split_with_sizes         0.27%       1.654ms         0.41%       2.476ms       7.737us       0.000us         0.00%       0.000us       0.000us           320  
+                          vllm::unified_kv_cache_update         2.11%      12.791ms         4.89%      29.667ms      92.708us       0.000us         0.00%     737.258us       2.304us           320  
+                                            aten::split         0.35%       2.130ms         1.13%       6.869ms      10.733us       0.000us         0.00%       0.000us       0.000us           640  
+                                           aten::narrow         0.35%       2.101ms         0.78%       4.739ms       3.702us       0.000us         0.00%       0.000us       0.000us          1280  
+                                        aten::new_empty         0.37%       2.226ms         1.24%       7.500ms       7.813us       0.000us         0.00%       0.000us       0.000us           960  
+                    vllm::unified_attention_with_output         4.72%      28.628ms        10.02%      60.777ms     189.928us       0.000us         0.00%       6.088ms      19.024us           320  
+                                           aten::expand         0.34%       2.092ms         0.42%       2.577ms       2.630us       0.000us         0.00%       0.000us       0.000us           980  
+                                       aten::empty_like         0.23%       1.416ms         1.29%       7.837ms      12.245us       0.000us         0.00%       0.000us       0.000us           640  
+                                   cudaFuncSetAttribute         0.17%       1.017ms         0.17%       1.017ms       3.177us       0.000us         0.00%       0.000us       0.000us           320  
+                                    cudaLaunchKernelExC         0.23%       1.389ms         0.23%       1.389ms       4.342us       0.000us         0.00%       0.000us       0.000us           320  
+                                            aten::alias         0.01%      35.200us         0.01%      35.200us       1.760us       0.000us         0.00%       0.000us       0.000us            20  
+                                       aten::index_put_         0.01%      54.433us         0.26%       1.590ms      79.519us       0.000us         0.00%      94.209us       4.710us            20  
+                                        aten::unsqueeze         0.01%      33.856us         0.01%      49.600us       2.480us       0.000us         0.00%       0.000us       0.000us            20  
+                                        aten::expand_as         0.00%      26.593us         0.01%      74.402us       3.720us       0.000us         0.00%       0.000us       0.000us            20  
+                                        cudaEventRecord         0.01%      41.217us         0.01%      41.217us       2.061us       0.000us         0.00%       0.000us       0.000us            20  
+                                   cudaEventSynchronize         0.01%      71.200us         0.01%      71.200us       3.560us       0.000us         0.00%       0.000us       0.000us            20  
+                                  cudaDeviceSynchronize         0.00%      10.208us         0.00%      10.208us       5.104us       0.000us         0.00%       0.000us       0.000us             2  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 606.596ms
+Self CUDA time total: 66.678ms
+
+INFO 11-19 20:42:22 [wrapper.py:66] Profiler stopped successfully.
+level 0 L=8: 16 requests, 1418 steps, 38 s
+level 1 L=48: 96 requests, 1053 steps, 65 s
+PASS  G-REV
+PASS  G-CFG
+PASS  G-BACKEND
+PASS  G-VARIANTS-END
+PASS  G-COV
+PASS  G-DUMMY
+[rank0]:[W1119 20:43:24.063569175 ProcessGroupNCCL.cpp:1624] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

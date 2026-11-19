@@ -1,0 +1,19 @@
+{
+ "schema": "moe-kernels/prod-call-shards/1",
+ "n": 320,
+ "max_bytes": 64000000,
+ "calls": [
+  {
+   "file": "calls.jsonl",
+   "rows": 320,
+   "sha256": "0bf53db2c59a7447f1b6c49e8f55a59370e1dc72dcd134e5323a9f9930a01f0e"
+  }
+ ],
+ "counts": [
+  {
+   "file": "counts.npy",
+   "rows": 320,
+   "sha256": "aca4994ae4372b9d3b8790202183534ce28f47963becd30d04317cb23e981824"
+  }
+ ]
+}

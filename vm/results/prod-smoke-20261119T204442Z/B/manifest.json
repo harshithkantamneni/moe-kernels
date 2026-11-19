@@ -1,0 +1,96 @@
+{
+  "argv": [
+    "/home/ubuntu/moe/repo/scripts/prod/serve_capture.py",
+    "--model",
+    "olmoe-1b-7b",
+    "--prompts",
+    "/home/ubuntu/moe/results/prod-smoke-20261119T204442Z/prompts.jsonl",
+    "--concurrency",
+    "8,48",
+    "--requests-per-level",
+    "16",
+    "--mode",
+    "eager",
+    "--torch-profiler",
+    "8:20",
+    "--min-steps-per-tile",
+    "0",
+    "--max-seconds",
+    "90",
+    "--out",
+    "/home/ubuntu/moe/results/prod-smoke-20261119T204442Z/B"
+  ],
+  "model": "olmoe-1b-7b",
+  "hf_repo": "allenai/OLMoE-1B-7B-0924",
+  "vllm": "0.27.1",
+  "torch": "2.13.0+cu130",
+  "python": "3.12.16",
+  "mode": "eager",
+  "shared_stream": "off",
+  "levels": [
+    8,
+    48
+  ],
+  "requests_per_level": 16,
+  "max_num_batched_tokens": 16384,
+  "max_num_seqs": 1024,
+  "prompts": {
+    "body_sha256": "05be7726482584e46de856442812575bba331e19a89cc2ec88a53018fa8857db",
+    "input_tokens": 183515,
+    "kind": "sharegpt",
+    "max_input": 2048,
+    "max_out": 1024,
+    "min_out": 4,
+    "n": 1024,
+    "out_dist": "sharegpt",
+    "output_tokens": 338924,
+    "schema": "moe-kernels/prod-prompts/1",
+    "seed": 0,
+    "source_sha256": "35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4",
+    "tokenizer": "allenai/OLMoE-1B-7B-0924@6d84c48581ece794365f2b8e9cfb043c68ade9c5"
+  },
+  "seed": 0,
+  "env": {
+    "TORCHINDUCTOR_CACHE_DIR": "/home/ubuntu/moe/torchinductor-cache",
+    "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
+    "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
+    "TORCHINDUCTOR_COMPILE_THREADS": "1"
+  },
+  "gpu_start": {
+    "name": "NVIDIA GH200 480GB",
+    "sm_mhz": 345,
+    "mem_mhz": 2619,
+    "power_w": 83.708,
+    "power_limit_w": 700.0,
+    "temp_c": 37,
+    "driver": "580.105.08"
+  },
+  "hf_revision": {
+    "pinned": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+    "resolved": "6d84c48581ece794365f2b8e9cfb043c68ade9c5"
+  },
+  "engine": {
+    "cudagraph_capture_sizes": [],
+    "cudagraph_mode": "NONE",
+    "compilation_mode": "0"
+  },
+  "gpu_end": {
+    "name": "NVIDIA GH200 480GB",
+    "sm_mhz": 1980,
+    "mem_mhz": 2619,
+    "power_w": 146.054,
+    "power_limit_w": 700.0,
+    "temp_c": 38,
+    "driver": "580.105.08"
+  },
+  "seconds": 65.0,
+  "realized_per_tile": {
+    "16x64x128w4s4": 1963,
+    "32x64x128w4s3": 467,
+    "32x128x64w4s3": 18,
+    "64x128x64w4s3": 4,
+    "64x128x64w8s3": 5,
+    "128x128x64w8s3": 6,
+    "128x128x64w8s3 g16": 0
+  }
+}

@@ -1,0 +1,2 @@
+{"8": {"ms": 0.15000878632139422, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.4281639687725022, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check olmoe-1b-7b: decode T 8 0.1500 ms (16x64x128w4s4), prefill T 1024 0.4282 ms (128x128x64w8s3)

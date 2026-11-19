@@ -1,0 +1,10 @@
+serve_capture: olmoe-1b-7b (allenai/OLMoE-1B-7B-0924) mode=graphs shared-stream=off levels=[1, 8, 48, 112, 256] N/level=16 out=/home/ubuntu/moe/results/prod-smoke-20261119T202706Z/A
+expected steps 11917; per tile (padded T):
+  16x64x128w4s4             9706
+  32x64x128w4s3              761
+  32x128x64w4s3              251
+  64x128x64w4s3              511
+  64x128x64w8s3              626
+  128x128x64w8s3              57
+  128x128x64w8s3 g16           5
+DRY RUN: nothing launched

@@ -1,0 +1,12 @@
+[
+  {
+    "names": [
+      "void vllm::moe::moe_align_block_size_small_batch_expert_kern",
+      "fused_moe_kernel",
+      "void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162,",
+      "fused_moe_kernel",
+      "void vllm::moe::moe_sum_vec_kernel<c10::BFloat16, int, 8, fa"
+    ],
+    "calls": 320
+  }
+]

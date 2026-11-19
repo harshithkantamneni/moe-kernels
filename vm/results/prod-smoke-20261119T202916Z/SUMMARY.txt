@@ -1,0 +1,8 @@
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS price-check (85s)
+PASS prompts-fetch (2s)
+PASS prompts-build (10s)
+PASS serve-plan (0s)
+FAIL capture-graphs-nsys: exit 1: [rank0]: FileNotFoundError: [Errno 2] No such file or directory: 'ninja' 

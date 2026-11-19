@@ -1,0 +1,20 @@
+{
+  "G-REV": {
+    "verdict": "FAIL",
+    "why": "olmoe-1b-7b is pinned at 6d84c48581ece794365f2b8e9cfb043c68ade9c5 but the loaded snapshot could not be resolved from the local HF cache (unverified: not the pin)"
+  },
+  "G-CFG": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-BACKEND": {
+    "verdict": "PASS",
+    "backends": [
+      "TRITON"
+    ],
+    "experts_cls": [
+      "TritonExperts"
+    ],
+    "why": ""
+  }
+}

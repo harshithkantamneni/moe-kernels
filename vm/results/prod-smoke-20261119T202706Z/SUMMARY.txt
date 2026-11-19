@@ -1,0 +1,8 @@
+PASS env (5s)
+FAIL (soft, dropped) power-readback: exit 3: FAIL power: enforced limit 900 W, want 700 W 
+PASS unlock-start (0s)
+PASS price-check (84s)
+PASS prompts-fetch (1s)
+PASS prompts-build (9s)
+PASS serve-plan (1s)
+FAIL capture-graphs-nsys: exit 1: where the "/tmp" directory has limited storage you can use the TMPDIR environment variable to set a different location. 

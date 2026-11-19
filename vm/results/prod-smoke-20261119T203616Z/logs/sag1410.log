@@ -1,0 +1,9 @@
+PASS sag1410 precondition: census /home/ubuntu/moe/session/census.json
+2026-11-19T20:43:24Z driver start: commit 036fb9dd07aa80c6352d00241e8dc5cca9fdfd69, steps of the plan scripts/prod/sag1410.plan, deadline 2026-11-19T21:58:24Z (67 min of work left)
+2026-11-19T20:43:24Z plan: /home/ubuntu/moe/repo/scripts/prod/sag1410.plan (sha256 8ac3556b3f58f3847a6b488833fc9eda57a9d4559f69f3d32883a47424196d69), 4 units
+2026-11-19T20:43:24Z prelude START: 3c.1 supported clocks, persistence, 700 W (power.max_limit read first), the session lock 1410 MHz [unit 1/4 - lock-mhz=1410 power-limit-w=700] (estimate 2 min, cap 15 min, 67 min left)
+2026-11-19T20:43:25Z prelude END: exit 2 after 0 min [unit 1/4 - lock-mhz=1410 power-limit-w=700]
+2026-11-19T20:43:25Z STOPPED: the prelude did not pass, and every step after it needs it
+2026-11-19T20:43:25Z clocks: 1980 MHz, 1980 MHz, 900.00 W, 0x0000000000000000
+sag1410: driver exit 2
+FAIL sag par: no sag gate record /home/ubuntu/moe/session/gh200-driver/gate-b3sag-1410.json (the driver exited 2 before the gate)
