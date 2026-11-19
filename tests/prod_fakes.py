@@ -195,9 +195,9 @@ def write_clocks(run: Path, n: int, mhz: float = 1710.0, off=()):
             fh.write(json.dumps({"i": i, "t_ns": i, "sm_mhz": (mhz - 60.0) if i in off else mhz, "power_w": 400.0}) + "\n")
 
 
-def write_sqlite(path: Path, events, marks) -> Path:
+def write_sqlite(path: Path, events, marks, *, eager: bool = False) -> Path:
     """The tables nsys's sqlite export writes (the columns this kit reads, with nsys's names and a few of the
-    others so the reader must pick by name)."""
+    others so the reader must pick by name). eager: no kernel is a CUDA-graph node (graphNodeId NULL)."""
     conn = sqlite3.connect(str(path))
     conn.execute("CREATE TABLE StringIds (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER NOT NULL, end INTEGER NOT NULL, "
@@ -232,7 +232,7 @@ def write_sqlite(path: Path, events, marks) -> Path:
         n = sid(e["name"])
         conn.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (" + ",".join(["?"] * 28) + ")",
                      (e["start"], e["end"], 0, 1, None, e["stream"], i, 1, n, n, n, 0, 0, 32, e["gx"], e.get("gy", 1), 1,
-                      128, 1, 1, 0, 0, 0, 0, i, 0, 1000 + i, 0))
+                      128, 1, 1, 0, 0, 0, 0, i, 0, None if eager else 1000 + i, 0))
     for j, (s, txt) in enumerate(marks):
         # nsys writes registered strings via textId and ad-hoc ones in text: exercise both
         if j % 2:

@@ -36,10 +36,12 @@
 #       smoke's walls x ERNIE's expert-bytes ratio, then the rest priced by the probe's own ERNIE walls, under
 #       locked_r3 at the branch clock
 #   M7  Frontier, ITS PREDICTOR ON OUR PROFILES (owner decision 2026-11-19; frontier_op.py module doc): Frontier's
-#       venv (primary arm only); its token grid (to 16384) with its round-robin routing timed by the replay harness
-#       under nsys at the branch clock in pages (decode: one page; prefill: 16 interleaved pages in bit-reversed
-#       order, run while the FRONTIER BUDGET lasts), the per-cell kernel-sum in Frontier's CSV schema, then
-#       Frontier's own trainer (its CLI) and hold-out, and the simulator-path model. All soft.
+#       venv (primary arm only); its FULL token grid (387 points to 16384, owner decision 2026-11-19: no budgeted
+#       subset) with its round-robin routing, timed by a lightweight timer that mirrors Frontier's profiler (one
+#       process per branch pass, weights built once, eager, 2 warm-up + 20 timed calls per point) under nsys at the
+#       branch clock (decode 1710, prefill 1410: kit_lock, read back per point), the per-point kernel-sum in
+#       Frontier's CSV schema, then Frontier's own trainer (its CLI) and hold-out, and the simulator-path model.
+#       All soft.
 #   M8  SECONDARY, every one SOFT: Adefault (default clocks: production delta), Aon (shared-experts stream on at
 #       1710: overlap delta), Beager (eager + torch profiler, one level: independent tooling), the replay under
 #       nsys per branch at its branch clock under locked_r3 (SMOKE-FIXES 7: the instrument offset and the API
@@ -70,9 +72,6 @@ MODEL=ernie-4.5-21b-a3b
 TOK=baidu/ERNIE-4.5-21B-A3B-PT
 LEVELS="${PROD_LEVELS:-1,8,24,48,80,112,256,1024x3}"
 NREQ="${PROD_REQUESTS_PER_LEVEL:-8}"
-#: Frontier's profile pages run while elapsed + the dearest page so far <= this (seconds; plan_time.py prices it)
-FR_BUDGET="${PROD_FRONTIER_BUDGET_S:-2700}"
-FR_PAGES=16
 FR_ROUTING="${PROD_FRONTIER_ROUTING:-balanced}"
 PY="${PY_VLLM:-python3}"
 PRICER="${PROD_PRICER:-r3_timing_model_v8}"
@@ -95,9 +94,9 @@ NSYS_A=("$NSYS" profile -t cuda,nvtx --cuda-graph-trace=node --force-overwrite t
 BEAGER=("$PY" "$SC/serve_capture.py" --model $MODEL --prompts "$R/prompts.jsonl" --concurrency 112
         --requests-per-level "$NREQ" --require-pinned)
 
-echo "main: model $MODEL, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER, Frontier budget ${FR_BUDGET}s"
+echo "main: model $MODEL, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER"
 if [[ $KIT_DRY -eq 1 ]]; then   # the expected wall time of this plan (README "main.sh: every step")
-  "$PY" "$SC/plan_time.py" --levels "$LEVELS" --n "$NREQ" --frontier-budget "$FR_BUDGET" \
+  "$PY" "$SC/plan_time.py" --levels "$LEVELS" --n "$NREQ" \
     || echo "PLAN (plan_time.py could not run under $PY: needs numpy)"
 fi
 # M0: the whole environment first (smoke rental 2026-11-19: SMOKE-FIXES.md 1-5), fail-fast with its reasons
@@ -172,8 +171,8 @@ done
 step unlock-after-replay --always --cap 60 -- kit_unlock
 step push-replay --soft --cap 3600 -- kit_push "prod main: replay C"
 
-# M7: Frontier, its predictor on our profiles (frontier_op.py module doc). Pages: the replay harness under nsys at
-# the branch clock (locked_r3), cell marks on, then the per-cell kernel-sum (nsys_extract replay-cells)
+# M7: Frontier, its predictor on our profiles (frontier_op.py module doc "PROFILER"). The timer: every grid point,
+# one process per branch pass at the branch clock, a marker kernel per point, then the per-point kernel-sum (fpoints)
 step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
 if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
 FSRC="${FRONTIER_SRC:-$FR/src}"
@@ -182,44 +181,24 @@ CSV="$FD/profile/$("$PY" -c "import sys; sys.path[:0]=['$SC']; import frontier_o
       || echo compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv)"
 step frontier-grid-check --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" \
   --max-tokens 16384
-export R MODEL SC PY NSYS FR_PAGES FR_ROUTING
-fr_page() {   # fr_page BRANCH PAGE: one page of Frontier's points, timed at the branch clock under nsys
-  local b="$1" pg="$2" lock=1710 reps=3 d
-  if [[ $b == prefill ]]; then lock=1410; reps=1; fi
-  d="$R/frontier/points/$b-$(printf %02d "$pg")"
+export R MODEL SC PY NSYS FR_ROUTING
+fr_timer() {   # fr_timer BRANCH LOCK: every grid point of the branch, one process, weights once, eager, under nsys
+  local b="$1" lock="$2" d="$R/frontier/timer-$1"
   mkdir -p "$d"
-  "$PY" "$SC/frontier_op.py" fsample --model "$MODEL" --branch "$b" --page "$pg" --pages "$FR_PAGES" \
-    --routing "$FR_ROUTING" --max-tokens 16384 --out "$d" || return 3
-  "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true -o "$d/page" \
-    env MOE_RESULTS_DIR="$d" python3 scripts/locked_r3.py --session-tag "prod-frontier-$b-$pg" --locks "$lock" \
-    --groups 1 --slip-policy cell --min-clean-repeats 0 --out-dir "$d/locked" --r3-script "$SC/replay.py" -- \
-    --model "$MODEL" --histogram "$d/sample.json" --branch "$b" --inst GRR --repeats "$reps" --duty 0.25 --seed 0 \
-    --cell-marks || return 3
-  "$NSYS" export --type sqlite --force-overwrite true -o "$d/page.sqlite" "$d/page.nsys-rep" || return 3
-  "$PY" "$SC/nsys_extract.py" replay-cells --sample "$d/sample.json" --replay-sqlite "$d/page.sqlite" \
-    --model "$MODEL" --branch "$b" --out "$d/cells.json"
+  "$NSYS" profile -t cuda --force-overwrite true -o "$d/timer" "$PY" "$SC/frontier_op.py" timer --model "$MODEL" \
+    --branch "$b" --lock "$lock" --routing "$FR_ROUTING" --max-tokens 16384 --out "$d"
 }
-FR_T0=""; FR_MAX=0
-fr_page_step() {   # fr_page_step BRANCH PAGE CAP: the page while the Frontier budget lasts (elapsed + dearest page)
-  local b="$1" pg="$2" cap="$3" name t dt
-  name="frontier-page-$b-$(printf %02d "$pg")"
-  if [[ $KIT_DRY -eq 0 && $KIT_RESUMING -eq 0 && -n "$FR_T0" ]] \
-     && (( $(date +%s) - FR_T0 + FR_MAX > FR_BUDGET )); then
-    KIT_BAD+="$name "
-    kit_record "SKIPPED $name: the Frontier profile budget (${FR_BUDGET}s): $(( $(date +%s) - FR_T0 ))s spent, dearest page ${FR_MAX}s"
-    return 0
-  fi
-  t=$(date +%s); [[ -n "$FR_T0" ]] || FR_T0=$t
-  step "$name" --soft --cap "$cap" --needs frontier-setup --out "$R/frontier/points/$b-$(printf %02d "$pg")/cells.json" -- fr_page "$b" "$pg"
-  dt=$(( $(date +%s) - t )); if (( dt > FR_MAX )); then FR_MAX=$dt; fi
-}
-fr_page_step decode 0 1200
-for pg in $("$PY" -c "import sys; sys.path[:0]=['$SC']; import frontier_op as F; print(*F.page_order($FR_PAGES))" 2>/dev/null \
-            || echo 0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15); do
-  fr_page_step prefill "$pg" 1800
+for b in decode prefill; do
+  lock=1710; [[ $b == prefill ]] && lock=1410
+  step "frontier-timer-lock-$b" --soft --always --cap 120 -- kit_lock "$lock"
+  step "frontier-timer-$b" --soft --cap 3600 --needs "frontier-timer-lock-$b" --out "$FD/timer-$b/timer.json,$FD/timer-$b/timer.nsys-rep" \
+    -- fr_timer "$b" "$lock"
+  step "frontier-timer-export-$b" --soft --cap 1800 --needs "frontier-timer-$b" --out "$FD/timer-$b/timer.sqlite" -- "$NSYS" export --type sqlite \
+    --force-overwrite true -o "$FD/timer-$b/timer.sqlite" "$FD/timer-$b/timer.nsys-rep"
 done
-step frontier-points --soft --cap 600 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --pages-root "$FD/points" \
-  --max-tokens 16384 --out "$FD/points.json"
+step frontier-timer-unlock --always --cap 60 -- kit_unlock
+step frontier-points --soft --cap 1800 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --timer "$FD/timer-decode" \
+  --timer "$FD/timer-prefill" --max-tokens 16384 --out "$FD/points.json"
 step frontier-csv --soft --cap 600 --needs frontier-points --out "$CSV" -- "$PY" "$SC/frontier_op.py" csv --model $MODEL --points "$FD/points.json" \
   --src "$FSRC" --out "$FD/profile"
 step frontier-train --soft --cap 1800 --needs frontier-csv --out "$FD/models" -- "$PY" "$SC/frontier_op.py" train --model $MODEL --csv "$CSV" \

@@ -44,7 +44,7 @@ def test_smoke_dry_run_lists_the_smoke_sequence(tmp_path):
     for want in ("env", "price-check", "capture-graphs-nsys", "nsys-export", "extract-gate-A", "sequences-A",
                  "capture-eager-torchprof", "extract-gate-B", "sag1410", "replay-decode", "replay-prefill",
                  "replay-wall", "replay-check-decode", "replay-check-prefill", "frontier-setup",
-                 "frontier-page-prefill", "frontier-cells-decode", "frontier-train", "frontier-predict", "score"):
+                 "frontier-timer-prefill", "frontier-timer-export-decode", "frontier-train", "frontier-predict", "score"):
         assert want in names, want
     by = dict(zip(names, steps, strict=True))
     # SMOKE-FIXES 7: the nsys replay passes run under locked_r3 at the branch clock, with cell marks
@@ -71,11 +71,11 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert names.index("gate60-extract") < names.index("A1710-capture") < names.index("A1410-capture")
     # review 1 MAJOR 5: gate60, (the sag par), A1710, A1410, replay C, Frontier, then the secondary runs, all soft
     order = ["gate60-extract", "sag1410", "A1710-capture", "A1410-capture", "replay-decode", "replay-prefill",
-             "frontier-page-decode-00", "frontier-train", "Adefault-capture", "Aon-capture", "Beager-capture",
+             "frontier-timer-decode", "frontier-train", "Adefault-capture", "Aon-capture", "Beager-capture",
              "replay-offset-nsys-decode", "frontier-predict"]
     assert [names.index(n) for n in order] == sorted(names.index(n) for n in order)
     for n in ("Adefault-capture", "Adefault-extract", "Aon-lock", "Aon-capture", "Aon-extract", "Beager-capture",
-              "Beager-extract", "replay-offset-nsys-decode", "replay-offset-check-prefill", "frontier-page-prefill-00",
+              "Beager-extract", "replay-offset-nsys-decode", "replay-offset-check-prefill", "frontier-timer-prefill",
               "frontier-train", "frontier-predict"):
         assert _soft(by[n]), n
     for n in ("A1710-capture", "A1410-extract", "replay-prefill", "sag1410", "price-check", "gate60-sequences",
@@ -99,13 +99,21 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     assert re.search(r"--shared-stream off", steps[names.index("A1710-capture")])
     assert "--torch-profiler" in steps[names.index("Beager-capture")]
     # owner decision 2026-11-19: Frontier's profiler cannot run on the GH200; no fidelity / variant arm, no Frontier
-    # profiler; its grid timed by our replay harness in pages (decode one, prefill 16 bit-reversed), budget-gated
+    # profiler; its FULL grid timed by the lightweight timer (no pages, no budget), one pass per branch at its clock
     assert not any("variant" in n or "fidelity" in n or "profile-" in n or n.startswith("graphmode") for n in names)
+    assert not any(n.startswith("frontier-page") for n in names) and "PROD_FRONTIER_BUDGET_S" not in \
+        (PROD / "main.sh").read_text()
     assert "--arms primary " in by["frontier-setup"]
-    pages = [n for n in names if n.startswith("frontier-page-")]
-    assert pages[0] == "frontier-page-decode-00" and len(pages) == 17
-    assert [int(n.rsplit("-", 1)[1]) for n in pages[1:]] == [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
-    assert all("fr_page " in by[n] and _soft(by[n]) and "needs=frontier-setup " in by[n] for n in pages)
+    for b, lock in (("decode", 1710), ("prefill", 1410)):
+        assert by[f"frontier-timer-lock-{b}"].endswith(f"kit_lock {lock} ") and _soft(by[f"frontier-timer-lock-{b}"])
+        assert f"fr_timer {b} {lock}" in by[f"frontier-timer-{b}"] and _soft(by[f"frontier-timer-{b}"])
+        assert f"needs=frontier-timer-lock-{b} " in by[f"frontier-timer-{b}"]
+        assert names.index(f"frontier-timer-lock-{b}") < names.index(f"frontier-timer-{b}") < \
+            names.index(f"frontier-timer-export-{b}") < names.index("frontier-points")
+    fr = (PROD / "main.sh").read_text().split("fr_timer() {", 1)[1].split("\n}", 1)[0]
+    assert "frontier_op.py\" timer" in fr and "--cuda-graph-trace" not in fr and "--max-tokens 16384" in fr
+    assert f"fpoints --model ernie-4.5-21b-a3b --timer {tmp_path}/res/frontier/timer-decode --timer " \
+        f"{tmp_path}/res/frontier/timer-prefill --max-tokens 16384 " in by["frontier-points"]
     for n in ("frontier-csv", "frontier-train", "frontier-holdout", "frontier-simpath"):
         assert f"--src {tmp_path}/moe/frontier/src" in by[n], n
     assert "fpoints" in by["frontier-points"] and "csv" in by["frontier-csv"].split("frontier_op.py")[1]
@@ -338,7 +346,7 @@ def test_every_main_step_has_a_cap_at_least_twice_its_expected_time_and_the_plan
     for _blk, st, sec, _basis in plan["steps"]:
         assert caps[st] >= 2 * sec, (st, caps[st], sec)
     assert plan["total_h"] <= 4.0 and min(plan["serving"]["per_tile"].values()) >= 30
-    assert plan["frontier"]["pages_run"] >= 5 and plan["frontier"]["points"] >= 100
+    assert plan["frontier"]["points"] == plan["frontier"]["grid_points"] == 387          # the full grid
     env = dict(os.environ, PY_VLLM=sys.executable, HOME=str(tmp_path / "home"), MOE_HOME=str(tmp_path / "moe"))
     p = subprocess.run(["bash", str(PROD / "main.sh"), "--dry-run", "--results", str(tmp_path / "res2")],
                        capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)

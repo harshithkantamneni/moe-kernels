@@ -6,8 +6,8 @@
     python scripts/prod/nsys_extract.py check-sequences --run RUN_DIR --model ...         # smoke: per-path sequences
     python scripts/prod/nsys_extract.py replay-check --serving RUN_DIR --sample SAMPLE/sample.json \\
         --replay-sqlite REPLAY.sqlite --model ... [--branch B]                            # replay == serving (core)
-    python scripts/prod/nsys_extract.py replay-cells --sample FSAMPLE/sample.json --replay-sqlite PAGE.sqlite \\
-        --model ... --branch B                                         # Frontier's points: per-cell core kernel-sum
+    python scripts/prod/nsys_extract.py replay-cells --sample SAMPLE/sample.json --replay-sqlite PAGE.sqlite \\
+        --model ... --branch B                                         # per-cell core kernel-sum (cell marks)
 
 THE MEASURED CALL (CAPTURE.md; v7's call): align .. moe_sum, the router EXCLUDED. Classified BY STREAM AND BY
 SEQUENCE, never by a name regex alone: only kernels on the marker's own stream, between the k-th capture-marker
@@ -664,9 +664,10 @@ def replay_check(serving_rows: list[dict], sample: dict, replay_calls: list[dict
 
 
 def replay_cells(sample: dict, marked: dict, model: PL.ServedModel, *, branch: str | None = None) -> dict:
-    """Frontier's profile points (frontier_op.py fsample): per cell its OWN calls (cell marks) on its expected grids,
-    the CORE kernel-sum (align..moe_sum, durations summed, the API fills stripped: the kit's kernel-sum truth) of
-    the timed graph calls (GRR replays; the eager check calls when the cell has no graph call), and its fills.
+    """Per cell (a replay page's cells, or frontier_op.py timer's points) its OWN calls (cell / point marks) on its
+    expected grids, the CORE kernel-sum (align..moe_sum, durations summed, the API fills stripped: the kit's
+    kernel-sum truth) of the timed graph calls (GRR replays; the eager calls when the cell has no graph call: the
+    Frontier timer's), and its fills.
     {"cells": [{label, T, n, kernel_sum_ms {median, mean, min, max, std}, fills_n, fills_ms, kernel_count}],
     "missing": [labels]}."""
     cfg = model.cfg

@@ -218,26 +218,6 @@ def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *,
     return out / "sample.json"
 
 
-def write_synthetic_sample(model: PL.ServedModel, pairs: list, out_dir, *, extra: dict | None = None) -> Path:
-    """A sample of synthetic cells only ((cell, ids) pairs; frontier_op.py fsample: Frontier's grid points with
-    Frontier's routing), in write_sample's format, so the replay times them unchanged."""
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    cells, ids = [], {}
-    for c, a in pairs:
-        if c["label"] in ids:
-            raise PL.KitError(f"duplicate cell label {c['label']}")
-        cells.append(c)
-        ids[c["label"]] = np.asarray(a, dtype=np.int16)
-    np.savez_compressed(out / "sample_ids.npz", **ids)
-    doc = {"schema": SAMPLE_SCHEMA, "model": model.key, "seed": None, "n_cells": len(cells), "run": None,
-           "ids_file": "sample_ids.npz", "budget": None,
-           "ids_sha256": hashlib.sha256((out / "sample_ids.npz").read_bytes()).hexdigest(), "cells": cells,
-           **(extra or {})}
-    (out / "sample.json").write_text(json.dumps(doc, indent=1))
-    return out / "sample.json"
-
-
 def load_sample(path, model: PL.ServedModel, branch: str | None) -> tuple[RD.DecodePage, dict]:
     """The DecodePage of the sample's cells on one branch, and {label: ids [T, k] int32 np}. V-BIN on load: every
     cell's bincount equals its counts and no token repeats an expert."""

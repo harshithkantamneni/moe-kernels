@@ -117,29 +117,31 @@ for b in decode prefill; do
 done
 
 # Frontier, its predictor on our profiles (frontier_op.py; owner decision 2026-11-19), small: its grid to 256 tokens,
-# the decode page and one prefill page, its trainer, hold-out and batch predictions on the VM
+# the timer's two branch passes (every point), its trainer, hold-out and batch predictions on the VM
 step frontier-setup --soft --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
 if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
 FSRC="${FRONTIER_SRC:-$FR/src}"
 FD="$R/frontier"
 CSV="$FD/profile/compute/gh200/olmoe-1b-7b-moe/moe_kernel_only.csv"
 step frontier-grid-check --soft --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" --max-tokens 256
+export R MODEL SC PY NSYS FD
+fr_timer() {   # fr_timer BRANCH LOCK: every grid point of the branch (to 256), one process, eager, under nsys
+  local d="$FD/timer-$1"
+  mkdir -p "$d"
+  "$NSYS" profile -t cuda --force-overwrite true -o "$d/timer" "$PY" "$SC/frontier_op.py" timer --model "$MODEL" \
+    --branch "$1" --lock "$2" --max-tokens 256 --out "$d"
+}
 for b in decode prefill; do
-  lock=1710; reps=3; [[ $b == prefill ]] && { lock=1410; reps=1; }
-  d="$FD/points/$b-00"
-  step "frontier-fsample-$b" --soft --cap 300 --needs frontier-setup --out "$d/sample.json" -- "$PY" "$SC/frontier_op.py" fsample --model $MODEL --branch $b \
-    --page 0 --pages 1 --max-tokens 256 --out "$d"
-  step "frontier-page-$b" --soft --cap 1800 --needs "frontier-fsample-$b" --out "$d/page.nsys-rep" -- "$NSYS" profile -t cuda --cuda-graph-trace=node --force-overwrite true \
-    -o "$d/page" env MOE_RESULTS_DIR="$d" python3 scripts/locked_r3.py --session-tag "smoke-frontier-$b" --locks $lock --groups 1 \
-    --slip-policy cell --min-clean-repeats 0 --out-dir "$d/locked" --r3-script "$SC/replay.py" -- --model $MODEL \
-    --histogram "$d/sample.json" --branch $b --inst GRR --repeats $reps --duty 0.25 --seed 0 --cell-marks
-  step "frontier-page-export-$b" --soft --cap 900 --needs "frontier-page-$b" --out "$d/page.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true \
-    -o "$d/page.sqlite" "$d/page.nsys-rep"
-  step "frontier-cells-$b" --soft --cap 600 --needs "frontier-page-export-$b" --out "$d/cells.json" -- "$PY" "$SC/nsys_extract.py" replay-cells --sample "$d/sample.json" \
-    --replay-sqlite "$d/page.sqlite" --model $MODEL --branch $b --out "$d/cells.json"
+  lock=1710; [[ $b == prefill ]] && lock=1410
+  d="$FD/timer-$b"
+  step "frontier-timer-lock-$b" --soft --always --cap 120 -- kit_lock "$lock"
+  step "frontier-timer-$b" --soft --cap 1800 --needs "frontier-timer-lock-$b" --out "$d/timer.json,$d/timer.nsys-rep" -- fr_timer "$b" "$lock"
+  step "frontier-timer-export-$b" --soft --cap 900 --needs "frontier-timer-$b" --out "$d/timer.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true \
+    -o "$d/timer.sqlite" "$d/timer.nsys-rep"
 done
-step frontier-points --soft --cap 300 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --pages-root "$FD/points" --max-tokens 256 \
-  --out "$FD/points.json"
+step frontier-timer-unlock --always --cap 60 -- kit_unlock
+step frontier-points --soft --cap 300 --out "$FD/points.json" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --timer "$FD/timer-decode" \
+  --timer "$FD/timer-prefill" --max-tokens 256 --out "$FD/points.json"
 step frontier-csv --soft --cap 300 --needs frontier-points --out "$CSV" -- "$PY" "$SC/frontier_op.py" csv --model $MODEL --points "$FD/points.json" --src "$FSRC" \
   --out "$FD/profile"
 step frontier-train --soft --cap 1800 --needs frontier-csv --out "$FD/models" -- "$PY" "$SC/frontier_op.py" train --model $MODEL --csv "$CSV" --src "$FSRC" \

@@ -1,9 +1,10 @@
 """Frontier (github.com/NetX-lab/Frontier at db5a85b, MIT): ITS PREDICTOR, OUR PROFILES (owner decision 2026-11-19).
 
     python scripts/prod/frontier_op.py grid --max-tokens 16384                      # Frontier's token grid (pure)
-    python scripts/prod/frontier_op.py fsample --model M --branch prefill --page 0 --pages 16 --out PAGE_DIR
-    (the replay harness times PAGE_DIR/sample.json under nsys at the branch clock; nsys_extract.py replay-cells)
-    python scripts/prod/frontier_op.py fpoints --model M --pages-root POINTS_DIR --out POINTS.json
+    nsys profile -t cuda -o TIMER_DIR/timer python scripts/prod/frontier_op.py timer --model M --branch decode \\
+        --lock 1710 --out TIMER_DIR                     # under kit_lock 1710 (prefill: --lock 1410, a second pass)
+    nsys export --type sqlite -o TIMER_DIR/timer.sqlite TIMER_DIR/timer.nsys-rep
+    python scripts/prod/frontier_op.py fpoints --model M --timer DECODE_DIR --timer PREFILL_DIR --out POINTS.json
     FR=$MOE_HOME/frontier; . $FR/frontier.env                                        # frontier_setup.sh wrote it
     python scripts/prod/frontier_op.py csv     --model M --points POINTS.json --src $FRONTIER_SRC --out PROFILE_DIR
     python scripts/prod/frontier_op.py train   --model M --csv CSV --src ... --out MODELS        # its RF, its trainer
@@ -18,20 +19,35 @@ gate with vLLM's ReplicatedLinear, which needs vLLM's tensor-parallel group and 
 "tensor model parallel group is not initialized"); its own pinned stack (torch 2.8 + vLLM 0.10.2) has no CUDA torch
 for aarch64 (the cu128 index carries no aarch64 wheel; PyPI's aarch64 torch 2.8 is CPU-only). So on the GH200:
 
-  PROFILER = OURS. The points are timed on the production kernel (vLLM 0.27.1's fused path, align .. moe_sum, the
-             functional fused_experts entry as the replay calls it: the same functional-vs-modular caveat as replay C,
-             SMOKE-FIXES 6) by the study's validated replay harness (scripts/prod/replay.py, r3_decode's GRR
-             instrument under locked_r3) at the BRANCH CLOCK (T <= 128 at 1710 MHz, T > 128 at 1410), under nsys with
-             cell marks; the time is the KIT'S KERNEL-SUM (the core align..moe_sum kernels' GPU durations summed, the
-             API path's fill kernels stripped: nsys_extract.replay_cells) of the timed graph calls, in ms.
+  PROFILER = A LIGHTWEIGHT TIMER THAT MIRRORS FRONTIER'S OWN METHOD (owner decision 2026-11-19: the FULL grid, all
+             387 points, no budgeted subset: a subset would starve Frontier's random forest). Frontier's
+             profile_fused_moe_kernel (frontier/profiling/moe/moe_vllm_kernel.py:727-945, moe_wrapper.py:46-47) builds
+             the weights once and, per point, calls vLLM's functional fused_experts EAGERLY in one process on those
+             warm weights: WARMUP_STEPS (2) calls, a synchronize, then ACTIVE_STEPS (20) timed calls, each followed by
+             a synchronize, the row's time the median. `timer` does exactly that, in ONE process per branch pass:
+             ERNIE's weights built once (synthetic bf16, the served shapes: private_weight_reference.
+             build_private_weights, one copy), per grid point the routing (Frontier's uniform_topk round robin) and
+             the call replay C makes (vLLM 0.27.1's functional fused_experts, align .. moe_sum, the same caveat as
+             replay C: SMOKE-FIXES 6), WARMUP_STEPS warm-up calls, then the point's marker kernel (moe_capture's step
+             marker, gridY = point index + 1) and ACTIVE_STEPS timed calls. Everything else a point launches (its
+             routing tensors, its warm-up) sits behind a SINK marker (gridY = SINK_INDEX + 1) and is never in a
+             point's segment. The time is not a CUDA event but THE KIT'S KERNEL-SUM per call (the core align..moe_sum
+             kernels' GPU durations summed, the API path's fill kernels stripped and reported separately: the same
+             classifier as nsys_extract, segment_marked + replay_cells), the row's median the median over the 20.
+             The whole loop runs under nsys (eager: no graph tracing) at the BRANCH CLOCK, locked_r3-equivalent: two
+             passes, decode points (T <= 128) under kit_lock 1710 and prefill points under kit_lock 1410 (main.sh),
+             the lock read back by the timer itself (NVML SM clock after the first warm-up: off by more than one
+             15 MHz step refuses the pass) and per point (before and after its timed calls); a point whose clock is
+             off is FLAGGED (off_lock in points.json, counted by fpoints), never silently kept or dropped.
   SCHEMA, GRID, ROUTING, TRAINER, PREDICTOR = FRONTIER'S:
     grid     frontier/profiling/utils/__init__.py get_num_tokens_to_profile(16384) (profile_moe.sh --max-tokens
-             16384): 387 points (token_grid; `grid-check` holds it to Frontier's own function on the VM).
+             16384): 387 points (token_grid; `grid-check` holds it to Frontier's own function on the VM). fpoints
+             refuses a points file that misses any of them (--allow-partial only by an operator's decision).
     routing  round-robin top-k, Frontier's uniform_topk (frontier/profiling/moe/moe_impl.py:75-102: token t takes
-             experts (t k + j) mod E, weights 1/k); in Frontier's load-distribution names that generator is
-             "balanced" (load_distribution.py: "the round-robin assignment of the uniform_topk routing path"), and the
-             rows say so. Frontier's "uniform" distribution (seeded random per-token top-k, torch RNG on the card) is
-             available as --routing uniform (three seeds per point, Frontier's num_samples_per_distribution).
+             experts (t k + j) mod E, weights 1/k), its shipped default; in Frontier's load-distribution names that
+             generator is "balanced" (load_distribution.py: "the round-robin assignment of the uniform_topk routing
+             path"), and the rows say so. Frontier's "uniform" distribution (seeded random per-token top-k, torch RNG
+             on the card) is available as --routing uniform (three seeds per point, num_samples_per_distribution).
     columns  the row Frontier's MoE profiler writes for the grouped GEMM (moe_wrapper.py profile_grouped_gemm +
              _build_profile_result, main.py profile_model / _attach_moe_output_metadata, moe_vllm_kernel.py's
              KERNEL_ONLY stats): num_tokens, the 14 load-imbalance features + load_distribution + seed from Frontier's
@@ -51,12 +67,8 @@ for aarch64 (the cu128 index carries no aarch64 wheel; PyPI's aarch64 torch 2.8 
              MoELoadImbalanceInput(expert_token_counts=real counts) (simpath: the padded count at Frontier's own
              block_size_m_for_tokens over the table's ranges), on the VM.
   ONE ROW PER GRID POINT under round-robin routing: Frontier writes num_samples_per_distribution (3) rows per point;
-  round-robin ids do not depend on the seed, so those would be three timings of one input; the replay's repeats time
+  round-robin ids do not depend on the seed, so those would be three timings of one input; the 20 timed calls time
   it (the median is the row's median).
-  BUDGET: the 387 points cost more than the main rental can give, so the decode points (19) are one page and the
-  prefill points are interleaved into PAGES (16) pages (page j = every 16th point from j), measured in PAGE_ORDER
-  (bit-reversed: 0, 8, 4, 12, ... so any prefix of pages is an even cover of the grid) until the Frontier budget
-  (main.sh) is spent; the README states how many fit.
 """
 from __future__ import annotations
 
@@ -66,6 +78,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -81,7 +94,16 @@ MAX_TOKENS = 16384
 ROUTINGS = ("balanced", "uniform")
 #: Frontier's main.py --num_samples_per_distribution default (the smoke's moe_config.yaml)
 SAMPLES_PER_DISTRIBUTION = 3
-PAGES = 16
+#: Frontier's moe_wrapper.py WARMUP_STEPS / ACTIVE_STEPS (passed to profile_fused_moe_kernel as warmup_steps /
+#: active_steps): the timer's warm-up calls and timed calls per point
+WARMUP_STEPS, ACTIVE_STEPS = 2, 20
+#: the sink segment's marker index (gridY = SINK_INDEX + 1 = 65535): a point's routing build and warm-up land there
+SINK_INDEX = PL.CELL_MARK_MAX - 1
+#: the branch clocks (CRITIQUE B1; replay C's): decode points at 1710 MHz, prefill points at 1410 MHz
+BRANCH_LOCK = {"decode": 1710, "prefill": 1410}
+#: one 15 MHz step (locked_r3's slip rule): a point whose SM clock reads further from the lock is off-lock
+LOCK_TOL_MHZ = 15
+TIMER_SCHEMA = "moe-kernels/prod-frontier-timer/1"
 HOLDOUT_MOD, HOLDOUT_REM = 5, 2
 TIME_COL = "time_stats.moe_grouped_gemm.median"
 #: Frontier's MoE family (frontier/operators/families.py MOE_FAMILY profiling_order); only the grouped GEMM is timed
@@ -178,32 +200,15 @@ def uniform_ids(T: int, E: int, k: int, seed: int):
     return torch.argsort(m, dim=1, descending=True)[:, :int(k)].int().cpu().numpy().astype(np.int64)
 
 
-def page_order(pages: int) -> list[int]:
-    """Bit-reversed page order (pages a power of two): any prefix of it is an even cover of the grid."""
-    if pages < 1 or pages & (pages - 1):
-        raise PL.KitError(f"--pages {pages}: a power of two")
-    bits = pages.bit_length() - 1
-    return [int(format(i, f"0{bits}b")[::-1], 2) if bits else 0 for i in range(pages)]
-
-
 def branch_points(branch: str, max_tokens: int) -> list[int]:
-    return sorted(T for T in token_grid(max_tokens) if PL.branch(T) == branch)
+    """The branch's grid points in Frontier's order (get_num_tokens_to_profile's: descending)."""
+    return [T for T in token_grid(max_tokens) if PL.branch(T) == branch]
 
 
-def page_points(branch: str, page: int, pages: int, max_tokens: int) -> list[int]:
-    """decode: every decode point (one page); prefill: page j of `pages` = every pages-th prefill point from j."""
-    pts = branch_points(branch, max_tokens)
-    if branch == "decode":
-        if page != 0:
-            raise PL.KitError("the decode points are one page (page 0)")
-        return pts
-    if not 0 <= page < pages:
-        raise PL.KitError(f"page {page} of {pages}")
-    return pts[page::pages]
-
-
-def fsample_cells(model_key: str, Ts: list[int], routing: str, seeds: int = SAMPLES_PER_DISTRIBUTION) -> list:
-    """(cell, ids) pairs for replay.write_synthetic_sample: label f<T> (balanced) or f<T>s<seed> (uniform)."""
+def grid_cells(model_key: str, Ts: list[int], routing: str, seeds: int = SAMPLES_PER_DISTRIBUTION) -> list:
+    """(cell, ids) pairs, one per point (balanced) or per point and seed (uniform): label f<T> or f<T>s<seed>, with
+    the fields nsys_extract.replay_cells reads (T, tile, branch, counts) and Frontier's (num_tokens,
+    load_distribution, seed)."""
     cfg = PL.MODELS[model_key].cfg
     if routing not in ROUTINGS:
         raise PL.KitError(f"--routing {routing}: one of {ROUTINGS}")
@@ -213,12 +218,123 @@ def fsample_cells(model_key: str, Ts: list[int], routing: str, seeds: int = SAMP
             ids = round_robin_ids(T, cfg.num_experts, cfg.top_k) if routing == "balanced" else \
                 uniform_ids(T, cfg.num_experts, cfg.top_k, seed)
             lab = f"f{T}" if routing == "balanced" else f"f{T}s{seed}"
-            out.append(({"label": lab, "g": None, "T": int(T), "T_unpadded": int(T), "layer": None,
-                         "tile": PL.tile_bin(T), "branch": PL.branch(T),
+            out.append(({"label": lab, "T": int(T), "tile": PL.tile_bin(T), "branch": PL.branch(T),
                          "counts": PL.counts_from_ids(ids, cfg.num_experts), "ids_digest": PL.digest(ids),
-                         "step": None, "synthetic": True,
                          "frontier": {"num_tokens": int(T), "load_distribution": routing, "seed": int(seed)}}, ids))
     return out
+
+
+def timer_plan(model_key: str, branch: str, max_tokens: int = MAX_TOKENS, routing: str = "balanced") -> list:
+    """One pass's (cell, ids) pairs: EVERY grid point of the branch (no page, no budget), index = the marker's."""
+    pairs = grid_cells(model_key, branch_points(branch, max_tokens), routing)
+    if len(pairs) >= SINK_INDEX:
+        raise PL.KitError(f"{len(pairs)} points: the marker's gridY carries the index (at most {SINK_INDEX - 1})")
+    return pairs
+
+
+def clock_flag(lock_mhz, readings) -> str | None:
+    """None when every SM clock reading is within LOCK_TOL_MHZ of the lock (locked_r3's one step); else why."""
+    why = []
+    for r in readings:
+        if r is None:
+            why.append("no clock reading")
+        elif r < lock_mhz - LOCK_TOL_MHZ:
+            why.append(f"{r} MHz under the {lock_mhz} MHz lock")
+        elif r > lock_mhz + LOCK_TOL_MHZ:
+            why.append(f"{r} MHz over the {lock_mhz} MHz lock (the lock not in force)")
+    return "; ".join(why) or None
+
+
+def point_record(idx: int, cell: dict, lock_mhz, readings) -> dict:
+    """timer.json's row for point idx: the cell, its SM clock readings (before and after its timed calls) and its
+    flag (clock_flag: None when on the lock)."""
+    return {"idx": int(idx), **cell, "sm_mhz": list(readings), "off_lock": clock_flag(lock_mhz, readings)}
+
+
+# ------------------------------------------------------------------------------------------------------------
+# the timer (our vLLM interpreter, on the GPU, under nsys; module doc "PROFILER")
+# ------------------------------------------------------------------------------------------------------------
+
+def nvml_clock():
+    """A callable returning the SM clock in MHz (NVML, device 0, as serve_capture samples it), None if unreadable."""
+    try:
+        import pynvml as N
+        N.nvmlInit()
+        h = N.nvmlDeviceGetHandleByIndex(0)
+    except Exception:                                                # noqa: BLE001
+        return lambda: None
+
+    def read():
+        try:
+            return int(N.nvmlDeviceGetClockInfo(h, N.NVML_CLOCK_SM))
+        except Exception:                                            # noqa: BLE001
+            return None
+    return read
+
+
+def run_timer(model_key: str, branch: str, lock_mhz: int, out, *, routing: str = "balanced",
+              max_tokens: int = MAX_TOKENS, warmup: int = WARMUP_STEPS, repeats: int = ACTIVE_STEPS,
+              seed: int = 0, clock=None) -> dict:
+    """Every grid point of the branch in ONE process on weights built ONCE (module doc "PROFILER"); writes
+    OUT/timer.json (the points, their clocks, their flags). The times come from the nsys trace (fpoints)."""
+    import moe_capture as MC
+    import numpy as np
+    import private_weight_reference as PWR
+    import torch
+    from vllm.model_executor.layers.fused_moe import fused_experts
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+    cfg = PL.MODELS[model_key].cfg
+    pairs = timer_plan(model_key, branch, max_tokens, routing)
+    clock = clock or nvml_clock()
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    w1, w2, _bytes = PWR.build_private_weights(cfg, "bf16", 1, int(seed))
+    gen = torch.Generator(device="cuda").manual_seed(int(seed) + 1)
+    x_all = torch.randn((max(c["T"] for c, _i in pairs), cfg.hidden_size), device="cuda", dtype=w1.dtype,
+                        generator=gen)
+    act, buf, mark = MoEActivation("silu"), torch.zeros(1, dtype=torch.int32, device="cuda"), MC.step_kernel()
+    torch.cuda.synchronize()
+    doc = {"schema": TIMER_SCHEMA, "model": model_key, "branch": branch, "lock_mhz": int(lock_mhz),
+           "routing": routing, "max_tokens": int(max_tokens), "warmup": int(warmup), "repeats": int(repeats),
+           "seed": int(seed), "weights_build_s": time.perf_counter() - t0, "sink_index": SINK_INDEX,
+           "method": "Frontier's profile_fused_moe_kernel loop (eager, warm weights, warm-up then timed calls each "
+                     "synchronized); time = the kit's kernel-sum per timed call from the nsys trace",
+           "call": "vllm.model_executor.layers.fused_moe.fused_experts (functional), as replay C calls it",
+           "points": [], "verdict": "RUNNING"}
+    tf = out / "timer.json"
+    with torch.inference_mode():
+        for i, (c, ids_np) in enumerate(pairs):
+            mark[MC.step_grid(SINK_INDEX)](buf, SINK_INDEX)                  # the routing build + warm-up: the sink
+            ids = torch.as_tensor(np.asarray(ids_np), dtype=torch.int32).to("cuda")
+            w = torch.full(tuple(ids.shape), 1.0 / cfg.top_k, dtype=torch.float32, device="cuda")
+            x = x_all[:c["T"]].contiguous()
+
+            def call(x=x, w=w, ids=ids):
+                return fused_experts(hidden_states=x, w1=w1, w2=w2, topk_weights=w, topk_ids=ids, activation=act,
+                                     apply_router_weight_on_input=False, global_num_experts=cfg.num_experts,
+                                     expert_map=None)
+            for _ in range(int(warmup)):
+                call()
+            torch.cuda.synchronize()
+            pre = clock()
+            if i == 0:
+                doc["lock_readback_mhz"] = pre
+                why = clock_flag(lock_mhz, [pre])
+                if why:
+                    doc.update(verdict="FAIL", why=f"lock read back after the first warm-up: {why}")
+                    tf.write_text(json.dumps(doc, indent=1))
+                    raise PL.KitError(doc["why"])
+            mark[MC.step_grid(i)](buf, i)                                     # point i's own segment starts here
+            for _ in range(int(repeats)):
+                call()
+                torch.cuda.synchronize()                                      # Frontier: each timed step synced
+            post = clock()
+            doc["points"].append(point_record(i, c, lock_mhz, [pre, post]))
+    doc.update(verdict="PASS", wall_s=time.perf_counter() - t0,
+               off_lock_points=sum(1 for p in doc["points"] if p["off_lock"]))
+    tf.write_text(json.dumps(doc, indent=1))
+    return doc
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -240,37 +356,71 @@ def bm_ranges(model_key: str, max_tokens: int) -> list[list[int]]:
     return out
 
 
-def build_points(model_key: str, pages_root, max_tokens: int) -> dict:
-    """Every measured point of every page under pages_root (each page dir: sample.json + cells.json from
-    nsys_extract replay-cells), with its geometry. A page without cells.json was not measured (budget or failure)."""
+def timer_pass_points(model_key: str, timer_dir, *, events=None) -> dict:
+    """One timer pass: timer.json + its nsys export (timer.sqlite). Per point its OWN calls (the kernels after its
+    marker and before the next marker: nsys_extract.segment_marked; the sink's segment dropped), those on its
+    expected launch grids, each call's CORE kernel-sum (align..moe_sum, the API fills stripped and reported:
+    nsys_extract.replay_cells, the serving extraction's classifier); a point must have exactly `repeats` timed calls.
+    {"points": [...], "problems": [...]}."""
+    import nsys_extract as NX
     import r3_decode as RD
+    d = Path(timer_dir)
+    doc = json.loads((d / "timer.json").read_text())
+    if doc.get("schema") != TIMER_SCHEMA or doc.get("model") != model_key:
+        raise PL.KitError(f"{d}/timer.json: schema {doc.get('schema')!r}, model {doc.get('model')!r}")
+    if doc.get("verdict") != "PASS":
+        raise PL.KitError(f"{d}/timer.json: the timer did not finish ({doc.get('verdict')}: {doc.get('why', '')})")
+    if [p["idx"] for p in doc["points"]] != list(range(len(doc["points"]))):
+        raise PL.KitError(f"{d}/timer.json: point indices out of order")
+    if events is None:
+        events = NX.read_sqlite(d / "timer.sqlite")["events"]
+    marked = NX.segment_marked(events)
+    marked.pop(int(doc.get("sink_index", SINK_INDEX)), None)
     cfg = PL.MODELS[model_key].cfg
-    pts, pages, unmeasured = [], [], []
-    for d in sorted(Path(pages_root).iterdir()):
-        if not (d / "sample.json").is_file():
+    res = NX.replay_cells({"cells": doc["points"]}, marked, PL.MODELS[model_key])
+    by = {c["label"]: c for c in res["cells"]}
+    pts, problems = [], []
+    for p in doc["points"]:
+        m = by.get(p["label"])
+        if m is None:
+            problems.append(f"{p['label']}: no call of its own on its launch grids")
             continue
-        if not (d / "cells.json").is_file():
-            unmeasured.append(d.name)
+        if m["n"] != int(doc["repeats"]) or m["source"] != "eager":
+            problems.append(f"{p['label']}: {m['n']} {m['source']} timed calls, want {doc['repeats']} eager")
             continue
-        sample = json.loads((d / "sample.json").read_text())
-        meas = {c["label"]: c for c in json.loads((d / "cells.json").read_text())["cells"]}
-        pages.append(d.name)
-        for c in sample["cells"]:
-            m = meas.get(c["label"])
-            if m is None:
-                continue
-            g = RD.geometry(cfg, int(c["T"]), c["counts"])
-            pts.append({"label": c["label"], "page": d.name, "num_tokens": int(c["T"]), "counts": c["counts"],
-                        "load_distribution": c["frontier"]["load_distribution"], "seed": c["frontier"]["seed"],
-                        "block_size_m": int(g.bm), "num_tokens_post_padded": int(g.post_padded), "tile": g.tile,
-                        "kernel_sum_ms": m["kernel_sum_ms"], "n": m["n"], "kernel_count": m["kernel_count"],
-                        "fills_n": m.get("fills_n"), "fills_ms": m.get("fills_ms"), "source": m.get("source")})
+        g = RD.geometry(cfg, int(p["T"]), p["counts"])
+        pts.append({"label": p["label"], "pass": doc["branch"], "num_tokens": int(p["T"]), "counts": p["counts"],
+                    "load_distribution": p["frontier"]["load_distribution"], "seed": p["frontier"]["seed"],
+                    "block_size_m": int(g.bm), "num_tokens_post_padded": int(g.post_padded), "tile": g.tile,
+                    "kernel_sum_ms": m["kernel_sum_ms"], "n": m["n"], "kernel_count": m["kernel_count"],
+                    "fills_n": m.get("fills_n"), "fills_ms": m.get("fills_ms"), "source": m["source"],
+                    "lock_mhz": int(doc["lock_mhz"]), "sm_mhz": p["sm_mhz"], "off_lock": p["off_lock"]})
+    return {"points": pts, "problems": problems, "branch": doc["branch"], "lock_mhz": doc["lock_mhz"],
+            "repeats": doc["repeats"], "warmup": doc["warmup"], "planned": len(doc["points"])}
+
+
+def build_points(model_key: str, timer_dirs, max_tokens: int) -> dict:
+    """Every pass's points with their geometry, the grid's coverage (complete = all of token_grid measured) and the
+    off-lock count. A pass directory without timer.json was not measured."""
+    pts, passes, problems = [], [], []
+    for d in timer_dirs:
+        if not (Path(d) / "timer.json").is_file():
+            problems.append(f"{d}: no timer.json (the pass did not run)")
+            continue
+        r = timer_pass_points(model_key, d)
+        pts += r["points"]
+        problems += r["problems"]
+        passes.append({"dir": str(d), "branch": r["branch"], "lock_mhz": r["lock_mhz"], "planned": r["planned"],
+                       "measured": len(r["points"]), "warmup": r["warmup"], "repeats": r["repeats"]})
     if not pts:
-        raise PL.KitError(f"{pages_root}: no measured Frontier point")
+        raise PL.KitError(f"{[str(d) for d in timer_dirs]}: no measured Frontier point")
     grid = token_grid(max_tokens)
     have = {p["num_tokens"] for p in pts}
-    return {"schema": "moe-kernels/prod-frontier-points/1", "model": model_key, "max_tokens": int(max_tokens),
-            "grid_points": len(grid), "measured_points": len(have), "pages": pages, "unmeasured_pages": unmeasured,
+    missing = sorted(set(grid) - have)
+    return {"schema": "moe-kernels/prod-frontier-points/2", "model": model_key, "max_tokens": int(max_tokens),
+            "grid_points": len(grid), "measured_points": len(have), "missing_points": missing,
+            "complete": not missing, "passes": passes, "problems": problems,
+            "off_lock_points": sum(1 for p in pts if p["off_lock"]),
             "block_size_m_ranges": bm_ranges(model_key, max_tokens), "points": pts}
 
 
@@ -615,17 +765,21 @@ def _fr_python() -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("grid", "fsample", "fpoints", "write-config", *INNER, *INNER.values()):
+    for c in ("grid", "timer", "fpoints", "write-config", *INNER, *INNER.values()):
         p = sub.add_parser(c)
         p.add_argument("--model", default="ernie-4.5-21b-a3b", choices=sorted(PL.MODELS))
         p.add_argument("--src", default=os.environ.get("FRONTIER_SRC", ""))
         p.add_argument("--arm-label", default="cli")
         p.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
         p.add_argument("--branch", choices=("decode", "prefill"), default=None)
-        p.add_argument("--page", type=int, default=0)
-        p.add_argument("--pages", type=int, default=PAGES)
+        p.add_argument("--lock", type=int, default=None, help="timer: the branch clock in force (MHz)")
+        p.add_argument("--warmup", type=int, default=WARMUP_STEPS)
+        p.add_argument("--repeats", type=int, default=ACTIVE_STEPS)
+        p.add_argument("--seed", type=int, default=0)
         p.add_argument("--routing", choices=ROUTINGS, default="balanced")
-        p.add_argument("--pages-root", default=None)
+        p.add_argument("--timer", dest="timer_dirs", action="append", default=[], help="fpoints: a timer pass dir")
+        p.add_argument("--allow-partial", action="store_true",
+                       help="fpoints: write the CSV's points though grid points are missing (an operator's decision)")
         p.add_argument("--points", default=None)
         p.add_argument("--csv", default=None)
         p.add_argument("--models", dest="models_list", action="append", default=[], help="ARM=DIR (predict)")
@@ -639,24 +793,33 @@ def main(argv=None) -> int:
             g = token_grid(a.max_tokens)
             print(json.dumps({"max_tokens": a.max_tokens, "points": len(g), "grid": g}))
             return 0
-        if a.cmd == "fsample":
+        if a.cmd == "timer":
             if not a.branch or not a.out:
-                raise PL.KitError("fsample needs --branch and --out")
-            import replay as RP
-            Ts = page_points(a.branch, a.page, a.pages, a.max_tokens)
-            pairs = fsample_cells(a.model, Ts, a.routing)
-            p = RP.write_synthetic_sample(PL.MODELS[a.model], pairs, a.out, extra={
-                "frontier": {"branch": a.branch, "page": a.page, "pages": a.pages, "routing": a.routing,
-                             "max_tokens": a.max_tokens, "grid": "get_num_tokens_to_profile"}})
-            print(f"PASS frontier fsample: {a.branch} page {a.page}/{a.pages}: {len(pairs)} cells "
-                  f"(T {min(Ts)}..{max(Ts)}) -> {p}")
+                raise PL.KitError("timer needs --branch and --out")
+            lock = int(a.lock or BRANCH_LOCK[a.branch])
+            if lock != BRANCH_LOCK[a.branch]:
+                raise PL.KitError(f"--lock {lock}: the {a.branch} branch clock is {BRANCH_LOCK[a.branch]} MHz")
+            doc = run_timer(a.model, a.branch, lock, a.out, routing=a.routing, max_tokens=a.max_tokens,
+                            warmup=a.warmup, repeats=a.repeats, seed=a.seed)
+            print(f"PASS frontier timer: {a.branch} {len(doc['points'])} points at {lock} MHz (read back "
+                  f"{doc['lock_readback_mhz']}), {a.warmup} warm-up + {a.repeats} timed calls each, weights built "
+                  f"once in {doc['weights_build_s']:.1f} s, {doc['off_lock_points']} off-lock, {doc['wall_s']:.0f} s "
+                  f"-> {Path(a.out) / 'timer.json'}")
             return 0
         if a.cmd == "fpoints":
-            doc = build_points(a.model, a.pages_root, a.max_tokens)
+            if not a.timer_dirs or not a.out:
+                raise PL.KitError("fpoints needs --timer DIR (one per pass) and --out")
+            doc = build_points(a.model, [Path(d) for d in a.timer_dirs], a.max_tokens)
             Path(a.out).write_text(json.dumps(doc, indent=1))
-            print(f"PASS frontier points: {len(doc['points'])} rows, {doc['measured_points']} of {doc['grid_points']} "
-                  f"grid points, pages {doc['pages']} (unmeasured: {doc['unmeasured_pages']}) -> {a.out}")
-            return 0
+            ok = doc["complete"] or a.allow_partial
+            print(f"{'PASS' if ok else 'FAIL'} frontier points: {len(doc['points'])} rows, {doc['measured_points']} "
+                  f"of {doc['grid_points']} grid points" + (f" (missing {doc['missing_points'][:8]})"
+                                                            if doc["missing_points"] else "")
+                  + f", {doc['off_lock_points']} off-lock, problems {doc['problems'][:3]} -> {a.out}")
+            if not ok:
+                print("FAIL frontier points: Frontier's training data must cover its full grid (owner decision "
+                      "2026-11-19); --allow-partial only by an operator's decision")
+            return 0 if ok else 3
         if a.cmd == "write-config":
             print(f"PASS frontier config: {write_config(a.model, a.src)}")
             return 0

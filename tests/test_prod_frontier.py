@@ -1,7 +1,8 @@
 """scripts/prod/frontier_op.py off the GPU (Frontier itself is never executed on the laptop; owner decision 2026-11-19:
-its predictor, our profiles): Frontier's token grid and round-robin routing, the pages and their order, the samples the
-replay times, the points and their geometry, the CSV in Frontier's MoE schema, the trainer's command line and its one
-shim, the batch predictions, the hold-out split and the dry run."""
+its predictor, our profiles): Frontier's token grid and round-robin routing, the timer's plan (the FULL grid, every
+point, no budget), the marker-based per-point segmentation of a synthetic timer trace, the clock flags, the points and
+their geometry, the CSV in Frontier's MoE schema, the trainer's command line and its one shim, the batch predictions,
+the hold-out split and the dry run."""
 from __future__ import annotations
 
 import json
@@ -14,13 +15,14 @@ import numpy as np
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-for _p in (REPO, REPO / "scripts", REPO / "scripts" / "prod"):
+for _p in (REPO, REPO / "scripts", REPO / "scripts" / "prod", REPO / "tests"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import frontier_op as FO  # noqa: E402
+import moe_capture as MC  # noqa: E402
+import prod_fakes as F  # noqa: E402
 import prodlib as PL  # noqa: E402
-import replay as RP  # noqa: E402
 
 #: frontier/moe_load_imbalance.py MOE_LOAD_IMBALANCE_FEATURES at db5a85b (the trainer's 14 grouped-GEMM features)
 FRONTIER_FEATURES = ("total_routed_tokens", "num_experts_per_device", "hidden_dim", "expert_hidden_dim", "router_topk",
@@ -61,64 +63,159 @@ def test_routing_is_frontiers_round_robin_uniform_topk():
     assert all(len(set(r)) == 6 for r in big.tolist())
 
 
-def test_pages_partition_the_grid_and_their_order_is_bit_reversed():
-    assert FO.page_order(16) == [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15] and FO.page_order(1) == [0]
+def test_the_timer_plan_is_the_full_grid_every_point_once_at_its_branch_clock():
+    """Owner decision 2026-11-19: Frontier's training data covers its FULL grid (387 points to 16384), no page, no
+    budget; decode points (T <= 128) in the 1710 MHz pass, prefill in the 1410 pass, each in Frontier's order."""
+    dec = FO.timer_plan("ernie-4.5-21b-a3b", "decode")
+    pre = FO.timer_plan("ernie-4.5-21b-a3b", "prefill")
+    Ts = [c["T"] for c, _i in dec + pre]
+    assert len(dec) == 19 and len(pre) == 368 and len(Ts) == 387 == len(set(Ts))
+    assert Ts == [T for T in FO.token_grid(16384) if T <= 128] + [T for T in FO.token_grid(16384) if T > 128] \
+        and Ts[:19] == sorted(Ts[:19], reverse=True)                     # Frontier's order (descending) per pass
+    assert sorted(Ts) == sorted(FO.token_grid(16384))
+    assert all(c["branch"] == "decode" for c, _i in dec) and all(c["branch"] == "prefill" for c, _i in pre)
+    assert FO.BRANCH_LOCK == {"decode": 1710, "prefill": 1410}
+    assert (FO.WARMUP_STEPS, FO.ACTIVE_STEPS) == (2, 20)                   # Frontier's moe_wrapper.py:46-47
+    assert MC.step_grid(FO.SINK_INDEX)[1] == 65535 and FO.SINK_INDEX > len(pre)
+    c, ids = pre[-1]
+    assert c["label"] == "f136" and ids.shape == (136, 6) and c["counts"] == PL.counts_from_ids(ids, 64)
+    assert c["frontier"] == {"num_tokens": 136, "load_distribution": "balanced", "seed": 0}
+    assert len(FO.timer_plan("ernie-4.5-21b-a3b", "decode", 256, "uniform")) == 3 * 19
     with pytest.raises(PL.KitError):
-        FO.page_order(12)
-    dec = FO.page_points("decode", 0, 16, 16384)
-    assert dec == [1, 2, 4] + list(range(8, 129, 8)) and len(dec) == 19
-    pre = [FO.page_points("prefill", j, 16, 16384) for j in range(16)]
-    flat = sorted(t for p in pre for t in p)
-    assert flat == FO.branch_points("prefill", 16384) and len(flat) + len(dec) == 387
-    # the first four pages in order cover every 4th prefill point
-    first4 = sorted(t for j in FO.page_order(16)[:4] for t in pre[j])
-    assert first4 == FO.branch_points("prefill", 16384)[::4]
-    with pytest.raises(PL.KitError):
-        FO.page_points("decode", 1, 16, 16384)
+        FO.grid_cells("ernie-4.5-21b-a3b", [8], "zipf")
 
 
-def test_fsample_writes_a_sample_the_replay_loads(tmp_path):
-    pairs = FO.fsample_cells("ernie-4.5-21b-a3b", FO.page_points("prefill", 3, 16, 16384), "balanced")
-    p = RP.write_synthetic_sample(PL.MODELS["ernie-4.5-21b-a3b"], pairs, tmp_path, extra={"frontier": {"page": 3}})
-    page, ids = RP.load_sample(p, PL.MODELS["ernie-4.5-21b-a3b"], "prefill")       # V-BIN on load passes
-    assert [c.label for c in page.cells] == [f"f{T}" for T in FO.page_points("prefill", 3, 16, 16384)]
-    doc = json.loads(p.read_text())
-    assert all(c["synthetic"] and c["g"] is None and c["frontier"]["load_distribution"] == "balanced"
-               for c in doc["cells"])
-    assert ids["f160"].shape == (160, 6)
-    with pytest.raises(PL.KitError):
-        FO.fsample_cells("ernie-4.5-21b-a3b", [8], "zipf")
+def test_clock_flags_mark_a_point_off_the_lock_by_more_than_one_step():
+    assert FO.clock_flag(1710, [1710, 1710]) is None and FO.clock_flag(1410, [1395, 1425]) is None
+    assert "under the 1710 MHz lock" in FO.clock_flag(1710, [1710, 1680])
+    assert "over the 1410 MHz lock" in FO.clock_flag(1410, [1440, 1410])
+    assert FO.clock_flag(1410, [None, 1410]) == "no clock reading"
+    r = FO.point_record(3, {"label": "f8", "T": 8}, 1710, [1710, 1650])
+    assert r["idx"] == 3 and r["sm_mhz"] == [1710, 1650] and "1650 MHz under" in r["off_lock"]
 
 
-def _fake_page(root, name, branch, Ts, model="ernie-4.5-21b-a3b", measured=True):
-    d = root / name
-    pairs = FO.fsample_cells(model, Ts, "balanced")
-    RP.write_synthetic_sample(PL.MODELS[model], pairs, d)
-    if measured:
-        cells = [{"label": c["label"], "T": c["T"], "n": 24, "kernel_count": 6, "fills_n": 9, "fills_ms": 0.01,
-                  "source": "graph", "kernel_sum_ms": {"median": 0.01 * c["T"] ** 0.5, "mean": 0.01, "min": 0.009,
-                                                       "max": 0.02, "std": 0.001}} for c, _i in pairs]
-        (d / "cells.json").write_text(json.dumps({"cells": cells}))
-    return d
+def _timer_pass(root, branch, *, max_tokens=16384, warmup=1, repeats=3, model="ernie-4.5-21b-a3b", readings=None,
+                drop_marker=(), drop_sink=()):
+    """The timer.json and the nsys sqlite a timer pass leaves (run_timer's launch order, eager): per point the sink
+    marker, the routing build and `warmup` calls, the point's marker (gridY = index + 1), `repeats` calls; every
+    call through the functional API (9 fill kernels before align)."""
+    cfg = PL.MODELS[model].cfg
+    lock = FO.BRANCH_LOCK[branch]
+    d = root / f"timer-{branch}"
+    d.mkdir(parents=True)
+    ev, expect, pts, t = [], {}, [], 1_000_000
+
+    def mark(i):
+        nonlocal t
+        ev.append({"start": t, "end": t + 1000, "stream": F.STREAM, "name": F.NAMES["stepmark"], "gx": 1,
+                   "gy": MC.step_grid(i)[1], "kind": "kernel", "role": "stepmark"})
+        t += 1500
+    for i, (c, ids) in enumerate(FO.timer_plan(model, branch, max_tokens)):
+        call = {"n": c["T"], "ids": ids, "layer": 0}
+        if i not in drop_sink:
+            mark(FO.SINK_INDEX)
+        for _ in range(warmup):
+            e, t, _x = F.call_events(cfg, call, t, drop_marker=True, api_fills=9)
+            ev += [dict(x, start=x["start"], end=x["end"] + 3000) for x in e]   # warm-up: other durations
+        if i not in drop_marker:
+            mark(i)
+        for _ in range(repeats):
+            e, t, x = F.call_events(cfg, call, t, drop_marker=True, api_fills=9)
+            ev += e
+        expect[c["label"]] = x
+        pts.append(FO.point_record(i, c, lock, (readings or {}).get(i, [lock, lock])))
+    doc = {"schema": FO.TIMER_SCHEMA, "model": model, "branch": branch, "lock_mhz": lock, "routing": "balanced",
+           "max_tokens": max_tokens, "warmup": warmup, "repeats": repeats, "seed": 0, "sink_index": FO.SINK_INDEX,
+           "points": pts, "verdict": "PASS"}
+    (d / "timer.json").write_text(json.dumps(doc))
+    F.write_sqlite(d / "timer.sqlite", ev, [], eager=True)
+    return d, expect
 
 
-def test_points_carry_vllms_geometry_and_skip_unmeasured_pages(tmp_path):
-    _fake_page(tmp_path, "decode-00", "decode", [1, 2, 8, 128])
-    _fake_page(tmp_path, "prefill-00", "prefill", [136, 2048])
-    _fake_page(tmp_path, "prefill-08", "prefill", [264], measured=False)
-    doc = FO.build_points("ernie-4.5-21b-a3b", tmp_path, 4096)
-    assert doc["pages"] == ["decode-00", "prefill-00"] and doc["unmeasured_pages"] == ["prefill-08"]
-    assert doc["measured_points"] == 6 and doc["grid_points"] == len(FO.token_grid(4096))
+def test_each_point_gets_exactly_its_own_timed_calls_by_its_marker(tmp_path):
+    """The point's marker (gridY = index + 1) opens its segment, the next point's SINK marker closes it: the
+    warm-up calls (longer here) and the routing build never count; the time is the core kernel-sum per call
+    (align..moe_sum, the functional API's 9 fills stripped and reported), n = the timed calls."""
+    d, expect = _timer_pass(tmp_path, "decode", max_tokens=64, repeats=4)
+    r = FO.timer_pass_points("ernie-4.5-21b-a3b", d)
+    assert r["problems"] == [] and len(r["points"]) == r["planned"] == 11
+    for p in r["points"]:
+        x = expect[p["label"]]
+        assert p["n"] == 4 and p["source"] == "eager" and p["fills_n"] == 9
+        assert round(p["kernel_sum_ms"]["median"] * 1e6) == x["kernel_sum_ns"]           # not the warm-up's
+        assert p["kernel_sum_ms"]["max"] == p["kernel_sum_ms"]["min"]
+        assert math.isclose(p["fills_ms"], x["fills_ns"] / 1e6) and p["off_lock"] is None and p["lock_mhz"] == 1710
+    # a point whose marker is missing has no calls of its own; the point before it then holds two points' calls
+    d2, _x = _timer_pass(tmp_path / "b", "decode", max_tokens=64, repeats=4, drop_marker=(3,))
+    bad = FO.timer_pass_points("ernie-4.5-21b-a3b", d2)
+    assert len(bad["points"]) <= 10 and any(s.startswith("f40:") for s in bad["problems"])
+    # the sink marker keeps the next point's warm-up out of a point's segment (before any grid filter): with it
+    # every segment holds exactly the 4 timed calls; without it the segment also holds the next warm-up call
+    import nsys_extract as NX
+    seg = NX.segment_marked(NX.read_sqlite(d / "timer.sqlite")["events"])
+    assert sorted(k for k in seg if k != FO.SINK_INDEX) == list(range(11))
+    assert all(len(seg[i]) == 4 for i in range(11))
+    d3, _x = _timer_pass(tmp_path / "c", "decode", max_tokens=64, repeats=4, drop_sink=tuple(range(1, 11)))
+    seg3 = NX.segment_marked(NX.read_sqlite(d3 / "timer.sqlite")["events"])
+    assert [len(seg3[i]) for i in range(11)] == [5] * 10 + [4]
+
+
+def test_off_lock_points_are_flagged_and_counted_not_dropped(tmp_path):
+    d, _x = _timer_pass(tmp_path, "decode", max_tokens=32, readings={2: [1710, 1665], 4: [None, 1710]})
+    doc = FO.build_points("ernie-4.5-21b-a3b", [d], 32)
+    flagged = {p["label"]: p["off_lock"] for p in doc["points"] if p["off_lock"]}
+    assert doc["off_lock_points"] == 2 and set(flagged) == {"f16", "f4"} and "1665 MHz under" in flagged["f16"]
+    assert len(doc["points"]) == len(FO.token_grid(32)) and doc["complete"]
+    assert all(p["sm_mhz"] == [1710, 1710] for p in doc["points"] if not p["off_lock"])
+
+
+def test_the_full_grid_is_measured_and_every_point_is_in_the_csv(tmp_path, fake_frontier, capsys):
+    """Grid completeness: two passes, 19 + 368 points, all 387 of get_num_tokens_to_profile(16384) in points.json
+    and in moe_kernel_only.csv; fpoints refuses a missing pass (no budgeted subset) unless --allow-partial."""
+    import pandas as pd
+    dd, _x = _timer_pass(tmp_path, "decode", repeats=2)
+    dp, _x = _timer_pass(tmp_path, "prefill", repeats=2)
+    out = tmp_path / "points.json"
+    assert FO.main(["fpoints", "--model", "ernie-4.5-21b-a3b", "--timer", str(dd), "--timer", str(dp),
+                    "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["complete"] and doc["grid_points"] == doc["measured_points"] == 387 and doc["missing_points"] == []
+    assert [p["measured"] for p in doc["passes"]] == [19, 368] and doc["problems"] == []
+    assert FO.main(["_csv", "--model", "ernie-4.5-21b-a3b", "--points", str(out), "--out", str(tmp_path / "prof")]) == 0
+    df = pd.read_csv(tmp_path / "prof" / FO.csv_relpath("ernie-4.5-21b-a3b"))
+    assert len(df) == 387 and list(df["num_tokens"]) == FO.token_grid(16384)
+    assert df[FO.TIME_COL].notna().all() and (df["time_stats.moe_grouped_gemm.count"] == 2).all()
+    capsys.readouterr()
+    assert FO.main(["fpoints", "--model", "ernie-4.5-21b-a3b", "--timer", str(dd), "--timer", str(tmp_path / "nope"),
+                    "--out", str(out)]) == 3
+    o = capsys.readouterr().out
+    assert "FAIL frontier points: 19 rows, 19 of 387 grid points" in o and "must cover its full grid" in o
+    doc = json.loads(out.read_text())
+    assert not doc["complete"] and len(doc["missing_points"]) == 368 and "did not run" in doc["problems"][0]
+    assert FO.main(["fpoints", "--model", "ernie-4.5-21b-a3b", "--timer", str(dd), "--timer", str(tmp_path / "nope"),
+                    "--out", str(out), "--allow-partial"]) == 0
+
+
+def test_points_carry_vllms_geometry(tmp_path):
+    d, _x = _timer_pass(tmp_path, "decode", max_tokens=4096, repeats=1)
+    dp, _x = _timer_pass(tmp_path, "prefill", max_tokens=1024, repeats=1)
+    doc = FO.build_points("ernie-4.5-21b-a3b", [d, dp], 4096)
+    assert not doc["complete"] and doc["grid_points"] == len(FO.token_grid(4096))
     r = doc["block_size_m_ranges"]
     assert r[0][0] == 1 and r[-1][1] == 4096 and all(a[1] + 1 == b[0] for a, b in zip(r, r[1:]))
-    by = {p["num_tokens"]: p for p in doc["points"]}
-    for T, p in by.items():
+    for p in doc["points"]:
+        T = p["num_tokens"]
         bm = next(x[2] for x in r if x[0] <= T <= x[1])
         assert p["block_size_m"] == bm and int(PL.tile_bin(T).split("x")[0]) == bm
         if T > 2:                                                      # the aligned path: sum ceil(c/BM) BM
             assert p["num_tokens_post_padded"] == PL.post_padded(p["counts"], bm)
     with pytest.raises(PL.KitError):
-        FO.build_points("ernie-4.5-21b-a3b", tmp_path / "prefill-08", 4096)
+        FO.build_points("ernie-4.5-21b-a3b", [tmp_path / "none"], 4096)
+    bad = json.loads((d / "timer.json").read_text())
+    bad["verdict"] = "FAIL"
+    (d / "timer.json").write_text(json.dumps(bad))
+    with pytest.raises(PL.KitError):
+        FO.timer_pass_points("ernie-4.5-21b-a3b", d)
 
 
 FAKE_LI = '''
@@ -163,14 +260,14 @@ def fake_frontier(tmp_path, monkeypatch):
 
 def test_the_csv_is_frontiers_moe_schema_with_the_untimed_operators_empty(tmp_path, fake_frontier):
     import pandas as pd
-    _fake_page(tmp_path / "pts", "decode-00", "decode", [1, 8, 128])
-    _fake_page(tmp_path / "pts", "prefill-00", "prefill", [256, 1024])
-    doc = FO.build_points("ernie-4.5-21b-a3b", tmp_path / "pts", 2048)
+    dd, _x = _timer_pass(tmp_path / "pts", "decode", max_tokens=16, repeats=2)
+    dp, _x = _timer_pass(tmp_path / "pts", "prefill", max_tokens=144, repeats=2)
+    doc = FO.build_points("ernie-4.5-21b-a3b", [dd, dp], 2048)
     (tmp_path / "points.json").write_text(json.dumps(doc))
     a = types.SimpleNamespace(points=str(tmp_path / "points.json"), model="ernie-4.5-21b-a3b", out=str(tmp_path / "prof"))
     assert FO._csv(a) == 0
     df = pd.read_csv(tmp_path / "prof" / FO.csv_relpath("ernie-4.5-21b-a3b"))
-    assert list(df["num_tokens"]) == [1024, 256, 128, 8, 1]               # Frontier's order (descending)
+    assert list(df["num_tokens"]) == [144, 136, 16, 8, 4, 2, 1]           # Frontier's order (descending)
     for op in FO.MOE_OPERATORS:                                              # the trainer's required targets
         assert f"time_stats.{op}.median" in df.columns
     for op in ("moe_gating_linear", "moe_gating_routing_topk", "moe_shuffling"):

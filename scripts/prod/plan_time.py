@@ -1,7 +1,7 @@
 """main.sh's expected wall time: the smoke rental's MEASURED step seconds (OLMoE-1B-7B, GH200, 2026-11-19), scaled to
 ERNIE-4.5-21B-A3B where the work scales. Planning numbers, not measurements; main.sh's dry run prints them.
 
-    python scripts/prod/plan_time.py [--levels 1,8,24,48,80,112,256,1024x3] [--n 8] [--frontier-budget 2700] [--json]
+    python scripts/prod/plan_time.py [--levels 1,8,24,48,80,112,256,1024x3] [--n 8] [--json]
 
 THE SCALING RULES (each line of the plan names its basis):
   ERNIE / OLMoE    expert bytes 23.6 / 12.6 MB = 1.875 (prodlib.expert_bytes), MoE layers 27 / 16; serving work per
@@ -16,9 +16,11 @@ THE SCALING RULES (each line of the plan names its basis):
   replay C         the registered budget (replay.py budget_quota): per branch the probe (PROBE_PER_TILE cells per tile
                    at the scaled smoke walls) plus the rest, which spends (REPLAY_BUDGET_S - probe) / WALL_SAFETY when
                    the walls are right.
-  Frontier pages   each cell at the smoke's measured repeats-1 nsys replay wall (prefill a + b T) or repeats-3 wall
-                   (decode), x 1.875, plus the step overhead; pages run while elapsed + the dearest page so far fit the
-                   budget (main.sh fr_page_step), simulated here in PAGE_ORDER.
+  Frontier timer   every grid point (387, no budget), per branch pass: the process start, the weight build and the
+                   Triton compiles (ASSUMED once per pass) + per point (warm-up + timed calls) x the call's wall
+                   (the larger of the eager host time per call, ASSUMED, and the call's GPU time: the smoke's replay C
+                   per-call medians, OLMoE at the branch clock, x 1.875) + a per-point overhead (ASSUMED); the nsys
+                   export by the kernel count against the smoke's; the extraction (fpoints) ASSUMED.
   ASSUMED          steps the smoke did not time (env-preflight, pushes, the ERNIE weight download, Frontier's venv
                    build and trainer): stated as assumptions.
 """
@@ -58,11 +60,23 @@ WALL_DECODE_R3, WALL_DECODE_R1 = 7.08, 3.99
 WALL_PREFILL_R1 = (4.156, 2.164e-3)
 REPLAY_STEP_OVERHEAD_S = 15
 CLOCK_DEFAULT_MHZ = 1980
+#: the call's GPU time (ms, OLMoE-1B-7B, one cold call of the GRR replay) from the smoke's replay C cells.csv ms_p50:
+#: decode (1710 MHz) 0.04 ms at T 1-2 (the naive path) and 0.21-0.26 ms at T 16-128; prefill (1410 MHz) 0.26 ms at
+#: T 152-272, 0.47 at 1262, 0.67 at 2048, 4.15 at 16384: priced as max(floor, a + b T)
+CALL_MS_DECODE = 0.26
+CALL_MS_PREFILL = (0.17, 2.43e-4, 0.26)
+#: smoke nsys export: 12 s for the smoke's A run (11922 steps x 16 MoE calls, ~6 core kernels per call + the rest of
+#: the step); the timer's calls carry ~15 kernels each (the functional API's ~9 fills): priced per kernel, floor 10 s
+SMOKE_EXPORT_KERNELS = SMOKE_STEPS * SMOKE_LAYERS * 12
 #: assumptions (not timed by the smoke)
 ASSUMED = {"env-preflight": 120, "revision-pinned": 5, "push-small": 60, "push-big": 120,
            "ernie-download": 220,        # 43.7 GB of bf16 weights at an assumed 200 MB/s
-           "frontier-setup": 300, "frontier-train": 180, "frontier-predict": 600, "frontier-points": 20,
-           "frontier-csv": 20, "grid-check": 20}
+           "frontier-setup": 300, "frontier-train": 180, "frontier-predict": 600, "frontier-points": 60,
+           "frontier-csv": 20, "grid-check": 20,
+           # the timer: interpreter + vLLM import + weights built once + Triton's compiles, per pass; the eager host
+           # time of one functional fused_experts call under nsys CUDA tracing (~15 launches) plus its synchronize;
+           # per point: the routing build, the synchronizes and two NVML reads
+           "frontier-timer-start": 120, "frontier-timer-host-call-ms": 1.0, "frontier-timer-point-ms": 30.0}
 
 
 def ernie_scale(model: str = "ernie-4.5-21b-a3b", smoke: str = "olmoe-1b-7b") -> tuple[float, float]:
@@ -119,29 +133,30 @@ def replay_branch_s(branch: str, model: str = "ernie-4.5-21b-a3b") -> dict:
     return {"probe_s": probe, "rest_s": rest, "rest_cells": cells, "per_cell_s": per}
 
 
-def frontier_pages(budget: float, pages: int = FO.PAGES, max_tokens: int = FO.MAX_TOKENS) -> dict:
-    """Each page's expected seconds and the pages the budget admits (main.sh fr_page_step's rule)."""
+def call_ms(T: int) -> float:
+    """The call's GPU ms on ERNIE at its branch clock (the smoke's replay C per-call medians x 1.875)."""
     eb, _w = ernie_scale()
-    cost = {("decode", 0): eb * WALL_DECODE_R3 * len(FO.page_points("decode", 0, pages, max_tokens))
-            + REPLAY_STEP_OVERHEAD_S + 10}
-    a, b = WALL_PREFILL_R1
-    for pg in range(pages):
-        Ts = FO.page_points("prefill", pg, pages, max_tokens)
-        cost[("prefill", pg)] = eb * sum(a + b * T for T in Ts) + REPLAY_STEP_OVERHEAD_S + 20
-    order = [("decode", 0)] + [("prefill", pg) for pg in FO.page_order(pages)]
-    t, dearest, run = 0.0, 0.0, []
-    for key in order:
-        if run and t + dearest > budget:
-            break
-        run.append(key)
-        t += cost[key]
-        dearest = max(dearest, cost[key])
-    return {"cost": cost, "run": run, "spent_s": t,
-            "points": sum(len(FO.page_points(b_, p_, pages, max_tokens)) for b_, p_ in run)}
+    if T <= 128:
+        return eb * CALL_MS_DECODE
+    a, b, floor = CALL_MS_PREFILL
+    return eb * max(floor, a + b * T)
 
 
-def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, frontier_budget: float = 2700,
-         model: str = "ernie-4.5-21b-a3b") -> dict:
+def frontier_timer(max_tokens: int = FO.MAX_TOKENS, warmup: int = FO.WARMUP_STEPS,
+                   repeats: int = FO.ACTIVE_STEPS) -> dict:
+    """Per branch pass: {"points", "timer_s", "export_s", "calls"} for every grid point (no budget)."""
+    out = {}
+    for b in ("decode", "prefill"):
+        Ts = FO.branch_points(b, max_tokens)
+        per = sum((warmup + repeats) * max(ASSUMED["frontier-timer-host-call-ms"], call_ms(T))
+                  + ASSUMED["frontier-timer-point-ms"] for T in Ts) / 1e3
+        calls = len(Ts) * (warmup + repeats)
+        out[b] = {"points": len(Ts), "calls": calls, "timer_s": ASSUMED["frontier-timer-start"] + per,
+                  "export_s": max(10.0, SMOKE_S["nsys-export"] * calls * 15 / SMOKE_EXPORT_KERNELS)}
+    return out
+
+
+def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "ernie-4.5-21b-a3b") -> dict:
     """[(block, step, seconds, basis)] in main.sh's order, with the totals."""
     eb, work = ernie_scale(model)
     sv = serving(levels, n)
@@ -190,14 +205,17 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, frontier_budge
             f"(REPLAY_BUDGET_S - probe) / {RP.WALL_SAFETY} (the registered budget, walls right)")
     add("M6", "unlock-after-replay", 1, "trivial")
     add("M6", "push-replay", ASSUMED["push-small"], "assumed")
-    fp = frontier_pages(frontier_budget)
+    ft = frontier_timer()
     add("M7", "frontier-setup", ASSUMED["frontier-setup"], "assumed (uv, the vLLM closure cached by setup_vm)")
     add("M7", "frontier-grid-check", ASSUMED["grid-check"], "assumed")
-    order = [("decode", 0)] + [("prefill", pg) for pg in FO.page_order(FO.PAGES)]
-    for key in order:
-        ran = key in fp["run"]
-        add("M7", f"frontier-page-{key[0]}-{key[1]:02d}", fp["cost"][key] if ran else 0,
-            ("smoke replay walls x 1.875" if ran else "budget: not run"))
+    for b in ("decode", "prefill"):
+        add("M7", f"frontier-timer-lock-{b}", 1, "trivial")
+        add("M7", f"frontier-timer-{b}", ft[b]["timer_s"],
+            f"start {ASSUMED['frontier-timer-start']} s (assumed) + {ft[b]['points']} points x "
+            f"{FO.WARMUP_STEPS}+{FO.ACTIVE_STEPS} calls x max(host {ASSUMED['frontier-timer-host-call-ms']} ms "
+            "(assumed), smoke call ms x 1.875)")
+        add("M7", f"frontier-timer-export-{b}", ft[b]["export_s"], f"smoke export x kernels ({ft[b]['calls']} calls)")
+    add("M7", "frontier-timer-unlock", 1, "trivial")
     add("M7", "frontier-points", ASSUMED["frontier-points"], "assumed")
     add("M7", "frontier-csv", ASSUMED["frontier-csv"], "assumed")
     for s in ("frontier-train", "frontier-holdout", "frontier-simpath"):
@@ -238,8 +256,8 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, frontier_budge
         blocks[blk] = blocks.get(blk, 0.0) + sec
     total = sum(blocks.values())
     return {"steps": out, "blocks": blocks, "total_s": total, "total_h": total / 3600, "serving": sv,
-            "frontier": {"budget_s": frontier_budget, "pages_run": len(fp["run"]), "points": fp["points"],
-                         "grid_points": len(FO.token_grid()), "spent_s": fp["spent_s"]},
+            "frontier": {"points": sum(v["points"] for v in ft.values()), "grid_points": len(FO.token_grid()),
+                         "timer_s": sum(v["timer_s"] + v["export_s"] for v in ft.values())},
             "levels": levels, "n": n}
 
 
@@ -247,10 +265,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--levels", default="1,8,24,48,80,112,256,1024x3")
     ap.add_argument("--n", type=int, default=8)
-    ap.add_argument("--frontier-budget", type=float, default=2700)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    p = plan(a.levels, a.n, a.frontier_budget)
+    p = plan(a.levels, a.n)
     if a.json:
         print(json.dumps(p, indent=1))
         return 0
@@ -259,8 +276,8 @@ def main(argv=None) -> int:
     print("PLAN per tile (estimator): " + ", ".join(f"{k} {v}" for k, v in p["serving"]["per_tile"].items()))
     print("PLAN blocks: " + ", ".join(f"{k} {v / 60:.1f} min" for k, v in p["blocks"].items()))
     fr = p["frontier"]
-    print(f"PLAN Frontier: {fr['pages_run']} pages, {fr['points']} of {fr['grid_points']} grid points, "
-          f"{fr['spent_s']:.0f} s of the {fr['budget_s']:.0f} s budget")
+    print(f"PLAN Frontier: {fr['points']} of {fr['grid_points']} grid points (the full grid), timer + export "
+          f"{fr['timer_s']:.0f} s")
     print(f"PLAN EXPECTED TOTAL {p['total_s']:.0f} s = {p['total_h']:.2f} h (levels {p['levels']}, N {p['n']})")
     return 0
 
