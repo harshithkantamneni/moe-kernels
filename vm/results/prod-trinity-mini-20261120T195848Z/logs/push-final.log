@@ -1,1 +1,2 @@
 PASS trace-manifest: 14 file(s), 2.88 GB under /home/ubuntu/moe/traces/prod-trinity-mini-20261120T195848Z -> /home/ubuntu/moe/results/prod-trinity-mini-20261120T195848Z/traces.sha256.json
+[push] pushed e45b183 to run-gh200-blind-glm-4-7-flash-trinity-mini-20261120t195848z: prod blind trinity-mini: measured, Frontier predicted, scored on the VM (v8, v9, Frontier)
