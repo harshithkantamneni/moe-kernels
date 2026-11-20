@@ -10,3 +10,4 @@
 2026-11-20T07:47:31Z main.sh exit 0: final push
 2026-11-20T08:00:32Z prod extras: X1 noise floor (A1710r)
 2026-11-20T08:04:19Z prod extras: X2 ncu bytes
+2026-11-20T08:07:21Z prod extras: X3 Qwen3 gate

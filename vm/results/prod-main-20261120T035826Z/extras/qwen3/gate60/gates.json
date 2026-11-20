@@ -1,0 +1,20 @@
+{
+  "G-REV": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-CFG": {
+    "verdict": "FAIL",
+    "why": "config.json num_experts=None, the kit's num_experts=128"
+  },
+  "G-BACKEND": {
+    "verdict": "PASS",
+    "backends": [
+      "TRITON"
+    ],
+    "experts_cls": [
+      "TritonExperts"
+    ],
+    "why": ""
+  }
+}

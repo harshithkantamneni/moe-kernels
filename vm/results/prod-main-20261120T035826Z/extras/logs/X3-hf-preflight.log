@@ -1,0 +1,13 @@
+SKIP P1 git: --skip
+SKIP P2 idle: --skip
+SKIP P3 power: --skip
+SKIP P4 locks: --skip
+SKIP P5 tmpdir: --skip
+SKIP P6 tools: --skip
+SKIP P7 nsys: --skip
+PASS P8 hf-rev: Qwen/Qwen3-30B-A3B resolves to the pin ad44e777bcd18fa416d9da3bd8f70d33ebb85d39
+SKIP P9 frontier: --skip
+PASS P10 disk: 4080 GB free under /home/ubuntu/moe
+SKIP P11 setup: --skip
+PASS P12 hf-rate: measured 487 MB/s (1007 MB in 2.1 s); the weights (61.1 GB) would take ~125 s
+PASS env-preflight

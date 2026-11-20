@@ -1,0 +1,79 @@
+{
+  "schema": "moe-kernels/prod-env-preflight/1",
+  "model": "qwen3-30b-a3b",
+  "checks": [
+    {
+      "id": "P1",
+      "what": "git",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P2",
+      "what": "idle",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P3",
+      "what": "power",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P4",
+      "what": "locks",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P5",
+      "what": "tmpdir",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P6",
+      "what": "tools",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P7",
+      "what": "nsys",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P8",
+      "what": "hf-rev",
+      "verdict": "PASS",
+      "detail": "Qwen/Qwen3-30B-A3B resolves to the pin ad44e777bcd18fa416d9da3bd8f70d33ebb85d39"
+    },
+    {
+      "id": "P9",
+      "what": "frontier",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P10",
+      "what": "disk",
+      "verdict": "PASS",
+      "detail": "4080 GB free under /home/ubuntu/moe"
+    },
+    {
+      "id": "P11",
+      "what": "setup",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P12",
+      "what": "hf-rate",
+      "verdict": "PASS",
+      "detail": "measured 487 MB/s (1007 MB in 2.1 s); the weights (61.1 GB) would take ~125 s"
+    }
+  ],
+  "pass": true
+}

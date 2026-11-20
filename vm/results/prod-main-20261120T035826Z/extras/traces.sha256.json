@@ -22,7 +22,12 @@
    "bytes": 1097,
    "mtime_ns": 1795161812822170059,
    "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
+  },
+  "qwen3/gate60/serve.nsys-rep": {
+   "bytes": 21059785,
+   "mtime_ns": 1795161996844090884,
+   "sha256": "2f1da40ff9a4df59bd58701317603120b1fe910958140022f6952aff528150c8"
   }
  },
- "total_bytes": 1363658367
+ "total_bytes": 1384718152
 }

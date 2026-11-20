@@ -1,0 +1,2 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+PASS build: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/prompts.jsonl n=4096 input 680764 output 1255398 tokens, body sha256 5301505696b763da
