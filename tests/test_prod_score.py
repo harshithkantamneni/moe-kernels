@@ -130,7 +130,9 @@ def test_prodlib_sends_v8s_interface_and_reuses_v8s_ernie():
     assert PL.ERNIE is V8.ERNIE and PL.MODELS["ernie-4.5-21b-a3b"].cfg is V8.ERNIE
     assert PL.refused_window(PL.ERNIE) == (8192, 8255) == PL.REFUSED_WINDOW
     assert PL.refused_window(MODEL.cfg) == (6144, 8255)
-    assert PL.strata(6200, 8, 64) == [PL.REFUSED_STRATUM] and PL.strata(6200, 6, 64) == []
+    # each model's refused-window stratum carries its own bounds (OLMoE k 8: 6144..8255, never ERNIE's name)
+    assert PL.strata(6200, 8, 64) == ["refused_window_6144_8255"] == [PL.refused_stratum(8, 64)]
+    assert PL.strata(6200, 6, 64) == [] and PL.strata(8200, 6, 64) == [PL.REFUSED_STRATUM]
 
 
 def test_the_v8_binding_holds_v8_to_its_interface(tmp_path, monkeypatch):
@@ -241,7 +243,7 @@ def test_refused_calls_are_counted_with_their_share_of_moe_time(tmp_path, stub):
     assert r["v8_refusals"] == {"HOPPER_G1_N refused": 16}
     assert r["v8_refused_share_of_moe_time"] == pytest.approx(0.5)
     st = r["tables"]["v8_ms vs kernel_sum_ms"]["stratum"]
-    assert PL.REFUSED_STRATUM not in st                               # refused: no prediction, not scored
+    assert PL.refused_stratum(MODEL.cfg.top_k, MODEL.cfg.num_experts) not in st   # refused: no prediction, not scored
     # the prefill rows carry v8 at the board's par and, beside it, at the reference median (DESCRIPTIVE)
     t, u = r["tables"]["v8_ms vs kernel_sum_ms"]["all"], r["tables"]["v8_refpar_ms vs kernel_sum_ms"]["all"]
     assert t["n"] == u["n"] > 0 and t["bias"] != u["bias"]

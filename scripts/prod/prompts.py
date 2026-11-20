@@ -194,6 +194,10 @@ def build(*, kind: str, data_path, encode, n: int, seed: int, max_input: int, ou
     return {"header": header, "rows": rows}
 
 
+#: what a long prompt is (review of the extras, MINOR): unrelated ShareGPT turns joined, not one long conversation
+LONG_LABEL = "concatenated unrelated turns"
+
+
 def build_long(*, data_path, encode, n: int, seed: int, min_input: int, max_input: int, out_dist: str,
                min_out: int = 4, max_out: int = 1024, source_sha256: str = "", tokenizer_name: str = "") -> dict:
     """THE LONG-CONTEXT SET (extras.sh X4): each prompt's length L drawn uniform in [min_input, max_input] by the seeded
@@ -225,7 +229,8 @@ def build_long(*, data_path, encode, n: int, seed: int, min_input: int, max_inpu
                      "prompt_token_ids": toks[:L], "input_len": L,
                      "max_tokens": draw_out_len(dist, rng, None, min_out, max_out)})
     body = "\n".join(json.dumps(r, sort_keys=True) for r in rows)
-    header = {"schema": SCHEMA, "kind": "sharegpt-long", "source_sha256": source_sha256, "tokenizer": tokenizer_name,
+    header = {"schema": SCHEMA, "kind": "sharegpt-long", "label": LONG_LABEL, "source_sha256": source_sha256,
+              "tokenizer": tokenizer_name,
               "n": n, "seed": seed, "min_input": int(min_input), "max_input": int(max_input), "out_dist": out_dist,
               "min_out": min_out, "max_out": max_out, "turns_used": pos,
               "body_sha256": hashlib.sha256(body.encode()).hexdigest(),

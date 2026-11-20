@@ -305,9 +305,12 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
 QWEN3 = "qwen3-30b-a3b"
 #: Qwen3-30B-A3B's bf16 weights (GB, ASSUMED: 30.5 B parameters x 2 bytes; env-preflight P12 measures the rate)
 QWEN3_WEIGHTS_GB = 61.1
-#: X3's replay budget per branch (s; the owner's "smaller budget, e.g. 1200 s per branch"), the registered rule priced
-#: by main's own ERNIE probe walls x the expert-bytes ratio
+#: X3's replay budget per branch (s; the owner's "smaller budget, e.g. 1200 s per branch"): a 2-per-tile probe on
+#: Qwen3 priced by main's ERNIE probe walls x the active-bytes ratio (replay.model_scale "active-bytes"), then the rest
+#: by the probe's own walls
 QWEN3_REPLAY_BUDGET_S = 1200
+#: Qwen3's serving levels (extras.sh $PROD_QWEN3_LEVELS; review of the extras M7: no 1024x3, its KV cache)
+QWEN3_LEVELS = "1,8,24,48,80,112,256"
 #: X4: the long-context serving (levels, N per level, prompt lengths uniform in [LONG_MIN, LONG_MAX], output fixed);
 #: ASSUMED: a step of long-context prefill costs LONG_ATTN_FACTOR x the smoke's step time at its T (the smoke's prompts
 #: were <= 2048 tokens: attention over 16k-token contexts is not in its step times)
@@ -323,8 +326,19 @@ def long_rows(n: int = LONG_PROMPTS) -> list[dict]:
             for i in range(n)]
 
 
+def qwen3_replay_s(branch: str) -> dict:
+    """X3's replay on one branch: the probe (PROBE_PER_TILE cells per tile Qwen3 serving reaches, ERNIE's priced walls
+    x the active-bytes ratio) and the rest ((budget - probe) / WALL_SAFETY when the walls are right)."""
+    ern = replay_branch_s(branch)
+    wall = {"model": "ernie-4.5-21b-a3b"}
+    tiles = [lab for lab, lo, _hi in PL.tile_bins(PL.MODELS[QWEN3].cfg.num_experts, 16384) if PL.branch(lo) == branch]
+    per = {t: ern["per_cell_s"][t] * RP.model_scale(wall, QWEN3, rule="active-bytes", tile=t) for t in tiles}
+    probe = sum(RP.PROBE_PER_TILE * v for v in per.values())
+    return {"probe_s": probe, "rest_s": max(0.0, QWEN3_REPLAY_BUDGET_S - probe) / RP.WALL_SAFETY, "per_cell_s": per}
+
+
 def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_s: float = 9000,
-                long_context: bool = True) -> dict:
+                long_context: bool = True, qwen3_levels: str = QWEN3_LEVELS) -> dict:
     """extras.sh's steps in order, [(block, step, seconds, basis)], the per-block totals and the budget's reading."""
     import ncu_bytes as NB
     model = "ernie-4.5-21b-a3b"
@@ -354,6 +368,7 @@ def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_
     add("X1", "X1-capture", engine + sv["serve_s_default"] * clock_factor(1710), "as main's A1710-capture")
     add("X1", "X1-unlock-after", 1, "trivial")
     add("X1", "X1-export", SMOKE_S["nsys-export"] * calls_ratio, "as main's A1710-export")
+    add("X1", "X1-identical", chk, "trivial (two manifests)")
     add("X1", "X1-extract", SMOKE_S["extract-gate-A"] * calls_ratio, "as main's A1710-extract")
     add("X1", "X1-push", EXTRAS_ASSUMED["push-big"], "assumed")
     # X2: the counter route on 2 x NB.N_PER_BRANCH cells
@@ -368,7 +383,7 @@ def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_
         add("X2", f"X2-unlock-{b}", 1, "trivial")
     add("X2", "X2-push", EXTRAS_ASSUMED["push"], "assumed")
     # X3: Qwen3-30B-A3B
-    qsv = serving(levels, n, model=QWEN3)
+    qsv = serving(qwen3_levels, n, model=QWEN3)
     qcalls = qsv["steps"] * PL.MODELS[QWEN3].moe_layers / (SMOKE_STEPS * SMOKE_LAYERS)
     gate_calls = 60 / SMOKE_SERVE_S * PL.MODELS[QWEN3].moe_layers / SMOKE_LAYERS
     add("X3", "X3-budget", chk, "trivial")
@@ -383,6 +398,7 @@ def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_
     add("X3", "X3-gate60-export", SMOKE_S["nsys-export"] * gate_calls, "smoke x 60/44 s x 48/16 layers")
     add("X3", "X3-gate60-extract", SMOKE_S["extract-gate-A"] * gate_calls, "smoke x 60/44 s x 48/16 layers")
     add("X3", "X3-gate60-sequences", SMOKE_S["sequences-A"], "smoke")
+    add("X3", "X3-push-gate60", EXTRAS_ASSUMED["push"], "assumed")
     for lab, lock in (("A1710", 1710), ("A1410", 1410)):
         add("X3", f"X3-{lab}-lock", 1, "trivial")
         add("X3", f"X3-{lab}-capture", qengine + qsv["serve_s_default"] * clock_factor(lock),
@@ -390,15 +406,22 @@ def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_
         add("X3", f"X3-{lab}-unlock-after", 1, "trivial")
         add("X3", f"X3-{lab}-export", SMOKE_S["nsys-export"] * qcalls, f"smoke x calls {qcalls:.2f}")
         add("X3", f"X3-{lab}-extract", SMOKE_S["extract-gate-A"] * qcalls, f"smoke x calls {qcalls:.2f}")
-    add("X3", "X3-push-captures", EXTRAS_ASSUMED["push-big"], "assumed")
+        add("X3", f"X3-{lab}-push-size", chk, "trivial (a directory walk)")
+        add("X3", f"X3-push-{lab}", EXTRAS_ASSUMED["push-big"], "assumed")
     for b in ("decode", "prefill"):
+        qr = qwen3_replay_s(b)
+        add("X3", f"X3-replay-probe-sample-{b}", 3, "smoke (replay-sample)")
+        add("X3", f"X3-replay-probe-{b}", qr["probe_s"] + REPLAY_STEP_OVERHEAD_S,
+            f"{RP.PROBE_PER_TILE} cells/tile x main's priced ERNIE wall x the active-bytes ratio")
+        add("X3", f"X3-replay-probe-wall-{b}", 1, "trivial")
         add("X3", f"X3-replay-sample-{b}", 3, "smoke (replay-sample)")
-        add("X3", f"X3-replay-{b}", QWEN3_REPLAY_BUDGET_S / RP.WALL_SAFETY + REPLAY_STEP_OVERHEAD_S,
-            f"{QWEN3_REPLAY_BUDGET_S} s budget / {RP.WALL_SAFETY} (main's ERNIE probe walls x the bytes ratio, right)")
+        add("X3", f"X3-replay-{b}", qr["rest_s"] + REPLAY_STEP_OVERHEAD_S,
+            f"({QWEN3_REPLAY_BUDGET_S} s - probe) / {RP.WALL_SAFETY} (the probe's own Qwen3 walls, right)")
     add("X3", "X3-unlock-after-replay", 1, "trivial")
     add("X3", "X3-push-replay", EXTRAS_ASSUMED["push"], "assumed")
     ft = frontier_timer(model=QWEN3)
     add("X3", "X3-frontier-env", chk, "trivial (main's Frontier venv)")
+    add("X3", "X3-frontier-grid-check", ASSUMED["grid-check"], "assumed (as main's)")
     for b in ("decode", "prefill"):
         add("X3", f"X3-frontier-lock-{b}", 1, "trivial")
         add("X3", f"X3-frontier-timer-{b}", ft[b]["timer_s"], f"as main's M7 on Qwen3's call times ({ft[b]['points']} "
@@ -439,7 +462,8 @@ def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_
             fits[blk] = run + blocks[blk] <= budget_s
             run += blocks[blk] if fits[blk] else 0.0
     return {"steps": out, "blocks": blocks, "total_s": total, "total_h": total / 3600, "budget_s": float(budget_s),
-            "fits": fits, "qwen3_serving": qsv, "long_serving": lsv if long_context else None, "levels": levels, "n": n}
+            "fits": fits, "qwen3_serving": qsv, "long_serving": lsv if long_context else None, "levels": levels, "n": n,
+            "qwen3_levels": qwen3_levels}
 
 
 def main(argv=None) -> int:
@@ -450,9 +474,10 @@ def main(argv=None) -> int:
     ap.add_argument("--extras", action="store_true", help="extras.sh's plan (X0..X4)")
     ap.add_argument("--budget-s", type=float, default=9000)
     ap.add_argument("--no-long-context", action="store_true")
+    ap.add_argument("--qwen3-levels", default=QWEN3_LEVELS, help="extras: Qwen3's levels ($PROD_QWEN3_LEVELS)")
     a = ap.parse_args(argv)
     if a.extras:
-        p = extras_plan(a.levels, a.n, a.budget_s, long_context=not a.no_long_context)
+        p = extras_plan(a.levels, a.n, a.budget_s, long_context=not a.no_long_context, qwen3_levels=a.qwen3_levels)
         if a.json:
             print(json.dumps(p, indent=1))
             return 0

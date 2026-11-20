@@ -401,21 +401,34 @@ everything goes under `<results>/extras/` (its own `SUMMARY.txt`, `logs/`, `env-
 `pull_traces.sh <ip> <run>/extras`).
 
 **The commit switch** (an operator step on the VM, between the two scripts). extras.sh lives at a commit newer than
-the one main.sh ran at:
+the one main.sh ran at. A checkout cloned with `--repo` has an `origin`; one cloned from a bundle has none, so the new
+bundle is fetched into origin's refs. Either way the sha is checked out detached:
 
 ```
-cd "$REPO" && git fetch origin && git checkout <extras sha>
+cd "$REPO" && git fetch origin && git checkout --detach <extras sha>                               # --repo clone
+cd "$REPO" && git fetch <bundle> '+refs/heads/*:refs/remotes/origin/*' && git checkout --detach <extras sha>   # bundle
 . ~/moe/env.sh && PROD_EXTRAS_COMMIT=<extras sha> bash scripts/prod/extras.sh --results <main's results dir>
 ```
 
 The first three steps are hard and hold it:
-- `extras-main-finished`: main's `SUMMARY.txt` exists and no main.sh process is running;
-- `extras-commit-switch`: a clean tree, HEAD the expected extras commit, and main's own commit (P1 of main's
-  `env-preflight.json`) an ancestor of HEAD;
-- `env-preflight` with `--expect-commit <extras sha>` (P1), on ERNIE (cached by main), 50 GB free.
+- `extras-main-finished`: main's `SUMMARY.txt` records `PASS held-back-check` (main reached its end), and no
+  main.sh, serve_capture.py, locked_r3.py or nsys process is running. `--after-main-fail` is the operator's
+  override for a main that stopped early: the step passes and an `OVERRIDE` line goes into the extras' `SUMMARY.txt`;
+- `extras-commit-switch`: a clean tree (P1's rule: `git status --porcelain` empty, untracked files included), HEAD
+  the expected extras commit, and main's own commit (P1 of main's `env-preflight.json`) an ancestor of HEAD;
+- `env-preflight` with `--expect-commit <extras sha>` (P1), on ERNIE (cached by main), with P9 (Frontier's remote),
+  P11 (setup_vm's verdict) and P12 (a timed download) skipped: none is needed, and a network blip must not stop the
+  extras. P10's disk need is computed from main's actual trace sizes (`extras_lib.py disk-need`:
+  1.25 x (A1710's traces for X1, gate60 + A1710 + A1410 traces plus Qwen3's 61 GB for X3, A1410's for X4)).
 
 Qwen3's pin (P8), download rate (P12) and 80 GB of disk (P10) are X3's own first step (`X3-hf-preflight`, soft), so a
-Hub or disk fault drops X3 only. `price-check-qwen3` is soft too.
+Hub or disk fault drops X3 only. `price-check-qwen3` is soft, and `X3-budget` needs it: when v8 cannot price Qwen3,
+the whole of X3 is skipped.
+
+**When the rental is done.** main.sh's last push wrote `DRIVER-DONE` on the run's branch, and that still means only
+"main.sh ended". The extras never write it: their EXIT trap writes `vm/results/<run>/extras/EXTRAS-DONE` (`exit RC at
+UTC`) and pushes without `--final`. Terminate only after the extras: wait for `EXTRAS-DONE` on the branch and
+`PASS extras-held-back-check` in `vm/results/<run>/extras/SUMMARY.txt`.
 
 **The blocks.** Each is soft: a failure drops that block's later steps and no other block's. Each step has a cap of
 at least 2x its expected time (`plan_time.extras_plan`; a test holds it), and a push follows each block.
@@ -423,17 +436,28 @@ at least 2x its expected time (`plan_time.extras_plan`; a test holds it), and a 
 | block | what | expected |
 |---|---|---|
 | X0 | the checks above, env, power, unlock, Qwen3's pin, `price-check` on Qwen3 | 4.1 min |
-| X1 | **noise floor**: main's A1710 again, identical (prompt file, levels, N, seed, 1710 lock, graphs, stream off) as `A1710r`, exported and extracted | 15.6 min |
+| X1 | **noise floor**: main's A1710 again, identical (prompt file, levels, N, seed, 1710 lock, graphs, stream off) as `A1710r`; `X1-identical` holds its manifest to A1710's (levels, N, seed, mode, stream, the prompt body's sha256); exported and extracted | 15.6 min |
 | X2 | **ncu bytes**: `ncu_bytes.py subsample` takes 30 decode + 30 prefill cells of main's replay C sample (equal quota per tile, systematic, seeded; relabelled `<branch>_<label>`); per branch at its clock, ncu over the counter route's own argv (`--cache-control all`, `-k regex:^fused_moe_kernel$`, kernel replay, `--clock-control none` under the lock), 2 warm-ups (the first under r3_decode's Spy: the grids every launch is held to) and 3 measured calls per cell; the page `ncu-<branch>/ncu_bytes.json` holds `dram__bytes_read.sum` per GEMM per call | 15.4 min |
-| X3 | **Qwen3-30B-A3B** (`prodlib.QWEN3`): its HF preflight, its prompt set (its tokenizer at its pin), the 60 s gate (G-CFG with `decoder_sparse_step 1` and `mlp_only_layers []`, G-BACKEND, G-REV and every extraction gate, then check-sequences), A1710 and A1410, replay C per branch on a 1200 s budget priced by main's own ERNIE probe walls times the expert-bytes ratio (the registered rule), Frontier's timer on Qwen3's shapes over the full grid (uniform x 3 seeds, branch clocks), its CSV and trainer under both truths (`cli`, `cli-fills`) and its predictions. The board's sag par is main's | 88.5 min |
-| X4 | **long-context prefill** (unless `--no-long-context`): ERNIE served with `prompts.py build-long` (ShareGPT first human turns concatenated to lengths uniform in 4096..16000 tokens, 16 output tokens, 96 prompts), levels 1,2,4,8, N 24, max-model-len 17408, at the 1410 lock, as `LC1410` | 6.4 min |
-| | **total** (the final push and the held-back check included) | **7921 s = 2.20 h** |
+| X3 | **Qwen3-30B-A3B** (`prodlib.QWEN3`): its HF preflight, its prompt set (its tokenizer at its pin), the 60 s gate (G-CFG with `decoder_sparse_step 1` and `mlp_only_layers []`, G-BACKEND, G-REV and every extraction gate, then check-sequences), A1710 and A1410 at levels 1,8,24,48,80,112,256 (`$PROD_QWEN3_LEVELS`: no 1024x3 bursts for Qwen3's KV cache; the estimator still gives every one of its six tiles >= 30 steps), each capture pushed on its own after `X3-<lab>-push-size` checks it against GitHub's limits (95 MB a file, 1.9 GB a push; the traces never go in a push). Replay C per branch on a 1200 s budget: a 2-per-tile probe on Qwen3, priced by main's ERNIE probe walls times the ACTIVE-bytes ratio (`replay.py sample --scale active-bytes`: per tile, the expert bytes a call of the tile's T activates under uniform routing, 0.58x..0.80x, where the expert-bytes ratio says 0.40x), then the rest priced by the probe's own Qwen3 walls. Frontier's grid-check and timer on Qwen3's shapes over the full grid (uniform x 3 seeds, branch clocks), its CSV and trainer under both truths (`cli`, `cli-fills`) and its predictions. The board's sag par is main's | 83.2 min |
+| X4 | **long-context prefill** (unless `--no-long-context`): ERNIE served with `prompts.py build-long` (ShareGPT first human turns, unrelated, concatenated to lengths uniform in 4096..16000 tokens, 16 output tokens, 96 prompts; the header's label says "concatenated unrelated turns"), levels 1,2,4,8, N 24, max-model-len 17408, at the 1410 lock, as `LC1410` | 6.4 min |
+| | **total** (the final push and the held-back check included) | **7609 s = 2.11 h** |
 
 **The budget.** One total for the extras, `--budget-s` (default 9000 s, `$PROD_EXTRAS_BUDGET_S`), counted from
 extras.sh's start. Before each block, `<block>-budget` passes only if the time already spent plus the block's expected
-seconds fits. Otherwise it FAILS (soft) and every step of the block is SKIPPED through `--needs`. A resume counts from
-its own start. The dry run prints every step's expected seconds, each block's, the total, and which blocks the budget
-would run.
+seconds (at this run's own `$PROD_LEVELS`, `$PROD_REQUESTS_PER_LEVEL` and `$PROD_QWEN3_LEVELS`) fits. Otherwise it
+FAILS (soft) and every step of the block is SKIPPED through `--needs`. A resume counts from its own start. The dry run
+prints every step's expected seconds, each block's, the total, and which blocks the budget would run.
+
+**The deadline.** `EXTRAS_DEADLINE` = start + budget + grace (`$PROD_EXTRAS_GRACE_S`, default 900 s), exported.
+kitlib's `step` records a step that would start after it as `SKIPPED <step>: past the deadline` and runs it not, and
+caps every other step's timeout at min(its cap, the time left). `extras-push-final` and `extras-held-back-check` are
+`--no-deadline`, and the EXIT trap (unlock, push) always runs. main.sh and smoke.sh never set a deadline (kitlib
+resets `KIT_DEADLINE` when sourced).
+
+**Every serving manifest** (main's runs too) now records the KV cache (`manifest.json` `kv`, serve_capture's
+`KVTracker`): `num_gpu_blocks`, the requests preempted (running at one engine step, waiting at the next), and per
+level the realized concurrency (running requests per step: max, median, mean, steps at L). What the engine does not
+expose is written `NOT AVAILABLE: <why>`.
 
 **Qwen3 in the kit.** Qwen3 is added like ERNIE, at runtime. `moe/spec.py` is not edited: the MoEConfig is in
 `prodlib.py`, and v8 registers it in-process from the config `price_v8` passes. The Hub's config.json at the pin
@@ -458,15 +482,23 @@ It refused 19 calls, all `HOPPER_G1_N`, every one with T in 12288..16511.
 **Offline.** When `<results>/extras/SUMMARY.txt` exists, `offline.sh` scores the extras in the same report, each
 labelled and DESCRIPTIVE:
 - `extras-expected-outputs` (soft) holds every extras step that PASSED to its file;
-- the ERNIE score step takes `--noise-floor A1710=extras/A1710r` (X1), `--ncu-bytes` and `--ncu-sample` (X2),
-  and `--run LC1410=extras/LC1410` (X4: its own stratum);
-- X1: per tile, the run-to-run variation of kernel-sum on calls matched by (layer, T_pad, counts digest), plus both
-  runs' per-tile medians;
+- the ERNIE score step takes `--noise-floor A1710=extras/A1710r` (X1), `--ncu-bytes` and `--ncu-sample` (X2);
+- X1: the repeat is refused unless its manifest is A1710's (levels, N, seed, mode, stream, prompt body sha256). When
+  the two runs' (step, layer, T_pad) sequences are identical, call k is paired with call k (asserted) and per tile
+  the run-to-run variation of kernel-sum on the pairs is reported; when they differ, no call has a twin, and per
+  tile the medians of measured / v8 and measured / roofline are compared across the runs (the repeat is priced
+  then). Both runs' per-tile medians either way;
 - X2: per tile and GEMM, counted against v8's predicted reads (`prodlib.predicted_reads`: prefill `price()`'s reads,
-  decode the v6d cell's `parts.reads`; a decode answer with none, the naive path, is NOT AVAILABLE and counted);
+  decode the v6d cell's `parts.reads`, which v8 returns for every ERNIE decode call a test prices; one with none is
+  NOT AVAILABLE, counted per branch in the report);
+- `score-lc1410` (soft) scores X4 ON ITS OWN (`--run LC1410=extras/LC1410`), so a fault in the extras never reaches
+  main's score;
 - `score-qwen3` (soft) runs the same scorer with `--model qwen3-30b-a3b` on `extras/qwen3`: its runs, its replay,
-  its Frontier arms, and main's par;
-- `score-merge` appends that score to `score/prod.score.{json,txt}` under `extras.qwen3`.
+  its Frontier arms, and main's par. Its refused-window stratum carries its own bounds (`refused_window_12288_16511`;
+  ERNIE's stays `refused_window_8192_8255`);
+- `score-merge-lc1410` and `score-merge-qwen3` (soft, each needing its score) append each to
+  `score/prod.score.{json,txt}` under `extras.<label>`. The first merge keeps main's own report as
+  `prod.score.main.{json,txt}`, and every merge rebuilds the report from that copy plus every extra merged so far.
 
 An extras input that cannot be read is reported in the report and never fails the main score.
 

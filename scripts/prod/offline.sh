@@ -23,10 +23,12 @@
 # THE EXTRAS (scripts/prod/extras.sh, the same rental after main.sh): when <results>/extras/SUMMARY.txt exists (or
 # with --extras, the dry run's way to show them), extras-expected-outputs (soft) holds every extras step that PASSED to
 # its output, and the same report gets, each labelled and DESCRIPTIVE: X1 the noise floor (--noise-floor
-# A1710=extras/A1710r), X2 the counted DRAM read bytes against v8's predicted reads (--ncu-bytes, --ncu-sample), X4 the
-# long-context run (--run LC1410); then X3: score-qwen3 (this scorer with --model qwen3-30b-a3b on extras/qwen3: its
-# runs, its replay, its Frontier predictions, the board's par from main's sag1410: the same board) and score-merge,
-# which appends that score to <results>/score/prod.score.{json,txt} under "extras qwen3".
+# A1710=extras/A1710r), X2 the counted DRAM read bytes against v8's predicted reads (--ncu-bytes, --ncu-sample); X4
+# the long-context run in ITS OWN soft step (score-lc1410: this scorer on --run LC1410 only, so an extras fault never
+# touches main's score; review of the extras M5); X3: score-qwen3 (this scorer with --model qwen3-30b-a3b on
+# extras/qwen3: its runs, its replay, its Frontier predictions, the board's par from main's sag1410: the same board);
+# then score-merge appends each to <results>/score/prod.score.{json,txt} under "extras <label>", after keeping main's
+# own report once as prod.score.main.{json,txt}.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -87,14 +89,19 @@ if [[ $EXTRAS -eq 1 || -f "$EX/SUMMARY.txt" ]]; then
     if [[ $KIT_DRY -eq 1 || -f "$EX/ncu-$b/ncu_bytes.json" ]]; then XARGS+=(--ncu-bytes "$EX/ncu-$b/ncu_bytes.json"); NCU=1; fi
   done
   if [[ $NCU -eq 1 ]]; then XARGS+=(--ncu-sample "$EX/ncu-sample/sample.json"); fi
-  if [[ $KIT_DRY -eq 1 || -e "$EX/LC1410/calls.jsonl" || -e "$EX/LC1410/calls.shards.json" ]]; then
-    RUNS+=(--run "LC1410=$EX/LC1410")
-  fi
+  LC=0
+  if [[ $KIT_DRY -eq 1 || -e "$EX/LC1410/calls.jsonl" || -e "$EX/LC1410/calls.shards.json" ]]; then LC=1; fi
 fi
 step score --cap 21600 -- "$PY" "$SC/score_prod.py" --model "$MODEL" --sag "$R/sag/par.json" ${RUNS[@]+"${RUNS[@]}"} \
   --replay decode="$R/replay-decode/private_weight_reference" --replay prefill="$R/replay-prefill/private_weight_reference" \
   ${RCHK[@]+"${RCHK[@]}"} ${FRONT[@]+"${FRONT[@]}"} ${XARGS[@]+"${XARGS[@]}"} --workers "$WORKERS" --out "$R/score"
-if [[ $EXTRAS -eq 1 ]]; then   # X3: Qwen3-30B-A3B, every predictor, then appended to the same report
+if [[ $EXTRAS -eq 1 ]]; then   # X4 and X3, each its own soft score, then appended to the same report
+  MERGE=(); MNEEDS=()
+  if [[ $LC -eq 1 ]]; then
+    step score-lc1410 --soft --cap 21600 -- "$PY" "$SC/score_prod.py" --model "$MODEL" --sag "$R/sag/par.json" \
+      --run "LC1410=$EX/LC1410" --workers "$WORKERS" --out "$R/score/lc1410"
+    MERGE+=(--extra "lc1410=$R/score/lc1410"); MNEEDS+=(score-lc1410)
+  fi
   Q="$EX/qwen3"
   QRUNS=(); QREP=(); QFR=()
   for lab in A1710 A1410; do
@@ -109,8 +116,13 @@ if [[ $EXTRAS -eq 1 ]]; then   # X3: Qwen3-30B-A3B, every predictor, then append
   if [[ $KIT_DRY -eq 1 || ${#QRUNS[@]} -gt 0 ]]; then
     step score-qwen3 --soft --cap 21600 -- "$PY" "$SC/score_prod.py" --model qwen3-30b-a3b --sag "$R/sag/par.json" \
       ${QRUNS[@]+"${QRUNS[@]}"} ${QREP[@]+"${QREP[@]}"} ${QFR[@]+"${QFR[@]}"} --workers "$WORKERS" --out "$R/score/qwen3"
-    step score-merge --soft --cap 600 --needs score-qwen3 -- "$PY" "$SC/score_prod.py" merge --into "$R/score" \
-      --extra "qwen3=$R/score/qwen3"
+    MERGE+=(--extra "qwen3=$R/score/qwen3"); MNEEDS+=(score-qwen3)
   fi
+  # each extra merged on its own (a failed one never blocks the other)
+  for i in ${MNEEDS[@]+"${!MNEEDS[@]}"}; do
+    lab="${MNEEDS[$i]#score-}"
+    step "score-merge-$lab" --soft --cap 600 --needs "${MNEEDS[$i]}" -- "$PY" "$SC/score_prod.py" merge --into "$R/score" \
+      "${MERGE[$((2 * i))]}" "${MERGE[$((2 * i + 1))]}"
+  done
 fi
 kit_summary

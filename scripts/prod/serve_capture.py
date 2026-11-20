@@ -18,7 +18,8 @@ prefill chunks); 1024 lands on > 512 and its bursts fill the 16384 budget (G16 a
 the estimator's expected per-tile step counts (`estimate_histogram`, a CPU model of V1's decode-first chunked
 prefill scheduler); the run's own step log is gated against the same minimum (G-COV) after the run.
 
-RECORDED (manifest.json): vLLM version, every bound layer's MoE backend (must be TRITON: G-BACKEND stops the run
+RECORDED (manifest.json): the KV cache's record ("kv": num_gpu_blocks, preemptions, the realized concurrency per
+level, KVTracker; NOT AVAILABLE with its reason when the engine does not expose one), vLLM version, every bound layer's MoE backend (must be TRITON: G-BACKEND stops the run
 before any step), engine config (capture sizes, mode), env, the prompt set's header, GPU clocks/power at start
 and end, plus a 10 Hz NVML sampler (clocks.jsonl) that also drops an NVTX mark per sample so nsys time maps to
 the clock trace (per-call SM clock; off-lock calls dropped by the scorer).
@@ -159,6 +160,94 @@ def coverage_gate(per_tile: dict, minimum: int) -> dict:
     short = {k: v for k, v in per_tile.items() if v < minimum}
     return {"verdict": "PASS" if not short else "FAIL", "minimum": minimum, "per_tile": per_tile,
             "why": "" if not short else f"tiles under {minimum} steps: {short}"}
+
+
+# ------------------------------------------------------------------------------------------------------------
+# the KV cache's own record (review of the extras, M7): every manifest says how many KV blocks the engine had, how
+# many requests it preempted and the concurrency it really ran, so a level the KV cache could not hold is visible
+# ------------------------------------------------------------------------------------------------------------
+
+def _scheduler(eng):
+    """V1's in-process scheduler (VLLM_ENABLE_V1_MULTIPROCESSING=0: InprocClient.engine_core.scheduler)."""
+    for path in (("engine_core", "engine_core", "scheduler"), ("engine_core", "scheduler"), ("scheduler",)):
+        o = eng
+        try:
+            for a in path:
+                o = getattr(o, a)
+        except AttributeError:
+            continue
+        if hasattr(o, "running") and hasattr(o, "waiting"):
+            return o
+    return None
+
+
+def _ids(q) -> set:
+    return {str(getattr(r, "request_id", r)) for r in list(q)}
+
+
+class KVTracker:
+    """num_gpu_blocks (the engine's cache_config), preemptions and realized concurrency, observed at each engine step
+    boundary from the scheduler's running / waiting queues: a request running at one boundary and waiting at the next
+    was preempted. Anything the engine does not expose is recorded as "NOT AVAILABLE: <why>", never left out."""
+
+    def __init__(self, llm):
+        self.num_gpu_blocks = self.block_size = None
+        self.why_blocks = self.why_sched = None
+        try:
+            cc = llm.llm_engine.vllm_config.cache_config
+            self.num_gpu_blocks, self.block_size = cc.num_gpu_blocks, getattr(cc, "block_size", None)
+            if self.num_gpu_blocks is None:
+                self.why_blocks = "cache_config.num_gpu_blocks is None"
+        except AttributeError as exc:
+            self.why_blocks = f"{type(exc).__name__}: {exc}"
+        self.sched = None
+        try:
+            self.sched = _scheduler(llm.llm_engine)
+        except Exception as exc:                                       # noqa: BLE001
+            self.why_sched = f"{type(exc).__name__}: {exc}"
+        if self.sched is None and self.why_sched is None:
+            self.why_sched = "no in-process scheduler with running/waiting queues"
+        self.prev: set = set()
+        self.preemptions = 0
+        self.levels: list[dict] = []
+
+    def level(self, li: int, L: int) -> None:
+        self.levels.append({"level_idx": li, "L": L, "running": [], "waiting_max": 0, "preemptions": 0})
+
+    def observe(self) -> None:
+        if self.sched is None or not self.levels:
+            return
+        try:
+            run, wait = _ids(self.sched.running), _ids(self.sched.waiting)
+        except Exception as exc:                                       # noqa: BLE001
+            self.why_sched, self.sched = f"{type(exc).__name__}: {exc}", None
+            return
+        pre = len(self.prev & wait)
+        self.preemptions += pre
+        lv = self.levels[-1]
+        lv["preemptions"] += pre
+        lv["running"].append(len(run))
+        lv["waiting_max"] = max(lv["waiting_max"], len(wait))
+        self.prev = run
+
+    def summary(self) -> dict:
+        def na(why):
+            return f"NOT AVAILABLE: {why}"
+        out = {"num_gpu_blocks": self.num_gpu_blocks if self.why_blocks is None else na(self.why_blocks),
+               "block_size": self.block_size}
+        if self.why_sched is not None:
+            out["preemptions"] = out["realized_concurrency"] = na(self.why_sched)
+            return out
+        out["preemptions"] = self.preemptions
+        rc = []
+        for lv in self.levels:
+            r = sorted(lv["running"])
+            rc.append({"level_idx": lv["level_idx"], "L": lv["L"], "steps": len(r), "preemptions": lv["preemptions"],
+                       "running_max": r[-1] if r else 0, "running_median": r[len(r) // 2] if r else 0,
+                       "running_mean": round(sum(r) / len(r), 2) if r else 0.0,
+                       "steps_at_L": sum(1 for x in r if x >= lv["L"]), "waiting_max": lv["waiting_max"]})
+        out["realized_concurrency"] = rc
+        return out
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -345,6 +434,8 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     if a.mode == "graphs" and sorted(manifest["engine"]["cudagraph_capture_sizes"]) != PL.capture_sizes():
         gates["G-SIZES"] = {"verdict": "FAIL", "why": f"capture sizes {manifest['engine']['cudagraph_capture_sizes']}"
                                                       f" differ from the kit's {PL.capture_sizes()}"}
+    kv = KVTracker(llm)
+    manifest["kv"] = kv.summary()
     if any(v["verdict"] == "FAIL" for v in gates.values()):
         (out / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str))
         cap.steps.close()
@@ -384,6 +475,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
             inflight += 1
         for _ in range(min(L, quota)):
             submit()
+        kv.level(li, L)
         prof_on = False
         while eng.has_unfinished_requests():
             cap.context = {"level_idx": li, "L": L, "warmup": step_in_level < WARMUP_STEPS, "profiled": prof_on}
@@ -395,6 +487,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
                 prof_on, prof_left = True, prof_steps
                 cap.context["profiled"] = True
             outs = eng.step()
+            kv.observe()
             step_in_level += 1
             if prof_on:
                 prof_left -= 1
@@ -420,6 +513,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     gates["G-VARIANTS-END"] = MC.variants_end_gate(cap.manifest)
     manifest["gpu_end"] = nvml_snapshot()
     manifest["seconds"] = round(time.time() - t0, 1)
+    manifest["kv"] = kv.summary()
     steps = PL.read_jsonl(out / "steps.jsonl")
     E = model.cfg.num_experts
     real = Counter(PL.tile_bin(s["T_pad"], E) for s in steps if not s.get("dummy") and not s.get("warmup"))

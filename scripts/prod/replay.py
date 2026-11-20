@@ -114,18 +114,45 @@ def select_sample(rows: list[dict], n: int = DEFAULT_N, seed: int = SAMPLE_SEED)
     return out
 
 
-def model_scale(wall: dict, target: str) -> float:
-    """The registered bytes scale of a wall timed on wall["model"] to the target model (module doc, MAJOR B)."""
+#: the scale rules a wall of another model is priced by: "expert-bytes" (the registered rule, main.sh) and
+#: "active-bytes" (extras.sh X3, review of the extras M6): per tile, the expert bytes a call of the tile's
+#: representative T ACTIVATES under uniform routing, E (1 - (1 - k/E)^T) x expert_bytes. ERNIE -> Qwen3: one expert
+#: is 0.4x the bytes, but a Qwen3 call touches more experts (k 8 of 128 vs 6 of 64), 0.6-0.8x the active bytes
+SCALE_RULES = ("expert-bytes", "active-bytes")
+
+
+def tile_T(tile: str) -> int:
+    """A tile's representative T for the active-bytes rule: the geometric middle of its T range (E 64 bounds; the
+    G16 tile: 8256..16384, the serving budget)."""
+    lo, hi = next((lo, hi) for lab, lo, hi in PL.TILE_BINS if lab == tile)
+    hi = min(hi, 16384)
+    return max(1, int(round((lo * hi) ** 0.5)))
+
+
+def active_bytes(cfg, T: int) -> float:
+    """Expected bytes of the experts one call of T tokens activates (uniform routing, top-k without replacement)."""
+    E, k = int(cfg.num_experts), int(cfg.top_k)
+    return E * (1.0 - (1.0 - k / E) ** int(T)) * PL.expert_bytes(cfg)
+
+
+def model_scale(wall: dict, target: str, *, rule: str = "expert-bytes", tile: str | None = None) -> float:
+    """The bytes scale of a wall timed on wall["model"] to the target model (module doc, MAJOR B): the registered
+    expert-bytes ratio, or (rule "active-bytes", needs `tile`) the ratio of the bytes a call of the tile activates."""
     src = wall.get("model")
     if src not in PL.MODELS:
         raise PL.KitError(f"the replay wall names no known model ({src!r}): it cannot price {target}")
     if target not in PL.MODELS:
         raise PL.KitError(f"unknown target model {target!r}")
-    return PL.expert_bytes(PL.MODELS[target].cfg) / PL.expert_bytes(PL.MODELS[src].cfg)
+    if rule == "expert-bytes":
+        return PL.expert_bytes(PL.MODELS[target].cfg) / PL.expert_bytes(PL.MODELS[src].cfg)
+    if rule != "active-bytes" or tile is None:
+        raise PL.KitError(f"scale rule {rule!r} (tile {tile!r}): one of {SCALE_RULES}, active-bytes per tile")
+    T = tile_T(tile)
+    return active_bytes(PL.MODELS[target].cfg, T) / active_bytes(PL.MODELS[src].cfg, T)
 
 
 def budget_quota(quota: dict, wall: dict, branch: str, *, repeats: int, target: str,
-                 budget_s: float | None = None) -> dict:
+                 budget_s: float | None = None, scale_rule: str = "expert-bytes") -> dict:
     """The registered time-budget rule (module doc). quota: tile -> registered cells; wall: replay_wall.json's
     {"model", "repeats": its repeats, "tiles": {tile: {"median_wall_s", "cells"}}}; target: the model replayed (a wall
     of another model is scaled by expert bytes). Returns {"quota", "cost_s", "scale", "per_cell_s", "budget_s",
@@ -133,21 +160,29 @@ def budget_quota(quota: dict, wall: dict, branch: str, *, repeats: int, target: 
     budget = float(REPLAY_BUDGET_S[branch] if budget_s is None else budget_s)
     if budget <= 0:
         raise PL.KitError(f"the {branch} replay budget is spent ({budget:.0f} s left)")
-    ms = model_scale(wall, target)
+    ms = model_scale(wall, target) if scale_rule == "expert-bytes" else None
     timed = {t: float(v["median_wall_s"]) for t, v in (wall.get("tiles") or {}).items()
              if PL.branch(next(lo for lab, lo, _hi in PL.TILE_BINS if lab == t)) == branch}
     if not timed:
         raise PL.KitError(f"the smoke wall times no {branch} tile: the replay budget cannot be priced")
     r_smoke = int(wall["repeats"])
-    per = {t: WALL_SAFETY * ms * timed.get(t, max(timed.values())) * (int(repeats) + 1) / (r_smoke + 1)
-           for t in quota}
+    if ms is not None:                                  # the registered rule (main.sh), unchanged
+        per = {t: WALL_SAFETY * ms * timed.get(t, max(timed.values())) * (int(repeats) + 1) / (r_smoke + 1)
+               for t in quota}
+        scales = ms
+    else:                                               # per tile; an untimed tile takes the dearest scaled wall
+        scales = {t: model_scale(wall, target, rule=scale_rule, tile=t) for t in set(quota) | set(timed)}
+        scaled = {t: timed[t] * scales[t] for t in timed}
+        dear = max(scaled.values())
+        per = {t: WALL_SAFETY * scaled.get(t, dear) * (int(repeats) + 1) / (r_smoke + 1) for t in quota}
     cost = sum(quota[t] * per[t] for t in quota)
     scale = min(1.0, budget / cost) if cost > 0 else 1.0
     q = {t: (quota[t] if scale >= 1.0 else max(1, int(quota[t] * scale))) for t in quota}
     return {"quota": q, "registered_quota": dict(quota), "per_cell_s": per, "cost_s": cost, "scale": scale,
             "budget_s": budget, "safety": WALL_SAFETY, "repeats": int(repeats), "smoke_repeats": r_smoke,
-            "wall_model": wall.get("model"), "target": target, "model_scale": ms,
-            "cost_after_s": sum(q[t] * per[t] for t in q)}
+            "wall_model": wall.get("model"), "target": target, "model_scale": scales,
+            "cost_after_s": sum(q[t] * per[t] for t in q),
+            **({} if scale_rule == "expert-bytes" else {"scale_rule": scale_rule})}
 
 
 def tile_quota(rows: list[dict], n: int) -> dict:
@@ -363,6 +398,8 @@ def sample_main(argv) -> int:
                     help="the re-measure's PROBE: this many cells per tile (main.sh: PROBE_PER_TILE), priced by --wall")
     ap.add_argument("--probe-wall", default=None,
                     help="the probe's wall-merge (target model): prices every tile and spends the budget minus its total")
+    ap.add_argument("--scale", choices=SCALE_RULES, default="expert-bytes",
+                    help="how a wall of another model prices this one (main.sh: expert-bytes; extras X3: active-bytes)")
     ap.add_argument("--min-big-T", type=int, default=None,
                     help="the sample holds a cell at T >= this (the run's largest, else a synthetic T 16384)")
     ap.add_argument("--out", required=True)
@@ -392,7 +429,8 @@ def sample_main(argv) -> int:
             quota = tile_quota(rows, a.n)
             if a.per_tile is not None:
                 quota = {t: int(a.per_tile) for t in quota}
-            budget = budget_quota(quota, wall, a.branch, repeats=a.repeats, target=model.key, budget_s=base - spent)
+            budget = budget_quota(quota, wall, a.branch, repeats=a.repeats, target=model.key, budget_s=base - spent,
+                                  scale_rule=a.scale)
             budget.update(probe_spent_s=spent, branch_budget_s=base)
         except (PL.KitError, OSError, ValueError, KeyError) as exc:
             print(f"FAIL replay sample: the budget: {exc}")

@@ -111,7 +111,7 @@ def test_extras_dry_run_order_soft_blocks_and_nothing_created(tmp_path):
     assert "kit_lock 1710" in by["X1-lock"] and "kit_lock 1410" in by["X4-lock"]
     # X3 runs Qwen3 everywhere, its replay on the smaller budget priced by main's own probe walls
     assert f"--model {QM}" in by["X3-A1710-capture"] and "--budget-s 1200" in by["X3-replay-sample-decode"]
-    assert f"--wall {res}/replay-probe-decode/replay_wall.json" in by["X3-replay-sample-decode"]
+    assert f"--wall {res}/replay-probe-decode/replay_wall.json" in by["X3-replay-probe-sample-decode"]
     assert "--run-cap-s 2500" in by["X3-replay-decode"] and _cap(by["X3-replay-decode"]) > 2500
     assert "--lock-mhz 1710" in by["X2-ncu-decode"] and "--lock-mhz 1410" in by["X2-ncu-prefill"]
     # the expected seconds per block and in total are printed
@@ -233,12 +233,12 @@ def test_commit_switch_holds_a_clean_tree_at_the_extras_commit_newer_than_mains(
 
 
 def test_main_finished_needs_a_summary_and_no_running_main(tmp_path):
-    ok, why = XL.main_finished(tmp_path, running=False)
+    ok, why = XL.main_finished(tmp_path, running=[])
     assert not ok and "SUMMARY.txt" in why
     (tmp_path / "SUMMARY.txt").write_text("PASS env-preflight (3s)\nPASS held-back-check (1s)\n")
-    assert not XL.main_finished(tmp_path, running=True)[0]
-    ok, why = XL.main_finished(tmp_path, running=False)
-    assert ok and "reached held-back-check" in why
+    assert not XL.main_finished(tmp_path, running=["main.sh (pid 1)"])[0]
+    ok, why = XL.main_finished(tmp_path, running=[])
+    assert ok and "PASS held-back-check" in why
 
 
 def test_inputs_check_names_what_main_lacks(tmp_path):
@@ -251,28 +251,60 @@ def test_inputs_check_names_what_main_lacks(tmp_path):
 # X1: the noise floor
 # ------------------------------------------------------------------------------------------------------------
 
-def _row(g, layer, T, dig, ms, tile="16x64x128w4s4"):
-    return {"g": g, "layer": layer, "T_pad": T, "counts_digest": dig, "kernel_sum_ms": ms, "tile": tile}
+def _row(g, layer, T, step, ms, tile="16x64x128w4s4", v8=None, roof=None, **kw):
+    return {"g": g, "layer": layer, "T_pad": T, "step": step, "counts_digest": f"d{g}", "kernel_sum_ms": ms,
+            "tile": tile, "v8_ms": v8, "roof_ms": roof, **kw}
 
 
-def test_noise_floor_pairs_the_kth_occurrence_of_a_key_and_reports_per_tile():
-    a = [_row(0, 1, 8, "d1", 0.10), _row(1, 1, 8, "d1", 0.20), _row(2, 2, 8, "d2", 0.30),
-         _row(3, 1, 1024, "d9", 1.0, "128x128x64w8s3"), _row(4, 3, 8, "dx", 0.5)]
-    b = [_row(10, 1, 8, "d1", 0.11), _row(11, 2, 8, "d2", 0.30), _row(12, 1, 1024, "d9", 1.1, "128x128x64w8s3"),
-         _row(13, 1, 8, "d1", 0.22), _row(14, 1, 8, "d1", 0.5)]
-    pairs = XL.match_calls(a, b)
-    got = sorted((x["g"], y["g"]) for x, y in pairs)
-    # d1 occurs twice in a and three times in b: 1st with 1st (g10), 2nd with 2nd (g13); dx and b's 3rd d1 unmatched
-    assert got == [(0, 10), (1, 13), (2, 11), (3, 12)]
-    nf = XL.noise_floor(a, b)
-    assert nf["matched_calls"] == 4 and nf["matched"]["all"]["n"] == 4
+def test_noise_floor_pairs_call_k_with_call_k_when_the_step_sequences_are_identical():
+    """review of the extras M8: identical (step, layer, T_pad) sequences pair by position (whatever the counts
+    digests say); a filtered call drops its pair, not the alignment."""
+    seq = [(1, 8, 0), (2, 8, 0), (1, 1024, 1), (2, 8, 1)]
+    a = [_row(i, L, T, st, ms, "128x128x64w8s3" if T > 512 else "16x64x128w4s4")
+         for i, ((L, T, st), ms) in enumerate(zip(seq, (0.10, 0.30, 1.0, 0.20), strict=True))]
+    b = [_row(100 + i, L, T, st, ms, "128x128x64w8s3" if T > 512 else "16x64x128w4s4")
+         for i, ((L, T, st), ms) in enumerate(zip(seq, (0.11, 0.30, 1.1, 0.5), strict=True))]
+    b[3]["warmup"] = True
+    pairs = XL.pair_by_step(a, b)
+    assert [(x["g"], y["g"]) for x, y in pairs] == [(0, 100), (1, 101), (2, 102), (3, 103)]
+    nf = XL.noise_floor(a, b, ok=lambda r: not r.get("warmup"))
+    assert nf["pairing"] == "step" and nf["matched_calls"] == 3 and nf["matched"]["all"]["n"] == 3
     t = nf["matched"]["128x128x64w8s3"]
     assert t["n"] == 1 and t["abs_rel_median_pct"] == pytest.approx(100 * 0.1 / 1.05)
     assert t["signed_median_pct"] == pytest.approx(10.0)
     small = nf["matched"]["16x64x128w4s4"]
-    assert small["n"] == 3 and small["abs_rel_median_pct"] == pytest.approx(100 * 0.01 / 0.105)
+    assert small["n"] == 2 and small["abs_rel_median_pct"] == pytest.approx(100 * 0.01 / 0.105 / 2)
     med = nf["per_tile_medians"]["16x64x128w4s4"]
-    assert med["n_a"] == 4 and med["n_b"] == 4 and med["a_ms"] == pytest.approx(0.25)
+    assert med["n_a"] == 3 and med["n_b"] == 2 and med["a_ms"] == pytest.approx(0.20)
+    assert nf["ratio_medians"] == {}
+
+
+def test_noise_floor_falls_back_to_per_tile_ratio_medians_when_the_sequences_differ():
+    a = [_row(0, 1, 8, 0, 0.20, v8=0.10, roof=0.05), _row(1, 2, 8, 0, 0.40, v8=0.20, roof=0.10)]
+    b = [_row(0, 1, 16, 0, 0.30, v8=0.10, roof=0.10), _row(1, 2, 8, 0, 0.40, v8=0.20, roof=0.10),
+         _row(2, 3, 8, 1, 0.66, v8=0.30, roof=0.30)]
+    assert XL.pair_by_step(a, b) is None
+    nf = XL.noise_floor(a, b)
+    assert nf["pairing"] == "ratio" and nf["matched_calls"] == 0 and nf["matched"] == {}
+    v8 = nf["ratio_medians"]["v8_ms"]["16x64x128w4s4"]
+    assert v8["a"] == pytest.approx(2.0) and v8["b"] == pytest.approx(2.2) and v8["delta_pct"] == pytest.approx(10.0)
+    rf = nf["ratio_medians"]["roof_ms"]["all"]
+    assert rf["n_a"] == 2 and rf["n_b"] == 3 and rf["a"] == pytest.approx(4.0)
+
+
+def test_x1_identical_holds_levels_n_seed_mode_and_the_prompt_body(tmp_path):
+    base = {"levels": [1, 8, 1024, 1024], "requests_per_level": 8, "seed": 0, "mode": "graphs", "shared_stream": "off",
+            "prompts": {"body_sha256": "ab" * 32}}
+    for d in ("A1710", "A1710r"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "manifest.json").write_text(json.dumps(base))
+    assert XL.identical_files(tmp_path / "A1710", tmp_path / "A1710r")[0]
+    for k, v in (("levels", [1, 8]), ("requests_per_level", 16), ("seed", 1), ("mode", "eager"),
+                 ("prompts", {"body_sha256": "cd" * 32})):
+        ok, why = XL.identical_check(base, dict(base, **{k: v}))
+        assert not ok and k in why, k
+    assert not XL.identical_files(tmp_path / "A1710", tmp_path / "none")[0]
+    assert XL.main(["x1-identical", "--base", str(tmp_path / "A1710"), "--repeat", str(tmp_path / "A1710r")]) == 0
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -408,7 +440,11 @@ def test_tiles_at_e128_move_g16_past_the_serving_budget():
     assert set(SC.estimate_histogram([1], [{"input_len": 40, "max_tokens": 8}], 8)["per_tile"]) == \
         {lab for lab, _lo, _hi in PL.TILE_BINS}
     assert PL.refused_window(PL.MODELS[QM].cfg) == (12288, 16511)
-    assert PL.REFUSED_STRATUM in PL.strata(12288, 8, 128) and PL.REFUSED_STRATUM not in PL.strata(12287, 8, 128)
+    # the refused stratum is named by the model's own window (review of the extras, MINOR), ERNIE's unchanged
+    qs = PL.refused_stratum(8, 128)
+    assert qs == "refused_window_12288_16511" and qs in PL.strata(12288, 8, 128) and qs not in PL.strata(12287, 8, 128)
+    assert PL.REFUSED_STRATUM not in PL.strata(12288, 8, 128)
+    assert PL.strata(8200, 6, 64) == ["refused_window_8192_8255"] == [PL.REFUSED_STRATUM]
     assert "small_batch_align_on_prefill_tile" not in PL.strata(130, 7, 128)
 
 
@@ -480,18 +516,26 @@ def test_offline_with_extras_scores_them_in_the_same_report(tmp_path):
     steps = [x for x in p.stdout.splitlines() if x.startswith("STEP ")]
     by = {x.split()[1]: x for x in steps}
     names = [x.split()[1] for x in steps]
-    assert names == ["decompress", "expected-outputs", "extras-expected-outputs", "score", "score-qwen3", "score-merge"]
+    assert names == ["decompress", "expected-outputs", "extras-expected-outputs", "score", "score-lc1410", "score-qwen3",
+                     "score-merge-lc1410", "score-merge-qwen3"]
     ex = f"{tmp_path}/res/extras"
     sc = by["score"]
     for want in (f"--noise-floor A1710={ex}/A1710r", f"--ncu-bytes {ex}/ncu-decode/ncu_bytes.json",
                  f"--ncu-bytes {ex}/ncu-prefill/ncu_bytes.json", f"--ncu-sample {ex}/ncu-sample/sample.json",
-                 f"--run LC1410={ex}/LC1410", "--model ernie-4.5-21b-a3b"):
+                 "--model ernie-4.5-21b-a3b"):
         assert want in sc, want
     assert not _soft(sc)
+    # review of the extras M5: LC1410 is never in main's score step; its own soft score, merged like Qwen3's
+    assert "LC1410" not in sc
+    lc = by["score-lc1410"]
+    assert _soft(lc) and f"--run LC1410={ex}/LC1410" in lc and "--model ernie-4.5-21b-a3b" in lc
+    assert f"--out {tmp_path}/res/score/lc1410" in lc and "--noise-floor" not in lc
     q = by["score-qwen3"]
     assert _soft(q) and f"--model {QM}" in q and f"--sag {tmp_path}/res/sag/par.json" in q
     assert f"--run A1710={ex}/qwen3/A1710" in q and f"--frontier {ex}/qwen3/frontier/predictions" in q
-    assert _soft(by["score-merge"]) and "needs=score-qwen3" in by["score-merge"]
+    for lab in ("lc1410", "qwen3"):
+        m = by[f"score-merge-{lab}"]
+        assert _soft(m) and f"needs=score-{lab}" in m and f"--extra {lab}={tmp_path}/res/score/{lab}" in m
 
 
 def test_merge_appends_the_qwen3_score_once(tmp_path):
@@ -523,3 +567,330 @@ def test_extras_expected_outputs_hold_each_passed_step_to_its_file(tmp_path):
     got = XL.expected_outputs(tmp_path)
     assert not got["missing"] and set(got["have"]) == {"X1-extract", "X2-ncu-decode"}
     assert XL.expected_outputs(tmp_path / "none")["extras"] is False
+
+
+# ------------------------------------------------------------------------------------------------------------
+# REVIEW-EXTRAS (2026-11-20): one test per item
+# ------------------------------------------------------------------------------------------------------------
+
+def _steps(p) -> dict:
+    return {x.split()[1]: x for x in p.stdout.splitlines() if x.startswith("STEP ")}
+
+
+def test_b1_the_commit_switch_is_documented_for_a_repo_clone_and_a_bundle_clone():
+    """B1: a bundle-cloned VM has no origin; both forms, then a detached checkout of the sha."""
+    for f in (PROD / "README.md", PROD / "extras.sh", PROD / "extras_lib.py"):
+        t = f.read_text()
+        assert "git fetch origin && git checkout --detach <extras sha>" in t, f
+        assert "git fetch <bundle> '+refs/heads/*:refs/remotes/origin/*'" in t, f
+        assert "git checkout <extras sha>" not in t, f
+
+
+def test_m1_main_finished_needs_mains_held_back_check_or_the_logged_override(tmp_path):
+    (tmp_path / "SUMMARY.txt").write_text("PASS env-preflight (3s)\nFAIL A1410-capture: exit 3: boom\n")
+    ok, why = XL.main_finished(tmp_path, running=[])
+    assert not ok and "PASS held-back-check" in why and "--after-main-fail" in why
+    ok, why = XL.main_finished(tmp_path, after_main_fail=True, running=[])
+    assert ok and why.startswith("OVERRIDE --after-main-fail")
+    # a FAIL held-back-check is not an end
+    (tmp_path / "SUMMARY.txt").write_text("FAIL held-back-check: exit 3: held back\n")
+    assert not XL.main_finished(tmp_path, running=[])[0]
+    # refused while main.sh or anything it leaves on the card runs, override or not
+    (tmp_path / "SUMMARY.txt").write_text("PASS held-back-check (1s)\n")
+    for busy in ("main.sh (pid 7)", "serve_capture (pid 8)", "locked_r3 (pid 9)", "nsys (pid 10)"):
+        ok, why = XL.main_finished(tmp_path, after_main_fail=True, running=[busy])
+        assert not ok and busy in why
+    pats = dict(XL.BUSY_PATTERNS)
+    assert pats["main.sh"] == "[m]ain[.]sh" and set(pats) == {"main.sh", "serve_capture", "locked_r3", "nsys"}
+    for name, line in (("nsys", "/usr/local/cuda/bin/nsys profile -o x python3 a.py"),
+                       ("serve_capture", "python3 scripts/prod/serve_capture.py --model m"),
+                       ("locked_r3", "python3 scripts/locked_r3.py --locks 1710"), ("main.sh", "bash scripts/prod/main.sh")):
+        assert re.search(pats[name], line), name
+    assert not re.search(pats["nsys"], "python3 scripts/prod/nsys_extract.py --run x")
+
+
+def test_m1_extras_sh_passes_the_override_and_records_it(tmp_path):
+    p = _dry(tmp_path, "--after-main-fail")
+    assert p.returncode == 0, p.stderr
+    assert "--after-main-fail" in _steps(p)["extras-main-finished"]
+    assert "--after-main-fail" not in _steps(_dry(tmp_path / "b"))["extras-main-finished"]
+    assert 'kit_record "OVERRIDE extras-main-finished: --after-main-fail' in (PROD / "extras.sh").read_text()
+
+
+def test_m2_the_extras_exit_writes_extras_done_and_never_pushes_final(tmp_path):
+    """M2: with KIT_DONE_FILE the EXIT trap writes it and pushes without --final (DRIVER-DONE stays main's); main.sh
+    (no KIT_DONE_FILE) still pushes --final RC."""
+    stub, got, done = tmp_path / "push_stub.sh", tmp_path / "pushed.txt", tmp_path / "EXTRAS-DONE"
+    stub.write_text(f'printf "%s\\n" "$@" > {got}\n')
+    script = tmp_path / "seq.sh"
+    script.write_text(f"set -euo pipefail\n. {PROD / 'kitlib.sh'}\nkit_init {tmp_path / 'r'}\nKIT_DONE_FILE={done}\n"
+                      "kit_trap_unlock --push\nstep boom --cap 10 -- bash -c 'exit 4'\nkit_summary\n")
+    env = dict(os.environ, KIT_KILL_AFTER="2", KIT_PUSH_SCRIPT=str(stub))
+    p = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env, timeout=120)
+    assert p.returncode == 4
+    assert done.read_text().startswith("exit 4 at ")
+    args = got.read_text().split("\n")
+    assert args[0] == "push" and "--final" not in args
+    # an inherited KIT_DONE_FILE never reaches main.sh: kitlib resets it when sourced
+    env2 = dict(env, KIT_DONE_FILE=str(tmp_path / "leak"))
+    script.write_text(f"set -euo pipefail\n. {PROD / 'kitlib.sh'}\nkit_init {tmp_path / 'r2'}\n"
+                      "kit_trap_unlock --push\nstep boom --cap 10 -- bash -c 'exit 5'\nkit_summary\n")
+    p = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env2, timeout=120)
+    args = got.read_text().split("\n")
+    assert p.returncode == 5 and args[args.index("--final") + 1] == "5" and not (tmp_path / "leak").exists()
+    for f in (PROD / "extras.sh", PROD / "README.md"):
+        t = " ".join(f.read_text().replace("#", " ").split())
+        assert "TERMINATE ONLY AFTER THE EXTRAS" in t.upper() and "EXTRAS-DONE" in t, f
+        assert "PASS extras-held-back-check" in t, f
+    assert 'KIT_DONE_FILE="$EX/EXTRAS-DONE"' in (PROD / "extras.sh").read_text()
+
+
+def test_m3_extras_env_preflight_skips_frontier_setup_and_the_download_rate(tmp_path):
+    ep = _steps(_dry(tmp_path))["env-preflight"]
+    assert "--skip P9\\,P11\\,P12" in ep and "--expect-commit" in ep
+
+
+def test_m4_steps_past_the_deadline_are_skipped_capped_and_the_trap_still_runs(tmp_path):
+    import time
+    stub, got = tmp_path / "push_stub.sh", tmp_path / "pushed.txt"
+    stub.write_text(f'printf "%s\\n" "$@" > {got}\n')
+    now = int(time.time())
+    body = (f"KIT_DEADLINE={now + 4}\nkit_trap_unlock --push\n"
+            "step slow --soft --cap 100 -- sleep 30\n"                      # capped at the ~4 s left: TIMEOUT
+            f"step late --soft --cap 10 -- touch {tmp_path / 'late'}\n"      # starts past it: SKIPPED, not run
+            "step dep --soft --cap 10 --needs late -- true\n"
+            f"step final --soft --no-deadline --cap 10 -- touch {tmp_path / 'final'}\n")
+    script = tmp_path / "seq.sh"
+    script.write_text(f"set -euo pipefail\n. {PROD / 'kitlib.sh'}\nkit_init {tmp_path / 'r'}\n{body}kit_summary\n")
+    env = dict(os.environ, KIT_KILL_AFTER="1", KIT_PUSH_SCRIPT=str(stub))
+    t0 = time.time()
+    p = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env, timeout=120)
+    summ = (tmp_path / "r" / "SUMMARY.txt").read_text().splitlines()
+    assert p.returncode == 0 and time.time() - t0 < 25, p.stderr
+    assert summ[0].startswith("FAIL (soft, dropped) slow: exit 124: TIMEOUT")
+    assert summ[1].startswith("SKIPPED late: past the deadline") and not (tmp_path / "late").exists()
+    assert summ[2].startswith("SKIPPED dep: needs late")
+    assert summ[3].startswith("PASS final") and (tmp_path / "final").exists()
+    assert got.read_text().startswith("push\n")                             # the EXIT trap pushed
+    # extras.sh exports the deadline (start + budget + grace) and marks its last two steps --no-deadline
+    src = (PROD / "extras.sh").read_text()
+    assert "EXTRAS_DEADLINE=$(( EXTRAS_T0 + BUDGET + GRACE ))" in src and 'KIT_DEADLINE="$EXTRAS_DEADLINE"' in src
+    by = _steps(_dry(tmp_path / "d"))
+    assert " nodeadline " in by["extras-push-final"] and " nodeadline " in by["extras-held-back-check"]
+    assert " nodeadline " not in by["X1-capture"]
+
+
+def test_m5_merge_keeps_mains_report_and_every_extra(tmp_path):
+    import score_prod as SP
+    main = tmp_path / "score"
+    main.mkdir()
+    (main / "prod.score.json").write_text(json.dumps({"model": "ernie-4.5-21b-a3b", "runs": {"A1710": {}}}))
+    (main / "prod.score.txt").write_text("PRODUCTION CHECK ernie\n")
+    for lab, model in (("lc1410", "ernie-4.5-21b-a3b"), ("qwen3", QM)):
+        (main / lab).mkdir()
+        (main / lab / "prod.score.json").write_text(json.dumps({"model": model, "runs": {lab: {}}}))
+        (main / lab / "prod.score.txt").write_text(f"PRODUCTION CHECK {lab}\n")
+    assert SP.main(["merge", "--into", str(main), "--extra", f"lc1410={main / 'lc1410'}"]) == 0
+    assert SP.main(["merge", "--into", str(main), "--extra", f"qwen3={main / 'qwen3'}"]) == 0
+    assert SP.main(["merge", "--into", str(main), "--extra", f"lc1410={main / 'lc1410'}"]) == 0   # again
+    txt = (main / "prod.score.txt").read_text()
+    assert txt.count("== EXTRAS lc1410:") == 1 and txt.count("== EXTRAS qwen3:") == 1
+    assert "concatenated unrelated turns" in txt and txt.startswith("PRODUCTION CHECK ernie")
+    doc = json.loads((main / "prod.score.json").read_text())
+    assert set(doc["extras"]) == {"lc1410", "qwen3"} and doc["runs"] == {"A1710": {}}
+    # main's own report kept, untouched
+    assert (main / "prod.score.main.txt").read_text() == "PRODUCTION CHECK ernie\n"
+    assert "extras" not in json.loads((main / "prod.score.main.json").read_text())
+
+
+def test_m6_qwen3_replay_probes_on_qwen3_priced_by_active_bytes(tmp_path):
+    import replay as RP
+    by = _steps(_dry(tmp_path))
+    names = list(by)
+    for b in ("decode", "prefill"):
+        ps = by[f"X3-replay-probe-sample-{b}"]
+        assert "--per-tile 2" in ps and "--scale active-bytes" in ps and f"--model {QM}" in ps
+        wm = by[f"X3-replay-probe-wall-{b}"]
+        assert f"--model {QM}" in wm and f"replay-probe-{b}/replay_wall.json" in wm
+        rest = by[f"X3-replay-sample-{b}"]
+        assert f"--probe-wall {tmp_path}/res/extras/qwen3/replay-probe-{b}/replay_wall.json" in rest
+        assert names.index(f"X3-replay-probe-{b}") < names.index(f"X3-replay-sample-{b}")
+    # the active-bytes rule: per tile, Qwen3's activated bytes over ERNIE's (2x the expert-bytes ratio's 0.4)
+    w = {"schema": RP.WALL_SCHEMA, "model": "ernie-4.5-21b-a3b", "repeats": 9, "total_wall_s": 100.0,
+         "tiles": {"16x64x128w4s4": {"median_wall_s": 10.0, "cells": 2},
+                   "64x128x64w4s3": {"median_wall_s": 20.0, "cells": 2}}}
+    q = {"16x64x128w4s4": 2, "32x64x128w4s3": 2, "64x128x64w4s3": 2}
+    eb = RP.budget_quota(q, w, "decode", repeats=9, target=QM, budget_s=1e6)
+    ab = RP.budget_quota(q, w, "decode", repeats=9, target=QM, budget_s=1e6, scale_rule="active-bytes")
+    assert eb["model_scale"] == pytest.approx(0.4) and "scale_rule" not in eb
+    s16, s64 = ab["model_scale"]["16x64x128w4s4"], ab["model_scale"]["64x128x64w4s3"]
+    assert 0.5 < s16 < 0.65 and 0.75 < s64 < 0.85 and ab["scale_rule"] == "active-bytes"
+    assert ab["per_cell_s"]["16x64x128w4s4"] == pytest.approx(RP.WALL_SAFETY * 10.0 * s16)
+    assert ab["per_cell_s"]["32x64x128w4s3"] == pytest.approx(RP.WALL_SAFETY * 20.0 * s64)   # untimed: dearest
+    assert RP.model_scale({"model": QM}, QM, rule="active-bytes", tile="16x64x128w4s4") == pytest.approx(1.0)
+
+
+def test_m7_qwen3_serves_without_the_1024_bursts_and_the_estimator_still_covers_every_tile(tmp_path):
+    import plan_time as PT
+    import serve_capture as SC
+    by = _steps(_dry(tmp_path))
+    assert "--concurrency 1\\,8\\,24\\,48\\,80\\,112\\,256 " in by["X3-A1710-capture"]
+    assert "1024x3" not in by["X3-A1710-capture"] and "1024x3" in by["X1-capture"]
+    est = SC.estimate_histogram(SC.parse_levels(PT.QWEN3_LEVELS), PT.length_rows(), 8, E=128)
+    assert len(est["per_tile"]) == 6 and min(est["per_tile"].values()) >= SC.MIN_STEPS_PER_TILE, est["per_tile"]
+
+
+class _Req:
+    def __init__(self, rid):
+        self.request_id = rid
+
+
+def test_m7_every_manifest_records_kv_blocks_preemptions_and_realized_concurrency():
+    import types
+
+    import serve_capture as SC
+    sched = types.SimpleNamespace(running=[], waiting=[])
+    llm = types.SimpleNamespace(llm_engine=types.SimpleNamespace(
+        vllm_config=types.SimpleNamespace(cache_config=types.SimpleNamespace(num_gpu_blocks=4321, block_size=16)),
+        engine_core=types.SimpleNamespace(engine_core=types.SimpleNamespace(scheduler=sched))))
+    kv = SC.KVTracker(llm)
+    kv.level(0, 3)
+    for run, wait in ((["a", "b", "c"], []), (["a", "b"], ["c"]), (["a", "c"], ["b"]), (["c"], [])):
+        sched.running, sched.waiting = [_Req(x) for x in run], [_Req(x) for x in wait]
+        kv.observe()
+    s = kv.summary()
+    assert s["num_gpu_blocks"] == 4321 and s["preemptions"] == 2
+    lv = s["realized_concurrency"][0]
+    assert lv["L"] == 3 and lv["steps"] == 4 and lv["running_max"] == 3 and lv["steps_at_L"] == 1
+    assert lv["preemptions"] == 2 and lv["waiting_max"] == 1
+    # an engine that exposes nothing is recorded NOT AVAILABLE, never left out
+    bare = SC.KVTracker(types.SimpleNamespace(llm_engine=types.SimpleNamespace()))
+    bare.level(0, 1)
+    bare.observe()
+    s = bare.summary()
+    assert all(str(s[k]).startswith("NOT AVAILABLE") for k in ("num_gpu_blocks", "preemptions", "realized_concurrency"))
+    src = (PROD / "serve_capture.py").read_text()
+    assert src.count('manifest["kv"] = kv.summary()') == 2 and "kv.observe()" in src
+
+
+def test_m8_x1_checks_its_manifest_against_a1710_before_the_extract(tmp_path):
+    by = _steps(_dry(tmp_path))
+    x = by["X1-identical"]
+    assert _soft(x) and "needs=X1-capture" in x and f"--base {tmp_path}/res/A1710" in x
+    assert f"--repeat {tmp_path}/res/extras/A1710r" in x
+    src = (PROD / "score_prod.py").read_text()
+    assert "XL.identical_files(_kv(a.run)[base], rdir)" in src and "XL.pair_by_step" in src
+
+
+def test_minor_x3_needs_v8_to_price_qwen3_and_runs_frontiers_grid_check(tmp_path):
+    by = _steps(_dry(tmp_path))
+    assert _soft(by["price-check-qwen3"]) and "needs=price-check-qwen3" in by["X3-budget"]
+    assert "price-check-qwen3" not in by["X1-budget"]
+    g = by["X3-frontier-grid-check"]
+    assert _soft(g) and f"--model {QM}" in g and "grid-check" in g and "needs=X3-frontier-env" in g
+    assert "needs=X3-frontier-grid-check" in by["X3-frontier-lock-decode"]
+
+
+def test_minor_commit_switch_refuses_an_untracked_file_as_p1_does(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "a").write_text("x\n")
+    _git(repo, "add", "a")
+    _git(repo, "commit", "-q", "-m", "m")
+    sha = _git(repo, "rev-parse", "HEAD")
+    res = tmp_path / "res"
+    _preflight(res, sha)
+    assert XL.commit_switch(repo, res, sha)[0]
+    (repo / "stray.txt").write_text("u\n")
+    ok, why = XL.commit_switch(repo, res, sha)
+    assert not ok and "dirty" in why and "stray.txt" in why
+    import env_preflight as EP
+    assert not EP.p1_git(repo, sha, "test")[0]                           # the same verdict
+
+
+def test_minor_the_budget_prices_the_runs_own_levels(tmp_path, monkeypatch):
+    import plan_time as PT
+    small = PT.extras_plan(levels="1,8", n=8)["blocks"]["X1"]
+    big = PT.extras_plan()["blocks"]["X1"]
+    assert small < big
+    t0 = 1000.0
+    now = t0 + 9000 - (small + big) / 2                                  # fits the small run, not the default
+    args = ["budget", "--block", "X1", "--t0", str(t0), "--budget-s", "9000", "--now", str(now)]
+    assert XL.main(args + ["--levels", "1,8", "--n", "8"]) == 0
+    assert XL.main(args) == 3
+    assert "--levels 1\\,8\\,24" in _steps(_dry(tmp_path))["X1-budget"]
+
+
+def test_minor_p10_need_comes_from_mains_trace_sizes(tmp_path):
+    need, why = XL.disk_need_gb(tmp_path)
+    assert need is None and "traces.sha256.json" in why
+    files = {"A1710/serve.nsys-rep": {"bytes": 30e9}, "A1710/serve.sqlite": {"bytes": 10e9},
+             "A1410/serve.nsys-rep": {"bytes": 20e9}, "gate60/serve.nsys-rep": {"bytes": 1e9},
+             "replay-nsys-decode/x": {"bytes": 99e9}}
+    (tmp_path / "traces.sha256.json").write_text(json.dumps({"files": files}))
+    need, why = XL.disk_need_gb(tmp_path)
+    # X1 = A1710 (40 GB), X3 = gate60 + A1710 + A1410 + Qwen3's weights, X4 = A1410; replay traces not counted
+    assert need == pytest.approx(1.25 * (40 + (1 + 40 + 20 + XL.QWEN3_WEIGHTS_GB) + 20))
+    assert XL.disk_need_gb(tmp_path, long_context=False)[0] == pytest.approx(1.25 * (40 + 61 + XL.QWEN3_WEIGHTS_GB))
+    ep = _steps(_dry(tmp_path / "d"))["env-preflight"]
+    assert "--min-free-gb 200 " in ep                                     # no manifest in the dry run: the default
+
+
+def test_minor_x3_pushes_each_capture_on_its_own_after_a_size_check(tmp_path):
+    by = _steps(_dry(tmp_path))
+    names = list(by)
+    for lab in ("A1710", "A1410"):
+        ps = by[f"X3-{lab}-push-size"]
+        assert _soft(ps) and f"needs=X3-{lab}-extract" in ps and f"--dir {tmp_path}/res/extras/qwen3/{lab}" in ps
+        assert names.index(f"X3-{lab}-push-size") < names.index(f"X3-push-{lab}") < names.index(f"X3-push-{lab}") + 1
+    assert "X3-push-captures" not in by
+    d = tmp_path / "run"
+    (d / "ring").mkdir(parents=True)
+    (d / "ring" / "shard_00000.npz").write_bytes(b"x" * 1000)
+    (d / "serve.sqlite").write_bytes(b"x" * 5000)                          # expendable: not pushed
+    ok, why = XL.push_size([d], total_max_mb=0.002)
+    assert ok and "0 MB" in why
+    ok, why = XL.push_size([d], total_max_mb=0.0005)
+    assert not ok and "copy by hand" in why
+
+
+def test_minor_x4_prompts_are_labelled_concatenated_unrelated_turns(tmp_path):
+    import score_prod as SP
+    data = [{"id": f"c{i}", "conversations": [{"from": "human", "value": " ".join(["w"] * 60)},
+                                              {"from": "gpt", "value": "ok"}]} for i in range(40)]
+    f = tmp_path / "sg.json"
+    f.write_text(json.dumps(data))
+    a = PR.build_long(data_path=f, encode=lambda s: [len(w) for w in s.split()], n=2, seed=0, min_input=200, max_input=300,
+                      out_dist="fixed:16")
+    assert a["header"]["label"] == "concatenated unrelated turns"
+    assert "concatenated unrelated turns" in SP.EXTRA_ROLES["LC1410"]
+
+
+def test_minor_v8s_decode_answers_carry_parts_reads_for_the_bytes_join():
+    """The real v8 (its own interpreter): every ERNIE decode call it prices carries parts.reads, so X2's decode rows
+    are compared, and bytes_summary counts each branch's sources (NOT AVAILABLE explicit)."""
+    import score_prod as SP
+    code = r"""
+import json, sys
+sys.path[:0] = [sys.argv[1]]
+import numpy as np, prodlib as PL
+cfg = PL.MODELS["ernie-4.5-21b-a3b"].cfg
+out = []
+for T in (2, 8, 48, 112):
+    rng = np.random.default_rng(T)
+    ids = np.argsort(rng.random((T, 64)), axis=1)[:, :6]
+    rd = PL.predicted_reads(PL.price_v8(cfg, T, PL.counts_from_ids(ids, 64), ids))
+    out.append(rd and rd["source"])
+print(json.dumps(out))
+"""
+    p = subprocess.run([sys.executable, "-c", code, str(PROD)], capture_output=True, text=True, cwd=str(REPO),
+                       timeout=900)
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert json.loads(p.stdout.strip().splitlines()[-1]) == ["parts.reads"] * 4
+    rows = [{"branch": "decode", "tile": "t", "pred_source": "parts.reads", "meas_w1": 1.0, "pred_w1": 1.0},
+            {"branch": "decode", "tile": "t", "pred_source": "NOT AVAILABLE", "meas_w1": 1.0, "pred_w1": None}]
+    s = SP.bytes_summary(rows)
+    assert s["pred_source_by_branch"] == {"decode": {"parts.reads": 1, "NOT AVAILABLE": 1}}
+    assert any("decode predicted reads: NOT AVAILABLE 1, parts.reads 1" in ln
+               for ln in SP.render_extras({"ncu_bytes": {"rows": rows, "summary": s}}))

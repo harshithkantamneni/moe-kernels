@@ -50,10 +50,12 @@ THE EXTRAS (scripts/prod/extras.sh, the same rental after main.sh; all DESCRIPTI
   --ncu-bytes PAGE --ncu-sample S X2: the counted w1 / w2 DRAM read bytes per call (ncu_bytes.py pages) against v8's
                                   predicted reads of the same call (prodlib.predicted_reads: prefill price()'s reads,
                                   decode the v6d cell's parts.reads, else NOT AVAILABLE, counted)
-  --run LC1410=EX/LC1410          X4: the long-context prefill run, scored like any locked run, its own stratum
-  merge --into SCORE --extra qwen3=SCORE_Q
-                                  X3: the Qwen3-30B-A3B score (this scorer, --model qwen3-30b-a3b, every predictor)
-                                  appended to the same report under "extras.qwen3"
+  --run LC1410=EX/LC1410          X4: the long-context prefill run (prompts of concatenated unrelated turns), scored
+                                  ON ITS OWN (offline.sh score-lc1410, soft) like any locked run
+  merge --into SCORE --extra qwen3=SCORE_Q [--extra lc1410=SCORE_LC]
+                                  X3: the Qwen3-30B-A3B score (this scorer, --model qwen3-30b-a3b, every predictor),
+                                  X4: the LC1410 score, appended to the same report under "extras.<label>"; main's own
+                                  report is kept first as prod.score.main.{json,txt}
 """
 from __future__ import annotations
 
@@ -201,7 +203,8 @@ def load_run(label: str, d, model: PL.ServedModel, *, want_ids: bool) -> list[di
 
 
 #: the run labels the extras add, and what each is (the report prints the role beside the run)
-EXTRA_ROLES = {"LC1410": "EXTRAS X4: long-context prefill (ERNIE, prompts 4096..16000 tokens, 1410 lock): its own stratum",
+EXTRA_ROLES = {"LC1410": "EXTRAS X4: long-context prefill (ERNIE; prompts of concatenated unrelated turns, 4096..16000 "
+                         "tokens; 1410 lock): scored on its own (offline.sh score-lc1410)",
                "A1710r": "EXTRAS X1: the identical repeat of A1710 (the noise floor)"}
 
 
@@ -304,7 +307,9 @@ def table(rows: list[dict], pred_key: str, truth_key: str, *, with_ci: bool = Tr
             out["tile"][lab] = m
     for b in ("decode", "prefill"):
         out["branch"][b] = sel(lambda r, b=b: r["branch"] == b)
-    for s in ("band_64x128", "small_batch_align_on_prefill_tile", PL.REFUSED_STRATUM):
+    # the refused window's stratum is the model's own (prodlib.refused_stratum: ERNIE's is refused_window_8192_8255)
+    refused = sorted({s for r in rows for s in (r.get("strata") or []) if s.startswith("refused_window_")})
+    for s in ("band_64x128", "small_batch_align_on_prefill_tile", *(refused or [PL.REFUSED_STRATUM])):
         m = sel(lambda r, s=s: s in (r.get("strata") or []))
         if m.get("n"):
             out["stratum"][s] = m
@@ -508,6 +513,11 @@ def bytes_summary(rows: list[dict]) -> dict:
     measured / predicted, and the predicted's MAPE and bias against the counted bytes."""
     out: dict = {"tile": {}, "branch": {}, "not_available": sum(1 for r in rows if r["pred_source"] == "NOT AVAILABLE"),
                  "readback_mismatch": sum(1 for r in rows if r.get("readback") not in (None, "PASS"))}
+    # where each branch's predicted reads came from (decode: the v6d cell's parts.reads), NOT AVAILABLE counted
+    src: dict = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        src[r["branch"]][r["pred_source"]] += 1
+    out["pred_source_by_branch"] = {b: dict(v) for b, v in sorted(src.items())}
     for kind in ("tile", "branch"):
         groups: dict = defaultdict(list)
         for r in rows:
@@ -528,20 +538,37 @@ def bytes_summary(rows: list[dict]) -> dict:
     return out
 
 
+#: what each merged extra score is (the section header names it)
+EXTRA_SCORES = {"qwen3": "scripts/prod/extras.sh X3: the second blind model, DESCRIPTIVE, every predictor as above",
+                "lc1410": "scripts/prod/extras.sh X4: long-context prefill on ERNIE (prompts of concatenated unrelated "
+                          "turns, 4096..16000 tokens, 1410 lock), DESCRIPTIVE, scored on its own"}
+MAIN_COPY = "prod.score.main"
+
+
 def merge(into, extras: dict) -> dict:
     """Append each extra score (label -> its score dir) to the main report: prod.score.json["extras"][label] and a
-    labelled section of prod.score.txt (a merge again replaces the section)."""
+    labelled section of prod.score.txt. Main's own report is kept first as prod.score.main.{json,txt} (once, never
+    overwritten), and every merge rebuilds the report from that copy plus every extra merged so far, so a merge
+    again replaces its own section and never drops another's."""
+    import shutil
     into = Path(into)
-    sc = json.loads((into / "prod.score.json").read_text())
-    txt = (into / "prod.score.txt").read_text()
+    for ext in ("json", "txt"):
+        if not (into / f"{MAIN_COPY}.{ext}").exists():
+            shutil.copyfile(into / f"prod.score.{ext}", into / f"{MAIN_COPY}.{ext}")
+    cur = json.loads((into / "prod.score.json").read_text())
+    dirs = dict(cur.get("extras_dirs") or {})
     for label, d in extras.items():
+        json.loads((Path(d) / "prod.score.json").read_text())             # readable before anything is written
+        (Path(d) / "prod.score.txt").read_text()
+        dirs[label] = str(d)
+    sc = json.loads((into / f"{MAIN_COPY}.json").read_text())
+    txt = (into / f"{MAIN_COPY}.txt").read_text()
+    sc["extras"], sc["extras_dirs"] = {}, dirs
+    for label, d in dirs.items():
         ex = json.loads((Path(d) / "prod.score.json").read_text())
-        sc.setdefault("extras", {})[label] = ex
-        mark = f"== EXTRAS {label}:"
-        if mark in txt:
-            txt = txt.split(mark)[0]
-        txt += (f"\n{mark} the score of {ex.get('model')} (scripts/prod/extras.sh X3: the second blind model, "
-                f"DESCRIPTIVE, every predictor as above)\n" + (Path(d) / "prod.score.txt").read_text())
+        sc["extras"][label] = ex
+        txt += (f"\n== EXTRAS {label}: the score of {ex.get('model')} ({EXTRA_SCORES.get(label, 'extras.sh')})\n"
+                + (Path(d) / "prod.score.txt").read_text())
     (into / "prod.score.json").write_text(json.dumps(sc, indent=1, default=str))
     (into / "prod.score.txt").write_text(txt)
     return sc
@@ -552,7 +579,12 @@ def render_extras(ex: dict) -> list[str]:
     nf = ex.get("noise_floor")
     if nf:
         lines.append(f"== EXTRAS X1 NOISE FLOOR (DESCRIPTIVE): {nf['base']} vs its identical repeat {nf['repeat']}: "
-                     f"{nf['matched_calls']} calls matched on {nf['key']} ({nf['calls_a']} / {nf['calls_b']} calls)")
+                     f"pairing {nf.get('pairing')}: {nf['matched_calls']} calls matched, {nf['key']} "
+                     f"({nf['calls_a']} / {nf['calls_b']} calls)")
+        for pred, tiles in (nf.get("ratio_medians") or {}).items():
+            for t, v in tiles.items():
+                lines.append(f"      measured/{pred[:-3]} median {t:<22s} {v['a']:.4f} vs {v['b']:.4f}  "
+                             f"{v['delta_pct']:+6.2f}%  (n {v['n_a']} / {v['n_b']})")
         for t, v in nf["matched"].items():
             lines.append(f"      {t:<22s} n={v['n']:<7d} |a-b|/mean median {v['abs_rel_median_pct']:6.2f}%  p95 "
                          f"{v['abs_rel_p95_pct']:6.2f}%  signed median {v['signed_median_pct']:+6.2f}%")
@@ -565,6 +597,8 @@ def render_extras(ex: dict) -> list[str]:
         lines.append(f"== EXTRAS X2 NCU DRAM READ BYTES (DESCRIPTIVE): {len(nb['rows'])} cells counted (ncu "
                      f"dram__bytes_read.sum, cold L2, branch clock) vs v8's predicted reads; NOT AVAILABLE "
                      f"{s['not_available']}, readback mismatches {s['readback_mismatch']}")
+        for b, v in (s.get("pred_source_by_branch") or {}).items():
+            lines.append(f"      {b} predicted reads: " + ", ".join(f"{k} {n}" for k, n in sorted(v.items())))
         for t, gs in s["tile"].items():
             for g, v in gs.items():
                 lines.append(f"      {t:<22s} {g} n={v['n']:<4d} counted {v['meas_MB_median'] or 0:9.2f} MB"
@@ -617,20 +651,30 @@ def render(sc: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _noise_and_bytes(a, model: PL.ServedModel, runs: dict, sag128, ex: dict) -> None:
-    """X1 and X2 into `ex` (main's --noise-floor, --ncu-bytes, --ncu-sample)."""
+def _noise_and_bytes(a, model: PL.ServedModel, runs: dict, sag128, ex: dict, roof: dict | None = None) -> None:
+    """X1 and X2 into `ex` (main's --noise-floor, --ncu-bytes, --ncu-sample). X1 (review of the extras M8): the repeat
+    must be identical to its base (extras_lib.identical_files: levels, N, seed, mode, stream, prompt body sha256);
+    call k is paired with call k when the step sequences are identical, else the per-tile measured / v8 and
+    measured / roofline medians are compared (the repeat priced here, only then)."""
     if a.noise_floor:
         import extras_lib as XL
         base, _, rdir = a.noise_floor.partition("=")
         if base not in runs or not rdir:
             raise PL.KitError(f"--noise-floor {a.noise_floor!r}: BASE must be a --run label, =DIR its repeat")
+        ok, why = XL.identical_files(_kv(a.run)[base], rdir)
+        if not ok:
+            raise PL.KitError(f"X1 noise floor refused: {why}")
         lk = lock_of(base)
         rep_rows = load_run("A1710r", rdir, model, want_ids=False)
+        if XL.pair_by_step(runs[base], rep_rows) is None:
+            rep_rows = load_run("A1710r", rdir, model, want_ids=True)
+            attach_predictions(model, {"A1710r": rep_rows}, {}, roof or PL.roofline_constants(), sag128=sag128,
+                               module=a.pricer, workers=a.workers)
 
-        def keep(rows):
-            return [r for r in rows if r.get("status") == "ok" and not r.get("warmup")
-                    and not off_lock(r.get("sm_mhz"), lk)]
-        ex["noise_floor"] = dict(XL.noise_floor(keep(runs[base]), keep(rep_rows)), base=base, repeat=rdir)
+        def keep(r):
+            return r.get("status") == "ok" and not r.get("warmup") and not off_lock(r.get("sm_mhz"), lk)
+        ex["noise_floor"] = dict(XL.noise_floor(runs[base], rep_rows, ok=keep), base=base, repeat=rdir,
+                                 identical=why)
     if a.ncu_bytes:
         if not a.ncu_sample:
             raise PL.KitError("--ncu-bytes needs --ncu-sample (the subsample the pages profiled)")
@@ -693,8 +737,8 @@ def main(argv=None) -> int:
         ex, ex_err = {}, {}
         # the extras never fail the main score: an extras input that cannot be read is reported in its place
         try:
-            _noise_and_bytes(a, model, runs, sag128, ex)
-        except (PL.KitError, OSError, ValueError, KeyError) as exc:
+            _noise_and_bytes(a, model, runs, sag128, ex, roof)
+        except Exception as exc:                                       # noqa: BLE001  (never fails the main score)
             ex_err["extras"] = f"{type(exc).__name__}: {exc}"
         if ex_err:
             ex["errors"] = ex_err

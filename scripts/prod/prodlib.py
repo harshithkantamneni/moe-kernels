@@ -181,23 +181,34 @@ def branch(T: int) -> str:
     return "decode" if int(T) <= DECODE_MAX_T else "prefill"
 
 
-#: the stratum name of the refused window (ERNIE's bounds in the name: the registered window; another model's window
-#: is its own refused_window(cfg), under the same name)
-REFUSED_STRATUM = "refused_window_8192_8255"
+def _refused_bounds(top_k: int, E: int) -> tuple[int, int]:
+    return max(-(-HOPPER_G1_N * int(E) * 128 // int(top_k)), 513), 129 * int(E) - 1
+
+
+def refused_stratum(top_k: int, E: int = 64) -> str:
+    """The refused window's stratum name, PER MODEL (review of the extras, MINOR): its own bounds in the name, so a
+    Qwen3 call (E 128, k 8: 12288..16511) is never reported under ERNIE's 8192..8255."""
+    lo, hi = _refused_bounds(top_k, E)
+    return f"refused_window_{lo}_{hi}"
+
+
+#: ERNIE's refused-window stratum (the registered window, E 64, k 6); every model's own is refused_stratum(k, E)
+REFUSED_STRATUM = refused_stratum(ERNIE.top_k, ERNIE.num_experts)
+assert REFUSED_STRATUM == "refused_window_8192_8255"
 
 
 def strata(T: int, top_k: int, E: int = 64) -> list[str]:
     """The strata a call belongs to beyond its tile (CRITIQUE M4, M5). The refused window is the model's own
-    (refused_window, k-dependent)."""
+    (refused_window, k-dependent), named by its own bounds (refused_stratum)."""
     out = []
     T = int(T)
     if 129 <= T <= 512:
         out.append("band_64x128")
     if T > DECODE_MAX_T and T * top_k < SMALL_BATCH_NUMEL and E <= 64:
         out.append("small_batch_align_on_prefill_tile")
-    lo = max(-(-HOPPER_G1_N * E * 128 // top_k), 513)
-    if lo <= T <= 129 * E - 1:
-        out.append(REFUSED_STRATUM)
+    lo, hi = _refused_bounds(top_k, E)
+    if lo <= T <= hi:
+        out.append(refused_stratum(top_k, E))
     return out
 
 

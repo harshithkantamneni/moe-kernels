@@ -21,6 +21,13 @@
 # every step before STEP that is not --always is recorded "SKIPPED-RESUME NAME" and not run. A skipped HARD step
 # whose declared output is missing REFUSES the resume (exit 2, before anything runs past it); a skipped SOFT step
 # whose output is missing stays dropped (its --needs dependents are SKIPPED). A --from naming no step is refused.
+# DEADLINE (extras.sh only, review of the extras M4): with KIT_DEADLINE set (epoch seconds; the caller sets it AFTER
+# sourcing this file, so main.sh and smoke.sh never see one) a step that would start at or past it is recorded
+# "SKIPPED NAME: past the deadline" and not run, and every other step's timeout is min(its cap, deadline - now). A step
+# marked --no-deadline (the final push and the held-back check) keeps its own cap. The EXIT trap (unlock, push) is not
+# a step: it always runs.
+# DONE FILE (extras.sh only, M2): with KIT_DONE_FILE set, the EXIT trap writes "exit RC at UTC" there and pushes
+# WITHOUT --final, so the push branch's DRIVER-DONE keeps meaning "main.sh ended" (vm_results_push.sh writes it).
 # ENV (smoke rental 2026-11-19): kit_env PY exports TMPDIR=$MOE_HOME/tmp (created; nsys cannot use the VM's
 # root-owned /tmp/nvidia) and puts PY's bin dir first on PATH (FlashInfer's JIT shells out to `ninja`), for every
 # step the sequence runs; --dry-run prints both as ENV lines.
@@ -32,6 +39,8 @@ KIT_TIMEOUT="${KIT_TIMEOUT:-timeout}"
 KIT_KILL_AFTER="${KIT_KILL_AFTER:-60}"
 KIT_FROM=""
 KIT_RESUMING=0
+KIT_DEADLINE=""
+KIT_DONE_FILE=""
 
 kit_init() {   # kit_init DIR: the summary is DIR/SUMMARY.txt, the step logs DIR/logs/ (created); $R is the caller's
   KIT_DIR="$1"
@@ -62,10 +71,11 @@ kit_missing_outputs() {
 
 step() {
   local name="$1"; shift
-  local soft=0 cap="" needs="" outs="" always=0 pre
+  local soft=0 cap="" needs="" outs="" always=0 nodl=0 pre
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --soft) soft=1; shift ;;
+      --no-deadline) nodl=1; shift ;;
       --always) always=1; shift ;;
       --cap) cap="${2:-}"; shift 2 ;;
       --needs) needs="${2:-}"; shift 2 ;;
@@ -99,7 +109,8 @@ step() {
   fi
   if [[ $KIT_DRY -eq 1 ]]; then
     printf 'STEP %-26s %scap=%s %s%s%s%s\n' "$name" "$([[ $soft -eq 1 ]] && echo '[soft] ')" "$cap" \
-      "$([[ $always -eq 1 ]] && echo 'always ')" "$([[ -n "$needs" ]] && echo "needs=$needs ")" \
+      "$([[ $always -eq 1 ]] && echo 'always ')$([[ $nodl -eq 1 ]] && echo 'nodeadline ')" \
+      "$([[ -n "$needs" ]] && echo "needs=$needs ")" \
       "$([[ -n "$outs" ]] && echo "out=$outs ")" "$(printf '%q ' "$@")"
     return 0
   fi
@@ -112,6 +123,15 @@ step() {
   done
   local log="$KIT_LOG/$name.log" t0 rc runner
   t0=$(date +%s)
+  if [[ -n "$KIT_DEADLINE" && $nodl -eq 0 ]]; then
+    local left=$(( KIT_DEADLINE - t0 ))
+    if [[ $left -le 0 ]]; then
+      KIT_BAD+="$name "
+      kit_record "SKIPPED $name: past the deadline ($(( -left ))s past $KIT_DEADLINE)"
+      return 0
+    fi
+    [[ $left -lt $cap ]] && cap=$left
+  fi
   if [[ "$(type -t "$1")" == function ]]; then
     export NSYS REPO PY_VLLM KIT_PUSH_SCRIPT 2>/dev/null || true
     runner=(bash -c "$(declare -f); \"\$@\"" "kit-step-$name" "$@")
@@ -266,8 +286,14 @@ kit_on_exit() {
     [[ -n "${KIT_LOG:-}" && -d "${KIT_LOG:-}" ]] && log="$KIT_LOG/final-push.log"
     echo "exit $rc: the final push (soft) -> $log" >&2
     export REPO KIT_PUSH_SCRIPT
+    local fin=(--final "$rc")
+    if [[ -n "${KIT_DONE_FILE:-}" ]]; then
+      printf 'exit %s at %s: %s\n' "$rc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$0")" > "$KIT_DONE_FILE" \
+        || echo "could not write $KIT_DONE_FILE" >&2
+      fin=()
+    fi
     "$KIT_TIMEOUT" --kill-after=60 "${KIT_PUSH_CAP:-3600}" bash -c "$(declare -f); kit_push \"\$@\"" kit-final-push \
-      "$(basename "$0") exit $rc: final push" --final "$rc" >> "$log" 2>&1 \
+      "$(basename "$0") exit $rc: final push" ${fin[@]+"${fin[@]}"} >> "$log" 2>&1 \
       || echo "the final push failed (soft): $log" >&2
   fi
   exit "$rc"
