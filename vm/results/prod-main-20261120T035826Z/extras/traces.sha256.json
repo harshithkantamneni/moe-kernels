@@ -12,7 +12,17 @@
    "bytes": 990126080,
    "mtime_ns": 1795161453164415940,
    "sha256": "0606ee863b86913a3155d4428b7d997339d2fa128941ade4bcd4b82682ff8622"
+  },
+  "ncu-decode/ncu_bytes.plan.json": {
+   "bytes": 1062,
+   "mtime_ns": 1795161810044141061,
+   "sha256": "dbc842ae5992fdf9d62bf9a78c9d3348ac6c62c9906ee8daa528ef32981bfbe9"
+  },
+  "ncu-prefill/ncu_bytes.plan.json": {
+   "bytes": 1097,
+   "mtime_ns": 1795161812822170059,
+   "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
   }
  },
- "total_bytes": 1363656208
+ "total_bytes": 1363658367
 }
