@@ -1,0 +1,18 @@
+{
+ "schema": "moe-kernels/prod-traces/1",
+ "traces_root": "/home/ubuntu/moe/traces/prod-main-20261120T035826Z/extras",
+ "run": "extras",
+ "files": {
+  "A1710r/serve.nsys-rep": {
+   "bytes": 373530128,
+   "mtime_ns": 1795161422885099883,
+   "sha256": "b0feb0ca4834faae53c4b057f3f09bda728d6ec59923b7a74bd4856e2defb761"
+  },
+  "A1710r/serve.sqlite": {
+   "bytes": 990126080,
+   "mtime_ns": 1795161453164415940,
+   "sha256": "0606ee863b86913a3155d4428b7d997339d2fa128941ade4bcd4b82682ff8622"
+  }
+ },
+ "total_bytes": 1363656208
+}

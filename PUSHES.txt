@@ -8,3 +8,4 @@
 2026-11-20T06:53:54Z prod main: Frontier profiles and models
 2026-11-20T07:42:54Z prod main: measurements and Frontier predictions done (score on the laptop: scripts/prod/offline.sh)
 2026-11-20T07:47:31Z main.sh exit 0: final push
+2026-11-20T08:00:32Z prod extras: X1 noise floor (A1710r)

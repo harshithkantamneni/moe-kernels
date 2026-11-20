@@ -1,0 +1,79 @@
+{
+  "schema": "moe-kernels/prod-env-preflight/1",
+  "model": "ernie-4.5-21b-a3b",
+  "checks": [
+    {
+      "id": "P1",
+      "what": "git",
+      "verdict": "PASS",
+      "detail": "clean at eb7e72ba9916875258b5b8e3d49455722ea041b3 (expected, from --expect-commit)"
+    },
+    {
+      "id": "P2",
+      "what": "idle",
+      "verdict": "PASS",
+      "detail": "no compute process on the GPU"
+    },
+    {
+      "id": "P3",
+      "what": "power",
+      "verdict": "PASS",
+      "detail": "enforced power limit 700 W"
+    },
+    {
+      "id": "P4",
+      "what": "locks",
+      "verdict": "PASS",
+      "detail": "1710 MHz set; 1410 MHz set; restored to default clocks"
+    },
+    {
+      "id": "P5",
+      "what": "tmpdir",
+      "verdict": "PASS",
+      "detail": "/home/ubuntu/moe/tmp writable"
+    },
+    {
+      "id": "P6",
+      "what": "tools",
+      "verdict": "PASS",
+      "detail": "ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu"
+    },
+    {
+      "id": "P7",
+      "what": "nsys",
+      "verdict": "PASS",
+      "detail": "nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp"
+    },
+    {
+      "id": "P8",
+      "what": "hf-rev",
+      "verdict": "PASS",
+      "detail": "baidu/ERNIE-4.5-21B-A3B-PT resolves to the pin 87db95487941cb39592ee0abca3b9155a6d19c5c"
+    },
+    {
+      "id": "P9",
+      "what": "frontier",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P10",
+      "what": "disk",
+      "verdict": "PASS",
+      "detail": "4085 GB free under /home/ubuntu/moe"
+    },
+    {
+      "id": "P11",
+      "what": "setup",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    },
+    {
+      "id": "P12",
+      "what": "hf-rate",
+      "verdict": "SKIP",
+      "detail": "--skip"
+    }
+  ],
+  "pass": true
+}

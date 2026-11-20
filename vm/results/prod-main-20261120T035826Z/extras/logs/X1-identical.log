@@ -1,0 +1,1 @@
+PASS x1-identical: identical levels=[1, 8, 24, 48, 80, 112, 256, 1024, 1024, 1024], requests_per_level=8, seed=0, mode='graphs', shared_stream='off', prompts 9f69d4e72ee8
