@@ -1,0 +1,15 @@
+{
+ "schema": "moe-kernels/prod-frontier-csv-meta/1",
+ "model": "ling-mini-2.0",
+ "truth": "kernel_sum",
+ "routing": "uniform",
+ "samples_per_point": 3,
+ "arm_kind": "complete",
+ "partial_needed": false,
+ "complete": true,
+ "grid_points": 3,
+ "measured_points": 3,
+ "missing_points": [],
+ "missing_samples": {},
+ "rows": 9
+}

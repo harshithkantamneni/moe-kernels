@@ -1,0 +1,44 @@
+{
+ "schema": "moe-kernels/prod-call-shards/1",
+ "n": 188537,
+ "max_bytes": 64000000,
+ "calls": [
+  {
+   "file": "calls.00000.jsonl",
+   "rows": 85729,
+   "sha256": "7250abb69b290f725d3ea083e0b9622478e0e1fc2a0eb7d414f7778665628c21"
+  },
+  {
+   "file": "calls.00001.jsonl",
+   "rows": 81249,
+   "sha256": "d0fc462b09a8e28087684c10addddc85fc79ceaa79709051524436489c59fdd7"
+  },
+  {
+   "file": "calls.00002.jsonl",
+   "rows": 21559,
+   "sha256": "7c5e2cd381864122a6ba91c6d3e6942c48d0e086d496153f63f695f710b8f0fa"
+  }
+ ],
+ "counts": [
+  {
+   "file": "counts.00000.npy",
+   "rows": 62499,
+   "sha256": "3b2d8a78cc0b7e9bf879b6956f697930601b2967494bad2a474f0712668c6b92"
+  },
+  {
+   "file": "counts.00001.npy",
+   "rows": 62499,
+   "sha256": "3656c65630e09193cd9886cc3440a81ee78636457f0167021140d87c030373a7"
+  },
+  {
+   "file": "counts.00002.npy",
+   "rows": 62499,
+   "sha256": "86119e2513d16270ae66af29eab6bdc3716e49f25476c3a8d1b14b54c5011e9b"
+  },
+  {
+   "file": "counts.00003.npy",
+   "rows": 1040,
+   "sha256": "c6465ab7d61ecaeb22431ab135469bfce03390a266915e0fc0ebbe14f6281c08"
+  }
+ ]
+}
