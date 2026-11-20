@@ -19,3 +19,4 @@
 2026-11-20T08:15:21Z prod extras: done (score on the laptop: scripts/prod/offline.sh)
 2026-11-20T08:16:25Z extras.sh exit 0: final push
 2026-11-20T08:22:15Z prod extras: X2 ncu bytes
+2026-11-20T08:24:32Z prod extras: X3 Qwen3 gate

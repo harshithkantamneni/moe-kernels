@@ -1,1 +1,1 @@
-PASS budget: X3: spent 966 s + expected 4994 s <= budget 9000 s
+PASS budget: X3: spent 225 s + expected 4994 s <= budget 9000 s

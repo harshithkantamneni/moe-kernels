@@ -72,7 +72,7 @@
       "id": "P12",
       "what": "hf-rate",
       "verdict": "PASS",
-      "detail": "measured 487 MB/s (1007 MB in 2.1 s); the weights (61.1 GB) would take ~125 s"
+      "detail": "measured 467 MB/s (1007 MB in 2.2 s); the weights (61.1 GB) would take ~131 s"
     }
   ],
   "pass": true

@@ -67,7 +67,7 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 345,
     "mem_mhz": 2619,
-    "power_w": 84.678,
+    "power_w": 84.75,
     "power_limit_w": 700.0,
     "temp_c": 36,
     "driver": "580.105.08"
@@ -134,7 +134,7 @@
     "compilation_mode": "3"
   },
   "kv": {
-    "num_gpu_blocks": 15928,
+    "num_gpu_blocks": 16303,
     "block_size": 16,
     "preemptions": 0,
     "realized_concurrency": []
