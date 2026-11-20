@@ -456,7 +456,8 @@ c1755ecad208f21b8c326c619fe22800a4554612d5466418feff035b11def5e2  vm/results/pro
 857c2e3f67d8adcf3498a4e1b0a089f4614c854093d701688bb9f18b8e5229e7  vm/results/prod-main-20261120T035826Z/extras/A1710r/ring/shard_00062.npz
 235f132927f7e5f92af24a8c86d35fcd6d0b3b8b3ed3c724bdc04e2dfce75b1e  vm/results/prod-main-20261120T035826Z/extras/A1710r/sequences.json
 d318701197090cd8e0d750692e6c0a3bdc97e198e6af89ae1928859dd2ec82d3  vm/results/prod-main-20261120T035826Z/extras/A1710r/steps.jsonl
-701b9560c66154e523a169507e0409a900433b7d37fc46e124acd9f081d74f78  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
+95d67c3bc3d9376e0604fa288857ae4807f1ddce1850d9d46a224210e3315ecd  vm/results/prod-main-20261120T035826Z/extras/EXTRAS-DONE
+a9161c0838af79169f710cb3af4be467500e47019076c5d28d0fe4fb10cf70c6  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
 79deb391729c245549b6fb7cc3fa1eb9de6edaba4a04bff20180dbe1f579b844  vm/results/prod-main-20261120T035826Z/extras/env-preflight.json
 b111ab9a9f44d39b445e39b9e2b63f6b251416ba23365b0f649125180c4fa0db  vm/results/prod-main-20261120T035826Z/extras/logs/X1-budget.log
 04eb3e2317b91fc9230c19077fb1be04cff1ff4439ee76a80a147b233a447ffb  vm/results/prod-main-20261120T035826Z/extras/logs/X1-capture.log
@@ -516,8 +517,10 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 eb047ea9392eda8021c635a8c4758de0255c2bbd4da95a0a5f1d822b08873a00  vm/results/prod-main-20261120T035826Z/extras/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-main-20261120T035826Z/extras/logs/env.log
 d82655b4705899cf3b3ff476bbc3d7cb536d675236e9878c72cbd605bc36bd7b  vm/results/prod-main-20261120T035826Z/extras/logs/extras-commit-switch.log
+a0c9115e6e5e47534e4ba64b379a95e0a28f9a0a488ff5d8100e3e8b01207a41  vm/results/prod-main-20261120T035826Z/extras/logs/extras-held-back-check.log
 9f144abbd2649ca2f0cb5858b363553a10654e425f2f7f38526b607b614eb0a0  vm/results/prod-main-20261120T035826Z/extras/logs/extras-main-finished.log
-fb99ef85741f3dedfe6c97c7c243ae0c0306697aef80fc5f3be64275ab581166  vm/results/prod-main-20261120T035826Z/extras/logs/extras-push-final.log
+e922cd030bab4b9776cac797842383f40d5a80f53b5b493318051cf360dc462e  vm/results/prod-main-20261120T035826Z/extras/logs/extras-push-final.log
+fb99ef85741f3dedfe6c97c7c243ae0c0306697aef80fc5f3be64275ab581166  vm/results/prod-main-20261120T035826Z/extras/logs/final-push.log
 5f86d0fc4c5794ab3636be45aaeac26012c6752270a2c21c50fc7ef318b14a58  vm/results/prod-main-20261120T035826Z/extras/logs/power-readback.log
 64a858df3ddc3868ee281a1aad24c6281b7a8743ce590062aac832bcc05c6282  vm/results/prod-main-20261120T035826Z/extras/logs/price-check-qwen3.log
 aa576cdc928d2ec2877d17374f2624be31e5ba1bf9ad78a6c7d03db28eb1aa28  vm/results/prod-main-20261120T035826Z/extras/logs/revision-pinned-qwen3.log
