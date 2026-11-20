@@ -63,6 +63,16 @@
    "mtime_ns": 1795162803694271938,
    "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
   },
+  "qwen3/A1710/serve.nsys-rep": {
+   "bytes": 303990004,
+   "mtime_ns": 1795165478293313558,
+   "sha256": "669009ecccac725f7e35ab0969ec0e69052b47b002d66616f55c4d7c695c2e59"
+  },
+  "qwen3/A1710/serve.sqlite": {
+   "bytes": 812376064,
+   "mtime_ns": 1795165503595555471,
+   "sha256": "0ad1013104acb5dc8b8bcde3cdb0f4aa24129cd462b823f81528c87d77dfea60"
+  },
   "qwen3/frontier/timer-decode/timer.nsys-rep": {
    "bytes": 629147,
    "mtime_ns": 1795163292674157571,
@@ -94,5 +104,5 @@
    "sha256": "b84a69b3c4f04aa658b555c66432a9b36b5e38d052f53a10336af406484d877a"
   }
  },
- "total_bytes": 2257564656
+ "total_bytes": 3373930724
 }
