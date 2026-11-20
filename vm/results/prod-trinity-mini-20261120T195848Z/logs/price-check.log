@@ -1,0 +1,2 @@
+{"8": {"ms": 0.19656348883653021, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.6274048390729519, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check trinity-mini: decode T 8 0.1966 ms (16x64x128w4s4), prefill T 1024 0.6274 ms (128x128x64w8s3)

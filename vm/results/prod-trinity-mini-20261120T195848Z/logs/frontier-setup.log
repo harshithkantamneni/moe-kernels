@@ -1,0 +1,12 @@
+[frontier_setup] dest /home/ubuntu/moe/frontier, arms primary, commit db5a85b
+[frontier_setup] reusing /home/ubuntu/moe/frontier/src: already at db5a85b63fb42436da2e3c21cbb42cc53b22a842
+PASS frontier source at db5a85b63fb42436da2e3c21cbb42cc53b22a842, tracked files unmodified
+  $ uv venv --python 3.12 /home/ubuntu/moe/frontier/venv-primary
+Using CPython 3.12.16
+Creating virtual environment at: /home/ubuntu/moe/frontier/venv-primary
+error: Failed to create virtual environment
+  cause: A virtual environment already exists at: /home/ubuntu/moe/frontier/venv-primary
+
+hint: Use the `--clear` flag or set `UV_VENV_CLEAR=1` to replace the existing virtual environment
+FAIL frontier primary venv: install exited 2
+[frontier_setup] wrote /home/ubuntu/moe/frontier/frontier.env and versions.json
