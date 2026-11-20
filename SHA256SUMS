@@ -175,7 +175,7 @@ a040450b6830023ad864f92dad57d30561e2d154a6176401b23c858425edc9e5  vm/results/pro
 d836ceef8e0b945938d97cb7477f20c5cc39520ebfaa90f3395f1cb058025ac3  vm/results/prod-glm-4.7-flash-20261120T195848Z/A1710/ring/shard_00035.npz
 ce3d7268bae647653de8abe29e0d83c5df22a79a55881a161cba7859b55afd99  vm/results/prod-glm-4.7-flash-20261120T195848Z/A1710/sequences.json
 e9782808e0b82a751f60540ea1f9fecafba863ac5ecd6ca41cc93ee972a34055  vm/results/prod-glm-4.7-flash-20261120T195848Z/A1710/steps.jsonl
-a6388cefad732ce21978492f46920a8624c102a0c7ca60b9115f0e8bb92ce810  vm/results/prod-glm-4.7-flash-20261120T195848Z/SUMMARY.txt
+ae40210ebda4e0fb2f8a913ba02599f26bedfabbf7d54051171beec5d1473411  vm/results/prod-glm-4.7-flash-20261120T195848Z/SUMMARY.txt
 ab8fdf831f9edc8207edbb460269379b05cc668fca69397bbe62f26c64e3e376  vm/results/prod-glm-4.7-flash-20261120T195848Z/env-preflight.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vm/results/prod-glm-4.7-flash-20261120T195848Z/frontier-probe/models/fdfb89ad_model_lock.file
 2d100c619bf299f90b22c90e6db50dc946b91436acb5983ae319e32069262955  vm/results/prod-glm-4.7-flash-20261120T195848Z/frontier-probe/models/moe_grouped_gemm_fdfb89ad.pkl
@@ -262,7 +262,7 @@ c6913ca456066063ff61e1c1b4621a294359a713a86ad3464e984c382976dd76  vm/results/pro
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/A1710-unlock-after.log
 f3ee6d7460d52fbf0e792e630a05348b18e05c5ad4d7e5330dc3ec8e1ae653ce  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/env.log
-b1d6bcb3ad253b6d4a6232d8e39f4a77a6566b566f1ae52fb0070f6ce8a79348  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/final-push.log
+ee7f023e0ec5fecacb996b2b8ac4bde19abbfe2c33c03ea7c6df516394e9c130  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/final-push.log
 21ee2a4402c571c762be0349be6b108489d0146b10ac6be42c12d6ec6408f436  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-csv-fills.log
 1a2b4d4b89467c9e421c57bb716f0d8c55a1001312c6bb2d8f7988d187757cb9  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-csv.log
 3a7b248c24a18f510892c83184b003578fd6283ab5baa9355b020b93c8dd0816  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-grid-check.log
@@ -283,12 +283,13 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 724d47b83f38b1b43eee0fe2632249ea0ce19074def4f14891e83e0ea1d8d5d9  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/gate60-capture.log
 bccd1843a79679ca9e5e6529f243520641fd124ab0b5afc28b2ef1b2e8355fcf  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/gate60-extract.log
 ce0f5b31fafe9cbe0f9796bd263baeddbf70b34f3acc6544dcc4c1f67ea33b17  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/gate60-sequences.log
+eb476069be7d26584767f3f1a5f71bb9662ed230cc295b6fb86e876b371f9621  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/held-back-check.log
 06eda66a36874844e4e88ebf66b89a553f0cae4a9a48aeb7ec682ff3ea427cd7  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/model-prefetch.log
 5f86d0fc4c5794ab3636be45aaeac26012c6752270a2c21c50fc7ef318b14a58  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/power-readback.log
 0e21ed211eb75725cc88938093c0b5526bcf22b42ab2248936f20cb3eb373b36  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/price-check-v9.log
 0e21ed211eb75725cc88938093c0b5526bcf22b42ab2248936f20cb3eb373b36  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/price-check.log
 bfa83ecea653eb670785ce4fdc202f474020817069faf25f1d7b79d46232a2f9  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/prompts.log
-535b7949aaa8c7c22cca576d8d7896d1e0e93d18a89adb66f2cf981b577019bb  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/push-final.log
+c4cb6fa84a556cb713d8f78b91da7cc88552e380173a1ff1d4a489376d800e14  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/push-final.log
 695bdb66f53c8a558f59bc1e7e76af76888ed39d754a27cf16ceacdebece0b8f  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/push-primary.log
 ea9d6493090a952d012f3673d5a2bca29800296e31954420b0e2e1c630452973  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/revision-pinned.log
 37cdd0e973a7eafda6b136fd914435cd69f2daf4225787371341e0182e91eda3  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/sag1410.log
