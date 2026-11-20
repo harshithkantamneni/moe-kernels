@@ -1,0 +1,14 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+PASS P1 git: clean at dc8b3f73fcce63a253911f3341b21f46d3aaaa34 (expected, from /home/ubuntu/moe/env.sh)
+PASS P2 idle: no compute process on the GPU
+PASS P3 power: enforced power limit 700 W
+PASS P4 locks: 1710 MHz set; 1410 MHz set; restored to default clocks
+PASS P5 tmpdir: /home/ubuntu/moe/tmp writable
+PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu
+PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
+PASS P8 hf-rev: inclusionAI/Ling-mini-2.0 resolves to the pin a810f6416bc4e1e29c9d7f271dd2fa7e56e71eab
+PASS P9 frontier: https://github.com/NetX-lab/Frontier reachable at db5a85b
+PASS P10 disk: 4215 GB free under /home/ubuntu/moe
+PASS P11 setup: /home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)
+PASS P12 hf-rate: measured 132 MB/s (1007 MB in 7.6 s); the weights (32.5 GB) would take ~247 s
+PASS env-preflight

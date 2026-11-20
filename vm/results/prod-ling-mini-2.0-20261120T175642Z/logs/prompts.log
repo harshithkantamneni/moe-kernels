@@ -1,0 +1,4 @@
+PASS fetch sharegpt: /home/ubuntu/moe/results/prod-ling-mini-2.0-20261120T175642Z/data/ShareGPT_V3_unfiltered_cleaned_split.json sha256 35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4
+[transformers] You are using a model of type `bailing_moe` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+PASS build: /home/ubuntu/moe/results/prod-ling-mini-2.0-20261120T175642Z/prompts.jsonl n=4096 input 703567 output 1319491 tokens, body sha256 8d4830684d64309e

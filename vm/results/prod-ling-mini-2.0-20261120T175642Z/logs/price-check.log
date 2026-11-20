@@ -1,0 +1,2 @@
+{"8": {"ms": 0.119773435192473, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.6721971762292488, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check ling-mini-2.0: decode T 8 0.1198 ms (16x64x128w4s4), prefill T 1024 0.6722 ms (128x128x64w8s3)
