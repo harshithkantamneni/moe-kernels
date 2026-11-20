@@ -1,0 +1,18 @@
+{
+ "schema": "moe-kernels/prod-traces/1",
+ "traces_root": "/home/ubuntu/moe/traces/prod-trinity-mini-20261120T195848Z",
+ "run": "prod-trinity-mini-20261120T195848Z",
+ "files": {
+  "gate60/serve.nsys-rep": {
+   "bytes": 232182859,
+   "mtime_ns": 1795208623622461750,
+   "sha256": "6d20a776217a06845152b3009b0c2fb5c8f59bf9b854606b2f545b44209919df"
+  },
+  "gate60/serve.sqlite": {
+   "bytes": 624394240,
+   "mtime_ns": 1795208643355645483,
+   "sha256": "8568913e265eeccb2f690f8e1b6ee42deedeec2a2d2e0a4a685d950c4047eba3"
+  }
+ },
+ "total_bytes": 856577099
+}
