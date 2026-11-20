@@ -1,0 +1,10 @@
+serve_capture: ernie-4.5-21b-a3b (baidu/ERNIE-4.5-21B-A3B-PT) mode=graphs shared-stream=off levels=[1, 8, 24, 48, 80, 112, 256, 1024, 1024, 1024] N/level=8 out=/home/ubuntu/moe/results/prod-main-20261120T035826Z/A1710
+expected steps 14856; per tile (padded T):
+  16x64x128w4s4             8475
+  32x64x128w4s3             1338
+  32x128x64w4s3              861
+  64x128x64w4s3              650
+  64x128x64w8s3             1522
+  128x128x64w8s3            1968
+  128x128x64w8s3 g16          42
+DRY RUN: nothing launched

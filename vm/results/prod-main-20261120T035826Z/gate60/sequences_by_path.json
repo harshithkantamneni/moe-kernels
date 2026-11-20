@@ -1,0 +1,25 @@
+{
+  "verdict": "PASS",
+  "why": "",
+  "problems": 0,
+  "paths": {
+    "block-scan": [
+      {
+        "sig": "align:moe_align_block_size_kernel|align:count_and_sort_expert_tokens_kernel|gemm:fused_moe_kernel|act:act_and_mul_kernel|gemm:fused_moe_kernel|reduce:moe_sum_vec_kernel",
+        "calls": 1215
+      }
+    ],
+    "naive": [
+      {
+        "sig": "fill:vectorized_elementwise_kernel|gemm:fused_moe_kernel|act:act_and_mul_kernel|gemm:fused_moe_kernel|reduce:moe_sum_vec_kernel",
+        "calls": 107379
+      }
+    ],
+    "small-batch": [
+      {
+        "sig": "align:moe_align_block_size_small_batch_expert_kernel|gemm:fused_moe_kernel|act:act_and_mul_kernel|gemm:fused_moe_kernel|reduce:moe_sum_vec_kernel",
+        "calls": 110970
+      }
+    ]
+  }
+}

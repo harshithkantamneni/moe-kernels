@@ -1,0 +1,23 @@
+[
+  {
+    "names": [
+      "void at::native::vectorized_elementwise_kernel<(int)4, at::n",
+      "fused_moe_kernel",
+      "void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162,",
+      "fused_moe_kernel",
+      "void vllm::moe::moe_sum_vec_kernel<c10::BFloat16, int, (int)"
+    ],
+    "calls": 1973
+  },
+  {
+    "names": [
+      "void vllm::moe::moe_align_block_size_kernel<int>(const T1 *,",
+      "void vllm::moe::count_and_sort_expert_tokens_kernel<int>(con",
+      "fused_moe_kernel",
+      "void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162,",
+      "fused_moe_kernel",
+      "void vllm::moe::moe_sum_vec_kernel<c10::BFloat16, int, (int)"
+    ],
+    "calls": 27
+  }
+]

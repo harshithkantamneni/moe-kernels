@@ -1,0 +1,3 @@
+  $ /home/ubuntu/moe/frontier/venv-primary/bin/python /home/ubuntu/moe/repo/scripts/prod/frontier_op.py _grid_check --model ernie-4.5-21b-a3b --src /home/ubuntu/moe/frontier/src --arm-label cli --max-tokens 16384
+PASS frontier grid-check: 387 points to 16384, identical to Frontier's own
+PASS frontier grid-check (cli): exit 0

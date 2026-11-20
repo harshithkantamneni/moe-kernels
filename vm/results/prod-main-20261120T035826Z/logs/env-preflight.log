@@ -1,0 +1,14 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+PASS P1 git: clean at 98f55deb9746634ad5d4316f70e762d9930ff400 (expected, from $PROD_EXPECT_COMMIT)
+PASS P2 idle: no compute process on the GPU
+PASS P3 power: enforced power limit 700 W
+PASS P4 locks: 1710 MHz set; 1410 MHz set; restored to default clocks
+PASS P5 tmpdir: /home/ubuntu/moe/tmp writable
+PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu
+PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
+PASS P8 hf-rev: baidu/ERNIE-4.5-21B-A3B-PT resolves to the pin 87db95487941cb39592ee0abca3b9155a6d19c5c
+PASS P9 frontier: https://github.com/NetX-lab/Frontier reachable at db5a85b
+PASS P10 disk: 4217 GB free under /home/ubuntu/moe
+PASS P11 setup: /home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)
+PASS P12 hf-rate: measured 164 MB/s (1007 MB in 6.1 s); the weights (43.9 GB) would take ~267 s
+PASS env-preflight

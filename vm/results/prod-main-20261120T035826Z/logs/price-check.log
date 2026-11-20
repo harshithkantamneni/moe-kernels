@@ -1,0 +1,2 @@
+{"8": {"ms": 0.22476487892862757, "tile": "16x64x128w4s4", "regime": "decode", "why": ""}, "1024": {"ms": 0.5697298887053212, "tile": "128x128x64w8s3", "regime": "prefill", "why": ""}}
+PASS price-check ernie-4.5-21b-a3b: decode T 8 0.2248 ms (16x64x128w4s4), prefill T 1024 0.5697 ms (128x128x64w8s3)
