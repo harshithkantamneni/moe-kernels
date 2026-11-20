@@ -1,1 +1,2 @@
 PASS trace-manifest: 6 file(s), 0.69 GB under /home/ubuntu/moe/traces/prod-main-20261120T035826Z -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/traces.sha256.json
+[push] pushed 53191d7 to run-gh200-prodmain-20261120t0349: prod main: the 60 s ERNIE gate and the Frontier probe
