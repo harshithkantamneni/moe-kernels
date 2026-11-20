@@ -1,0 +1,1976 @@
+{
+  "verdict": "PASS",
+  "why": "",
+  "problems": 0,
+  "compared": "core sequence (align..moe_sum, API fills stripped) and launch grids",
+  "per_tile": {
+    "16x64x128w4s4": {
+      "cells": 20,
+      "seen": 20,
+      "sig_ok": 20,
+      "replay_fills_n_median": 0.0,
+      "replay_fills_ns_median": 0.0,
+      "serving_calls": 228987,
+      "serving_fills_n_median": 0.0,
+      "serving_fills_ns_median": 0.0,
+      "serving_kernel_sum_ns_median": 95584.0
+    },
+    "32x64x128w4s3": {
+      "cells": 20,
+      "seen": 20,
+      "sig_ok": 20,
+      "replay_fills_n_median": 0.0,
+      "replay_fills_ns_median": 0.0,
+      "serving_calls": 36099,
+      "serving_fills_n_median": 0.0,
+      "serving_fills_ns_median": 0.0,
+      "serving_kernel_sum_ns_median": 429152.0
+    },
+    "32x128x64w4s3": {
+      "cells": 20,
+      "seen": 20,
+      "sig_ok": 20,
+      "replay_fills_n_median": 0.0,
+      "replay_fills_ns_median": 0.0,
+      "serving_calls": 23355,
+      "serving_fills_n_median": 0.0,
+      "serving_fills_ns_median": 0.0,
+      "serving_kernel_sum_ns_median": 451264.0
+    },
+    "64x128x64w4s3": {
+      "cells": 20,
+      "seen": 20,
+      "sig_ok": 20,
+      "replay_fills_n_median": 0.0,
+      "replay_fills_ns_median": 0.0,
+      "serving_calls": 17469,
+      "serving_fills_n_median": 0.0,
+      "serving_fills_ns_median": 0.0,
+      "serving_kernel_sum_ns_median": 455776.0
+    }
+  },
+  "cells": [
+    {
+      "label": "g9190",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16483,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52672.0,
+        "kernel_sum_with_fills_ns": 52672.0,
+        "graph_calls": 16408
+      },
+      "serving": {
+        "g": 9190,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 53184
+      }
+    },
+    {
+      "label": "g20627",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16995,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 53120.0,
+        "kernel_sum_with_fills_ns": 53120.0,
+        "graph_calls": 16920
+      },
+      "serving": {
+        "g": 20627,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 52480
+      }
+    },
+    {
+      "label": "g32064",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16491,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52832.0,
+        "kernel_sum_with_fills_ns": 52832.0,
+        "graph_calls": 16416
+      },
+      "serving": {
+        "g": 32064,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 52960
+      }
+    },
+    {
+      "label": "g43501",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16411,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52800.0,
+        "kernel_sum_with_fills_ns": 52800.0,
+        "graph_calls": 16336
+      },
+      "serving": {
+        "g": 43501,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 53088
+      }
+    },
+    {
+      "label": "g54965",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16483,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52736.0,
+        "kernel_sum_with_fills_ns": 52736.0,
+        "graph_calls": 16408
+      },
+      "serving": {
+        "g": 54965,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 53280
+      }
+    },
+    {
+      "label": "g66430",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16483,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52640.0,
+        "kernel_sum_with_fills_ns": 52640.0,
+        "graph_calls": 16408
+      },
+      "serving": {
+        "g": 66430,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 53088
+      }
+    },
+    {
+      "label": "g77921",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 17003,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52704.0,
+        "kernel_sum_with_fills_ns": 52704.0,
+        "graph_calls": 16928
+      },
+      "serving": {
+        "g": 77921,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 52256
+      }
+    },
+    {
+      "label": "g89466",
+      "tile": "16x64x128w4s4",
+      "T": 8,
+      "grid": [
+        2304,
+        1920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10763,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 232160.0,
+        "kernel_sum_with_fills_ns": 232160.0,
+        "graph_calls": 10688
+      },
+      "serving": {
+        "g": 89466,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 231584
+      }
+    },
+    {
+      "label": "g101038",
+      "tile": "16x64x128w4s4",
+      "T": 8,
+      "grid": [
+        2304,
+        1920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10595,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 254752.0,
+        "kernel_sum_with_fills_ns": 254752.0,
+        "graph_calls": 10520
+      },
+      "serving": {
+        "g": 101038,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 254912
+      }
+    },
+    {
+      "label": "g112475",
+      "tile": "16x64x128w4s4",
+      "T": 2,
+      "grid": [
+        576,
+        480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 13331,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 87872.0,
+        "kernel_sum_with_fills_ns": 87872.0,
+        "graph_calls": 13256
+      },
+      "serving": {
+        "g": 112475,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 88736
+      }
+    },
+    {
+      "label": "g123913",
+      "tile": "16x64x128w4s4",
+      "T": 1,
+      "grid": [
+        288,
+        240
+      ],
+      "matched": "cell marks",
+      "replay_calls": 16995,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 52544.0,
+        "kernel_sum_with_fills_ns": 52544.0,
+        "graph_calls": 16920
+      },
+      "serving": {
+        "g": 123913,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 52320
+      }
+    },
+    {
+      "label": "g135971",
+      "tile": "16x64x128w4s4",
+      "T": 24,
+      "grid": [
+        3312,
+        2760
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10243,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 334080.0,
+        "kernel_sum_with_fills_ns": 334080.0,
+        "graph_calls": 10168
+      },
+      "serving": {
+        "g": 135971,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 335328
+      }
+    },
+    {
+      "label": "g147408",
+      "tile": "16x64x128w4s4",
+      "T": 4,
+      "grid": [
+        1152,
+        960
+      ],
+      "matched": "cell marks",
+      "replay_calls": 11051,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 166048.0,
+        "kernel_sum_with_fills_ns": 166048.0,
+        "graph_calls": 10976
+      },
+      "serving": {
+        "g": 147408,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 166720
+      }
+    },
+    {
+      "label": "g173182",
+      "tile": "16x64x128w4s4",
+      "T": 16,
+      "grid": [
+        3168,
+        2640
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10243,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 338304.0,
+        "kernel_sum_with_fills_ns": 338304.0,
+        "graph_calls": 10168
+      },
+      "serving": {
+        "g": 173182,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 339040
+      }
+    },
+    {
+      "label": "g184619",
+      "tile": "16x64x128w4s4",
+      "T": 2,
+      "grid": [
+        576,
+        480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 13555,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 94272.0,
+        "kernel_sum_with_fills_ns": 94272.0,
+        "graph_calls": 13480
+      },
+      "serving": {
+        "g": 184619,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 93408
+      }
+    },
+    {
+      "label": "g216307",
+      "tile": "16x64x128w4s4",
+      "T": 8,
+      "grid": [
+        2304,
+        1920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10507,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 208832.0,
+        "kernel_sum_with_fills_ns": 208832.0,
+        "graph_calls": 10432
+      },
+      "serving": {
+        "g": 216307,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 209632
+      }
+    },
+    {
+      "label": "g248237",
+      "tile": "16x64x128w4s4",
+      "T": 4,
+      "grid": [
+        1152,
+        960
+      ],
+      "matched": "cell marks",
+      "replay_calls": 11491,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 170272.0,
+        "kernel_sum_with_fills_ns": 170272.0,
+        "graph_calls": 11416
+      },
+      "serving": {
+        "g": 248237,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 169792
+      }
+    },
+    {
+      "label": "g284595",
+      "tile": "16x64x128w4s4",
+      "T": 8,
+      "grid": [
+        2304,
+        1920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10763,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 232032.0,
+        "kernel_sum_with_fills_ns": 232032.0,
+        "graph_calls": 10688
+      },
+      "serving": {
+        "g": 284595,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 231776
+      }
+    },
+    {
+      "label": "g357430",
+      "tile": "16x64x128w4s4",
+      "T": 24,
+      "grid": [
+        3312,
+        2760
+      ],
+      "matched": "cell marks",
+      "replay_calls": 10075,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 371552.0,
+        "kernel_sum_with_fills_ns": 371552.0,
+        "graph_calls": 10000
+      },
+      "serving": {
+        "g": 357430,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 373024
+      }
+    },
+    {
+      "label": "g399107",
+      "tile": "16x64x128w4s4",
+      "T": 4,
+      "grid": [
+        1152,
+        960
+      ],
+      "matched": "cell marks",
+      "replay_calls": 11051,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 166144.0,
+        "kernel_sum_with_fills_ns": 166144.0,
+        "graph_calls": 10976
+      },
+      "serving": {
+        "g": 399107,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 167744
+      }
+    },
+    {
+      "label": "g154629",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 425344.0,
+        "kernel_sum_with_fills_ns": 425344.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 154629,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 425152
+      }
+    },
+    {
+      "label": "g156511",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 429792.0,
+        "kernel_sum_with_fills_ns": 429792.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 156511,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 430912
+      }
+    },
+    {
+      "label": "g158474",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 425056.0,
+        "kernel_sum_with_fills_ns": 425056.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 158474,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 429152
+      }
+    },
+    {
+      "label": "g160464",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 429568.0,
+        "kernel_sum_with_fills_ns": 429568.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 160464,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 430208
+      }
+    },
+    {
+      "label": "g162400",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 421280.0,
+        "kernel_sum_with_fills_ns": 421280.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 162400,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 421824
+      }
+    },
+    {
+      "label": "g164282",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 429824.0,
+        "kernel_sum_with_fills_ns": 429824.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 164282,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 428992
+      }
+    },
+    {
+      "label": "g166083",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 416064.0,
+        "kernel_sum_with_fills_ns": 416064.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 166083,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 418080
+      }
+    },
+    {
+      "label": "g167884",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9395,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 433472.0,
+        "kernel_sum_with_fills_ns": 433472.0,
+        "graph_calls": 9320
+      },
+      "serving": {
+        "g": 167884,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 433472
+      }
+    },
+    {
+      "label": "g201491",
+      "tile": "32x64x128w4s3",
+      "T": 56,
+      "grid": [
+        3504,
+        2920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 414720.0,
+        "kernel_sum_with_fills_ns": 414720.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 201491,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 412704
+      }
+    },
+    {
+      "label": "g203291",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 429984.0,
+        "kernel_sum_with_fills_ns": 429984.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 203291,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 431008
+      }
+    },
+    {
+      "label": "g205092",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 427744.0,
+        "kernel_sum_with_fills_ns": 427744.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 205092,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 429888
+      }
+    },
+    {
+      "label": "g236998",
+      "tile": "32x64x128w4s3",
+      "T": 56,
+      "grid": [
+        3504,
+        2920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 431360.0,
+        "kernel_sum_with_fills_ns": 431360.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 236998,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 434528
+      }
+    },
+    {
+      "label": "g238799",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 420128.0,
+        "kernel_sum_with_fills_ns": 420128.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 238799,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 420928
+      }
+    },
+    {
+      "label": "g274458",
+      "tile": "32x64x128w4s3",
+      "T": 56,
+      "grid": [
+        3504,
+        2920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9387,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 437120.0,
+        "kernel_sum_with_fills_ns": 437120.0,
+        "graph_calls": 9312
+      },
+      "serving": {
+        "g": 274458,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 436544
+      }
+    },
+    {
+      "label": "g276259",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 427872.0,
+        "kernel_sum_with_fills_ns": 427872.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 276259,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 428416
+      }
+    },
+    {
+      "label": "g315482",
+      "tile": "32x64x128w4s3",
+      "T": 56,
+      "grid": [
+        3504,
+        2920
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 426688.0,
+        "kernel_sum_with_fills_ns": 426688.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 315482,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 428000
+      }
+    },
+    {
+      "label": "g353436",
+      "tile": "32x64x128w4s3",
+      "T": 64,
+      "grid": [
+        3552,
+        2960
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9907,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 438112.0,
+        "kernel_sum_with_fills_ns": 438112.0,
+        "graph_calls": 9832
+      },
+      "serving": {
+        "g": 353436,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 441344
+      }
+    },
+    {
+      "label": "g355237",
+      "tile": "32x64x128w4s3",
+      "T": 48,
+      "grid": [
+        3408,
+        2840
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9979,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 421696.0,
+        "kernel_sum_with_fills_ns": 421696.0,
+        "graph_calls": 9904
+      },
+      "serving": {
+        "g": 355237,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 423104
+      }
+    },
+    {
+      "label": "g390869",
+      "tile": "32x64x128w4s3",
+      "T": 64,
+      "grid": [
+        3552,
+        2960
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9899,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 437856.0,
+        "kernel_sum_with_fills_ns": 437856.0,
+        "graph_calls": 9824
+      },
+      "serving": {
+        "g": 390869,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 438176
+      }
+    },
+    {
+      "label": "g392669",
+      "tile": "32x64x128w4s3",
+      "T": 40,
+      "grid": [
+        3360,
+        2800
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9467,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 423264.0,
+        "kernel_sum_with_fills_ns": 423264.0,
+        "graph_calls": 9392
+      },
+      "serving": {
+        "g": 392669,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 424608
+      }
+    },
+    {
+      "label": "g186213",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9907,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 433760.0,
+        "kernel_sum_with_fills_ns": 433760.0,
+        "graph_calls": 9832
+      },
+      "serving": {
+        "g": 186213,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 436416
+      }
+    },
+    {
+      "label": "g187512",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 451264.0,
+        "kernel_sum_with_fills_ns": 451264.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 187512,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 451104
+      }
+    },
+    {
+      "label": "g188783",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9387,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 440736.0,
+        "kernel_sum_with_fills_ns": 440736.0,
+        "graph_calls": 9312
+      },
+      "serving": {
+        "g": 188783,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 444800
+      }
+    },
+    {
+      "label": "g189974",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 451040.0,
+        "kernel_sum_with_fills_ns": 451040.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 189974,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 451296
+      }
+    },
+    {
+      "label": "g191354",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450912.0,
+        "kernel_sum_with_fills_ns": 450944.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 191354,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454304
+      }
+    },
+    {
+      "label": "g192571",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450944.0,
+        "kernel_sum_with_fills_ns": 450944.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 192571,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 453120
+      }
+    },
+    {
+      "label": "g193843",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450688.0,
+        "kernel_sum_with_fills_ns": 450688.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 193843,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 449280
+      }
+    },
+    {
+      "label": "g195277",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 451008.0,
+        "kernel_sum_with_fills_ns": 451008.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 195277,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 451648
+      }
+    },
+    {
+      "label": "g196657",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 445952.0,
+        "kernel_sum_with_fills_ns": 445952.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 196657,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 443424
+      }
+    },
+    {
+      "label": "g197982",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450912.0,
+        "kernel_sum_with_fills_ns": 450912.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 197982,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 452160
+      }
+    },
+    {
+      "label": "g199173",
+      "tile": "32x128x64w4s3",
+      "T": 72,
+      "grid": [
+        1824,
+        1520
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450048.0,
+        "kernel_sum_with_fills_ns": 450048.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 199173,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 450464
+      }
+    },
+    {
+      "label": "g232656",
+      "tile": "32x128x64w4s3",
+      "T": 96,
+      "grid": [
+        1920,
+        1600
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 453344.0,
+        "kernel_sum_with_fills_ns": 453344.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 232656,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 453312
+      }
+    },
+    {
+      "label": "g233819",
+      "tile": "32x128x64w4s3",
+      "T": 88,
+      "grid": [
+        1896,
+        1580
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 447200.0,
+        "kernel_sum_with_fills_ns": 447200.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 233819,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 446144
+      }
+    },
+    {
+      "label": "g234983",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450751.0,
+        "kernel_sum_with_fills_ns": 450752.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 234983,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 451712
+      }
+    },
+    {
+      "label": "g271652",
+      "tile": "32x128x64w4s3",
+      "T": 96,
+      "grid": [
+        1920,
+        1600
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 453152.0,
+        "kernel_sum_with_fills_ns": 453152.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 271652,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 455680
+      }
+    },
+    {
+      "label": "g272815",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450912.0,
+        "kernel_sum_with_fills_ns": 450912.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 272815,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 453312
+      }
+    },
+    {
+      "label": "g313237",
+      "tile": "32x128x64w4s3",
+      "T": 96,
+      "grid": [
+        1920,
+        1600
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 453248.0,
+        "kernel_sum_with_fills_ns": 453248.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 313237,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 455232
+      }
+    },
+    {
+      "label": "g314401",
+      "tile": "32x128x64w4s3",
+      "T": 72,
+      "grid": [
+        1824,
+        1520
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 449504.0,
+        "kernel_sum_with_fills_ns": 449504.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 314401,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 450688
+      }
+    },
+    {
+      "label": "g353284",
+      "tile": "32x128x64w4s3",
+      "T": 72,
+      "grid": [
+        1824,
+        1520
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 449280.0,
+        "kernel_sum_with_fills_ns": 449280.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 353284,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 449920
+      }
+    },
+    {
+      "label": "g390168",
+      "tile": "32x128x64w4s3",
+      "T": 80,
+      "grid": [
+        1848,
+        1540
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 450976.0,
+        "kernel_sum_with_fills_ns": 450976.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 390168,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 451232
+      }
+    },
+    {
+      "label": "g196335",
+      "tile": "64x128x64w4s3",
+      "T": 104,
+      "grid": [
+        1752,
+        1460
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 455584.0,
+        "kernel_sum_with_fills_ns": 455584.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 196335,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454718
+      }
+    },
+    {
+      "label": "g220399",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 451264.0,
+        "kernel_sum_with_fills_ns": 451264.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 220399,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 450528
+      }
+    },
+    {
+      "label": "g221323",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456128.0,
+        "kernel_sum_with_fills_ns": 456128.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 221323,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 455488
+      }
+    },
+    {
+      "label": "g222383",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456704.0,
+        "kernel_sum_with_fills_ns": 456704.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 222383,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 455936
+      }
+    },
+    {
+      "label": "g223389",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456640.0,
+        "kernel_sum_with_fills_ns": 456640.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 223389,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454272
+      }
+    },
+    {
+      "label": "g224449",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9875,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456928.0,
+        "kernel_sum_with_fills_ns": 456928.0,
+        "graph_calls": 9800
+      },
+      "serving": {
+        "g": 224449,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 457792
+      }
+    },
+    {
+      "label": "g225427",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456672.0,
+        "kernel_sum_with_fills_ns": 456672.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 225427,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 458048
+      }
+    },
+    {
+      "label": "g226406",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456832.0,
+        "kernel_sum_with_fills_ns": 456832.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 226406,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 456896
+      }
+    },
+    {
+      "label": "g227520",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456640.0,
+        "kernel_sum_with_fills_ns": 456640.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 227520,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 453952
+      }
+    },
+    {
+      "label": "g228661",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456768.0,
+        "kernel_sum_with_fills_ns": 456768.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 228661,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 457024
+      }
+    },
+    {
+      "label": "g229747",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456576.0,
+        "kernel_sum_with_fills_ns": 456576.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 229747,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454496
+      }
+    },
+    {
+      "label": "g230807",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456928.0,
+        "kernel_sum_with_fills_ns": 456928.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 230807,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 455424
+      }
+    },
+    {
+      "label": "g231678",
+      "tile": "64x128x64w4s3",
+      "T": 104,
+      "grid": [
+        1752,
+        1460
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 455136.0,
+        "kernel_sum_with_fills_ns": 455136.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 231678,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454624
+      }
+    },
+    {
+      "label": "g269809",
+      "tile": "64x128x64w4s3",
+      "T": 128,
+      "grid": [
+        1800,
+        1500
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 458400.0,
+        "kernel_sum_with_fills_ns": 458400.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 269809,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 456608
+      }
+    },
+    {
+      "label": "g270679",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456768.0,
+        "kernel_sum_with_fills_ns": 456768.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 270679,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 457856
+      }
+    },
+    {
+      "label": "g271550",
+      "tile": "64x128x64w4s3",
+      "T": 104,
+      "grid": [
+        1752,
+        1460
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 455328.0,
+        "kernel_sum_with_fills_ns": 455328.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 271550,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 453632
+      }
+    },
+    {
+      "label": "g312732",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456800.0,
+        "kernel_sum_with_fills_ns": 456800.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 312732,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 456416
+      }
+    },
+    {
+      "label": "g351484",
+      "tile": "64x128x64w4s3",
+      "T": 120,
+      "grid": [
+        1800,
+        1500
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 457984.0,
+        "kernel_sum_with_fills_ns": 457984.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 351484,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 457440
+      }
+    },
+    {
+      "label": "g387913",
+      "tile": "64x128x64w4s3",
+      "T": 128,
+      "grid": [
+        1800,
+        1500
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9371,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 458400.0,
+        "kernel_sum_with_fills_ns": 458400.0,
+        "graph_calls": 9296
+      },
+      "serving": {
+        "g": 387913,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 459968
+      }
+    },
+    {
+      "label": "g388784",
+      "tile": "64x128x64w4s3",
+      "T": 112,
+      "grid": [
+        1776,
+        1480
+      ],
+      "matched": "cell marks",
+      "replay_calls": 9883,
+      "replay": {
+        "fills_n": 0.0,
+        "fills_ns": 0.0,
+        "kernel_sum_ns": 456384.0,
+        "kernel_sum_with_fills_ns": 456384.0,
+        "graph_calls": 9808
+      },
+      "serving": {
+        "g": 388784,
+        "fills_n": 0,
+        "fills_ns": 0,
+        "kernel_sum_ns": 454144
+      }
+    }
+  ],
+  "replay_calls": 848328,
+  "matched_by": "cell marks"
+}

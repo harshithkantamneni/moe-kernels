@@ -1,0 +1,90 @@
+{
+ "schema": "moe-kernels/prod-frontier-predictions/1",
+ "model": "ernie-4.5-21b-a3b",
+ "runs": {
+  "A1710": {
+   "g": "A1710.g.npy",
+   "n": 401463
+  },
+  "A1410": {
+   "g": "A1410.g.npy",
+   "n": 401463
+  },
+  "Adefault": {
+   "g": "Adefault.g.npy",
+   "n": 401463
+  },
+  "Aon": {
+   "g": "Aon.g.npy",
+   "n": 401463
+  }
+ },
+ "arms": {
+  "cli": {
+   "model_file": "moe_grouped_gemm_4bdb99d0.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_experts_per_device",
+    "hidden_dim",
+    "expert_hidden_dim",
+    "router_topk",
+    "model_expansion_ratio",
+    "tokens_per_expert_avg",
+    "tokens_to_experts_ratio",
+    "expert_utilization",
+    "min_load_ratio",
+    "load_imbalance_cv",
+    "max_load_ratio",
+    "load_entropy",
+    "load_gini_coefficient"
+   ],
+   "distinct": 441628,
+   "files": {
+    "A1710": "cli.A1710.npy",
+    "A1410": "cli.A1410.npy",
+    "Adefault": "cli.Adefault.npy",
+    "Aon": "cli.Aon.npy"
+   }
+  },
+  "simpath": {
+   "model_file": "moe_grouped_gemm_9500d96e.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_tokens_post_padded"
+   ],
+   "distinct": 441628,
+   "files": {
+    "A1710": "simpath.A1710.npy",
+    "A1410": "simpath.A1410.npy",
+    "Adefault": "simpath.Adefault.npy",
+    "Aon": "simpath.Aon.npy"
+   }
+  },
+  "cli-fills": {
+   "model_file": "moe_grouped_gemm_4bdb99d0.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_experts_per_device",
+    "hidden_dim",
+    "expert_hidden_dim",
+    "router_topk",
+    "model_expansion_ratio",
+    "tokens_per_expert_avg",
+    "tokens_to_experts_ratio",
+    "expert_utilization",
+    "min_load_ratio",
+    "load_imbalance_cv",
+    "max_load_ratio",
+    "load_entropy",
+    "load_gini_coefficient"
+   ],
+   "distinct": 441628,
+   "files": {
+    "A1710": "cli-fills.A1710.npy",
+    "A1410": "cli-fills.A1410.npy",
+    "Adefault": "cli-fills.Adefault.npy",
+    "Aon": "cli-fills.Aon.npy"
+   }
+  }
+ }
+}

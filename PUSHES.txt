@@ -6,3 +6,4 @@
 2026-11-20T05:51:18Z prod main: A1710 and A1410
 2026-11-20T06:51:28Z prod main: replay C
 2026-11-20T06:53:54Z prod main: Frontier profiles and models
+2026-11-20T07:42:54Z prod main: measurements and Frontier predictions done (score on the laptop: scripts/prod/offline.sh)

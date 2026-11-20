@@ -1,0 +1,19 @@
+#loc = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":137:0)
+#loc6 = loc("buf_ptr"(#loc))
+#loc7 = loc("step"(#loc))
+module {
+  tt.func public @_moe_prod_step_kernel(%buf_ptr: !tt.ptr<i32> {tt.divisibility = 16 : i32} loc("buf_ptr"(#loc)), %step: i32 loc("step"(#loc))) attributes {noinline = false} {
+    %c0_i32 = arith.constant 0 : i32 loc(#loc1)
+    %0 = tt.get_program_id y : i32 loc(#loc2)
+    %1 = arith.cmpi eq, %0, %c0_i32 : i32 loc(#loc1)
+    scf.if %1 {
+      tt.store %buf_ptr, %step : !tt.ptr<i32> loc(#loc4)
+    } loc(#loc3)
+    tt.return loc(#loc5)
+  } loc(#loc)
+} loc(#loc)
+#loc1 = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":139:27)
+#loc2 = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":139:21)
+#loc3 = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":139:7)
+#loc4 = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":140:26)
+#loc5 = loc("/home/ubuntu/moe/repo/scripts/prod/moe_capture.py":139:4)
