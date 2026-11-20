@@ -13,3 +13,4 @@
 2026-11-20T08:07:21Z prod extras: X3 Qwen3 gate
 2026-11-20T08:08:25Z prod extras: X3 Qwen3 A1710
 2026-11-20T08:09:28Z prod extras: X3 Qwen3 A1410
+2026-11-20T08:10:32Z prod extras: X3 Qwen3 replay C
