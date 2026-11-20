@@ -239,7 +239,7 @@ c6913ca456066063ff61e1c1b4621a294359a713a86ad3464e984c382976dd76  vm/results/pro
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/A1710-unlock-after.log
 493ebea9e117d0abd8bb8c100f6d69786bb5807d3285bc10fed404fba3080f4e  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/env.log
-b198a2ff1b64927caf65621fe2e1c400ea882973cd55fe011c7f3285ae60dfc7  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/final-push.log
+b1d6bcb3ad253b6d4a6232d8e39f4a77a6566b566f1ae52fb0070f6ce8a79348  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/final-push.log
 3a7b248c24a18f510892c83184b003578fd6283ab5baa9355b020b93c8dd0816  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-grid-check.log
 9615f1fb33b3020cd6f725d84a362cae6160d02e8f15923dd48d35f2a6091c52  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-setup.log
 ff678476ef5562c24288ce14ae0d045af2b2de4c13ea1a227ea48560b8eb532f  vm/results/prod-glm-4.7-flash-20261120T195848Z/logs/frontier-timer-decode.log
@@ -266,8 +266,8 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 5bbb43fd72e5b45b2489445f6b04d1ec0fee4fae1b26ae5c51de62e0a0f856ae  vm/results/prod-glm-4.7-flash-20261120T195848Z/prompts.jsonl
 3688e22e391e41e464cd7aac76a3ffc3303a820df07a150eef3f8825c20be889  vm/results/prod-glm-4.7-flash-20261120T195848Z/sag/par.json
 436086257e05f0fe0bdbcf2f5ba17943293156259d55921ef36f30480b723689  vm/results/prod-glm-4.7-flash-20261120T195848Z/traces.sha256.json
-a530d7da41eb061da520d934cd2404fa19a2e4d343d20b0a97fe9b22f482934a  vm/results/prod-trinity-mini-20261120T195848Z/SUMMARY.txt
-8bc06ca5078b5e0ec4bf26bca9a047d43242392ae736f292de0db513de55490e  vm/results/prod-trinity-mini-20261120T195848Z/env-preflight.json
+d05acadf64d288500234e14c10af89ddec75fda7e16e573d90091828a9f134d0  vm/results/prod-trinity-mini-20261120T195848Z/SUMMARY.txt
+ee5ca9fc46d299838df7978c7aab19ae41016a82dc39e13fa33309773a5084e5  vm/results/prod-trinity-mini-20261120T195848Z/env-preflight.json
 7ddc3bf4d99e02390205f5a51d2c78d2fef1a90b2d4cdb29bcdc7794d457b070  vm/results/prod-trinity-mini-20261120T195848Z/gate60/calls.00000.jsonl
 b2a256c145fb493c9b85151b377602ff90980d53f5de53bbd994559d49449d22  vm/results/prod-trinity-mini-20261120T195848Z/gate60/calls.00001.jsonl
 6f5cf56da4f77e04625f3978cbe92b832cf0159f7d0dfdb445851a701015fd50  vm/results/prod-trinity-mini-20261120T195848Z/gate60/calls.00002.jsonl
@@ -313,9 +313,10 @@ c34ad1a1d34b75e9b40c6d24c3de38ae0a29bfd37b7d5528aa8ec4c3ff950582  vm/results/pro
 35651ff9fb5bf6db283441420300e0cf5a6735a277ff7021dabc33d7e47b021c  vm/results/prod-trinity-mini-20261120T195848Z/gate60/sequences_by_path.json
 a668f4cbb0e9ee04f86eef517a6edf0db4bc772a24dab825961a180bd6f9cdf0  vm/results/prod-trinity-mini-20261120T195848Z/gate60/steps.jsonl
 0b4aec6a5f037d53ae0974f7ab7d093d5721183b4e96ccef0365249a554b7e55  vm/results/prod-trinity-mini-20261120T195848Z/kit-profile.json
-163da7ce6cc2d73bd837bf0247bfbf4b5873b2ac986921b5f8b58965f174a0ab  vm/results/prod-trinity-mini-20261120T195848Z/logs/env-preflight.log
+d19367805f0c3bed0ff96b061555a452135efe664b8601b95ad25b1dc1549c65  vm/results/prod-trinity-mini-20261120T195848Z/logs/env-preflight.log
 1f148460d334150c0050664d4f66eece354321aab61157085819af8ebeb2246d  vm/results/prod-trinity-mini-20261120T195848Z/logs/env.log
-6228dc6dfa5ce8d8f6af0410039eca155d12ce9251c1bac0730ed61a9f6980c0  vm/results/prod-trinity-mini-20261120T195848Z/logs/final-push.log
+17e2e733d330978514bb0523bd084790562ec18f2a0c859e986a71d1c0533352  vm/results/prod-trinity-mini-20261120T195848Z/logs/final-push.log
+84cbefc1dddbf926254096e68904a68d3ab7107eb2c22d2853625296d6c4e41b  vm/results/prod-trinity-mini-20261120T195848Z/logs/frontier-grid-check.log
 c5114d46436bfbb5a0a4d9f58e5faf96039cf4d2762f0e5387246d2a5c9d3909  vm/results/prod-trinity-mini-20261120T195848Z/logs/frontier-setup.log
 dff79f602f2a9bd7ba1d8beda5bc4ac941e8c54e536ca1092579f19f16e7830b  vm/results/prod-trinity-mini-20261120T195848Z/logs/gate60-capture.log
 69c072b827d5d6cf24e63877cc73e396037caa2ea0af0cb82d4e20892b6b3134  vm/results/prod-trinity-mini-20261120T195848Z/logs/gate60-extract.log

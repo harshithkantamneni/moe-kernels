@@ -1,4 +1,3 @@
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 PASS P1 git: clean at dc8b3f73fcce63a253911f3341b21f46d3aaaa34 (expected, from /home/ubuntu/moe/env.sh)
 PASS P2 idle: no compute process on the GPU
 PASS P3 power: enforced power limit 700 W
@@ -8,7 +7,7 @@ PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda
 PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
 PASS P8 hf-rev: arcee-ai/Trinity-Mini resolves to the pin e7fa016763d03089ab547c9ee19044980073669b
 PASS P9 frontier: /home/ubuntu/moe/frontier/src holds db5a85b
-PASS P10 disk: 4145 GB free under /home/ubuntu/moe
+PASS P10 disk: 4085 GB free under /home/ubuntu/moe
 PASS P11 setup: /home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)
-PASS P12 hf-rate: measured 101 MB/s (1007 MB in 9.9 s); the weights (52.2 GB) would take ~516 s
+PASS P12 hf-rate: measured 75 MB/s (1007 MB in 13.4 s); the weights (52.2 GB) would take ~694 s
 PASS env-preflight

@@ -14,3 +14,21 @@ PASS gate60-capture (207s)
 PASS gate60-extract (103s)
 PASS gate60-sequences (3s)
 FAIL frontier-setup: exit 4: FAIL frontier primary venv: install exited 2 
+RESUME from frontier-grid-check at 2026-11-20T21:35:02Z in /home/ubuntu/moe/results/prod-trinity-mini-20261120T195848Z
+PASS env-preflight (15s)
+PASS env (5s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME price-check-v9
+SKIPPED-RESUME model-prefetch
+SKIPPED-RESUME prompts
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+FAIL frontier-grid-check: exit 3: FAIL frontier_op: $FR_PY_PRIMARY is unset: source $MOE_HOME/frontier/frontier.env (frontier_setup.sh) 

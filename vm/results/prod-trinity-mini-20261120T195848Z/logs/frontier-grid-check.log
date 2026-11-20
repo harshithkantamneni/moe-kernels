@@ -1,0 +1,1 @@
+FAIL frontier_op: $FR_PY_PRIMARY is unset: source $MOE_HOME/frontier/frontier.env (frontier_setup.sh)
