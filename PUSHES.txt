@@ -41,3 +41,4 @@
 2026-11-20T10:05:33Z extras.sh exit 0: final push
 2026-11-20T10:08:51Z prod extras: X4 long-context prefill
 2026-11-20T10:10:36Z prod extras: done (score on the laptop: scripts/prod/offline.sh)
+2026-11-20T10:11:56Z extras.sh exit 0: final push

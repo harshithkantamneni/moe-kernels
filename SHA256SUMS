@@ -456,7 +456,7 @@ c1755ecad208f21b8c326c619fe22800a4554612d5466418feff035b11def5e2  vm/results/pro
 857c2e3f67d8adcf3498a4e1b0a089f4614c854093d701688bb9f18b8e5229e7  vm/results/prod-main-20261120T035826Z/extras/A1710r/ring/shard_00062.npz
 235f132927f7e5f92af24a8c86d35fcd6d0b3b8b3ed3c724bdc04e2dfce75b1e  vm/results/prod-main-20261120T035826Z/extras/A1710r/sequences.json
 d318701197090cd8e0d750692e6c0a3bdc97e198e6af89ae1928859dd2ec82d3  vm/results/prod-main-20261120T035826Z/extras/A1710r/steps.jsonl
-074420484106b15446613c832a4555644408abca81cc22a784d6585f312861d2  vm/results/prod-main-20261120T035826Z/extras/EXTRAS-DONE
+224dfa75d4cd6333a183dac5da70f917f104dd26a1d6dfaa28f36e4f21e0a28c  vm/results/prod-main-20261120T035826Z/extras/EXTRAS-DONE
 274cd75f7100e305c9bc1f1f6c5b92b5e31e52cb4c756527f9db7ae8b24a8b29  vm/results/prod-main-20261120T035826Z/extras/LC1410/calls.jsonl
 1c9c043f2b04bca8cf64569113edb4c983d069030a63b63d9dc02b81345f0723  vm/results/prod-main-20261120T035826Z/extras/LC1410/calls.shards.json
 845b65e2c443429b560926c39e62b8625d0adf6b9a36685c3697527304c3c4f0  vm/results/prod-main-20261120T035826Z/extras/LC1410/capture_manifest.json
@@ -472,7 +472,7 @@ d131f9b80d33c48f5a095746e9dba5191db35d893ef767028ac1dee8c0065176  vm/results/pro
 db150d22e854bdcde5d8b05e098b3e264875a2fb197aab3f1db7add3da47c528  vm/results/prod-main-20261120T035826Z/extras/LC1410/ring/shard_00004.npz
 85ece09262a5719adad92120c917c1b4f4fd6a6d41cf85e371de84bed4c0f920  vm/results/prod-main-20261120T035826Z/extras/LC1410/sequences.json
 65fb50ea56a141ef925a8c1625c193af3e40a21df5b9c63a2472b9a9f3deaab8  vm/results/prod-main-20261120T035826Z/extras/LC1410/steps.jsonl
-89890522bb6c8744e415068313d7e8f8923cd4092104b9183abd8d72a7f494f0  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
+8495db1a17b1229cba4dc6d70ab2816bf486631d385f9b35f2490ee67084980d  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
 2082550b2bb152817d3d2d5adda4ff86d6678d84df8641be7519d71b39f0277e  vm/results/prod-main-20261120T035826Z/extras/env-preflight.json
 b111ab9a9f44d39b445e39b9e2b63f6b251416ba23365b0f649125180c4fa0db  vm/results/prod-main-20261120T035826Z/extras/logs/X1-budget.log
 04eb3e2317b91fc9230c19077fb1be04cff1ff4439ee76a80a147b233a447ffb  vm/results/prod-main-20261120T035826Z/extras/logs/X1-capture.log
@@ -561,8 +561,8 @@ c5b83b7fd497372b8099f546323586932c2e9fe42303c31c273d892618e6eccb  vm/results/pro
 94ef0fdd6457b7d4beb89373bfffaadfa7763676ef71fbd7ed022c1032f0c1f8  vm/results/prod-main-20261120T035826Z/extras/logs/extras-commit-switch.log
 a0c9115e6e5e47534e4ba64b379a95e0a28f9a0a488ff5d8100e3e8b01207a41  vm/results/prod-main-20261120T035826Z/extras/logs/extras-held-back-check.log
 9f144abbd2649ca2f0cb5858b363553a10654e425f2f7f38526b607b614eb0a0  vm/results/prod-main-20261120T035826Z/extras/logs/extras-main-finished.log
-5fd2be14905c8015338c710dc0ce07467fd65b83668792fe0d55f319f3378373  vm/results/prod-main-20261120T035826Z/extras/logs/extras-push-final.log
-e7c92fb90d71ffd647959f5340237d522fe9ccaa123154916a7b966e1763f994  vm/results/prod-main-20261120T035826Z/extras/logs/final-push.log
+353de046eefd57bfdd052a78d63e0e43df44b7a2c504206195715d63da6546b1  vm/results/prod-main-20261120T035826Z/extras/logs/extras-push-final.log
+ce6c451441786ac2f49fdc09c29dca031a9158e63a7db788673b960e964635cc  vm/results/prod-main-20261120T035826Z/extras/logs/final-push.log
 5f86d0fc4c5794ab3636be45aaeac26012c6752270a2c21c50fc7ef318b14a58  vm/results/prod-main-20261120T035826Z/extras/logs/power-readback.log
 64a858df3ddc3868ee281a1aad24c6281b7a8743ce590062aac832bcc05c6282  vm/results/prod-main-20261120T035826Z/extras/logs/price-check-qwen3.log
 aa576cdc928d2ec2877d17374f2624be31e5ba1bf9ad78a6c7d03db28eb1aa28  vm/results/prod-main-20261120T035826Z/extras/logs/revision-pinned-qwen3.log
