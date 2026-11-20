@@ -1,0 +1,60 @@
+  $ /home/ubuntu/moe/frontier/venv-primary/bin/python /home/ubuntu/moe/repo/scripts/prod/frontier_op.py _train --model qwen3-30b-a3b --src /home/ubuntu/moe/frontier/src --arm-label cli --max-tokens 16384 --csv /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/profile/compute/gh200/qwen3-30b-a3b-moe/moe_kernel_only.csv --out /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models
+INFO 08:11:51 cli.py:464] ================================================================================
+INFO 08:11:51 cli.py:465] MoE Model Training
+INFO 08:11:51 cli.py:466] ================================================================================
+INFO 08:11:51 cli.py:506] Using explicit MoE parameters
+INFO 08:11:51 base_trainer.py:117] Initialized MoETrainer
+INFO 08:11:51 base_trainer.py:118] Dataset path: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/profile/compute/gh200/qwen3-30b-a3b-moe/moe_kernel_only.csv
+INFO 08:11:51 base_trainer.py:119] Output directory: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models
+INFO 08:11:51 base_trainer.py:120] Predictor type: random_forest
+INFO 08:11:51 moe_trainer.py:176] MoE Configuration:
+INFO 08:11:51 moe_trainer.py:181]   - num_experts: 128
+INFO 08:11:51 moe_trainer.py:182]   - router_topk: 8
+INFO 08:11:51 moe_trainer.py:183]   - hidden_dim: 2048
+INFO 08:11:51 moe_trainer.py:184]   - expert_hidden_dim: 768
+INFO 08:11:51 moe_trainer.py:185]   - moe_tensor_parallel_size: 1
+INFO 08:11:51 moe_trainer.py:186]   - expert_parallel_size: 1
+INFO 08:11:51 moe_trainer.py:187]   - routing_runtime_path: uniform_topk
+INFO 08:11:51 moe_trainer.py:188]   - gating_runtime_context: prefill_hot
+INFO 08:11:51 moe_trainer.py:470] Starting training for MoETrainer
+INFO 08:11:51 moe_trainer.py:472] Loading dataset from /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/profile/compute/gh200/qwen3-30b-a3b-moe/moe_kernel_only.csv
+INFO 08:11:51 base_trainer.py:148] Profiling precision detected: BF16
+INFO 08:11:51 base_trainer.py:184] Measurement type detected: KERNEL_ONLY
+INFO 08:11:51 moe_trainer.py:208] Original MoE data: 1161 rows, 46 columns
+INFO 08:11:51 moe_trainer.py:211] Filtering conditions:
+INFO 08:11:51 moe_trainer.py:212]   - num_experts == 128
+INFO 08:11:51 moe_trainer.py:213]   - router_topk == 8
+INFO 08:11:51 moe_trainer.py:214]   - hidden_dim == 2048
+INFO 08:11:51 moe_trainer.py:215]   - expert_hidden_dim == 768
+INFO 08:11:51 moe_trainer.py:216]   - model-specific TP/EP slices are selected during training
+INFO 08:11:51 moe_trainer.py:217]   - requested moe_tensor_parallel_size == 1
+INFO 08:11:51 moe_trainer.py:218]   - requested expert_parallel_size == 1
+INFO 08:11:51 moe_trainer.py:223]   - Available num_experts: [np.int64(128)]
+INFO 08:11:51 moe_trainer.py:225]   - Available router_topk: [np.int64(8)]
+INFO 08:11:51 moe_trainer.py:227]   - Available num_tensor_parallel_workers: [np.int64(1)]
+INFO 08:11:51 moe_trainer.py:229]   - Available expert_parallel_size: [np.int64(1)]
+INFO 08:11:51 moe_trainer.py:239] After filtering: 1161 rows
+INFO 08:11:51 moe_trainer.py:271] Dataset column verification passed
+INFO 08:11:51 moe_trainer.py:291] Load imbalance features detected (full feature set) - will use enhanced feature set for moe_grouped_gemm
+INFO 08:11:51 moe_trainer.py:474] Loaded 1161 rows after filtering
+INFO 08:11:51 moe_trainer.py:483] Training 1 models: ['moe_grouped_gemm']
+INFO 08:11:51 moe_trainer.py:375]   Using load imbalance features for moe_grouped_gemm (14 features)
+INFO 08:11:51 moe_trainer.py:458]   Filtered training rows for moe_grouped_gemm: 1161 / 1161 (tp=1, ep=1)
+INFO 08:11:51 moe_trainer.py:504] 
+INFO 08:11:51 moe_trainer.py:504] --- Training moe_grouped_gemm ---
+INFO 08:11:51 moe_trainer.py:505] Features: ['total_routed_tokens', 'num_experts_per_device', 'hidden_dim', 'expert_hidden_dim', 'router_topk', 'model_expansion_ratio', 'tokens_per_expert_avg', 'tokens_to_experts_ratio', 'expert_utilization', 'min_load_ratio', 'load_imbalance_cv', 'max_load_ratio', 'load_entropy', 'load_gini_coefficient']
+INFO 08:11:51 moe_trainer.py:506] Target: time_stats.moe_grouped_gemm.median
+INFO 08:11:51 base_trainer.py:421] Training model moe_grouped_gemm with 1161 samples
+INFO 08:11:58 base_trainer.py:439] Trained model moe_grouped_gemm with MAPE 0.17%
+INFO 08:11:58 base_trainer.py:389] Saved model to /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models/moe_grouped_gemm_b8b2dfa1.pkl
+INFO 08:11:58 moe_trainer.py:515] 
+INFO 08:11:58 moe_trainer.py:515] Training complete! Trained 1 models
+INFO 08:11:58 moe_trainer.py:516] Models saved to /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models
+INFO 08:11:58 cli.py:526] 
+INFO 08:11:58 cli.py:526] ================================================================================
+INFO 08:11:58 cli.py:527] Training completed successfully!
+INFO 08:11:58 cli.py:528] ================================================================================
+INFO 08:11:58 cli.py:529] Trained models: ['moe_grouped_gemm']
+INFO 08:11:58 cli.py:530] Models saved to: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models
+PASS frontier train (cli): exit 0
+PASS frontier train (cli): exit 0

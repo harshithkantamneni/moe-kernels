@@ -23,11 +23,31 @@
    "mtime_ns": 1795161812822170059,
    "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
   },
+  "qwen3/frontier/timer-decode/timer.nsys-rep": {
+   "bytes": 629451,
+   "mtime_ns": 1795162261916817374,
+   "sha256": "4657d1851006c6ebbddb359e5cfc203d24e9caf16c3c0131f9e88e63315a7f45"
+  },
+  "qwen3/frontier/timer-decode/timer.sqlite": {
+   "bytes": 1675264,
+   "mtime_ns": 1795162262000818220,
+   "sha256": "35d8e8c3fcd867ee4ed8cb5b521f154c030d04093e10819db82030665270df8f"
+  },
+  "qwen3/frontier/timer-prefill/timer.nsys-rep": {
+   "bytes": 10921600,
+   "mtime_ns": 1795162304938250511,
+   "sha256": "fff8ffa3b2d78303c22c345a52ad6f8080f32ba1ef104945a9796e3319a0f952"
+  },
+  "qwen3/frontier/timer-prefill/timer.sqlite": {
+   "bytes": 27037696,
+   "mtime_ns": 1795162305734258525,
+   "sha256": "946db901607ce8f470f2ed049b9c6697a7ad7c87829720e37df40bbc80eab499"
+  },
   "qwen3/gate60/serve.nsys-rep": {
    "bytes": 21059785,
    "mtime_ns": 1795161996844090884,
    "sha256": "2f1da40ff9a4df59bd58701317603120b1fe910958140022f6952aff528150c8"
   }
  },
- "total_bytes": 1384718152
+ "total_bytes": 1424982163
 }
