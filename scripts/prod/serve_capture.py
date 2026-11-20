@@ -434,7 +434,7 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     resolved = resolve_revision(model.hf_repo, rev)
     manifest["hf_revision"] = {"pinned": rev, "resolved": resolved}
     gates["G-REV"] = rev_gate(model.key, rev, resolved)
-    hf = llm.llm_engine.model_config.hf_config.to_dict()
+    hf = PL.hf_config_view(llm.llm_engine.model_config.hf_config)
     bad_cfg = PL.check_hf_config(model, hf)
     backends = sorted({r["backend"] for r in cap.bound_layers})
     gates["G-CFG"] = {"verdict": "FAIL" if bad_cfg else "PASS", "why": "; ".join(bad_cfg)}

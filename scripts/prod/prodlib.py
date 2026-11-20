@@ -97,6 +97,18 @@ def expert_bytes(cfg: MoEConfig) -> int:
     return 3 * int(cfg.hidden_size) * int(cfg.intermediate_size) * 2
 
 
+def hf_config_view(config) -> dict:
+    """The dict G-CFG reads: config.to_dict() plus every alias in the config's attribute_map whose key to_dict()
+    dropped. transformers 5.x stores Qwen3-MoE's expert count as num_local_experts and keeps num_experts only as an
+    attribute_map alias, so to_dict() has no num_experts although config.json does (the 2026-11-20 extras X3 G-CFG
+    stop). An alias fills a missing key only; a key to_dict() already holds is never replaced."""
+    d = dict(config.to_dict())
+    for alias, canonical in (getattr(config, "attribute_map", None) or {}).items():
+        if alias not in d and canonical in d:
+            d[alias] = d[canonical]
+    return d
+
+
 def check_hf_config(model: ServedModel, hf: dict) -> list[str]:
     """G-CFG: every listed config.json number equals the kit's MoEConfig. ERNIE's moe_num_experts may be a list
     (one entry per modality); its first entry is the text experts."""

@@ -418,6 +418,45 @@ def test_qwen3_config_is_the_hubs_and_pinned():
     assert PL.check_hf_config(m, dict(QWEN3_HF, mlp_only_layers=[3]))
     assert PL.check_hf_config(m, dict(QWEN3_HF, num_experts_per_tok=6))
     assert re.fullmatch(r"[0-9a-f]{40}", PL.hf_revision(QM))
+
+
+class _Tf515Qwen3Config:
+    """transformers 5.15.1's Qwen3MoeConfig as the VM showed it on 2026-11-20: to_dict() names the expert count
+    num_local_experts; num_experts survives only as an attribute_map alias."""
+    attribute_map = {"num_experts": "num_local_experts"}
+
+    def to_dict(self):
+        d = {k: v for k, v in QWEN3_HF.items() if k != "num_experts"}
+        d["num_local_experts"] = QWEN3_HF["num_experts"]
+        return d
+
+
+def test_g_cfg_reads_attribute_map_aliases_that_to_dict_drops():
+    m = PL.MODELS[QM]
+    cfg = _Tf515Qwen3Config()
+    assert PL.check_hf_config(m, cfg.to_dict())          # the X3 stop: num_experts=None
+    view = PL.hf_config_view(cfg)
+    assert view["num_experts"] == 128 and PL.check_hf_config(m, view) == []
+
+
+def test_hf_config_view_never_replaces_a_key_to_dict_holds():
+    class C:
+        attribute_map = {"num_experts": "num_local_experts"}
+
+        def to_dict(self):
+            return {"num_experts": 64, "num_local_experts": 128}
+    assert PL.hf_config_view(C())["num_experts"] == 64
+
+    class NoMap:
+        def to_dict(self):
+            return {"moe_num_experts": [64, 64]}
+    assert PL.hf_config_view(NoMap()) == {"moe_num_experts": [64, 64]}
+
+
+def test_prompts_write_creates_its_directory(tmp_path):
+    out = tmp_path / "extras" / "long" / "prompts.jsonl"
+    PR.write({"header": {"schema": "x"}, "rows": [{"a": 1}]}, out)
+    assert out.read_text().splitlines() == ['{"schema": "x"}', '{"a": 1}']
     assert PR.tokenizer_revision("Qwen/Qwen3-30B-A3B") == PL.hf_revision(QM)
     import moe.spec as S
     assert QM not in S.MODEL_CONFIGS or S.MODEL_CONFIGS[QM] == c          # spec.py untouched: runtime only

@@ -241,6 +241,7 @@ def build_long(*, data_path, encode, n: int, seed: int, min_input: int, max_inpu
 def write(promptset: dict, out) -> None:
     lines = [json.dumps(promptset["header"], sort_keys=True)] + [json.dumps(r, sort_keys=True)
                                                                    for r in promptset["rows"]]
+    Path(out).parent.mkdir(parents=True, exist_ok=True)   # extras X4 writes into a new extras/long/ (2026-11-20)
     Path(out).write_text("\n".join(lines) + "\n")
 
 
