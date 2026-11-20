@@ -185,7 +185,7 @@ def synthetic_cell(model: PL.ServedModel, T: int = BIG_T_SYNTHETIC, seed: int = 
     rng = np.random.default_rng(int(seed) + int(T))
     ids = np.argsort(rng.random((int(T), cfg.num_experts)), axis=1)[:, :cfg.top_k]
     return ({"label": f"s{int(T)}", "g": None, "T": int(T), "T_unpadded": int(T), "layer": None,
-             "tile": PL.tile_bin(T), "branch": PL.branch(T), "counts": PL.counts_from_ids(ids, cfg.num_experts),
+             "tile": PL.tile_bin(T, cfg.num_experts), "branch": PL.branch(T), "counts": PL.counts_from_ids(ids, cfg.num_experts),
              "ids_digest": PL.digest(ids), "step": None, "synthetic": True}, ids)
 
 
@@ -204,7 +204,7 @@ def write_sample(run_dir, model: PL.ServedModel, picked: list[dict], out_dir, *,
         lab = f"g{r['g']}"
         counts = PL.counts_from_ids(rec["ids"], cfg.num_experts)
         cells.append({"label": lab, "g": r["g"], "T": rec["n"], "T_unpadded": r.get("T"), "layer": rec["layer"],
-                      "tile": PL.tile_bin(rec["n"]), "branch": PL.branch(rec["n"]), "counts": counts,
+                      "tile": PL.tile_bin(rec["n"], cfg.num_experts), "branch": PL.branch(rec["n"]), "counts": counts,
                       "ids_digest": PL.digest(rec["ids"]), "step": r.get("step")})
         ids[lab] = np.asarray(rec["ids"], dtype=np.int16)
     for c, a in synthetic or []:

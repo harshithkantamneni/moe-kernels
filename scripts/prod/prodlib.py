@@ -58,6 +58,20 @@ class ServedModel:
     moe_layers: int
     #: config.json keys that must equal cfg's numbers (G-CFG), as (json key, cfg attribute)
     hf_keys: tuple
+    #: config.json keys that must hold a literal value (G-CFG), as (json key, value): e.g. Qwen3's every-layer-MoE keys
+    hf_literals: tuple = ()
+
+
+#: Qwen3-30B-A3B (extras.sh X3, the SECOND BLIND MODEL, owner 2026-11-19): E 128 routed, top-8, H 2048, expert I 768,
+#: 48 layers, every one MoE (decoder_sparse_step 1, mlp_only_layers []), no shared expert. Built HERE at runtime like
+#: ERNIE (moe/spec.py is sha-pinned and is not edited; v8 registers it in-process from the MoEConfig price_v8 passes).
+#: Checked 2026-11-19 against the Hub's config.json at the pinned revision (HF_REVISIONS): hidden_size 2048,
+#: moe_intermediate_size 768, num_experts 128, num_experts_per_tok 8, num_hidden_layers 48, norm_topk_prob true,
+#: decoder_sparse_step 1, mlp_only_layers [] (no shared_expert_intermediate_size key: vLLM 0.27.1's
+#: Qwen3MoeSparseMoeBlock builds no shared expert, qwen3_moe.py:180-202, and routes through FusedMoEFactory).
+QWEN3 = MoEConfig(name="qwen3-30b-a3b", hidden_size=2048, intermediate_size=768, num_experts=128, top_k=8,
+                  gate_fn="softmax", norm_topk_prob=True, shared_experts=0, num_layers=48, first_moe_layer=0,
+                  hf_repo="Qwen/Qwen3-30B-A3B", verified=True)
 
 
 MODELS = {
@@ -69,6 +83,11 @@ MODELS = {
                                (("hidden_size", "hidden_size"), ("intermediate_size", "intermediate_size"),
                                 ("num_experts", "num_experts"), ("num_experts_per_tok", "top_k"),
                                 ("num_hidden_layers", "num_layers"))),
+    "qwen3-30b-a3b": ServedModel("qwen3-30b-a3b", QWEN3, "Qwen/Qwen3-30B-A3B", 48,
+                                 (("hidden_size", "hidden_size"), ("moe_intermediate_size", "intermediate_size"),
+                                  ("num_experts", "num_experts"), ("num_experts_per_tok", "top_k"),
+                                  ("num_hidden_layers", "num_layers")),
+                                 (("decoder_sparse_step", 1), ("mlp_only_layers", []))),
 }
 
 
@@ -89,6 +108,10 @@ def check_hf_config(model: ServedModel, hf: dict) -> list[str]:
         want = getattr(model.cfg, attr)
         if got != want:
             bad.append(f"config.json {key}={got!r}, the kit's {attr}={want!r}")
+    for key, want in model.hf_literals:
+        got = hf.get(key)
+        if got != want:
+            bad.append(f"config.json {key}={got!r}, the kit requires {want!r}")
     return bad
 
 
@@ -131,14 +154,24 @@ def tile_label(T: int, E: int) -> str:
     return lab + (" g16" if c["GROUP_SIZE_M"] == 16 else "")
 
 
+def tile_bins(E: int = 64, max_T: int | None = None) -> tuple:
+    """The seven default tiles in T order at E experts: the BLOCK_M / BLOCK_N / BLOCK_K ladder depends on T only, and
+    GROUP_SIZE_M turns 16 once T // E > 128, i.e. T >= 129 E (E 64: 8256; E 128: 16512). With max_T, only the tiles a
+    step of at most max_T tokens can reach (serve_capture's coverage gate: Qwen3's G16 starts past the registered
+    16384-token budget)."""
+    g16 = 129 * int(E)
+    bins = (("16x64x128w4s4", 1, 32), ("32x64x128w4s3", 33, 64), ("32x128x64w4s3", 65, 96),
+            ("64x128x64w4s3", 97, 128), ("64x128x64w8s3", 129, 512), ("128x128x64w8s3", 513, g16 - 1),
+            ("128x128x64w8s3 g16", g16, 10 ** 9))
+    return bins if max_T is None else tuple(b for b in bins if b[1] <= int(max_T))
+
+
 #: the seven tiles a serving run at E=64 lands on, in T order (KIT-SPEC 2 / CRITIQUE M9)
-TILE_BINS = (("16x64x128w4s4", 1, 32), ("32x64x128w4s3", 33, 64), ("32x128x64w4s3", 65, 96),
-             ("64x128x64w4s3", 97, 128), ("64x128x64w8s3", 129, 512), ("128x128x64w8s3", 513, 8255),
-             ("128x128x64w8s3 g16", 8256, 10 ** 9))
+TILE_BINS = tile_bins(64)
 
 
-def tile_bin(T: int) -> str:
-    for lab, lo, hi in TILE_BINS:
+def tile_bin(T: int, E: int = 64) -> str:
+    for lab, lo, hi in (TILE_BINS if int(E) == 64 else tile_bins(E)):
         if lo <= T <= hi:
             return lab
     raise ValueError(f"T {T} is not a token count")
@@ -614,7 +647,9 @@ def roofline_ms(cfg: MoEConfig, counts, c: dict | None = None) -> float:
 #: Resolved on the laptop 2026-11-19 by scripts/prod/hf_revisions.py (the Hub's public model API, no auth; review 2,
 #: MINOR 3) and pasted here; `hf_revisions.py --check` holds them to the Hub before the kit freezes.
 HF_REVISIONS: dict = {"ernie-4.5-21b-a3b": "87db95487941cb39592ee0abca3b9155a6d19c5c",
-                      "olmoe-1b-7b": "6d84c48581ece794365f2b8e9cfb043c68ade9c5"}
+                      "olmoe-1b-7b": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+                      # extras.sh X3: the Hub's sha of Qwen/Qwen3-30B-A3B on 2026-11-19 (public model API, no auth)
+                      "qwen3-30b-a3b": "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39"}
 
 
 def hf_revision(model_key: str) -> str | None:
@@ -644,6 +679,18 @@ def price_v8(cfg: MoEConfig, T: int, counts, ids=None, *, sag128=None, module: s
     if ans["ms"] is None and not ans.get("why"):
         raise KitError(f"{module or PRICER_MODULE}.price refused T={T} without a why")
     return ans
+
+
+def predicted_reads(ans: dict) -> dict | None:
+    """v8's predicted DRAM reads of one priced call, {"w1": bytes, "w2": bytes, "source": where}, or None when v8's
+    answer carries none (a refusal, or a decode path whose parts hold no reads: NOT AVAILABLE). Prefill: price()'s
+    own `reads` (round 5's per-GEMM reads, RR's w1 when RR applies); decode: the v6d cell's `parts.reads`."""
+    if not isinstance(ans, dict) or ans.get("ms") is None:
+        return None
+    for src, rd in (("reads", ans.get("reads")), ("parts.reads", (ans.get("parts") or {}).get("reads"))):
+        if isinstance(rd, dict) and rd.get("w1") is not None and rd.get("w2") is not None:
+            return {"w1": float(rd["w1"]), "w2": float(rd["w2"]), "source": src}
+    return None
 
 
 def price_check(model_key: str, *, sag128=None, module: str | None = None, seed: int = 20261119) -> dict:

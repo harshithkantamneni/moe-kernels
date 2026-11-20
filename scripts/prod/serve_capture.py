@@ -132,8 +132,9 @@ def simulate_level(L: int, reqs: list[tuple[int, int]], *, budget: int = MAX_BAT
 
 
 def estimate_histogram(levels: list[int], rows: list[dict], n_per_level: int, *, mode: str = "graphs",
-                       sizes: list[int] | None = None) -> dict:
-    """Expected steps per tile (padded T) over the run, prompts taken in order and wrapping."""
+                       sizes: list[int] | None = None, E: int = 64, max_T: int = MAX_BATCHED) -> dict:
+    """Expected steps per tile (padded T) over the run, prompts taken in order and wrapping. The tiles are the
+    model's (E experts: GROUP_SIZE_M's edge) that a step of at most max_T tokens can reach (prodlib.tile_bins)."""
     i = 0
     per_tile: Counter = Counter()
     per_level = []
@@ -146,11 +147,11 @@ def estimate_histogram(levels: list[int], rows: list[dict], n_per_level: int, *,
             reqs.append((int(r["input_len"]), int(r["max_tokens"])))
             i += 1
         Ts = simulate_level(L, reqs)
-        tiles = Counter(PL.tile_bin(PL.padded_T(T, mode, sizes)) for T in Ts)
+        tiles = Counter(PL.tile_bin(PL.padded_T(T, mode, sizes), E) for T in Ts)
         per_tile.update(tiles)
         steps_total += len(Ts)
         per_level.append({"L": L, "requests": q, "steps": len(Ts), "tiles": dict(tiles)})
-    return {"per_tile": {lab: int(per_tile.get(lab, 0)) for lab, _, _ in PL.TILE_BINS}, "per_level": per_level,
+    return {"per_tile": {lab: int(per_tile.get(lab, 0)) for lab, _, _ in PL.tile_bins(E, max_T)}, "per_level": per_level,
             "steps": steps_total}
 
 
@@ -420,8 +421,10 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     manifest["gpu_end"] = nvml_snapshot()
     manifest["seconds"] = round(time.time() - t0, 1)
     steps = PL.read_jsonl(out / "steps.jsonl")
-    real = Counter(PL.tile_bin(s["T_pad"]) for s in steps if not s.get("dummy") and not s.get("warmup"))
-    manifest["realized_per_tile"] = {lab: int(real.get(lab, 0)) for lab, _, _ in PL.TILE_BINS}
+    E = model.cfg.num_experts
+    real = Counter(PL.tile_bin(s["T_pad"], E) for s in steps if not s.get("dummy") and not s.get("warmup"))
+    manifest["realized_per_tile"] = {lab: int(real.get(lab, 0))
+                                     for lab, _, _ in PL.tile_bins(E, a.max_num_batched_tokens)}
     gates["G-COV"] = coverage_gate(manifest["realized_per_tile"], a.min_steps_per_tile)
     gates["G-DUMMY"] = {"verdict": "PASS" if not any(s.get("dummy") for s in steps) else "FAIL",
                         "why": "" if not any(s.get("dummy") for s in steps) else "dummy runs after the reset"}
@@ -477,7 +480,7 @@ def main(argv=None) -> int:
         print(f"REFUSED: {exc}")
         return 2
     model = PL.MODELS[a.model]
-    est = estimate_histogram(levels, ps["rows"], a.requests_per_level, mode=a.mode)
+    est = estimate_histogram(levels, ps["rows"], a.requests_per_level, mode=a.mode, E=model.cfg.num_experts)
     print(f"serve_capture: {model.key} ({model.hf_repo}) mode={a.mode} shared-stream={a.shared_stream} "
           f"levels={levels} N/level={a.requests_per_level} out={a.out}")
     print(f"expected steps {est['steps']}; per tile (padded T):")

@@ -415,7 +415,7 @@ def extract(run_dir, trace: dict, model: PL.ServedModel, *, shard_tag: str | Non
         row = {"g": rec["g"], "layer": rec["layer"], "T_pad": rec["n"], "T": None if st is None else st["T"],
                "step": None if st is None else st["step"], "L": None if st is None else st.get("L"),
                "warmup": None if st is None else st.get("warmup"), "cg_mode": None if st is None else st["cg_mode"],
-               "tile": PL.tile_bin(rec["n"]), "branch": PL.branch(rec["n"]),
+               "tile": PL.tile_bin(rec["n"], cfg.num_experts), "branch": PL.branch(rec["n"]),
                "strata": PL.strata(rec["n"], cfg.top_k, cfg.num_experts),
                "counts_digest": PL.digest(counts), "ids_digest": PL.digest(rec["ids"]), **{
                    kk: call.get(kk) for kk in ("status", "kernel_sum_ns", "span_ns", "start_ns", "intruders",

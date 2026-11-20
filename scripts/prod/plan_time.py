@@ -110,10 +110,11 @@ def length_rows(path=HERE / "plan_lengths.json") -> list[dict]:
     return [{"input_len": a, "max_tokens": b} for a, b in doc["rows"]]
 
 
-def serving(levels: str, n: int, rows=None) -> dict:
-    """{"steps", "serve_s_default" (ERNIE, default clocks), "per_tile"}: the estimator's steps, each priced."""
+def serving(levels: str, n: int, rows=None, model: str = "ernie-4.5-21b-a3b", step_factor: float = 1.0) -> dict:
+    """{"steps", "serve_s_default" (the model, default clocks), "per_tile"}: the estimator's steps, each priced
+    (x step_factor: the long-context run's assumed attention cost, extras_plan)."""
     rows = rows or length_rows()
-    _eb, work = ernie_scale()
+    _eb, work = ernie_scale(model)
     lv = SC.parse_levels(levels)
     i, steps, sec = 0, 0, 0.0
     for L in lv:
@@ -125,8 +126,8 @@ def serving(levels: str, n: int, rows=None) -> dict:
         Ts = SC.simulate_level(L, reqs)
         steps += len(Ts)
         sec += sum(step_ms(T) for T in Ts) / 1e3
-    est = SC.estimate_histogram(lv, rows, n)
-    return {"steps": steps, "serve_s_default": sec * work, "per_tile": est["per_tile"]}
+    est = SC.estimate_histogram(lv, rows, n, E=PL.MODELS[model].cfg.num_experts)
+    return {"steps": steps, "serve_s_default": sec * work * step_factor, "per_tile": est["per_tile"]}
 
 
 def clock_factor(lock) -> float:
@@ -146,9 +147,10 @@ def replay_branch_s(branch: str, model: str = "ernie-4.5-21b-a3b") -> dict:
     return {"probe_s": probe, "rest_s": rest, "rest_cells": cells, "per_cell_s": per}
 
 
-def call_ms(T: int) -> float:
-    """The call's GPU ms on ERNIE at its branch clock (the smoke's replay C per-call medians x 1.875)."""
-    eb, _w = ernie_scale()
+def call_ms(T: int, model: str = "ernie-4.5-21b-a3b") -> float:
+    """The call's GPU ms on the model (ERNIE by default) at its branch clock (the smoke's replay C per-call medians x
+    the expert-bytes ratio: ERNIE 1.875)."""
+    eb, _w = ernie_scale(model)
     if T <= 128:
         return eb * CALL_MS_DECODE
     a, b, floor = CALL_MS_PREFILL
@@ -157,14 +159,14 @@ def call_ms(T: int) -> float:
 
 def frontier_timer(max_tokens: int = FO.MAX_TOKENS, warmup: int = FO.WARMUP_STEPS,
                    repeats: int = FO.ACTIVE_STEPS, routing: str = FO.DEFAULT_ROUTING,
-                   points: list[int] | None = None) -> dict:
+                   points: list[int] | None = None, model: str = "ernie-4.5-21b-a3b") -> dict:
     """Per branch pass: {"points", "samples", "timer_s", "export_s", "calls"} for every grid point (no budget; or
     the given `points`: the probe's) x its samples (uniform: 3)."""
     out = {}
     ns = len(FO.samples_for(routing))
     for b in ("decode", "prefill"):
         Ts = FO.branch_points(b, max_tokens) if points is None else [T for T in points if PL.branch(T) == b]
-        per = ns * sum((warmup + repeats) * max(ASSUMED["frontier-timer-host-call-ms"], call_ms(T))
+        per = ns * sum((warmup + repeats) * max(ASSUMED["frontier-timer-host-call-ms"], call_ms(T, model))
                        + ASSUMED["frontier-timer-point-ms"] for T in Ts) / 1e3
         calls = ns * len(Ts) * (warmup + repeats)
         out[b] = {"points": len(Ts), "samples": ns * len(Ts), "calls": calls,
@@ -296,12 +298,171 @@ def plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, model: str = "
             "levels": levels, "n": n}
 
 
+# ------------------------------------------------------------------------------------------------------------
+# extras.sh (after main, same rental): X1 noise floor, X2 ncu bytes, X3 Qwen3-30B-A3B, X4 long-context prefill
+# ------------------------------------------------------------------------------------------------------------
+
+QWEN3 = "qwen3-30b-a3b"
+#: Qwen3-30B-A3B's bf16 weights (GB, ASSUMED: 30.5 B parameters x 2 bytes; env-preflight P12 measures the rate)
+QWEN3_WEIGHTS_GB = 61.1
+#: X3's replay budget per branch (s; the owner's "smaller budget, e.g. 1200 s per branch"), the registered rule priced
+#: by main's own ERNIE probe walls x the expert-bytes ratio
+QWEN3_REPLAY_BUDGET_S = 1200
+#: X4: the long-context serving (levels, N per level, prompt lengths uniform in [LONG_MIN, LONG_MAX], output fixed);
+#: ASSUMED: a step of long-context prefill costs LONG_ATTN_FACTOR x the smoke's step time at its T (the smoke's prompts
+#: were <= 2048 tokens: attention over 16k-token contexts is not in its step times)
+LONG_LEVELS, LONG_N, LONG_MIN, LONG_MAX, LONG_OUT, LONG_PROMPTS = "1,2,4,8", 24, 4096, 16000, 16, 96
+LONG_ATTN_FACTOR = 2.0
+EXTRAS_ASSUMED = {"check": 2, "push": 60, "push-big": 120, "build-long": 60, "qwen3-predict": 300,
+                  "ncu-subsample": 5}
+
+
+def long_rows(n: int = LONG_PROMPTS) -> list[dict]:
+    """The long set's (input, output) lengths for pricing: n lengths evenly over [LONG_MIN, LONG_MAX]."""
+    return [{"input_len": int(LONG_MIN + (LONG_MAX - LONG_MIN) * i / max(1, n - 1)), "max_tokens": LONG_OUT}
+            for i in range(n)]
+
+
+def extras_plan(levels: str = "1,8,24,48,80,112,256,1024x3", n: int = 8, budget_s: float = 9000,
+                long_context: bool = True) -> dict:
+    """extras.sh's steps in order, [(block, step, seconds, basis)], the per-block totals and the budget's reading."""
+    import ncu_bytes as NB
+    model = "ernie-4.5-21b-a3b"
+    out = []
+
+    def add(block, step, sec, basis):
+        out.append((block, step, float(sec), basis))
+
+    _eb, work = ernie_scale(model)
+    _qb, qwork = ernie_scale(QWEN3)
+    sv = serving(levels, n)
+    calls_ratio = sv["steps"] * PL.MODELS[model].moe_layers / (SMOKE_STEPS * SMOKE_LAYERS)
+    engine, qengine = SMOKE_ENGINE_S * work, SMOKE_ENGINE_S * qwork
+    chk = EXTRAS_ASSUMED["check"]
+    add("X0", "extras-main-finished", chk, "trivial")
+    add("X0", "extras-commit-switch", chk, "trivial (git)")
+    add("X0", "env-preflight", ASSUMED["env-preflight"], "assumed (as main's, on ERNIE)")
+    add("X0", "env", SMOKE_S["env"], "smoke")
+    add("X0", "power-readback", 1, "smoke")
+    add("X0", "unlock-start", 1, "smoke")
+    add("X0", "revision-pinned-qwen3", ASSUMED["revision-pinned"], "assumed")
+    add("X0", "price-check-qwen3", SMOKE_S["price-check"], "smoke (CPU, v8)")
+    # X1: main's A1710, again
+    add("X1", "X1-budget", chk, "trivial")
+    add("X1", "X1-inputs", chk, "trivial")
+    add("X1", "X1-lock", 1, "trivial")
+    add("X1", "X1-capture", engine + sv["serve_s_default"] * clock_factor(1710), "as main's A1710-capture")
+    add("X1", "X1-unlock-after", 1, "trivial")
+    add("X1", "X1-export", SMOKE_S["nsys-export"] * calls_ratio, "as main's A1710-export")
+    add("X1", "X1-extract", SMOKE_S["extract-gate-A"] * calls_ratio, "as main's A1710-extract")
+    add("X1", "X1-push", EXTRAS_ASSUMED["push-big"], "assumed")
+    # X2: the counter route on 2 x NB.N_PER_BRANCH cells
+    add("X2", "X2-budget", chk, "trivial")
+    add("X2", "X2-inputs", chk, "trivial")
+    add("X2", "X2-subsample", EXTRAS_ASSUMED["ncu-subsample"], "assumed")
+    for b in ("decode", "prefill"):
+        add("X2", f"X2-lock-{b}", 1, "trivial")
+        add("X2", f"X2-ncu-{b}", NB.expected_s(NB.N_PER_BRANCH),
+            f"child start {NB.SETUP_S:.0f} s (assumed) + {NB.N_PER_BRANCH} cells x {NB.CALLS} calls x 2 GEMMs x "
+            f"{NB.SEC_PER_LAUNCH} s per profiled launch (RR's counter route on the GH200)")
+        add("X2", f"X2-unlock-{b}", 1, "trivial")
+    add("X2", "X2-push", EXTRAS_ASSUMED["push"], "assumed")
+    # X3: Qwen3-30B-A3B
+    qsv = serving(levels, n, model=QWEN3)
+    qcalls = qsv["steps"] * PL.MODELS[QWEN3].moe_layers / (SMOKE_STEPS * SMOKE_LAYERS)
+    gate_calls = 60 / SMOKE_SERVE_S * PL.MODELS[QWEN3].moe_layers / SMOKE_LAYERS
+    add("X3", "X3-budget", chk, "trivial")
+    add("X3", "X3-inputs", chk, "trivial")
+    add("X3", "X3-hf-preflight", 40, "assumed (P8, P10, P12's timed download <= 20 s)")
+    add("X3", "X3-prompts-fetch", SMOKE_S["prompts-fetch"], "smoke (main's file reused when present)")
+    add("X3", "X3-prompts-build", SMOKE_S["prompts-build"] * 4096 / SMOKE_PROMPTS, "smoke x 4096/1024 prompts")
+    add("X3", "X3-unlock-gate", 1, "trivial")
+    add("X3", "X3-gate60-capture", qengine + 60 + QWEN3_WEIGHTS_GB * 1e3 / DOWNLOAD_MBPS,
+        f"smoke engine start x {qwork:.2f} (Qwen3 bytes x 48/16 layers) + 60 s + {QWEN3_WEIGHTS_GB} GB at an assumed "
+        f"{DOWNLOAD_MBPS:.0f} MB/s")
+    add("X3", "X3-gate60-export", SMOKE_S["nsys-export"] * gate_calls, "smoke x 60/44 s x 48/16 layers")
+    add("X3", "X3-gate60-extract", SMOKE_S["extract-gate-A"] * gate_calls, "smoke x 60/44 s x 48/16 layers")
+    add("X3", "X3-gate60-sequences", SMOKE_S["sequences-A"], "smoke")
+    for lab, lock in (("A1710", 1710), ("A1410", 1410)):
+        add("X3", f"X3-{lab}-lock", 1, "trivial")
+        add("X3", f"X3-{lab}-capture", qengine + qsv["serve_s_default"] * clock_factor(lock),
+            f"engine start + {qsv['steps']} steps x smoke step time x {qwork:.2f} x {clock_factor(lock):.3f} (clock)")
+        add("X3", f"X3-{lab}-unlock-after", 1, "trivial")
+        add("X3", f"X3-{lab}-export", SMOKE_S["nsys-export"] * qcalls, f"smoke x calls {qcalls:.2f}")
+        add("X3", f"X3-{lab}-extract", SMOKE_S["extract-gate-A"] * qcalls, f"smoke x calls {qcalls:.2f}")
+    add("X3", "X3-push-captures", EXTRAS_ASSUMED["push-big"], "assumed")
+    for b in ("decode", "prefill"):
+        add("X3", f"X3-replay-sample-{b}", 3, "smoke (replay-sample)")
+        add("X3", f"X3-replay-{b}", QWEN3_REPLAY_BUDGET_S / RP.WALL_SAFETY + REPLAY_STEP_OVERHEAD_S,
+            f"{QWEN3_REPLAY_BUDGET_S} s budget / {RP.WALL_SAFETY} (main's ERNIE probe walls x the bytes ratio, right)")
+    add("X3", "X3-unlock-after-replay", 1, "trivial")
+    add("X3", "X3-push-replay", EXTRAS_ASSUMED["push"], "assumed")
+    ft = frontier_timer(model=QWEN3)
+    add("X3", "X3-frontier-env", chk, "trivial (main's Frontier venv)")
+    for b in ("decode", "prefill"):
+        add("X3", f"X3-frontier-lock-{b}", 1, "trivial")
+        add("X3", f"X3-frontier-timer-{b}", ft[b]["timer_s"], f"as main's M7 on Qwen3's call times ({ft[b]['points']} "
+                                                               "points x 3 samples)")
+        add("X3", f"X3-frontier-export-{b}", ft[b]["export_s"], f"smoke export x kernels ({ft[b]['calls']} calls)")
+    add("X3", "X3-frontier-unlock", 1, "trivial")
+    add("X3", "X3-frontier-points", ASSUMED["frontier-points"], "assumed")
+    add("X3", "X3-frontier-csv", ASSUMED["frontier-csv"], "assumed")
+    add("X3", "X3-frontier-train", ASSUMED["frontier-train"], "assumed (as main's)")
+    add("X3", "X3-frontier-csv-fills", ASSUMED["frontier-csv"], "assumed")
+    add("X3", "X3-frontier-train-fills", ASSUMED["frontier-train"], "assumed (as main's)")
+    add("X3", "X3-frontier-predict", EXTRAS_ASSUMED["qwen3-predict"], "assumed (two models, two runs)")
+    add("X3", "X3-push-frontier", EXTRAS_ASSUMED["push"], "assumed")
+    if long_context:
+        lsv = serving(LONG_LEVELS, LONG_N, rows=long_rows(), step_factor=LONG_ATTN_FACTOR)
+        lcalls = lsv["steps"] * PL.MODELS[model].moe_layers / (SMOKE_STEPS * SMOKE_LAYERS)
+        add("X4", "X4-budget", chk, "trivial")
+        add("X4", "X4-inputs", chk, "trivial")
+        add("X4", "X4-prompts-fetch", SMOKE_S["prompts-fetch"], "smoke")
+        add("X4", "X4-prompts-build", EXTRAS_ASSUMED["build-long"], "assumed (~1M tokens tokenized)")
+        add("X4", "X4-lock", 1, "trivial")
+        add("X4", "X4-capture", engine + lsv["serve_s_default"] * clock_factor(1410),
+            f"engine start + {lsv['steps']} steps (levels {LONG_LEVELS}, N {LONG_N}, inputs {LONG_MIN}..{LONG_MAX}) x "
+            f"smoke step time x 3.16 x {LONG_ATTN_FACTOR} (long attention, assumed) x {clock_factor(1410):.3f}")
+        add("X4", "X4-unlock-after", 1, "trivial")
+        add("X4", "X4-export", max(10.0, SMOKE_S["nsys-export"] * lcalls), f"smoke x calls {lcalls:.2f}")
+        add("X4", "X4-extract", max(10.0, SMOKE_S["extract-gate-A"] * lcalls), f"smoke x calls {lcalls:.2f}")
+        add("X4", "X4-push", EXTRAS_ASSUMED["push"], "assumed")
+    add("XF", "extras-push-final", EXTRAS_ASSUMED["push-big"], "assumed")
+    add("XF", "extras-held-back-check", 2, "trivial")
+    blocks: dict = {}
+    for blk, _s, sec, _b in out:
+        blocks[blk] = blocks.get(blk, 0.0) + sec
+    total = sum(blocks.values())
+    run, fits = blocks.get("X0", 0.0), {}
+    for blk in ("X1", "X2", "X3", "X4"):
+        if blk in blocks:
+            fits[blk] = run + blocks[blk] <= budget_s
+            run += blocks[blk] if fits[blk] else 0.0
+    return {"steps": out, "blocks": blocks, "total_s": total, "total_h": total / 3600, "budget_s": float(budget_s),
+            "fits": fits, "qwen3_serving": qsv, "long_serving": lsv if long_context else None, "levels": levels, "n": n}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--levels", default="1,8,24,48,80,112,256,1024x3")
     ap.add_argument("--n", type=int, default=8)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--extras", action="store_true", help="extras.sh's plan (X0..X4)")
+    ap.add_argument("--budget-s", type=float, default=9000)
+    ap.add_argument("--no-long-context", action="store_true")
     a = ap.parse_args(argv)
+    if a.extras:
+        p = extras_plan(a.levels, a.n, a.budget_s, long_context=not a.no_long_context)
+        if a.json:
+            print(json.dumps(p, indent=1))
+            return 0
+        for blk, step, sec, basis in p["steps"]:
+            print(f"PLAN {blk:<3s} {step:<30s} {sec:8.0f} s  {basis}")
+        print("PLAN extras blocks: " + ", ".join(f"{k} {v / 60:.1f} min" for k, v in p["blocks"].items()))
+        print("PLAN extras budget " + f"{p['budget_s']:.0f} s from extras.sh's start (X0 counted): " + ", ".join(
+            f"{k} {'runs' if v else 'SKIPPED by the budget'}" for k, v in p["fits"].items()))
+        print(f"PLAN EXTRAS EXPECTED TOTAL {p['total_s']:.0f} s = {p['total_h']:.2f} h")
+        return 0
     p = plan(a.levels, a.n)
     if a.json:
         print(json.dumps(p, indent=1))

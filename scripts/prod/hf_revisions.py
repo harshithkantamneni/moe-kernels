@@ -31,14 +31,14 @@ import prodlib as PL  # noqa: E402
 
 API = "https://huggingface.co/api/models/{repo}"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-KIT_SCRIPTS = ("smoke.sh", "main.sh")
+KIT_SCRIPTS = ("smoke.sh", "main.sh", "extras.sh")
 
 
 def tokenizer_repos() -> list[str]:
-    """The TOK= repos of smoke.sh and main.sh, in file order."""
+    """The TOK= (and extras.sh's QTOK=) repos of smoke.sh, main.sh and extras.sh, in file order."""
     out = []
     for name in KIT_SCRIPTS:
-        for m in re.finditer(r"^TOK=(\S+)\s*$", (HERE / name).read_text(), re.M):
+        for m in re.finditer(r"^Q?TOK=(\S+)\s*$", (HERE / name).read_text(), re.M):
             out.append(m.group(1).strip("'\""))
     return out
 

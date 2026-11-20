@@ -43,6 +43,17 @@ per branch, per stratum (64x128 band, small-batch align on a prefill tile, the 8
 per-layer-per-step total (a step's calls summed). Plus: v8's refused calls' share of MoE time; run deltas
 (in-serving vs replay on the same calls; shared stream on vs off, default vs lock, eager vs graphs: per-tile
 medians of kernel-sum).
+
+THE EXTRAS (scripts/prod/extras.sh, the same rental after main.sh; all DESCRIPTIVE, each labelled in the report):
+  --noise-floor A1710=EX/A1710r   X1: main's A1710 against its identical repeat, calls matched on (layer, T_pad, counts
+                                  digest): per tile the run-to-run variation of kernel-sum (extras_lib.noise_floor)
+  --ncu-bytes PAGE --ncu-sample S X2: the counted w1 / w2 DRAM read bytes per call (ncu_bytes.py pages) against v8's
+                                  predicted reads of the same call (prodlib.predicted_reads: prefill price()'s reads,
+                                  decode the v6d cell's parts.reads, else NOT AVAILABLE, counted)
+  --run LC1410=EX/LC1410          X4: the long-context prefill run, scored like any locked run, its own stratum
+  merge --into SCORE --extra qwen3=SCORE_Q
+                                  X3: the Qwen3-30B-A3B score (this scorer, --model qwen3-30b-a3b, every predictor)
+                                  appended to the same report under "extras.qwen3"
 """
 from __future__ import annotations
 
@@ -187,6 +198,11 @@ def load_run(label: str, d, model: PL.ServedModel, *, want_ids: bool) -> list[di
         r["kernel_sum_ms"] = None if r.get("kernel_sum_ns") is None else r["kernel_sum_ns"] / 1e6
         r["span_ms"] = None if r.get("span_ns") is None else r["span_ns"] / 1e6
     return rows
+
+
+#: the run labels the extras add, and what each is (the report prints the role beside the run)
+EXTRA_ROLES = {"LC1410": "EXTRAS X4: long-context prefill (ERNIE, prompts 4096..16000 tokens, 1410 lock): its own stratum",
+               "A1710r": "EXTRAS X1: the identical repeat of A1710 (the noise floor)"}
 
 
 def lock_of(label: str):
@@ -340,8 +356,8 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
             keep = [r for r in keep if r["branch"] == "decode"]
         elif lk == 1410:
             keep = [r for r in keep if r["branch"] == "prefill"]
-        res = {"lock": lk, "role": "model+context error at the branch clock" if lk else
-               "production delta only (default clocks: never model error)",
+        res = {"lock": lk, "role": EXTRA_ROLES.get(label) or ("model+context error at the branch clock" if lk else
+                                                             "production delta only (default clocks: never model error)"),
                "calls": len(rows), "scored": len(keep), "off_lock_dropped": dropped, "tables": {}}
         tot = sum(r["kernel_sum_ms"] for r in keep if r.get("kernel_sum_ms"))
         ref = sum(r["kernel_sum_ms"] for r in keep if r.get("kernel_sum_ms") and r.get("v8_ms") is None)
@@ -437,6 +453,127 @@ def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: 
     return prices
 
 
+# ------------------------------------------------------------------------------------------------------------
+# the extras (extras.sh): X1 noise floor, X2 ncu bytes, X3 merge
+# ------------------------------------------------------------------------------------------------------------
+
+def load_ncu_pages(paths) -> list[dict]:
+    import ncu_bytes as NB
+    out = []
+    for p in paths:
+        doc = json.loads(Path(p).read_text())
+        if doc.get("schema") != NB.PAGE_SCHEMA:
+            raise PL.KitError(f"{p}: schema {doc.get('schema')!r}, not {NB.PAGE_SCHEMA}")
+        out.append(doc)
+    return out
+
+
+def bytes_rows(model: PL.ServedModel, pages: list[dict], sample, *, sag128, module: str | None = None,
+               pricer=None) -> list[dict]:
+    """One row per profiled cell: the counted w1 / w2 DRAM read bytes (median over its calls) and v8's predicted
+    reads of the same call (T, counts, ids from the subsample), with the source of the prediction or NOT AVAILABLE.
+    `pricer(T, counts, ids, sag128)` -> v8's answer (tests); default prodlib.price_v8."""
+    import ncu_bytes as NB
+    cells, ids, _sha = NB.load_cells(sample, model.key, None)
+    meta = {c["label"]: c for c in cells}
+    rows = []
+    for doc in pages:
+        for c in doc["cells"]:
+            m = meta.get(c["label"])
+            if m is None:
+                raise PL.KitError(f"ncu cell {c['label']} is not in the subsample {sample}")
+            T = int(m["T"])
+            pre = T > PL.DECODE_MAX_T
+            try:
+                ans = (pricer or (lambda T_, c_, i_, s_: PL.price_v8(model.cfg, T_, c_, i_, sag128=s_, module=module)))(
+                    T, m["counts"], ids[c["label"]], sag128 if pre else None)
+            except KeyboardInterrupt:
+                raise
+            except BaseException as exc:                                # noqa: BLE001
+                ans = {"ms": None, "why": f"{type(exc).__name__}: {exc}"}
+            rd = PL.predicted_reads(ans)
+            row = {"label": c["label"], "tile": m["tile"], "branch": m["branch"], "T": T,
+                   "readback": (c.get("readback") or {}).get("verdict"), "v8_ms": ans.get("ms"),
+                   "pred_source": rd["source"] if rd else "NOT AVAILABLE",
+                   "why": None if rd else (ans.get("why") or "v8's answer carries no reads")}
+            for g in ("w1", "w2"):
+                row[f"meas_{g}"] = (c.get("per_gemm", {}).get(g) or {}).get("dram__bytes_read.sum")
+                row[f"pred_{g}"] = rd[g] if rd else None
+            rows.append(row)
+    return rows
+
+
+def bytes_summary(rows: list[dict]) -> dict:
+    """Per (tile, GEMM) and per (branch, GEMM): n measured, n with a prediction, medians (MB), the median ratio
+    measured / predicted, and the predicted's MAPE and bias against the counted bytes."""
+    out: dict = {"tile": {}, "branch": {}, "not_available": sum(1 for r in rows if r["pred_source"] == "NOT AVAILABLE"),
+                 "readback_mismatch": sum(1 for r in rows if r.get("readback") not in (None, "PASS"))}
+    for kind in ("tile", "branch"):
+        groups: dict = defaultdict(list)
+        for r in rows:
+            groups[r[kind]].append(r)
+        for k, rs in groups.items():
+            for g in ("w1", "w2"):
+                meas = [r[f"meas_{g}"] for r in rs if r.get(f"meas_{g}") is not None]
+                both = [(r[f"meas_{g}"], r[f"pred_{g}"]) for r in rs
+                        if r.get(f"meas_{g}") is not None and r.get(f"pred_{g}") is not None]
+                ent = {"n": len(meas), "n_predicted": len(both),
+                       "meas_MB_median": float(np.median(meas)) / 1e6 if meas else None}
+                if both:
+                    m_, p_ = np.asarray([b[0] for b in both], float), np.asarray([b[1] for b in both], float)
+                    ent.update(pred_MB_median=float(np.median(p_)) / 1e6,
+                               ratio_meas_over_pred_median=float(np.median(m_ / p_)), **{
+                                   f"pred_{k2}": v for k2, v in metrics(p_, m_).items() if k2 in ("MAPE", "bias")})
+                out[kind].setdefault(k, {})[g] = ent
+    return out
+
+
+def merge(into, extras: dict) -> dict:
+    """Append each extra score (label -> its score dir) to the main report: prod.score.json["extras"][label] and a
+    labelled section of prod.score.txt (a merge again replaces the section)."""
+    into = Path(into)
+    sc = json.loads((into / "prod.score.json").read_text())
+    txt = (into / "prod.score.txt").read_text()
+    for label, d in extras.items():
+        ex = json.loads((Path(d) / "prod.score.json").read_text())
+        sc.setdefault("extras", {})[label] = ex
+        mark = f"== EXTRAS {label}:"
+        if mark in txt:
+            txt = txt.split(mark)[0]
+        txt += (f"\n{mark} the score of {ex.get('model')} (scripts/prod/extras.sh X3: the second blind model, "
+                f"DESCRIPTIVE, every predictor as above)\n" + (Path(d) / "prod.score.txt").read_text())
+    (into / "prod.score.json").write_text(json.dumps(sc, indent=1, default=str))
+    (into / "prod.score.txt").write_text(txt)
+    return sc
+
+
+def render_extras(ex: dict) -> list[str]:
+    lines = []
+    nf = ex.get("noise_floor")
+    if nf:
+        lines.append(f"== EXTRAS X1 NOISE FLOOR (DESCRIPTIVE): {nf['base']} vs its identical repeat {nf['repeat']}: "
+                     f"{nf['matched_calls']} calls matched on {nf['key']} ({nf['calls_a']} / {nf['calls_b']} calls)")
+        for t, v in nf["matched"].items():
+            lines.append(f"      {t:<22s} n={v['n']:<7d} |a-b|/mean median {v['abs_rel_median_pct']:6.2f}%  p95 "
+                         f"{v['abs_rel_p95_pct']:6.2f}%  signed median {v['signed_median_pct']:+6.2f}%")
+        for t, v in nf["per_tile_medians"].items():
+            lines.append(f"      per-tile median {t:<22s} {v['a_ms'] * 1e3:9.2f} us vs {v['b_ms'] * 1e3:9.2f} us  "
+                         f"{v['delta_pct']:+6.2f}%")
+    nb = ex.get("ncu_bytes")
+    if nb:
+        s = nb["summary"]
+        lines.append(f"== EXTRAS X2 NCU DRAM READ BYTES (DESCRIPTIVE): {len(nb['rows'])} cells counted (ncu "
+                     f"dram__bytes_read.sum, cold L2, branch clock) vs v8's predicted reads; NOT AVAILABLE "
+                     f"{s['not_available']}, readback mismatches {s['readback_mismatch']}")
+        for t, gs in s["tile"].items():
+            for g, v in gs.items():
+                lines.append(f"      {t:<22s} {g} n={v['n']:<4d} counted {v['meas_MB_median'] or 0:9.2f} MB"
+                             + (f"  v8 {v['pred_MB_median']:9.2f} MB  counted/v8 {v['ratio_meas_over_pred_median']:.3f}"
+                                f"  MAPE {v.get('pred_MAPE', float('nan')):6.2f}%  bias {v.get('pred_bias', float('nan')):+6.2f}%"
+                                if v.get("n_predicted") else "  v8 NOT AVAILABLE"))
+    return lines
+
+
 def render(sc: dict) -> str:
     lines = [f"PRODUCTION CHECK (DESCRIPTIVE: no bars, no verdicts) model {sc['model']}", ""]
     for n in sc["notes"]:
@@ -476,7 +613,29 @@ def render(sc: dict) -> str:
         lines.append(f"== delta {k}: {d['what']}")
         for tile, v in d["per_tile_median_kernel_sum"].items():
             lines.append(f"      {tile:<22s} {v['a_ms'] * 1e3:9.2f} us vs {v['b_ms'] * 1e3:9.2f} us  {v['delta_pct']:+6.2f}%")
+    lines += render_extras(sc.get("extras_local") or {})
     return "\n".join(lines) + "\n"
+
+
+def _noise_and_bytes(a, model: PL.ServedModel, runs: dict, sag128, ex: dict) -> None:
+    """X1 and X2 into `ex` (main's --noise-floor, --ncu-bytes, --ncu-sample)."""
+    if a.noise_floor:
+        import extras_lib as XL
+        base, _, rdir = a.noise_floor.partition("=")
+        if base not in runs or not rdir:
+            raise PL.KitError(f"--noise-floor {a.noise_floor!r}: BASE must be a --run label, =DIR its repeat")
+        lk = lock_of(base)
+        rep_rows = load_run("A1710r", rdir, model, want_ids=False)
+
+        def keep(rows):
+            return [r for r in rows if r.get("status") == "ok" and not r.get("warmup")
+                    and not off_lock(r.get("sm_mhz"), lk)]
+        ex["noise_floor"] = dict(XL.noise_floor(keep(runs[base]), keep(rep_rows)), base=base, repeat=rdir)
+    if a.ncu_bytes:
+        if not a.ncu_sample:
+            raise PL.KitError("--ncu-bytes needs --ncu-sample (the subsample the pages profiled)")
+        rows = bytes_rows(model, load_ncu_pages(a.ncu_bytes), a.ncu_sample, sag128=sag128, module=a.pricer)
+        ex["ncu_bytes"] = {"rows": rows, "summary": bytes_summary(rows)}
 
 
 def _kv(items) -> dict:
@@ -490,8 +649,24 @@ def _kv(items) -> dict:
 
 
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["merge"]:
+        mp = argparse.ArgumentParser(description="append extra scores to the main report")
+        mp.add_argument("--into", required=True)
+        mp.add_argument("--extra", action="append", required=True, help="LABEL=SCORE_DIR")
+        m = mp.parse_args(argv[1:])
+        try:
+            merge(m.into, _kv(m.extra))
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"FAIL score_prod merge: {type(exc).__name__}: {exc}")
+            return 3
+        print(f"PASS score_prod merge: {sorted(_kv(m.extra))} -> {m.into}")
+        return 0
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", required=True, choices=sorted(PL.MODELS))
+    ap.add_argument("--noise-floor", default=None, help="X1: BASE_LABEL=REPEAT_RUN_DIR (BASE a --run label)")
+    ap.add_argument("--ncu-bytes", action="append", default=[], help="X2: an ncu_bytes.py page (ncu_bytes.json)")
+    ap.add_argument("--ncu-sample", default=None, help="X2: the subsample the pages profiled (ncu-sample/sample.json)")
     ap.add_argument("--run", action="append", default=[], help="LABEL=DIR (nsys_extract'd serve_capture dir)")
     ap.add_argument("--replay", action="append", default=[], help="BRANCH=DIR (replay.py's run dir)")
     ap.add_argument("--sample-run", action="append", default=[], help="BRANCH=RUNLABEL the sample was drawn from")
@@ -515,6 +690,21 @@ def main(argv=None) -> int:
         fills = {b: load_replay_check(p) for b, p in _kv(a.replay_check).items()}
         sc = score(model=model, runs=runs, replay=replay, sample_run=sample_run, frontier=frontier, roof=roof,
                    prices=prices, sag128=sag128, fills=fills)
+        ex, ex_err = {}, {}
+        # the extras never fail the main score: an extras input that cannot be read is reported in its place
+        try:
+            _noise_and_bytes(a, model, runs, sag128, ex)
+        except (PL.KitError, OSError, ValueError, KeyError) as exc:
+            ex_err["extras"] = f"{type(exc).__name__}: {exc}"
+        if ex_err:
+            ex["errors"] = ex_err
+            print(f"WARN score_prod extras: {ex_err}")
+        if ex or "LC1410" in runs:
+            sc["extras_local"] = ex
+            sc["notes"].append("EXTRAS (scripts/prod/extras.sh, DESCRIPTIVE): " + ", ".join(
+                {"noise_floor": "X1 noise floor", "ncu_bytes": "X2 ncu DRAM read bytes vs v8's predicted reads",
+                 "errors": "unreadable extras inputs (see extras_local.errors)"}[k] for k in ex)
+                + ("; X4 long-context run LC1410" if "LC1410" in runs else ""))
     except (PL.KitError, PL.RingError, OSError, ValueError, KeyError) as exc:
         print(f"FAIL score_prod: {type(exc).__name__}: {exc}")
         return 3

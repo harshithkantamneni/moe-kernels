@@ -26,6 +26,9 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `prodlib.py` *(extra)* | Code several scripts share: the models (ERNIE is v8's own `ERNIE`), tiles, branches and strata, the capture sizes, the ring format and decoder, the prefill constants, the registered roofline, the pinned HF revisions, and **`price_v8`, the one v8 binding** (`PRICER_MODULE`, or `--pricer` / `$PROD_PRICER`). `prodlib.py price-check` prices one real decode and one real prefill call through v8. |
 | `kitlib.sh` *(extra)* | The step runner (caps, `--needs`, `--out`, `--always`, resume), the kit's TMPDIR and PATH (`kit_env`), the lock and unlock helpers, nsys location, and the env and power checks that both sequences use. |
 | `env_preflight.py` *(extra)* | The first hard step of smoke.sh and main.sh (`env-preflight`, cap 600 s): every environment fault the smoke rental met, checked before anything long. See "Smoke rental fixes". |
+| `extras.sh` *(extra)* | The GPU work right after main.sh in the same rental (owner 2026-11-19, "the final run"): X1 the noise floor, X2 the ncu DRAM bytes, X3 the second blind model Qwen3-30B-A3B, X4 long-context prefill. See "extras.sh". |
+| `extras_lib.py` *(extra)* | extras.sh's checks (main finished, the commit switch, the budget, each block's inputs), the offline expected-outputs check, and the noise-floor matching the scorer reads. |
+| `ncu_bytes.py` *(extra)* | X2: the study's counter route (`scripts/dram_counter_route.py`, imported, in the manner of `dram_counter_route_rr.py`) on a stratified subsample of main's replay C sample, real ids, branch clock: counted w1 / w2 DRAM read bytes per call. |
 | `tests/prod_fakes.py`, `tests/test_prod_*.py` | CPU tests on synthetic inputs. |
 
 ## How each KIT-SPEC item is met
@@ -388,6 +391,84 @@ The long steps:
 The caps only bound a hung step. The primary measurements (M2 to M6) do not move with `--graphmode-overhead` (a
 test holds every other step identical with and without it). `PROD_REQUESTS_PER_LEVEL` and `PROD_LEVELS` override
 the plan's N and levels.
+
+## extras.sh: after main, same rental
+
+The owner's instruction (2026-11-19): "this is the final run; get as much data and information as possible".
+`extras.sh` runs on main's results root after main.sh has finished. It reads main's outputs and never writes them:
+everything goes under `<results>/extras/` (its own `SUMMARY.txt`, `logs/`, `env-preflight.json`,
+`traces.sha256.json`), the raw traces under `$MOE_HOME/traces/<run>/extras/` (pull them with
+`pull_traces.sh <ip> <run>/extras`).
+
+**The commit switch** (an operator step on the VM, between the two scripts). extras.sh lives at a commit newer than
+the one main.sh ran at:
+
+```
+cd "$REPO" && git fetch origin && git checkout <extras sha>
+. ~/moe/env.sh && PROD_EXTRAS_COMMIT=<extras sha> bash scripts/prod/extras.sh --results <main's results dir>
+```
+
+The first three steps are hard and hold it:
+- `extras-main-finished`: main's `SUMMARY.txt` exists and no main.sh process is running;
+- `extras-commit-switch`: a clean tree, HEAD the expected extras commit, and main's own commit (P1 of main's
+  `env-preflight.json`) an ancestor of HEAD;
+- `env-preflight` with `--expect-commit <extras sha>` (P1), on ERNIE (cached by main), 50 GB free.
+
+Qwen3's pin (P8), download rate (P12) and 80 GB of disk (P10) are X3's own first step (`X3-hf-preflight`, soft), so a
+Hub or disk fault drops X3 only. `price-check-qwen3` is soft too.
+
+**The blocks.** Each is soft: a failure drops that block's later steps and no other block's. Each step has a cap of
+at least 2x its expected time (`plan_time.extras_plan`; a test holds it), and a push follows each block.
+
+| block | what | expected |
+|---|---|---|
+| X0 | the checks above, env, power, unlock, Qwen3's pin, `price-check` on Qwen3 | 4.1 min |
+| X1 | **noise floor**: main's A1710 again, identical (prompt file, levels, N, seed, 1710 lock, graphs, stream off) as `A1710r`, exported and extracted | 15.6 min |
+| X2 | **ncu bytes**: `ncu_bytes.py subsample` takes 30 decode + 30 prefill cells of main's replay C sample (equal quota per tile, systematic, seeded; relabelled `<branch>_<label>`); per branch at its clock, ncu over the counter route's own argv (`--cache-control all`, `-k regex:^fused_moe_kernel$`, kernel replay, `--clock-control none` under the lock), 2 warm-ups (the first under r3_decode's Spy: the grids every launch is held to) and 3 measured calls per cell; the page `ncu-<branch>/ncu_bytes.json` holds `dram__bytes_read.sum` per GEMM per call | 15.4 min |
+| X3 | **Qwen3-30B-A3B** (`prodlib.QWEN3`): its HF preflight, its prompt set (its tokenizer at its pin), the 60 s gate (G-CFG with `decoder_sparse_step 1` and `mlp_only_layers []`, G-BACKEND, G-REV and every extraction gate, then check-sequences), A1710 and A1410, replay C per branch on a 1200 s budget priced by main's own ERNIE probe walls times the expert-bytes ratio (the registered rule), Frontier's timer on Qwen3's shapes over the full grid (uniform x 3 seeds, branch clocks), its CSV and trainer under both truths (`cli`, `cli-fills`) and its predictions. The board's sag par is main's | 88.5 min |
+| X4 | **long-context prefill** (unless `--no-long-context`): ERNIE served with `prompts.py build-long` (ShareGPT first human turns concatenated to lengths uniform in 4096..16000 tokens, 16 output tokens, 96 prompts), levels 1,2,4,8, N 24, max-model-len 17408, at the 1410 lock, as `LC1410` | 6.4 min |
+| | **total** (the final push and the held-back check included) | **7921 s = 2.20 h** |
+
+**The budget.** One total for the extras, `--budget-s` (default 9000 s, `$PROD_EXTRAS_BUDGET_S`), counted from
+extras.sh's start. Before each block, `<block>-budget` passes only if the time already spent plus the block's expected
+seconds fits. Otherwise it FAILS (soft) and every step of the block is SKIPPED through `--needs`. A resume counts from
+its own start. The dry run prints every step's expected seconds, each block's, the total, and which blocks the budget
+would run.
+
+**Qwen3 in the kit.** Qwen3 is added like ERNIE, at runtime. `moe/spec.py` is not edited: the MoEConfig is in
+`prodlib.py`, and v8 registers it in-process from the config `price_v8` passes. The Hub's config.json at the pin
+(`ad44e777...`, public API) gives H 2048, I 768, E 128, k 8, 48 layers, `decoder_sparse_step` 1, `mlp_only_layers`
+[], and no shared expert. vLLM 0.27.1's `qwen3_moe.py:130-215` builds `FusedMoEFactory` with `shared_experts` None
+and the gate inside the runner: the same modular path ERNIE takes, which G-BACKEND checks on the card.
+
+At E 128, GROUP_SIZE_M turns 16 only at T ≥ 129·128 = 16512, past the registered 16384-token budget. So:
+- `prodlib.tile_bins(E, max_T)` and `tile_bin(T, E)` give the model's own tiles (E 64: unchanged);
+- serve_capture's coverage gate counts only the six tiles Qwen3 can reach;
+- v8's HOPPER_G1_N window for k 8 at E 128 is T 12288..16511 (`refused_window`), on the 128x128 tile at G 1.
+
+The offline sweep (T 1..128 every T, then steps to 16600; seeded uniform routing; the board par stand-in 64.325 /
+612.5) priced every call on all six tiles:
+- 128 decode calls;
+- 56 calls on 64x128;
+- 64 calls on 128x128 G 1;
+- 2 calls on G16 (T 16512, 16600, beyond serving).
+
+It refused 19 calls, all `HOPPER_G1_N`, every one with T in 12288..16511.
+
+**Offline.** When `<results>/extras/SUMMARY.txt` exists, `offline.sh` scores the extras in the same report, each
+labelled and DESCRIPTIVE:
+- `extras-expected-outputs` (soft) holds every extras step that PASSED to its file;
+- the ERNIE score step takes `--noise-floor A1710=extras/A1710r` (X1), `--ncu-bytes` and `--ncu-sample` (X2),
+  and `--run LC1410=extras/LC1410` (X4: its own stratum);
+- X1: per tile, the run-to-run variation of kernel-sum on calls matched by (layer, T_pad, counts digest), plus both
+  runs' per-tile medians;
+- X2: per tile and GEMM, counted against v8's predicted reads (`prodlib.predicted_reads`: prefill `price()`'s reads,
+  decode the v6d cell's `parts.reads`; a decode answer with none, the naive path, is NOT AVAILABLE and counted);
+- `score-qwen3` (soft) runs the same scorer with `--model qwen3-30b-a3b` on `extras/qwen3`: its runs, its replay,
+  its Frontier arms, and main's par;
+- `score-merge` appends that score to `score/prod.score.{json,txt}` under `extras.qwen3`.
+
+An extras input that cannot be read is reported in the report and never fails the main score.
 
 ## The prefill constants (v8 has no defaults)
 

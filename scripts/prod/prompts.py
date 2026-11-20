@@ -194,6 +194,45 @@ def build(*, kind: str, data_path, encode, n: int, seed: int, max_input: int, ou
     return {"header": header, "rows": rows}
 
 
+def build_long(*, data_path, encode, n: int, seed: int, min_input: int, max_input: int, out_dist: str,
+               min_out: int = 4, max_out: int = 1024, source_sha256: str = "", tokenizer_name: str = "") -> dict:
+    """THE LONG-CONTEXT SET (extras.sh X4): each prompt's length L drawn uniform in [min_input, max_input] by the seeded
+    generator, its tokens the first human turns of ShareGPT conversations taken in the seeded order (each used once)
+    and concatenated, token lists joined as encoded, until L tokens, then cut at L. Output lengths from out_dist (a
+    short fixed or uniform length: the set exists for its prefill steps). Deterministic in (file bytes, seed,
+    tokenizer, n, min_input, max_input, out_dist)."""
+    dist = parse_out_dist(out_dist)
+    if dist[0] == "sharegpt":
+        raise PromptError("a concatenated prompt has no single reply: pick fixed/uniform/lognormal")
+    if not MIN_INPUT <= int(min_input) <= int(max_input):
+        raise PromptError(f"--min-input {min_input} / --max-input {max_input}")
+    rng = random.Random(int(seed))
+    pairs = sharegpt_pairs(json.loads(Path(data_path).read_text(encoding="utf-8")))
+    order = rng.sample(range(len(pairs)), len(pairs))
+    pos, rows = 0, []
+    while len(rows) < n:
+        L = rng.randint(int(min_input), int(max_input))
+        toks: list[int] = []
+        srcs = []
+        while len(toks) < L:
+            if pos >= len(order):
+                raise PromptError(f"ShareGPT ran out of turns at prompt {len(rows)} ({len(order)} turns used)")
+            cid, prompt, _reply = pairs[order[pos]]
+            pos += 1
+            toks += [int(t) for t in encode(prompt)]
+            srcs.append(cid)
+        rows.append({"i": len(rows), "src": "+".join(srcs[:4]) + (f"+{len(srcs) - 4} more" if len(srcs) > 4 else ""),
+                     "prompt_token_ids": toks[:L], "input_len": L,
+                     "max_tokens": draw_out_len(dist, rng, None, min_out, max_out)})
+    body = "\n".join(json.dumps(r, sort_keys=True) for r in rows)
+    header = {"schema": SCHEMA, "kind": "sharegpt-long", "source_sha256": source_sha256, "tokenizer": tokenizer_name,
+              "n": n, "seed": seed, "min_input": int(min_input), "max_input": int(max_input), "out_dist": out_dist,
+              "min_out": min_out, "max_out": max_out, "turns_used": pos,
+              "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
+              "input_tokens": sum(r["input_len"] for r in rows), "output_tokens": sum(r["max_tokens"] for r in rows)}
+    return {"header": header, "rows": rows}
+
+
 def write(promptset: dict, out) -> None:
     lines = [json.dumps(promptset["header"], sort_keys=True)] + [json.dumps(r, sort_keys=True)
                                                                    for r in promptset["rows"]]
@@ -257,12 +296,37 @@ def main(argv=None) -> int:
     b.add_argument("--max-out", type=int, default=1024)
     b.add_argument("--allow-unpinned", action="store_true")
     b.add_argument("--out", required=True)
+    lg = sub.add_parser("build-long", help="the long-context set (extras.sh X4): ShareGPT turns concatenated")
+    lg.add_argument("--data", required=True)
+    lg.add_argument("--tokenizer", required=True)
+    lg.add_argument("--revision", default=None)
+    lg.add_argument("--n", type=int, default=96)
+    lg.add_argument("--seed", type=int, default=0)
+    lg.add_argument("--min-input", type=int, default=4096)
+    lg.add_argument("--max-input", type=int, default=16000)
+    lg.add_argument("--out-dist", default="fixed:16")
+    lg.add_argument("--min-out", type=int, default=4)
+    lg.add_argument("--max-out", type=int, default=1024)
+    lg.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     try:
         if a.cmd == "fetch":
             p, sha = fetch(a.source, a.dest, a.allow_unpinned)
             print(f"PASS fetch {a.source}: {p} sha256 {sha}" + ("" if SOURCES[a.source]["sha256"] else
                                                                "  (UNPINNED: pin this sha256 before freeze)"))
+            return 0
+        if a.cmd == "build-long":
+            sha = check_pin("sharegpt", a.data, False)
+            rev = a.revision or tokenizer_revision(a.tokenizer)
+            if rev is None:
+                raise PromptError(f"the tokenizer {a.tokenizer} has no pinned revision (prodlib.HF_REVISIONS)")
+            ps = build_long(data_path=a.data, encode=hf_encoder(a.tokenizer, rev), n=a.n, seed=a.seed,
+                            min_input=a.min_input, max_input=a.max_input, out_dist=a.out_dist, min_out=a.min_out,
+                            max_out=a.max_out, source_sha256=sha, tokenizer_name=f"{a.tokenizer}@{rev}")
+            write(ps, a.out)
+            h = ps["header"]
+            print(f"PASS build-long: {a.out} n={h['n']} input {h['input_tokens']} tokens ({h['min_input']}.."
+                  f"{h['max_input']} each), output {h['output_tokens']}, body sha256 {h['body_sha256'][:16]}")
             return 0
         sha = check_pin(a.source, a.data, a.allow_unpinned)
         rev = a.revision or tokenizer_revision(a.tokenizer)

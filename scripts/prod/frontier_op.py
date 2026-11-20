@@ -149,7 +149,8 @@ CLI_TRAINING = {"k_fold_cv_splits": 10, "num_training_job_threads": -1, "num_est
 #: the early probe's NARROW grid search (train --narrow: 9 rows, minutes matter; the CLI's own arguments)
 PROBE_TRAINING = {"k_fold_cv_splits": 3, "num_estimators": [50], "max_depth": [8], "min_samples_split": [2]}
 #: the early probe's grid points: one decode T and two prefill T (main.sh; the smoke uses its own grid's)
-PROBE_POINTS = {"ernie-4.5-21b-a3b": (64, 1024, 8192), "olmoe-1b-7b": (64, 192, 256)}
+PROBE_POINTS = {"ernie-4.5-21b-a3b": (64, 1024, 8192), "olmoe-1b-7b": (64, 192, 256),
+                "qwen3-30b-a3b": (64, 1024, 8192)}
 
 #: the served models in Frontier's HF-config dialect (kept for Frontier's model registry; the explicit-parameter
 #: trainer does not read it)
@@ -164,6 +165,12 @@ FRONTIER_MODELS = {
         "intermediate_size": 1024, "num_hidden_layers": 16, "num_attention_heads": 16, "num_key_value_heads": 16,
         "head_dim": 128, "vocab_size": 50304, "max_position_embeddings": 4096, "rms_norm_eps": 1e-05,
         "norm_topk_prob": False, "use_qk_norm": True, "tie_word_embeddings": False}),
+    # extras.sh X3 (the second blind model): Qwen/Qwen3-30B-A3B's config.json at prodlib.HF_REVISIONS
+    "qwen3-30b-a3b": ("qwen3-30b-a3b-moe", {
+        "hidden_size": 2048, "moe_intermediate_size": 768, "num_experts": 128, "num_experts_per_tok": 8,
+        "intermediate_size": 6144, "num_hidden_layers": 48, "num_attention_heads": 32, "num_key_value_heads": 4,
+        "head_dim": 128, "vocab_size": 151936, "max_position_embeddings": 40960, "rms_norm_eps": 1e-06,
+        "norm_topk_prob": True, "use_qk_norm": True, "tie_word_embeddings": False}),
 }
 
 
@@ -293,7 +300,7 @@ def make_cell(model_key: str, spec: dict, routing: str, ids) -> dict:
     load_distribution, seed)."""
     cfg = PL.MODELS[model_key].cfg
     T = int(spec["T"])
-    return {"label": spec["label"], "T": T, "tile": PL.tile_bin(T), "branch": PL.branch(T),
+    return {"label": spec["label"], "T": T, "tile": PL.tile_bin(T, cfg.num_experts), "branch": PL.branch(T),
             "counts": PL.counts_from_ids(ids, cfg.num_experts), "ids_digest": PL.digest(ids),
             "frontier": {"num_tokens": T, "load_distribution": routing, "seed": int(spec["seed"])}}
 
