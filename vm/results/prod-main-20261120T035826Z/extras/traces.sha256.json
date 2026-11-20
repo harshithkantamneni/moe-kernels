@@ -64,24 +64,24 @@
    "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
   },
   "qwen3/frontier/timer-decode/timer.nsys-rep": {
-   "bytes": 629451,
-   "mtime_ns": 1795162261916817374,
-   "sha256": "4657d1851006c6ebbddb359e5cfc203d24e9caf16c3c0131f9e88e63315a7f45"
+   "bytes": 629147,
+   "mtime_ns": 1795163292674157571,
+   "sha256": "04c37fb473c8788b01ac64ddea1cbc57a8140c583716f91f9b852c071fe52605"
   },
   "qwen3/frontier/timer-decode/timer.sqlite": {
-   "bytes": 1675264,
-   "mtime_ns": 1795162262000818220,
-   "sha256": "35d8e8c3fcd867ee4ed8cb5b521f154c030d04093e10819db82030665270df8f"
+   "bytes": 1671168,
+   "mtime_ns": 1795163292757158380,
+   "sha256": "50e283e78cac170321918c7774ec2a356ec47bf653e9169278123dbbdee6bd21"
   },
   "qwen3/frontier/timer-prefill/timer.nsys-rep": {
-   "bytes": 10921600,
-   "mtime_ns": 1795162304938250511,
-   "sha256": "fff8ffa3b2d78303c22c345a52ad6f8080f32ba1ef104945a9796e3319a0f952"
+   "bytes": 10936506,
+   "mtime_ns": 1795163334842568301,
+   "sha256": "ce60c4a6a68dc354cd4dd0089b3ea000b0e09701d6156f02b4147165fe4d1ef1"
   },
   "qwen3/frontier/timer-prefill/timer.sqlite": {
    "bytes": 27037696,
-   "mtime_ns": 1795162305734258525,
-   "sha256": "946db901607ce8f470f2ed049b9c6697a7ad7c87829720e37df40bbc80eab499"
+   "mtime_ns": 1795163335635576025,
+   "sha256": "a04ba721dec5512437e5f42c4f89cc5fc64a00452cd8c03b1d8f32f32e748a46"
   },
   "qwen3/gate60/serve.nsys-rep": {
    "bytes": 19240176,
@@ -89,5 +89,5 @@
    "sha256": "672d6089283fd0a184eb99abb2f881446fe699ef95946ea494b8e96133410ece"
   }
  },
- "total_bytes": 1430848822
+ "total_bytes": 1430859328
 }
