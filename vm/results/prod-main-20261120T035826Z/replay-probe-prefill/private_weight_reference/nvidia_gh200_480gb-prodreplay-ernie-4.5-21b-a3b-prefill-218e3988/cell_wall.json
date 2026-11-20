@@ -1,0 +1,48 @@
+{
+ "schema": "moe-kernels/prod-replay-wall/1/cells",
+ "repeats": 9,
+ "cells": [
+  {
+   "label": "g267826",
+   "T": 160,
+   "tile": "64x128x64w8s3",
+   "wall_s": 19.0291144110015,
+   "synthetic": false
+  },
+  {
+   "label": "g383588",
+   "T": 304,
+   "tile": "64x128x64w8s3",
+   "wall_s": 18.546767744002864,
+   "synthetic": false
+  },
+  {
+   "label": "g303889",
+   "T": 543,
+   "tile": "128x128x64w8s3",
+   "wall_s": 19.79262606899647,
+   "synthetic": false
+  },
+  {
+   "label": "g372388",
+   "T": 1077,
+   "tile": "128x128x64w8s3",
+   "wall_s": 19.23657038500096,
+   "synthetic": false
+  },
+  {
+   "label": "g287359",
+   "T": 12749,
+   "tile": "128x128x64w8s3 g16",
+   "wall_s": 64.07307967699671,
+   "synthetic": false
+  },
+  {
+   "label": "g363215",
+   "T": 16384,
+   "tile": "128x128x64w8s3 g16",
+   "wall_s": 84.43730710300224,
+   "synthetic": false
+  }
+ ]
+}

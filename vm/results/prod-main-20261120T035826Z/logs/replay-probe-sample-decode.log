@@ -1,0 +1,1 @@
+PASS replay sample: 8 cells -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-probe-decode/sample.json; per tile {'16x64x128w4s4': 2, '32x64x128w4s3': 2, '32x128x64w4s3': 2, '64x128x64w4s3': 2}; budget scale 1.000 (394 s of 2400)

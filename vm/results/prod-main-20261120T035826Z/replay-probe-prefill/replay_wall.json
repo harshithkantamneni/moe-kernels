@@ -1,0 +1,20 @@
+{
+ "schema": "moe-kernels/prod-replay-wall/1",
+ "model": "ernie-4.5-21b-a3b",
+ "repeats": 9,
+ "total_wall_s": 225.11546538900075,
+ "tiles": {
+  "128x128x64w8s3": {
+   "median_wall_s": 19.514598226998714,
+   "cells": 2
+  },
+  "128x128x64w8s3 g16": {
+   "median_wall_s": 74.25519338999948,
+   "cells": 2
+  },
+  "64x128x64w8s3": {
+   "median_wall_s": 18.787941077502182,
+   "cells": 2
+  }
+ }
+}

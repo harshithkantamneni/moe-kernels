@@ -1,0 +1,103 @@
+experiment  prod replay (decode, real ids) / nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-e40f6644
+model       ernie-4.5-21b-a3b E=64 k=6 bf16; W_e 22.5 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-decode/sample.json (sha256 bb3a15c1d74efffc...), prod-replay-decode, 80 cells, 80 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 2 (R x A_min 6 x W_e 22.5 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      2 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::2]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    23.9 min
+session     prod-replay-decode-lock1710
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-e40f6644
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   g9190                 native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     62648333697a
+  T=1   g20627                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     8dad133ae813
+  T=1   g32064                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     c3ffec053c4a
+  T=1   g43501                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     63cb056c8233
+  T=1   g54965                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     345cdd3b7a16
+  T=1   g66430                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     b3516bce3d83
+  T=1   g77921                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     db30f222e018
+  T=1   g123913               native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     598e8aff9c4f
+  T=2   g112475               native      naive       16x64x128w4s4  A=9   L=12  P=180  dead=0/0     61a9a6abeb22
+  T=2   g184619               native      naive       16x64x128w4s4  A=11  L=12  P=180  dead=0/0     0f5f21f13dc0
+  T=4   g147408               native      small-batch 16x64x128w4s4  A=22  L=22  P=328  dead=96/80    d85f92798255
+  T=4   g248237               native      small-batch 16x64x128w4s4  A=23  L=23  P=344  dead=48/40    c3a1c4152fdf
+  T=4   g399107               native      small-batch 16x64x128w4s4  A=22  L=22  P=328  dead=96/80    8548ef28b786
+  T=8   g89466                native      small-batch 16x64x128w4s4  A=33  L=33  P=480  dead=720/600   21ad425eec3d
+  T=8   g101038               native      small-batch 16x64x128w4s4  A=36  L=36  P=528  dead=576/480   5e95c3419611
+  T=8   g216307               native      small-batch 16x64x128w4s4  A=29  L=29  P=416  dead=912/760   3f0110705187
+  T=8   g284595               native      small-batch 16x64x128w4s4  A=33  L=33  P=480  dead=720/600   4759212dd4ba
+  T=16  g173182               native      small-batch 16x64x128w4s4  A=50  L=50  P=704  dead=768/640   0ae2b7004c47
+  T=24  g135971               native      small-batch 16x64x128w4s4  A=49  L=49  P=640  dead=960/800   273e6448213c
+  T=24  g357430               native      small-batch 16x64x128w4s4  A=55  L=55  P=736  dead=672/560   b764b8bb1401
+  T=40  g166083               native      small-batch 32x64x128w4s3  A=60  L=60  P=1680 dead=480/400   44d8577198c2
+  T=40  g167884               native      small-batch 32x64x128w4s3  A=64  L=64  P=1808 dead=288/240   02c0812f3606
+  T=40  g205092               native      small-batch 32x64x128w4s3  A=63  L=63  P=1776 dead=336/280   d688ef208dff
+  T=40  g238799               native      small-batch 32x64x128w4s3  A=61  L=61  P=1712 dead=432/360   e0aa8cf0c7e0
+  T=40  g276259               native      small-batch 32x64x128w4s3  A=63  L=63  P=1776 dead=336/280   8980637b4116
+  T=40  g392669               native      small-batch 32x64x128w4s3  A=62  L=62  P=1744 dead=384/320   e4f4a806756f
+  T=48  g154629               native      small-batch 32x64x128w4s3  A=62  L=62  P=1696 dead=432/360   493e75233aa8
+  T=48  g156511               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   dcac6afa5517
+  T=48  g158474               native      small-batch 32x64x128w4s3  A=62  L=62  P=1696 dead=432/360   c01c3c108e21
+  T=48  g160464               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   f10c5cdcdcf6
+  T=48  g162400               native      small-batch 32x64x128w4s3  A=61  L=61  P=1664 dead=480/400   c81d72034e9b
+  T=48  g164282               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   55fb178c6622
+  T=48  g203291               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   74ba793682a6
+  T=48  g355237               native      small-batch 32x64x128w4s3  A=61  L=61  P=1664 dead=480/400   58e2a9fdbb31
+  T=56  g201491               native      small-batch 32x64x128w4s3  A=59  L=59  P=1552 dead=672/560   a9c8af711e44
+  T=56  g236998               native      small-batch 32x64x128w4s3  A=63  L=63  P=1680 dead=480/400   1725c8416c68
+  T=56  g274458               native      small-batch 32x64x128w4s3  A=64  L=64  P=1712 dead=432/360   d911892b8179
+  T=56  g315482               native      small-batch 32x64x128w4s3  A=62  L=62  P=1648 dead=528/440   a46096c3fe40
+  T=64  g353436               native      small-batch 32x64x128w4s3  A=64  L=64  P=1664 dead=480/400   b8e3f4a58e5d
+  T=64  g390869               native      small-batch 32x64x128w4s3  A=64  L=64  P=1664 dead=480/400   ad9be9460cf8
+  T=72  g199173               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   4310a0860229
+  T=72  g314401               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   27cd7e331a02
+  T=72  g353284               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   a426a1111edd
+  T=80  g186213               native      small-batch 32x128x64w4s3  A=61  L=61  P=1472 dead=384/320   8a8cdd441e9f
+  T=80  g187512               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   c12c1d6e194d
+  T=80  g188783               native      small-batch 32x128x64w4s3  A=62  L=62  P=1504 dead=360/300   02878f41005a
+  T=80  g189974               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   941d5490ceae
+  T=80  g191354               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   ceefd06bc012
+  T=80  g192571               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   487aeed1309a
+  T=80  g193843               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   9035f7575671
+  T=80  g195277               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   d82cd37e3c4d
+  T=80  g196657               native      small-batch 32x128x64w4s3  A=63  L=63  P=1536 dead=336/280   78daaef7cd25
+  T=80  g197982               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   eecb1b7a6348
+  T=80  g234983               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   bcb8040aa0ae
+  T=80  g272815               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   0afef81a8c8a
+  T=80  g390168               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   8abbe1078fce
+  T=88  g233819               native      small-batch 32x128x64w4s3  A=63  L=63  P=1488 dead=384/320   c7f95f97331e
+  T=96  g232656               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   2f00525f4cde
+  T=96  g271652               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   f6e837abdf44
+  T=96  g313237               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   9c31efad4ab4
+  T=104 g196335               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   6b510c9b0b88
+  T=104 g231678               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   8ee5e17d1856
+  T=104 g271550               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   49edee10d675
+  T=112 g220399               native      small-batch 64x128x64w4s3  A=63  L=63  P=3360 dead=264/220   b2fa0fa686d2
+  T=112 g221323               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   fe4427883fc1
+  T=112 g222383               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   a24015bb5216
+  T=112 g223389               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   867d08f11f81
+  T=112 g224449               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   af923a6d9deb
+  T=112 g225427               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   677457839101
+  T=112 g226406               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   37372af730fc
+  T=112 g227520               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   3304e3252efd
+  T=112 g228661               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   5080dd67b2e8
+  T=112 g229747               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   e4c39753214e
+  T=112 g230807               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   7ac92412b6c1
+  T=112 g270679               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   c0ed4aa3b4bf
+  T=112 g312732               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   5043a02ed587
+  T=112 g388784               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   d26d84fd47b2
+  T=120 g351484               native      small-batch 64x128x64w4s3  A=64  L=64  P=3376 dead=264/220   67859449f695
+  T=128 g269809               native      small-batch 64x128x64w4s3  A=64  L=64  P=3328 dead=264/220   d628375b0a8c
+  T=128 g387913               native      small-batch 64x128x64w4s3  A=64  L=64  P=3328 dead=264/220   9f819a44642f
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS

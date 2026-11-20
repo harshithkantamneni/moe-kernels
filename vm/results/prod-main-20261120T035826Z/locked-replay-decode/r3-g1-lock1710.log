@@ -1,0 +1,827 @@
+PROD REPLAY PAGE (r3_decode's instrument; adapter: real ids, page built from the sample)
+experiment  prod replay (decode, real ids) / nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-e40f6644
+model       ernie-4.5-21b-a3b E=64 k=6 bf16; W_e 22.5 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-decode/sample.json (sha256 bb3a15c1d74efffc...), prod-replay-decode, 80 cells, 80 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 2 (R x A_min 6 x W_e 22.5 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      2 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::2]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    23.9 min
+session     prod-replay-decode-lock1710
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-e40f6644
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   g9190                 native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     62648333697a
+  T=1   g20627                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     8dad133ae813
+  T=1   g32064                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     c3ffec053c4a
+  T=1   g43501                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     63cb056c8233
+  T=1   g54965                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     345cdd3b7a16
+  T=1   g66430                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     b3516bce3d83
+  T=1   g77921                native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     db30f222e018
+  T=1   g123913               native      naive       16x64x128w4s4  A=6   L=6   P=90   dead=0/0     598e8aff9c4f
+  T=2   g112475               native      naive       16x64x128w4s4  A=9   L=12  P=180  dead=0/0     61a9a6abeb22
+  T=2   g184619               native      naive       16x64x128w4s4  A=11  L=12  P=180  dead=0/0     0f5f21f13dc0
+  T=4   g147408               native      small-batch 16x64x128w4s4  A=22  L=22  P=328  dead=96/80    d85f92798255
+  T=4   g248237               native      small-batch 16x64x128w4s4  A=23  L=23  P=344  dead=48/40    c3a1c4152fdf
+  T=4   g399107               native      small-batch 16x64x128w4s4  A=22  L=22  P=328  dead=96/80    8548ef28b786
+  T=8   g89466                native      small-batch 16x64x128w4s4  A=33  L=33  P=480  dead=720/600   21ad425eec3d
+  T=8   g101038               native      small-batch 16x64x128w4s4  A=36  L=36  P=528  dead=576/480   5e95c3419611
+  T=8   g216307               native      small-batch 16x64x128w4s4  A=29  L=29  P=416  dead=912/760   3f0110705187
+  T=8   g284595               native      small-batch 16x64x128w4s4  A=33  L=33  P=480  dead=720/600   4759212dd4ba
+  T=16  g173182               native      small-batch 16x64x128w4s4  A=50  L=50  P=704  dead=768/640   0ae2b7004c47
+  T=24  g135971               native      small-batch 16x64x128w4s4  A=49  L=49  P=640  dead=960/800   273e6448213c
+  T=24  g357430               native      small-batch 16x64x128w4s4  A=55  L=55  P=736  dead=672/560   b764b8bb1401
+  T=40  g166083               native      small-batch 32x64x128w4s3  A=60  L=60  P=1680 dead=480/400   44d8577198c2
+  T=40  g167884               native      small-batch 32x64x128w4s3  A=64  L=64  P=1808 dead=288/240   02c0812f3606
+  T=40  g205092               native      small-batch 32x64x128w4s3  A=63  L=63  P=1776 dead=336/280   d688ef208dff
+  T=40  g238799               native      small-batch 32x64x128w4s3  A=61  L=61  P=1712 dead=432/360   e0aa8cf0c7e0
+  T=40  g276259               native      small-batch 32x64x128w4s3  A=63  L=63  P=1776 dead=336/280   8980637b4116
+  T=40  g392669               native      small-batch 32x64x128w4s3  A=62  L=62  P=1744 dead=384/320   e4f4a806756f
+  T=48  g154629               native      small-batch 32x64x128w4s3  A=62  L=62  P=1696 dead=432/360   493e75233aa8
+  T=48  g156511               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   dcac6afa5517
+  T=48  g158474               native      small-batch 32x64x128w4s3  A=62  L=62  P=1696 dead=432/360   c01c3c108e21
+  T=48  g160464               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   f10c5cdcdcf6
+  T=48  g162400               native      small-batch 32x64x128w4s3  A=61  L=61  P=1664 dead=480/400   c81d72034e9b
+  T=48  g164282               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   55fb178c6622
+  T=48  g203291               native      small-batch 32x64x128w4s3  A=63  L=63  P=1728 dead=384/320   74ba793682a6
+  T=48  g355237               native      small-batch 32x64x128w4s3  A=61  L=61  P=1664 dead=480/400   58e2a9fdbb31
+  T=56  g201491               native      small-batch 32x64x128w4s3  A=59  L=59  P=1552 dead=672/560   a9c8af711e44
+  T=56  g236998               native      small-batch 32x64x128w4s3  A=63  L=63  P=1680 dead=480/400   1725c8416c68
+  T=56  g274458               native      small-batch 32x64x128w4s3  A=64  L=64  P=1712 dead=432/360   d911892b8179
+  T=56  g315482               native      small-batch 32x64x128w4s3  A=62  L=62  P=1648 dead=528/440   a46096c3fe40
+  T=64  g353436               native      small-batch 32x64x128w4s3  A=64  L=64  P=1664 dead=480/400   b8e3f4a58e5d
+  T=64  g390869               native      small-batch 32x64x128w4s3  A=64  L=64  P=1664 dead=480/400   ad9be9460cf8
+  T=72  g199173               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   4310a0860229
+  T=72  g314401               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   27cd7e331a02
+  T=72  g353284               native      small-batch 32x128x64w4s3  A=64  L=64  P=1616 dead=288/240   a426a1111edd
+  T=80  g186213               native      small-batch 32x128x64w4s3  A=61  L=61  P=1472 dead=384/320   8a8cdd441e9f
+  T=80  g187512               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   c12c1d6e194d
+  T=80  g188783               native      small-batch 32x128x64w4s3  A=62  L=62  P=1504 dead=360/300   02878f41005a
+  T=80  g189974               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   941d5490ceae
+  T=80  g191354               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   ceefd06bc012
+  T=80  g192571               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   487aeed1309a
+  T=80  g193843               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   9035f7575671
+  T=80  g195277               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   d82cd37e3c4d
+  T=80  g196657               native      small-batch 32x128x64w4s3  A=63  L=63  P=1536 dead=336/280   78daaef7cd25
+  T=80  g197982               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   eecb1b7a6348
+  T=80  g234983               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   bcb8040aa0ae
+  T=80  g272815               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   0afef81a8c8a
+  T=80  g390168               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   8abbe1078fce
+  T=88  g233819               native      small-batch 32x128x64w4s3  A=63  L=63  P=1488 dead=384/320   c7f95f97331e
+  T=96  g232656               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   2f00525f4cde
+  T=96  g271652               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   f6e837abdf44
+  T=96  g313237               native      small-batch 32x128x64w4s3  A=64  L=64  P=1472 dead=384/320   9c31efad4ab4
+  T=104 g196335               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   6b510c9b0b88
+  T=104 g231678               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   8ee5e17d1856
+  T=104 g271550               native      small-batch 64x128x64w4s3  A=64  L=64  P=3472 dead=216/180   49edee10d675
+  T=112 g220399               native      small-batch 64x128x64w4s3  A=63  L=63  P=3360 dead=264/220   b2fa0fa686d2
+  T=112 g221323               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   fe4427883fc1
+  T=112 g222383               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   a24015bb5216
+  T=112 g223389               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   867d08f11f81
+  T=112 g224449               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   af923a6d9deb
+  T=112 g225427               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   677457839101
+  T=112 g226406               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   37372af730fc
+  T=112 g227520               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   3304e3252efd
+  T=112 g228661               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   5080dd67b2e8
+  T=112 g229747               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   e4c39753214e
+  T=112 g230807               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   7ac92412b6c1
+  T=112 g270679               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   c0ed4aa3b4bf
+  T=112 g312732               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   5043a02ed587
+  T=112 g388784               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   d26d84fd47b2
+  T=120 g351484               native      small-batch 64x128x64w4s3  A=64  L=64  P=3376 dead=264/220   67859449f695
+  T=128 g269809               native      small-batch 64x128x64w4s3  A=64  L=64  P=3328 dead=264/220   d628375b0a8c
+  T=128 g387913               native      small-batch 64x128x64w4s3  A=64  L=64  P=3328 dead=264/220   9f819a44642f
+WARNING 11-20 05:57:24 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1536,device_name=NVIDIA_GH200_480GB.json
+  rep 0 g9190            native T=  1     53.98 us ok
+  rep 0 g20627           native T=  1     54.55 us ok
+  rep 0 g32064           native T=  1     54.20 us ok
+  rep 0 g43501           native T=  1     54.76 us ok
+  rep 0 g54965           native T=  1     54.30 us ok
+  rep 0 g66430           native T=  1     54.46 us ok
+  rep 0 g77921           native T=  1     54.24 us ok
+  rep 0 g123913          native T=  1     54.31 us ok
+  rep 0 g112475          native T=  2     89.13 us ok
+  rep 0 g184619          native T=  2     95.61 us ok
+  rep 0 g147408          native T=  4    167.43 us ok
+  rep 0 g248237          native T=  4    171.53 us ok
+  rep 0 g399107          native T=  4    167.52 us ok
+  rep 0 g89466           native T=  8    233.78 us ok
+  rep 0 g101038          native T=  8    256.18 us ok
+  rep 0 g216307          native T=  8    210.28 us ok
+  rep 0 g284595          native T=  8    234.09 us ok
+  rep 0 g173182          native T= 16    340.21 us ok
+  rep 0 g135971          native T= 24    335.68 us ok
+  rep 0 g357430          native T= 24    372.92 us ok
+  rep 0 g166083          native T= 40    417.61 us ok
+  rep 0 g167884          native T= 40    434.73 us ok
+  rep 0 g205092          native T= 40    429.33 us ok
+  rep 0 g238799          native T= 40    421.11 us ok
+  rep 0 g276259          native T= 40    429.24 us ok
+  rep 0 g392669          native T= 40    424.69 us ok
+  rep 0 g154629          native T= 48    426.49 us ok
+  rep 0 g156511          native T= 48    430.52 us ok
+  rep 0 g158474          native T= 48    426.55 us ok
+  rep 0 g160464          native T= 48    431.16 us ok
+  rep 0 g162400          native T= 48    422.59 us ok
+  rep 0 g164282          native T= 48    430.80 us ok
+  rep 0 g203291          native T= 48    431.11 us ok
+  rep 0 g355237          native T= 48    423.09 us ok
+  rep 0 g201491          native T= 56    415.88 us ok
+  rep 0 g236998          native T= 56    432.40 us ok
+  rep 0 g274458          native T= 56    438.51 us ok
+  rep 0 g315482          native T= 56    427.96 us ok
+  rep 0 g353436          native T= 64    439.66 us ok
+  rep 0 g390869          native T= 64    438.97 us ok
+  rep 0 g199173          native T= 72    451.49 us ok
+  rep 0 g314401          native T= 72    450.74 us ok
+  rep 0 g353284          native T= 72    451.29 us ok
+  rep 0 g186213          native T= 80    435.67 us ok
+  rep 0 g187512          native T= 80    452.63 us ok
+  rep 0 g188783          native T= 80    442.23 us ok
+  rep 0 g189974          native T= 80    452.79 us ok
+  rep 0 g191354          native T= 80    452.67 us ok
+  rep 0 g192571          native T= 80    452.50 us ok
+  rep 0 g193843          native T= 80    452.74 us ok
+  rep 0 g195277          native T= 80    453.08 us ok
+  rep 0 g196657          native T= 80    446.90 us ok
+  rep 0 g197982          native T= 80    452.84 us ok
+  rep 0 g234983          native T= 80    452.50 us ok
+  rep 0 g272815          native T= 80    452.65 us ok
+  rep 0 g390168          native T= 80    452.63 us ok
+  rep 0 g233819          native T= 88    448.99 us ok
+  rep 0 g232656          native T= 96    455.06 us ok
+  rep 0 g271652          native T= 96    454.86 us ok
+  rep 0 g313237          native T= 96    454.81 us ok
+  rep 0 g196335          native T=104    457.29 us ok
+  rep 0 g231678          native T=104    457.30 us ok
+  rep 0 g271550          native T=104    457.50 us ok
+  rep 0 g220399          native T=112    453.35 us ok
+  rep 0 g221323          native T=112    458.60 us ok
+  rep 0 g222383          native T=112    457.91 us ok
+  rep 0 g223389          native T=112    458.82 us ok
+  rep 0 g224449          native T=112    458.49 us ok
+  rep 0 g225427          native T=112    458.55 us ok
+  rep 0 g226406          native T=112    458.54 us ok
+  rep 0 g227520          native T=112    458.65 us ok
+  rep 0 g228661          native T=112    458.56 us ok
+  rep 0 g229747          native T=112    458.98 us ok
+  rep 0 g230807          native T=112    458.45 us ok
+  rep 0 g270679          native T=112    459.05 us ok
+  rep 0 g312732          native T=112    458.21 us ok
+  rep 0 g388784          native T=112    458.80 us ok
+  rep 0 g351484          native T=120    459.55 us ok
+  rep 0 g269809          native T=128    460.71 us ok
+  rep 0 g387913          native T=128    460.22 us ok
+  rep 1 g387913          native T=128    460.82 us ok
+  rep 1 g269809          native T=128    460.28 us ok
+  rep 1 g351484          native T=120    459.85 us ok
+  rep 1 g388784          native T=112    458.22 us ok
+  rep 1 g312732          native T=112    458.87 us ok
+  rep 1 g270679          native T=112    458.38 us ok
+  rep 1 g230807          native T=112    458.67 us ok
+  rep 1 g229747          native T=112    458.31 us ok
+  rep 1 g228661          native T=112    458.36 us ok
+  rep 1 g227520          native T=112    458.85 us ok
+  rep 1 g226406          native T=112    458.37 us ok
+  rep 1 g225427          native T=112    458.52 us ok
+  rep 1 g224449          native T=112    458.67 us ok
+  rep 1 g223389          native T=112    458.53 us ok
+  rep 1 g222383          native T=112    458.65 us ok
+  rep 1 g221323          native T=112    458.62 us ok
+  rep 1 g220399          native T=112    453.66 us ok
+  rep 1 g271550          native T=104    456.98 us ok
+  rep 1 g231678          native T=104    457.36 us ok
+  rep 1 g196335          native T=104    457.31 us ok
+  rep 1 g313237          native T= 96    455.08 us ok
+  rep 1 g271652          native T= 96    454.57 us ok
+  rep 1 g232656          native T= 96    455.45 us ok
+  rep 1 g233819          native T= 88    448.61 us ok
+  rep 1 g390168          native T= 80    452.99 us ok
+  rep 1 g272815          native T= 80    452.43 us ok
+  rep 1 g234983          native T= 80    452.68 us ok
+  rep 1 g197982          native T= 80    452.38 us ok
+  rep 1 g196657          native T= 80    447.10 us ok
+  rep 1 g195277          native T= 80    452.57 us ok
+  rep 1 g193843          native T= 80    452.56 us ok
+  rep 1 g192571          native T= 80    452.46 us ok
+  rep 1 g191354          native T= 80    452.89 us ok
+  rep 1 g189974          native T= 80    451.97 us ok
+  rep 1 g188783          native T= 80    442.20 us ok
+  rep 1 g187512          native T= 80    452.43 us ok
+  rep 1 g186213          native T= 80    435.53 us ok
+  rep 1 g353284          native T= 72    450.75 us ok
+  rep 1 g314401          native T= 72    450.94 us ok
+  rep 1 g199173          native T= 72    451.31 us ok
+  rep 1 g390869          native T= 64    439.33 us ok
+  rep 1 g353436          native T= 64    439.17 us ok
+  rep 1 g315482          native T= 56    428.44 us ok
+  rep 1 g274458          native T= 56    437.98 us ok
+  rep 1 g236998          native T= 56    432.60 us ok
+  rep 1 g201491          native T= 56    415.62 us ok
+  rep 1 g355237          native T= 48    423.06 us ok
+  rep 1 g203291          native T= 48    431.09 us ok
+  rep 1 g164282          native T= 48    431.02 us ok
+  rep 1 g162400          native T= 48    422.35 us ok
+  rep 1 g160464          native T= 48    431.46 us ok
+  rep 1 g158474          native T= 48    426.63 us ok
+  rep 1 g156511          native T= 48    431.04 us ok
+  rep 1 g154629          native T= 48    426.08 us ok
+  rep 1 g392669          native T= 40    424.65 us ok
+  rep 1 g276259          native T= 40    429.29 us ok
+  rep 1 g238799          native T= 40    420.92 us ok
+  rep 1 g205092          native T= 40    429.03 us ok
+  rep 1 g167884          native T= 40    434.80 us ok
+  rep 1 g166083          native T= 40    417.43 us ok
+  rep 1 g357430          native T= 24    373.01 us ok
+  rep 1 g135971          native T= 24    335.60 us ok
+  rep 1 g173182          native T= 16    339.99 us ok
+  rep 1 g284595          native T=  8    233.76 us ok
+  rep 1 g216307          native T=  8    210.26 us ok
+  rep 1 g101038          native T=  8    256.16 us ok
+  rep 1 g89466           native T=  8    233.52 us ok
+  rep 1 g399107          native T=  4    167.87 us ok
+  rep 1 g248237          native T=  4    171.68 us ok
+  rep 1 g147408          native T=  4    167.71 us ok
+  rep 1 g184619          native T=  2     95.62 us ok
+  rep 1 g112475          native T=  2     89.14 us ok
+  rep 1 g123913          native T=  1     54.13 us ok
+  rep 1 g77921           native T=  1     54.05 us ok
+  rep 1 g66430           native T=  1     54.26 us ok
+  rep 1 g54965           native T=  1     54.32 us ok
+  rep 1 g43501           native T=  1     54.25 us ok
+  rep 1 g32064           native T=  1     54.01 us ok
+  rep 1 g20627           native T=  1     54.27 us ok
+  rep 1 g9190            native T=  1     54.03 us ok
+  rep 2 g9190            native T=  1     54.07 us ok
+  rep 2 g20627           native T=  1     54.29 us ok
+  rep 2 g32064           native T=  1     54.00 us ok
+  rep 2 g43501           native T=  1     54.26 us ok
+  rep 2 g54965           native T=  1     54.33 us ok
+  rep 2 g66430           native T=  1     54.26 us ok
+  rep 2 g77921           native T=  1     54.07 us ok
+  rep 2 g123913          native T=  1     54.15 us ok
+  rep 2 g112475          native T=  2     89.12 us ok
+  rep 2 g184619          native T=  2     95.71 us ok
+  rep 2 g147408          native T=  4    167.68 us ok
+  rep 2 g248237          native T=  4    171.72 us ok
+  rep 2 g399107          native T=  4    167.81 us ok
+  rep 2 g89466           native T=  8    233.55 us ok
+  rep 2 g101038          native T=  8    256.06 us ok
+  rep 2 g216307          native T=  8    210.31 us ok
+  rep 2 g284595          native T=  8    233.70 us ok
+  rep 2 g173182          native T= 16    339.97 us ok
+  rep 2 g135971          native T= 24    336.09 us ok
+  rep 2 g357430          native T= 24    372.91 us ok
+  rep 2 g166083          native T= 40    417.31 us ok
+  rep 2 g167884          native T= 40    434.59 us ok
+  rep 2 g205092          native T= 40    429.20 us ok
+  rep 2 g238799          native T= 40    420.99 us ok
+  rep 2 g276259          native T= 40    429.05 us ok
+  rep 2 g392669          native T= 40    424.67 us ok
+  rep 2 g154629          native T= 48    426.32 us ok
+  rep 2 g156511          native T= 48    430.79 us ok
+  rep 2 g158474          native T= 48    426.62 us ok
+  rep 2 g160464          native T= 48    431.21 us ok
+  rep 2 g162400          native T= 48    422.60 us ok
+  rep 2 g164282          native T= 48    430.81 us ok
+  rep 2 g203291          native T= 48    431.07 us ok
+  rep 2 g355237          native T= 48    422.58 us ok
+  rep 2 g201491          native T= 56    415.65 us ok
+  rep 2 g236998          native T= 56    432.48 us ok
+  rep 2 g274458          native T= 56    438.41 us ok
+  rep 2 g315482          native T= 56    428.37 us ok
+  rep 2 g353436          native T= 64    439.61 us ok
+  rep 2 g390869          native T= 64    439.52 us ok
+  rep 2 g199173          native T= 72    451.53 us ok
+  rep 2 g314401          native T= 72    450.81 us ok
+  rep 2 g353284          native T= 72    451.19 us ok
+  rep 2 g186213          native T= 80    435.54 us ok
+  rep 2 g187512          native T= 80    452.83 us ok
+  rep 2 g188783          native T= 80    441.95 us ok
+  rep 2 g189974          native T= 80    452.73 us ok
+  rep 2 g191354          native T= 80    453.17 us ok
+  rep 2 g192571          native T= 80    452.63 us ok
+  rep 2 g193843          native T= 80    452.64 us ok
+  rep 2 g195277          native T= 80    452.86 us ok
+  rep 2 g196657          native T= 80    447.15 us ok
+  rep 2 g197982          native T= 80    453.05 us ok
+  rep 2 g234983          native T= 80    452.41 us ok
+  rep 2 g272815          native T= 80    452.87 us ok
+  rep 2 g390168          native T= 80    452.72 us ok
+  rep 2 g233819          native T= 88    448.69 us ok
+  rep 2 g232656          native T= 96    454.65 us ok
+  rep 2 g271652          native T= 96    454.95 us ok
+  rep 2 g313237          native T= 96    455.07 us ok
+  rep 2 g196335          native T=104    457.97 us ok
+  rep 2 g231678          native T=104    457.37 us ok
+  rep 2 g271550          native T=104    457.30 us ok
+  rep 2 g220399          native T=112    453.39 us ok
+  rep 2 g221323          native T=112    458.55 us ok
+  rep 2 g222383          native T=112    458.11 us ok
+  rep 2 g223389          native T=112    458.86 us ok
+  rep 2 g224449          native T=112    458.49 us ok
+  rep 2 g225427          native T=112    458.59 us ok
+  rep 2 g226406          native T=112    458.53 us ok
+  rep 2 g227520          native T=112    458.91 us ok
+  rep 2 g228661          native T=112    458.27 us ok
+  rep 2 g229747          native T=112    458.78 us ok
+  rep 2 g230807          native T=112    458.58 us ok
+  rep 2 g270679          native T=112    458.80 us ok
+  rep 2 g312732          native T=112    458.27 us ok
+  rep 2 g388784          native T=112    458.42 us ok
+  rep 2 g351484          native T=120    459.68 us ok
+  rep 2 g269809          native T=128    460.83 us ok
+  rep 2 g387913          native T=128    460.29 us ok
+  rep 3 g387913          native T=128    460.41 us ok
+  rep 3 g269809          native T=128    460.38 us ok
+  rep 3 g351484          native T=120    459.65 us ok
+  rep 3 g388784          native T=112    458.36 us ok
+  rep 3 g312732          native T=112    458.81 us ok
+  rep 3 g270679          native T=112    458.41 us ok
+  rep 3 g230807          native T=112    458.66 us ok
+  rep 3 g229747          native T=112    458.60 us ok
+  rep 3 g228661          native T=112    458.49 us ok
+  rep 3 g227520          native T=112    458.50 us ok
+  rep 3 g226406          native T=112    458.46 us ok
+  rep 3 g225427          native T=112    458.88 us ok
+  rep 3 g224449          native T=112    458.74 us ok
+  rep 3 g223389          native T=112    458.54 us ok
+  rep 3 g222383          native T=112    458.73 us ok
+  rep 3 g221323          native T=112    458.28 us ok
+  rep 3 g220399          native T=112    453.64 us ok
+  rep 3 g271550          native T=104    456.93 us ok
+  rep 3 g231678          native T=104    457.47 us ok
+  rep 3 g196335          native T=104    457.32 us ok
+  rep 3 g313237          native T= 96    455.14 us ok
+  rep 3 g271652          native T= 96    454.82 us ok
+  rep 3 g232656          native T= 96    454.91 us ok
+  rep 3 g233819          native T= 88    448.72 us ok
+  rep 3 g390168          native T= 80    452.64 us ok
+  rep 3 g272815          native T= 80    452.79 us ok
+  rep 3 g234983          native T= 80    452.60 us ok
+  rep 3 g197982          native T= 80    452.67 us ok
+  rep 3 g196657          native T= 80    447.44 us ok
+  rep 3 g195277          native T= 80    452.57 us ok
+  rep 3 g193843          native T= 80    452.40 us ok
+  rep 3 g192571          native T= 80    452.77 us ok
+  rep 3 g191354          native T= 80    453.03 us ok
+  rep 3 g189974          native T= 80    452.36 us ok
+  rep 3 g188783          native T= 80    441.91 us ok
+  rep 3 g187512          native T= 80    452.94 us ok
+  rep 3 g186213          native T= 80    435.63 us ok
+  rep 3 g353284          native T= 72    451.09 us ok
+  rep 3 g314401          native T= 72    451.05 us ok
+  rep 3 g199173          native T= 72    451.33 us ok
+  rep 3 g390869          native T= 64    439.18 us ok
+  rep 3 g353436          native T= 64    439.25 us ok
+  rep 3 g315482          native T= 56    428.39 us ok
+  rep 3 g274458          native T= 56    437.92 us ok
+  rep 3 g236998          native T= 56    432.49 us ok
+  rep 3 g201491          native T= 56    415.35 us ok
+  rep 3 g355237          native T= 48    422.90 us ok
+  rep 3 g203291          native T= 48    430.78 us ok
+  rep 3 g164282          native T= 48    430.99 us ok
+  rep 3 g162400          native T= 48    422.49 us ok
+  rep 3 g160464          native T= 48    431.43 us ok
+  rep 3 g158474          native T= 48    426.74 us ok
+  rep 3 g156511          native T= 48    430.84 us ok
+  rep 3 g154629          native T= 48    426.38 us ok
+  rep 3 g392669          native T= 40    424.73 us ok
+  rep 3 g276259          native T= 40    429.01 us ok
+  rep 3 g238799          native T= 40    421.05 us ok
+  rep 3 g205092          native T= 40    429.05 us ok
+  rep 3 g167884          native T= 40    434.65 us ok
+  rep 3 g166083          native T= 40    417.57 us ok
+  rep 3 g357430          native T= 24    372.98 us ok
+  rep 3 g135971          native T= 24    335.99 us ok
+  rep 3 g173182          native T= 16    339.92 us ok
+  rep 3 g284595          native T=  8    233.82 us ok
+  rep 3 g216307          native T=  8    210.40 us ok
+  rep 3 g101038          native T=  8    256.08 us ok
+  rep 3 g89466           native T=  8    233.60 us ok
+  rep 3 g399107          native T=  4    167.79 us ok
+  rep 3 g248237          native T=  4    171.70 us ok
+  rep 3 g147408          native T=  4    167.67 us ok
+  rep 3 g184619          native T=  2     95.72 us ok
+  rep 3 g112475          native T=  2     89.18 us ok
+  rep 3 g123913          native T=  1     54.29 us ok
+  rep 3 g77921           native T=  1     54.18 us ok
+  rep 3 g66430           native T=  1     54.54 us ok
+  rep 3 g54965           native T=  1     54.16 us ok
+  rep 3 g43501           native T=  1     54.62 us ok
+  rep 3 g32064           native T=  1     54.20 us ok
+  rep 3 g20627           native T=  1     54.41 us ok
+  rep 3 g9190            native T=  1     53.94 us ok
+  rep 4 g9190            native T=  1     54.01 us ok
+  rep 4 g20627           native T=  1     54.37 us ok
+  rep 4 g32064           native T=  1     54.25 us ok
+  rep 4 g43501           native T=  1     54.57 us ok
+  rep 4 g54965           native T=  1     54.14 us ok
+  rep 4 g66430           native T=  1     54.52 us ok
+  rep 4 g77921           native T=  1     54.20 us ok
+  rep 4 g123913          native T=  1     54.25 us ok
+  rep 4 g112475          native T=  2     89.15 us ok
+  rep 4 g184619          native T=  2     95.69 us ok
+  rep 4 g147408          native T=  4    167.58 us ok
+  rep 4 g248237          native T=  4    171.64 us ok
+  rep 4 g399107          native T=  4    167.77 us ok
+  rep 4 g89466           native T=  8    233.58 us ok
+  rep 4 g101038          native T=  8    256.10 us ok
+  rep 4 g216307          native T=  8    210.37 us ok
+  rep 4 g284595          native T=  8    233.86 us ok
+  rep 4 g173182          native T= 16    339.95 us ok
+  rep 4 g135971          native T= 24    335.77 us ok
+  rep 4 g357430          native T= 24    373.08 us ok
+  rep 4 g166083          native T= 40    417.62 us ok
+  rep 4 g167884          native T= 40    434.81 us ok
+  rep 4 g205092          native T= 40    429.36 us ok
+  rep 4 g238799          native T= 40    421.09 us ok
+  rep 4 g276259          native T= 40    428.87 us ok
+  rep 4 g392669          native T= 40    424.98 us ok
+  rep 4 g154629          native T= 48    426.38 us ok
+  rep 4 g156511          native T= 48    430.79 us ok
+  rep 4 g158474          native T= 48    426.47 us ok
+  rep 4 g160464          native T= 48    431.28 us ok
+  rep 4 g162400          native T= 48    422.44 us ok
+  rep 4 g164282          native T= 48    430.88 us ok
+  rep 4 g203291          native T= 48    430.93 us ok
+  rep 4 g355237          native T= 48    422.65 us ok
+  rep 4 g201491          native T= 56    415.39 us ok
+  rep 4 g236998          native T= 56    432.21 us ok
+  rep 4 g274458          native T= 56    438.26 us ok
+  rep 4 g315482          native T= 56    427.99 us ok
+  rep 4 g353436          native T= 64    439.11 us ok
+  rep 4 g390869          native T= 64    439.09 us ok
+  rep 4 g199173          native T= 72    451.10 us ok
+  rep 4 g314401          native T= 72    450.81 us ok
+  rep 4 g353284          native T= 72    451.10 us ok
+  rep 4 g186213          native T= 80    435.76 us ok
+  rep 4 g187512          native T= 80    452.54 us ok
+  rep 4 g188783          native T= 80    442.26 us ok
+  rep 4 g189974          native T= 80    452.74 us ok
+  rep 4 g191354          native T= 80    452.64 us ok
+  rep 4 g192571          native T= 80    452.30 us ok
+  rep 4 g193843          native T= 80    452.63 us ok
+  rep 4 g195277          native T= 80    452.87 us ok
+  rep 4 g196657          native T= 80    447.20 us ok
+  rep 4 g197982          native T= 80    452.45 us ok
+  rep 4 g234983          native T= 80    452.76 us ok
+  rep 4 g272815          native T= 80    452.57 us ok
+  rep 4 g390168          native T= 80    452.50 us ok
+  rep 4 g233819          native T= 88    448.69 us ok
+  rep 4 g232656          native T= 96    454.90 us ok
+  rep 4 g271652          native T= 96    454.73 us ok
+  rep 4 g313237          native T= 96    455.08 us ok
+  rep 4 g196335          native T=104    457.26 us ok
+  rep 4 g231678          native T=104    457.12 us ok
+  rep 4 g271550          native T=104    457.30 us ok
+  rep 4 g220399          native T=112    453.24 us ok
+  rep 4 g221323          native T=112    458.44 us ok
+  rep 4 g222383          native T=112    458.48 us ok
+  rep 4 g223389          native T=112    458.48 us ok
+  rep 4 g224449          native T=112    458.48 us ok
+  rep 4 g225427          native T=112    458.38 us ok
+  rep 4 g226406          native T=112    458.22 us ok
+  rep 4 g227520          native T=112    458.76 us ok
+  rep 4 g228661          native T=112    458.77 us ok
+  rep 4 g229747          native T=112    458.73 us ok
+  rep 4 g230807          native T=112    458.63 us ok
+  rep 4 g270679          native T=112    458.63 us ok
+  rep 4 g312732          native T=112    458.59 us ok
+  rep 4 g388784          native T=112    458.53 us ok
+  rep 4 g351484          native T=120    459.73 us ok
+  rep 4 g269809          native T=128    460.64 us ok
+  rep 4 g387913          native T=128    460.47 us ok
+  rep 5 g387913          native T=128    460.42 us ok
+  rep 5 g269809          native T=128    460.82 us ok
+  rep 5 g351484          native T=120    459.80 us ok
+  rep 5 g388784          native T=112    458.50 us ok
+  rep 5 g312732          native T=112    458.80 us ok
+  rep 5 g270679          native T=112    458.21 us ok
+  rep 5 g230807          native T=112    458.36 us ok
+  rep 5 g229747          native T=112    458.62 us ok
+  rep 5 g228661          native T=112    458.55 us ok
+  rep 5 g227520          native T=112    458.54 us ok
+  rep 5 g226406          native T=112    458.37 us ok
+  rep 5 g225427          native T=112    458.60 us ok
+  rep 5 g224449          native T=112    458.98 us ok
+  rep 5 g223389          native T=112    458.40 us ok
+  rep 5 g222383          native T=112    458.67 us ok
+  rep 5 g221323          native T=112    458.63 us ok
+  rep 5 g220399          native T=112    453.23 us ok
+  rep 5 g271550          native T=104    457.15 us ok
+  rep 5 g231678          native T=104    457.31 us ok
+  rep 5 g196335          native T=104    457.63 us ok
+  rep 5 g313237          native T= 96    454.71 us ok
+  rep 5 g271652          native T= 96    454.71 us ok
+  rep 5 g232656          native T= 96    454.89 us ok
+  rep 5 g233819          native T= 88    448.63 us ok
+  rep 5 g390168          native T= 80    452.51 us ok
+  rep 5 g272815          native T= 80    452.52 us ok
+  rep 5 g234983          native T= 80    452.13 us ok
+  rep 5 g197982          native T= 80    452.87 us ok
+  rep 5 g196657          native T= 80    446.88 us ok
+  rep 5 g195277          native T= 80    452.81 us ok
+  rep 5 g193843          native T= 80    452.83 us ok
+  rep 5 g192571          native T= 80    452.47 us ok
+  rep 5 g191354          native T= 80    452.83 us ok
+  rep 5 g189974          native T= 80    452.23 us ok
+  rep 5 g188783          native T= 80    442.56 us ok
+  rep 5 g187512          native T= 80    452.42 us ok
+  rep 5 g186213          native T= 80    435.73 us ok
+  rep 5 g353284          native T= 72    451.24 us ok
+  rep 5 g314401          native T= 72    451.45 us ok
+  rep 5 g199173          native T= 72    451.31 us ok
+  rep 5 g390869          native T= 64    439.27 us ok
+  rep 5 g353436          native T= 64    439.30 us ok
+  rep 5 g315482          native T= 56    428.14 us ok
+  rep 5 g274458          native T= 56    438.37 us ok
+  rep 5 g236998          native T= 56    432.50 us ok
+  rep 5 g201491          native T= 56    415.14 us ok
+  rep 5 g355237          native T= 48    422.75 us ok
+  rep 5 g203291          native T= 48    431.19 us ok
+  rep 5 g164282          native T= 48    431.45 us ok
+  rep 5 g162400          native T= 48    422.42 us ok
+  rep 5 g160464          native T= 48    430.97 us ok
+  rep 5 g158474          native T= 48    426.25 us ok
+  rep 5 g156511          native T= 48    430.74 us ok
+  rep 5 g154629          native T= 48    426.27 us ok
+  rep 5 g392669          native T= 40    424.63 us ok
+  rep 5 g276259          native T= 40    429.01 us ok
+  rep 5 g238799          native T= 40    420.92 us ok
+  rep 5 g205092          native T= 40    429.21 us ok
+  rep 5 g167884          native T= 40    434.75 us ok
+  rep 5 g166083          native T= 40    417.51 us ok
+  rep 5 g357430          native T= 24    372.88 us ok
+  rep 5 g135971          native T= 24    335.78 us ok
+  rep 5 g173182          native T= 16    340.04 us ok
+  rep 5 g284595          native T=  8    234.23 us ok
+  rep 5 g216307          native T=  8    210.35 us ok
+  rep 5 g101038          native T=  8    256.50 us ok
+  rep 5 g89466           native T=  8    234.14 us ok
+  rep 5 g399107          native T=  4    167.72 us ok
+  rep 5 g248237          native T=  4    171.64 us ok
+  rep 5 g147408          native T=  4    167.74 us ok
+  rep 5 g184619          native T=  2     95.65 us ok
+  rep 5 g112475          native T=  2     89.20 us ok
+  rep 5 g123913          native T=  1     54.32 us ok
+  rep 5 g77921           native T=  1     54.14 us ok
+  rep 5 g66430           native T=  1     54.23 us ok
+  rep 5 g54965           native T=  1     54.30 us ok
+  rep 5 g43501           native T=  1     54.38 us ok
+  rep 5 g32064           native T=  1     54.09 us ok
+  rep 5 g20627           native T=  1     54.43 us ok
+  rep 5 g9190            native T=  1     53.87 us ok
+  rep 6 g9190            native T=  1     53.88 us ok
+  rep 6 g20627           native T=  1     54.42 us ok
+  rep 6 g32064           native T=  1     54.11 us ok
+  rep 6 g43501           native T=  1     54.35 us ok
+  rep 6 g54965           native T=  1     54.32 us ok
+  rep 6 g66430           native T=  1     54.25 us ok
+  rep 6 g77921           native T=  1     54.09 us ok
+  rep 6 g123913          native T=  1     54.29 us ok
+  rep 6 g112475          native T=  2     89.15 us ok
+  rep 6 g184619          native T=  2     95.61 us ok
+  rep 6 g147408          native T=  4    167.62 us ok
+  rep 6 g248237          native T=  4    171.58 us ok
+  rep 6 g399107          native T=  4    167.60 us ok
+  rep 6 g89466           native T=  8    234.04 us ok
+  rep 6 g101038          native T=  8    256.50 us ok
+  rep 6 g216307          native T=  8    210.42 us ok
+  rep 6 g284595          native T=  8    234.18 us ok
+  rep 6 g173182          native T= 16    339.95 us ok
+  rep 6 g135971          native T= 24    335.91 us ok
+  rep 6 g357430          native T= 24    373.02 us ok
+  rep 6 g166083          native T= 40    417.57 us ok
+  rep 6 g167884          native T= 40    434.95 us ok
+  rep 6 g205092          native T= 40    429.40 us ok
+  rep 6 g238799          native T= 40    421.25 us ok
+  rep 6 g276259          native T= 40    429.36 us ok
+  rep 6 g392669          native T= 40    424.84 us ok
+  rep 6 g154629          native T= 48    426.05 us ok
+  rep 6 g156511          native T= 48    430.62 us ok
+  rep 6 g158474          native T= 48    426.28 us ok
+  rep 6 g160464          native T= 48    431.05 us ok
+  rep 6 g162400          native T= 48    422.49 us ok
+  rep 6 g164282          native T= 48    431.24 us ok
+  rep 6 g203291          native T= 48    430.74 us ok
+  rep 6 g355237          native T= 48    422.96 us ok
+  rep 6 g201491          native T= 56    415.31 us ok
+  rep 6 g236998          native T= 56    432.95 us ok
+  rep 6 g274458          native T= 56    438.44 us ok
+  rep 6 g315482          native T= 56    428.10 us ok
+  rep 6 g353436          native T= 64    439.44 us ok
+  rep 6 g390869          native T= 64    438.99 us ok
+  rep 6 g199173          native T= 72    451.23 us ok
+  rep 6 g314401          native T= 72    451.06 us ok
+  rep 6 g353284          native T= 72    450.82 us ok
+  rep 6 g186213          native T= 80    435.38 us ok
+  rep 6 g187512          native T= 80    452.46 us ok
+  rep 6 g188783          native T= 80    442.36 us ok
+  rep 6 g189974          native T= 80    452.36 us ok
+  rep 6 g191354          native T= 80    452.84 us ok
+  rep 6 g192571          native T= 80    452.25 us ok
+  rep 6 g193843          native T= 80    452.96 us ok
+  rep 6 g195277          native T= 80    452.98 us ok
+  rep 6 g196657          native T= 80    447.21 us ok
+  rep 6 g197982          native T= 80    452.16 us ok
+  rep 6 g234983          native T= 80    452.42 us ok
+  rep 6 g272815          native T= 80    452.17 us ok
+  rep 6 g390168          native T= 80    452.88 us ok
+  rep 6 g233819          native T= 88    448.37 us ok
+  rep 6 g232656          native T= 96    454.98 us ok
+  rep 6 g271652          native T= 96    454.67 us ok
+  rep 6 g313237          native T= 96    455.44 us ok
+  rep 6 g196335          native T=104    457.20 us ok
+  rep 6 g231678          native T=104    457.62 us ok
+  rep 6 g271550          native T=104    457.19 us ok
+  rep 6 g220399          native T=112    453.45 us ok
+  rep 6 g221323          native T=112    458.52 us ok
+  rep 6 g222383          native T=112    458.28 us ok
+  rep 6 g223389          native T=112    458.60 us ok
+  rep 6 g224449          native T=112    458.64 us ok
+  rep 6 g225427          native T=112    458.39 us ok
+  rep 6 g226406          native T=112    458.76 us ok
+  rep 6 g227520          native T=112    458.78 us ok
+  rep 6 g228661          native T=112    458.49 us ok
+  rep 6 g229747          native T=112    458.63 us ok
+  rep 6 g230807          native T=112    458.50 us ok
+  rep 6 g270679          native T=112    458.73 us ok
+  rep 6 g312732          native T=112    458.96 us ok
+  rep 6 g388784          native T=112    458.48 us ok
+  rep 6 g351484          native T=120    459.61 us ok
+  rep 6 g269809          native T=128    460.41 us ok
+  rep 6 g387913          native T=128    460.45 us ok
+  rep 7 g387913          native T=128    460.58 us ok
+  rep 7 g269809          native T=128    460.54 us ok
+  rep 7 g351484          native T=120    459.86 us ok
+  rep 7 g388784          native T=112    458.70 us ok
+  rep 7 g312732          native T=112    458.76 us ok
+  rep 7 g270679          native T=112    458.80 us ok
+  rep 7 g230807          native T=112    458.66 us ok
+  rep 7 g229747          native T=112    458.85 us ok
+  rep 7 g228661          native T=112    458.18 us ok
+  rep 7 g227520          native T=112    459.05 us ok
+  rep 7 g226406          native T=112    458.38 us ok
+  rep 7 g225427          native T=112    458.86 us ok
+  rep 7 g224449          native T=112    458.57 us ok
+  rep 7 g223389          native T=112    458.64 us ok
+  rep 7 g222383          native T=112    458.42 us ok
+  rep 7 g221323          native T=112    458.87 us ok
+  rep 7 g220399          native T=112    453.14 us ok
+  rep 7 g271550          native T=104    457.36 us ok
+  rep 7 g231678          native T=104    457.27 us ok
+  rep 7 g196335          native T=104    457.71 us ok
+  rep 7 g313237          native T= 96    455.18 us ok
+  rep 7 g271652          native T= 96    454.91 us ok
+  rep 7 g232656          native T= 96    455.07 us ok
+  rep 7 g233819          native T= 88    449.02 us ok
+  rep 7 g390168          native T= 80    452.55 us ok
+  rep 7 g272815          native T= 80    452.83 us ok
+  rep 7 g234983          native T= 80    452.51 us ok
+  rep 7 g197982          native T= 80    452.78 us ok
+  rep 7 g196657          native T= 80    446.96 us ok
+  rep 7 g195277          native T= 80    452.76 us ok
+  rep 7 g193843          native T= 80    452.59 us ok
+  rep 7 g192571          native T= 80    452.89 us ok
+  rep 7 g191354          native T= 80    452.40 us ok
+  rep 7 g189974          native T= 80    452.23 us ok
+  rep 7 g188783          native T= 80    441.91 us ok
+  rep 7 g187512          native T= 80    452.39 us ok
+  rep 7 g186213          native T= 80    435.66 us ok
+  rep 7 g353284          native T= 72    450.94 us ok
+  rep 7 g314401          native T= 72    450.86 us ok
+  rep 7 g199173          native T= 72    451.69 us ok
+  rep 7 g390869          native T= 64    439.04 us ok
+  rep 7 g353436          native T= 64    439.21 us ok
+  rep 7 g315482          native T= 56    428.11 us ok
+  rep 7 g274458          native T= 56    438.49 us ok
+  rep 7 g236998          native T= 56    432.63 us ok
+  rep 7 g201491          native T= 56    416.09 us ok
+  rep 7 g355237          native T= 48    422.61 us ok
+  rep 7 g203291          native T= 48    431.17 us ok
+  rep 7 g164282          native T= 48    430.89 us ok
+  rep 7 g162400          native T= 48    422.48 us ok
+  rep 7 g160464          native T= 48    431.04 us ok
+  rep 7 g158474          native T= 48    426.64 us ok
+  rep 7 g156511          native T= 48    430.83 us ok
+  rep 7 g154629          native T= 48    426.82 us ok
+  rep 7 g392669          native T= 40    424.55 us ok
+  rep 7 g276259          native T= 40    429.20 us ok
+  rep 7 g238799          native T= 40    420.93 us ok
+  rep 7 g205092          native T= 40    429.46 us ok
+  rep 7 g167884          native T= 40    434.76 us ok
+  rep 7 g166083          native T= 40    417.48 us ok
+  rep 7 g357430          native T= 24    372.90 us ok
+  rep 7 g135971          native T= 24    335.84 us ok
+  rep 7 g173182          native T= 16    340.10 us ok
+  rep 7 g284595          native T=  8    233.96 us ok
+  rep 7 g216307          native T=  8    210.37 us ok
+  rep 7 g101038          native T=  8    256.46 us ok
+  rep 7 g89466           native T=  8    234.08 us ok
+  rep 7 g399107          native T=  4    167.50 us ok
+  rep 7 g248237          native T=  4    171.54 us ok
+  rep 7 g147408          native T=  4    167.40 us ok
+  rep 7 g184619          native T=  2     95.57 us ok
+  rep 7 g112475          native T=  2     89.08 us ok
+  rep 7 g123913          native T=  1     54.30 us ok
+  rep 7 g77921           native T=  1     54.43 us ok
+  rep 7 g66430           native T=  1     54.62 us ok
+  rep 7 g54965           native T=  1     54.22 us ok
+  rep 7 g43501           native T=  1     54.57 us ok
+  rep 7 g32064           native T=  1     54.15 us ok
+  rep 7 g20627           native T=  1     54.16 us ok
+  rep 7 g9190            native T=  1     54.00 us ok
+  rep 8 g9190            native T=  1     53.91 us ok
+  rep 8 g20627           native T=  1     54.19 us ok
+  rep 8 g32064           native T=  1     54.13 us ok
+  rep 8 g43501           native T=  1     54.54 us ok
+  rep 8 g54965           native T=  1     54.15 us ok
+  rep 8 g66430           native T=  1     54.64 us ok
+  rep 8 g77921           native T=  1     54.37 us ok
+  rep 8 g123913          native T=  1     54.30 us ok
+  rep 8 g112475          native T=  2     89.07 us ok
+  rep 8 g184619          native T=  2     95.55 us ok
+  rep 8 g147408          native T=  4    167.39 us ok
+  rep 8 g248237          native T=  4    171.50 us ok
+  rep 8 g399107          native T=  4    167.45 us ok
+  rep 8 g89466           native T=  8    233.89 us ok
+  rep 8 g101038          native T=  8    256.45 us ok
+  rep 8 g216307          native T=  8    210.29 us ok
+  rep 8 g284595          native T=  8    234.00 us ok
+  rep 8 g173182          native T= 16    340.14 us ok
+  rep 8 g135971          native T= 24    335.89 us ok
+  rep 8 g357430          native T= 24    372.87 us ok
+  rep 8 g166083          native T= 40    417.55 us ok
+  rep 8 g167884          native T= 40    434.72 us ok
+  rep 8 g205092          native T= 40    429.25 us ok
+  rep 8 g238799          native T= 40    421.26 us ok
+  rep 8 g276259          native T= 40    429.09 us ok
+  rep 8 g392669          native T= 40    424.96 us ok
+  rep 8 g154629          native T= 48    426.22 us ok
+  rep 8 g156511          native T= 48    430.72 us ok
+  rep 8 g158474          native T= 48    426.39 us ok
+  rep 8 g160464          native T= 48    431.31 us ok
+  rep 8 g162400          native T= 48    422.35 us ok
+  rep 8 g164282          native T= 48    431.05 us ok
+  rep 8 g203291          native T= 48    430.89 us ok
+  rep 8 g355237          native T= 48    422.62 us ok
+  rep 8 g201491          native T= 56    415.74 us ok
+  rep 8 g236998          native T= 56    432.45 us ok
+  rep 8 g274458          native T= 56    438.41 us ok
+  rep 8 g315482          native T= 56    428.41 us ok
+  rep 8 g353436          native T= 64    439.12 us ok
+  rep 8 g390869          native T= 64    439.65 us ok
+  rep 8 g199173          native T= 72    451.54 us ok
+  rep 8 g314401          native T= 72    450.78 us ok
+  rep 8 g353284          native T= 72    450.86 us ok
+  rep 8 g186213          native T= 80    435.82 us ok
+  rep 8 g187512          native T= 80    452.32 us ok
+  rep 8 g188783          native T= 80    442.45 us ok
+  rep 8 g189974          native T= 80    452.18 us ok
+  rep 8 g191354          native T= 80    453.02 us ok
+  rep 8 g192571          native T= 80    452.48 us ok
+  rep 8 g193843          native T= 80    452.78 us ok
+  rep 8 g195277          native T= 80    452.86 us ok
+  rep 8 g196657          native T= 80    447.34 us ok
+  rep 8 g197982          native T= 80    452.56 us ok
+  rep 8 g234983          native T= 80    452.46 us ok
+  rep 8 g272815          native T= 80    452.76 us ok
+  rep 8 g390168          native T= 80    452.96 us ok
+  rep 8 g233819          native T= 88    448.56 us ok
+  rep 8 g232656          native T= 96    454.99 us ok
+  rep 8 g271652          native T= 96    455.15 us ok
+  rep 8 g313237          native T= 96    455.21 us ok
+  rep 8 g196335          native T=104    457.84 us ok
+  rep 8 g231678          native T=104    457.64 us ok
+  rep 8 g271550          native T=104    457.26 us ok
+  rep 8 g220399          native T=112    453.49 us ok
+  rep 8 g221323          native T=112    458.52 us ok
+  rep 8 g222383          native T=112    458.39 us ok
+  rep 8 g223389          native T=112    458.40 us ok
+  rep 8 g224449          native T=112    458.83 us ok
+  rep 8 g225427          native T=112    458.45 us ok
+  rep 8 g226406          native T=112    458.63 us ok
+  rep 8 g227520          native T=112    458.50 us ok
+  rep 8 g228661          native T=112    458.62 us ok
+  rep 8 g229747          native T=112    458.79 us ok
+  rep 8 g230807          native T=112    458.72 us ok
+  rep 8 g270679          native T=112    458.79 us ok
+  rep 8 g312732          native T=112    458.53 us ok
+  rep 8 g388784          native T=112    458.39 us ok
+  rep 8 g351484          native T=120    459.71 us ok
+  rep 8 g269809          native T=128    460.39 us ok
+  rep 8 g387913          native T=128    460.49 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-e40f6644/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

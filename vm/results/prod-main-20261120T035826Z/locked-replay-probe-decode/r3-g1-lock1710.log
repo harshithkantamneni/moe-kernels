@@ -1,0 +1,107 @@
+PROD REPLAY PAGE (r3_decode's instrument; adapter: real ids, page built from the sample)
+experiment  prod replay (decode, real ids) / nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-d0ef3aaf
+model       ernie-4.5-21b-a3b E=64 k=6 bf16; W_e 22.5 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-probe-decode/sample.json (sha256 4b5852aa6620124d...), prod-replay-decode, 8 cells, 8 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 12 x W_e 22.5 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.2 min
+session     prod-replay-probe-decode-lock1710
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-probe-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-d0ef3aaf
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=2   g286274               native      naive       16x64x128w4s4  A=12  L=12  P=180  dead=0/0     70187e96fbe5
+  T=8   g91145                native      small-batch 16x64x128w4s4  A=33  L=33  P=480  dead=720/600   1d424c9b1a47
+  T=40  g166706               native      small-batch 32x64x128w4s3  A=61  L=61  P=1712 dead=432/360   fd8c18179bd3
+  T=56  g354059               native      small-batch 32x64x128w4s3  A=63  L=63  P=1680 dead=480/400   2633c70d7c38
+  T=80  g194506               native      small-batch 32x128x64w4s3  A=64  L=64  P=1568 dead=312/260   b9558338b164
+  T=88  g313738               native      small-batch 32x128x64w4s3  A=64  L=64  P=1520 dead=360/300   104c03e48586
+  T=112 g224904               native      small-batch 64x128x64w4s3  A=64  L=64  P=3424 dead=240/200   b0ff569cc607
+  T=120 g312290               native      small-batch 64x128x64w4s3  A=64  L=64  P=3376 dead=264/220   b6e3291fcc03
+WARNING 11-20 05:54:36 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1536,device_name=NVIDIA_GH200_480GB.json
+  rep 0 g286274          native T=  2     96.18 us ok
+  rep 0 g91145           native T=  8    233.60 us ok
+  rep 0 g166706          native T= 40    420.69 us ok
+  rep 0 g354059          native T= 56    433.07 us ok
+  rep 0 g194506          native T= 80    452.39 us ok
+  rep 0 g313738          native T= 88    453.72 us ok
+  rep 0 g224904          native T=112    457.17 us ok
+  rep 0 g312290          native T=120    458.51 us ok
+  rep 1 g312290          native T=120    458.61 us ok
+  rep 1 g224904          native T=112    457.07 us ok
+  rep 1 g313738          native T= 88    453.66 us ok
+  rep 1 g194506          native T= 80    452.24 us ok
+  rep 1 g354059          native T= 56    432.84 us ok
+  rep 1 g166706          native T= 40    420.98 us ok
+  rep 1 g91145           native T=  8    233.60 us ok
+  rep 1 g286274          native T=  2     96.17 us ok
+  rep 2 g286274          native T=  2     96.20 us ok
+  rep 2 g91145           native T=  8    233.58 us ok
+  rep 2 g166706          native T= 40    420.72 us ok
+  rep 2 g354059          native T= 56    432.83 us ok
+  rep 2 g194506          native T= 80    452.15 us ok
+  rep 2 g313738          native T= 88    454.34 us ok
+  rep 2 g224904          native T=112    457.00 us ok
+  rep 2 g312290          native T=120    458.67 us ok
+  rep 3 g312290          native T=120    458.57 us ok
+  rep 3 g224904          native T=112    457.19 us ok
+  rep 3 g313738          native T= 88    454.10 us ok
+  rep 3 g194506          native T= 80    451.87 us ok
+  rep 3 g354059          native T= 56    432.67 us ok
+  rep 3 g166706          native T= 40    420.94 us ok
+  rep 3 g91145           native T=  8    233.70 us ok
+  rep 3 g286274          native T=  2     96.24 us ok
+  rep 4 g286274          native T=  2     96.20 us ok
+  rep 4 g91145           native T=  8    233.56 us ok
+  rep 4 g166706          native T= 40    420.89 us ok
+  rep 4 g354059          native T= 56    432.97 us ok
+  rep 4 g194506          native T= 80    451.90 us ok
+  rep 4 g313738          native T= 88    453.74 us ok
+  rep 4 g224904          native T=112    457.10 us ok
+  rep 4 g312290          native T=120    458.67 us ok
+  rep 5 g312290          native T=120    459.30 us ok
+  rep 5 g224904          native T=112    457.00 us ok
+  rep 5 g313738          native T= 88    454.15 us ok
+  rep 5 g194506          native T= 80    452.18 us ok
+  rep 5 g354059          native T= 56    432.87 us ok
+  rep 5 g166706          native T= 40    421.15 us ok
+  rep 5 g91145           native T=  8    233.56 us ok
+  rep 5 g286274          native T=  2     96.21 us ok
+  rep 6 g286274          native T=  2     96.16 us ok
+  rep 6 g91145           native T=  8    233.55 us ok
+  rep 6 g166706          native T= 40    420.88 us ok
+  rep 6 g354059          native T= 56    432.94 us ok
+  rep 6 g194506          native T= 80    452.06 us ok
+  rep 6 g313738          native T= 88    453.98 us ok
+  rep 6 g224904          native T=112    457.15 us ok
+  rep 6 g312290          native T=120    458.61 us ok
+  rep 7 g312290          native T=120    458.94 us ok
+  rep 7 g224904          native T=112    456.90 us ok
+  rep 7 g313738          native T= 88    454.39 us ok
+  rep 7 g194506          native T= 80    452.08 us ok
+  rep 7 g354059          native T= 56    432.77 us ok
+  rep 7 g166706          native T= 40    421.10 us ok
+  rep 7 g91145           native T=  8    233.57 us ok
+  rep 7 g286274          native T=  2     96.19 us ok
+  rep 8 g286274          native T=  2     96.26 us ok
+  rep 8 g91145           native T=  8    233.48 us ok
+  rep 8 g166706          native T= 40    420.76 us ok
+  rep 8 g354059          native T= 56    433.11 us ok
+  rep 8 g194506          native T= 80    451.92 us ok
+  rep 8 g313738          native T= 88    453.60 us ok
+  rep 8 g224904          native T=112    457.14 us ok
+  rep 8 g312290          native T=120    458.86 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-probe-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-decode-d0ef3aaf/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

@@ -1,0 +1,87 @@
+PROD REPLAY PAGE (r3_decode's instrument; adapter: real ids, page built from the sample)
+experiment  prod replay (prefill, real ids) / nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-prefill-218e3988
+model       ernie-4.5-21b-a3b E=64 k=6 bf16; W_e 22.5 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-probe-prefill/sample.json (sha256 f059c8a3971d4b3a...), prod-replay-prefill, 6 cells, 6 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 64 x W_e 22.5 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    3.6 min
+session     prod-replay-probe-prefill-lock1410
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-probe-prefill/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-prefill-218e3988
+slips       --slip-policy cell at the 1410 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=160 g267826               native      small-batch 64x128x64w8s3  A=64  L=64  P=3136 dead=336/280   955ce350a56b
+  T=304 g383588               native      block-scan  64x128x64w8s3  A=64  L=65  P=2336 dead=648/540   4fc827fae029
+  T=543 g303889               native      block-scan  128x128x64w8s3 A=64  L=64  P=4934 dead=600/500   f08b9c7adc9b
+  T=1077g372388               native      block-scan  128x128x64w8s3 A=64  L=73  P=2882 dead=984/820   477c978c8591
+  T=12749g287359               native      block-scan  128x128x64w8s3 A=64  L=628 P=3890 dead=816/680   ef7dc3a7a4d1
+  T=16384g363215               native      block-scan  128x128x64w8s3 A=64  L=804 P=4608 dead=672/560   194ea1299bd4
+WARNING 11-20 06:21:11 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1536,device_name=NVIDIA_GH200_480GB.json
+  rep 0 g267826          native T=160    482.54 us ok
+  rep 0 g383588          native T=304    476.32 us ok
+  rep 0 g303889          native T=543    526.65 us ok
+  rep 0 g372388          native T=1077    601.04 us ok
+  rep 0 g287359          native T=12749   4304.41 us ok
+  rep 0 g363215          native T=16384   5492.76 us ok
+  rep 1 g363215          native T=16384   5495.64 us ok
+  rep 1 g287359          native T=12749   4305.53 us ok
+  rep 1 g372388          native T=1077    600.32 us ok
+  rep 1 g303889          native T=543    526.24 us ok
+  rep 1 g383588          native T=304    476.57 us ok
+  rep 1 g267826          native T=160    482.68 us ok
+  rep 2 g267826          native T=160    482.47 us ok
+  rep 2 g383588          native T=304    476.13 us ok
+  rep 2 g303889          native T=543    526.09 us ok
+  rep 2 g372388          native T=1077    600.59 us ok
+  rep 2 g287359          native T=12749   4303.98 us ok
+  rep 2 g363215          native T=16384   5518.72 us ok
+  rep 3 g363215          native T=16384   5502.96 us ok
+  rep 3 g287359          native T=12749   4310.07 us ok
+  rep 3 g372388          native T=1077    600.42 us ok
+  rep 3 g303889          native T=543    526.45 us ok
+  rep 3 g383588          native T=304    476.22 us ok
+  rep 3 g267826          native T=160    482.53 us ok
+  rep 4 g267826          native T=160    482.80 us ok
+  rep 4 g383588          native T=304    476.46 us ok
+  rep 4 g303889          native T=543    526.17 us ok
+  rep 4 g372388          native T=1077    600.25 us ok
+  rep 4 g287359          native T=12749   4306.39 us ok
+  rep 4 g363215          native T=16384   5489.94 us ok
+  rep 5 g363215          native T=16384   5508.55 us ok
+  rep 5 g287359          native T=12749   4306.66 us ok
+  rep 5 g372388          native T=1077    601.03 us ok
+  rep 5 g303889          native T=543    526.11 us ok
+  rep 5 g383588          native T=304    476.42 us ok
+  rep 5 g267826          native T=160    482.99 us ok
+  rep 6 g267826          native T=160    482.71 us ok
+  rep 6 g383588          native T=304    476.41 us ok
+  rep 6 g303889          native T=543    526.10 us ok
+  rep 6 g372388          native T=1077    601.22 us ok
+  rep 6 g287359          native T=12749   4303.88 us ok
+  rep 6 g363215          native T=16384   5494.41 us ok
+  rep 7 g363215          native T=16384   5490.80 us ok
+  rep 7 g287359          native T=12749   4304.67 us ok
+  rep 7 g372388          native T=1077    601.00 us ok
+  rep 7 g303889          native T=543    525.78 us ok
+  rep 7 g383588          native T=304    476.02 us ok
+  rep 7 g267826          native T=160    482.54 us ok
+  rep 8 g267826          native T=160    482.70 us ok
+  rep 8 g383588          native T=304    476.27 us ok
+  rep 8 g303889          native T=543    526.74 us ok
+  rep 8 g372388          native T=1077    600.90 us ok
+  rep 8 g287359          native T=12749   4308.61 us ok
+  rep 8 g363215          native T=16384   5508.97 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-probe-prefill/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-prefill-218e3988/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

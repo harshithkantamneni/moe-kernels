@@ -1,0 +1,59 @@
+experiment  prod replay (prefill, real ids) / nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-prefill-d9eccb45
+model       ernie-4.5-21b-a3b E=64 k=6 bf16; W_e 22.5 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/sample-prefill/sample.json (sha256 3775112d13344c75...), prod-replay-prefill, 36 cells, 36 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 64 x W_e 22.5 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    11.8 min
+session     prod-replay-prefill-lock1410
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/replay-prefill/private_weight_reference/nvidia_gh200_480gb-prodreplay-ernie-4.5-21b-a3b-prefill-d9eccb45
+slips       --slip-policy cell at the 1410 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=152 g267927               native      small-batch 64x128x64w8s3  A=64  L=64  P=3184 dead=336/280   491bd1a36b52
+  T=152 g387121               native      small-batch 64x128x64w8s3  A=64  L=64  P=3184 dead=336/280   3c228f72843d
+  T=184 g309782               native      block-scan  64x128x64w8s3  A=64  L=64  P=2992 dead=408/340   04c0136ac10d
+  T=232 g264496               native      block-scan  64x128x64w8s3  A=64  L=64  P=2704 dead=504/420   a00fd1468294
+  T=256 g256769               native      block-scan  64x128x64w8s3  A=64  L=64  P=2560 dead=552/460   93be05e7ebaa
+  T=256 g347667               native      block-scan  64x128x64w8s3  A=64  L=64  P=2560 dead=552/460   6cf47d652311
+  T=272 g253068               native      block-scan  64x128x64w8s3  A=64  L=64  P=2464 dead=600/500   f2e728f03d8c
+  T=304 g260660               native      block-scan  64x128x64w8s3  A=64  L=64  P=2272 dead=672/560   bcfa9bddcfd2
+  T=304 g383690               native      block-scan  64x128x64w8s3  A=64  L=65  P=2336 dead=648/540   f071ad185e48
+  T=400 g306350               native      block-scan  64x128x64w8s3  A=64  L=67  P=1888 dead=816/680   865cee6366c7
+  T=432 g344236               native      block-scan  64x128x64w8s3  A=64  L=70  P=1888 dead=816/680   6ee1c28de711
+  T=512 g380258               native      block-scan  64x128x64w8s3  A=64  L=76  P=1792 dead=840/700   fa83b2450989
+  T=624 g378909               native      block-scan  128x128x64w8s3 A=64  L=64  P=4448 dead=696/580   6709e7c438de
+  T=683 g340803               native      block-scan  128x128x64w8s3 A=64  L=64  P=4094 dead=768/640   5fd7c06041f6
+  T=754 g301563               native      block-scan  128x128x64w8s3 A=64  L=64  P=3668 dead=840/700   29871045a7ac
+  T=1037g292716               native      block-scan  128x128x64w8s3 A=64  L=78  P=3762 dead=840/700   233ba44cb4f9
+  T=1044g365639               native      block-scan  128x128x64w8s3 A=64  L=75  P=3336 dead=912/760   2335935fe4df
+  T=1047g327533               native      block-scan  128x128x64w8s3 A=64  L=80  P=3958 dead=792/660   fa808b5805e8
+  T=1077g297140               native      block-scan  128x128x64w8s3 A=64  L=76  P=3266 dead=912/760   73ca9bd92027
+  T=1090g331956               native      block-scan  128x128x64w8s3 A=64  L=79  P=3572 dead=864/720   7bbe737b5293
+  T=1107g336380               native      block-scan  128x128x64w8s3 A=64  L=81  P=3726 dead=840/700   9836cab2be63
+  T=1125g288293               native      block-scan  128x128x64w8s3 A=64  L=82  P=3746 dead=840/700   d67f100aeaf9
+  T=1140g370062               native      block-scan  128x128x64w8s3 A=64  L=76  P=2888 dead=984/820   86cba9f6fb9a
+  T=1224g374486               native      block-scan  128x128x64w8s3 A=64  L=90  P=4176 dead=744/620   48e24c780118
+  T=12749g363295               native      block-scan  128x128x64w8s3 A=64  L=629 P=4018 dead=792/660   066adda17c4d
+  T=16384g287158               native      block-scan  128x128x64w8s3 A=64  L=798 P=3840 dead=816/680   2ee8a2fdf2c7
+  T=16384g287214               native      block-scan  128x128x64w8s3 A=64  L=801 P=4224 dead=744/620   353ea9554349
+  T=16384g287270               native      block-scan  128x128x64w8s3 A=64  L=799 P=3968 dead=792/660   f7413b3434dc
+  T=16384g287326               native      block-scan  128x128x64w8s3 A=64  L=800 P=4096 dead=768/640   039b967a0fac
+  T=16384g325642               native      block-scan  128x128x64w8s3 A=64  L=799 P=3968 dead=792/660   6816c70ef1d0
+  T=16384g325698               native      block-scan  128x128x64w8s3 A=64  L=797 P=3712 dead=840/700   6c4b0027179c
+  T=16384g325754               native      block-scan  128x128x64w8s3 A=64  L=801 P=4224 dead=744/620   993045b52b89
+  T=16384g363070               native      block-scan  128x128x64w8s3 A=64  L=800 P=4096 dead=768/640   31ac24af54e6
+  T=16384g363127               native      block-scan  128x128x64w8s3 A=64  L=803 P=4480 dead=696/580   f887a7041afd
+  T=16384g363183               native      block-scan  128x128x64w8s3 A=64  L=796 P=3584 dead=864/720   38d84b9681ec
+  T=16384g363239               native      block-scan  128x128x64w8s3 A=64  L=801 P=4224 dead=744/620   8d5a7b97701d
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
