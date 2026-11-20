@@ -25,3 +25,4 @@
 2026-11-20T08:27:43Z prod extras: X3 Qwen3 replay C
 2026-11-20T08:30:05Z prod extras: X3 Qwen3 Frontier
 2026-11-20T08:31:24Z prod extras: X4 long-context prefill
+2026-11-20T08:32:28Z prod extras: done (score on the laptop: scripts/prod/offline.sh)
