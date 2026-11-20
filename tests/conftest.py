@@ -191,3 +191,16 @@ def _results_root_sandbox(tmp_path_factory):
     else:
         os.environ["MOE_RESULTS_DIR"] = previous
     shutil.rmtree(root, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def _model_configs_restored():
+    """A test that prices a served model registers its MoEConfig into moe.spec.MODEL_CONFIGS for the process
+    (r3_timing_model_v8.register_model); drop what it added afterwards, so a test that enumerates the registered
+    models (the v7 blinds' census, rescore) never sees another test's models. Re-registration is stateless: v8
+    registers the config object on every call that passes one."""
+    from moe.spec import MODEL_CONFIGS
+    before = set(MODEL_CONFIGS)
+    yield
+    for k in set(MODEL_CONFIGS) - before:
+        del MODEL_CONFIGS[k]

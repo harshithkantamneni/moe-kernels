@@ -34,12 +34,16 @@ def _call(model_key: str, T: int, seed: int = 0) -> dict:
 
 @pytest.fixture(scope="module")
 def priced():
+    from moe.spec import MODEL_CONFIGS
+    before = set(MODEL_CONFIGS)
     out = {}
     for mk in MODELS:
         for T in (8, 96, 136, 256, 512, 520, 1024):
             c = _call(mk, T)
             out[(mk, T)] = (V8.price(dict(c)), V9.price(dict(c)), V9.price(dict(c), V9.Switches(NONGEMM=False)))
-    return out
+    yield out
+    for k in set(MODEL_CONFIGS) - before:      # pricing registered the served models (conftest's rule, module scope)
+        del MODEL_CONFIGS[k]
 
 
 def test_the_constants_are_the_fit_on_the_published_launch_floor_pages():
