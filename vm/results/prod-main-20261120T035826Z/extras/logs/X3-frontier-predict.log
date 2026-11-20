@@ -1,3 +1,4 @@
   $ /home/ubuntu/moe/frontier/venv-primary/bin/python /home/ubuntu/moe/repo/scripts/prod/frontier_op.py _predict --model qwen3-30b-a3b --src /home/ubuntu/moe/frontier/src --arm-label cli --max-tokens 16384 --csv /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/profile/compute/gh200/qwen3-30b-a3b-moe/moe_kernel_only.csv --out /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/predictions --models cli=/home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models --models cli-fills=/home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models-fills --calls A1710=/home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/A1710 --calls A1410=/home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/A1410
-FAIL frontier_op: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/models: 3 moe_grouped_gemm_*.pkl files (want 1)
-FAIL frontier predict (cli): exit 3
+PASS frontier predict (cli): 892032 calls, 421440 distinct in one batch, estimator moe_grouped_gemm_2de392ac.pkl
+PASS frontier predict (cli-fills): 892032 calls, 421440 distinct in one batch, estimator moe_grouped_gemm_2de392ac.pkl
+PASS frontier predict (cli): exit 0

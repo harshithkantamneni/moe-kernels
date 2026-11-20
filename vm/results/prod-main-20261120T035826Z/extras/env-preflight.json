@@ -60,7 +60,7 @@
       "id": "P10",
       "what": "disk",
       "verdict": "PASS",
-      "detail": "4080 GB free under /home/ubuntu/moe"
+      "detail": "4070 GB free under /home/ubuntu/moe"
     },
     {
       "id": "P11",
