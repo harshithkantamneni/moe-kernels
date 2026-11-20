@@ -110,12 +110,33 @@ DEFAULT_PROBE_POINTS = (64, 1024, 8192)
 #:     "acme-moe-16b-a2b": {"hf_repo": "acme/MoE-16B-A2B", "hidden_size": 2048, "moe_intermediate_size": 1024,
 #:                          "num_experts": 64, "top_k": 6, "num_layers": 28, "first_moe_layer": 1},
 #: The model's HF commit goes in BLIND_REVISIONS_PENDING, never here.
-BLIND_SPECS: dict = {}
+BLIND_SPECS: dict = {
+    # 2026-11-20, the v9 / v8 / Frontier blind run: three models neither predictor has seen (no calibration or test
+    # page, not in Frontier's paper), each through vLLM 0.27.1's Triton fused_moe in bf16 (no GH200 tuned config:
+    # the default tile ladder). Every number is G-CFG-checked against config.json at the pinned revision.
+    "glm-4.7-flash": {"hf_repo": "zai-org/GLM-4.7-Flash", "hidden_size": 2048, "moe_intermediate_size": 1536,
+                      "num_experts": 64, "top_k": 4, "num_layers": 47, "first_moe_layer": 1, "shared_experts": 1,
+                      "gate_fn": "sigmoid", "norm_topk_prob": True,
+                      "hf_keys": {"hidden_size": "hidden_size", "moe_intermediate_size": "intermediate_size",
+                                  "n_routed_experts": "num_experts", "num_experts_per_tok": "top_k",
+                                  "num_hidden_layers": "num_layers"},
+                      "levels": "1,8,24,48,80,112,256"},
+    "trinity-mini": {"hf_repo": "arcee-ai/Trinity-Mini", "hidden_size": 2048, "moe_intermediate_size": 1024,
+                     "num_experts": 128, "top_k": 8, "num_layers": 32, "first_moe_layer": 2, "shared_experts": 1,
+                     "gate_fn": "sigmoid", "norm_topk_prob": True, "levels": "1,8,24,48,80,112,256"},
+    "ling-mini-2.0": {"hf_repo": "inclusionAI/Ling-mini-2.0", "hidden_size": 2048, "moe_intermediate_size": 512,
+                      "num_experts": 256, "top_k": 8, "num_layers": 20, "first_moe_layer": 1, "shared_experts": 1,
+                      "gate_fn": "sigmoid", "norm_topk_prob": True, "levels": "1,8,24,48,80,112,256"},
+}
 
 #: PLACEHOLDER: {model key: the HF commit sha of the model's repo}, to be FILLED by a separate step from
 #: `python scripts/prod/hf_revisions.py` (the Hub's public API) once the candidate models are verified. A key of
 #: BLIND_SPECS missing here (or None) is UNPINNED: main.sh stops at revision-pinned and serve_capture refuses it.
-BLIND_REVISIONS_PENDING: dict = {}
+BLIND_REVISIONS_PENDING: dict = {   # HF main commits read from /api/models on 2026-11-20
+    "glm-4.7-flash": "7dd20894a642a0aa287e9827cb1a1f7f91386b67",
+    "trinity-mini": "e7fa016763d03089ab547c9ee19044980073669b",
+    "ling-mini-2.0": "a810f6416bc4e1e29c9d7f271dd2fa7e56e71eab",
+}
 
 _SPEC_REQUIRED = ("hf_repo", "hidden_size", "moe_intermediate_size", "num_experts", "top_k", "num_layers")
 
