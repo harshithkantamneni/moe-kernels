@@ -1,0 +1,1 @@
+PASS replay sample: 38 cells -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-prefill/sample.json; per tile {'64x128x64w8s3': 19, '128x128x64w8s3': 19}; budget scale 0.062 (1071 s of 1125)

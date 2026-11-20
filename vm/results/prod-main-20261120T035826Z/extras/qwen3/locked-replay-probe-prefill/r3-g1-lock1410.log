@@ -1,0 +1,67 @@
+PROD REPLAY PAGE (r3_decode's instrument; adapter: real ids, page built from the sample)
+experiment  prod replay (prefill, real ids) / nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-prefill-61b064a0
+model       qwen3-30b-a3b E=128 k=8 bf16; W_e 9.0 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-probe-prefill/sample.json (sha256 74b002b2be2087d8...), prod-replay-prefill, 4 cells, 4 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 1 (R x A_min 125 x W_e 9.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      1 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::1]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    3.1 min
+session     prod-extras-qwen3-probe-prefill-lock1410
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/replay-probe-prefill/private_weight_reference/nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-prefill-61b064a0
+slips       --slip-policy cell at the 1410 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=160 g414394               native      block-scan  64x128x64w8s3  A=125 L=125 P=6720 dead=252/336   3b8a771dc337
+  T=288 g398506               native      block-scan  64x128x64w8s3  A=126 L=127 P=5824 dead=420/560   763ea246afcf
+  T=514 g404265               native      block-scan  128x128x64w8s3 A=126 L=127 P=12144dead=396/528   eeff3c2a703d
+  T=2179g343977               native      block-scan  128x128x64w8s3 A=125 L=215 P=10088dead=588/784   ce49b28d62c7
+WARNING 11-20 09:32:34 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=128,N=768,device_name=NVIDIA_GH200_480GB.json
+  rep 0 g414394          native T=160    366.10 us ok
+  rep 0 g398506          native T=288    377.51 us ok
+  rep 0 g404265          native T=514    427.15 us ok
+  rep 0 g343977          native T=2179    683.37 us ok
+  rep 1 g343977          native T=2179    683.15 us ok
+  rep 1 g404265          native T=514    426.99 us ok
+  rep 1 g398506          native T=288    377.39 us ok
+  rep 1 g414394          native T=160    366.18 us ok
+  rep 2 g414394          native T=160    366.44 us ok
+  rep 2 g398506          native T=288    377.67 us ok
+  rep 2 g404265          native T=514    427.92 us ok
+  rep 2 g343977          native T=2179    683.64 us ok
+  rep 3 g343977          native T=2179    684.00 us ok
+  rep 3 g404265          native T=514    426.88 us ok
+  rep 3 g398506          native T=288    377.45 us ok
+  rep 3 g414394          native T=160    366.39 us ok
+  rep 4 g414394          native T=160    366.38 us ok
+  rep 4 g398506          native T=288    377.54 us ok
+  rep 4 g404265          native T=514    427.36 us ok
+  rep 4 g343977          native T=2179    683.26 us ok
+  rep 5 g343977          native T=2179    682.44 us ok
+  rep 5 g404265          native T=514    427.35 us ok
+  rep 5 g398506          native T=288    377.53 us ok
+  rep 5 g414394          native T=160    366.35 us ok
+  rep 6 g414394          native T=160    366.42 us ok
+  rep 6 g398506          native T=288    377.77 us ok
+  rep 6 g404265          native T=514    426.89 us ok
+  rep 6 g343977          native T=2179    683.39 us ok
+  rep 7 g343977          native T=2179    683.95 us ok
+  rep 7 g404265          native T=514    427.15 us ok
+  rep 7 g398506          native T=288    377.37 us ok
+  rep 7 g414394          native T=160    366.49 us ok
+  rep 8 g414394          native T=160    366.36 us ok
+  rep 8 g398506          native T=288    377.65 us ok
+  rep 8 g404265          native T=514    427.58 us ok
+  rep 8 g343977          native T=2179    685.58 us ok
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS
+json     /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/replay-probe-prefill/private_weight_reference/nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-prefill-61b064a0/report.json
+exit     0 DONE: measured; every VALIDITY and CLAIM gate PASSED

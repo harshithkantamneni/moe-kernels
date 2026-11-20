@@ -1,0 +1,34 @@
+{
+ "schema": "moe-kernels/prod-replay-wall/1/cells",
+ "repeats": 9,
+ "cells": [
+  {
+   "label": "g398506",
+   "T": 288,
+   "tile": "64x128x64w8s3",
+   "wall_s": 17.223508396000398,
+   "synthetic": false
+  },
+  {
+   "label": "g414394",
+   "T": 160,
+   "tile": "64x128x64w8s3",
+   "wall_s": 18.72076221700263,
+   "synthetic": false
+  },
+  {
+   "label": "g343977",
+   "T": 2179,
+   "tile": "128x128x64w8s3",
+   "wall_s": 20.48753341599513,
+   "synthetic": false
+  },
+  {
+   "label": "g404265",
+   "T": 514,
+   "tile": "128x128x64w8s3",
+   "wall_s": 18.742474010003207,
+   "synthetic": false
+  }
+ ]
+}

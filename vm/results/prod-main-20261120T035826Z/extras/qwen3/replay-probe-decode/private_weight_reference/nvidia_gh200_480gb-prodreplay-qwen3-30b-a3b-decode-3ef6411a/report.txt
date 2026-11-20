@@ -1,0 +1,31 @@
+experiment  prod replay (decode, real ids) / nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-decode-3ef6411a
+model       qwen3-30b-a3b E=128 k=8 bf16; W_e 9.0 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-probe-decode/sample.json (sha256 9585b92c0e4c04bc...), prod-replay-decode, 8 cells, 8 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 4 (R x A_min 8 x W_e 9.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      4 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::4]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    4.2 min
+session     prod-extras-qwen3-probe-decode-lock1710
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/replay-probe-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-decode-3ef6411a
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   g126606               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     81051c6cfaa1
+  T=16  g375606               native      block-scan  16x64x128w4s4  A=74  L=74  P=1056 dead=1296/1728  83b45cf4dc7d
+  T=48  g246232               native      block-scan  32x64x128w4s3  A=104 L=104 P=2944 dead=768/1024  fb43a41f5f22
+  T=48  g365848               native      block-scan  32x64x128w4s3  A=100 L=100 P=2816 dead=864/1152  ecb12177714b
+  T=80  g293088               native      block-scan  32x128x64w4s3  A=119 L=119 P=3168 dead=300/400   44fc416018c5
+  T=80  g361416               native      block-scan  32x128x64w4s3  A=114 L=114 P=3008 dead=360/480   793700a946f7
+  T=104 g355558               native      block-scan  64x128x64w4s3  A=119 L=119 P=6784 dead=240/320   30386205e72e
+  T=112 g342550               native      block-scan  64x128x64w4s3  A=112 L=112 P=6272 dead=336/448   509dc33db63b
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS

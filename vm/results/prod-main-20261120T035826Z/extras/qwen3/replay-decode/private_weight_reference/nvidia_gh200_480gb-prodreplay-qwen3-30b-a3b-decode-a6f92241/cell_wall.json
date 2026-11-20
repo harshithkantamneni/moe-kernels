@@ -1,0 +1,286 @@
+{
+ "schema": "moe-kernels/prod-replay-wall/1/cells",
+ "repeats": 9,
+ "cells": [
+  {
+   "label": "g25436",
+   "T": 1,
+   "tile": "16x64x128w4s4",
+   "wall_s": 15.463079400004062,
+   "synthetic": false
+  },
+  {
+   "label": "g57226",
+   "T": 1,
+   "tile": "16x64x128w4s4",
+   "wall_s": 14.418727640000725,
+   "synthetic": false
+  },
+  {
+   "label": "g89065",
+   "T": 1,
+   "tile": "16x64x128w4s4",
+   "wall_s": 14.380504297005245,
+   "synthetic": false
+  },
+  {
+   "label": "g120999",
+   "T": 1,
+   "tile": "16x64x128w4s4",
+   "wall_s": 14.395571257991833,
+   "synthetic": false
+  },
+  {
+   "label": "g153174",
+   "T": 8,
+   "tile": "16x64x128w4s4",
+   "wall_s": 15.682778735004831,
+   "synthetic": false
+  },
+  {
+   "label": "g185012",
+   "T": 1,
+   "tile": "16x64x128w4s4",
+   "wall_s": 14.3800740220031,
+   "synthetic": false
+  },
+  {
+   "label": "g217954",
+   "T": 8,
+   "tile": "16x64x128w4s4",
+   "wall_s": 15.267186694993143,
+   "synthetic": false
+  },
+  {
+   "label": "g273169",
+   "T": 8,
+   "tile": "16x64x128w4s4",
+   "wall_s": 15.307285797000077,
+   "synthetic": false
+  },
+  {
+   "label": "g369999",
+   "T": 32,
+   "tile": "16x64x128w4s4",
+   "wall_s": 16.1676429859981,
+   "synthetic": false
+  },
+  {
+   "label": "g439470",
+   "T": 8,
+   "tile": "16x64x128w4s4",
+   "wall_s": 15.19730097700085,
+   "synthetic": false
+  },
+  {
+   "label": "g233316",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.36141192300056,
+   "synthetic": false
+  },
+  {
+   "label": "g237761",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.452787575999537,
+   "synthetic": false
+  },
+  {
+   "label": "g242494",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.122478586003126,
+   "synthetic": false
+  },
+  {
+   "label": "g246987",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 17.04641887699472,
+   "synthetic": false
+  },
+  {
+   "label": "g251288",
+   "T": 40,
+   "tile": "32x64x128w4s3",
+   "wall_s": 17.394278783001937,
+   "synthetic": false
+  },
+  {
+   "label": "g305460",
+   "T": 64,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.98179826399428,
+   "synthetic": false
+  },
+  {
+   "label": "g309665",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.7515386390005,
+   "synthetic": false
+  },
+  {
+   "label": "g313870",
+   "T": 40,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.340247085001465,
+   "synthetic": false
+  },
+  {
+   "label": "g366603",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.49103952200676,
+   "synthetic": false
+  },
+  {
+   "label": "g426296",
+   "T": 48,
+   "tile": "32x64x128w4s3",
+   "wall_s": 16.49248011599775,
+   "synthetic": false
+  },
+  {
+   "label": "g283526",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.57982820599136,
+   "synthetic": false
+  },
+  {
+   "label": "g286843",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.784341507005593,
+   "synthetic": false
+  },
+  {
+   "label": "g290160",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.616765036997094,
+   "synthetic": false
+  },
+  {
+   "label": "g293524",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 17.033573315005924,
+   "synthetic": false
+  },
+  {
+   "label": "g297321",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.922678629001894,
+   "synthetic": false
+  },
+  {
+   "label": "g300926",
+   "T": 80,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.762619385004655,
+   "synthetic": false
+  },
+  {
+   "label": "g304003",
+   "T": 72,
+   "tile": "32x128x64w4s3",
+   "wall_s": 17.15640046300541,
+   "synthetic": false
+  },
+  {
+   "label": "g358776",
+   "T": 88,
+   "tile": "32x128x64w4s3",
+   "wall_s": 17.151495647991396,
+   "synthetic": false
+  },
+  {
+   "label": "g361852",
+   "T": 72,
+   "tile": "32x128x64w4s3",
+   "wall_s": 16.972468413994648,
+   "synthetic": false
+  },
+  {
+   "label": "g423345",
+   "T": 72,
+   "tile": "32x128x64w4s3",
+   "wall_s": 17.18390763700154,
+   "synthetic": false
+  },
+  {
+   "label": "g336628",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 17.521360401013226,
+   "synthetic": false
+  },
+  {
+   "label": "g338903",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.89488476498809,
+   "synthetic": false
+  },
+  {
+   "label": "g341466",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.62529699299921,
+   "synthetic": false
+  },
+  {
+   "label": "g343934",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.91316094000649,
+   "synthetic": false
+  },
+  {
+   "label": "g346497",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 17.486243015999207,
+   "synthetic": false
+  },
+  {
+   "label": "g349060",
+   "T": 128,
+   "tile": "64x128x64w4s3",
+   "wall_s": 17.04540456301038,
+   "synthetic": false
+  },
+  {
+   "label": "g351863",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.88414869600092,
+   "synthetic": false
+  },
+  {
+   "label": "g354618",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.81501126999865,
+   "synthetic": false
+  },
+  {
+   "label": "g418142",
+   "T": 128,
+   "tile": "64x128x64w4s3",
+   "wall_s": 17.158001916988724,
+   "synthetic": false
+  },
+  {
+   "label": "g420273",
+   "T": 112,
+   "tile": "64x128x64w4s3",
+   "wall_s": 16.85028168599456,
+   "synthetic": false
+  }
+ ]
+}

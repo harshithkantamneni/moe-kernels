@@ -1,0 +1,12 @@
+2026-11-20T09:32:25Z locked_r3 start: tag prod-extras-qwen3-probe-prefill, locks [1410], G [1], R3 args --model qwen3-30b-a3b --histogram /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-probe-prefill/sample.json --branch prefill --inst GRR --repeats 9 --duty 0.25 --seed 0, results /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/replay-probe-prefill/private_weight_reference
+2026-11-20T09:32:25Z card: NVIDIA GH200 480GB, GPU-1867256b-a69f-0e1f-b7eb-4ad8570bb4c9, Enabled, 900.00 W, 1980 MHz (nvidia-smi exited 0)
+2026-11-20T09:32:25Z supported graphics clocks: 110, 345 to 1980 MHz
+2026-11-20T09:32:26Z locked at 1410 MHz: GPU clocks set to "(gpuClkMin 1410, gpuClkMax 1410)" for GPU 00000000:DD:00.0 All done.
+2026-11-20T09:32:26Z read back after the lock (an idle reading, not the lock's evidence): 345 MHz, 1980 MHz, 0x0000000000000001, 86.48 W, 900.00 W
+2026-11-20T09:32:26Z G=1 start at lock 1410: pid 291573, tag prod-extras-qwen3-probe-prefill-lock1410, log r3-g1-lock1410.log
+2026-11-20T09:32:36Z G=1 at lock 1410: R3 named its run directory nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-prefill-61b064a0
+2026-11-20T09:33:56Z G=1 held at lock 1410: R3 exit 0 DONE, cells=36 worst=1410.0 MHz, 90 s, dir nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-prefill-61b064a0
+2026-11-20T09:33:56Z all G held at lock 1410 MHz
+2026-11-20T09:33:56Z SM clock reset: `sudo -n nvidia-smi -rgc` exited 0, the 1410 MHz lock is released
+2026-11-20T09:33:56Z read back after the reset: 345 MHz, 1980 MHz, 0x0000000000000001, 108.68 W, 900.00 W
+2026-11-20T09:33:56Z locked_r3 end: exit 0, 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

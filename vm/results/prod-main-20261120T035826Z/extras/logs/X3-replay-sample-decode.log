@@ -1,0 +1,1 @@
+PASS replay sample: 40 cells -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-decode/sample.json; per tile {'16x64x128w4s4': 10, '32x64x128w4s3': 10, '32x128x64w4s3': 10, '64x128x64w4s3': 10}; budget scale 0.049 (1015 s of 1065)

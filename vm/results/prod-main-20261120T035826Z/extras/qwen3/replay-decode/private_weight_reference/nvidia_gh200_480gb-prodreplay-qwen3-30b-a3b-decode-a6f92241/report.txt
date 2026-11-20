@@ -1,0 +1,63 @@
+experiment  prod replay (decode, real ids) / nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-decode-a6f92241
+model       qwen3-30b-a3b E=128 k=8 bf16; W_e 9.0 MiB
+page        /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/sample-decode/sample.json (sha256 8b099573b667b397...), prod-replay-decode, 40 cells, 40 (cell, arm), token-row shuffle seed 0
+instrument  GRR: one graph of 8 calls, call j on copy j mod 4 (R x A_min 8 x W_e 9.0 MiB >= 240 MiB); per call = replay / 8; no flush
+copies      4 allocated (expert-first, R3's build_private_weights); NATIVE reads w1[j::4]
+tile        vLLM's own: get_default_config(T, E), read back off the kernel (GD5); no override_config
+repeats     9, T ascending, reversed on odd repeats, arms rotated (R3's histogram_schedule)
+duty        0.25; warmup 100 ms, 3 trials of 100 ms
+estimate    12.9 min
+session     prod-extras-qwen3-replay-decode-lock1710
+WRITES TO   /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/replay-decode/private_weight_reference/nvidia_gh200_480gb-prodreplay-qwen3-30b-a3b-decode-a6f92241
+slips       --slip-policy cell at the 1710 MHz lock (R3's lock_slip); min clean repeats 0
+cells (T, label, arms, path, tile, A, L, P, dead w1/w2, counts sha256):
+  T=1   g25436                native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     7327234eeaf0
+  T=1   g57226                native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     0842209ced2a
+  T=1   g89065                native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     a0414ac40142
+  T=1   g120999               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     66c40c04291e
+  T=1   g185012               native      naive       16x64x128w4s4  A=8   L=8   P=120  dead=0/0     767fd85ce5fb
+  T=8   g153174               native      block-scan  16x64x128w4s4  A=48  L=48  P=704  dead=384/512   8c88bdec91cf
+  T=8   g217954               native      block-scan  16x64x128w4s4  A=52  L=52  P=768  dead=288/384   ecbb08d1f0bf
+  T=8   g273169               native      block-scan  16x64x128w4s4  A=48  L=48  P=704  dead=384/512   78b2722d7f02
+  T=8   g439470               native      block-scan  16x64x128w4s4  A=47  L=47  P=688  dead=408/544   2dba547c3261
+  T=32  g369999               native      block-scan  16x64x128w4s4  A=89  L=89  P=1168 dead=1128/1504  10ee1a4ca757
+  T=40  g251288               native      block-scan  32x64x128w4s3  A=101 L=101 P=2912 dead=792/1056  b88193ff67ff
+  T=40  g313870               native      block-scan  32x64x128w4s3  A=89  L=89  P=2528 dead=1080/1440  f069d2dc5f80
+  T=48  g233316               native      block-scan  32x64x128w4s3  A=102 L=102 P=2880 dead=816/1088  fd3762758cac
+  T=48  g237761               native      block-scan  32x64x128w4s3  A=96  L=96  P=2688 dead=960/1280  2afeba7f4612
+  T=48  g242494               native      block-scan  32x64x128w4s3  A=91  L=91  P=2528 dead=1080/1440  ff627a17b913
+  T=48  g246987               native      block-scan  32x64x128w4s3  A=108 L=108 P=3072 dead=672/896   29406f94e4d9
+  T=48  g309665               native      block-scan  32x64x128w4s3  A=99  L=99  P=2784 dead=888/1184  b48701e59b7d
+  T=48  g366603               native      block-scan  32x64x128w4s3  A=111 L=111 P=3168 dead=600/800   168190fdef89
+  T=48  g426296               native      block-scan  32x64x128w4s3  A=111 L=111 P=3168 dead=600/800   48334371ab6e
+  T=64  g305460               native      block-scan  32x64x128w4s3  A=108 L=108 P=2944 dead=768/1024  118c4ea7aec4
+  T=72  g304003               native      block-scan  32x128x64w4s3  A=108 L=108 P=2880 dead=408/544   b478f179da0a
+  T=72  g361852               native      block-scan  32x128x64w4s3  A=110 L=110 P=2944 dead=384/512   64e2466e1982
+  T=72  g423345               native      block-scan  32x128x64w4s3  A=114 L=114 P=3072 dead=336/448   4b7475f02d27
+  T=80  g283526               native      block-scan  32x128x64w4s3  A=99  L=100 P=2560 dead=528/704   245df32b1ad7
+  T=80  g286843               native      block-scan  32x128x64w4s3  A=109 L=109 P=2848 dead=420/560   30962b9b7d26
+  T=80  g290160               native      block-scan  32x128x64w4s3  A=116 L=116 P=3072 dead=336/448   d45ceff4dffc
+  T=80  g293524               native      block-scan  32x128x64w4s3  A=112 L=112 P=2944 dead=384/512   8716068c2d4c
+  T=80  g297321               native      block-scan  32x128x64w4s3  A=111 L=111 P=2912 dead=396/528   71c9ba606211
+  T=80  g300926               native      block-scan  32x128x64w4s3  A=105 L=105 P=2720 dead=468/624   7c2e78525b45
+  T=88  g358776               native      block-scan  32x128x64w4s3  A=113 L=113 P=2912 dead=396/528   6f9d4b207d30
+  T=112 g336628               native      block-scan  64x128x64w4s3  A=101 L=101 P=5568 dead=468/624   61181f2236f5
+  T=112 g338903               native      block-scan  64x128x64w4s3  A=114 L=114 P=6400 dead=312/416   42b3b8ab548a
+  T=112 g341466               native      block-scan  64x128x64w4s3  A=97  L=97  P=5312 dead=516/688   8eb670ef8def
+  T=112 g343934               native      block-scan  64x128x64w4s3  A=116 L=116 P=6528 dead=288/384   bcaf0cef8f67
+  T=112 g346497               native      block-scan  64x128x64w4s3  A=120 L=120 P=6784 dead=240/320   0acbea4f0f04
+  T=112 g351863               native      block-scan  64x128x64w4s3  A=114 L=114 P=6400 dead=312/416   cf321877722a
+  T=112 g354618               native      block-scan  64x128x64w4s3  A=106 L=106 P=5888 dead=408/544   94e5e7620016
+  T=112 g420273               native      block-scan  64x128x64w4s3  A=124 L=124 P=7040 dead=192/256   389315610855
+  T=128 g349060               native      block-scan  64x128x64w4s3  A=117 L=117 P=6464 dead=300/400   cede4adfb204
+  T=128 g418142               native      block-scan  64x128x64w4s3  A=118 L=118 P=6528 dead=288/384   ac90945436ae
+
+DECODE GATES:
+  G1_lock_thermal: PASS
+  G2_host_bound: PASS
+  G3_uniform_control: SCORED OFFLINE
+  G4_worst_cell_clock: RECORDED
+  G5_provenance: PASS
+  V_ALIGN: PASS
+  GD1_gpu_bound: PASS
+  GD4_graph_fidelity: PASS

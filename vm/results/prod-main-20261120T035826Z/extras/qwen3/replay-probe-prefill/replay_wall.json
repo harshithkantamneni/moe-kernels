@@ -1,0 +1,16 @@
+{
+ "schema": "moe-kernels/prod-replay-wall/1",
+ "model": "qwen3-30b-a3b",
+ "repeats": 9,
+ "total_wall_s": 75.17427803900136,
+ "tiles": {
+  "128x128x64w8s3": {
+   "median_wall_s": 19.61500371299917,
+   "cells": 2
+  },
+  "64x128x64w8s3": {
+   "median_wall_s": 17.972135306501514,
+   "cells": 2
+  }
+ }
+}
