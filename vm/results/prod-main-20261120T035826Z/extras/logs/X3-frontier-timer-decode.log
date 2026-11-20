@@ -4,10 +4,10 @@ Try the 'nsys status --environment' command to learn more.
 WARNING: CPU context switch tracing not supported, disabling.
 Try the 'nsys status --environment' command to learn more.
 
-WARNING 11-20 08:28:10 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=128,N=768,device_name=NVIDIA_GH200_480GB.json
+WARNING 11-20 09:47:18 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=128,N=768,device_name=NVIDIA_GH200_480GB.json
 PASS frontier timer: decode 57 points (uniform) at 1710 MHz (read back 1710), 2 warm-up + 20 timed calls each, weights built once in 0.4 s, 0 off-lock, 1 s -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/frontier/timer-decode/timer.json
 Collecting data...
-Generating '/home/ubuntu/moe/tmp/nsys-report-817c.qdstrm'
-[1/1] [0%                          ] timer.nsys-rep[1/1] [0%                          ] timer.nsys-rep[1/1] [5%                          ] timer.nsys-rep[1/1] [6%                          ] timer.nsys-rep[1/1] [7%                          ] timer.nsys-rep[1/1] [8%                          ] timer.nsys-rep[1/1] [============57%             ] timer.nsys-rep[1/1] [===================82%      ] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep
+Generating '/home/ubuntu/moe/tmp/nsys-report-0a94.qdstrm'
+[1/1] [0%                          ] timer.nsys-rep[1/1] [0%                          ] timer.nsys-rep[1/1] [5%                          ] timer.nsys-rep[1/1] [6%                          ] timer.nsys-rep[1/1] [============57%             ] timer.nsys-rep[1/1] [===================81%      ] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep
 Generated:
 	/home/ubuntu/moe/traces/prod-main-20261120T035826Z/extras/qwen3/frontier/timer-decode/timer.nsys-rep
