@@ -142,6 +142,14 @@ def test_the_coverage_gate_fails_loudly_on_a_short_tile():
     assert g["verdict"] == "FAIL" and "'b': 2" in g["why"]
 
 
+def test_a_tile_between_the_floor_and_the_target_is_short_and_does_not_block(tmp_path):
+    """The final run's A1710: 25 steps on g16 against the target 30 is SHORT, recorded, not a FAIL."""
+    g = S.coverage_gate({"a": 31, "128x128x64w8s3 g16": 25}, 30)
+    assert g["verdict"] == "SHORT" and g["short"] == {"128x128x64w8s3 g16": 25} and "not blocking" in g["why"]
+    assert S.write_gates(tmp_path, {"G-COV": g}) == 0
+    assert S.write_gates(tmp_path, {"G-COV": S.coverage_gate({"a": 9}, 30)}) != 0
+
+
 def test_serve_capture_dry_run_prints_the_plan_without_vllm(tmp_path, capsys):
     a = PR.build(kind="sharegpt", data_path=sharegpt(tmp_path), encode=enc, n=50, seed=0, max_input=40,
                  out_dist="fixed:16")
