@@ -1,0 +1,2 @@
+== 2026-11-20T04:18:39Z step gate: gate b3sag: scripts/tileB3_gate.py sag at the 1410 lock; FAIL ends the rental before any timed unit (tileB3)
+2026-11-20T04:18:39Z gate b3sag at 1410 MHz: RESULT: GATE b3sag PASS par A 56.7250 us tau 562.5 us ratio 1.437 olmoe 42.68/450 rms 4.39 sha 6293d0571b6a mixtral 70.77/675 rms 9.55 sha d776eadcc12e (exit 0)

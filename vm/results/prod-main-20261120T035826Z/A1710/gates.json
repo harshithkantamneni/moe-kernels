@@ -1,0 +1,42 @@
+{
+  "G-REV": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-CFG": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-BACKEND": {
+    "verdict": "PASS",
+    "backends": [
+      "TRITON"
+    ],
+    "experts_cls": [
+      "TritonExperts"
+    ],
+    "why": ""
+  },
+  "G-VARIANTS-END": {
+    "verdict": "PASS",
+    "why": ""
+  },
+  "G-COV": {
+    "verdict": "FAIL",
+    "minimum": 30,
+    "per_tile": {
+      "16x64x128w4s4": 8472,
+      "32x64x128w4s3": 1334,
+      "32x128x64w4s3": 862,
+      "64x128x64w4s3": 645,
+      "64x128x64w8s3": 1525,
+      "128x128x64w8s3": 1966,
+      "128x128x64w8s3 g16": 25
+    },
+    "why": "tiles under 30 steps: {'128x128x64w8s3 g16': 25}"
+  },
+  "G-DUMMY": {
+    "verdict": "PASS",
+    "why": ""
+  }
+}

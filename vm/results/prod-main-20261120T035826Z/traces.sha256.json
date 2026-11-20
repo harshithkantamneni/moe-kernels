@@ -3,6 +3,11 @@
  "traces_root": "/home/ubuntu/moe/traces/prod-main-20261120T035826Z",
  "run": "prod-main-20261120T035826Z",
  "files": {
+  "A1710/serve.nsys-rep": {
+   "bytes": 373596685,
+   "mtime_ns": 1795148817110674547,
+   "sha256": "5dda5ca72d8c45f1b1e2c921b69cb76fcbb2481549c3db7cc3e4f81e56dc1302"
+  },
   "frontier-probe/timer-decode/timer.nsys-rep": {
    "bytes": 117829,
    "mtime_ns": 1795147622989528761,
@@ -34,5 +39,5 @@
    "sha256": "52eda2bffe4545d9b16a763baf4ba96eb8bda240866d547170929ffcbc205337"
   }
  },
- "total_bytes": 689894026
+ "total_bytes": 1063490711
 }

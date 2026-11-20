@@ -1,0 +1,34 @@
+{
+ "schema": "moe-kernels/prod-sag-par/1",
+ "verdict": "PASS",
+ "par": [
+  56.724999999999994,
+  562.5
+ ],
+ "driver_exit": 0,
+ "started": 1795147672.0,
+ "results": "/home/ubuntu/moe/results",
+ "record": "/home/ubuntu/moe/session/gh200-driver/gate-b3sag-1410.json",
+ "finaliser": "scripts/scoring/v7pblind/v7pcommon.py finalise_pars (unchanged)",
+ "plan": "scripts/prod/sag1410.plan",
+ "record_mtime": 1795148319.4990563,
+ "record_sha256": "94d87e6587f98b0de1e751730d3062aa8e77426a953f3bb3f2a51b70d7ff0918",
+ "per_page": {
+  "olmoe-1b-7b": {
+   "A_us": 42.68,
+   "tau_us": 450.0,
+   "rms_us": 4.39,
+   "cells": 54,
+   "sha256": "6293d0571b6aceeeca4b026f16926a2559340a46aa42a6bc9acf235117198376"
+  },
+  "mixtral-8x7b": {
+   "A_us": 70.77,
+   "tau_us": 675.0,
+   "rms_us": 9.55,
+   "cells": 54,
+   "sha256": "d776eadcc12e411d5b623ceb803669c94fff8d8999bb4efe0dab19e2c7e320a1"
+  }
+ },
+ "gate_verdict": "PASS",
+ "inside_held_out_par_span": false
+}

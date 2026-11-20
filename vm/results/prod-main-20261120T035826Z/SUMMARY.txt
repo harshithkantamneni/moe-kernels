@@ -16,3 +16,7 @@ PASS frontier-setup (32s)
 PASS frontier-grid-check (0s)
 PASS frontier-timer-probe (22s)
 PASS push-gate60 (36s)
+PASS sag1410 (728s)
+PASS unlock-after-sag (0s)
+PASS A1710-lock (0s)
+FAIL A1710-capture: exit 3: FAIL  G-COV: tiles under 30 steps: {'128x128x64w8s3 g16': 25} 
