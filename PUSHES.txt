@@ -38,3 +38,4 @@
 2026-11-20T09:59:36Z prod extras: X3 Qwen3 Frontier
 2026-11-20T10:02:29Z prod extras: X4 long-context prefill
 2026-11-20T10:04:13Z prod extras: done (score on the laptop: scripts/prod/offline.sh)
+2026-11-20T10:05:33Z extras.sh exit 0: final push

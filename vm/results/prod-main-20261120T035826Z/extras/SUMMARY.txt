@@ -367,3 +367,5 @@ PASS X4-unlock-after (0s)
 PASS X4-export (2s)
 FAIL (soft, dropped) X4-extract: exit 3: FAIL  G-STEP: shard_00000.npz: 6912 records, 512 steps x 27 layers = 13824; shard_00001.npz: 5319 records, 394 steps x 27 layers = 10638; shard_00002.npz: 4131 records, 306 steps x 27 layers = 8262; shard_00003.npz: 2376 records, 176 steps x 27 layers = 4752; shard_00004.npz: 1458 records, 108 steps x 27 layers = 2916 FAIL  G-STEPMARK: 748 step markers, 1496 logged steps; first difference at step 
 PASS X4-push (104s)
+PASS extras-push-final (80s)
+PASS extras-held-back-check (0s)
