@@ -90,3 +90,30 @@ SKIPPED X4-extract: needs X4-export (failed or skipped)
 PASS X4-push (65s)
 PASS extras-push-final (64s)
 PASS extras-held-back-check (0s)
+RESUME from X2-budget at 2026-11-20T08:18:50Z in /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras
+PASS extras-main-finished (0s)
+PASS extras-commit-switch (1s)
+PASS env-preflight (2s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned-qwen3 (0s)
+SKIPPED-RESUME price-check-qwen3
+SKIPPED-RESUME X1-budget
+SKIPPED-RESUME X1-inputs
+PASS X1-lock (0s)
+SKIPPED-RESUME X1-capture
+PASS X1-unlock-after (0s)
+SKIPPED-RESUME X1-export
+SKIPPED-RESUME X1-identical
+SKIPPED-RESUME X1-extract
+SKIPPED-RESUME X1-push
+PASS X2-budget (1s)
+PASS X2-inputs (0s)
+PASS X2-subsample (0s)
+PASS X2-lock-decode (0s)
+PASS X2-ncu-decode (65s)
+PASS X2-unlock-decode (0s)
+PASS X2-lock-prefill (0s)
+PASS X2-ncu-prefill (87s)
+PASS X2-unlock-prefill (0s)

@@ -13,14 +13,54 @@
    "mtime_ns": 1795161453164415940,
    "sha256": "0606ee863b86913a3155d4428b7d997339d2fa128941ade4bcd4b82682ff8622"
   },
+  "ncu-decode/ncu_bytes.csv": {
+   "bytes": 395197,
+   "mtime_ns": 1795162803323268202,
+   "sha256": "e86f86c664dbbf02cb9f2aa8a4cf2d23f39e0fbf12d807fdf7b61fd924878cc0"
+  },
+  "ncu-decode/ncu_bytes.manifest.json": {
+   "bytes": 5292,
+   "mtime_ns": 1795162801717252033,
+   "sha256": "32db430d1432750f717e398c68f4c7c7bea52662b3dcca9a28c8283ea135b3a8"
+  },
+  "ncu-decode/ncu_bytes.ncu-rep": {
+   "bytes": 3476017,
+   "mtime_ns": 1795162801716252023,
+   "sha256": "a1e7c5987df050f630c18bce2c5eb38d89d71a9b5543e22fd3eaf92adbe341cc"
+  },
+  "ncu-decode/ncu_bytes.ncu.log": {
+   "bytes": 13060,
+   "mtime_ns": 1795162802907264014,
+   "sha256": "c8604a6ec7a956b6880c092ea34187d32f602539906abfae5126d291a442f8f5"
+  },
   "ncu-decode/ncu_bytes.plan.json": {
    "bytes": 1062,
-   "mtime_ns": 1795161810044141061,
+   "mtime_ns": 1795162739103621645,
    "sha256": "dbc842ae5992fdf9d62bf9a78c9d3348ac6c62c9906ee8daa528ef32981bfbe9"
+  },
+  "ncu-prefill/ncu_bytes.csv": {
+   "bytes": 400802,
+   "mtime_ns": 1795162890724148148,
+   "sha256": "5f654d189950be70beb0be49966075809375b3409ecb5cddd54e30566cc3e6c8"
+  },
+  "ncu-prefill/ncu_bytes.manifest.json": {
+   "bytes": 5423,
+   "mtime_ns": 1795162889129132089,
+   "sha256": "4779387ca662a71885ae919de04b169b59a1ddb7997fd3ecd086af4a57246702"
+  },
+  "ncu-prefill/ncu_bytes.ncu-rep": {
+   "bytes": 3377415,
+   "mtime_ns": 1795162889128132079,
+   "sha256": "0228246d72fcf01599d95497b8a422c893ed451c9103f27dcb558322218f63d2"
+  },
+  "ncu-prefill/ncu_bytes.ncu.log": {
+   "bytes": 13062,
+   "mtime_ns": 1795162890309143970,
+   "sha256": "5b924eb843ab79f1a7111ee288671c0ca030a9b3869fa6652d1308be89cf9580"
   },
   "ncu-prefill/ncu_bytes.plan.json": {
    "bytes": 1097,
-   "mtime_ns": 1795161812822170059,
+   "mtime_ns": 1795162803694271938,
    "sha256": "29c57375ae8bd33104090d765535576cf866657626cf5a0133557dcfece3598b"
   },
   "qwen3/frontier/timer-decode/timer.nsys-rep": {
@@ -49,5 +89,5 @@
    "sha256": "2f1da40ff9a4df59bd58701317603120b1fe910958140022f6952aff528150c8"
   }
  },
- "total_bytes": 1424982163
+ "total_bytes": 1432668431
 }

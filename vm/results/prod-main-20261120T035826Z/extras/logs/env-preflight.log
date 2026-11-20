@@ -7,7 +7,7 @@ PASS P6 tools: ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda
 PASS P7 nsys: nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp
 PASS P8 hf-rev: baidu/ERNIE-4.5-21B-A3B-PT resolves to the pin 87db95487941cb39592ee0abca3b9155a6d19c5c
 SKIP P9 frontier: --skip
-PASS P10 disk: 4085 GB free under /home/ubuntu/moe
+PASS P10 disk: 4080 GB free under /home/ubuntu/moe
 SKIP P11 setup: --skip
 SKIP P12 hf-rate: --skip
 PASS env-preflight

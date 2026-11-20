@@ -1,1 +1,1 @@
-PASS budget: X2: spent 896 s + expected 925 s <= budget 9000 s
+PASS budget: X2: spent 8 s + expected 925 s <= budget 9000 s
