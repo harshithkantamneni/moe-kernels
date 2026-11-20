@@ -14,9 +14,9 @@
     "why": ""
   },
   "G-STEP": {
-    "verdict": "PASS",
-    "why": "",
-    "problems": 0
+    "verdict": "FAIL",
+    "why": "shard_00000.npz: 6912 records, 512 steps x 27 layers = 13824; shard_00001.npz: 5319 records, 394 steps x 27 layers = 10638; shard_00002.npz: 4131 records, 306 steps x 27 layers = 8262; shard_00003.npz: 2376 records, 176 steps x 27 layers = 4752; shard_00004.npz: 1458 records, 108 steps x 27 layers = 2916",
+    "problems": 5
   },
   "G-PAIR": {
     "verdict": "PASS",
@@ -25,11 +25,11 @@
     "paired": 20196
   },
   "G-STEPMARK": {
-    "verdict": "PASS",
-    "why": "",
+    "verdict": "FAIL",
+    "why": "748 step markers, 1496 logged steps; first difference at step position 748: marker gridY None, step log 1; call 0: after step marker 0 on the trace, its ring record joins step None; call 1: after step marker 0 on the trace, its ring record joins step None; call 2: after step marker 0 on the trace, its ring record joins step None; 20196 calls in all sit after another step's marker",
     "step_markers": 748,
-    "steps": 748,
-    "misplaced_calls": 0
+    "steps": 1496,
+    "misplaced_calls": 20196
   },
   "G-IDS": {
     "verdict": "PASS",
