@@ -456,7 +456,7 @@ c1755ecad208f21b8c326c619fe22800a4554612d5466418feff035b11def5e2  vm/results/pro
 857c2e3f67d8adcf3498a4e1b0a089f4614c854093d701688bb9f18b8e5229e7  vm/results/prod-main-20261120T035826Z/extras/A1710r/ring/shard_00062.npz
 235f132927f7e5f92af24a8c86d35fcd6d0b3b8b3ed3c724bdc04e2dfce75b1e  vm/results/prod-main-20261120T035826Z/extras/A1710r/sequences.json
 d318701197090cd8e0d750692e6c0a3bdc97e198e6af89ae1928859dd2ec82d3  vm/results/prod-main-20261120T035826Z/extras/A1710r/steps.jsonl
-14125a5a7b7599e3472fcc14947752e3ec7b026f4c018fb12ed319122efecb8a  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
+84ec7a7c5d086ce27901de66c2f860869d824719279201181f2a66db85ce9e8d  vm/results/prod-main-20261120T035826Z/extras/SUMMARY.txt
 79deb391729c245549b6fb7cc3fa1eb9de6edaba4a04bff20180dbe1f579b844  vm/results/prod-main-20261120T035826Z/extras/env-preflight.json
 b111ab9a9f44d39b445e39b9e2b63f6b251416ba23365b0f649125180c4fa0db  vm/results/prod-main-20261120T035826Z/extras/logs/X1-budget.log
 04eb3e2317b91fc9230c19077fb1be04cff1ff4439ee76a80a147b233a447ffb  vm/results/prod-main-20261120T035826Z/extras/logs/X1-capture.log
@@ -477,6 +477,7 @@ e42a8bac55c1a3d02cff63c7ad662adb890f2a77978869302efb9389fe8bcaa4  vm/results/pro
 985c0ddc68861909d5d9d2d9cedceb79f57f8875361300d164a8f21e7a26f96b  vm/results/prod-main-20261120T035826Z/extras/logs/X2-subsample.log
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-main-20261120T035826Z/extras/logs/X2-unlock-decode.log
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-main-20261120T035826Z/extras/logs/X2-unlock-prefill.log
+d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-main-20261120T035826Z/extras/logs/X3-A1410-unlock-after.log
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-main-20261120T035826Z/extras/logs/X3-A1710-unlock-after.log
 236d648c1364c552d982a4be97da4f9a308c8af1ba3f58c93dadc6831dd4aa88  vm/results/prod-main-20261120T035826Z/extras/logs/X3-budget.log
 156951116933e14ad2f9d7fa949736c07b33cbd789a9762e6fcca10573150bb3  vm/results/prod-main-20261120T035826Z/extras/logs/X3-gate60-capture.log
@@ -484,7 +485,8 @@ d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/pro
 bd557c46843511939fc71aa15095108badb989cbf85e36a9a791f2023b4c969b  vm/results/prod-main-20261120T035826Z/extras/logs/X3-inputs.log
 c77d363e0869b2a5a99c589e15185d3dabe7025c80eae6c97c2a4b3323c44a2d  vm/results/prod-main-20261120T035826Z/extras/logs/X3-prompts-build.log
 7834a39b43a3aac4fb1513fef64eacc96018fbf429bc927da9e3abe0844e8210  vm/results/prod-main-20261120T035826Z/extras/logs/X3-prompts-fetch.log
-4a669e74adb2039039c77d7475af2de5d034a1f3e7ef1d7e3f40f8804c152f88  vm/results/prod-main-20261120T035826Z/extras/logs/X3-push-A1710.log
+4a669e74adb2039039c77d7475af2de5d034a1f3e7ef1d7e3f40f8804c152f88  vm/results/prod-main-20261120T035826Z/extras/logs/X3-push-A1410.log
+33c5b329e49347fd98308749b8a6d77ea370bf416b77999be3d3ab7736655d42  vm/results/prod-main-20261120T035826Z/extras/logs/X3-push-A1710.log
 ecde419b1a892fe44d61a56ff14512e0c1fb9602a012159bb40494e1dae21792  vm/results/prod-main-20261120T035826Z/extras/logs/X3-push-gate60.log
 d8132f142abdad5973488a2b75046bc3799115c6ab5035a5fc570d19a56cb327  vm/results/prod-main-20261120T035826Z/extras/logs/X3-unlock-gate.log
 eb047ea9392eda8021c635a8c4758de0255c2bbd4da95a0a5f1d822b08873a00  vm/results/prod-main-20261120T035826Z/extras/logs/env-preflight.log
