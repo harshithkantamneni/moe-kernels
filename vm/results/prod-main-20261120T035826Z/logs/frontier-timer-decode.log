@@ -1,0 +1,13 @@
+WARNING: CPU IP/backtrace sampling not supported, disabling.
+Try the 'nsys status --environment' command to learn more.
+
+WARNING: CPU context switch tracing not supported, disabling.
+Try the 'nsys status --environment' command to learn more.
+
+WARNING 11-20 06:51:43 [fused_moe.py:1161] Using default MoE config. Performance might be sub-optimal! Config file not found at /home/ubuntu/moe/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=1536,device_name=NVIDIA_GH200_480GB.json
+PASS frontier timer: decode 57 points (uniform) at 1710 MHz (read back 1710), 2 warm-up + 20 timed calls each, weights built once in 0.4 s, 0 off-lock, 2 s -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/frontier/timer-decode/timer.json
+Collecting data...
+Generating '/home/ubuntu/moe/tmp/nsys-report-d3cf.qdstrm'
+[1/1] [0%                          ] timer.nsys-rep[1/1] [0%                          ] timer.nsys-rep[1/1] [6%                          ] timer.nsys-rep[1/1] [7%                          ] timer.nsys-rep[1/1] [==============64%           ] timer.nsys-rep[1/1] [===================81%      ] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep[1/1] [========================100%] timer.nsys-rep
+Generated:
+	/home/ubuntu/moe/traces/prod-main-20261120T035826Z/frontier/timer-decode/timer.nsys-rep
