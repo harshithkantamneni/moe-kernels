@@ -67,9 +67,9 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 1410,
     "mem_mhz": 2619,
-    "power_w": 107.713,
+    "power_w": 107.911,
     "power_limit_w": 700.0,
-    "temp_c": 37,
+    "temp_c": 38,
     "driver": "580.105.08"
   },
   "hf_revision": {
@@ -134,7 +134,7 @@
     "compilation_mode": "3"
   },
   "kv": {
-    "num_gpu_blocks": 47858,
+    "num_gpu_blocks": 47857,
     "block_size": 16,
     "preemptions": 0,
     "realized_concurrency": [
@@ -188,19 +188,19 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 1410,
     "mem_mhz": 2619,
-    "power_w": 590.617,
+    "power_w": 602.911,
     "power_limit_w": 700.0,
-    "temp_c": 59,
+    "temp_c": 61,
     "driver": "580.105.08"
   },
-  "seconds": 21.3,
+  "seconds": 21.2,
   "realized_per_tile": {
-    "16x64x128w4s4": 1312,
+    "16x64x128w4s4": 656,
     "32x64x128w4s3": 0,
     "32x128x64w4s3": 0,
     "64x128x64w4s3": 0,
     "64x128x64w8s3": 0,
-    "128x128x64w8s3": 52,
-    "128x128x64w8s3 g16": 100
+    "128x128x64w8s3": 26,
+    "128x128x64w8s3 g16": 50
   }
 }

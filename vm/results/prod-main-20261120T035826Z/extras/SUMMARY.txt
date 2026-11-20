@@ -369,3 +369,93 @@ FAIL (soft, dropped) X4-extract: exit 3: FAIL  G-STEP: shard_00000.npz: 6912 rec
 PASS X4-push (104s)
 PASS extras-push-final (80s)
 PASS extras-held-back-check (0s)
+RESUME from X4-budget at 2026-11-20T10:06:19Z in /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras
+PASS extras-main-finished (0s)
+PASS extras-commit-switch (0s)
+PASS env-preflight (2s)
+PASS env (5s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned-qwen3 (0s)
+SKIPPED-RESUME price-check-qwen3
+SKIPPED-RESUME X1-budget
+SKIPPED-RESUME X1-inputs
+PASS X1-lock (0s)
+SKIPPED-RESUME X1-capture
+PASS X1-unlock-after (0s)
+SKIPPED-RESUME X1-export
+SKIPPED-RESUME X1-identical
+SKIPPED-RESUME X1-extract
+SKIPPED-RESUME X1-push
+SKIPPED-RESUME X2-budget
+SKIPPED-RESUME X2-inputs
+SKIPPED-RESUME X2-subsample
+PASS X2-lock-decode (0s)
+SKIPPED-RESUME X2-ncu-decode
+PASS X2-unlock-decode (0s)
+PASS X2-lock-prefill (0s)
+SKIPPED-RESUME X2-ncu-prefill
+PASS X2-unlock-prefill (0s)
+SKIPPED-RESUME X2-push
+SKIPPED-RESUME X3-budget
+SKIPPED-RESUME X3-inputs
+SKIPPED-RESUME X3-hf-preflight
+SKIPPED-RESUME X3-prompts-fetch
+SKIPPED-RESUME X3-prompts-build
+PASS X3-unlock-gate (0s)
+SKIPPED-RESUME X3-gate60-capture
+SKIPPED-RESUME X3-gate60-export
+SKIPPED-RESUME X3-gate60-extract
+SKIPPED-RESUME X3-gate60-sequences
+SKIPPED-RESUME X3-push-gate60
+PASS X3-A1710-lock (0s)
+SKIPPED-RESUME X3-A1710-capture
+PASS X3-A1710-unlock-after (0s)
+SKIPPED-RESUME X3-A1710-export
+SKIPPED-RESUME X3-A1710-extract
+SKIPPED-RESUME X3-A1710-push-size
+SKIPPED-RESUME X3-push-A1710
+PASS X3-A1410-lock (1s)
+SKIPPED-RESUME X3-A1410-capture
+PASS X3-A1410-unlock-after (0s)
+SKIPPED-RESUME X3-A1410-export
+SKIPPED-RESUME X3-A1410-extract
+SKIPPED-RESUME X3-A1410-push-size
+SKIPPED-RESUME X3-push-A1410
+SKIPPED-RESUME X3-replay-probe-sample-decode
+SKIPPED-RESUME X3-replay-probe-decode
+SKIPPED-RESUME X3-replay-probe-wall-decode
+SKIPPED-RESUME X3-replay-sample-decode
+SKIPPED-RESUME X3-replay-decode
+SKIPPED-RESUME X3-replay-probe-sample-prefill
+SKIPPED-RESUME X3-replay-probe-prefill
+SKIPPED-RESUME X3-replay-probe-wall-prefill
+SKIPPED-RESUME X3-replay-sample-prefill
+SKIPPED-RESUME X3-replay-prefill
+PASS X3-unlock-after-replay (0s)
+SKIPPED-RESUME X3-push-replay
+SKIPPED-RESUME X3-frontier-env
+SKIPPED-RESUME X3-frontier-grid-check
+PASS X3-frontier-lock-decode (0s)
+SKIPPED-RESUME X3-frontier-timer-decode
+SKIPPED-RESUME X3-frontier-export-decode
+PASS X3-frontier-lock-prefill (0s)
+SKIPPED-RESUME X3-frontier-timer-prefill
+SKIPPED-RESUME X3-frontier-export-prefill
+PASS X3-frontier-unlock (0s)
+SKIPPED-RESUME X3-frontier-points
+SKIPPED-RESUME X3-frontier-csv
+SKIPPED-RESUME X3-frontier-train
+SKIPPED-RESUME X3-frontier-csv-fills
+SKIPPED-RESUME X3-frontier-train-fills
+SKIPPED-RESUME X3-frontier-predict
+SKIPPED-RESUME X3-push-frontier
+PASS X4-budget (1s)
+PASS X4-inputs (0s)
+PASS X4-prompts-fetch (0s)
+PASS X4-prompts-build (10s)
+PASS X4-lock (0s)
+PASS X4-capture (68s)
+PASS X4-unlock-after (0s)
+PASS X4-export (3s)
+PASS X4-extract (9s)

@@ -14,14 +14,14 @@
    "sha256": "0606ee863b86913a3155d4428b7d997339d2fa128941ade4bcd4b82682ff8622"
   },
   "LC1410/serve.nsys-rep": {
-   "bytes": 30525904,
-   "mtime_ns": 1795168883347598969,
-   "sha256": "01c3328c93c33e9b29a8f2b778602b63c86a216ea8bf9c3a0ee42123f36c1c0c"
+   "bytes": 30533944,
+   "mtime_ns": 1795169266874226512,
+   "sha256": "92c6ad154a752e1b83a04db4116792c86d01ba74e62a2bce700e0055f2f32b2e"
   },
   "LC1410/serve.sqlite": {
-   "bytes": 77246464,
-   "mtime_ns": 1795168885569619986,
-   "sha256": "cc346b5e152a3ca275ac1693845303cab95a839a3f1d96c4667298fb67b7900a"
+   "bytes": 77242368,
+   "mtime_ns": 1795169269096247529,
+   "sha256": "7df199231a36175a020ee984908c3a5417ba9d186cd2b5c0b6c9fa528f3402e5"
   },
   "ncu-decode/ncu_bytes.csv": {
    "bytes": 395197,
@@ -122,7 +122,17 @@
    "bytes": 614711296,
    "mtime_ns": 1795165067821372657,
    "sha256": "b84a69b3c4f04aa658b555c66432a9b36b5e38d052f53a10336af406484d877a"
+  },
+  "stale/LC1410-pass4/serve.nsys-rep": {
+   "bytes": 30525904,
+   "mtime_ns": 1795168883347598969,
+   "sha256": "01c3328c93c33e9b29a8f2b778602b63c86a216ea8bf9c3a0ee42123f36c1c0c"
+  },
+  "stale/LC1410-pass4/serve.sqlite": {
+   "bytes": 77246464,
+   "mtime_ns": 1795168885569619986,
+   "sha256": "cc346b5e152a3ca275ac1693845303cab95a839a3f1d96c4667298fb67b7900a"
   }
  },
- "total_bytes": 4598562837
+ "total_bytes": 4706339149
 }
