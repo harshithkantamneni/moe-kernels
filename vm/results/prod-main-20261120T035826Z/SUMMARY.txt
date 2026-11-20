@@ -20,3 +20,34 @@ PASS sag1410 (728s)
 PASS unlock-after-sag (0s)
 PASS A1710-lock (0s)
 FAIL A1710-capture: exit 3: FAIL  G-COV: tiles under 30 steps: {'128x128x64w8s3 g16': 25} 
+RESUME from A1710-export at 2026-11-20T05:38:02Z in /home/ubuntu/moe/results/prod-main-20261120T035826Z
+PASS env-preflight (5s)
+PASS env (4s)
+PASS power-readback (1s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+PASS replay-wall-present (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME prompts-fetch
+SKIPPED-RESUME prompts-build
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-export
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME frontier-grid-check
+SKIPPED-RESUME frontier-timer-probe
+SKIPPED-RESUME push-gate60
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+PASS A1710-lock (0s)
+SKIPPED-RESUME A1710-capture
+PASS A1710-unlock-after (0s)
+PASS A1710-export (30s)
+PASS A1710-extract (134s)
+PASS A1410-lock (0s)
+PASS A1410-capture (429s)
+PASS A1410-unlock-after (0s)
+PASS A1410-export (30s)
+PASS A1410-extract (135s)

@@ -3,10 +3,25 @@
  "traces_root": "/home/ubuntu/moe/traces/prod-main-20261120T035826Z",
  "run": "prod-main-20261120T035826Z",
  "files": {
+  "A1410/serve.nsys-rep": {
+   "bytes": 374596311,
+   "mtime_ns": 1795153685162691757,
+   "sha256": "f5a804f6e251006ddc92c1bf3f6de85f34b1379642fd70694d939d3627f9a793"
+  },
+  "A1410/serve.sqlite": {
+   "bytes": 990130176,
+   "mtime_ns": 1795153715036966060,
+   "sha256": "6b95db248f8a112ab8c79aeade33aefd6ff7401c93116af40ee1d9bc497e6aae"
+  },
   "A1710/serve.nsys-rep": {
    "bytes": 373596685,
    "mtime_ns": 1795148817110674547,
    "sha256": "5dda5ca72d8c45f1b1e2c921b69cb76fcbb2481549c3db7cc3e4f81e56dc1302"
+  },
+  "A1710/serve.sqlite": {
+   "bytes": 990121984,
+   "mtime_ns": 1795153122286523477,
+   "sha256": "28be9500a7608f09918dfa8a6daceb999f6aac819c26a5abda4b9d99fed20e08"
   },
   "frontier-probe/timer-decode/timer.nsys-rep": {
    "bytes": 117829,
@@ -39,5 +54,5 @@
    "sha256": "52eda2bffe4545d9b16a763baf4ba96eb8bda240866d547170929ffcbc205337"
   }
  },
- "total_bytes": 1063490711
+ "total_bytes": 3418339182
 }
