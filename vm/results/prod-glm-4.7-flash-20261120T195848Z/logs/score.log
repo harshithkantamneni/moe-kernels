@@ -1,0 +1,5 @@
+PASS expected-outputs (0s)
+PASS score (581s)
+==== offline.sh summary (/home/ubuntu/moe/results/prod-glm-4.7-flash-20261120T195848Z/offline-logs)
+PASS expected-outputs (0s)
+PASS score (581s)
