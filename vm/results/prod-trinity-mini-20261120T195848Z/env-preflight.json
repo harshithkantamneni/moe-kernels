@@ -60,7 +60,7 @@
       "id": "P10",
       "what": "disk",
       "verdict": "PASS",
-      "detail": "4085 GB free under /home/ubuntu/moe"
+      "detail": "4079 GB free under /home/ubuntu/moe"
     },
     {
       "id": "P11",
@@ -72,7 +72,7 @@
       "id": "P12",
       "what": "hf-rate",
       "verdict": "PASS",
-      "detail": "measured 75 MB/s (1007 MB in 13.4 s); the weights (52.2 GB) would take ~694 s"
+      "detail": "measured 338 MB/s (1007 MB in 3.0 s); the weights (52.2 GB) would take ~155 s"
     }
   ],
   "pass": true

@@ -3,6 +3,66 @@
  "traces_root": "/home/ubuntu/moe/traces/prod-trinity-mini-20261120T195848Z",
  "run": "prod-trinity-mini-20261120T195848Z",
  "files": {
+  "A1410/serve.nsys-rep": {
+   "bytes": 268949706,
+   "mtime_ns": 1795212996411237269,
+   "sha256": "b43223a0daeaeeb66ee1a3e522ca1e1be282a85fd39b59886cd75b34cf960333"
+  },
+  "A1410/serve.sqlite": {
+   "bytes": 722800640,
+   "mtime_ns": 1795213019089449370,
+   "sha256": "9a63f53a7bccd99516b7c9a1b368f37752f8aa558f09176806e128a5a8fcb547"
+  },
+  "A1710/serve.nsys-rep": {
+   "bytes": 267301604,
+   "mtime_ns": 1795212805467451427,
+   "sha256": "8210e53e0bbab2a8d0db20da67c276774745146e76e772852263228530f8cf02"
+  },
+  "A1710/serve.sqlite": {
+   "bytes": 723771392,
+   "mtime_ns": 1795212828563667438,
+   "sha256": "4b1bc8931d5dc61212d118d61d6e987d066104b80dca05804d976a66cc0d8c55"
+  },
+  "frontier/timer-decode/timer.nsys-rep": {
+   "bytes": 623473,
+   "mtime_ns": 1795213006384330543,
+   "sha256": "e7c51bbeceea800ab0dca72e63c722dd3de0472d96506821965f494679558c2b"
+  },
+  "frontier/timer-decode/timer.sqlite": {
+   "bytes": 1679360,
+   "mtime_ns": 1795213006470331348,
+   "sha256": "4e373d7b8605f4c9d448e25c860e0168581b84165077936d9c167d33f3b9a99b"
+  },
+  "frontier/timer-prefill/timer.nsys-rep": {
+   "bytes": 10771099,
+   "mtime_ns": 1795213056428798593,
+   "sha256": "6723d498069c142bd38f40adc86db6d445939dd77f9100166cb5b61cb7390781"
+  },
+  "frontier/timer-prefill/timer.sqlite": {
+   "bytes": 27054080,
+   "mtime_ns": 1795213057224806038,
+   "sha256": "dacfabf289e0c913177f11c229967605c0cab24c62c679bae7ac72c3d3570e68"
+  },
+  "frontier-probe/timer-decode/timer.nsys-rep": {
+   "bytes": 121784,
+   "mtime_ns": 1795212606762593003,
+   "sha256": "fe2264ad5e4f943d40711179b85c88a0de79dce951ca30e00be8c1b04236c33f"
+  },
+  "frontier-probe/timer-decode/timer.sqlite": {
+   "bytes": 434176,
+   "mtime_ns": 1795212606871594023,
+   "sha256": "24819ca8bdaa0f0b031e4d9a01c87900550e5b9df2abad618ac90efd46a0f79e"
+  },
+  "frontier-probe/timer-prefill/timer.nsys-rep": {
+   "bytes": 152654,
+   "mtime_ns": 1795212615612675775,
+   "sha256": "d002ce267dd6625ee31829939619ae4e8ad57f05d7c5215da63ba3c5ce562b59"
+  },
+  "frontier-probe/timer-prefill/timer.sqlite": {
+   "bytes": 499712,
+   "mtime_ns": 1795212615712676711,
+   "sha256": "437fc9d00aa4684c3ff355904ceb20d55d61fe2e7bb5751438e1d1ad4e363221"
+  },
   "gate60/serve.nsys-rep": {
    "bytes": 232182859,
    "mtime_ns": 1795208623622461750,
@@ -14,5 +74,5 @@
    "sha256": "8568913e265eeccb2f690f8e1b6ee42deedeec2a2d2e0a4a685d950c4047eba3"
   }
  },
- "total_bytes": 856577099
+ "total_bytes": 2880736779
 }

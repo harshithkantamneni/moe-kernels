@@ -32,3 +32,37 @@ SKIPPED-RESUME gate60-capture
 SKIPPED-RESUME gate60-extract
 SKIPPED-RESUME gate60-sequences
 FAIL frontier-grid-check: exit 3: FAIL frontier_op: $FR_PY_PRIMARY is unset: source $MOE_HOME/frontier/frontier.env (frontier_setup.sh) 
+RESUME from frontier-grid-check at 2026-11-20T22:09:48Z in /home/ubuntu/moe/results/prod-trinity-mini-20261120T195848Z
+PASS env-preflight (5s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME price-check-v9
+SKIPPED-RESUME model-prefetch
+SKIPPED-RESUME prompts
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+PASS frontier-grid-check (1s)
+PASS frontier-timer-probe (22s)
+PASS A1710-lock (0s)
+PASS A1710-capture (185s)
+PASS A1710-unlock-after (0s)
+PASS A1410-lock (0s)
+PASS A1410-capture (191s)
+PASS A1410-unlock-after (0s)
+PASS A1710-extract (191s)
+PASS frontier-timer-lock-decode (0s)
+PASS frontier-timer-decode (10s)
+PASS frontier-timer-export-decode (0s)
+PASS frontier-timer-lock-prefill (0s)
+PASS frontier-timer-prefill (50s)
+PASS frontier-timer-export-prefill (1s)
+PASS frontier-timer-unlock (0s)
+PASS A1410-extract (123s)
