@@ -1,0 +1,9 @@
+PASS  G-REC
+PASS  G-GEMM
+PASS  G-STEP
+PASS  G-PAIR
+PASS  G-STEPMARK
+PASS  G-IDS
+PASS  G-GRID
+PASS  G-CLASS
+446016 calls -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/qwen3/A1410 (6 calls shard(s), 4 counts shard(s))
