@@ -1,0 +1,1 @@
+vm/results/prod-glm-4.7-flash-20261120T195848Z/data/ShareGPT_V3_unfiltered_cleaned_split.json	672837942 bytes	sha256 35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4	LEFT ON THE VM (copy it by hand before the terminate)

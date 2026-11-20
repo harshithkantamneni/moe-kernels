@@ -1,0 +1,79 @@
+{
+  "schema": "moe-kernels/prod-env-preflight/1",
+  "model": "glm-4.7-flash",
+  "checks": [
+    {
+      "id": "P1",
+      "what": "git",
+      "verdict": "PASS",
+      "detail": "clean at dc8b3f73fcce63a253911f3341b21f46d3aaaa34 (expected, from /home/ubuntu/moe/env.sh)"
+    },
+    {
+      "id": "P2",
+      "what": "idle",
+      "verdict": "PASS",
+      "detail": "no compute process on the GPU"
+    },
+    {
+      "id": "P3",
+      "what": "power",
+      "verdict": "PASS",
+      "detail": "enforced power limit 700 W"
+    },
+    {
+      "id": "P4",
+      "what": "locks",
+      "verdict": "PASS",
+      "detail": "1710 MHz set; 1410 MHz set; restored to default clocks"
+    },
+    {
+      "id": "P5",
+      "what": "tmpdir",
+      "verdict": "PASS",
+      "detail": "/home/ubuntu/moe/tmp writable"
+    },
+    {
+      "id": "P6",
+      "what": "tools",
+      "verdict": "PASS",
+      "detail": "ninja /home/ubuntu/moe/venvs/vllm/bin/ninja, nsys /usr/local/cuda-13.0/bin/nsys, ncu /usr/local/cuda-13.0/bin/ncu"
+    },
+    {
+      "id": "P7",
+      "what": "nsys",
+      "verdict": "PASS",
+      "detail": "nsys profile --cuda-graph-trace=node ran under TMPDIR=/home/ubuntu/moe/tmp"
+    },
+    {
+      "id": "P8",
+      "what": "hf-rev",
+      "verdict": "PASS",
+      "detail": "zai-org/GLM-4.7-Flash resolves to the pin 7dd20894a642a0aa287e9827cb1a1f7f91386b67"
+    },
+    {
+      "id": "P9",
+      "what": "frontier",
+      "verdict": "PASS",
+      "detail": "https://github.com/NetX-lab/Frontier reachable at db5a85b"
+    },
+    {
+      "id": "P10",
+      "what": "disk",
+      "verdict": "PASS",
+      "detail": "4215 GB free under /home/ubuntu/moe"
+    },
+    {
+      "id": "P11",
+      "what": "setup",
+      "verdict": "PASS",
+      "detail": "/home/ubuntu/moe/session/PREFLIGHT.txt: verdict READY (exit 0: 0 DONE: measured; every VALIDITY and CLAIM gate PASSED)"
+    },
+    {
+      "id": "P12",
+      "what": "hf-rate",
+      "verdict": "PASS",
+      "detail": "measured 509 MB/s (1007 MB in 2.0 s); the weights (31.2 GB) would take ~61 s"
+    }
+  ],
+  "pass": true
+}
