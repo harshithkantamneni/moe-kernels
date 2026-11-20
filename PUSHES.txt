@@ -2,3 +2,4 @@
 2026-11-20T18:07:57Z bytes: G=64 page exit 3
 2026-11-20T18:15:12Z bytes: G=64 page exit 3
 2026-11-20T18:28:39Z prod blind ling-mini-2.0: A1710, A1410 and Frontier's timers
+2026-11-20T18:35:33Z prod blind ling-mini-2.0: measured, Frontier predicted, scored on the VM (v8, v9, Frontier)

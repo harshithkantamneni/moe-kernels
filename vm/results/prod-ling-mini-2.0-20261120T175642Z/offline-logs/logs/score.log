@@ -1,0 +1,165 @@
+PRODUCTION CHECK (DESCRIPTIVE: no bars, no verdicts) model ling-mini-2.0
+
+NOTE v8_refpar_ms is DESCRIPTIVE: v8 with no on-board calibration (the registered reference pars' median for sag128); v8_ms at the board's par is the model's number
+NOTE truths: kernel_sum_ms is PRIMARY; span_ms is SECONDARY (calls with T > 512 run without CUDA graphs and their span includes host launch gaps: the smoke's 128x128 span was ~2x kernel-sum; span / kernel-sum per cudagraph mode under each run)
+NOTE Frontier arms, all scored against serving's kernel-sum (fills-free): frontier:cli = Frontier's CLI trainer on the complete grid, uniform routing x 3 samples; trained on the kernel-sum WITHOUT the functional API's fills: the like-for-like truth (serving's kernel-sum has no such fills); frontier:cli-fills = as cli, trained on Frontier's NATIVE definition (record_function: every kernel of the functional call, its ~9 fills included); scored against the fills-free serving kernel-sum, so it carries the fills as error by construction; frontier:simpath = as cli, the simulator's features (total_routed_tokens, num_tokens_post_padded)
+NOTE also priced, each at the board's par like v8_ms: v9_ms = r3_timing_model_v9.price
+== A1710: lock 1710  model+context error at the branch clock
+   calls: 188537
+   scored: 174320
+   off_lock_dropped: 608
+   v8_refused_share_of_moe_time: 0.0
+   intruder_calls: 0
+   span / kernel-sum, cudagraph FULL     n=171584  median 1.01
+   span / kernel-sum, cudagraph PIECEWISE n=2736    median 1.00
+   v8_ms vs kernel_sum_ms [primary]                     n=174320  MAPE   4.04% [3.99, 4.09]  wMAPE   2.48%  p50  4.02%  p95   8.33%  bias  +1.22%
+      16x64x128w4s4          n=134938  MAPE   4.72%  wMAPE   3.37%  bias  +1.12%
+      32x64x128w4s3          n=17708   MAPE   1.51%  wMAPE   1.50%  bias  +1.48%
+      32x128x64w4s3          n=12749   MAPE   1.69%  wMAPE   1.67%  bias  +1.33%
+      64x128x64w4s3          n=8925    MAPE   2.10%  wMAPE   2.10%  bias  +2.10%
+      per-step total        n=9175    MAPE   3.93%  bias  +1.21%
+   v8_ms vs span_ms [secondary]                         n=174320  MAPE   2.80% [2.74, 2.86]  wMAPE   2.22%  p50  1.39%  p95   8.93%  bias  -2.09%
+      16x64x128w4s4          n=134938  MAPE   3.24%  wMAPE   3.28%  bias  -3.00%
+      32x64x128w4s3          n=17708   MAPE   1.00%  wMAPE   0.99%  bias  +0.83%
+      32x128x64w4s3          n=12749   MAPE   1.42%  wMAPE   1.41%  bias  +0.81%
+      64x128x64w4s3          n=8925    MAPE   1.64%  wMAPE   1.64%  bias  +1.64%
+      per-step total        n=9175    MAPE   2.57%  bias  -2.10%
+   v9_ms vs kernel_sum_ms [primary]                     n=174320  MAPE   4.04% [3.99, 4.09]  wMAPE   2.48%  p50  4.02%  p95   8.33%  bias  +1.22%
+      16x64x128w4s4          n=134938  MAPE   4.72%  wMAPE   3.37%  bias  +1.12%
+      32x64x128w4s3          n=17708   MAPE   1.51%  wMAPE   1.50%  bias  +1.48%
+      32x128x64w4s3          n=12749   MAPE   1.69%  wMAPE   1.67%  bias  +1.33%
+      64x128x64w4s3          n=8925    MAPE   2.10%  wMAPE   2.10%  bias  +2.10%
+      per-step total        n=9175    MAPE   3.93%  bias  +1.21%
+   v9_ms vs span_ms [secondary]                         n=174320  MAPE   2.80% [2.74, 2.86]  wMAPE   2.22%  p50  1.39%  p95   8.93%  bias  -2.09%
+      16x64x128w4s4          n=134938  MAPE   3.24%  wMAPE   3.28%  bias  -3.00%
+      32x64x128w4s3          n=17708   MAPE   1.00%  wMAPE   0.99%  bias  +0.83%
+      32x128x64w4s3          n=12749   MAPE   1.42%  wMAPE   1.41%  bias  +0.81%
+      64x128x64w4s3          n=8925    MAPE   1.64%  wMAPE   1.64%  bias  +1.64%
+      per-step total        n=9175    MAPE   2.57%  bias  -2.10%
+   v8_refpar_ms vs kernel_sum_ms [primary]              n=174320  MAPE   4.04% [3.99, 4.09]  wMAPE   2.48%  p50  4.02%  p95   8.33%  bias  +1.22%
+      16x64x128w4s4          n=134938  MAPE   4.72%  wMAPE   3.37%  bias  +1.12%
+      32x64x128w4s3          n=17708   MAPE   1.51%  wMAPE   1.50%  bias  +1.48%
+      32x128x64w4s3          n=12749   MAPE   1.69%  wMAPE   1.67%  bias  +1.33%
+      64x128x64w4s3          n=8925    MAPE   2.10%  wMAPE   2.10%  bias  +2.10%
+      per-step total        n=9175    MAPE   3.93%  bias  +1.21%
+   v8_refpar_ms vs span_ms [secondary]                  n=174320  MAPE   2.80% [2.74, 2.86]  wMAPE   2.22%  p50  1.39%  p95   8.93%  bias  -2.09%
+      16x64x128w4s4          n=134938  MAPE   3.24%  wMAPE   3.28%  bias  -3.00%
+      32x64x128w4s3          n=17708   MAPE   1.00%  wMAPE   0.99%  bias  +0.83%
+      32x128x64w4s3          n=12749   MAPE   1.42%  wMAPE   1.41%  bias  +0.81%
+      64x128x64w4s3          n=8925    MAPE   1.64%  wMAPE   1.64%  bias  +1.64%
+      per-step total        n=9175    MAPE   2.57%  bias  -2.10%
+   roof_ms vs kernel_sum_ms [primary]                   n=174320  MAPE  29.68% [29.25, 30.08]  wMAPE  13.21%  p50 26.64%  p95  54.79%  bias -29.68%
+      16x64x128w4s4          n=134938  MAPE  36.66%  wMAPE  21.93%  bias -36.66%
+      32x64x128w4s3          n=17708   MAPE   5.76%  wMAPE   5.69%  bias  -5.76%
+      32x128x64w4s3          n=12749   MAPE   5.51%  wMAPE   5.51%  bias  -5.51%
+      64x128x64w4s3          n=8925    MAPE   6.11%  wMAPE   6.08%  bias  -6.11%
+      per-step total        n=9175    MAPE  29.65%  bias -29.65%
+   roof_ms vs span_ms [secondary]                       n=174320  MAPE  31.38% [30.93, 31.81]  wMAPE  14.29%  p50 27.59%  p95  57.72%  bias -31.38%
+      16x64x128w4s4          n=134938  MAPE  38.71%  wMAPE  23.52%  bias -38.71%
+      32x64x128w4s3          n=17708   MAPE   6.36%  wMAPE   6.29%  bias  -6.36%
+      32x128x64w4s3          n=12749   MAPE   6.00%  wMAPE   6.00%  bias  -6.00%
+      64x128x64w4s3          n=8925    MAPE   6.54%  wMAPE   6.50%  bias  -6.54%
+      per-step total        n=9175    MAPE  31.35%  bias -31.35%
+   frontier:cli vs kernel_sum_ms [primary]              n=174320  MAPE   6.86% [6.76, 6.95]  wMAPE   4.72%  p50  6.40%  p95  14.53%  bias  -6.24%
+      16x64x128w4s4          n=134938  MAPE   7.62%  wMAPE   5.12%  bias  -6.97%
+      32x64x128w4s3          n=17708   MAPE   2.95%  wMAPE   2.96%  bias  -1.74%
+      32x128x64w4s3          n=12749   MAPE   5.00%  wMAPE   4.99%  bias  -4.96%
+      64x128x64w4s3          n=8925    MAPE   5.85%  wMAPE   5.77%  bias  -5.84%
+      per-step total        n=9175    MAPE   6.32%  bias  -6.23%
+   frontier:cli vs span_ms [secondary]                  n=174320  MAPE   9.45% [9.29, 9.59]  wMAPE   5.62%  p50  7.04%  p95  19.68%  bias  -9.12%
+      16x64x128w4s4          n=134938  MAPE  10.85%  wMAPE   6.61%  bias -10.54%
+      32x64x128w4s3          n=17708   MAPE   3.19%  wMAPE   3.21%  bias  -2.37%
+      32x128x64w4s3          n=12749   MAPE   5.48%  wMAPE   5.46%  bias  -5.45%
+      64x128x64w4s3          n=8925    MAPE   6.27%  wMAPE   6.19%  bias  -6.26%
+      per-step total        n=9175    MAPE   9.12%  bias  -9.11%
+   frontier:cli-fills vs kernel_sum_ms [primary]        n=174320  MAPE   6.68% [6.59, 6.76]  wMAPE   5.02%  p50  6.69%  p95  13.89%  bias  -6.08%
+      16x64x128w4s4          n=134938  MAPE   7.16%  wMAPE   4.97%  bias  -6.45%
+      32x64x128w4s3          n=17708   MAPE   4.07%  wMAPE   4.06%  bias  -3.70%
+      32x128x64w4s3          n=12749   MAPE   5.55%  wMAPE   5.50%  bias  -5.51%
+      64x128x64w4s3          n=8925    MAPE   6.12%  wMAPE   6.03%  bias  -6.11%
+      per-step total        n=9175    MAPE   6.20%  bias  -6.07%
+   frontier:cli-fills vs span_ms [secondary]            n=174320  MAPE   9.25% [9.11, 9.38]  wMAPE   5.95%  p50  7.36%  p95  19.05%  bias  -8.99%
+      16x64x128w4s4          n=134938  MAPE  10.36%  wMAPE   6.43%  bias -10.05%
+      32x64x128w4s3          n=17708   MAPE   4.54%  wMAPE   4.53%  bias  -4.32%
+      32x128x64w4s3          n=12749   MAPE   6.02%  wMAPE   5.98%  bias  -6.01%
+      64x128x64w4s3          n=8925    MAPE   6.54%  wMAPE   6.44%  bias  -6.54%
+      per-step total        n=9175    MAPE   8.99%  bias  -8.98%
+   frontier:simpath vs kernel_sum_ms [primary]          n=174320  MAPE   9.28% [9.18, 9.37]  wMAPE   8.48%  p50 10.78%  p95  17.58%  bias  -2.15%
+      16x64x128w4s4          n=134938  MAPE   8.90%  wMAPE   6.73%  bias  -5.85%
+      32x64x128w4s3          n=17708   MAPE  13.22%  wMAPE  12.60%  bias +13.21%
+      32x128x64w4s3          n=12749   MAPE   5.31%  wMAPE   5.07%  bias  +5.25%
+      64x128x64w4s3          n=8925    MAPE  12.81%  wMAPE  12.50%  bias +12.81%
+      per-step total        n=9175    MAPE   9.06%  bias  -2.26%
+   frontier:simpath vs span_ms [secondary]              n=174320  MAPE  11.51% [11.37, 11.63]  wMAPE   8.61%  p50 12.01%  p95  20.96%  bias  -5.04%
+      16x64x128w4s4          n=134938  MAPE  11.96%  wMAPE   7.68%  bias  -9.41%
+      32x64x128w4s3          n=17708   MAPE  12.52%  wMAPE  11.91%  bias +12.49%
+      32x128x64w4s3          n=12749   MAPE   4.86%  wMAPE   4.63%  bias  +4.70%
+      64x128x64w4s3          n=8925    MAPE  12.30%  wMAPE  11.99%  bias +12.30%
+      per-step total        n=9175    MAPE  11.31%  bias  -5.15%
+== A1410: lock 1410  model+context error at the branch clock
+   calls: 188537
+   scored: 13357
+   off_lock_dropped: 0
+   v8_refused_share_of_moe_time: 0.0
+   intruder_calls: 0
+   span / kernel-sum, cudagraph FULL     n=7847    median 1.00
+   span / kernel-sum, cudagraph NONE     n=1501    median 1.29
+   span / kernel-sum, cudagraph PIECEWISE n=4009    median 1.00
+   v8_ms vs kernel_sum_ms [primary]                     n=13357   MAPE  11.42% [11.29, 11.53]  wMAPE  11.28%  p50 11.79%  p95  13.29%  bias +11.42%
+      64x128x64w8s3          n=11856   MAPE  11.64%  wMAPE  11.63%  bias +11.64%
+      128x128x64w8s3         n=1501    MAPE   9.65%  wMAPE   9.26%  bias  +9.65%
+      per-step total        n=703     MAPE  11.42%  bias +11.42%
+   v8_ms vs span_ms [secondary]                         n=13357   MAPE  11.61% [11.53, 11.70]  wMAPE  11.82%  p50 11.58%  p95  14.73%  bias  +8.51%
+      64x128x64w8s3          n=11856   MAPE  11.26%  wMAPE  11.25%  bias +11.26%
+      128x128x64w8s3         n=1501    MAPE  14.30%  wMAPE  14.41%  bias -13.24%
+      per-step total        n=703     MAPE  11.52%  bias  +8.47%
+   v9_ms vs kernel_sum_ms [primary]                     n=13357   MAPE   6.33% [6.21, 6.48]  wMAPE   6.40%  p50  6.19%  p95  11.05%  bias  +6.33%
+      64x128x64w8s3          n=11856   MAPE   5.91%  wMAPE   5.91%  bias  +5.91%
+      128x128x64w8s3         n=1501    MAPE   9.65%  wMAPE   9.26%  bias  +9.65%
+      per-step total        n=703     MAPE   6.33%  bias  +6.33%
+   v9_ms vs span_ms [secondary]                         n=13357   MAPE   6.53% [6.33, 6.78]  wMAPE   7.14%  p50  5.91%  p95  14.73%  bias  +3.44%
+      64x128x64w8s3          n=11856   MAPE   5.55%  wMAPE   5.55%  bias  +5.55%
+      128x128x64w8s3         n=1501    MAPE  14.30%  wMAPE  14.41%  bias -13.24%
+      per-step total        n=703     MAPE   6.45%  bias  +3.40%
+   v8_refpar_ms vs kernel_sum_ms [primary]              n=13357   MAPE  11.39% [11.26, 11.49]  wMAPE  11.24%  p50 11.78%  p95  13.26%  bias +11.39%
+      64x128x64w8s3          n=11856   MAPE  11.64%  wMAPE  11.63%  bias +11.64%
+      128x128x64w8s3         n=1501    MAPE   9.37%  wMAPE   8.97%  bias  +9.37%
+      per-step total        n=703     MAPE  11.38%  bias +11.38%
+   v8_refpar_ms vs span_ms [secondary]                  n=13357   MAPE  11.63% [11.54, 11.73]  wMAPE  11.86%  p50 11.58%  p95  14.96%  bias  +8.49%
+      64x128x64w8s3          n=11856   MAPE  11.26%  wMAPE  11.25%  bias +11.26%
+      128x128x64w8s3         n=1501    MAPE  14.49%  wMAPE  14.62%  bias -13.47%
+      per-step total        n=703     MAPE  11.54%  bias  +8.45%
+   roof_ms vs kernel_sum_ms [primary]                   n=13357   MAPE  11.76% [11.25, 12.44]  wMAPE  12.68%  p50  9.12%  p95  31.26%  bias -11.76%
+      64x128x64w8s3          n=11856   MAPE   9.20%  wMAPE   9.21%  bias  -9.20%
+      128x128x64w8s3         n=1501    MAPE  31.95%  wMAPE  32.71%  bias -31.95%
+      per-step total        n=703     MAPE  11.76%  bias -11.76%
+   roof_ms vs span_ms [secondary]                       n=13357   MAPE  13.64% [12.83, 14.69]  wMAPE  16.19%  p50  9.42%  p95  46.68%  bias -13.64%
+      64x128x64w8s3          n=11856   MAPE   9.51%  wMAPE   9.51%  bias  -9.51%
+      128x128x64w8s3         n=1501    MAPE  46.23%  wMAPE  46.77%  bias -46.23%
+      per-step total        n=703     MAPE  13.66%  bias -13.66%
+   frontier:cli vs kernel_sum_ms [primary]              n=13357   MAPE   9.12% [8.77, 9.51]  wMAPE   9.07%  p50  6.88%  p95  23.15%  bias  -8.91%
+      64x128x64w8s3          n=11856   MAPE   9.37%  wMAPE   9.31%  bias  -9.37%
+      128x128x64w8s3         n=1501    MAPE   7.18%  wMAPE   7.70%  bias  -5.29%
+      per-step total        n=703     MAPE   9.02%  bias  -8.85%
+   frontier:cli vs span_ms [secondary]                  n=13357   MAPE  11.42% [10.96, 11.97]  wMAPE  12.51%  p50  7.80%  p95  27.74%  bias -11.42%
+      64x128x64w8s3          n=11856   MAPE   9.68%  wMAPE   9.61%  bias  -9.68%
+      128x128x64w8s3         n=1501    MAPE  25.18%  wMAPE  25.78%  bias -25.18%
+      per-step total        n=703     MAPE  11.39%  bias -11.39%
+   frontier:cli-fills vs kernel_sum_ms [primary]        n=13357   MAPE   9.36% [8.97, 9.79]  wMAPE   9.33%  p50  6.99%  p95  25.01%  bias  -9.22%
+      64x128x64w8s3          n=11856   MAPE   9.54%  wMAPE   9.47%  bias  -9.54%
+      128x128x64w8s3         n=1501    MAPE   7.94%  wMAPE   8.53%  bias  -6.63%
+      per-step total        n=703     MAPE   9.27%  bias  -9.16%
+   frontier:cli-fills vs span_ms [secondary]            n=13357   MAPE  11.70% [11.20, 12.30]  wMAPE  12.83%  p50  7.95%  p95  29.23%  bias -11.70%
+      64x128x64w8s3          n=11856   MAPE   9.86%  wMAPE   9.78%  bias  -9.86%
+      128x128x64w8s3         n=1501    MAPE  26.23%  wMAPE  26.82%  bias -26.23%
+      per-step total        n=703     MAPE  11.66%  bias -11.66%
+   frontier:simpath vs kernel_sum_ms [primary]          n=13357   MAPE   4.70% [4.51, 4.92]  wMAPE   4.62%  p50  4.15%  p95  11.00%  bias  +3.76%
+      64x128x64w8s3          n=11856   MAPE   4.62%  wMAPE   4.48%  bias  +4.37%
+      128x128x64w8s3         n=1501    MAPE   5.35%  wMAPE   5.46%  bias  -1.06%
+      per-step total        n=703     MAPE   4.36%  bias  +3.67%
+   frontier:simpath vs span_ms [secondary]              n=13357   MAPE   6.31% [5.92, 6.79]  wMAPE   7.46%  p50  4.35%  p95  23.55%  bias  +1.11%
+      64x128x64w8s3          n=11856   MAPE   4.35%  wMAPE   4.22%  bias  +4.02%
+      128x128x64w8s3         n=1501    MAPE  21.83%  wMAPE  22.34%  bias -21.83%
+      per-step total        n=703     MAPE   5.97%  bias  +1.00%
+
+PASS score_prod (descriptive)
