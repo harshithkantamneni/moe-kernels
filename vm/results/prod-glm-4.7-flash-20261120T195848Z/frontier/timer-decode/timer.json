@@ -10,7 +10,7 @@
  "warmup": 2,
  "repeats": 20,
  "seed": 0,
- "weights_build_s": 0.3711342729993703,
+ "weights_build_s": 0.3540878160001739,
  "sink_index": 65534,
  "method": "Frontier's profile_fused_moe_kernel loop (eager, warm weights, warm-up then timed calls each synchronized); time = the kit's kernel-sum per timed call from the nsys trace",
  "call": "vllm.model_executor.layers.fused_moe.fused_experts (functional), as replay C calls it",
@@ -4806,6 +4806,6 @@
  ],
  "verdict": "PASS",
  "lock_readback_mhz": 1710,
- "wall_s": 2.3976797739996982,
+ "wall_s": 1.4221024530006616,
  "off_lock_points": 0
 }

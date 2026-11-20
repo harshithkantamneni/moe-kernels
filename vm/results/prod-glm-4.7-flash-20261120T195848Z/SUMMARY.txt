@@ -55,3 +55,37 @@ PASS frontier-timer-prefill (41s)
 PASS frontier-timer-export-prefill (1s)
 PASS frontier-timer-unlock (0s)
 FAIL A1410-extract: exit 3: FAIL  G-STEP: shard_00000.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00001.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00002.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00003.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00004.npz: 11776 records, 512 steps x 46 layers = 23552 FAIL  G-STEPMARK: 12621 step markers, 21789 logged steps; first differen
+RESUME from A1410-lock at 2026-11-20T21:36:16Z in /home/ubuntu/moe/results/prod-glm-4.7-flash-20261120T195848Z
+PASS env-preflight (13s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned (0s)
+SKIPPED-RESUME price-check
+SKIPPED-RESUME price-check-v9
+SKIPPED-RESUME model-prefetch
+SKIPPED-RESUME prompts
+SKIPPED-RESUME frontier-setup
+SKIPPED-RESUME sag1410
+PASS unlock-after-sag (0s)
+SKIPPED-RESUME serve-plan
+SKIPPED-RESUME gate60-capture
+SKIPPED-RESUME gate60-extract
+SKIPPED-RESUME gate60-sequences
+SKIPPED-RESUME frontier-grid-check
+SKIPPED-RESUME frontier-timer-probe
+PASS A1710-lock (0s)
+SKIPPED-RESUME A1710-capture
+PASS A1710-unlock-after (0s)
+SKIPPED-RESUME A1710-extract
+PASS A1410-lock (0s)
+PASS A1410-capture (793s)
+PASS A1410-unlock-after (0s)
+PASS frontier-timer-lock-decode (1s)
+PASS frontier-timer-decode (9s)
+PASS frontier-timer-export-decode (0s)
+PASS frontier-timer-lock-prefill (0s)
+PASS frontier-timer-prefill (40s)
+PASS frontier-timer-export-prefill (1s)
+PASS frontier-timer-unlock (0s)
+PASS A1410-extract (255s)

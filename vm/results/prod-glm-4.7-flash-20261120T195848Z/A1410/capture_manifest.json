@@ -56,7 +56,7 @@
   "kernel_variants": 2,
   "kernel_variants_expected": 2,
   "step_kernel_variants": 1,
-  "reset_monotonic_ns": 4491295302478,
+  "reset_monotonic_ns": 5828527851693,
   "kernel_variants_end": 2,
   "step_kernel_variants_end": 1,
   "bound_layers": [
