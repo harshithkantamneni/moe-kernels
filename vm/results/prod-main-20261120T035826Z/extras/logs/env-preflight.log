@@ -1,4 +1,4 @@
-PASS P1 git: clean at eb7e72ba9916875258b5b8e3d49455722ea041b3 (expected, from --expect-commit)
+PASS P1 git: clean at fe96486c458551cbbed7db213ffcad0662c7e0f1 (expected, from --expect-commit)
 PASS P2 idle: no compute process on the GPU
 PASS P3 power: enforced power limit 700 W
 PASS P4 locks: 1710 MHz set; 1410 MHz set; restored to default clocks

@@ -9,5 +9,5 @@ PASS P8 hf-rev: Qwen/Qwen3-30B-A3B resolves to the pin ad44e777bcd18fa416d9da3bd
 SKIP P9 frontier: --skip
 PASS P10 disk: 4080 GB free under /home/ubuntu/moe
 SKIP P11 setup: --skip
-PASS P12 hf-rate: measured 467 MB/s (1007 MB in 2.2 s); the weights (61.1 GB) would take ~131 s
+PASS P12 hf-rate: measured 541 MB/s (1007 MB in 1.9 s); the weights (61.1 GB) would take ~113 s
 PASS env-preflight

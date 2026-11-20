@@ -1,20 +1,49 @@
 {
-  "G-REV": {
+  "G-REC": {
     "verdict": "PASS",
+    "records": 336192,
+    "markers": 336192,
+    "marker_streams": {
+      "7": 336192
+    },
     "why": ""
   },
-  "G-CFG": {
-    "verdict": "FAIL",
-    "why": "config.json num_experts=None, the kit's num_experts=128"
-  },
-  "G-BACKEND": {
+  "G-GEMM": {
     "verdict": "PASS",
-    "backends": [
-      "TRITON"
-    ],
-    "experts_cls": [
-      "TritonExperts"
-    ],
+    "gemms": 672384,
     "why": ""
+  },
+  "G-STEP": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-PAIR": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0,
+    "paired": 336192
+  },
+  "G-STEPMARK": {
+    "verdict": "PASS",
+    "why": "",
+    "step_markers": 7004,
+    "steps": 7004,
+    "misplaced_calls": 0
+  },
+  "G-IDS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-GRID": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-CLASS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
   }
 }

@@ -67,7 +67,7 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 345,
     "mem_mhz": 2619,
-    "power_w": 84.75,
+    "power_w": 84.564,
     "power_limit_w": 700.0,
     "temp_c": 36,
     "driver": "580.105.08"
@@ -134,9 +134,84 @@
     "compilation_mode": "3"
   },
   "kv": {
-    "num_gpu_blocks": 16303,
+    "num_gpu_blocks": 16304,
     "block_size": 16,
     "preemptions": 0,
-    "realized_concurrency": []
+    "realized_concurrency": [
+      {
+        "level_idx": 0,
+        "L": 1,
+        "steps": 2721,
+        "preemptions": 0,
+        "running_max": 1,
+        "running_median": 1,
+        "running_mean": 1.0,
+        "steps_at_L": 2713,
+        "waiting_max": 0
+      },
+      {
+        "level_idx": 1,
+        "L": 8,
+        "steps": 1189,
+        "preemptions": 0,
+        "running_max": 8,
+        "running_median": 7,
+        "running_mean": 5.69,
+        "steps_at_L": 521,
+        "waiting_max": 0
+      },
+      {
+        "level_idx": 2,
+        "L": 24,
+        "steps": 910,
+        "preemptions": 0,
+        "running_max": 24,
+        "running_median": 16,
+        "running_mean": 13.95,
+        "steps_at_L": 284,
+        "waiting_max": 0
+      },
+      {
+        "level_idx": 3,
+        "L": 48,
+        "steps": 1059,
+        "preemptions": 0,
+        "running_max": 48,
+        "running_median": 29,
+        "running_mean": 27.19,
+        "steps_at_L": 331,
+        "waiting_max": 0
+      },
+      {
+        "level_idx": 4,
+        "L": 80,
+        "steps": 1137,
+        "preemptions": 0,
+        "running_max": 80,
+        "running_median": 47,
+        "running_mean": 45.89,
+        "steps_at_L": 331,
+        "waiting_max": 0
+      }
+    ]
+  },
+  "stopped_at_level": 5,
+  "gpu_end": {
+    "name": "NVIDIA GH200 480GB",
+    "sm_mhz": 1980,
+    "mem_mhz": 2619,
+    "power_w": 443.548,
+    "power_limit_w": 700.0,
+    "temp_c": 58,
+    "driver": "580.105.08"
+  },
+  "seconds": 66.7,
+  "realized_per_tile": {
+    "16x64x128w4s4": 5798,
+    "32x64x128w4s3": 681,
+    "32x128x64w4s3": 436,
+    "64x128x64w4s3": 22,
+    "64x128x64w8s3": 24,
+    "128x128x64w8s3": 23
   }
 }

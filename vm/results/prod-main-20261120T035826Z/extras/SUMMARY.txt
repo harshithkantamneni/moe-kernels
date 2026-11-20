@@ -183,3 +183,41 @@ SKIPPED X4-extract: needs X4-export (failed or skipped)
 PASS X4-push (64s)
 PASS extras-push-final (64s)
 PASS extras-held-back-check (1s)
+RESUME from X3-budget at 2026-11-20T08:54:35Z in /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras
+PASS extras-main-finished (1s)
+PASS extras-commit-switch (0s)
+PASS env-preflight (2s)
+PASS env (4s)
+PASS power-readback (0s)
+PASS unlock-start (0s)
+PASS revision-pinned-qwen3 (0s)
+SKIPPED-RESUME price-check-qwen3
+SKIPPED-RESUME X1-budget
+SKIPPED-RESUME X1-inputs
+PASS X1-lock (0s)
+SKIPPED-RESUME X1-capture
+PASS X1-unlock-after (0s)
+SKIPPED-RESUME X1-export
+SKIPPED-RESUME X1-identical
+SKIPPED-RESUME X1-extract
+SKIPPED-RESUME X1-push
+SKIPPED-RESUME X2-budget
+SKIPPED-RESUME X2-inputs
+SKIPPED-RESUME X2-subsample
+PASS X2-lock-decode (0s)
+SKIPPED-RESUME X2-ncu-decode
+PASS X2-unlock-decode (0s)
+PASS X2-lock-prefill (1s)
+SKIPPED-RESUME X2-ncu-prefill
+PASS X2-unlock-prefill (0s)
+SKIPPED-RESUME X2-push
+PASS X3-budget (1s)
+PASS X3-inputs (0s)
+PASS X3-hf-preflight (2s)
+PASS X3-prompts-fetch (0s)
+PASS X3-prompts-build (13s)
+PASS X3-unlock-gate (0s)
+PASS X3-gate60-capture (149s)
+PASS X3-gate60-export (19s)
+PASS X3-gate60-extract (97s)
+PASS X3-gate60-sequences (4s)

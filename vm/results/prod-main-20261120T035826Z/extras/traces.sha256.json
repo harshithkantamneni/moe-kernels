@@ -84,10 +84,15 @@
    "sha256": "a04ba721dec5512437e5f42c4f89cc5fc64a00452cd8c03b1d8f32f32e748a46"
   },
   "qwen3/gate60/serve.nsys-rep": {
-   "bytes": 19240176,
-   "mtime_ns": 1795163028214532389,
-   "sha256": "672d6089283fd0a184eb99abb2f881446fe699ef95946ea494b8e96133410ece"
+   "bytes": 231234208,
+   "mtime_ns": 1795165048716188233,
+   "sha256": "82701f494659cf9d65f795ed318657fa470cb76de6ffaa7ad637c126e6e360fa"
+  },
+  "qwen3/gate60/serve.sqlite": {
+   "bytes": 614711296,
+   "mtime_ns": 1795165067821372657,
+   "sha256": "b84a69b3c4f04aa658b555c66432a9b36b5e38d052f53a10336af406484d877a"
   }
  },
- "total_bytes": 1430859328
+ "total_bytes": 2257564656
 }
