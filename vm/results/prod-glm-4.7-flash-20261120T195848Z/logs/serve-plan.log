@@ -1,0 +1,10 @@
+serve_capture: glm-4.7-flash (zai-org/GLM-4.7-Flash) mode=graphs shared-stream=off levels=[1, 8, 24, 48, 80, 112, 256] N/level=8 out=/home/ubuntu/moe/results/prod-glm-4.7-flash-20261120T195848Z/A1710
+expected steps 9160; per tile (padded T):
+  16x64x128w4s4             6539
+  32x64x128w4s3              868
+  32x128x64w4s3              626
+  64x128x64w4s3              438
+  64x128x64w8s3              603
+  128x128x64w8s3              81
+  128x128x64w8s3 g16           5   < 30
+DRY RUN: nothing launched

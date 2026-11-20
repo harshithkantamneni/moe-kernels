@@ -1,0 +1,35 @@
+{
+ "schema": "moe-kernels/prod-frontier-predictions/1",
+ "model": "glm-4.7-flash",
+ "runs": {
+  "points": {
+   "g": "points.g.npy",
+   "n": 9
+  }
+ },
+ "arms": {
+  "cli": {
+   "model_file": "moe_grouped_gemm_fdfb89ad.pkl",
+   "features": [
+    "total_routed_tokens",
+    "num_experts_per_device",
+    "hidden_dim",
+    "expert_hidden_dim",
+    "router_topk",
+    "model_expansion_ratio",
+    "tokens_per_expert_avg",
+    "tokens_to_experts_ratio",
+    "expert_utilization",
+    "min_load_ratio",
+    "load_imbalance_cv",
+    "max_load_ratio",
+    "load_entropy",
+    "load_gini_coefficient"
+   ],
+   "distinct": 9,
+   "files": {
+    "points": "cli.points.npy"
+   }
+  }
+ }
+}

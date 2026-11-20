@@ -1,0 +1,1 @@
+PASS trace-manifest: 9 file(s), 2.98 GB under /home/ubuntu/moe/traces/prod-glm-4.7-flash-20261120T195848Z -> /home/ubuntu/moe/results/prod-glm-4.7-flash-20261120T195848Z/traces.sha256.json

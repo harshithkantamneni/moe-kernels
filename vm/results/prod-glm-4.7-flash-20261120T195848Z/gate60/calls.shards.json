@@ -1,0 +1,39 @@
+{
+ "schema": "moe-kernels/prod-call-shards/1",
+ "n": 267674,
+ "max_bytes": 64000000,
+ "calls": [
+  {
+   "file": "calls.00000.jsonl",
+   "rows": 86017,
+   "sha256": "aa9f006b12e17fa3afcad73aa84719c45d7703aa4f674a49fd23fa26db710222"
+  },
+  {
+   "file": "calls.00001.jsonl",
+   "rows": 84314,
+   "sha256": "1055cede045aa04849794667048a9644c7b0b32d8d4de244eec4dda7e9a3326d"
+  },
+  {
+   "file": "calls.00002.jsonl",
+   "rows": 82677,
+   "sha256": "1a53061b0109245d3de085dcdc17ab6c150d99e9add96e5c8d8af05d967364d3"
+  },
+  {
+   "file": "calls.00003.jsonl",
+   "rows": 14666,
+   "sha256": "39cdb4c878cf22b300c4dd0f5b6d8bc0dcfbe534d5cc11c636e2559df277d26e"
+  }
+ ],
+ "counts": [
+  {
+   "file": "counts.00000.npy",
+   "rows": 249996,
+   "sha256": "cbd882eb8d2a7affe281a6dc8fbc4edbd2ab2df30f1f97bbb1d35277b234ef47"
+  },
+  {
+   "file": "counts.00001.npy",
+   "rows": 17678,
+   "sha256": "bdc080444bf6e4fb632129336d1e89c34026b2f4d6b794794d34e9066844a584"
+  }
+ ]
+}

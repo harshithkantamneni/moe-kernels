@@ -1,0 +1,49 @@
+{
+  "G-REC": {
+    "verdict": "PASS",
+    "records": 267674,
+    "markers": 267674,
+    "marker_streams": {
+      "7": 267674
+    },
+    "why": ""
+  },
+  "G-GEMM": {
+    "verdict": "PASS",
+    "gemms": 535348,
+    "why": ""
+  },
+  "G-STEP": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-PAIR": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0,
+    "paired": 267674
+  },
+  "G-STEPMARK": {
+    "verdict": "PASS",
+    "why": "",
+    "step_markers": 5819,
+    "steps": 5819,
+    "misplaced_calls": 0
+  },
+  "G-IDS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-GRID": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-CLASS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  }
+}
