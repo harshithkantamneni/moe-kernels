@@ -7,6 +7,13 @@
 #
 #   git fetch origin <run branch> && git worktree add ../run <run branch>      # the VM pushed vm/results/...
 #   bash scripts/prod/offline.sh --results ../run/vm/results/prod-main-<utc> [--from STEP] [--workers 4] [--dry-run]
+#       [--model KEY] [--pricer MODULE] [--also-price LABEL=MODULE | --also-price none]
+#
+# PRICERS (2026-11-20): --pricer (default r3_timing_model_v8) fills v8_ms as before; --also-price (default
+# v9=r3_timing_model_v9, repeatable; `none` drops it) adds each further pricer as its own column <LABEL>_ms, at the
+# board's par, scored in the same tables beside v8_ms (score_prod.py --also-price). ON THE VM (main.sh --profile
+# blind runs this script as its score step): --workers from nproc (capped at 32), no .xz to write out (decompress
+# runs only when the tree holds one), the replays passed only when the rental measured them.
 #
 # RESUME: `--from STEP` re-enters at STEP; the steps before it are SKIPPED-RESUME (a hard one's declared output, such
 # as expected-outputs' runs.txt, must be present; kitlib.sh).
@@ -35,6 +42,7 @@ REPO="$(cd "$HERE/../.." && pwd)"
 . "$HERE/kitlib.sh"
 
 RES=""; FROM=""; WORKERS="${PROD_WORKERS:-4}"; MODEL=ernie-4.5-21b-a3b; EXTRAS=0
+PRICER="${PROD_PRICER:-r3_timing_model_v8}"; ALSO=(); ALSO_SET=0
 ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,12 +50,17 @@ while [[ $# -gt 0 ]]; do
     --from) FROM="$2"; shift 2 ;;
     --workers) WORKERS="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
+    --pricer) PRICER="$2"; shift 2 ;;
+    --also-price) ALSO_SET=1; [[ "$2" == none ]] || ALSO+=("$2"); shift 2 ;;
     --extras) EXTRAS=1; shift ;;
     --dry-run) KIT_DRY=1; shift ;;
     *) echo "FAIL offline: unknown option $1" >&2; exit 2 ;;
   esac
 done
 [[ -n "$RES" ]] || { echo "FAIL offline: --results DIR (the main rental's results directory)" >&2; exit 2; }
+[[ $ALSO_SET -eq 1 ]] || ALSO=(v9=r3_timing_model_v9)
+PRICES=(--pricer "$PRICER")
+for x in ${ALSO[@]+"${ALSO[@]}"}; do PRICES+=(--also-price "$x"); done
 R="$RES"
 SC="$REPO/scripts/prod"
 PY="${PY_SCORE:-python3}"
@@ -56,7 +69,10 @@ export PYTHONPATH="$REPO:$REPO/scripts:$SC${PYTHONPATH:+:$PYTHONPATH}"
 kit_init "$R/offline-logs"
 kit_resume_init "$FROM" ${ARGS[@]+"${ARGS[@]}"}
 cd "$REPO"
-step decompress --cap 3600 -- "$PY" "$SC/prodlib.py" decompress --root "$R"
+# the push's .xz files written out (a fetched tree); on the VM (or a tree with none) the step is not needed
+if [[ $KIT_DRY -eq 1 ]] || find "$R" -name '*.xz' -print -quit 2>/dev/null | grep -q .; then
+  step decompress --cap 3600 -- "$PY" "$SC/prodlib.py" decompress --root "$R"
+fi
 step expected-outputs --cap 600 --out "$R/offline-logs/runs.txt" -- "$PY" "$SC/prodlib.py" expected-outputs --results "$R" --runs-out "$R/offline-logs/runs.txt"
 LABELS=(A1710 A1410 Adefault Aon Beager)
 if [[ $KIT_DRY -eq 0 ]]; then
@@ -69,6 +85,12 @@ for lab in ${LABELS[@]+"${LABELS[@]}"}; do
 done
 FRONT=()
 if [[ $KIT_DRY -eq 1 || -s "$R/frontier/predictions/index.json" ]]; then FRONT=(--frontier "$R/frontier/predictions"); fi
+REPL=()
+for b in decode prefill; do   # the replays, when the rental measured them (main.sh --profile blind runs none)
+  if [[ $KIT_DRY -eq 1 ]] || find "$R/replay-$b" -name 'cells.csv*' -print -quit 2>/dev/null | grep -q .; then
+    REPL+=(--replay "$b=$R/replay-$b/private_weight_reference")
+  fi
+done
 RCHK=()
 for b in decode prefill; do
   if [[ $KIT_DRY -eq 1 || -f "$R/replay-offset-$b/replay_check.json" ]]; then
@@ -93,8 +115,8 @@ if [[ $EXTRAS -eq 1 || -f "$EX/SUMMARY.txt" ]]; then
   if [[ $KIT_DRY -eq 1 || -e "$EX/LC1410/calls.jsonl" || -e "$EX/LC1410/calls.shards.json" ]]; then LC=1; fi
 fi
 step score --cap 21600 -- "$PY" "$SC/score_prod.py" --model "$MODEL" --sag "$R/sag/par.json" ${RUNS[@]+"${RUNS[@]}"} \
-  --replay decode="$R/replay-decode/private_weight_reference" --replay prefill="$R/replay-prefill/private_weight_reference" \
-  ${RCHK[@]+"${RCHK[@]}"} ${FRONT[@]+"${FRONT[@]}"} ${XARGS[@]+"${XARGS[@]}"} --workers "$WORKERS" --out "$R/score"
+  ${REPL[@]+"${REPL[@]}"} ${RCHK[@]+"${RCHK[@]}"} ${FRONT[@]+"${FRONT[@]}"} ${XARGS[@]+"${XARGS[@]}"} "${PRICES[@]}" \
+  --workers "$WORKERS" --out "$R/score"
 if [[ $EXTRAS -eq 1 ]]; then   # X4 and X3, each its own soft score, then appended to the same report
   MERGE=(); MNEEDS=()
   if [[ $LC -eq 1 ]]; then

@@ -192,7 +192,11 @@ def test_main_dry_run_gates_first_and_locks_each_branch(tmp_path):
     for want in ('--grid-points "$PROBE_POINTS"', "fpoints", " csv ", "train --narrow", "predict", "--points",
                  "kit_lock", "$PT/timer-$b/timer.sqlite"):
         assert want in pr, want
-    assert 'PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-64,1024,8192}"' in (PROD / "main.sh").read_text()
+    # the probe points come from the model (prodlib.py model-info; ERNIE's are 64,1024,8192), an env override first
+    assert 'PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-$SPEC_PROBE_POINTS}"' in (PROD / "main.sh").read_text()
+    sys.path.insert(0, str(PROD))
+    import prodlib as PL
+    assert "SPEC_PROBE_POINTS=64,1024,8192" in PL.shell_model_info("ernie-4.5-21b-a3b")
     # review M2: every locked_r3 call names its run cap, below its step's cap
     runcaps = {}
     for n, st in by.items():

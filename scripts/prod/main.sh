@@ -4,7 +4,13 @@
 # (scripts/prod/offline.sh). Run on the VM after setup_vm.sh, from the pushed, registered checkout:
 #
 #   . ~/moe/env.sh && cd "$REPO" && bash scripts/prod/main.sh [--results DIR [--from STEP]] [--graphmode-overhead]
-#       [--frontier-balanced-arm] [--dry-run]
+#       [--frontier-balanced-arm] [--model KEY] [--profile full|blind] [--utc STAMP] [--dry-run]
+#
+# MODEL (2026-11-20): --model KEY (default ernie-4.5-21b-a3b) is any prodlib.MODELS key, the blind registry
+# (prodlib.BLIND_SPECS) included; TOK, the serving levels, the Frontier probe points and its CSV path come from
+# `prodlib.py model-info`. PROFILE: full (default, the sequence below) or blind (scripts/prod/blind.sh: ONE new model
+# per 1x GH200, lean, ~1.2 h, scored on the VM by v8, v9 and Frontier). --utc names the instance: blind results go
+# to prod-<model>-<utc> and the launcher's run branch is run-gh200-blind-<model>-<utc> (`prodlib.py run-names`).
 #
 # RESUME: `--results DIR --from STEP` re-enters the run in DIR at STEP: the steps before it are SKIPPED-RESUME and
 # never re-run (a hard one whose declared output is missing REFUSES the resume); the --always steps (env-preflight,
@@ -73,27 +79,55 @@ REPO="$(cd "$HERE/../.." && pwd)"
 RES=""; FROM=""
 GRAPHMODE=0
 FR_BALANCED=0
+MODEL=ernie-4.5-21b-a3b
+PROFILE=full
+UTC=""
 ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --results) RES="$2"; KIT_RESULTS_GIVEN=1; shift 2 ;;
     --from) FROM="$2"; shift 2 ;;
+    --model) MODEL="$2"; shift 2 ;;
+    --profile) PROFILE="$2"; shift 2 ;;
+    --utc) UTC="$2"; shift 2 ;;
     --graphmode-overhead) GRAPHMODE=1; shift ;;
     --frontier-balanced-arm) FR_BALANCED=1; shift ;;
     --dry-run) KIT_DRY=1; shift ;;
     *) echo "FAIL main: unknown option $1" >&2; exit 2 ;;
   esac
 done
-MODEL=ernie-4.5-21b-a3b
-TOK=baidu/ERNIE-4.5-21B-A3B-PT
-LEVELS="${PROD_LEVELS:-1,8,24,48,80,112,256,1024x3}"
+case "$PROFILE" in
+  full) ;;
+  blind) if [[ $GRAPHMODE -eq 1 || $FR_BALANCED -eq 1 ]]; then
+           echo "FAIL main: --profile blind runs no opt-in arm (--graphmode-overhead, --frontier-balanced-arm)" >&2; exit 2
+         fi ;;
+  *) echo "FAIL main: --profile full|blind, not '$PROFILE'" >&2; exit 2 ;;
+esac
+PY="${PY_VLLM:-python3}"
+# the model's names from prodlib.MODELS (the blind registry included): TOK (its own repo: the tokenizer is pinned by
+# the model's revision), its serving levels and Frontier probe points when its spec names them, Frontier's CSV path
+minfo() { "$PY" "$HERE/prodlib.py" "$@" 2>/dev/null || python3 "$HERE/prodlib.py" "$@"; }
+INFO="$(minfo model-info --model "$MODEL")" || { echo "FAIL main: --model $MODEL: $INFO" >&2; exit 2; }
+eval "$INFO"     # TOK SPEC_LEVELS SPEC_PROBE_POINTS CSVREL (shell-quoted by prodlib.shell_model_info)
+UTC="${UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
+RUN_NAME="prod-main-$UTC"
+if [[ $PROFILE == blind ]]; then   # per instance: prod-<model>-<utc>, branch run-gh200-blind-<model>-<utc>
+  NAMES="$(minfo run-names --model "$MODEL" --utc "$UTC")" || { echo "FAIL main: $NAMES" >&2; exit 2; }
+  eval "$NAMES"  # RESULTS_NAME RUN_BRANCH
+  RUN_NAME="$RESULTS_NAME"
+fi
+LEVELS="${PROD_LEVELS:-${SPEC_LEVELS:-1,8,24,48,80,112,256,1024x3}}"
 NREQ="${PROD_REQUESTS_PER_LEVEL:-8}"
 FR_ROUTING="${PROD_FRONTIER_ROUTING:-uniform}"
-PY="${PY_VLLM:-python3}"
 PRICER="${PROD_PRICER:-r3_timing_model_v8}"
 WALL="${PROD_REPLAY_WALL:-$HERE/replay_wall.json}"
-R="${RES:-${RESULTS_ROOT:-$HOME/moe/results}/prod-main-$(date -u +%Y%m%dT%H%M%SZ)}"
+R="${RES:-${RESULTS_ROOT:-$HOME/moe/results}/$RUN_NAME}"
 kit_init "$R"
+if [[ $KIT_DRY -eq 0 && ! -f "$R/kit-profile.json" ]]; then   # offline.sh's expected-outputs reads it (blind: no
+  # secondary run, no replay); written once, so a resume keeps the run's own names
+  printf '{"profile": "%s", "model": "%s", "utc": "%s", "run_branch": "%s"}\n' "$PROFILE" "$MODEL" "$UTC" \
+    "${RUN_BRANCH:-}" > "$R/kit-profile.json"
+fi
 kit_locate_nsys
 kit_env "$PY"
 kit_resume_init "$FROM" ${ARGS[@]+"${ARGS[@]}"}
@@ -117,48 +151,16 @@ NSYS_A=("$NSYS" profile -t cuda,nvtx --cuda-graph-trace=node --force-overwrite t
 BEAGER=("$PY" "$SC/serve_capture.py" --model $MODEL --prompts "$R/prompts.jsonl" --concurrency 112
         --requests-per-level "$NREQ" --require-pinned)
 
-echo "main: model $MODEL, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER"
-if [[ $KIT_DRY -eq 1 ]]; then   # the expected wall time of this plan (README "main.sh: every step")
+echo "main: model $MODEL, profile $PROFILE, levels $LEVELS, N/level $NREQ, results $R, pricer $PRICER" \
+  "${RUN_BRANCH:+, run branch $RUN_BRANCH}"
+if [[ $KIT_DRY -eq 1 && $PROFILE == full ]]; then   # the expected wall time of this plan (README "main.sh: every step")
   "$PY" "$SC/plan_time.py" --levels "$LEVELS" --n "$NREQ" \
     || echo "PLAN (plan_time.py could not run under $PY: needs numpy)"
 fi
-# M0: the whole environment first (smoke rental 2026-11-19: SMOKE-FIXES.md 1-5), fail-fast with its reasons
-step env-preflight --always --cap 600 -- "$PY" "$SC/env_preflight.py" --repo "$REPO" --model $MODEL --nsys "$NSYS" \
-  --power-w "${PROD_POWER_W:-700}" --locks 1710,1410 --tmpdir "$KIT_TMP" --frontier-src "$FR/src" \
-  --disk "${MOE_HOME:-$HOME/moe}" --min-free-gb "${PROD_MIN_FREE_GB:-200}" --out "$R/env-preflight.json"
-step env --always --cap 300 -- kit_env_check
-step power-readback --always --cap 60 -- kit_power_check "${PROD_POWER_W:-700}"
-step unlock-start --always --cap 60 -- kit_unlock
-step revision-pinned --always --cap 120 -- "$PY" -c "import sys; sys.path[:0]=['$SC']; import prodlib as P; r=P.hf_revision('$MODEL'); print(('PASS revision ' + r) if r else 'FAIL revision: $MODEL is not pinned in prodlib.HF_REVISIONS'); sys.exit(0 if r else 3)"
-step replay-wall-present --always --cap 30 -- test -s "$WALL"
-step price-check --cap 900 -- "$PY" "$SC/prodlib.py" price-check --model $MODEL --pricer "$PRICER"
-# M1
-step prompts-fetch --cap 1800 --out "$R/data/ShareGPT_V3_unfiltered_cleaned_split.json" -- "$PY" "$SC/prompts.py" fetch --source sharegpt --dest "$R/data"
-step prompts-build --cap 1800 --out "$R/prompts.jsonl" -- "$PY" "$SC/prompts.py" build --source sharegpt --data "$R/data/ShareGPT_V3_unfiltered_cleaned_split.json" \
-  --tokenizer "$TOK" --n 4096 --seed 0 --max-input 2048 --out-dist sharegpt --out "$R/prompts.jsonl"
-step serve-plan --cap 300 -- "${SERVE[@]}" --mode graphs --out "$R/A1710" --dry-run
-
-# M2: the 60 s gate (the first ERNIE load: the weights download here)
-step gate60-capture --cap 3600 --out "$TR/gate60/serve.nsys-rep,$R/gate60/manifest.json" -- "${NSYS_A[@]}" -o "$TR/gate60/serve" "${SERVE[@]}" --mode graphs --shared-stream off \
-  --min-steps-per-tile 0 --max-seconds 60 --out "$R/gate60"
-step gate60-export --cap 1800 --out "$TR/gate60/serve.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true -o "$TR/gate60/serve.sqlite" "$TR/gate60/serve.nsys-rep"
-step gate60-extract --cap 1800 --out "$R/gate60/calls.jsonl|$R/gate60/calls.shards.json" -- "$PY" "$SC/nsys_extract.py" --run "$R/gate60" --sqlite "$TR/gate60/serve.sqlite" --model $MODEL
-step gate60-sequences --cap 600 -- "$PY" "$SC/nsys_extract.py" check-sequences --run "$R/gate60" --model $MODEL
-
-# THE EARLY FRONTIER PROBE (hard; review 2026-11-19): Frontier's venv, its grid-check, then the new timer on 3 ERNIE
-# grid points at their branch clocks and Frontier's own csv / trainer (narrow) / predict on them, ~5 min. A failure
-# here stops the run before the expensive blocks (the Frontier block M7 would otherwise fail hours later)
-step frontier-setup --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
-if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
-FSRC="${FRONTIER_SRC:-$FR/src}"
+# Frontier's paths and step helpers (defined once, used by the full sequence and by blind.sh)
 FD="$R/frontier"
-CSVREL="$("$PY" -c "import sys; sys.path[:0]=['$SC']; import frontier_op as F; print(F.csv_relpath('$MODEL'))" 2>/dev/null \
-      || echo compute/gh200/ernie45-21b-a3b-moe/moe_kernel_only.csv)"
 CSV="$FD/profile/$CSVREL"
-PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-64,1024,8192}"
-export R TR MODEL SC PY NSYS FR_ROUTING FSRC CSVREL PROBE_POINTS FR_PY_PRIMARY 2>/dev/null || true
-step frontier-grid-check --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" \
-  --max-tokens 16384
+PROBE_POINTS="${PROD_FRONTIER_PROBE_POINTS:-$SPEC_PROBE_POINTS}"
 fr_probe() {   # the probe: per branch lock, timer (under nsys), export; then fpoints, csv, train (narrow), predict
   local P="$R/frontier-probe" PT="$TR/frontier-probe" b lock
   for b in decode prefill; do
@@ -182,22 +184,86 @@ fr_probe() {   # the probe: per branch lock, timer (under nsys), export; then fp
     --points "$P/points.json" --src "$FSRC" --out "$P/predictions" || return 3
   echo "PASS frontier-timer-probe: points $PROBE_POINTS ($FR_ROUTING), timer + Frontier's csv/train/predict"
 }
+# M7's helpers: the timer (every grid point and sample, one process per branch pass at the branch clock, a marker
+# kernel per point), the two branch passes of one routing, then the per-point kernel-sum (fpoints); the traces under
+# $TR (outside the pushed tree)
+fr_timer() {   # fr_timer BRANCH LOCK ROUTING DIR: every grid point of the branch, one process, weights once, eager, nsys
+  local b="$1" lock="$2" routing="$3" d="$R/frontier/$4" t="$TR/frontier/$4"
+  mkdir -p "$d" "$t"
+  "$NSYS" profile -t cuda --force-overwrite true -o "$t/timer" "$PY" "$SC/frontier_op.py" timer --model "$MODEL" \
+    --branch "$b" --lock "$lock" --routing "$routing" --max-tokens 16384 --out "$d"
+}
+fr_passes() {   # fr_passes PREFIX ROUTING [--soft]: the two branch passes (lock, timer, export) of one routing
+  local pre="$1" routing="$2" b lock
+  for b in decode prefill; do
+    lock=1710; [[ $b == prefill ]] && lock=1410
+    step "$pre-lock-$b" --soft --always --cap 120 -- kit_lock "$lock"
+    step "$pre-$b" --soft --cap 3600 --needs "$pre-lock-$b" --out "$FD/${pre#frontier-}-$b/timer.json,$TR/frontier/${pre#frontier-}-$b/timer.nsys-rep" \
+      -- fr_timer "$b" "$lock" "$routing" "${pre#frontier-}-$b"
+    step "$pre-export-$b" --soft --cap 1800 --needs "$pre-$b" --out "$TR/frontier/${pre#frontier-}-$b/timer.sqlite" -- "$NSYS" export --type sqlite \
+      --force-overwrite true -o "$TR/frontier/${pre#frontier-}-$b/timer.sqlite" "$TR/frontier/${pre#frontier-}-$b/timer.nsys-rep"
+  done
+}
+fr_fpoints() {   # fr_fpoints STEP PREFIX OUT: fpoints over the two passes, their traces named
+  local x="${2#frontier-}"
+  step "$1" --soft --cap 1800 --out "$3" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --timer "$FD/$x-decode" \
+    --timer-sqlite "$TR/frontier/$x-decode/timer.sqlite" --timer "$FD/$x-prefill" --timer-sqlite "$TR/frontier/$x-prefill/timer.sqlite" \
+    --max-tokens 16384 --out "$3"
+}
+# M0: the whole environment first (smoke rental 2026-11-19: SMOKE-FIXES.md 1-5), fail-fast with its reasons
+step env-preflight --always --cap 600 -- "$PY" "$SC/env_preflight.py" --repo "$REPO" --model $MODEL --nsys "$NSYS" \
+  --power-w "${PROD_POWER_W:-700}" --locks 1710,1410 --tmpdir "$KIT_TMP" --frontier-src "$FR/src" \
+  --disk "${MOE_HOME:-$HOME/moe}" --min-free-gb "${PROD_MIN_FREE_GB:-200}" --out "$R/env-preflight.json"
+step env --always --cap 300 -- kit_env_check
+step power-readback --always --cap 60 -- kit_power_check "${PROD_POWER_W:-700}"
+step unlock-start --always --cap 60 -- kit_unlock
+step revision-pinned --always --cap 120 -- "$PY" -c "import sys; sys.path[:0]=['$SC']; import prodlib as P; r=P.hf_revision('$MODEL'); print(('PASS revision ' + r) if r else 'FAIL revision: $MODEL is not pinned in prodlib.HF_REVISIONS'); sys.exit(0 if r else 3)"
+if [[ $PROFILE == blind ]]; then   # ONE blind model per GH200, lean (scripts/prod/blind.sh), then the summary
+  . "$HERE/blind.sh"
+  kit_summary
+  exit 0
+fi
+step replay-wall-present --always --cap 30 -- test -s "$WALL"
+step price-check --cap 900 -- "$PY" "$SC/prodlib.py" price-check --model $MODEL --pricer "$PRICER"
+# M1
+step prompts-fetch --cap 1800 --out "$R/data/ShareGPT_V3_unfiltered_cleaned_split.json" -- "$PY" "$SC/prompts.py" fetch --source sharegpt --dest "$R/data"
+step prompts-build --cap 1800 --out "$R/prompts.jsonl" -- "$PY" "$SC/prompts.py" build --source sharegpt --data "$R/data/ShareGPT_V3_unfiltered_cleaned_split.json" \
+  --tokenizer "$TOK" --n 4096 --seed 0 --max-input 2048 --out-dist sharegpt --out "$R/prompts.jsonl"
+step serve-plan --cap 300 -- "${SERVE[@]}" --mode graphs --out "$R/A1710" --dry-run
+
+# M2: the 60 s gate (the model's first load: the weights download here)
+step gate60-capture --cap 3600 --out "$TR/gate60/serve.nsys-rep,$R/gate60/manifest.json" -- "${NSYS_A[@]}" -o "$TR/gate60/serve" "${SERVE[@]}" --mode graphs --shared-stream off \
+  --min-steps-per-tile 0 --max-seconds 60 --out "$R/gate60"
+step gate60-export --cap 1800 --out "$TR/gate60/serve.sqlite" -- "$NSYS" export --type sqlite --force-overwrite true -o "$TR/gate60/serve.sqlite" "$TR/gate60/serve.nsys-rep"
+step gate60-extract --cap 1800 --out "$R/gate60/calls.jsonl|$R/gate60/calls.shards.json" -- "$PY" "$SC/nsys_extract.py" --run "$R/gate60" --sqlite "$TR/gate60/serve.sqlite" --model $MODEL
+step gate60-sequences --cap 600 -- "$PY" "$SC/nsys_extract.py" check-sequences --run "$R/gate60" --model $MODEL
+
+# THE EARLY FRONTIER PROBE (hard; review 2026-11-19): Frontier's venv, its grid-check, then the new timer on 3 ERNIE
+# grid points at their branch clocks and Frontier's own csv / trainer (narrow) / predict on them, ~5 min. A failure
+# here stops the run before the expensive blocks (the Frontier block M7 would otherwise fail hours later)
+step frontier-setup --cap 3600 --out "$FR/frontier.env" -- bash "$SC/frontier_setup.sh" --dest "$FR" --arms primary
+if [[ $KIT_DRY -eq 0 && -f "$FR/frontier.env" ]]; then . "$FR/frontier.env"; fi
+FSRC="${FRONTIER_SRC:-$FR/src}"
+export R TR MODEL SC PY NSYS FR_ROUTING FSRC CSVREL PROBE_POINTS FR_PY_PRIMARY 2>/dev/null || true
+step frontier-grid-check --cap 300 --needs frontier-setup -- "$PY" "$SC/frontier_op.py" grid-check --model $MODEL --src "$FSRC" \
+  --max-tokens 16384
 step frontier-timer-probe --cap 900 --needs frontier-grid-check --out "$R/frontier-probe/predictions/index.json" -- fr_probe
-step push-gate60 --soft --cap 3600 -- kit_push "prod main: the 60 s ERNIE gate and the Frontier probe"
+step push-gate60 --soft --cap 3600 -- kit_push "prod main: the 60 s $MODEL gate and the Frontier probe"
 
 # M3: the board's sag par at 1410 (the v7 prefill blind's units and finaliser; the driver's own deadline is 75 min)
 step sag1410 --cap 5400 --out "$R/sag/par.json" -- bash "$SC/sag1410.sh" --out "$R/sag"
 step unlock-after-sag --always --cap 60 -- kit_unlock
 
-serve_A() {   # serve_A LABEL LOCK(0=default) STREAM(on|off) [--soft]
-  local lab="$1" lock="$2" stream="$3" soft=("${@:4}") pre
+serve_A() {   # serve_A LABEL LOCK(0=default) STREAM(on|off) [--soft]; G-COV gates the branch of the lock only
+  local lab="$1" lock="$2" stream="$3" soft=("${@:4}") pre cov=all
   if [[ "$lock" != 0 ]]; then
+    cov=decode; [[ "$lock" == 1410 ]] && cov=prefill
     pre="$lab-lock"; step "$pre" ${soft[@]+"${soft[@]}"} --always --cap 120 -- kit_lock "$lock"
   else
     pre="$lab-unlock"; step "$pre" ${soft[@]+"${soft[@]}"} --always --cap 60 -- kit_unlock
   fi
   step "$lab-capture" ${soft[@]+"${soft[@]}"} --cap 10800 --needs "$pre" --out "$TR/$lab/serve.nsys-rep,$R/$lab/manifest.json" -- "${NSYS_A[@]}" -o "$TR/$lab/serve" "${SERVE[@]}" \
-    --mode graphs --shared-stream "$stream" --out "$R/$lab"
+    --mode graphs --shared-stream "$stream" --cov-branch "$cov" --out "$R/$lab"
   step "$lab-unlock-after" --always --cap 60 -- kit_unlock
   step "$lab-export" ${soft[@]+"${soft[@]}"} --cap 5400 --needs "$lab-capture" --out "$TR/$lab/serve.sqlite" -- "$NSYS" export --type sqlite \
     --force-overwrite true -o "$TR/$lab/serve.sqlite" "$TR/$lab/serve.nsys-rep"
@@ -236,29 +302,6 @@ step push-replay --soft --cap 3600 -- kit_push "prod main: replay C"
 # M7: Frontier, its predictor on our profiles (frontier_op.py module doc "PROFILER"; its venv and grid-check ran
 # before the probe). The timer: every grid point and sample, one process per branch pass at the branch clock, a marker
 # kernel per point, then the per-point kernel-sum (fpoints); the traces under $TR (outside the pushed tree)
-fr_timer() {   # fr_timer BRANCH LOCK ROUTING DIR: every grid point of the branch, one process, weights once, eager, nsys
-  local b="$1" lock="$2" routing="$3" d="$R/frontier/$4" t="$TR/frontier/$4"
-  mkdir -p "$d" "$t"
-  "$NSYS" profile -t cuda --force-overwrite true -o "$t/timer" "$PY" "$SC/frontier_op.py" timer --model "$MODEL" \
-    --branch "$b" --lock "$lock" --routing "$routing" --max-tokens 16384 --out "$d"
-}
-fr_passes() {   # fr_passes PREFIX ROUTING [--soft]: the two branch passes (lock, timer, export) of one routing
-  local pre="$1" routing="$2" b lock
-  for b in decode prefill; do
-    lock=1710; [[ $b == prefill ]] && lock=1410
-    step "$pre-lock-$b" --soft --always --cap 120 -- kit_lock "$lock"
-    step "$pre-$b" --soft --cap 3600 --needs "$pre-lock-$b" --out "$FD/${pre#frontier-}-$b/timer.json,$TR/frontier/${pre#frontier-}-$b/timer.nsys-rep" \
-      -- fr_timer "$b" "$lock" "$routing" "${pre#frontier-}-$b"
-    step "$pre-export-$b" --soft --cap 1800 --needs "$pre-$b" --out "$TR/frontier/${pre#frontier-}-$b/timer.sqlite" -- "$NSYS" export --type sqlite \
-      --force-overwrite true -o "$TR/frontier/${pre#frontier-}-$b/timer.sqlite" "$TR/frontier/${pre#frontier-}-$b/timer.nsys-rep"
-  done
-}
-fr_fpoints() {   # fr_fpoints STEP PREFIX OUT: fpoints over the two passes, their traces named
-  local x="${2#frontier-}"
-  step "$1" --soft --cap 1800 --out "$3" -- "$PY" "$SC/frontier_op.py" fpoints --model $MODEL --timer "$FD/$x-decode" \
-    --timer-sqlite "$TR/frontier/$x-decode/timer.sqlite" --timer "$FD/$x-prefill" --timer-sqlite "$TR/frontier/$x-prefill/timer.sqlite" \
-    --max-tokens 16384 --out "$3"
-}
 fr_passes frontier-timer "$FR_ROUTING"
 step frontier-timer-unlock --always --cap 60 -- kit_unlock
 fr_fpoints frontier-points frontier-timer "$FD/points.json"

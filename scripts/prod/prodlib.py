@@ -90,6 +90,89 @@ MODELS = {
                                  (("decoder_sparse_step", 1), ("mlp_only_layers", []))),
 }
 
+# --------------------------------------------------------------------------------------------------------------
+# THE BLIND-MODEL REGISTRY (2026-11-20): one dict entry per new model, read by prodlib (MODELS, HF_REVISIONS),
+# frontier_op (FRONTIER_MODELS, PROBE_POINTS) and main.sh (--model KEY: TOK, levels, probe points)
+# --------------------------------------------------------------------------------------------------------------
+
+#: The config.json keys G-CFG holds a blind model to when its entry names none (the Qwen / Mixtral dialect)
+DEFAULT_HF_KEYS = {"hidden_size": "hidden_size", "moe_intermediate_size": "intermediate_size",
+                   "num_experts": "num_experts", "num_experts_per_tok": "top_k", "num_hidden_layers": "num_layers"}
+DEFAULT_PROBE_POINTS = (64, 1024, 8192)
+
+#: {model key: spec}. Required: hf_repo, hidden_size, moe_intermediate_size, num_experts, top_k, num_layers. Optional:
+#: first_moe_layer (0), moe_layers (num_layers - first_moe_layer), shared_experts (0; a separate dense MLP is not in
+#: the measured call), gate_fn ("softmax"), norm_topk_prob (True), hf_keys ({config.json key: MoEConfig attribute},
+#: DEFAULT_HF_KEYS), hf_literals ({config.json key: value}), levels (serving levels; default main.sh's),
+#: probe_points (DEFAULT_PROBE_POINTS), frontier_name (f"{key}-moe"), frontier_config (Frontier's HF-config dialect
+#: beyond the MoE numbers: attention heads, vocab, ...; cosmetic for the explicit-parameter trainer). Every number is
+#: checked against the downloaded config.json by G-CFG before the first step. Example (NOT a registered model):
+#:     "acme-moe-16b-a2b": {"hf_repo": "acme/MoE-16B-A2B", "hidden_size": 2048, "moe_intermediate_size": 1024,
+#:                          "num_experts": 64, "top_k": 6, "num_layers": 28, "first_moe_layer": 1},
+#: The model's HF commit goes in BLIND_REVISIONS_PENDING, never here.
+BLIND_SPECS: dict = {}
+
+#: PLACEHOLDER: {model key: the HF commit sha of the model's repo}, to be FILLED by a separate step from
+#: `python scripts/prod/hf_revisions.py` (the Hub's public API) once the candidate models are verified. A key of
+#: BLIND_SPECS missing here (or None) is UNPINNED: main.sh stops at revision-pinned and serve_capture refuses it.
+BLIND_REVISIONS_PENDING: dict = {}
+
+_SPEC_REQUIRED = ("hf_repo", "hidden_size", "moe_intermediate_size", "num_experts", "top_k", "num_layers")
+
+
+def served_from_spec(key: str, s: dict) -> ServedModel:
+    """The ServedModel (and its MoEConfig) a BLIND_SPECS entry describes; KitError on a missing required field."""
+    miss = [f for f in _SPEC_REQUIRED if f not in s]
+    if miss:
+        raise KitError(f"BLIND_SPECS[{key!r}]: missing {miss}")
+    first = int(s.get("first_moe_layer", 0))
+    cfg = MoEConfig(name=key, hidden_size=int(s["hidden_size"]), intermediate_size=int(s["moe_intermediate_size"]),
+                    num_experts=int(s["num_experts"]), top_k=int(s["top_k"]), gate_fn=s.get("gate_fn", "softmax"),
+                    norm_topk_prob=bool(s.get("norm_topk_prob", True)), shared_experts=int(s.get("shared_experts", 0)),
+                    num_layers=int(s["num_layers"]), first_moe_layer=first, hf_repo=s["hf_repo"], verified=True)
+    hk = s.get("hf_keys") or DEFAULT_HF_KEYS
+    lit = s.get("hf_literals") or {}
+    return ServedModel(key, cfg, s["hf_repo"], int(s.get("moe_layers", int(s["num_layers"]) - first)),
+                       tuple(hk.items()), tuple(lit.items()))
+
+
+def register_specs(specs: dict, revisions: dict) -> list[str]:
+    """Add every spec to MODELS and its pin (or None: unpinned) to HF_REVISIONS; a key already in MODELS is refused
+    (a registered model is never redefined). Returns the keys added."""
+    for key, s in specs.items():
+        if key in MODELS:
+            raise KitError(f"BLIND_SPECS[{key!r}]: already a served model")
+        MODELS[key] = served_from_spec(key, s)
+        HF_REVISIONS[key] = revisions.get(key)
+    return list(specs)
+
+
+def spec_of(key: str) -> dict:
+    """The model's BLIND_SPECS entry ({} for the kit's own models)."""
+    return dict(BLIND_SPECS.get(key) or {})
+
+
+def frontier_name(key: str) -> str:
+    """Frontier's model name for the key (frontier_op.FRONTIER_MODELS; a blind model's frontier_name or <key>-moe)."""
+    own = {"ernie-4.5-21b-a3b": "ernie45-21b-a3b-moe", "olmoe-1b-7b": "olmoe-1b-7b-moe",
+           "qwen3-30b-a3b": "qwen3-30b-a3b-moe"}
+    return own.get(key) or spec_of(key).get("frontier_name") or f"{key}-moe"
+
+
+def frontier_csv_rel(key: str) -> str:
+    """frontier_op.csv_relpath(key) without importing it (a test holds the two equal)."""
+    return f"compute/gh200/{frontier_name(key)}/moe_kernel_only.csv"
+
+
+def run_names(key: str, utc: str) -> dict:
+    """Per-instance names (one blind model per GH200): the results dir prod-<key>-<utc> and the run branch
+    run-gh200-blind-<key>-<utc> (lower case: vm_run.sh's branch rule ^run-[a-z0-9][a-z0-9.-]*$)."""
+    if key not in MODELS:
+        raise KitError(f"unknown model {key!r}")
+    if not utc or not all(c.isalnum() for c in utc):
+        raise KitError(f"utc stamp {utc!r}: want e.g. 20261120T035826Z")
+    return {"results": f"prod-{key}-{utc}", "branch": f"run-gh200-blind-{key}-{utc}".lower()}
+
 
 def expert_bytes(cfg: MoEConfig) -> int:
     """One expert's bf16 weight bytes, w13 (2 I x H) and w2 (H x I): the replay budget's scale between models (review 2,
@@ -176,6 +259,16 @@ def tile_bins(E: int = 64, max_T: int | None = None) -> tuple:
             ("64x128x64w4s3", 97, 128), ("64x128x64w8s3", 129, 512), ("128x128x64w8s3", 513, g16 - 1),
             ("128x128x64w8s3 g16", g16, 10 ** 9))
     return bins if max_T is None else tuple(b for b in bins if b[1] <= int(max_T))
+
+
+def branch_tiles(E: int, branch_name: str, max_T: int | None = None) -> tuple:
+    """The tile labels of one branch (decode: T <= DECODE_MAX_T, prefill: above), of tile_bins(E, max_T). G-COV
+    per run (2026-11-20): the 1710 run is gated on the decode tiles only, the 1410 run on the prefill tiles only
+    (the A1710 capture stopped on the prefill G16 tile, which the 1410 run is the one to measure)."""
+    if branch_name not in ("decode", "prefill", "all"):
+        raise ValueError(f"branch {branch_name!r}")
+    return tuple(lab for lab, lo, _hi in tile_bins(E, max_T)
+                 if branch_name == "all" or branch(lo) == branch_name)
 
 
 #: the seven tiles a serving run at E=64 lands on, in T order (KIT-SPEC 2 / CRITIQUE M9)
@@ -535,20 +628,40 @@ FRONTIER_OUTPUTS = (("frontier-predict", "frontier/predictions/index.json"),
                     ("frontier-timer-probe", "frontier-probe/predictions/index.json"))
 
 
-def expected_outputs(results) -> dict:
+#: main.sh writes the run's profile and model here (blind: no secondary runs, no replays); absent = the full profile
+RUN_PROFILE_FILE = "kit-profile.json"
+PROFILES = ("full", "blind")
+
+
+def run_profile(results) -> dict:
+    """{"profile": "full" | "blind", "model": key} from <results>/kit-profile.json (absent: full, ERNIE)."""
+    p = Path(results) / RUN_PROFILE_FILE
+    doc = json.loads(p.read_text()) if p.is_file() else {}
+    prof = doc.get("profile", "full")
+    if prof not in PROFILES:
+        raise KitError(f"{p}: profile {prof!r}, not one of {PROFILES}")
+    return {"profile": prof, "model": doc.get("model", "ernie-4.5-21b-a3b")}
+
+
+def expected_outputs(results, profile: str | None = None) -> dict:
     """What offline.sh must find in a fetched results tree, from the rental's own SUMMARY.txt: the primary runs,
     every secondary run whose extract step PASSED, the board par, both replays, each replay_check.json whose check
     PASSED, and each Frontier output whose step PASSED (FRONTIER_OUTPUTS). {"runs": [labels], "frontier": [paths],
-    "missing": [why]}."""
+    "missing": [why]}. Under the BLIND profile (main.sh --profile blind: kit-profile.json, or `profile`) the
+    secondary runs and the replays were never planned and are not required; the Frontier CSV is the run's model's."""
     R = Path(results)
     summ = R / "SUMMARY.txt"
     if not summ.exists():
         return {"runs": [], "frontier": [], "missing": [f"{summ}: no SUMMARY.txt (cannot tell what the rental measured)"]}
+    rp = run_profile(R)
+    blind = (profile or rp["profile"]) == "blind"
     passed = {ln.split()[1] for ln in summ.read_text().splitlines() if ln.startswith("PASS ") and len(ln.split()) > 1}
-    runs = list(PRIMARY_RUNS) + [lab for lab in SECONDARY_RUNS if f"{lab}-extract" in passed]
+    runs = list(PRIMARY_RUNS) + ([] if blind else [lab for lab in SECONDARY_RUNS if f"{lab}-extract" in passed])
     missing = [f"run {lab}: no calls under {R / lab}" for lab in runs if not has_calls(R / lab)]
     fr = []
+    csv_rel = frontier_csv_rel(rp["model"])
     for stepname, rel in FRONTIER_OUTPUTS:
+        rel = rel.replace(FRONTIER_CSV_REL, csv_rel)
         if stepname in passed:
             fr.append(rel)
             if not (R / rel).exists() and not (R / (rel + ".xz")).exists():
@@ -560,7 +673,7 @@ def expected_outputs(results) -> dict:
     if not (R / "sag" / "par.json").exists() and not (R / "sag" / "par.json.xz").exists():
         missing.append(f"{R / 'sag' / 'par.json'}: missing")
     for b in ("decode", "prefill"):
-        if not any((R / f"replay-{b}").rglob("cells.csv*")):
+        if not blind and not any((R / f"replay-{b}").rglob("cells.csv*")):
             missing.append(f"replay-{b}: no cells.csv under {R / f'replay-{b}'}")
     return {"runs": runs, "frontier": fr, "missing": missing}
 
@@ -733,6 +846,32 @@ def price_check(model_key: str, *, sag128=None, module: str | None = None, seed:
     return out
 
 
+def shell_model_info(key: str) -> str:
+    """main.sh --model KEY: TOK (the model's own repo: prompts.py pins the tokenizer by the model's revision), LEVELS
+    (the spec's serving levels, empty = main.sh's default), PROBE_POINTS, CSVREL (Frontier's CSV under profile/)."""
+    import shlex
+    m = MODELS[key]
+    s = spec_of(key)
+    pts = s.get("probe_points") or {"olmoe-1b-7b": (64, 192, 256)}.get(key, DEFAULT_PROBE_POINTS)
+    kv = {"TOK": m.hf_repo, "SPEC_LEVELS": s.get("levels", ""), "SPEC_PROBE_POINTS": ",".join(str(int(x)) for x in pts),
+          "CSVREL": frontier_csv_rel(key)}
+    return "\n".join(f"{k}={shlex.quote(str(v))}" for k, v in kv.items())
+
+
+def prefetch(key: str) -> int:
+    """The model's config, tokenizer and weights at its pin into the HF cache (huggingface_hub.snapshot_download),
+    so the gate's first engine load does not download. Refuses an unpinned model."""
+    m = MODELS[key]
+    rev = hf_revision(key)
+    if not rev:
+        raise KitError(f"{key} is not pinned (HF_REVISIONS / BLIND_REVISIONS_PENDING)")
+    from huggingface_hub import snapshot_download
+    path = snapshot_download(m.hf_repo, revision=rev,
+                             allow_patterns=["*.json", "*.safetensors", "*.model", "*.txt", "*.tiktoken", "*.py"])
+    print(f"PASS prefetch {key}: {m.hf_repo} at {rev} -> {path}")
+    return 0
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="prodlib: the kit's v8 contract check")
@@ -747,6 +886,14 @@ def main(argv=None) -> int:
     ex = sub.add_parser("expected-outputs", help="FAIL if a fetched tree lacks what the rental measured (offline.sh)")
     ex.add_argument("--results", required=True)
     ex.add_argument("--runs-out", required=True, help="writes the labels of the runs to score, one per line")
+    ex.add_argument("--profile", choices=PROFILES, default=None, help="default: <results>/kit-profile.json, else full")
+    mi = sub.add_parser("model-info", help="main.sh --model KEY: shell assignments TOK, LEVELS, PROBE_POINTS, CSVREL")
+    mi.add_argument("--model", required=True)
+    rn = sub.add_parser("run-names", help="the per-instance results dir and run branch (launcher, main.sh)")
+    rn.add_argument("--model", required=True)
+    rn.add_argument("--utc", required=True)
+    pf = sub.add_parser("prefetch", help="download the model's files at its pin into the HF cache (main.sh, bg)")
+    pf.add_argument("--model", required=True)
     dz = sub.add_parser("decompress", help="write every <f>.xz under a tree out as <f> (offline.sh)")
     dz.add_argument("--root", required=True)
     tm = sub.add_parser("trace-manifest", help="sha256 of the run's raw traces into the results tree (kit_push)")
@@ -776,8 +923,24 @@ def main(argv=None) -> int:
             return 3
         print(f"PASS held-back-check: no needed file of {Path(a.results).name} held back")
         return 0
+    if a.cmd in ("model-info", "run-names", "prefetch"):
+        import shlex
+        try:
+            if a.model not in MODELS:
+                raise KitError(f"unknown model {a.model!r} (prodlib.MODELS: {sorted(MODELS)})")
+            if a.cmd == "run-names":
+                n = run_names(a.model, a.utc)
+                print(f"RESULTS_NAME={shlex.quote(n['results'])}\nRUN_BRANCH={shlex.quote(n['branch'])}")
+            elif a.cmd == "model-info":
+                print(shell_model_info(a.model))
+            else:
+                return prefetch(a.model)
+        except KitError as exc:
+            print(f"FAIL {a.cmd}: {exc}")
+            return 3
+        return 0
     if a.cmd == "expected-outputs":
-        got = expected_outputs(a.results)
+        got = expected_outputs(a.results, a.profile)
         if got["missing"]:
             print("FAIL expected-outputs: " + "; ".join(got["missing"]))
             return 3
@@ -803,6 +966,8 @@ def main(argv=None) -> int:
 class KitError(RuntimeError):
     """A kit invariant broke: the step stops and says why (never a silent fallback)."""
 
+
+register_specs(BLIND_SPECS, BLIND_REVISIONS_PENDING)
 
 if __name__ == "__main__":
     sys.exit(main())

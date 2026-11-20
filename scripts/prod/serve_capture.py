@@ -163,6 +163,14 @@ def estimate_histogram(levels: list[int], rows: list[dict], n_per_level: int, *,
 COVERAGE_FLOOR = 10
 
 
+def branch_view(per_tile: dict, E: int, branch: str, max_T: int | None = None) -> dict:
+    """The per-tile counts G-COV gates for a run measured for one branch (prodlib.branch_tiles): the 1710 run's
+    prefill tiles and the 1410 run's decode tiles are recorded in the manifest but never gated (2026-11-20: A1710
+    stopped on 25 steps of the prefill G16 tile, which only the 1410 run measures). 'all': every tile."""
+    keep = set(PL.branch_tiles(E, branch, max_T))
+    return {k: v for k, v in per_tile.items() if k in keep}
+
+
 def coverage_gate(per_tile: dict, minimum: int, floor: int = COVERAGE_FLOOR) -> dict:
     short = {k: v for k, v in per_tile.items() if v < minimum}
     fail = {k: v for k, v in short.items() if v < floor}
@@ -533,7 +541,9 @@ def run(a, model: PL.ServedModel, ps: dict, levels: list[int]) -> int:
     real = Counter(PL.tile_bin(s["T_pad"], E) for s in steps if not s.get("dummy") and not s.get("warmup"))
     manifest["realized_per_tile"] = {lab: int(real.get(lab, 0))
                                      for lab, _, _ in PL.tile_bins(E, a.max_num_batched_tokens)}
-    gates["G-COV"] = coverage_gate(manifest["realized_per_tile"], a.min_steps_per_tile)
+    gates["G-COV"] = coverage_gate(branch_view(manifest["realized_per_tile"], E, a.cov_branch,
+                                               a.max_num_batched_tokens), a.min_steps_per_tile)
+    gates["G-COV"]["branch"] = a.cov_branch
     gates["G-DUMMY"] = {"verdict": "PASS" if not any(s.get("dummy") for s in steps) else "FAIL",
                         "why": "" if not any(s.get("dummy") for s in steps) else "dummy runs after the reset"}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str))
@@ -556,6 +566,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--torch-profiler", default=None, metavar="L:STEPS",
                     help="eager only: vLLM's torch profiler around STEPS engine steps of level L")
     ap.add_argument("--min-steps-per-tile", type=int, default=MIN_STEPS_PER_TILE)
+    ap.add_argument("--cov-branch", choices=("all", "decode", "prefill"), default="all",
+                    help="G-COV gates only this branch's tiles (main.sh: the 1710 run decode, the 1410 run prefill)")
     ap.add_argument("--max-seconds", type=float, default=0.0,
                     help="stop feeding requests after this long (the 60 s gate runs); 0: no limit")
     ap.add_argument("--seed", type=int, default=0)
@@ -592,8 +604,9 @@ def main(argv=None) -> int:
     print(f"serve_capture: {model.key} ({model.hf_repo}) mode={a.mode} shared-stream={a.shared_stream} "
           f"levels={levels} N/level={a.requests_per_level} out={a.out}")
     print(f"expected steps {est['steps']}; per tile (padded T):")
+    gated = set(PL.branch_tiles(model.cfg.num_experts, a.cov_branch, a.max_num_batched_tokens))
     for k, v in est["per_tile"].items():
-        flag = "" if v >= a.min_steps_per_tile else f"   < {a.min_steps_per_tile}"
+        flag = "" if v >= a.min_steps_per_tile or k not in gated else f"   < {a.min_steps_per_tile}"
         print(f"  {k:<22s}{v:8d}{flag}")
     if a.dry_run:
         print("DRY RUN: nothing launched")

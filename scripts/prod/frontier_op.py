@@ -174,6 +174,24 @@ FRONTIER_MODELS = {
 }
 
 
+def _blind_entries() -> None:
+    """prodlib.BLIND_SPECS (one dict entry per new model) into FRONTIER_MODELS and PROBE_POINTS: the MoE numbers from
+    the spec, the rest of Frontier's HF-config dialect from its frontier_config (cosmetic for the explicit-parameter
+    trainer, which reads only the MoE numbers)."""
+    for key, s in PL.BLIND_SPECS.items():
+        if key in FRONTIER_MODELS:
+            continue
+        doc = {"hidden_size": int(s["hidden_size"]), "moe_intermediate_size": int(s["moe_intermediate_size"]),
+               "num_experts": int(s["num_experts"]), "num_experts_per_tok": int(s["top_k"]),
+               "intermediate_size": int(s["moe_intermediate_size"]), "num_hidden_layers": int(s["num_layers"]),
+               "norm_topk_prob": bool(s.get("norm_topk_prob", True)), **(s.get("frontier_config") or {})}
+        FRONTIER_MODELS[key] = (PL.frontier_name(key), doc)
+        PROBE_POINTS[key] = tuple(int(x) for x in (s.get("probe_points") or PL.DEFAULT_PROBE_POINTS))
+
+
+_blind_entries()
+
+
 def frontier_config(model_key: str) -> tuple[str, dict]:
     name, extra = FRONTIER_MODELS[model_key]
     cfg = PL.MODELS[model_key].cfg
@@ -938,6 +956,19 @@ def record_versions(py, out) -> int:
     return 0
 
 
+def clear_models(out) -> list[str]:
+    """Remove every *.pkl and versions.json in a trainer's output dir before it trains (2026-11-20: the extras' X3
+    predict found 3 moe_grouped_gemm_*.pkl, want 1, after a re-run trained into a dir holding an earlier model, and
+    _load_estimator refuses more than one). versions.json is rewritten only when the new training PASSES."""
+    d = Path(out)
+    gone = []
+    for f in sorted(list(d.glob("*.pkl")) + [d / "versions.json"]):
+        if f.is_file():
+            f.unlink()
+            gone.append(f.name)
+    return gone
+
+
 def env_for(src) -> dict:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(Path(src)) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
@@ -1056,6 +1087,10 @@ def main(argv=None) -> int:
             return 0
         if a.cmd in ("train", "simpath", "holdout", "csv", "predict") and a.out:
             Path(a.out).mkdir(parents=True, exist_ok=True)
+        if a.cmd in ("train", "simpath") and a.out:
+            gone = clear_models(a.out)
+            if gone:
+                print(f"  cleared {len(gone)} stale model file(s) in {a.out}: {gone[:6]}", flush=True)
         rc = subprocess.run(cmd, cwd=str(src), env=env_for(src)).returncode
         if rc == 0 and a.cmd in ("train", "simpath"):
             rc = record_versions(py, a.out)

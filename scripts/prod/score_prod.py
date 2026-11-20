@@ -333,7 +333,7 @@ def delta(a: dict, b: dict) -> dict:
 
 
 def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, frontier: dict, roof: dict,
-          prices: dict, sag128=None, fills: dict | None = None) -> dict:
+          prices: dict, sag128=None, fills: dict | None = None, also: dict | None = None) -> dict:
     """runs: label -> rows (load_run, priced: r['v8_ms'] etc. filled by the caller); replay: branch -> {label: ms}."""
     out: dict = {"model": model.key, "descriptive": True, "runs": {}, "deltas": {}, "notes": [],
                  "constants": {"sag128 (board, measured at 1410)": None if sag128 is None else list(sag128),
@@ -352,7 +352,13 @@ def score(*, model: PL.ServedModel, runs: dict, replay: dict, sample_run: dict, 
         out["frontier_arms"] = {a: FRONTIER_ARMS.get(a, "unlabelled arm") for a in arms}
         out["notes"].append("Frontier arms, all scored against serving's kernel-sum (fills-free): "
                             + "; ".join(f"frontier:{a} = {FRONTIER_ARMS.get(a, 'unlabelled arm')}" for a in arms))
-    preds = (["v8_ms", "v8_refpar_ms", "roof_ms"] + [f"frontier:{a}" for a in arms])
+    also = also or {}
+    if also:
+        out["also_priced"] = dict(also)
+        out["notes"].append("also priced, each at the board's par like v8_ms: " + "; ".join(
+            f"{lab}_ms = {mod}.price" for lab, mod in also.items()))
+    preds = (["v8_ms"] + [f"{lab}_ms" for lab in also] + ["v8_refpar_ms", "roof_ms"]
+             + [f"frontier:{a}" for a in arms])
     for label, rows in runs.items():
         lk = lock_of(label)
         dropped = sum(1 for r in rows if off_lock(r.get("sm_mhz"), lk))
@@ -425,9 +431,11 @@ def _count(xs) -> dict:
 
 
 def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: dict, *, sag128,
-                       module: str | None, workers: int) -> dict:
+                       module: str | None, workers: int, also: dict | None = None) -> dict:
     """v8 at the board's par (v8_ms), v8 at the reference median (v8_refpar_ms, prefill only; decode reads no par),
-    the roofline (roof_ms) and Frontier's predictions, onto every row."""
+    the roofline (roof_ms) and Frontier's predictions, onto every row. `also` {LABEL: MODULE} (--also-price, e.g.
+    v9=r3_timing_model_v9): each pricer at the board's par onto <LABEL>_ms (<LABEL>_why its refusal); its answers
+    join the returned prices under keys (LABEL, ...) so their errors are counted like v8's."""
     if sag128 is None:
         raise PL.KitError("no board par (--sag): v8's prefill branch has no default 128x128 sag par")
     jobs = {}
@@ -441,8 +449,15 @@ def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: 
                 if k not in jobs:
                     jobs[k] = (r["T_pad"], r["counts"], r["ids"], tuple(par) if pre else None)
     prices = price_all(model.key, jobs, module=module, workers=workers)
+    also_prices = {}
+    for lab, mod in (also or {}).items():
+        pj = {k: jobs[k] for k in {r["_pkey"] for rows in runs.values() for r in rows}}
+        also_prices[lab] = price_all(model.key, pj, module=mod, workers=workers)
     for label, rows in runs.items():
         for r in rows:
+            for lab, ap in also_prices.items():
+                r[f"{lab}_ms"] = ap[r["_pkey"]].get("ms")
+                r[f"{lab}_why"] = ap[r["_pkey"]].get("why") or ap[r["_pkey"]].get("error")
             a = prices[r["_pkey"]]
             r["v8_ms"] = a.get("ms")
             r["v8_why"] = a.get("why") or a.get("error")
@@ -455,6 +470,8 @@ def attach_predictions(model: PL.ServedModel, runs: dict, frontier: dict, roof: 
         for r in rows:
             for arm, v in fr.get(r["g"], {}).items():
                 r[f"frontier:{arm}"] = v
+    for lab, ap in also_prices.items():
+        prices.update({(lab,) + k: v for k, v in ap.items()})
     return prices
 
 
@@ -719,9 +736,12 @@ def main(argv=None) -> int:
     ap.add_argument("--frontier", default=None, help="frontier_op.py predict's directory (or a predictions.jsonl)")
     ap.add_argument("--sag", required=True, help="the board's 128x128 par (main.sh's sag1410 step: RESULTS/sag/par.json)")
     ap.add_argument("--pricer", default=None, help=f"pricer module (default {PL.PRICER_MODULE})")
+    ap.add_argument("--also-price", action="append", default=[], metavar="LABEL=MODULE",
+                    help="another pricer at the board's par, scored as <LABEL>_ms beside v8_ms (e.g. v9=r3_timing_model_v9)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    also = _kv(a.also_price)
     model = PL.MODELS[a.model]
     try:
         runs = {lab: load_run(lab, d, model, want_ids=True) for lab, d in _kv(a.run).items()}
@@ -730,10 +750,11 @@ def main(argv=None) -> int:
         frontier = load_frontier(a.frontier) if a.frontier else {}
         sag128 = PL.load_board_par(a.sag)
         roof = PL.roofline_constants()
-        prices = attach_predictions(model, runs, frontier, roof, sag128=sag128, module=a.pricer, workers=a.workers)
+        prices = attach_predictions(model, runs, frontier, roof, sag128=sag128, module=a.pricer, workers=a.workers,
+                                    also=also)
         fills = {b: load_replay_check(p) for b, p in _kv(a.replay_check).items()}
         sc = score(model=model, runs=runs, replay=replay, sample_run=sample_run, frontier=frontier, roof=roof,
-                   prices=prices, sag128=sag128, fills=fills)
+                   prices=prices, sag128=sag128, fills=fills, also=also)
         ex, ex_err = {}, {}
         # the extras never fail the main score: an extras input that cannot be read is reported in its place
         try:

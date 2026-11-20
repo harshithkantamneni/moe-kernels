@@ -29,7 +29,36 @@ edited. moe/spec.py is not touched: the ERNIE MoEConfig is built in `prodlib.py`
 | `extras.sh` *(extra)* | The GPU work right after main.sh in the same rental (owner 2026-11-19, "the final run"): X1 the noise floor, X2 the ncu DRAM bytes, X3 the second blind model Qwen3-30B-A3B, X4 long-context prefill. See "extras.sh". |
 | `extras_lib.py` *(extra)* | extras.sh's checks (main finished, the commit switch, the budget, each block's inputs), the offline expected-outputs check, and the noise-floor matching the scorer reads. |
 | `ncu_bytes.py` *(extra)* | X2: the study's counter route (`scripts/dram_counter_route.py`, imported, in the manner of `dram_counter_route_rr.py`) on a stratified subsample of main's replay C sample, real ids, branch clock: counted w1 / w2 DRAM read bytes per call. |
+| `blind.sh` *(extra)* | Sourced by `main.sh --profile blind`: ONE new blind model per 1x GH200, lean. See "The blind profile". |
 | `tests/prod_fakes.py`, `tests/test_prod_*.py` | CPU tests on synthetic inputs. |
+
+## The blind profile (2026-11-20): one new model per 1x GH200
+
+    eval "$(python scripts/prod/prodlib.py run-names --model KEY --utc "$(date -u +%Y%m%dT%H%M%SZ)")"
+    # the launcher: bash scripts/vm_run.sh prepare ... --branch "$RUN_BRANCH"; on the VM:
+    bash scripts/prod/main.sh --profile blind --model KEY --utc <the same stamp>   # results prod-KEY-<utc>
+
+- **Adding a model** is one entry in `prodlib.BLIND_SPECS` (its MoE numbers, repo, optional levels / probe points /
+  Frontier config; the docstring lists the fields). It is registered into `prodlib.MODELS`, `HF_REVISIONS` (unpinned),
+  `frontier_op.FRONTIER_MODELS` and `PROBE_POINTS` at import. Its HF commit goes in **`prodlib.BLIND_REVISIONS_PENDING`**
+  (a placeholder, empty until a separate step fills it from `hf_revisions.py`); an unpinned model stops at
+  `revision-pinned`. G-CFG still checks every number against the downloaded config.json at the gate.
+- **main.sh `--model KEY`** (default ERNIE, the full profile unchanged otherwise) reads TOK (the model's own repo), the
+  spec's levels and probe points and Frontier's CSV path from `prodlib.py model-info`; `hf_revisions.py` reads the
+  tokenizer repos from `prodlib.MODELS`.
+- **What runs** (`blind.sh` header): price-check through v8 and v9; the model download (`prodlib.py prefetch`), the
+  prompts and Frontier's venv in the background during sag1410; the 60 s gate; Frontier's probe; A1710 and A1410
+  (each run's export + extract in the background during the next GPU step); Frontier's timers, CSVs, three trainers in
+  parallel and its predictions; the score on the VM (`offline.sh`: `v8_ms` and `v9_ms` side by side, the roofline,
+  Frontier's cli, cli-fills and simpath arms; `--workers` from nproc, capped at 32); pushes. Not run: Adefault, Aon,
+  Beager, replay C, the replay offsets, the extras. `kit-profile.json` tells `expected-outputs` not to require them.
+- **Background steps** (`kitlib.sh`): `step NAME --bg ...` and `step_join NAME`, recorded like any step (PASS / FAIL /
+  soft), so `KIT_BAD`, `--needs` (which joins a running prerequisite first) and resume keep working. GPU-timed steps
+  stay strictly serial.
+- **G-COV per branch** (`serve_capture.py --cov-branch`, both profiles): the 1710 runs are gated on the decode tiles
+  only, the 1410 runs on the prefill tiles only (the 2026-11-20 A1710 stop on the prefill G16 tile).
+- **Frontier**: `train` / `simpath` clear `*.pkl` and `versions.json` in their output dir first (the 2026-11-20 X3
+  predict stop: 3 pkl, want 1).
 
 ## How each KIT-SPEC item is met
 

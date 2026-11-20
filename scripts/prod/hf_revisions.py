@@ -4,10 +4,11 @@ freezes and recorded by hand into prodlib.HF_REVISIONS:
     python scripts/prod/hf_revisions.py              # prints {model key: sha} and the tokenizer repos' shas
     python scripts/prod/hf_revisions.py --check      # exit 3 unless prodlib.HF_REVISIONS equals what the Hub says now
 
-THE REPOS: each served model's hf_repo (prodlib.MODELS) and each tokenizer repo smoke.sh / main.sh pass prompts.py
-(their TOK= line). A tokenizer repo must be one of the models' repos: prompts.py pins a tokenizer by the revision of the
-model whose hf_repo it is (prompts.tokenizer_revision), so a tokenizer repo of its own would run unpinned; this
-script refuses one.
+THE REPOS: each served model's hf_repo (prodlib.MODELS, prodlib.BLIND_SPECS included), which is also each model's
+tokenizer repo (main.sh --model KEY derives TOK from MODELS). A tokenizer repo must be one of the models' repos:
+prompts.py pins a tokenizer by the revision of the model whose hf_repo it is (prompts.tokenizer_revision), so a
+tokenizer repo of its own would run unpinned; this script refuses one. A blind model's commit is printed as
+BLIND_REVISIONS_PENDING, for the step that fills prodlib's placeholder table.
 
 THE SOURCE: the Hub's public model API, GET https://huggingface.co/api/models/<repo> (its "sha" field: the commit
 the default branch points at). No token, no cookie, no header beyond a generic User-Agent; nothing about the user
@@ -31,16 +32,13 @@ import prodlib as PL  # noqa: E402
 
 API = "https://huggingface.co/api/models/{repo}"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-KIT_SCRIPTS = ("smoke.sh", "main.sh", "extras.sh")
 
 
 def tokenizer_repos() -> list[str]:
-    """The TOK= (and extras.sh's QTOK=) repos of smoke.sh, main.sh and extras.sh, in file order."""
-    out = []
-    for name in KIT_SCRIPTS:
-        for m in re.finditer(r"^Q?TOK=(\S+)\s*$", (HERE / name).read_text(), re.M):
-            out.append(m.group(1).strip("'\""))
-    return out
+    """The tokenizer repos the kit loads: each served model's own hf_repo (prodlib.MODELS, the blind registry
+    included). main.sh derives TOK from MODELS[--model] (prodlib.py model-info), so the tokenizer is always pinned by
+    its model's revision; no script's TOK= line is read."""
+    return [m.hf_repo for m in PL.MODELS.values()]
 
 
 def fetch_sha(repo: str, *, timeout: float = 20.0) -> str:
@@ -84,6 +82,9 @@ def main(argv=None) -> int:
         return 3
     print(json.dumps(got, indent=1))
     print("HF_REVISIONS: dict = " + json.dumps(got["models"]))
+    blind = {k: v for k, v in got["models"].items() if k in PL.BLIND_SPECS}
+    if blind:
+        print("BLIND_REVISIONS_PENDING: dict = " + json.dumps(blind))
     if a.check:
         bad = check(got, PL.HF_REVISIONS)
         if bad:

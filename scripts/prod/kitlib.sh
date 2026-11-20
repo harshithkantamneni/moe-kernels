@@ -21,6 +21,11 @@
 # every step before STEP that is not --always is recorded "SKIPPED-RESUME NAME" and not run. A skipped HARD step
 # whose declared output is missing REFUSES the resume (exit 2, before anything runs past it); a skipped SOFT step
 # whose output is missing stays dropped (its --needs dependents are SKIPPED). A --from naming no step is refused.
+# BACKGROUND (main.sh --profile blind, 2026-11-20): `step NAME --bg ... -- CMD` starts the step under its cap and
+# returns at once ("STARTED NAME"); `step_join NAME` waits and records it exactly as a foreground step (PASS, FAIL
+# (soft, dropped), or FAIL: fail-fast), so KIT_BAD and --needs keep working; a step that --needs a running
+# background step joins it first. kit_summary joins what is still running; the EXIT trap kills it. Only CPU or
+# network work goes in the background: a GPU-timed step never overlaps another GPU-timed step.
 # DEADLINE (extras.sh only, review of the extras M4): with KIT_DEADLINE set (epoch seconds; the caller sets it AFTER
 # sourcing this file, so main.sh and smoke.sh never see one) a step that would start at or past it is recorded
 # "SKIPPED NAME: past the deadline" and not run, and every other step's timeout is min(its cap, deadline - now). A step
@@ -41,6 +46,7 @@ KIT_FROM=""
 KIT_RESUMING=0
 KIT_DEADLINE=""
 KIT_DONE_FILE=""
+KIT_BG_OPEN=" "
 
 kit_init() {   # kit_init DIR: the summary is DIR/SUMMARY.txt, the step logs DIR/logs/ (created); $R is the caller's
   KIT_DIR="$1"
@@ -71,10 +77,11 @@ kit_missing_outputs() {
 
 step() {
   local name="$1"; shift
-  local soft=0 cap="" needs="" outs="" always=0 nodl=0 pre
+  local soft=0 cap="" needs="" outs="" always=0 nodl=0 bg=0 pre
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --soft) soft=1; shift ;;
+      --bg) bg=1; shift ;;
       --no-deadline) nodl=1; shift ;;
       --always) always=1; shift ;;
       --cap) cap="${2:-}"; shift 2 ;;
@@ -109,12 +116,14 @@ step() {
   fi
   if [[ $KIT_DRY -eq 1 ]]; then
     printf 'STEP %-26s %scap=%s %s%s%s%s\n' "$name" "$([[ $soft -eq 1 ]] && echo '[soft] ')" "$cap" \
-      "$([[ $always -eq 1 ]] && echo 'always ')$([[ $nodl -eq 1 ]] && echo 'nodeadline ')" \
+      "$([[ $always -eq 1 ]] && echo 'always ')$([[ $nodl -eq 1 ]] && echo 'nodeadline ')$([[ $bg -eq 1 ]] && echo 'bg ')" \
       "$([[ -n "$needs" ]] && echo "needs=$needs ")" \
       "$([[ -n "$outs" ]] && echo "out=$outs ")" "$(printf '%q ' "$@")"
     return 0
   fi
   for pre in ${needs//,/ }; do
+    # a prerequisite still running in the background is joined first (its PASS/FAIL decides this step)
+    if [[ "$KIT_BG_OPEN" == *" $pre "* ]]; then step_join "$pre"; fi
     if [[ "$KIT_BAD" == *" $pre "* ]]; then
       KIT_BAD+="$name "
       kit_record "SKIPPED $name: needs $pre (failed or skipped)"
@@ -138,11 +147,25 @@ step() {
   else
     runner=("$@")
   fi
+  if [[ $bg -eq 1 ]]; then
+    if [[ "$KIT_BG_OPEN" == *" $name "* ]]; then echo "FAIL $name: already running in the background" >&2; exit 2; fi
+    mkdir -p "$KIT_LOG/.bg"
+    "$KIT_TIMEOUT" --kill-after="$KIT_KILL_AFTER" "$cap" "${runner[@]}" > "$log" 2>&1 < /dev/null &
+    printf '%s %s %s %s\n' "$!" "$t0" "$soft" "$cap" > "$KIT_LOG/.bg/$name"
+    KIT_BG_OPEN+="$name "
+    echo "STARTED $name (background, pid $!)"
+    return 0
+  fi
   set +e
   "$KIT_TIMEOUT" --kill-after="$KIT_KILL_AFTER" "$cap" "${runner[@]}" > "$log" 2>&1
   rc=$?
   set -e
-  local dt=$(( $(date +%s) - t0 ))
+  kit_finish "$name" "$rc" "$(( $(date +%s) - t0 ))" "$soft" "$cap" "$log"
+}
+
+# kit_finish NAME RC SECONDS SOFT CAP LOG: one step's result line, KIT_BAD, and fail-fast on a hard FAIL
+kit_finish() {
+  local name="$1" rc="$2" dt="$3" soft="$4" cap="$5" log="$6"
   if [[ $rc -eq 0 ]]; then
     kit_record "PASS $name (${dt}s)"
     return 0
@@ -163,6 +186,37 @@ step() {
   kit_record "FAIL $name: exit $rc: $why"
   echo "fail-fast: stopping after $name; logs in $KIT_LOG" >&2
   exit "$rc"
+}
+
+# step_join NAME: wait for a background step (`step NAME --bg ...`) and record it exactly as a foreground step:
+# PASS / FAIL (soft, dropped) / FAIL into SUMMARY and KIT_BAD, a hard FAIL stops the sequence. A name that is not
+# running (never started: resumed past, skipped by --needs, or already joined) is a no-op. Dry run: a JOIN line.
+step_join() {
+  local name="$1" pid t0 soft cap rc
+  if [[ $KIT_DRY -eq 1 ]]; then echo "JOIN $name"; return 0; fi
+  [[ "$KIT_BG_OPEN" == *" $name "* ]] || return 0
+  read -r pid t0 soft cap < "$KIT_LOG/.bg/$name"
+  set +e
+  wait "$pid"
+  rc=$?
+  set -e
+  KIT_BG_OPEN="${KIT_BG_OPEN/ $name / }"
+  rm -f "$KIT_LOG/.bg/$name"
+  kit_finish "$name" "$rc" "$(( $(date +%s) - t0 ))" "$soft" "$cap" "$KIT_LOG/$name.log"
+}
+
+# every background step still running is joined (kit_summary), or killed (the EXIT trap, a hard FAIL elsewhere)
+kit_join_all() {
+  local n
+  for n in $KIT_BG_OPEN; do step_join "$n"; done
+}
+kit_kill_bg() {
+  local n pid _r
+  for n in $KIT_BG_OPEN; do
+    [[ -f "$KIT_LOG/.bg/$n" ]] || continue
+    read -r pid _r < "$KIT_LOG/.bg/$n"
+    kill "$pid" 2>/dev/null && echo "killed background step $n (pid $pid): the sequence stopped" >&2
+  done
 }
 
 # kit_resume_init FROM SCRIPT_ARGS...: enter the sequence at step FROM (empty: a fresh run). The step must exist in
@@ -280,6 +334,7 @@ kit_trap_unlock() {
 kit_on_exit() {
   local rc="$1"
   set +e
+  kit_kill_bg
   sudo -n nvidia-smi -rgc >/dev/null 2>&1
   if [[ "${KIT_TRAP_PUSH:-0}" -eq 1 ]]; then
     local log="/dev/null"
@@ -301,6 +356,7 @@ kit_on_exit() {
 
 kit_summary() {
   if [[ $KIT_RESUMING -eq 1 ]]; then echo "RESUME REFUSED: --from $KIT_FROM was never reached" >&2; exit 2; fi
+  kit_join_all
   echo "==== $(basename "$0") summary ($KIT_DIR)"
   printf '%s\n' "${KIT_STEPS[@]+"${KIT_STEPS[@]}"}"
 }

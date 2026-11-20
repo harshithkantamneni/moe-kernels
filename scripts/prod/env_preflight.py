@@ -233,7 +233,7 @@ def p12_rate(model_key: str, url: str | None, max_bytes: float, max_s: float, mi
     price = f"; the weights ({total / 1e9:.1f} GB) would take ~{total / 1e6 / mbps:.0f} s" if total else ""
     msg = f"measured {mbps:.0f} MB/s ({got / 1e6:.0f} MB in {dt:.1f} s){price}"
     if mbps < min_mbps:
-        return False, f"{msg}: under the {min_mbps:g} MB/s floor (the ERNIE download would eat the rental)"
+        return False, f"{msg}: under the {min_mbps:g} MB/s floor (the {model_key} download would eat the rental)"
     return True, msg
 
 
@@ -286,7 +286,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     moe = Path(os.environ.get("MOE_HOME", str(Path.home() / "moe")))
     ap.add_argument("--repo", default=str(HERE.parents[1]))
-    ap.add_argument("--model", required=True)
+    ap.add_argument("--model", required=True, help="a prodlib.MODELS key (the blind registry included)")
     ap.add_argument("--expect-commit", default=None)
     ap.add_argument("--power-w", type=int, default=700)
     ap.add_argument("--locks", default="1710,1410")

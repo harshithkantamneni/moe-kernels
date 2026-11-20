@@ -459,7 +459,7 @@ def test_prompts_write_creates_its_directory(tmp_path):
     assert out.read_text().splitlines() == ['{"schema": "x"}', '{"a": 1}']
     assert PR.tokenizer_revision("Qwen/Qwen3-30B-A3B") == PL.hf_revision(QM)
     import moe.spec as S
-    assert QM not in S.MODEL_CONFIGS or S.MODEL_CONFIGS[QM] == c          # spec.py untouched: runtime only
+    assert QM not in S.MODEL_CONFIGS or S.MODEL_CONFIGS[QM] == PL.QWEN3    # spec.py untouched: runtime only
     import frontier_op as FO
     assert FO.frontier_config(QM)[0] == "qwen3-30b-a3b-moe"
     assert str(FO.csv_relpath(QM)) == "compute/gh200/qwen3-30b-a3b-moe/moe_kernel_only.csv"
