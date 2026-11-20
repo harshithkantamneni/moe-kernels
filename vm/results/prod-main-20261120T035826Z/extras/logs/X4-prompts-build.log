@@ -1,1 +1,1 @@
-FAIL prompts: [Errno 2] No such file or directory: '/home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/long/prompts.jsonl'
+PASS build-long: /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/long/prompts.jsonl n=96 input 928495 tokens (4096..16000 each), output 1536, body sha256 79bd80640dd22766

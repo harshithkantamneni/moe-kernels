@@ -1,1 +1,2 @@
 PASS trace-manifest: 22 file(s), 4.49 GB under /home/ubuntu/moe/traces/prod-main-20261120T035826Z/extras -> /home/ubuntu/moe/results/prod-main-20261120T035826Z/extras/traces.sha256.json
+[push] pushed 3bba9e6 to run-gh200-prodmain-20261120t0349: prod extras: X3 Qwen3 Frontier
