@@ -56,7 +56,7 @@
   "kernel_variants": 2,
   "kernel_variants_expected": 2,
   "step_kernel_variants": 1,
-  "reset_monotonic_ns": 2300982394205,
+  "reset_monotonic_ns": 4491295302478,
   "kernel_variants_end": 2,
   "step_kernel_variants_end": 1,
   "bound_layers": [
@@ -337,8 +337,8 @@
       "quant_method": "UnquantizedFusedMoEMethod"
     }
   ],
-  "shards": 36,
-  "total_records": 421728,
+  "shards": 55,
+  "total_records": 580566,
   "top_k": 4,
   "n_moe_layers": 46,
   "ids_cap": 67108864,

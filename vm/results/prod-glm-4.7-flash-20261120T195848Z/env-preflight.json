@@ -54,13 +54,13 @@
       "id": "P9",
       "what": "frontier",
       "verdict": "PASS",
-      "detail": "https://github.com/NetX-lab/Frontier reachable at db5a85b"
+      "detail": "/home/ubuntu/moe/frontier/src holds db5a85b"
     },
     {
       "id": "P10",
       "what": "disk",
       "verdict": "PASS",
-      "detail": "4215 GB free under /home/ubuntu/moe"
+      "detail": "4091 GB free under /home/ubuntu/moe"
     },
     {
       "id": "P11",
@@ -72,7 +72,7 @@
       "id": "P12",
       "what": "hf-rate",
       "verdict": "PASS",
-      "detail": "measured 509 MB/s (1007 MB in 2.0 s); the weights (31.2 GB) would take ~61 s"
+      "detail": "measured 370 MB/s (1007 MB in 2.7 s); the weights (31.2 GB) would take ~84 s"
     }
   ],
   "pass": true

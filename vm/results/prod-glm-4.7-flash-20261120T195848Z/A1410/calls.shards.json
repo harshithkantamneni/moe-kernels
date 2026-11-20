@@ -1,0 +1,64 @@
+{
+ "schema": "moe-kernels/prod-call-shards/1",
+ "n": 580566,
+ "max_bytes": 64000000,
+ "calls": [
+  {
+   "file": "calls.00000.jsonl",
+   "rows": 85519,
+   "sha256": "7b651f5d0744d67955b2fcda269caaf6ceb9b27fd9740dd2db2b2f65ff449ff1"
+  },
+  {
+   "file": "calls.00001.jsonl",
+   "rows": 83874,
+   "sha256": "b7e8a93e0b958365a8845d30621c2266ed883a0b5765a80fe488aef5a7bfc2a5"
+  },
+  {
+   "file": "calls.00002.jsonl",
+   "rows": 82479,
+   "sha256": "802f9275877ad1797314e32930f93c58c40fafef9de1d8c8eda5e5554318a8a3"
+  },
+  {
+   "file": "calls.00003.jsonl",
+   "rows": 82045,
+   "sha256": "594a1c542bbe34a647412b8f52b4fd0cecb195259e5ded084e12cc72527a733d"
+  },
+  {
+   "file": "calls.00004.jsonl",
+   "rows": 80618,
+   "sha256": "9786b1aea534afcc102ff49ef7c39709c4092268d78ce06d351d26c505552d7a"
+  },
+  {
+   "file": "calls.00005.jsonl",
+   "rows": 80307,
+   "sha256": "b0e08da9efb641cf13c6f20044f9398af464c4fb8469824a9580cadd82d87047"
+  },
+  {
+   "file": "calls.00006.jsonl",
+   "rows": 79785,
+   "sha256": "73672c6f2a46114b396003ad9a484f8e697a80465a5a29a682119f5c3bf2f985"
+  },
+  {
+   "file": "calls.00007.jsonl",
+   "rows": 5939,
+   "sha256": "0bf294fdd8a74529803486e935420bd43ba94225e61cb1371d9ae121fde7d562"
+  }
+ ],
+ "counts": [
+  {
+   "file": "counts.00000.npy",
+   "rows": 249996,
+   "sha256": "cbd882eb8d2a7affe281a6dc8fbc4edbd2ab2df30f1f97bbb1d35277b234ef47"
+  },
+  {
+   "file": "counts.00001.npy",
+   "rows": 249996,
+   "sha256": "cd45313f0ad40cf214c28948efa02faa18746463d9877cd52d3ba547af04a765"
+  },
+  {
+   "file": "counts.00002.npy",
+   "rows": 80574,
+   "sha256": "fc5e4fbba3d6cfdf36af2784e8649c509bf9e03252e3785cd4fa8a479f61b67d"
+  }
+ ]
+}

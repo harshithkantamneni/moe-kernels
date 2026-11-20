@@ -6,7 +6,7 @@
     "--prompts",
     "/home/ubuntu/moe/results/prod-glm-4.7-flash-20261120T195848Z/prompts.jsonl",
     "--concurrency",
-    "1,8,24,48,80,112,256",
+    "1,8,24,48,80,112,256,1024x3",
     "--requests-per-level",
     "8",
     "--require-pinned",
@@ -33,7 +33,10 @@
     48,
     80,
     112,
-    256
+    256,
+    1024,
+    1024,
+    1024
   ],
   "requests_per_level": 8,
   "max_num_batched_tokens": 16384,
@@ -65,9 +68,9 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 1410,
     "mem_mhz": 2619,
-    "power_w": 94.166,
+    "power_w": 93.816,
     "power_limit_w": 700.0,
-    "temp_c": 36,
+    "temp_c": 35,
     "driver": "580.105.08"
   },
   "hf_revision": {
@@ -132,7 +135,7 @@
     "compilation_mode": "3"
   },
   "kv": {
-    "num_gpu_blocks": 27518,
+    "num_gpu_blocks": 27519,
     "block_size": 16,
     "preemptions": 0,
     "realized_concurrency": [
@@ -212,6 +215,39 @@
         "running_mean": 134.14,
         "steps_at_L": 208,
         "waiting_max": 130
+      },
+      {
+        "level_idx": 7,
+        "L": 1024,
+        "steps": 1150,
+        "preemptions": 0,
+        "running_max": 1024,
+        "running_median": 519,
+        "running_mean": 537.53,
+        "steps_at_L": 28,
+        "waiting_max": 927
+      },
+      {
+        "level_idx": 8,
+        "L": 1024,
+        "steps": 1156,
+        "preemptions": 0,
+        "running_max": 1024,
+        "running_median": 506,
+        "running_mean": 539.12,
+        "steps_at_L": 36,
+        "waiting_max": 927
+      },
+      {
+        "level_idx": 9,
+        "L": 1024,
+        "steps": 1150,
+        "preemptions": 0,
+        "running_max": 1024,
+        "running_median": 519,
+        "running_mean": 537.53,
+        "steps_at_L": 28,
+        "waiting_max": 927
       }
     ]
   },
@@ -219,19 +255,19 @@
     "name": "NVIDIA GH200 480GB",
     "sm_mhz": 1410,
     "mem_mhz": 2619,
-    "power_w": 277.365,
+    "power_w": 327.066,
     "power_limit_w": 700.0,
-    "temp_c": 47,
+    "temp_c": 48,
     "driver": "580.105.08"
   },
-  "seconds": 146.1,
+  "seconds": 412.6,
   "realized_per_tile": {
-    "16x64x128w4s4": 6534,
-    "32x64x128w4s3": 869,
-    "32x128x64w4s3": 623,
-    "64x128x64w4s3": 436,
-    "64x128x64w8s3": 601,
-    "128x128x64w8s3": 77,
-    "128x128x64w8s3 g16": 0
+    "16x64x128w4s4": 13532,
+    "32x64x128w4s3": 2031,
+    "32x128x64w4s3": 1415,
+    "64x128x64w4s3": 1038,
+    "64x128x64w8s3": 1823,
+    "128x128x64w8s3": 1860,
+    "128x128x64w8s3 g16": 22
   }
 }

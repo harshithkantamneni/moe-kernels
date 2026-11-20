@@ -1,43 +1,49 @@
 {
-  "G-REV": {
+  "G-REC": {
     "verdict": "PASS",
+    "records": 580566,
+    "markers": 580566,
+    "marker_streams": {
+      "7": 580566
+    },
     "why": ""
   },
-  "G-CFG": {
+  "G-GEMM": {
     "verdict": "PASS",
+    "gemms": 1161132,
     "why": ""
   },
-  "G-BACKEND": {
-    "verdict": "PASS",
-    "backends": [
-      "TRITON"
-    ],
-    "experts_cls": [
-      "TritonExperts"
-    ],
-    "why": ""
-  },
-  "G-VARIANTS-END": {
-    "verdict": "PASS",
-    "why": ""
-  },
-  "G-COV": {
+  "G-STEP": {
     "verdict": "FAIL",
-    "minimum": 30,
-    "floor": 10,
-    "per_tile": {
-      "64x128x64w8s3": 601,
-      "128x128x64w8s3": 77,
-      "128x128x64w8s3 g16": 0
-    },
-    "short": {
-      "128x128x64w8s3 g16": 0
-    },
-    "why": "tiles under the floor of 10 steps: {'128x128x64w8s3 g16': 0}",
-    "branch": "prefill"
+    "why": "shard_00000.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00001.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00002.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00003.npz: 11776 records, 512 steps x 46 layers = 23552; shard_00004.npz: 11776 records, 512 steps x 46 layers = 23552",
+    "problems": 36
   },
-  "G-DUMMY": {
+  "G-PAIR": {
     "verdict": "PASS",
-    "why": ""
+    "why": "",
+    "problems": 0,
+    "paired": 580566
+  },
+  "G-STEPMARK": {
+    "verdict": "FAIL",
+    "why": "12621 step markers, 21789 logged steps; first difference at step position 9168: marker gridY 9169, step log 1; call 0: after step marker 0 on the trace, its ring record joins step None; call 1: after step marker 0 on the trace, its ring record joins step None; call 2: after step marker 0 on the trace, its ring record joins step None; 422234 calls in all sit after another step's marker",
+    "step_markers": 12621,
+    "steps": 21789,
+    "misplaced_calls": 422234
+  },
+  "G-IDS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-GRID": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
+  },
+  "G-CLASS": {
+    "verdict": "PASS",
+    "why": "",
+    "problems": 0
   }
 }
