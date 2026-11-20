@@ -15,3 +15,4 @@
 2026-11-20T08:09:28Z prod extras: X3 Qwen3 A1410
 2026-11-20T08:10:32Z prod extras: X3 Qwen3 replay C
 2026-11-20T08:12:56Z prod extras: X3 Qwen3 Frontier
+2026-11-20T08:14:17Z prod extras: X4 long-context prefill
